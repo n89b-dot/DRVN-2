@@ -1,7 +1,51 @@
 # Applying migrations
 
 Run these in the **Supabase SQL Editor**, in order. Each is wrapped in a
-transaction and written to be idempotent — re-running one is safe.
+transaction and written to be idempotent — re-running one is safe. (0007 and
+0009 were *not* re-runnable on first write: they created policies without a
+preceding `drop policy if exists`, and `purchase_begin` left its temp table
+behind if called twice in one transaction. Both fixed — verified by applying each
+file twice.)
+
+## Status: 0006–0009 applied 26 July 2026
+
+Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
+`supabase/tests/purchase_guard.sql` passes all five assertions, and the
+notification triggers raise into the correct sections. The commands below are
+the record of how, and what to do for the next environment.
+
+### Applying without Docker or psql
+
+`supabase db dump` and `supabase db start` need Docker; `supabase db query`
+can't take a multi-statement file (it uses a prepared statement, which Postgres
+refuses for multiple commands). Neither was available here, so the files were
+applied over the direct IPv6 connection with `node-postgres`, which uses the
+simple query protocol and accepts whole scripts including `DO` blocks:
+
+```js
+// scratch runner — node apply.mjs <file.sql>
+import { readFileSync } from "node:fs";
+import { Client } from "pg";
+const client = new Client({
+  connectionString: process.env.DB_URL,       // postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres
+  ssl: { rejectUnauthorized: false },
+});
+client.on("notice", (n) => console.log(n.message));  // migration assertions arrive as NOTICEs
+await client.connect();
+await client.query(readFileSync(process.argv[2], "utf8"));
+await client.end();
+```
+
+The SQL Editor in the dashboard does all of this without the plumbing — prefer
+it unless you're scripting.
+
+**Do not use `supabase db push`.** 0001–0005 were applied by hand, so the CLI has
+no `supabase_migrations.schema_migrations` history and would try to run 0001 —
+which drops every table in `public`.
+
+**A wrapping transaction won't make a dry run safe.** Each file ends with its own
+`commit;`, so an outer `begin` is closed by the file itself and a following
+`rollback` does nothing. To rehearse a migration, run it against a copy.
 
 ## Order
 

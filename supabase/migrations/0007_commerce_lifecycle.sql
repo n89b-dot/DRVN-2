@@ -232,6 +232,7 @@ alter table public.payments enable row level security;
 
 -- Buyers and sellers may see that a payment exists and its state; only the
 -- service role writes them.
+drop policy if exists "participants read payments" on public.payments;
 create policy "participants read payments" on public.payments for select
   using (exists (
     select 1 from public.orders o
@@ -413,6 +414,11 @@ begin
 
   -- Claim. Anything not returned here was unavailable, someone else's win, or
   -- the buyer's own listing.
+  --
+  -- `on commit drop` only fires at commit, so a second call inside the same
+  -- transaction would otherwise find the table still there. Temp tables are
+  -- per-session, so this cannot interfere with a concurrent buyer.
+  drop table if exists _claimed;
   create temp table _claimed on commit drop as
   with claimed as (
     update public.listings l

@@ -86,6 +86,9 @@ export function prefEnabled(prefs: unknown, key: NotificationPrefKey): boolean {
 export function prefKeyForKind(kind: string): NotificationPrefKey | null {
   const key = (() => {
     if (kind === "follow") return "profile_follows";
+    // A saved part is governed by the marketplace preference; a saved car or
+    // profile by the engagement one.
+    if (kind === "listing_save") return "listing_saves";
     if (kind === "save") return "car_engagement";
     if (kind === "comment" || kind === "reaction") return "comments";
     if (kind === "review") return "reviews";

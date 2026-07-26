@@ -40,11 +40,14 @@ create index if not exists notifications_unread_idx
 
 alter table public.notifications enable row level security;
 
+drop policy if exists "users read own notifications" on public.notifications;
 create policy "users read own notifications" on public.notifications for select
   using (auth.uid() = user_id);
+drop policy if exists "users update own notifications" on public.notifications;
 create policy "users update own notifications" on public.notifications for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+drop policy if exists "users delete own notifications" on public.notifications;
 create policy "users delete own notifications" on public.notifications for delete
   using (auth.uid() = user_id);
 -- Inserts come from triggers (security definer) only.
@@ -132,6 +135,10 @@ declare
   v_owner uuid;
   v_href text;
   v_title text;
+  v_kind text := 'save';
+  -- A saved *part* is market interest, not someone admiring your build. The PRD
+  -- keeps the two columns separate, and the two have different preferences.
+  v_section text := 'engagement';
 begin
   if new.target_type = 'car' then
     select c.owner_id, '/cars/' || c.slug into v_owner, v_href
@@ -141,13 +148,15 @@ begin
     select l.seller_id, '/listings/' || l.id into v_owner, v_href
     from public.listings l where l.id = new.target_id;
     v_title := public.actor_name(new.user_id) || ' saved your part';
+    v_kind := 'listing_save';
+    v_section := 'marketplace';
   else
     v_owner := new.target_id;
     v_title := public.actor_name(new.user_id) || ' saved your profile';
     select '/u/' || username into v_href from public.profiles where id = new.user_id;
   end if;
 
-  perform public.notify(v_owner, 'save', 'engagement', v_title, null, v_href, new.user_id);
+  perform public.notify(v_owner, v_kind, v_section, v_title, null, v_href, new.user_id);
   return new;
 end;
 $$;
