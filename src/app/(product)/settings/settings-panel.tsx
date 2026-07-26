@@ -6,6 +6,8 @@ import { useActionState, useState } from "react";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 
 import { updateNotificationPrefs, updateProfile, type ActionState } from "../garage/actions";
+import { DeleteAccount } from "./delete-account";
+import { PasswordSection } from "./password-section";
 
 type ProfileLink = { label: string; url: string };
 export type SettingsProfile = {
@@ -148,10 +150,12 @@ export function SettingsPanel({
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Account — your sign-in identity</span>
           </div>
-          <ReadOnlyLine label="Email" value={profile.email} />
           <ReadOnlyLine label="Username" value={`@${profile.username}`} />
           <ReadOnlyLine label="Display name" value={profile.display_name || "—"} />
-          <form action={logout} className="mt-4">
+          <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
+            <PasswordSection currentEmail={profile.email} />
+          </div>
+          <form action={logout} className="mt-6">
             <button type="submit" className="btn btn--ghost">
               Log out
             </button>
@@ -215,34 +219,51 @@ export function SettingsPanel({
 
         <section id="payments" className="tile tile--deep">
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">Payments</span>
-            <span className="chip">Stubbed</span>
+            <span className="microlabel microlabel--ink">Payments &amp; fees</span>
+            <span className="chip">Test mode</span>
           </div>
           <p className="field__hint max-w-[62ch]">
-            Payments currently run through a stubbed provider — Stripe Connect payouts plug in here
-            without changing checkout.
+            Payments run through a test provider — no money moves yet. Stripe Connect payouts plug
+            into the same seam.
           </p>
-          <div className="mt-4">
+          <div className="mt-3">
+            <div className="sheet__row">
+              <span>DRVN fee on a sale</span>
+              <b>10%</b>
+            </div>
+            <div className="sheet__row">
+              <span>Fee on shipping</span>
+              <b>None</b>
+            </div>
+            <div className="sheet__row">
+              <span>Cost to list</span>
+              <b>Free</b>
+            </div>
+          </div>
+          <p className="field__hint mt-3 max-w-[62ch]">
+            The buyer pays the asking price plus your shipping; DRVN&apos;s fee comes out of your
+            payout, so what you list is what they see.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-4">
             <Link href="/orders" className="jumplink">
               Purchase &amp; sales history →
+            </Link>
+            <Link href="/fees" className="jumplink">
+              Full fee schedule →
             </Link>
           </div>
         </section>
 
-        <section id="reference" className="tile tile--deep">
+        <section id="danger" className="tile">
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">Reference</span>
+            <span className="microlabel microlabel--ink">Close the workshop</span>
           </div>
           <p className="field__hint max-w-[62ch]">
-            Internal reference for DRVN&apos;s components and tokens (kept during testing).
+            Deleting your account removes your sheets, listings and uploads. Orders you&apos;ve
+            traded stay on the other party&apos;s record, with your name replaced.
           </p>
-          <div className="mt-4 flex flex-wrap gap-4">
-            <Link href="/design-system" className="jumplink">
-              Open design system →
-            </Link>
-            <Link href="/mockup" className="jumplink">
-              Clickable mockup →
-            </Link>
+          <div className="mt-4">
+            <DeleteAccount />
           </div>
         </section>
       </div>

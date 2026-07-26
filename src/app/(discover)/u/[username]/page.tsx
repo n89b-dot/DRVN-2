@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { NarrowColumn, ProfileHeader } from "@/components/ui";
@@ -6,6 +7,43 @@ import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
 import { loadProfileView } from "@/lib/profile-data";
 import { createClient } from "@/lib/supabase/server";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ username: string }>;
+}): Promise<Metadata> {
+  const { username } = await params;
+  const supabase = await createClient();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name, username, headline, bio, avatar_url")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (!profile) return { title: "Keeper not found - DRVN" };
+
+  const name = profile.display_name ?? `@${profile.username}`;
+  const description =
+    profile.headline ??
+    profile.bio?.slice(0, 155) ??
+    `${name} on DRVN — their cars, their build sheets, and the parts they have for sale.`;
+
+  return {
+    title: `${name} (@${profile.username}) - DRVN`,
+    description,
+    alternates: { canonical: `/u/${profile.username}` },
+    openGraph: {
+      title: `${name} on DRVN`,
+      description,
+      url: `/u/${profile.username}`,
+      type: "profile",
+      images: profile.avatar_url ? [{ url: profile.avatar_url }] : undefined,
+    },
+    twitter: { card: "summary", title: `${name} on DRVN`, description },
+  };
+}
 
 export default async function PublicProfilePage({
   params,

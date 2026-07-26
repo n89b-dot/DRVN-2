@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Static design explorations: hand-written vanilla JS prototypes, not
+    // application code. Linting them only produced noise that masked real
+    // findings in src/.
+    "design-mockups/**",
   ]),
 ]);
 

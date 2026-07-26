@@ -1,6 +1,6 @@
+import { Button } from "@/components/ui/button";
 import {
   Avatar,
-  Button,
   CategoryIcon,
   HorizontalGallery,
   Icon,

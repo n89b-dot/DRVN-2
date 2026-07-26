@@ -98,6 +98,19 @@ export default async function OrdersPage({
     (myListings ?? []).find((l) => l.id === lid)?.title ??
     "Listing";
 
+  // Absolute rather than relative: a countdown needs the current clock, and
+  // reading it during render is impure (it would also be stale the moment the
+  // page is cached). The exact deadline is the more useful number anyway.
+  const expiresLabel = (expiresAt: string | null) => {
+    if (!expiresAt) return null;
+    return `lapses ${new Date(expiresAt).toLocaleString(undefined, {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  };
+
   const toOfferView = (offer: (typeof allOffers)[number]): OfferView => ({
     id: offer.id,
     listing_id: offer.listing_id,
@@ -107,7 +120,7 @@ export default async function OrdersPage({
     amount_cents: offer.amount_cents,
     counter_amount_cents: offer.counter_amount_cents,
     status: offer.status,
-    expires_at: offer.expires_at,
+    expiresLabel: expiresLabel(offer.expires_at),
     messages: (offerMessages ?? [])
       .filter((m) => m.offer_id === offer.id)
       .map((m) => ({

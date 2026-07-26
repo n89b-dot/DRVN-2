@@ -35,7 +35,9 @@ export function Media({
 
   return (
     <span className={`relative block overflow-hidden bg-img-fallback ${className}`}>
-      <Image src={src} alt={alt} fill sizes="(max-width: 768px) 100vw, 33vw" unoptimized className="object-cover" />
+      {/* Optimization is on: next.config.ts allows the Supabase storage host,
+          so these resize and serve AVIF/WebP instead of full-size originals. */}
+      <Image src={src} alt={alt} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
     </span>
   );
 }

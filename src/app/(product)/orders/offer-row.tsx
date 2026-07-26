@@ -21,7 +21,8 @@ export type OfferView = {
   amount_cents: number;
   counter_amount_cents: number | null;
   status: string;
-  expires_at: string | null;
+  /** Pre-formatted on the server — clock reads during render aren't pure. */
+  expiresLabel: string | null;
   messages: { id: string; sender_id: string; sender_name: string; body: string }[];
 };
 
@@ -67,9 +68,6 @@ export function OfferRow({
   const [showCounter, setShowCounter] = useState(false);
 
   const live = offer.status === "open" || offer.status === "countered";
-  const expiresIn = offer.expires_at
-    ? Math.max(0, Math.round((new Date(offer.expires_at).getTime() - Date.now()) / 3_600_000))
-    : null;
 
   return (
     <div className="jobrow">
@@ -93,9 +91,7 @@ export function OfferRow({
 
       <p className="order__meta mt-0.5">
         {incoming ? `${offer.buyer_name} makes the offer` : "Your offer"}
-        {live && expiresIn !== null && (
-          <> · {expiresIn > 0 ? `lapses in ${expiresIn}h` : "lapsed"}</>
-        )}
+        {live && offer.expiresLabel && <> · {offer.expiresLabel}</>}
       </p>
 
       {/* The thread stays readable after a decline — it used to disappear the

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -9,6 +10,64 @@ import { createClient } from "@/lib/supabase/server";
 
 import { PurchaseActions } from "./purchase-actions";
 import { QASection, type QAItem } from "./qa-section";
+
+/**
+ * Per-listing metadata with the cover as the OG image. A part listing is the
+ * unit people paste into group chats, and every one of them previously unfurled
+ * as the site-wide tagline with no picture.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: listing } = await supabase
+    .from("listings")
+    .select("title, description, price_cents, condition, status, category")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!listing) return { title: "Listing not found - DRVN" };
+
+  const { data: image } = await supabase
+    .from("listing_images")
+    .select("url")
+    .eq("listing_id", id)
+    .order("position")
+    .limit(1)
+    .maybeSingle();
+
+  const price = formatPrice(listing.price_cents);
+  const sold = listing.status === "sold";
+  const description =
+    listing.description?.slice(0, 155) ??
+    `${conditionLabel(listing.condition)} · ${price} · off a real build on DRVN.`;
+
+  return {
+    title: `${listing.title} — ${price}${sold ? " (sold)" : ""} - DRVN`,
+    description,
+    alternates: { canonical: `/listings/${id}` },
+    // Drafts, paused and archived listings shouldn't be indexed.
+    robots: ["active", "sold"].includes(listing.status)
+      ? undefined
+      : { index: false, follow: false },
+    openGraph: {
+      title: `${listing.title} — ${price}`,
+      description,
+      url: `/listings/${id}`,
+      type: "website",
+      images: image?.url ? [{ url: image.url }] : undefined,
+    },
+    twitter: {
+      card: image?.url ? "summary_large_image" : "summary",
+      title: `${listing.title} — ${price}`,
+      description,
+    },
+  };
+}
 
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

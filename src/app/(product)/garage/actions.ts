@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { slugify } from "@/lib/format";
+import { isAllowedVideoUrl, isOwnStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { createClient } from "@/lib/supabase/server";
 
-export type ActionState = { error?: string };
+export type ActionState = { error?: string; ok?: string };
 
 async function requireUser() {
   const supabase = await createClient();
@@ -88,6 +89,8 @@ export async function deleteCar(formData: FormData) {
 }
 
 export type ModItemInput = {
+  /** Present for rows that already exist, so their listing link survives a save. */
+  id?: string | null;
   group_label: string;
   brand: string | null;
   product: string | null;
@@ -95,6 +98,14 @@ export type ModItemInput = {
   position: number;
 };
 
+/**
+ * Saves the mod sheet.
+ *
+ * Deliberately not delete-and-reinsert: `mod_items.linked_listing_id` connects a
+ * build line to the part listed off it, and wiping every row on each save
+ * destroyed that link. Existing rows are updated in place, absent rows deleted,
+ * new rows inserted.
+ */
 export async function saveModItems(carId: string, items: ModItemInput[]): Promise<ActionState> {
   const { supabase, user } = await requireUser();
 
@@ -106,20 +117,27 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     .single();
   if (!car || car.owner_id !== user.id) return { error: "Car not found." };
 
-  const { error: delError } = await supabase.from("mod_items").delete().eq("car_id", carId);
+  const keepIds = items.map((i) => i.id).filter((id): id is string => Boolean(id));
+
+  const deleteQuery = supabase.from("mod_items").delete().eq("car_id", carId);
+  const { error: delError } = keepIds.length
+    ? await deleteQuery.not("id", "in", `(${keepIds.join(",")})`)
+    : await deleteQuery;
   if (delError) return { error: delError.message };
 
-  if (items.length > 0) {
-    const { error } = await supabase.from("mod_items").insert(
-      items.map((item, index) => ({
-        car_id: carId,
-        group_label: item.group_label || "Other",
-        brand: item.brand,
-        product: item.product,
-        raw_text: item.raw_text,
-        position: index,
-      }))
-    );
+  for (const [index, item] of items.entries()) {
+    const row = {
+      group_label: item.group_label || "Other",
+      brand: item.brand,
+      product: item.product,
+      raw_text: item.raw_text,
+      position: index,
+    };
+
+    const { error } = item.id
+      ? await supabase.from("mod_items").update(row).eq("id", item.id).eq("car_id", carId)
+      : await supabase.from("mod_items").insert({ car_id: carId, ...row });
+
     if (error) return { error: error.message };
   }
 
@@ -131,6 +149,10 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
 export async function addCarImage(carId: string, url: string): Promise<ActionState> {
   const { supabase } = await requireUser();
 
+  if (!isOwnStorageUrl(url)) {
+    return { error: "That image couldn't be verified. Try uploading it again." };
+  }
+
   const { count } = await supabase
     .from("car_images")
     .select("id", { count: "exact", head: true })
@@ -141,7 +163,7 @@ export async function addCarImage(carId: string, url: string): Promise<ActionSta
     .insert({ car_id: carId, url, position: count ?? 0 });
   if (error) return { error: error.message };
 
-  // First image becomes the cover automatically.
+  // First image becomes the cover automatically; changeable via setCoverImage.
   if ((count ?? 0) === 0) {
     await supabase.from("cars").update({ cover_image_url: url }).eq("id", carId);
   }
@@ -154,8 +176,56 @@ export async function deleteCarImage(formData: FormData) {
   const { supabase } = await requireUser();
   const id = String(formData.get("image_id") ?? "");
   const carId = String(formData.get("car_id") ?? "");
-  if (id) await supabase.from("car_images").delete().eq("id", id);
+
+  if (id) {
+    // If this was the cover, promote another image rather than leaving a
+    // dangling cover_image_url.
+    const { data: image } = await supabase
+      .from("car_images")
+      .select("url, car_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    await supabase.from("car_images").delete().eq("id", id);
+
+    if (image) {
+      const { data: car } = await supabase
+        .from("cars")
+        .select("cover_image_url")
+        .eq("id", image.car_id)
+        .maybeSingle();
+
+      if (car?.cover_image_url === image.url) {
+        const { data: next } = await supabase
+          .from("car_images")
+          .select("url")
+          .eq("car_id", image.car_id)
+          .order("position")
+          .limit(1)
+          .maybeSingle();
+        await supabase
+          .from("cars")
+          .update({ cover_image_url: next?.url ?? null })
+          .eq("id", image.car_id);
+      }
+    }
+  }
+
   if (carId) revalidatePath(`/garage/${carId}/edit`);
+}
+
+/** Lets the owner choose the cover instead of being stuck with the first upload. */
+export async function setCoverImage(formData: FormData): Promise<void> {
+  const { supabase } = await requireUser();
+  const carId = String(formData.get("car_id") ?? "");
+  const url = String(formData.get("url") ?? "");
+  if (!carId || !isOwnStorageUrl(url)) return;
+
+  await supabase.from("cars").update({ cover_image_url: url }).eq("id", carId);
+  revalidatePath(`/garage/${carId}/edit`);
+
+  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
+  if (car) revalidatePath(`/cars/${car.slug}`);
 }
 
 export async function createActivityPost(
@@ -240,6 +310,116 @@ export async function createRichActivityPost(
   redirect(`/cars/${car.slug}/activity/${post.id}`);
 }
 
+/**
+ * Edits an existing update. Posts were create-only, so a typo in a title was
+ * permanent and images could never be added or removed after filing.
+ */
+export async function updateActivityPost(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const { supabase, user } = await requireUser();
+
+  const postId = String(formData.get("post_id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  if (!postId || !title) return { error: "A title is required." };
+  if (title.length > 160) return { error: "Keep the title under 160 characters." };
+
+  const { data: post } = await supabase
+    .from("activity_posts")
+    .select("id, car_id, author_id")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post || post.author_id !== user.id) return { error: "Update not found." };
+
+  const { data: car } = await supabase
+    .from("cars")
+    .select("slug")
+    .eq("id", post.car_id)
+    .maybeSingle();
+
+  const videoUrl = String(formData.get("video_url") ?? "").trim();
+  if (videoUrl && !isAllowedVideoUrl(videoUrl)) {
+    return { error: "Video links must be YouTube URLs." };
+  }
+
+  // The rich composer posts blocks; the quick editor posts plain text.
+  const blocksRaw = formData.get("blocks");
+  let body: unknown;
+  if (typeof blocksRaw === "string" && blocksRaw) {
+    const { normalizeBlocks } = await import("@/lib/activity-blocks");
+    try {
+      body = normalizeBlocks(JSON.parse(blocksRaw));
+    } catch {
+      return { error: "Could not read the post content." };
+    }
+    if ((body as unknown[]).length === 0) return { error: "Add at least one block." };
+  } else {
+    const text = String(formData.get("body") ?? "").trim();
+    body = text ? [{ heading: null, text }] : [];
+  }
+
+  const { error } = await supabase
+    .from("activity_posts")
+    .update({
+      title,
+      intro: String(formData.get("intro") ?? "").trim() || null,
+      body: body as never,
+      video_url: videoUrl || null,
+    })
+    .eq("id", postId);
+  if (error) return { error: error.message };
+
+  // Keep activity_images in step so feed covers reflect the edit.
+  const imageUrls = Array.isArray(body)
+    ? keepValidImageUrls(
+        (body as { type?: string; urls?: string[] }[]).flatMap((b) =>
+          b.type === "images" ? (b.urls ?? []) : []
+        ),
+        24
+      )
+    : [];
+
+  await supabase.from("activity_images").delete().eq("post_id", postId);
+  if (imageUrls.length) {
+    await supabase
+      .from("activity_images")
+      .insert(imageUrls.map((url, index) => ({ post_id: postId, url, position: index })));
+  }
+
+  revalidatePath(`/garage/${post.car_id}/edit`);
+  if (car) {
+    revalidatePath(`/cars/${car.slug}`);
+    revalidatePath(`/cars/${car.slug}/activity/${postId}`);
+  }
+  return { ok: "Update saved." };
+}
+
+export async function deleteActivityPost(formData: FormData): Promise<void> {
+  const { supabase, user } = await requireUser();
+  const postId = String(formData.get("post_id") ?? "");
+  if (!postId) return;
+
+  const { data: post } = await supabase
+    .from("activity_posts")
+    .select("id, car_id, author_id")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post || post.author_id !== user.id) return;
+
+  const { data: car } = await supabase
+    .from("cars")
+    .select("slug")
+    .eq("id", post.car_id)
+    .maybeSingle();
+
+  await supabase.from("activity_posts").delete().eq("id", postId);
+
+  revalidatePath(`/garage/${post.car_id}/edit`);
+  if (car) revalidatePath(`/cars/${car.slug}`);
+  redirect(`/garage/${post.car_id}/edit`);
+}
+
 export async function updateNotificationPrefs(
   _prev: ActionState,
   formData: FormData
@@ -267,25 +447,93 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
 
   const displayName = String(formData.get("display_name") ?? "").trim();
   if (!displayName) return { error: "Display name is required." };
+  if (displayName.length > 80) return { error: "Keep the display name under 80 characters." };
+
+  const bio = String(formData.get("bio") ?? "").trim();
+  if (bio.length > 1000) return { error: "Keep the bio under 1000 characters." };
 
   const links = ["website", "instagram", "youtube"]
     .map((label) => ({ label, url: String(formData.get(`link_${label}`) ?? "").trim() }))
-    .filter((l) => l.url);
+    .filter((l) => l.url)
+    .filter((l) => /^https?:\/\//.test(l.url));
+
+  // Avatar upload happens client-side into the `avatars` bucket; only the URL
+  // arrives here. An empty value leaves the existing avatar alone.
+  const avatarUrl = String(formData.get("avatar_url") ?? "").trim();
+  if (avatarUrl && !isOwnStorageUrl(avatarUrl)) {
+    return { error: "That image couldn't be verified. Try uploading it again." };
+  }
 
   const { error } = await supabase
     .from("profiles")
     .update({
       display_name: displayName,
       headline: String(formData.get("headline") ?? "").trim() || null,
-      bio: String(formData.get("bio") ?? "").trim() || null,
+      bio: bio || null,
       location: String(formData.get("location") ?? "").trim() || null,
       links,
-      updated_at: new Date().toISOString(),
+      ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     })
     .eq("id", user.id);
 
   if (error) return { error: error.message };
 
   revalidatePath("/profile");
-  return {};
+  revalidatePath("/settings");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.username) revalidatePath(`/u/${profile.username}`);
+
+  return { ok: "Sheet saved." };
+}
+
+/**
+ * Account deletion. Orders are anonymised rather than cascaded (migration 0007),
+ * so the counterparty keeps their history — before that change this would have
+ * failed on a foreign-key violation for anyone who had ever traded.
+ */
+export async function deleteAccount(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { supabase, user } = await requireUser();
+
+  const confirmation = String(formData.get("confirm") ?? "").trim();
+  if (confirmation !== "DELETE") {
+    return { error: 'Type DELETE to confirm.' };
+  }
+
+  // Undispatched sales would leave buyers stranded.
+  const { data: openOrders } = await supabase
+    .from("orders")
+    .select("id")
+    .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+    .in("status", ["pending", "paid", "shipped"])
+    .limit(1);
+
+  if (openOrders?.length) {
+    return {
+      error:
+        "You have orders in progress. Finish or cancel them first — deleting now would leave the other party stranded.",
+    };
+  }
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+
+  // Remove uploaded media, which the row cascade doesn't reach.
+  for (const bucket of ["avatars", "car-images", "activity-images", "listing-images"]) {
+    const { data: files } = await admin.storage.from(bucket).list(user.id);
+    if (files?.length) {
+      await admin.storage.from(bucket).remove(files.map((f) => `${user.id}/${f.name}`));
+    }
+  }
+
+  // Cascades through profiles → cars, listings, activity, saves, follows.
+  const { error } = await admin.auth.admin.deleteUser(user.id);
+  if (error) return { error: error.message };
+
+  await supabase.auth.signOut();
+  redirect("/?deleted=1");
 }
