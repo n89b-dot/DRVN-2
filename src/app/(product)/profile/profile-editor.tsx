@@ -6,9 +6,6 @@ import { updateProfile, type ActionState } from "../garage/actions";
 
 type ProfileLink = { label: string; url: string };
 
-const inputClass =
-  "h-11 w-full rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent";
-
 export function ProfileEditor({
   profile,
 }: {
@@ -30,76 +27,66 @@ export function ProfileEditor({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-pill border border-border px-5 py-2.5 text-sm text-text-secondary transition hover:text-text-primary"
-      >
-        Edit profile
+      <button type="button" onClick={() => setOpen(true)} className="btn btn--ghost">
+        Edit sheet
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-5"
-          onClick={(e) => e.target === e.currentTarget && setOpen(false)}
-        >
-          <div className="max-h-[85vh] w-full max-w-[440px] overflow-y-auto rounded-card border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-text-primary">Edit profile</h2>
+        <div className="sheetwrap is-open" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
+          <div className="sheet max-h-[85vh] overflow-y-auto text-left">
+            <span className="microlabel microlabel--ink">Keeper details</span>
             <form
               action={(fd) => {
                 setSubmitted(true);
                 action(fd);
               }}
-              className="mt-5 flex flex-col gap-3"
+              className="mt-4"
             >
-              <input
-                name="display_name"
-                defaultValue={profile.display_name}
-                required
-                placeholder="Display name"
-                className={inputClass}
-              />
-              <input
-                name="headline"
-                defaultValue={profile.headline}
-                placeholder="Headline (e.g. Product Designer)"
-                className={inputClass}
-              />
-              <input
-                name="location"
-                defaultValue={profile.location}
-                placeholder="Location"
-                className={inputClass}
-              />
-              <textarea
-                name="bio"
-                defaultValue={profile.bio}
-                rows={3}
-                placeholder="Bio"
-                className="w-full resize-y rounded-input border border-border bg-app px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-              />
-              <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                Links
-              </p>
-              <input name="link_website" defaultValue={linkValue("website")} placeholder="Website URL" className={inputClass} />
-              <input name="link_instagram" defaultValue={linkValue("instagram")} placeholder="Instagram URL" className={inputClass} />
-              <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="YouTube URL" className={inputClass} />
-              {state.error && <p className="text-sm text-red-400">{state.error}</p>}
-              {saved && <p className="text-sm text-success">Saved.</p>}
-              <div className="mt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-pill px-4 py-2 text-sm text-text-secondary hover:text-text-primary"
-                >
-                  Cancel
+              <div className="field">
+                <span className="microlabel">Keeper name</span>
+                <input name="display_name" defaultValue={profile.display_name} required className="ctl max-w-none" />
+              </div>
+              <div className="field">
+                <span className="microlabel">Headline</span>
+                <input
+                  name="headline"
+                  defaultValue={profile.headline}
+                  placeholder="One car, drawn honestly"
+                  className="ctl max-w-none"
+                />
+              </div>
+              <div className="field">
+                <span className="microlabel">Location</span>
+                <input name="location" defaultValue={profile.location} className="ctl max-w-none" />
+              </div>
+              <div className="field">
+                <span className="microlabel">Sheet note</span>
+                <textarea name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
+              </div>
+              <div className="field">
+                <span className="microlabel">Website</span>
+                <input name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="ctl max-w-none" />
+              </div>
+              <div className="field">
+                <span className="microlabel">Instagram</span>
+                <input name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="ctl max-w-none" />
+              </div>
+              <div className="field">
+                <span className="microlabel">YouTube</span>
+                <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl max-w-none" />
+              </div>
+              {state.error && (
+                <p className="field__err" style={{ display: "flex" }}>
+                  {state.error}
+                </p>
+              )}
+              {saved && <span className="chip chip--ok">Sheet saved</span>}
+              <div className="sheet__actions">
+                <button type="submit" disabled={pending} className="btn btn--live flex-1">
+                  {pending ? "Filing…" : "Save the sheet"}
                 </button>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="rounded-pill bg-accent px-5 py-2 text-sm font-semibold text-white transition hover:bg-accent/90"
-                >
-                  {pending ? "Saving…" : "Save"}
+                <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
+                  Close
                 </button>
               </div>
             </form>

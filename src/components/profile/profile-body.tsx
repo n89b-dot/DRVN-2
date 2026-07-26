@@ -19,7 +19,7 @@ function VehicleRows({ view }: { view: ProfileView }) {
       {view.vehicles.map((car) => (
         <TimelineRow key={car.id} date={car.year}>
           <LinkedTitle href={`/cars/${car.slug}`} label={car.name} />
-          {car.colorLabel && <p className="mt-0.5 text-sm text-text-muted">{car.colorLabel}</p>}
+          {car.colorLabel && <p className="order__meta mt-0.5">{car.colorLabel}</p>}
           {car.gallery.length > 0 && (
             <div className="mt-4">
               <HorizontalGallery images={car.gallery.map((g) => g.url)} alt={car.name} />
@@ -27,7 +27,9 @@ function VehicleRows({ view }: { view: ProfileView }) {
           )}
         </TimelineRow>
       ))}
-      {view.vehicles.length === 0 && <p className="mt-5 text-sm text-text-muted">No cars yet.</p>}
+      {view.vehicles.length === 0 && (
+        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">No cars yet</p>
+      )}
     </div>
   );
 }
@@ -38,7 +40,7 @@ function ActivityRows({ view }: { view: ProfileView }) {
       {view.activity.map((post) => (
         <TimelineRow key={post.id} date={post.date}>
           <LinkedTitle href={`/cars/${post.carSlug}/activity/${post.id}`} label={post.title} />
-          {post.intro && <p className="mt-1 text-sm leading-6 text-text-secondary">{post.intro}</p>}
+          {post.intro && <p className="mt-1 max-w-[62ch] text-sm leading-6">{post.intro}</p>}
           {post.gallery.length > 0 && (
             <div className="mt-4">
               <HorizontalGallery large images={post.gallery.map((g) => g.url)} alt={post.title} />
@@ -47,7 +49,7 @@ function ActivityRows({ view }: { view: ProfileView }) {
         </TimelineRow>
       ))}
       {view.activity.length === 0 && (
-        <p className="mt-5 text-sm text-text-muted">No build updates yet.</p>
+        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">No entries</p>
       )}
     </div>
   );
@@ -77,7 +79,7 @@ export function ProfileBody({
 
       {tab === "About" ? (
         <div className="mt-8 grid gap-12">
-          {bio && <p className="text-sm leading-7 text-text-secondary">{bio}</p>}
+          {bio && <p className="max-w-[62ch] text-[15px] leading-7">{bio}</p>}
 
           <section>
             <SectionHeading>Vehicles</SectionHeading>
@@ -94,20 +96,17 @@ export function ProfileBody({
           {contactLinks.length > 0 && (
             <section>
               <SectionHeading>Contact</SectionHeading>
-              <div className="mt-5 grid gap-3">
+              <div className="mt-2">
                 {contactLinks.map((link) => (
-                  <div key={link.label} className="grid grid-cols-[110px_1fr] gap-4 text-sm">
-                    <span className="capitalize text-text-muted">{link.label}</span>
+                  <div key={link.label} className="bline">
+                    <span className="bline__label">{link.label}</span>
                     <a
                       href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="group text-text-primary"
+                      className="bline__val !text-[15px] transition-colors hover:text-live"
                     >
-                      <span className="group-hover:underline">
-                        {link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                      </span>{" "}
-                      <span className="text-xs text-text-muted">↗</span>
+                      {link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
                     </a>
                   </div>
                 ))}

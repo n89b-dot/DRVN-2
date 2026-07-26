@@ -44,6 +44,9 @@ export default async function PublicProfilePage({
 
   return (
     <NarrowColumn>
+      <div className="pagehead !pb-4">
+        <span className="microlabel">Keeper sheet — public</span>
+      </div>
       <ProfileHeader
         initials={initialsFrom(name)}
         name={name}

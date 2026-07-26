@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
 
   return (
-    <div className="mx-auto w-full max-w-[900px] px-6 py-10 md:px-10">
+    <div className="mx-auto w-full max-w-[900px] px-6 pb-10">
       <SettingsPanel
         profile={{
           email: user?.email ?? "",

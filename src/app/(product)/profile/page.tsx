@@ -27,6 +27,14 @@ export default async function ProfilePage() {
 
   return (
     <NarrowColumn>
+      <div className="pagehead !pb-4">
+        <span className="microlabel">
+          Keeper sheet — yours ·{" "}
+          <Link href={`/u/${profile?.username}`} className="hover:text-live">
+            view public →
+          </Link>
+        </span>
+      </div>
       <ProfileHeader
         initials={initialsFrom(name)}
         name={name}
@@ -52,9 +60,9 @@ export default async function ProfilePage() {
       />
       <ProfileBody bio={profile?.bio ?? null} view={view} contactLinks={rest} />
 
-      <p className="mt-10 text-sm text-text-muted">
-        Your public page:{" "}
-        <Link href={`/u/${profile?.username}`} className="text-accent hover:underline">
+      <p className="mt-10">
+        <span className="microlabel">Your public sheet — </span>
+        <Link href={`/u/${profile?.username}`} className="jumplink">
           drvn.app/u/{profile?.username}
         </Link>
       </p>
