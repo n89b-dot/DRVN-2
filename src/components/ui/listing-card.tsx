@@ -12,19 +12,36 @@ export type ListingCardData = {
   location: string | null;
   cover_url: string | null;
   fits_car_name?: string | null;
+  /** Manufacturer part number — what a buyer cross-references against. */
+  part_number?: string | null;
+  /** How many people are watching. Omitted (not 0) when unknown. */
+  watch_count?: number;
 };
 
-/** Market card — an `a.tile` for the `.mkt` grid: image plate, name, mono
- *  price, chip row. Fits-your-car is an ok chip (a fact, not a signal). */
+/** Market card — an `a.tile` for the `.mkt` grid: part number annotation, image
+ *  plate, name, mono price with the watch count set against it, chip row.
+ *  Fits-your-car is an ok chip (a fact, not a signal). */
 export function ListingCard({ listing }: { listing: ListingCardData }) {
   const meta = [conditionLabel(listing.condition), listing.location].filter(Boolean);
+  const watching = listing.watch_count ?? 0;
+
   return (
     <Link href={`/listings/${listing.id}`} className="tile">
-      <span className="tile__img block aspect-[3/2]">
+      {listing.part_number && (
+        <span className="microlabel block truncate">Part no. {listing.part_number}</span>
+      )}
+      <span className="tile__img mt-2 block aspect-[3/2]">
         <Media src={listing.cover_url ?? undefined} alt={listing.title} className="h-full w-full" />
       </span>
       <p className="mkt__name clamp2">{listing.title}</p>
-      <p className="mkt__price">{formatPrice(listing.price_cents)}</p>
+      <p className="mkt__price flex items-baseline justify-between gap-3">
+        <span>{formatPrice(listing.price_cents)}</span>
+        {watching > 0 && (
+          <span className="microlabel tabular-nums">
+            Watch {watching}
+          </span>
+        )}
+      </p>
       <span className="mkt__meta">
         {listing.fits_car_name && <span className="chip chip--ok">Fits your {listing.fits_car_name}</span>}
         {meta.map((m) => (

@@ -34,14 +34,22 @@ export default async function SellPage({
   // Only honour the pre-fill if this really is the seller's own car.
   const sourceCar = carParam ? cars?.find((c) => c.id === carParam) : undefined;
 
-  let prefill: { carId?: string; title?: string; category?: string; modItemId?: string } | undefined;
+  let prefill:
+    | {
+        carId?: string;
+        title?: string;
+        category?: string;
+        modItemId?: string;
+        partNumber?: string;
+      }
+    | undefined;
   if (sourceCar) {
     prefill = { carId: sourceCar.id };
 
     if (modParam) {
       const { data: mod } = await supabase
         .from("mod_items")
-        .select("id, brand, product, raw_text, category, car_id")
+        .select("id, brand, product, raw_text, category, part_number, car_id")
         .eq("id", modParam)
         .eq("car_id", sourceCar.id)
         .maybeSingle();
@@ -53,6 +61,9 @@ export default async function SellPage({
           title: title.slice(0, 140),
           category: mod.category ?? undefined,
           modItemId: mod.id,
+          // The build line already knows the part number — carry it across so
+          // the seller isn't retyping what the sheet recorded.
+          partNumber: mod.part_number ?? undefined,
         };
       }
     }

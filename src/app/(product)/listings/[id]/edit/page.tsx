@@ -92,6 +92,7 @@ export default async function EditListingPage({
             category: listing.category,
             subcategory: listing.subcategory,
             condition: listing.condition,
+            part_number: listing.part_number,
             price_cents: listing.price_cents,
             shipping_cents: listing.shipping_cents ?? 0,
             offer_floor_cents: listing.offer_floor_cents,

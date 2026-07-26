@@ -43,6 +43,7 @@ export type ListingDraft = {
   category: string;
   subcategory: string | null;
   condition: string | null;
+  part_number: string | null;
   price_cents: number;
   shipping_cents: number;
   offer_floor_cents: number | null;
@@ -65,7 +66,13 @@ export function SellForm({
   /** Present when editing an existing listing. */
   listing?: ListingDraft;
   /** Pre-fill from "release a part off this car". */
-  prefill?: { carId?: string; title?: string; category?: string; modItemId?: string };
+  prefill?: {
+    carId?: string;
+    title?: string;
+    category?: string;
+    modItemId?: string;
+    partNumber?: string;
+  };
 }) {
   const isEdit = Boolean(listing);
   const [state, action, pending] = useActionState<SellState, FormData>(
@@ -179,20 +186,35 @@ export function SellForm({
             </select>
           </label>
         </div>
-        <label className="field !mb-0 sm:max-w-[50%]">
-          <span className="microlabel">Condition</span>
-          <select
-            name="condition"
-            defaultValue={listing?.condition ?? "used"}
-            className="ctl max-w-none"
-          >
-            {CONDITIONS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="field--row">
+          <label className="field !mb-0">
+            <span className="microlabel">Condition</span>
+            <select
+              name="condition"
+              defaultValue={listing?.condition ?? "used"}
+              className="ctl max-w-none"
+            >
+              {CONDITIONS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field !mb-0">
+            <span className="microlabel">Part number — optional</span>
+            <input
+              name="part_number"
+              maxLength={120}
+              defaultValue={listing?.part_number ?? prefill?.partNumber ?? ""}
+              placeholder="e.g. CP9660-2S4"
+              className="ctl max-w-none"
+            />
+            <span className="field__hint">
+              What a buyer cross-references. Seller-entered, not verified.
+            </span>
+          </label>
+        </div>
         <label className="field !mb-0">
           <span className="microlabel">Description</span>
           <textarea

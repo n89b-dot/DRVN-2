@@ -91,6 +91,8 @@ export type Listing = {
   category: string;
   subcategory: string | null;
   condition: "new" | "like_new" | "used" | "for_parts" | null;
+  /** Manufacturer part number, seller-entered. Not platform-verified. */
+  part_number: string | null;
   price_cents: number;
   /** Seller-set flat shipping, charged on top of the asking price. */
   shipping_cents: number;

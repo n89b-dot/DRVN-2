@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Rv } from "@/components/livesheet";
+import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, ListingCard, Media } from "@/components/ui";
 import { SaveButton } from "@/features/social/buttons";
+import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
@@ -115,6 +116,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     isSaved = Boolean(save);
   }
 
+  const watchCount = (await fetchWatchCounts(supabase, [id])).get(id) ?? 0;
+
   // Seller rating + Q&A
   const [{ data: reviews }, { data: questions }] = await Promise.all([
     supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),
@@ -185,6 +188,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             </>
           )}
           {" · part sheet"}
+          {listing.part_number && ` · part no. ${listing.part_number}`}
         </span>
         <h1>{listing.title}</h1>
       </Rv>
@@ -261,6 +265,17 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <p className="kv mt-2 text-dim">
               {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(" · ")}
             </p>
+            {/* What the sheet has seen of this part — watchers are live, views
+                are cumulative, so only the watcher line carries the live dot. */}
+            <LiveDim
+              label="Watching"
+              value={watchCount > 0 ? `${watchCount} watching` : "—"}
+              live={watchCount > 0}
+              blank={watchCount === 0}
+            />
+            {listing.part_number && (
+              <LiveDim label="Part number" value={listing.part_number} />
+            )}
 
             <PurchaseActions
               listingId={listing.id}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import type { ModItem } from "@/lib/database.types";
@@ -17,9 +18,13 @@ export const MOD_GROUPS = [
 
 type Row = {
   key: string;
+  /** The saved mod_items id, or null for a line not yet filed. Only a saved
+   *  line can be released for sale — the listing links back to this id. */
+  id: string | null;
   group_label: string;
   brand: string;
   product: string;
+  part_number: string;
   raw_text: string;
 };
 
@@ -49,6 +54,8 @@ function parsePaste(text: string): Row[] {
     const words = line.split(/\s+/);
     rows.push({
       key: crypto.randomUUID(),
+      id: null,
+      part_number: "",
       group_label: currentGroup,
       brand: words.length > 1 ? words[0] : "",
       product: words.length > 1 ? words.slice(1).join(" ") : line,
@@ -64,9 +71,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   const [rows, setRows] = useState<Row[]>(
     initialMods.map((m) => ({
       key: m.id,
+      id: m.id,
       group_label: m.group_label,
       brand: m.brand ?? "",
       product: m.product ?? "",
+      part_number: m.part_number ?? "",
       raw_text: m.raw_text ?? "",
     }))
   );
@@ -82,9 +91,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   function save() {
     setStatus(null);
     const items: ModItemInput[] = rows.map((r, i) => ({
+      id: r.id,
       group_label: r.group_label,
       brand: r.brand.trim() || null,
       product: r.product.trim() || null,
+      part_number: r.part_number.trim() || null,
       raw_text: r.raw_text || `${r.brand} ${r.product}`.trim(),
       position: i,
     }));
@@ -159,6 +170,27 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 placeholder="Product"
                 className="ctl !py-2 max-w-none min-w-[150px] flex-1"
               />
+              <input
+                value={row.part_number}
+                onChange={(e) => updateRow(row.key, { part_number: e.target.value })}
+                placeholder="Part no."
+                className={`${inputClass} w-[110px] shrink-0`}
+              />
+              {/* Release is only offered on a filed line: the listing links back
+                  to this row's id, so an unsaved row has nothing to attach to. */}
+              {row.id ? (
+                <Link
+                  href={`/sell?car=${carId}&mod=${row.id}`}
+                  className="relbtn !static shrink-0"
+                  title="List this component for sale with its provenance attached"
+                >
+                  Release
+                </Link>
+              ) : (
+                <span className="microlabel shrink-0" title="Save the sheet before releasing">
+                  Unfiled
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setRows((r) => r.filter((x) => x.key !== row.key))}
@@ -178,7 +210,15 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           onClick={() =>
             setRows((r) => [
               ...r,
-              { key: crypto.randomUUID(), group_label: "Other", brand: "", product: "", raw_text: "" },
+              {
+                key: crypto.randomUUID(),
+                id: null,
+                group_label: "Other",
+                brand: "",
+                product: "",
+                part_number: "",
+                raw_text: "",
+              },
             ])
           }
           className="jumplink"

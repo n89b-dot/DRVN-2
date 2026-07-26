@@ -49,6 +49,9 @@ async function readListingFields(formData: FormData, userId: string) {
     return { error: "Keep the compatibility notes under 2000 characters." };
   }
 
+  const partNumber = String(formData.get("part_number") ?? "").trim();
+  if (partNumber.length > 120) return { error: "Keep the part number under 120 characters." };
+
   // A source car is a provenance claim, so it must be a car this seller owns.
   // Without this check any seller could attach someone else's well-known build.
   const sourceCarId = String(formData.get("source_car_id") ?? "") || null;
@@ -81,6 +84,7 @@ async function readListingFields(formData: FormData, userId: string) {
       allows_collection: formData.get("allows_collection") === "on",
       location: String(formData.get("location") ?? "").trim() || null,
       compatibility_notes: compatibility || null,
+      part_number: partNumber || null,
       source_car_id: sourceCarId,
     },
   };

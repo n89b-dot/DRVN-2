@@ -94,6 +94,8 @@ export type ModItemInput = {
   group_label: string;
   brand: string | null;
   product: string | null;
+  /** Carried onto the listing when this line is released for sale. */
+  part_number?: string | null;
   raw_text: string;
   position: number;
 };
@@ -130,6 +132,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
       group_label: item.group_label || "Other",
       brand: item.brand,
       product: item.product,
+      part_number: item.part_number ?? null,
       raw_text: item.raw_text,
       position: index,
     };
