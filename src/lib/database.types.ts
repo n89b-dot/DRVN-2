@@ -103,6 +103,8 @@ export type Listing = {
   location: string | null;
   compatibility_notes: string | null;
   status: ListingStatus;
+  /** Public part-sheet loads, excluding the seller. */
+  view_count: number;
   sold_at: string | null;
   reserved_until: string | null;
   created_at: string;
@@ -376,6 +378,11 @@ export type Database = {
       search_listing_ids: {
         Args: { p_query: string };
         Returns: string[];
+      };
+      /** Bumps a listing's public view counter. Callable by anyone. */
+      bump_listing_view: {
+        Args: { p_listing: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { hasSupabaseConfig, isProduction } from "@/lib/env";
+import { hasSupabaseConfig, isProduction, publicKey } from "@/lib/env";
 
 const PRODUCT_PREFIXES = [
   "/home",
@@ -54,8 +54,9 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // hasSupabaseConfig() above already proved both are present.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseKey = publicKey()!;
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {

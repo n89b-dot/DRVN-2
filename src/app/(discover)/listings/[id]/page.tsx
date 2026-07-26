@@ -118,6 +118,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
   const watchCount = (await fetchWatchCounts(supabase, [id])).get(id) ?? 0;
 
+  // Count the look, but never the seller's own — a seller refreshing their
+  // listing must not inflate the number they price against. Fire-and-forget:
+  // a failed counter bump must never break the page.
+  if (user?.id !== listing.seller_id) {
+    void supabase.rpc("bump_listing_view", { p_listing: id });
+  }
+
   // Seller rating + Q&A
   const [{ data: reviews }, { data: questions }] = await Promise.all([
     supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),

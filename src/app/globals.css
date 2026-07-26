@@ -1240,6 +1240,118 @@ video {
     margin-top: 3px;
   }
 
+  /* ---------- THE LEDGER — a ruled data table ----------
+     For the one place a list genuinely is tabular: many short columns the
+     seller scans down (views, watchers, asking, top offer). Everywhere else
+     the ruled row is still the answer — this is not a general-purpose grid. */
+  .ledger {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .ledger th {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    text-align: left;
+    padding: 0 10px 9px 0;
+    border-bottom: 1px solid var(--rule-mid);
+    white-space: nowrap;
+  }
+  .ledger td {
+    padding: 13px 10px 13px 0;
+    border-top: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  .ledger tbody tr:first-child td {
+    border-top: 0;
+  }
+  /* the row you're looking at lifts by tone, never by shadow */
+  .ledger tbody tr.is-open > td {
+    background: var(--tile-2);
+  }
+  .ledger__num {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .ledger__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: inherit;
+    transition: color var(--t-fast) ease;
+  }
+  .ledger__sort:hover {
+    color: var(--ink);
+  }
+  .ledger__sort.is-on {
+    color: var(--ink);
+  }
+  /* the disclosure caret — a drafting tick that turns, not a chevron icon */
+  .ledger__toggle {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    width: 18px;
+    text-align: left;
+    transition:
+      transform var(--t-fast) var(--spring),
+      color var(--t-fast) ease;
+    display: inline-block;
+  }
+  .ledger__toggle:hover {
+    color: var(--ink);
+  }
+  .ledger__toggle.is-on {
+    transform: rotate(90deg);
+    color: var(--live);
+  }
+  .ledger__detail > td {
+    border-top: 0;
+    padding-top: 0;
+  }
+  @media (max-width: 860px) {
+    /* Below this the table stops being scannable and starts being a maze;
+       the ledger becomes ruled rows carrying the same figures as labels. */
+    .ledger,
+    .ledger tbody,
+    .ledger tr,
+    .ledger td {
+      display: block;
+      width: 100%;
+    }
+    .ledger thead {
+      display: none;
+    }
+    .ledger tbody tr {
+      border-top: 1px solid var(--rule-soft);
+      padding: 12px 0;
+    }
+    .ledger tbody tr:first-child {
+      border-top: 0;
+    }
+    .ledger td {
+      border-top: 0;
+      padding: 2px 0;
+    }
+    .ledger__num {
+      text-align: left;
+    }
+    .ledger__num::before {
+      content: attr(data-label) " ";
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+  }
+
   /* ---------- spec tables ---------- */
   .spec {
     width: 100%;
