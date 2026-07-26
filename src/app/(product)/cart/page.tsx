@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { Media, NarrowColumn, SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot, Media } from "@/components/ui";
 import { getCartIds } from "@/lib/cart";
 import { formatPrice, platformFeeCents } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
@@ -39,67 +40,88 @@ export default async function CartPage() {
   }
 
   return (
-    <NarrowColumn>
-      <SectionLabel>Cart</SectionLabel>
-      <h1 className="mt-3 text-2xl font-bold text-text-primary">Your cart</h1>
+    <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">
+          The cart · {active.length} line{active.length === 1 ? "" : "s"}
+        </span>
+        <h1>Before it leaves the sheet.</h1>
+      </Rv>
 
       {active.length === 0 ? (
-        <p className="mt-6 text-sm text-text-muted">
-          Cart&apos;s empty.{" "}
-          <Link href="/marketplace" className="text-accent hover:underline">
-            Browse the marketplace →
+        <Rv className="undrawn undrawn--hero">
+          <span className="undrawn__mark" aria-hidden="true">
+            ⌕
+          </span>
+          <h3>Nothing in the cart</h3>
+          <p>Lines you add from the market collect here until you confirm them.</p>
+          <Link href="/marketplace" className="btn btn--ghost">
+            Browse the market
           </Link>
-        </p>
+        </Rv>
       ) : (
-        <>
-          <div className="mt-6 flex flex-col gap-2">
-            {active.map((listing) => (
-              <div
-                key={listing.id}
-                className="flex items-center gap-4 rounded-card border border-border bg-surface p-4"
-              >
-                <Media
-                  src={cover.get(listing.id) ?? undefined}
-                  alt={listing.title}
-                  className="h-14 w-20 shrink-0 rounded-tile"
-                />
-                <Link
-                  href={`/listings/${listing.id}`}
-                  className="min-w-0 flex-1 truncate text-sm font-semibold text-text-primary transition hover:text-accent"
-                >
-                  {listing.title}
-                </Link>
-                <span className="text-sm font-bold text-text-primary">
-                  {formatPrice(listing.price_cents)}
-                </span>
-                <form action={removeFromCart}>
-                  <input type="hidden" name="listing_id" value={listing.id} />
-                  <button type="submit" className="text-xs text-text-muted transition hover:text-red-400">
-                    Remove
-                  </button>
-                </form>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 rounded-card border border-border bg-surface p-5 text-sm">
-            <div className="flex justify-between border-b border-border pb-3 text-base font-bold text-text-primary">
-              <span>Total</span>
-              <span>{formatPrice(subtotal)}</span>
+        <section className="deck">
+          <Rv className="tile">
+            <div className="rowlist">
+              {active.map((listing) => (
+                <div key={listing.id} className="order">
+                  <span className="order__img">
+                    <Media
+                      src={cover.get(listing.id) ?? undefined}
+                      alt={listing.title}
+                      className="h-full w-full"
+                    />
+                  </span>
+                  <span className="min-w-0">
+                    <Link
+                      href={`/listings/${listing.id}`}
+                      className="order__name block truncate transition-colors hover:text-live"
+                    >
+                      {listing.title}
+                    </Link>
+                    <span className="order__meta block">{formatPrice(listing.price_cents)}</span>
+                  </span>
+                  <span className="order__actions">
+                    <form action={removeFromCart}>
+                      <input type="hidden" name="listing_id" value={listing.id} />
+                      <button type="submit" className="relbtn !static">
+                        Remove
+                      </button>
+                    </form>
+                  </span>
+                </div>
+              ))}
             </div>
-            <p className="mt-3 text-xs text-text-muted">
+          </Rv>
+
+          <Rv className="tile tile--deep" stagger={1}>
+            <span className="microlabel microlabel--ink">The math on the sheet</span>
+            <div className="mt-2">
+              <div className="sheet__row">
+                <span>Subtotal</span>
+                <b>{formatPrice(subtotal)}</b>
+              </div>
+              <div className="sheet__row sheet__total">
+                <span>You pay</span>
+                <b>{formatPrice(subtotal)}</b>
+              </div>
+            </div>
+            <p className="spec-note">
               You pay the listed price — DRVN&apos;s 10% fee ({formatPrice(fee)}) is deducted from
-              the seller&apos;s payout.
+              the seller&apos;s payout. <b>Payments are stubbed in this build</b> — no real charge
+              is made.
             </p>
             <div className="mt-4">
               <CheckoutButton action={checkoutCart} />
             </div>
-            <p className="mt-3 text-center text-xs text-text-muted">
-              Payments are stubbed in this build — no real charge is made.
-            </p>
-          </div>
-        </>
+          </Rv>
+        </section>
       )}
-    </NarrowColumn>
+
+      <Foot
+        left="DRVN / Livesheet — money sits in the stub until you say otherwise"
+        right={<Link href="/orders">Your orders →</Link>}
+      />
+    </div>
   );
 }

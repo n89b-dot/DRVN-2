@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { NarrowColumn, SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,18 +10,14 @@ import { ReviewForm } from "./review-form";
 
 export const metadata = { title: "Orders - DRVN" };
 
-function statusPill(status: string) {
-  const tone =
+function StatusChip({ status }: { status: string }) {
+  const cls =
     status === "paid" || status === "completed" || status === "accepted"
-      ? "bg-success/15 text-success"
+      ? "chip chip--ok"
       : status === "pending" || status === "open"
-        ? "bg-accent/15 text-accent"
-        : "bg-raised text-text-muted";
-  return (
-    <span className={`rounded-pill px-2.5 py-0.5 text-[11px] font-semibold uppercase ${tone}`}>
-      {status}
-    </span>
-  );
+        ? "chip chip--live"
+        : "chip chip--spent";
+  return <span className={cls}>{status}</span>;
 }
 
 export default async function OrdersPage({
@@ -116,40 +113,41 @@ export default async function OrdersPage({
 
   const purchases = (orders ?? []).filter((o) => o.buyer_id === user!.id);
   const sales = (orders ?? []).filter((o) => o.seller_id === user!.id);
+  const openIncoming = (incomingOffers ?? []).filter((o) => o.status === "open").length;
 
-  const OrderCard = ({ order, role }: { order: NonNullable<typeof orders>[number]; role: "buyer" | "seller" }) => (
-    <div className="rounded-card border border-border bg-surface p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {statusPill(order.status)}
-          <span className="text-xs text-text-muted">
+  const OrderRow = ({ order, role }: { order: NonNullable<typeof orders>[number]; role: "buyer" | "seller" }) => (
+    <div className="jobrow">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <StatusChip status={order.status} />
+          <span className="font-mono text-xs text-dim">
             {new Date(order.created_at).toLocaleDateString()}
           </span>
-        </div>
-        <span className="text-sm font-bold text-text-primary">{formatPrice(order.total_cents)}</span>
+        </span>
+        <span className="kv font-medium">{formatPrice(order.total_cents)}</span>
       </div>
-      <ul className="mt-3 flex flex-col gap-1">
+      <ul className="mt-2">
         {(items ?? [])
           .filter((i) => i.order_id === order.id)
           .map((i) => (
-            <li key={i.id} className="flex justify-between gap-3 text-sm">
+            <li key={i.id} className="flex justify-between gap-3 py-0.5">
               <Link
                 href={`/listings/${i.listing_id}`}
-                className="min-w-0 truncate text-text-secondary transition hover:text-accent"
+                className="order__name min-w-0 truncate !text-[14.5px] transition-colors hover:text-live"
               >
                 {listingTitle(i.listing_id)}
               </Link>
-              <span className="shrink-0 text-text-muted">{formatPrice(i.price_cents)}</span>
+              <span className="kv shrink-0 text-dim">{formatPrice(i.price_cents)}</span>
             </li>
           ))}
       </ul>
-      <p className="mt-2 text-xs text-text-muted">
+      <p className="order__meta mt-1">
         {role === "buyer"
-          ? `Seller: ${name(order.seller_id)}`
-          : `Buyer: ${name(order.buyer_id)} · fee ${formatPrice(order.platform_fee_cents)} · you receive ${formatPrice(order.total_cents - order.platform_fee_cents)}`}
+          ? `Seller — ${name(order.seller_id)} · money sits in the stub until delivery`
+          : `Buyer — ${name(order.buyer_id)} · fee ${formatPrice(order.platform_fee_cents)} · payout ${formatPrice(order.total_cents - order.platform_fee_cents)}`}
       </p>
       {["paid", "shipped", "completed"].includes(order.status) && !reviewedByMe.has(order.id) && (
-        <div className="mt-3 border-t border-border pt-3">
+        <div className="mt-3 border-t border-[color:var(--rule-soft)] pt-3">
           <ReviewForm
             orderId={order.id}
             revieweeName={role === "buyer" ? name(order.seller_id) : name(order.buyer_id)}
@@ -159,71 +157,62 @@ export default async function OrdersPage({
     </div>
   );
 
-  const OfferCard = ({
+  const OfferRow = ({
     offer,
     incoming,
   }: {
     offer: NonNullable<typeof myOffers>[number];
     incoming: boolean;
   }) => (
-    <div className="rounded-card border border-border bg-surface p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {statusPill(offer.status)}
+    <div className="jobrow">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <StatusChip status={offer.status} />
           <Link
             href={`/listings/${offer.listing_id}`}
-            className="min-w-0 truncate text-sm font-semibold text-text-primary transition hover:text-accent"
+            className="order__name min-w-0 truncate transition-colors hover:text-live"
           >
             {listingTitle(offer.listing_id)}
           </Link>
-        </div>
-        <span className="shrink-0 text-sm font-bold text-text-primary">
-          {formatPrice(offer.amount_cents)}
         </span>
+        <span className="kv shrink-0 font-medium">{formatPrice(offer.amount_cents)}</span>
       </div>
-      {incoming && <p className="mt-1 text-xs text-text-muted">From {name(offer.buyer_id)}</p>}
+      {incoming && <p className="order__meta mt-0.5">@{name(offer.buyer_id)} makes the offer</p>}
 
       {messagesFor(offer.id).length > 0 && (
-        <div className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3">
+        <div className="thread mt-3 border-t border-[color:var(--rule-soft)] pt-2">
           {messagesFor(offer.id).map((m) => (
-            <p key={m.id} className="text-sm">
-              <span className={m.sender_id === user!.id ? "text-accent" : "text-text-muted"}>
-                {name(m.sender_id)}:
-              </span>{" "}
-              <span className="text-text-secondary">{m.body}</span>
-            </p>
+            <div key={m.id} className={`msg !py-1.5 ${m.sender_id === user!.id ? "msg--me" : ""}`}>
+              <span className="msg__who">{name(m.sender_id)}</span>
+              <p className="msg__body !text-[14px]">{m.body}</p>
+            </div>
           ))}
         </div>
       )}
 
       {offer.status === "open" && (
-        <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-          <form action={sendOfferMessage} className="flex gap-2">
+        <div className="mt-3 flex flex-col gap-2 border-t border-[color:var(--rule-soft)] pt-3">
+          <form action={sendOfferMessage} className="composer__row">
             <input type="hidden" name="offer_id" value={offer.id} />
-            <input
-              name="body"
-              required
-              placeholder="Message…"
-              className="h-9 flex-1 rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted"
-            />
-            <button type="submit" className="rounded-pill border border-border px-4 text-sm text-text-secondary">
+            <input name="body" required placeholder="Message…" className="ctl max-w-none flex-1 !py-2" />
+            <button type="submit" className="btn btn--ghost !py-2.5">
               Send
             </button>
           </form>
           {incoming && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <form action={respondToOffer}>
                 <input type="hidden" name="offer_id" value={offer.id} />
                 <input type="hidden" name="decision" value="accepted" />
-                <button type="submit" className="rounded-pill bg-success/90 px-4 py-1.5 text-sm font-semibold text-white">
-                  Accept — sell for {formatPrice(offer.amount_cents)}
+                <button type="submit" className="btn btn--live">
+                  Accept {formatPrice(offer.amount_cents)}
                 </button>
               </form>
               <form action={respondToOffer}>
                 <input type="hidden" name="offer_id" value={offer.id} />
                 <input type="hidden" name="decision" value="declined" />
-                <button type="submit" className="rounded-pill border border-border px-4 py-1.5 text-sm text-text-secondary">
-                  Decline
+                <button type="submit" className="btn btn--ghost">
+                  Pass
                 </button>
               </form>
             </div>
@@ -234,56 +223,127 @@ export default async function OrdersPage({
   );
 
   return (
-    <NarrowColumn>
-      <SectionLabel>Orders</SectionLabel>
-      <h1 className="mt-3 text-2xl font-bold text-text-primary">Orders & offers</h1>
-      {placed && (
-        <p className="mt-4 rounded-card border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">
-          Order placed. Payment was processed by the stub provider — no real charge.
+    <div className="wrap">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">
+          Orders &amp; offers
+          {openIncoming > 0 && (
+            <>
+              {" · "}
+              <span className="microlabel--live">
+                {openIncoming} offer{openIncoming === 1 ? "" : "s"} need an answer
+              </span>
+            </>
+          )}
+        </span>
+        <h1>
+          Work orders on the <span className="live-word">sheet.</span>
+        </h1>
+        <p className="sub">
+          Offers arrive as work orders — accept, counter in the thread, or pass. Money sits with
+          the stub provider until the part is confirmed.
         </p>
-      )}
+      </Rv>
 
-      {(incomingOffers ?? []).length > 0 && (
-        <div className="mt-8">
-          <SectionLabel>Offers on your listings</SectionLabel>
-          <div className="mt-3 flex flex-col gap-3">
-            {(incomingOffers ?? []).map((o) => (
-              <OfferCard key={o.id} offer={o} incoming />
-            ))}
-          </div>
+      {placed && (
+        <div className="alert alert--ok mb-6">
+          <span className="alert__ico" aria-hidden="true">
+            ✓
+          </span>
+          <h4>Order placed</h4>
+          <p>Payment was processed by the stub provider — no real charge.</p>
         </div>
       )}
 
-      {(myOffers ?? []).length > 0 && (
-        <div className="mt-8">
-          <SectionLabel>Your offers</SectionLabel>
-          <div className="mt-3 flex flex-col gap-3">
-            {(myOffers ?? []).map((o) => (
-              <OfferCard key={o.id} offer={o} incoming={false} />
-            ))}
-          </div>
-        </div>
-      )}
+      <section className="deck deck--two !items-start">
+        <div className="grid gap-4">
+          {(incomingOffers ?? []).length > 0 && (
+            <Rv className="tile">
+              <div className="tile__head">
+                <span className="microlabel microlabel--ink">Offers on your listings</span>
+                {openIncoming > 0 && <span className="chip chip--live">{openIncoming} open</span>}
+              </div>
+              <div className="rowlist">
+                {(incomingOffers ?? []).map((o) => (
+                  <OfferRow key={o.id} offer={o} incoming />
+                ))}
+              </div>
+            </Rv>
+          )}
 
-      <div className="mt-8">
-        <SectionLabel>Purchases</SectionLabel>
-        <div className="mt-3 flex flex-col gap-3">
-          {purchases.map((o) => (
-            <OrderCard key={o.id} order={o} role="buyer" />
-          ))}
-          {purchases.length === 0 && <p className="text-sm text-text-muted">No purchases yet.</p>}
-        </div>
-      </div>
+          {(myOffers ?? []).length > 0 && (
+            <Rv className="tile" stagger={1}>
+              <div className="tile__head">
+                <span className="microlabel microlabel--ink">Offers you&apos;ve made</span>
+              </div>
+              <div className="rowlist">
+                {(myOffers ?? []).map((o) => (
+                  <OfferRow key={o.id} offer={o} incoming={false} />
+                ))}
+              </div>
+            </Rv>
+          )}
 
-      <div className="mt-8">
-        <SectionLabel>Sales</SectionLabel>
-        <div className="mt-3 flex flex-col gap-3">
-          {sales.map((o) => (
-            <OrderCard key={o.id} order={o} role="seller" />
-          ))}
-          {sales.length === 0 && <p className="text-sm text-text-muted">No sales yet.</p>}
+          {(incomingOffers ?? []).length === 0 && (myOffers ?? []).length === 0 && (
+            <Rv className="undrawn">
+              <span className="undrawn__mark" aria-hidden="true">
+                ⏱
+              </span>
+              <h3>No offers in motion</h3>
+              <p>
+                When an offer lands it arrives here as a work order — buyer, amount against your
+                ask, and a window that counts down.
+              </p>
+              <Link href="/marketplace" className="btn btn--ghost">
+                Browse the market
+              </Link>
+            </Rv>
+          )}
         </div>
-      </div>
-    </NarrowColumn>
+
+        <div className="grid gap-4">
+          <Rv className="tile tile--deep" stagger={1}>
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">What you&apos;re buying</span>
+              {purchases.length > 0 && <span className="chip">{purchases.length}</span>}
+            </div>
+            {purchases.length > 0 ? (
+              <div className="rowlist">
+                {purchases.map((o) => (
+                  <OrderRow key={o.id} order={o} role="buyer" />
+                ))}
+              </div>
+            ) : (
+              <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+                No purchases yet — first payout lands here
+              </p>
+            )}
+          </Rv>
+
+          <Rv className="tile tile--deep" stagger={2}>
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">What you&apos;ve sold</span>
+              {sales.length > 0 && <span className="chip">{sales.length}</span>}
+            </div>
+            {sales.length > 0 ? (
+              <div className="rowlist">
+                {sales.map((o) => (
+                  <OrderRow key={o.id} order={o} role="seller" />
+                ))}
+              </div>
+            ) : (
+              <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+                No sales yet — buyers can&apos;t offer until you list
+              </p>
+            )}
+          </Rv>
+        </div>
+      </section>
+
+      <Foot
+        left="DRVN / Livesheet — the clock is the contract"
+        right={<Link href="/cart">Your cart →</Link>}
+      />
+    </div>
   );
 }
