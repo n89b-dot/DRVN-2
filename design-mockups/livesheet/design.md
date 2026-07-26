@@ -161,15 +161,14 @@ typography:
       color: "{colors.dim}"
 
 rounded:
-  r:      "20px"    # --r — tiles, sheets, hero media, undrawn, drop, mail, band, savebar
-  r-cap:  "999px"   # --r-cap — nav pills, chips, capsules, filters, search, toast, gbar
-  tile-img: "12px"  # calc(var(--r) - 8px)
-  md:     "14px"    # .week__day
-  sm:     "12px"    # .btn, .cat-ico, .alert, .ctl__prefix, .monogram--sm, .undrawn__mark
-  xs:     "10px"    # .callout, .order__img, .ctl, .msg__attach, .thumb
-  xxs:    "8px"     # .sheet .stamp
+  # Four tokens, no pills. Radius descends with the size of the thing.
+  r:      "16px"    # --r — tiles, sheets, hero media, undrawn, drop, mail, band, savebar
+  ctl:    "10px"    # --r-ctl — buttons, controls, inner media, monograms, callouts,
+                    #   nav links, capsules, filters, search, toast, week cells, alerts
+  chip:   "6px"     # --r-chip — chips, badges, the sheet stamp
+  meter:  "3px"     # --r-meter — gbar, guide track/band, strength bar
   focus:  "4px"     # :focus-visible outline radius
-  monogram: "16px"
+  circle: "50%"     # live dots, pipeline pips, thumb remove badge — ONLY these
 
 spacing:
   base: "2px"
@@ -204,7 +203,7 @@ components:
     base:
       font: "{typography.scale.label-btn}"
       padding: "13px 20px"
-      radius: "{rounded.sm}"
+      radius: "{rounded.ctl}"
       background: "{colors.ink}"
       color: "{colors.on-ink}"
       decoration: "::before '[ ' and ::after ' ]' at 0.5 opacity"
@@ -222,7 +221,7 @@ components:
     variants:
       deep:  { background: "{colors.tile-2}" }
       hover: { transform: "translateY(-2px) scale(1.005)", applies-to: ".tile--hover:hover, a.tile:hover" }
-    slots: [".tile__head", ".tile__img (radius {rounded.tile-img}, background {colors.img-fallback})"]
+    slots: [".tile__head", ".tile__img (radius {rounded.ctl}, background {colors.img-fallback})"]
   rowlist-row:
     class: ".rowlist .order / .rowlist .jobrow"
     base:
@@ -257,7 +256,7 @@ components:
     base:
       font: "{typography.families.mono} 10px / 0.12em / uppercase"
       padding: "4px 10px"
-      radius: "{rounded.r-cap}"
+      radius: "{rounded.chip}"
       background: "{colors.paper-deep}"
       color: "{colors.dim}"
     variants:
@@ -271,7 +270,7 @@ components:
     base:
       background: "{colors.ink}"
       color: "{colors.on-ink}"
-      radius: "{rounded.r-cap}"
+      radius: "{rounded.ctl}"
       padding: "10px 16px"
       font: "{typography.families.mono} 12px / 0.06em"
       slots: [".dot (7px, {colors.live}, pulse)", ".cd (countdown, {colors.live}, tabular-nums)"]
@@ -314,13 +313,13 @@ components:
       color: "{colors.ink}"
       background: "{colors.paper-deep}"
       border: "0"
-      radius: "{rounded.xs}"
+      radius: "{rounded.ctl}"
       padding: "10px 12px"
       max-width: "320px"
     variants:
       textarea: { font: "{typography.families.sans} 13.5px/1.5", min-height: "88px", resize: "vertical", max-width: "none" }
       block: { class: ".ctl--block", width: "100%" }
-      prefix: { class: ".ctl__prefix", frame: "1px solid {colors.rule-mid}, radius {rounded.sm}, background {colors.paper-deep}" }
+      prefix: { class: ".ctl__prefix", frame: "1px solid {colors.rule-mid}, radius {rounded.ctl}, background {colors.paper-deep}" }
       checkbox: { class: "input.sq", size: "16px", accent-color: "{colors.live}", radius: "0" }
   drop:
     class: ".drop"
@@ -333,12 +332,12 @@ components:
     base:
       grid: "auto 1fr, gap 4px 12px"
       padding: "14px 16px"
-      radius: "{rounded.sm}"
+      radius: "{rounded.ctl}"
       background: "{colors.paper-deep}"
-      border-left: "2px solid {colors.dimline}"
+      border: "none"                       # no side stroke — see Shapes
     variants:
-      live: { border-left-color: "{colors.live}", background: "{colors.live-tint}", icon: "{colors.live}" }
-      ok:   { border-left-color: "{colors.ok}",   background: "{colors.ok-tint}",   icon: "{colors.ok}" }
+      live: { background: "{colors.live-tint}", icon: "{colors.live}" }
+      ok:   { background: "{colors.ok-tint}",   icon: "{colors.ok}" }
   msg:
     class: ".msg"
     base: { padding: "13px 0 13px 14px", border-left: "2px solid {colors.rule-mid}", body: "14.5px/1.55, max-width 62ch" }
@@ -377,15 +376,15 @@ components:
     responsive: { "≤720px": "44px 1fr; third column hidden" }
   toast:
     class: ".toast"
-    base: { position: "fixed bottom 24px, centered", background: "{colors.ink}", color: "{colors.on-ink}", radius: "{rounded.r-cap}", padding: "12px 20px" }
+    base: { position: "fixed bottom 24px, centered", background: "{colors.ink}", color: "{colors.on-ink}", radius: "{rounded.ctl}", padding: "12px 20px" }
     states: { shown: { class: ".is-shown", opacity: 1, transform: "translate(-50%, 0)" } }
     api: "window.lsToast(message) — or any element with [data-toast=\"MESSAGE\"]; role=status; dwell 2600ms"
   search:
     class: ".search"
-    base: { background: "{colors.tile}", radius: "{rounded.r-cap}", padding: "12px 18px", width: "min(420px, 100%)", input: "borderless, inherits mono 13px" }
+    base: { background: "{colors.tile}", radius: "{rounded.ctl}", padding: "12px 18px", width: "min(420px, 100%)", input: "borderless, inherits mono 13px" }
   fbtn:
     class: ".fbtn"
-    base: { font: "{typography.families.mono} 11px / 0.1em / uppercase", padding: "8px 14px", radius: "{rounded.r-cap}", background: "{colors.paper-deep}", color: "{colors.dim}" }
+    base: { font: "{typography.families.mono} 11px / 0.1em / uppercase", padding: "8px 14px", radius: "{rounded.ctl}", background: "{colors.paper-deep}", color: "{colors.dim}" }
     states:
       hover:   { color: "{colors.ink}" }
       on:      { class: ".is-on", background: "{colors.ink}", color: "{colors.on-ink}" }
@@ -586,15 +585,26 @@ over leaders 2.
 
 ## Shapes
 
-Soft-cornered, superellipse-*feeling* plates on paper. Radii descend with the size of the
-thing: `--r` 20px for plates and sheets, 14px for week cells, 12px for buttons, alerts,
-icon plates and tile images (`calc(var(--r) - 8px)`), 10px for small media and controls,
-8px for the stamp, and `--r-cap` 999px for anything pill-shaped (nav links, chips,
-capsules, filters, search, toast, skeleton bars).
+Soft-cornered plates on paper — soft, not round. Four tokens, and radius descends with
+the size of the thing: `--r` 16px for plates, sheets, hero media and bands; `--r-ctl`
+10px for everything you operate or that sits inside a plate (buttons, nav links,
+capsules, filters, search, toast, week cells, alerts, monograms, tile and order images);
+`--r-chip` 6px for chips, badges and the stamp; `--r-meter` 3px for thin bars and tracks.
 
-Nothing is a perfect circle except live dots (6–9px) and thumbnail close buttons.
-Nothing is square-cornered except the checkbox (`input.sq`, `border-radius: 0` — a drawn
-tick box) and ruled rows (radius 0 by definition).
+**Nothing is a pill.** There is no `999px` in the stylesheet. A capsule, chip, filter or
+toast is a rectangle with a soft corner, not a stadium — the sheet is a drawing, and a
+stadium is a button from another system.
+
+Nothing is a perfect circle except live dots (6–9px), pipeline pips and thumbnail close
+buttons, where the circle *is* the meaning. Nothing is square-cornered except the
+checkbox (`input.sq`, `border-radius: 0` — a drawn tick box) and ruled rows (radius 0 by
+definition).
+
+**No accent stroke off to one side.** An alert carries its meaning in the icon colour and
+a tinted ground, never a 2px bar down the left edge — on a rounded card the bar gets
+clipped by the corners and reads as a stray mark rather than an edge. The left rule
+survives only where the surface is flat and the rule is a genuine margin annotation: the
+`.livedim` leader line and the `.msg` thread, which are drafting devices, not accents.
 
 ---
 
@@ -807,14 +817,16 @@ Tailwind v4 is CSS-first. The token block moves almost verbatim into `globals.cs
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
-  --radius-r: 20px;
-  --radius-cap: 999px;
+  --radius-r: 16px;
+  --radius-ctl: 10px;
+  --radius-chip: 6px;
+  --radius-meter: 3px;
 
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
 }
 ```
 
-That gives you `bg-tile`, `text-dim`, `rounded-r`, `ease-spring` etc. for free.
+That gives you `bg-tile`, `text-dim`, `rounded-r`, `rounded-ctl`, `ease-spring` etc. for free.
 
 The **alpha tokens** (`--dimline`, `--rule-soft`, `--rule-mid`, `--ghost`,
 `--ghost-strong`, `--live-tint`, `--ok-tint`, `--scrim`, `--grid-line`) and the

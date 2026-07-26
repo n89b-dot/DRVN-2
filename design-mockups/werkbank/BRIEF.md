@@ -161,16 +161,23 @@ implementation. `design.html` renders the same tokens live for human review.
 
 ## Style-emulation prompt
 
-> Design a light-mode, drafting-office product interface: warm paper-grey
-> canvas (#F0EFEB) with a faint 32px blueprint grid, content on white
-> "plates" with 1px #D8D6CF hairline borders and 2px corners maximum, no
-> shadows or gradients. Type is IBM Plex Sans 400/500/600 for UI (headings
-> ≤22px, tight) and IBM Plex Mono for every number, ID, timestamp and label;
-> microlabels are 10px mono uppercase with 0.14em tracking written like
-> drawing callouts ("PLATE 03 — ACTIVE LISTINGS", "REF 04-B · SHEET 2 OF 4").
-> Ink is graphite #24262A with #7B7E85 secondary; exactly one accent, safety
-> orange #FF4D00, reserved for decisions, active states and annotation lines,
-> plus technical blue #2B5BD7 for hyperlink-style cross-references only. The
+> Design a light-mode, drafting-office product interface: warm drafting-paper
+> canvas (#EFEDE6) with a faint 32px blueprint grid, content on raised paper
+> "plates" (#F8F6F0 — never pure white) that carry NO border at all: 20px soft
+> corners, separation by tone only, no shadows or gradients. Controls sit a
+> tier down at 12px corners and chips at 8px; the only rules left are internal
+> (plate-head dividers, table and row separators) in #DAD7CC. Plates clip their
+> contents so a flush image takes the plate's corner. Type is IBM Plex Sans
+> 400/500/600 for UI (body 16px, headings clamp(26px,2.6vw,30px), tight) and
+> IBM Plex Mono for every number, ID, timestamp and label (data 14.5px, KPIs
+> set large at clamp(40–56px) mono 600, -0.03em); microlabels are 11.5px mono
+> uppercase with 0.14em tracking, each led by its Phosphor icon, written
+> like drawing callouts ("PLATE 03 — ACTIVE LISTINGS", "REF 04-B · SHEET 2 OF
+> 4"). Icons are Phosphor regular, inherited in currentColor at 18/19/30px.
+> Ink is graphite #20232A with #656872 secondary; exactly one accent, the live
+> signal #F03A20, reserved for decisions, active states and annotation lines.
+> There is no second hue — hyperlink-style cross-references are graphite with
+> a dotted rule that goes accent on hover. The
 > signature device is the dimension line — a 1px rule with perpendicular
 > end-ticks and a centered mono label — drawn under key figures and animated
 > scaleX 0→1 over 600ms; all other motion is instrument-like 120ms ease-out

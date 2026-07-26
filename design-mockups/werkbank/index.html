@@ -6,7 +6,7 @@
 <title>WERKBANK — Dashboard · DRVN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="werkbank.css">
 <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
 <script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
@@ -77,18 +77,18 @@
     <!-- KPI PLATES -->
     <section class="wb-kpis" aria-label="Key figures">
       <div class="wb-plate wb-kpi wb-plate--hover">
-        <span class="microlabel">Active listings</span>
+        <span class="microlabel"><i class="ph ph-tag" aria-hidden="true"></i>&nbsp;Active listings</span>
         <div class="wb-kpi__value" data-count="7">0</div>
         <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">5 live · 2 under offer</span></div>
       </div>
       <div class="wb-plate wb-kpi wb-plate--hover">
-        <span class="microlabel">Offers awaiting reply</span>
+        <span class="microlabel"><i class="ph ph-bell-ringing" aria-hidden="true"></i>&nbsp;Offers awaiting reply</span>
         <span class="wb-kpi__badge wb-tag wb-tag--fill">ACTION</span>
         <div class="wb-kpi__value" data-count="3" style="color:var(--wb-accent)">0</div>
         <div class="wb-dim wb-dim--accent" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Oldest expires 04 H</span></div>
       </div>
       <div class="wb-plate wb-kpi wb-plate--hover">
-        <span class="microlabel">30-day sales</span>
+        <span class="microlabel"><i class="ph ph-hand-coins" aria-hidden="true"></i>&nbsp;30-day sales</span>
         <div class="wb-kpi__value"><small>£</small><span data-count="4320" >0</span></div>
         <svg class="wb-chart" viewBox="0 0 220 56" preserveAspectRatio="none" aria-hidden="true">
           <line class="grid" x1="0" y1="46" x2="220" y2="46"/>
@@ -102,7 +102,7 @@
         <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">£4,320 — 30-day sales · +38%</span></div>
       </div>
       <div class="wb-plate wb-kpi wb-plate--hover">
-        <span class="microlabel">Garage fitment matches</span>
+        <span class="microlabel"><i class="ph ph-crosshair" aria-hidden="true"></i>&nbsp;Garage fitment matches</span>
         <div class="wb-kpi__value" data-count="12">0</div>
         <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Buyers whose cars fit your parts</span></div>
       </div>
@@ -113,7 +113,7 @@
       <!-- OFFERS INBOX -->
       <section class="wb-plate">
         <div class="wb-plate__head">
-          <span class="microlabel microlabel--ink">PLATE 02 — OFFERS INBOX</span>
+          <span class="microlabel microlabel--ink"><i class="ph ph-gavel" aria-hidden="true"></i>&nbsp;PLATE 02 — OFFERS INBOX</span>
           <a class="ref-link" href="listings.html">VIEW ALL LISTINGS →</a>
         </div>
         <div class="wb-plate__body wb-plate__body--flush">
@@ -172,7 +172,7 @@
       <!-- RECENT ACTIVITY -->
       <section class="wb-plate">
         <div class="wb-plate__head">
-          <span class="microlabel microlabel--ink">PLATE 04 — RECENT ACTIVITY</span>
+          <span class="microlabel microlabel--ink"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>&nbsp;PLATE 04 — RECENT ACTIVITY</span>
           <span class="microlabel">LEDGER · UTC+2</span>
         </div>
         <ul class="wb-ledger">
@@ -190,7 +190,7 @@
     <!-- GARAGE PLATE -->
     <section class="wb-plate wb-section">
       <div class="wb-plate__head">
-        <span class="microlabel microlabel--ink">PLATE 03 — GARAGE · 2 UNITS ON FILE</span>
+        <span class="microlabel microlabel--ink"><i class="ph ph-garage" aria-hidden="true"></i>&nbsp;PLATE 03 — GARAGE · 2 UNITS ON FILE</span>
         <a class="ref-link" href="garage.html">OPEN GARAGE →</a>
       </div>
       <div class="wb-plate__body wb-plate__body--flush">
@@ -239,7 +239,7 @@
       </div>
       <div class="wb-grid-2">
         <div><span class="microlabel">Buyer</span><div class="mono" style="margin-top:2px" data-slot="buyer">—</div></div>
-        <div><span class="microlabel">Offer</span><div class="mono" style="margin-top:2px;color:var(--wb-accent);font-size:18px" data-slot="offer">—</div></div>
+        <div><span class="microlabel">Offer</span><div class="mono" style="margin-top:2px;color:var(--wb-accent);font-size:20px" data-slot="offer">—</div></div>
       </div>
       <div class="microlabel" data-slot="against">—</div>
       <div class="wb-dim wb-dim--accent is-drawn"><span class="wb-dim__line"></span><span class="wb-dim__label">Accepting raises an order &amp; locks the listing</span></div>

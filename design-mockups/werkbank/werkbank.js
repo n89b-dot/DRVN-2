@@ -325,12 +325,25 @@
   var mast = document.querySelector(".wb-mast");
   if (!rail && !mast) return;
 
-  /* Collect nav items */
+  /* Phosphor icon per public route — the masthead links carry no icon of
+     their own, so the mobile index derives one from the destination sheet. */
+  var PUBLIC_ICONS = {
+    "home.html": "ph-article",
+    "home-v2.html": "ph-article",
+    "explore.html": "ph-compass",
+    "market.html": "ph-tag",
+    "index.html": "ph-sign-in"
+  };
+
+  /* Collect nav items — the icon travels with the item so the mobile index
+     shows the same Phosphor glyph as the tool-rail. */
   var items = [];
   if (rail) {
     rail.querySelectorAll(".wb-rail__item").forEach(function (a) {
+      var ico = a.querySelector(".ph");
       items.push({
         href: a.getAttribute("href"),
+        icon: ico ? ico.className : "",
         label: a.querySelector(".label") ? a.querySelector(".label").textContent : a.textContent.trim(),
         idx: a.querySelector(".wb-rail__idx") ? a.querySelector(".wb-rail__idx").textContent : "",
         active: a.classList.contains("is-active"),
@@ -339,8 +352,10 @@
     });
   } else {
     mast.querySelectorAll("[data-mobile-link]").forEach(function (a) {
+      var name = PUBLIC_ICONS[(a.getAttribute("href") || "").split("/").pop()];
       items.push({
         href: a.getAttribute("href"),
+        icon: name ? "ph " + name : "",
         label: a.textContent.trim(),
         idx: "",
         active: false,
@@ -358,6 +373,7 @@
   menu.setAttribute("aria-label", "Mobile");
   var navHtml = items.map(function (it) {
     return '<a class="wb-menu__item' + (it.active ? " is-active" : "") + (it.stub ? " is-stub" : "") + '" href="' + it.href + '"' + (it.active ? ' aria-current="page"' : "") + '>' +
+      (it.icon ? '<i class="' + it.icon + '" aria-hidden="true"></i>' : "") +
       '<span>' + it.label + '</span>' +
       (it.idx ? '<span class="wb-rail__idx">' + it.idx + '</span>' : "") +
       '</a>';

@@ -45,7 +45,7 @@
 .sg-item:first-child { border-top: 0; padding-top: 2px; }
 .sg-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .sg-stack { display: grid; gap: 10px; }
-.sg-bar { height: 12px; border-radius: 999px; background: var(--ghost-strong); }
+.sg-bar { height: 12px; border-radius: var(--r-meter); background: var(--ghost-strong); }
 .sg-swatchbox { border-radius: var(--r); background: var(--paper-deep); height: 64px; }
 .sg-radii { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 10px; }
 .sg-radii > div { background: var(--paper-deep); height: 62px; display: grid; place-items: end center; padding-bottom: 6px; }
@@ -130,23 +130,21 @@
     <div class="tile rv" data-stagger="1">
       <div class="tile__head">
         <span class="microlabel microlabel--ink">03 — RADII &amp; SHAPE</span>
-        <span class="chip">2 TOKENS · 7 LITERALS</span>
+        <span class="chip">4 TOKENS · NO PILLS</span>
       </div>
       <div class="sg-radii">
-        <div style="border-radius:var(--r)"><span class="microlabel">--r 20</span></div>
-        <div style="border-radius:var(--r-cap)"><span class="microlabel">--r-cap</span></div>
-        <div style="border-radius:16px"><span class="microlabel">16</span></div>
-        <div style="border-radius:14px"><span class="microlabel">14</span></div>
-        <div style="border-radius:12px"><span class="microlabel">12</span></div>
-        <div style="border-radius:10px"><span class="microlabel">10</span></div>
-        <div style="border-radius:8px"><span class="microlabel">8</span></div>
+        <div style="border-radius:var(--r)"><span class="microlabel">--r 16 plate</span></div>
+        <div style="border-radius:var(--r-ctl)"><span class="microlabel">--r-ctl 10</span></div>
+        <div style="border-radius:var(--r-chip)"><span class="microlabel">--r-chip 6</span></div>
+        <div style="border-radius:var(--r-meter)"><span class="microlabel">--r-meter 3</span></div>
         <div style="border-radius:4px"><span class="microlabel">4 focus</span></div>
+        <div style="border-radius:50%"><span class="microlabel">50% dots</span></div>
       </div>
       <div class="livedim" style="margin-top:16px"><span class="livedim__tick"></span>
-        <span class="microlabel">Tile image radius is derived, not fixed</span>
-        <span class="val">calc(var(--r) − 8px) = 12px</span>
+        <span class="microlabel">Inner media takes the control radius</span>
+        <span class="val">var(--r-ctl) = 10px</span>
       </div>
-      <p class="spec-note"><b>Discrepancy, documented:</b> only <b>--r</b> (20px) and <b>--r-cap</b> (999px) are tokens. The 16 / 14 / 12 / 10 / 8 / 4px radii are literals inside component rules in <span class="mono">livesheet.css</span>. That is what the CSS does, so it is what this page shows. <b>Porting note:</b> promote them to <span class="mono">--radius-*</span> in the Tailwind <span class="mono">@theme</span> block. <b>Rule:</b> radius descends with the size of the thing — plates 20, controls 12, small media 10.</p>
+      <p class="spec-note"><b>No pills.</b> There is no <span class="mono">999px</span> anywhere in <span class="mono">livesheet.css</span> — a capsule, chip, filter or toast is a rectangle with a soft corner, not a stadium. <b>Rule:</b> radius descends with the size of the thing — plates 16, controls 10, chips 6, bars 3. Circles are reserved for status dots, pipeline pips and the thumb remove badge, where the shape <i>is</i> the meaning. <b>Porting note:</b> the four tokens map straight onto <span class="mono">--radius-*</span> in the Tailwind <span class="mono">@theme</span> block.</p>
     </div>
   </section>
 
