@@ -9,32 +9,39 @@ export function OnboardingForm({ email }: { email: string }) {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-text-primary">Set up your profile</h1>
-      <p className="mt-1 text-sm text-text-muted">Signed up as {email}</p>
+      <span className="microlabel">Day one — nothing drawn yet</span>
+      <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[650] leading-[1.05] tracking-[-0.02em]">
+        Name the <span className="text-live">keeper.</span>
+      </h1>
+      <p className="kv mt-3 text-dim">Signed up as {email}</p>
 
-      <form action={action} className="mt-6 flex flex-col gap-3">
-        <input
-          name="username"
-          required
-          placeholder="Username (letters, numbers, _)"
-          autoComplete="username"
-          pattern="[a-zA-Z0-9_]{3,24}"
-          className="h-12 rounded-input border border-border bg-app px-4 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-        />
-        <input
-          name="display_name"
-          required
-          placeholder="Display name"
-          autoComplete="name"
-          className="h-12 rounded-input border border-border bg-app px-4 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-        />
-        {state.error && <p className="text-sm text-red-400">{state.error}</p>}
-        <button
-          type="submit"
-          disabled={pending}
-          className="mt-1 h-12 rounded-pill bg-accent text-sm font-semibold text-white transition hover:bg-accent/90"
-        >
-          {pending ? "Saving…" : "Continue"}
+      <form action={action} className="mt-6">
+        <div className={`field ${state.error ? "is-invalid" : ""}`}>
+          <span className="microlabel">Handle</span>
+          <input
+            name="username"
+            required
+            placeholder="drossi.integrale"
+            autoComplete="username"
+            pattern="[a-zA-Z0-9_]{3,24}"
+            className="ctl max-w-none"
+          />
+          <span className="field__hint">
+            How the market knows you — letters, numbers, underscore. Permanent once a part sells
+            under it.
+          </span>
+          {state.error && (
+            <span className="field__err" style={{ display: "flex" }}>
+              {state.error}
+            </span>
+          )}
+        </div>
+        <div className="field">
+          <span className="microlabel">Keeper name</span>
+          <input name="display_name" required placeholder="Dana Rossi" autoComplete="name" className="ctl max-w-none" />
+        </div>
+        <button type="submit" disabled={pending} className="btn btn--live w-full">
+          {pending ? "Filing…" : "Open the sheet"}
         </button>
       </form>
     </div>

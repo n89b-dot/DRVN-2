@@ -18,14 +18,14 @@ export function OAuthButton() {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={signInWithGoogle}
-        className="h-12 w-full rounded-pill border border-border bg-raised text-sm font-semibold text-text-primary transition hover:bg-raised/80"
-      >
-        Continue with Google
+      <button type="button" onClick={signInWithGoogle} className="btn btn--ghost w-full">
+        Google
       </button>
-      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="field__err mt-2" style={{ display: "flex" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
