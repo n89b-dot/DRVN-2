@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { Avatar, ListingCard, Media, NarrowColumn, SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Avatar, Foot, ListingCard, Media } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Saved - DRVN" };
@@ -52,89 +53,123 @@ export default async function SavedPage() {
   const isEmpty = !listingIds.length && !carIds.length && !profileIds.length;
 
   return (
-    <NarrowColumn>
-      <SectionLabel>Saved</SectionLabel>
-      <h1 className="mt-3 text-2xl font-bold text-text-primary">Saved</h1>
+    <div className="wrap">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">
+          Watching · {listingIds.length} parts · {carIds.length} sheets · {profileIds.length} keepers
+        </span>
+        <h1>
+          Everything you&apos;re
+          <br />
+          keeping an <span className="live-word">eye on.</span>
+        </h1>
+        <p className="sub">
+          Watched parts keep ticking whether you&apos;re looking or not. Spent listings stay on the
+          sheet — history is part of the drawing.
+        </p>
+      </Rv>
 
       {isEmpty && (
-        <p className="mt-6 text-sm text-text-muted">
-          Nothing saved yet. Save parts, cars, and sellers as you browse.
-        </p>
+        <section className="deck">
+          <Rv className="undrawn undrawn--hero">
+            <span className="undrawn__mark" aria-hidden="true">
+              ◎
+            </span>
+            <h3>Nothing on the watchlist</h3>
+            <p>Save parts, car sheets and keepers as you browse — they collect here and keep counting.</p>
+            <Link href="/marketplace" className="btn btn--ghost">
+              Browse the market
+            </Link>
+          </Rv>
+        </section>
       )}
 
       {(listings ?? []).length > 0 && (
-        <div className="mt-8">
-          <SectionLabel>Parts</SectionLabel>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {(listings ?? []).map((l) => (
-              <ListingCard
-                key={l.id}
-                listing={{
-                  id: l.id,
-                  title: l.title,
-                  price_cents: l.price_cents,
-                  condition: l.condition,
-                  location: l.status === "active" ? l.location : `${l.status}`,
-                  cover_url: cover.get(l.id) ?? null,
-                }}
-              />
-            ))}
+        <section className="deck">
+          <div>
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Parts you&apos;re watching</span>
+              <span className="chip">{(listings ?? []).length}</span>
+            </div>
+            <div className="mkt">
+              {(listings ?? []).map((l) => (
+                <ListingCard
+                  key={l.id}
+                  listing={{
+                    id: l.id,
+                    title: l.title,
+                    price_cents: l.price_cents,
+                    condition: l.condition,
+                    location: l.status === "active" ? l.location : `${l.status}`,
+                    cover_url: cover.get(l.id) ?? null,
+                  }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
       {(cars ?? []).length > 0 && (
-        <div className="mt-8">
-          <SectionLabel>Cars</SectionLabel>
-          <div className="mt-3 flex flex-col gap-3">
-            {(cars ?? []).map((car) => (
-              <Link
-                key={car.id}
-                href={`/cars/${car.slug}`}
-                className="flex items-center gap-4 rounded-card border border-border bg-surface p-4 transition hover:border-text-muted"
-              >
-                <Media
-                  src={car.cover_image_url ?? undefined}
-                  alt={car.name}
-                  className="h-14 w-20 shrink-0 rounded-tile"
-                />
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-text-primary">{car.name}</p>
-                  <p className="mt-0.5 text-sm text-text-muted">
-                    {[car.year, car.make, car.model].filter(Boolean).join(" ")}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <section className="deck">
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Sheets you follow</span>
+              <span className="chip">{(cars ?? []).length}</span>
+            </div>
+            <div className="rowlist">
+              {(cars ?? []).map((car) => (
+                <Link key={car.id} href={`/cars/${car.slug}`} className="order">
+                  <span className="order__img">
+                    <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
+                  </span>
+                  <span>
+                    <span className="order__name block">{car.name}</span>
+                    <span className="order__meta block">
+                      {[car.year, car.make, car.model].filter(Boolean).join(" ") || "car sheet"}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Rv>
+        </section>
       )}
 
       {(profiles ?? []).length > 0 && (
-        <div className="mt-8">
-          <SectionLabel>Sellers</SectionLabel>
-          <div className="mt-3 flex flex-col gap-2">
-            {(profiles ?? []).map((p) => (
-              <Link
-                key={p.id}
-                href={`/u/${p.username}`}
-                className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 transition hover:border-text-muted"
-              >
-                <Avatar
-                  size="h-9 w-9"
-                  initials={(p.display_name ?? p.username ?? "?")
-                    .split(" ")
-                    .map((w: string) => w[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                />
-                <span className="text-sm text-text-primary">{p.display_name ?? `@${p.username}`}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <section className="deck">
+          <Rv className="tile tile--deep">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Keepers you follow</span>
+              <span className="chip">{(profiles ?? []).length}</span>
+            </div>
+            <div className="rowlist">
+              {(profiles ?? []).map((p) => (
+                <Link key={p.id} href={`/u/${p.username}`} className="order">
+                  <Avatar
+                    size="h-11 w-11 text-xs"
+                    initials={(p.display_name ?? p.username ?? "?")
+                      .split(" ")
+                      .map((w: string) => w[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
+                  />
+                  <span>
+                    <span className="order__name block">{p.display_name ?? `@${p.username}`}</span>
+                    <span className="order__meta block">keeper sheet →</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Rv>
+        </section>
       )}
-    </NarrowColumn>
+
+      <Foot
+        left="DRVN / Livesheet — the sheet keeps watching when you don't"
+        right={<Link href="/marketplace">← The market</Link>}
+      />
+    </div>
   );
 }

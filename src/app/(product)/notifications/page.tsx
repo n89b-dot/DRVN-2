@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { NarrowColumn, SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot, NarrowColumn } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { prefEnabled } from "@/lib/notification-prefs";
 import { createClient } from "@/lib/supabase/server";
@@ -20,26 +21,26 @@ function relative(date: string) {
 
 function Section({ label, entries, empty }: { label: string; entries: Entry[]; empty: string }) {
   return (
-    <div className="mt-8">
-      <SectionLabel>{label}</SectionLabel>
+    <Rv className="tile">
+      <div className="tile__head">
+        <span className="microlabel microlabel--ink">{label}</span>
+        {entries.length > 0 && <span className="chip">{entries.length}</span>}
+      </div>
       {entries.length > 0 ? (
-        <ul className="mt-3 flex flex-col gap-2">
+        <ul className="feed">
           {entries.map((entry) => (
             <li key={entry.id}>
-              <Link
-                href={entry.href}
-                className="flex items-baseline justify-between gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm transition hover:border-text-muted"
-              >
-                <span className="text-text-secondary">{entry.text}</span>
-                <span className="shrink-0 text-xs text-text-muted">{relative(entry.when)}</span>
+              <time>{relative(entry.when)}</time>
+              <Link href={entry.href} className="min-w-0 flex-1 transition-colors hover:text-live">
+                {entry.text}
               </Link>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-text-muted">{empty}</p>
+        <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">{empty}</p>
       )}
-    </div>
+    </Rv>
   );
 }
 
@@ -161,9 +162,23 @@ export default async function NotificationsPage() {
 
   return (
     <NarrowColumn>
-      <SectionLabel>Notifications</SectionLabel>
-      <h1 className="mt-3 text-2xl font-bold text-text-primary">Notifications</h1>
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">The bell — what the sheet saw</span>
+        <h1>
+          What the bell knows,
+          <br />
+          and what it <span className="live-word">sends.</span>
+        </h1>
+        <p className="sub">
+          Engagement on you and your sheets. Tune what rings in{" "}
+          <Link href="/settings#signals" className="jumplink">
+            Settings → Signals
+          </Link>
+          .
+        </p>
+      </Rv>
 
+      <div className="deck">
       <Section
         label="Profile"
         entries={profileEntries}
@@ -172,8 +187,11 @@ export default async function NotificationsPage() {
       <Section
         label="Marketplace"
         entries={marketplaceEntries}
-        empty="No marketplace activity yet. Offers and sales will land here too."
+        empty="No marketplace activity yet — offers and sales land here too"
       />
+      </div>
+
+      <Foot left="DRVN / Livesheet — the bell rings for deadlines, not for attention" />
     </NarrowColumn>
   );
 }
