@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Registry — DRVN · Every part has a past. Now it has papers.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Archivo:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="registry.css">
+<style>
+  /* --- page-specific: landing --- */
+  .hero { padding: clamp(40px, 6vw, 88px) 0 0; }
+  .hero__folio { margin-bottom: clamp(32px, 5vw, 64px); }
+  .hero__grid {
+    display: grid;
+    grid-template-columns: 7fr 5fr;
+    gap: clamp(28px, 4vw, 64px);
+    align-items: end;
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-optical-sizing: auto;
+    font-weight: 340;
+    font-size: clamp(2.9rem, 8.4vw, 7.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+    margin-bottom: clamp(24px, 3vw, 44px);
+  }
+  .hero h1 em { font-style: italic; font-weight: 300; color: var(--oxblood); }
+  .hero__sub {
+    max-width: 42ch;
+    color: var(--ink-muted);
+    font-size: 15.5px;
+    margin-bottom: 32px;
+  }
+  .hero__cta { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: clamp(36px, 5vw, 64px); }
+  .hero__side { position: relative; }
+  .hero__side .img-reveal { aspect-ratio: 4 / 5; }
+  .hero__side .stamp { position: absolute; top: -18px; right: 6px; z-index: 2; background: var(--paper); }
+  .hero__caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    margin-top: 14px;
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  .hero__strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero__strip > div { padding: 22px 20px 22px 0; border-right: 1px solid var(--rule); }
+  .hero__strip > div:not(:first-child) { padding-left: 20px; }
+  .hero__strip > div:last-child { border-right: 0; }
+  .hero__strip .stat { font-family: var(--serif); font-size: clamp(24px, 2.6vw, 34px); font-weight: 400; margin-top: 6px; }
+  .hero__strip .stat span { font-size: 0.55em; font-style: italic; color: var(--ink-muted); }
+
+  .how {
+    background: var(--panel);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .how__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(24px, 4vw, 56px); }
+  .how__step .num-big {
+    font-family: var(--serif);
+    font-weight: 300;
+    font-style: italic;
+    font-size: clamp(48px, 5vw, 72px);
+    color: var(--oxblood);
+    line-height: 1;
+    display: block;
+    margin-bottom: 18px;
+  }
+  .how__step h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin-bottom: 10px; }
+  .how__step p { color: var(--ink-muted); font-size: 14.5px; max-width: 34ch; }
+  .how__step { padding-top: 20px; border-top: 1px solid var(--ink); }
+
+  .thesis {
+    text-align: center;
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .thesis blockquote {
+    font-family: var(--serif);
+    font-weight: 300;
+    font-style: italic;
+    font-size: clamp(24px, 3.4vw, 40px);
+    line-height: 1.25;
+    margin: 24px 0 18px;
+  }
+  .thesis cite { font-style: normal; }
+
+  @media (max-width: 860px) {
+    .hero__grid { grid-template-columns: 1fr; }
+    .hero__side { max-width: 480px; }
+    .hero__strip { grid-template-columns: 1fr 1fr; }
+    .hero__strip > div { border-right: 0; border-bottom: 1px solid var(--rule); padding-left: 0 !important; }
+    .how__grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap masthead__inner">
+    <a class="wordmark" href="index.html">THE&nbsp;REGISTRY <small>by DRVN</small></a>
+    <button class="menu-toggle" aria-expanded="false" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="masthead__nav" aria-label="Primary">
+      <a class="nav-link" href="index.html" aria-current="page">Browse Registry</a>
+      <a class="nav-link" href="listing.html">Marketplace</a>
+      <a class="nav-link" href="listing.html">Consign a Part</a>
+      <a class="nav-link nav-signin" href="#">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="folio-corner hero__folio reveal">
+        <span>Vol. I — Spring Catalogue</span>
+        <span>Accessions to date: 4,182</span>
+        <span>Folio 01</span>
+      </div>
+
+      <div class="hero__grid">
+        <div>
+          <p class="meta-label meta-label--ox reveal">The marketplace of documented machines</p>
+          <h1 class="reveal" style="--d:80ms">Every part has a past. Now it has <em>papers.</em></h1>
+          <p class="hero__sub reveal" style="--d:160ms">
+            The Registry is where modified cars are archived and their parts are traded with
+            provenance intact. Every listing answers four questions: what car did this come off,
+            who is the seller, will it fit, and what was it paired with. No orphan parts. No anonymous sellers.
+          </p>
+          <div class="hero__cta reveal" style="--d:240ms">
+            <a class="btn btn--solid" href="car.html">Open a registry entry</a>
+            <a class="btn btn--ink" href="listing.html">View documented parts</a>
+          </div>
+        </div>
+
+        <figure class="hero__side reveal" style="--d:180ms">
+          <span class="stamp" aria-hidden="true">Verified Provenance</span>
+          <div class="img-reveal">
+            <img src="../assets/c1-hero-964.png" alt="1992 Porsche 911 Carrera 2 (964) in slate grey, photographed in an ivory studio" loading="eager">
+          </div>
+          <figcaption class="hero__caption">
+            <a class="tlink" href="car.html" style="text-transform:none;letter-spacing:0.04em">Registry No. DRVN-0042</a>
+            <span>Porsche 911 (964), 1992</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="hero__strip" data-stagger="90" style="margin-top: clamp(40px,5vw,72px)">
+        <div class="reveal"><span class="meta-label">Cars registered</span><div class="stat">4,182</div></div>
+        <div class="reveal"><span class="meta-label">Parts documented</span><div class="stat">27,940</div></div>
+        <div class="reveal"><span class="meta-label">Provenance disputes</span><div class="stat">0.4<span>%</span></div></div>
+        <div class="reveal"><span class="meta-label">Median sale time</span><div class="stat">6<span>&nbsp;days</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECENTLY ACCESSIONED ============ -->
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">01</span>
+        <h2 class="reveal" style="--d:60ms">Recently accessioned</h2>
+        <p class="side-note reveal" style="--d:120ms">Cars admitted to the Registry this month, each with a documented build ledger.</p>
+      </div>
+      <hr class="rule-h rule-draw" style="margin-bottom: clamp(28px,4vw,48px)">
+
+      <div class="card-grid" data-stagger="140">
+        <a class="card-link reveal" href="car.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-hero-964.png" alt="Porsche 911 (964) in slate grey" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Registry No. DRVN-0042</span>
+              <span class="folio-num">acc. 03.2026</span>
+            </div>
+            <h3>1992 Porsche 911 Carrera 2 (964)</h3>
+            <p class="reg-card__meta">
+              <span>Owner — M. Hale (@airkult)</span>
+              <span>31 documented modifications</span>
+              <span>2 active lots</span>
+            </p>
+          </article>
+        </a>
+
+        <a class="card-link reveal" href="car.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-car-e30.png" alt="BMW E30 M3 in white, side profile" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Registry No. DRVN-0107</span>
+              <span class="folio-num">acc. 04.2026</span>
+            </div>
+            <h3>1989 BMW M3 (E30), Alpine White</h3>
+            <p class="reg-card__meta">
+              <span>Owner — S. Okafor (@s14heart)</span>
+              <span>18 documented modifications</span>
+              <span>4 active lots</span>
+            </p>
+          </article>
+        </a>
+
+        <a class="card-link reveal" href="car.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-car-gtr.png" alt="Nissan Skyline R34 GT-R in Bayside Blue, rear three-quarter" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Registry No. DRVN-0113</span>
+              <span class="folio-num">acc. 05.2026</span>
+            </div>
+            <h3>1999 Nissan Skyline GT-R (R34)</h3>
+            <p class="reg-card__meta">
+              <span>Owner — J. Tanaka (@midnightclub_uk)</span>
+              <span>42 documented modifications</span>
+              <span>1 active lot</span>
+            </p>
+          </article>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DOCUMENTED PARTS ============ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">02</span>
+        <h2 class="reveal" style="--d:60ms">Documented parts</h2>
+        <p class="side-note reveal" style="--d:120ms">Each lot ships with its certificate of provenance and the ledger entry it was removed under.</p>
+      </div>
+      <hr class="rule-h rule-draw" style="margin-bottom: clamp(28px,4vw,48px)">
+
+      <div class="card-grid col-rules" data-stagger="140">
+        <a class="card-link reveal" href="listing.html" style="padding-right:24px">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-part-itb.png" alt="Jenvey individual throttle body kit, still life" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Lot No. 217</span>
+              <span class="folio-num">Grade II</span>
+            </div>
+            <h3>Jenvey Individual Throttle Body Kit, 3.6L M64</h3>
+            <p class="reg-card__meta">
+              <span>Removed from DRVN-0042 · Porsche 964</span>
+              <span>Seller — M. Hale, 14 sales, 4.9★</span>
+            </p>
+            <p class="reg-card__price">£2,450</p>
+          </article>
+        </a>
+
+        <a class="card-link reveal" href="listing.html" style="padding:0 24px">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-part-wheel.png" alt="Bronze forged wheel, still life" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Lot No. 231</span>
+              <span class="folio-num">Grade I</span>
+            </div>
+            <h3>Rays Volk TE37SL, 18×9.5 ET22, Bronze — set of four</h3>
+            <p class="reg-card__meta">
+              <span>Removed from DRVN-0113 · Skyline R34</span>
+              <span>Seller — J. Tanaka, 9 sales, 5.0★</span>
+            </p>
+            <p class="reg-card__price">£3,180</p>
+          </article>
+        </a>
+
+        <a class="card-link reveal" href="listing.html" style="padding-left:24px">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-part-seat.png" alt="Recaro bucket seat, still life" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Lot No. 204</span>
+              <span class="folio-num">Grade III</span>
+            </div>
+            <h3>Recaro Pole Position ABE, black suede</h3>
+            <p class="reg-card__meta">
+              <span>Removed from DRVN-0107 · BMW E30 M3</span>
+              <span>Seller — S. Okafor, 22 sales, 4.8★</span>
+            </p>
+            <p class="reg-card__price">£640</p>
+          </article>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW THE REGISTRY WORKS ============ -->
+  <section class="how section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">03</span>
+        <h2 class="reveal" style="--d:60ms">How the Registry works</h2>
+        <p class="side-note reveal" style="--d:120ms">Three procedures, borrowed from the auction house and the archive.</p>
+      </div>
+
+      <div class="how__grid" data-stagger="160">
+        <div class="how__step reveal">
+          <span class="num-big">01</span>
+          <h3>Register the car</h3>
+          <p>Your car receives a registry number and a build ledger. Every modification is a dated entry — the paperwork your build always deserved.</p>
+        </div>
+        <div class="how__step reveal">
+          <span class="num-big">02</span>
+          <h3>Consign the part</h3>
+          <p>When a part comes off, it leaves with papers: the ledger entry it was fitted under, mileage on the car, and what it ran alongside.</p>
+        </div>
+        <div class="how__step reveal">
+          <span class="num-big">03</span>
+          <h3>Trade on record</h3>
+          <p>Buyers see the source car, the seller's dossier, and seller-stated fitment — clearly marked as such. The certificate transfers on sale.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ THESIS PULL ============ -->
+  <section class="section">
+    <div class="wrap thesis">
+      <hr class="rule-h rule-draw" style="max-width:120px;margin:0 auto">
+      <blockquote class="reveal">
+        &ldquo;A part is only worth its paperwork. The Registry made my ITBs worth
+        £400 more than the anonymous set on the forum — because mine had a history.&rdquo;
+      </blockquote>
+      <cite class="meta-label reveal" style="--d:100ms">Marcus Hale — <a class="tlink" href="seller.html">Seller dossier №&nbsp;88</a></cite>
+    </div>
+  </section>
+</main>
+
+<!-- ============ COLOPHON ============ -->
+<footer class="colophon">
+  <div class="wrap">
+    <div class="colophon__grid">
+      <div>
+        <a class="wordmark" href="index.html" style="margin-bottom:16px;display:inline-flex">THE&nbsp;REGISTRY <small>by DRVN</small></a>
+        <p class="colophon__note">Set in Fraunces &amp; Archivo, on ivory paper stock.</p>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Registry</h5>
+        <ul>
+          <li><a href="car.html">Registry entries</a></li>
+          <li><a href="index.html">Recent accessions</a></li>
+          <li><a href="seller.html">Seller dossiers</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Marketplace</h5>
+        <ul>
+          <li><a href="listing.html">Active lots</a></li>
+          <li><a href="listing.html">Consign a part</a></li>
+          <li><a href="listing.html">Condition grading</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Institution</h5>
+        <ul>
+          <li><a href="#">About the archive</a></li>
+          <li><a href="#">Provenance policy</a></li>
+          <li><a href="#">Contact the registrar</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="colophon__base">
+      <span>© MMXXVI DRVN Ltd. — The Registry</span>
+      <span>Fitment claims are seller-stated unless marked verified</span>
+      <span>Printed in Britain, rendered in the browser</span>
+    </div>
+  </div>
+</footer>
+
+<script src="registry.js"></script>
+</body>
+</html>

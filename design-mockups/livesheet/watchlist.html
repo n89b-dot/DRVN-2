@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Watching</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 08 — WATCHING · <span data-watch-count>6</span> PARTS · 3 SHEETS · 4 SAVED SEARCHES</span>
+    <h1>Everything you're<br>keeping an <span class="live-word">eye on.</span></h1>
+    <p class="sub">Watched parts keep ticking whether you're looking or not. Two moved overnight — one dropped $80, one sold to somebody quicker.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#parts">Parts · 6</a>
+    <a class="jumplink" href="#sheets">Sheets · 3</a>
+    <a class="jumplink" href="#searches">Saved searches · 4</a>
+  </div>
+
+  <section class="deck" style="margin-top:14px;padding-bottom:14px">
+    <div class="alert rv">
+      <i class="ph ph-bell-ringing alert__ico" aria-hidden="true"></i>
+      <h4>Price drops reach you in about a minute</h4>
+      <p>Anything on this sheet that drops more than 5%, opens an offer window, or gets a new photo pings you straight away. Quiet hours, digest-only, and per-search thresholds all live in <a class="jumplink" href="settings.html">settings → notifications</a>.</p>
+    </div>
+  </section>
+
+  <!-- PARTS -->
+  <section id="parts" style="padding-bottom:14px">
+    <div class="jumprow rv" style="margin-bottom:12px">
+      <span class="microlabel microlabel--ink">PARTS YOU'RE WATCHING</span>
+      <span class="capsule"><span class="dot"></span> 1 OFFER WINDOW OPEN — <span class="cd" data-seconds="14700"></span></span>
+    </div>
+
+    <div class="mkt" data-watchgrid>
+
+      <div class="tile tile--hover rv" data-watch data-name="Öhlins DFV coilover kit">
+        <a href="listing.html" aria-label="Öhlins DFV coilover kit — 993 fitment">
+          <div class="tile__img"><img src="../assets/c16-part-coilovers.png" alt="Öhlins coilover kit" onerror="this.remove()"></div>
+          <div class="mkt__name">Öhlins DFV kit — 993 fitment</div>
+          <div class="mkt__price">$1,070 <span style="color:var(--dim)">· was $1,150</span></div>
+        </a>
+        <div class="mkt__meta">
+          <span class="chip chip--live">▼ $80 SINCE YOU SAVED IT</span>
+          <span class="chip">@LUFTKUEHL</span>
+        </div>
+        <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Dropped 2 hours ago</span>
+          <span class="val">Your $980 offer is $90 off it now</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn btn--live" href="buyer-offers.html">Raise your offer</a>
+          <button class="btn btn--ghost" type="button" data-unwatch>Unwatch</button>
+        </div>
+      </div>
+
+      <div class="tile tile--hover rv" data-watch data-name="AP Racing CP7600 rear kit" data-stagger="1">
+        <a href="listing.html" aria-label="AP Racing CP7600 rear kit">
+          <div class="tile__img"><img src="../assets/c4-part-brake.png" alt="AP Racing brake kit" onerror="this.remove()"></div>
+          <div class="mkt__name">AP Racing CP7600 rear kit</div>
+          <div class="mkt__price">$690 · off sheet C-0512</div>
+        </a>
+        <div class="mkt__meta">
+          <span class="chip chip--live">OFFER WINDOW OPEN <span class="cd" data-seconds="14700"></span></span>
+          <span class="chip">@TARMAC.RALLY</span>
+        </div>
+        <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Best offer standing</span>
+          <span class="val">$620 from someone else</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn btn--live" href="buyer-offers.html">Make an offer</a>
+          <button class="btn btn--ghost" type="button" data-unwatch>Unwatch</button>
+        </div>
+      </div>
+
+      <div class="tile rv" data-watch data-name="Recaro Pole Position ABE" data-stagger="2" style="opacity:.72">
+        <div class="tile__img"><img src="../assets/c4-part-seat.png" alt="Recaro seat" onerror="this.remove()"></div>
+        <div class="mkt__name">Recaro Pole Position ABE — pair</div>
+        <div class="mkt__price" style="color:var(--dim)">Sold at $1,090 · Jul 21</div>
+        <div class="mkt__meta">
+          <span class="chip chip--spent">SOLD</span>
+          <span class="chip chip--spent">@KESSLER.M</span>
+        </div>
+        <div class="livedim livedim--blank" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Gone 9 hours after you saved it</span>
+          <span class="val">Four similar pairs listed this month</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn btn--ghost" href="market.html">Find similar</a>
+          <button class="btn btn--ghost" type="button" data-unwatch>Remove</button>
+        </div>
+      </div>
+
+      <div class="tile tile--hover rv" data-watch data-name="Speedline Montecarlo 16in">
+        <a href="listing.html" aria-label="Speedline Montecarlo 16 inch wheels">
+          <div class="tile__img" style="display:grid;place-items:center;background:var(--paper-deep)">
+            <span class="num-giant" style="font-size:40px;color:var(--dim)">16″</span>
+          </div>
+          <div class="mkt__name">Speedline Montecarlo ×4</div>
+          <div class="mkt__price">$820 · straight, refinished</div>
+        </a>
+        <div class="mkt__meta">
+          <span class="chip chip--live"><span data-tick="14">14</span>&nbsp;WATCHING</span>
+          <span class="chip chip--ok">FITS YOUR DELTA</span>
+        </div>
+        <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Held at $820 since Jul 3</span>
+          <span class="val">No offers on it yet</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn btn--ghost" href="listing.html">Part sheet</a>
+          <button class="btn btn--ghost" type="button" data-unwatch>Unwatch</button>
+        </div>
+      </div>
+
+      <div class="tile tile--hover rv" data-watch data-name="Getrag 265 dogleg gearbox" data-stagger="1">
+        <a href="listing.html" aria-label="Getrag 265 dogleg gearbox">
+          <div class="tile__img" style="display:grid;place-items:center;background:var(--paper-deep)">
+            <span class="num-giant" style="font-size:40px;color:var(--dim)">DOG</span>
+          </div>
+          <div class="mkt__name">Getrag 265 dogleg — rebuilt</div>
+          <div class="mkt__price">$2,600 · receipts on sheet</div>
+        </a>
+        <div class="mkt__meta">
+          <span class="chip chip--live"><span data-tick="27">27</span>&nbsp;WATCHING</span>
+          <span class="chip">@LUFTKUEHL</span>
+        </div>
+        <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Your $2,100 offer lapsed Jul 12</span>
+          <span class="val">Still unsold · seller has declined two since</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn btn--ghost" href="buyer-offers.html">Offer again</a>
+          <button class="btn btn--ghost" type="button" data-unwatch>Unwatch</button>
+        </div>
+      </div>
+
+      <div class="tile tile--hover rv" data-watch data-name="Sabelt bucket seat" data-stagger="2">
+        <a href="listing.html" aria-label="Sabelt bucket seat, driver side">
+          <div class="tile__img"><img src="../assets/c16-part-seat.png" alt="Sabelt bucket seat" onerror="this.remove()"></div>
+          <div class="mkt__name">Sabelt bucket — driver side</div>
+          <div class="mkt__price">$290 · under offer</div>
+        </a>
+        <div class="mkt__meta">
+          <span class="chip chip--live"><span data-tick="6">6</span>&nbsp;WATCHING</span>
+          <span class="chip">UNDER OFFER</span>
+        </div>
+        <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Someone offered $240 — window closes in</span>
+          <span class="val" data-seconds="31300"></span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <a class="btn btn--ghost" href="listing.html">Part sheet</a>
+          <button class="btn btn--ghost" type="button" data-unwatch>Unwatch</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SHEETS -->
+  <section id="sheets" style="padding-bottom:14px">
+    <div class="jumprow rv" style="margin-bottom:12px">
+      <span class="microlabel microlabel--ink">SHEETS YOU FOLLOW</span>
+      <span class="microlabel">NEW ENTRIES SINCE YOUR LAST VISIT</span>
+    </div>
+    <div class="deck deck--three">
+
+      <a class="tile tile--hover rv" href="car.html">
+        <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c4-car-911.png" alt="Porsche 993 in a workshop" onerror="this.remove()"></div>
+        <div class="mkt__name">Porsche 911 993 — "Luftkühl"</div>
+        <div class="mkt__price">@luftkuehl · sheet C-0208 · 4 parts listed</div>
+        <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">3 new entries since you followed</span>
+          <span class="val">Gearbox rebuild logged · 2 parts released</span>
+        </div>
+      </a>
+
+      <a class="tile tile--hover rv" href="car.html" data-stagger="1">
+        <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c4-car-evo.png" alt="Mitsubishi Evo IX rally car" onerror="this.remove()"></div>
+        <div class="mkt__name">Lancer Evo IX — "Tarmac"</div>
+        <div class="mkt__price">@tarmac.rally · sheet C-0512 · 6 parts listed</div>
+        <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">2 new entries this week</span>
+          <span class="val">Alcon 380 mm fitted — the AP kit you bought came off here</span>
+        </div>
+      </a>
+
+      <a class="tile tile--hover rv" href="car.html" data-stagger="2">
+        <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c4-car-miata.png" alt="Mazda Miata on a lift" onerror="this.remove()"></div>
+        <div class="mkt__name">Mazda Roadster NA — "Iida-san"</div>
+        <div class="mkt__price">@garage.iida · sheet C-0334 · 2 parts listed</div>
+        <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Quiet for 11 days</span>
+          <span class="val">Last entry: engine out, bay stripped</span>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- SAVED SEARCHES -->
+  <section class="deck" id="searches">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-magnifying-glass"></i>&nbsp;SAVED SEARCHES — RUNNING WHILE YOU'RE AWAY</span>
+        <span class="chip chip--live"><span data-tick="9">9</span>&nbsp;NEW MATCHES</span>
+      </div>
+      <div class="rowlist" data-searches>
+
+        <div class="order" data-search-row>
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-gear" style="color:var(--dim)" aria-hidden="true"></i></div>
+          <div>
+            <div class="order__name">"dogleg gearbox"</div>
+            <div class="order__meta">Any chassis · under $3,000 · <b>4 new matches</b> since Jul 18</div>
+          </div>
+          <div class="order__actions">
+            <a class="btn btn--ghost" href="market.html">View</a>
+            <button class="btn btn--ghost" type="button" data-stopwatch>Stop watching</button>
+          </div>
+        </div>
+
+        <div class="order" data-search-row>
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-record" style="color:var(--dim)" aria-hidden="true"></i></div>
+          <div>
+            <div class="order__name">"Delta HF brakes"</div>
+            <div class="order__meta">Fits your Delta · any price · <b>3 new matches</b> · 1 dropped $60 today</div>
+          </div>
+          <div class="order__actions">
+            <a class="btn btn--ghost" href="market.html">View</a>
+            <button class="btn btn--ghost" type="button" data-stopwatch>Stop watching</button>
+          </div>
+        </div>
+
+        <div class="order" data-search-row>
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-circle-dashed" style="color:var(--dim)" aria-hidden="true"></i></div>
+          <div>
+            <div class="order__name">"Speedline 16in"</div>
+            <div class="order__meta">Wheels · under $900 · <b>2 new matches</b> · both off Group A cars</div>
+          </div>
+          <div class="order__actions">
+            <a class="btn btn--ghost" href="market.html">View</a>
+            <button class="btn btn--ghost" type="button" data-stopwatch>Stop watching</button>
+          </div>
+        </div>
+
+        <div class="order" data-search-row>
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-steering-wheel" style="color:var(--dim)" aria-hidden="true"></i></div>
+          <div>
+            <div class="order__name">"Integrale Evo II gauge cluster"</div>
+            <div class="order__meta">Interior · under $500 · no matches yet · running since Jun 30</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--spent">0 MATCHES</span>
+            <button class="btn btn--ghost" type="button" data-stopwatch>Stop watching</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="undrawn" style="margin-top:16px">
+        <div class="undrawn__mark"><i class="ph ph-binoculars" aria-hidden="true"></i></div>
+        <h3>Nothing yet — we're still looking</h3>
+        <p>No Evo II cluster has come off a sheet since you saved this search. Twelve Integrale sheets are live; the moment one releases a cluster, this row fills in and you get a ping.</p>
+        <div style="margin-top:6px"><a class="btn btn--ghost" href="explore.html">Browse Integrale sheets</a></div>
+      </div>
+
+      <p class="spec-note"><b>How this runs:</b> a saved search re-runs every time a part is released from any sheet — not on a schedule. <b>Threshold:</b> price-drop alerts fire at 5% by default, per-search in <a class="jumplink" href="settings.html">settings</a>.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 08 · THE SHEET KEEPS WATCHING WHEN YOU DON'T</span>
+    <a class="microlabel mono" href="buyer-offers.html">YOUR OFFERS →</a>
+    <a class="microlabel mono" href="market.html">← THE MARKET</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- unwatch a part: card leaves, counter drops ---------- */
+  var grid = document.querySelector("[data-watchgrid]");
+  var counter = document.querySelector("[data-watch-count]");
+  if (grid) {
+    grid.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-unwatch]"); if (!b) return;
+      var card = b.closest("[data-watch]");
+      card.style.transition = "opacity var(--t-move) ease, transform var(--t-move) var(--spring)";
+      card.style.opacity = "0";
+      card.style.transform = "translateY(10px) scale(0.98)";
+      window.lsToast("STOPPED WATCHING — " + card.getAttribute("data-name").toUpperCase());
+      setTimeout(function () {
+        card.remove();
+        var left = grid.querySelectorAll("[data-watch]").length;
+        if (counter) counter.textContent = left;
+        if (!left) {
+          grid.style.display = "block";
+          grid.innerHTML =
+            '<div class="undrawn">' +
+            '<div class="undrawn__mark"><i class="ph ph-eye" aria-hidden="true"></i></div>' +
+            '<h3>Nothing on watch</h3>' +
+            '<p>Save a part and it keeps ticking here — price moves, offer windows, and the moment it sells.</p>' +
+            '<div style="margin-top:6px"><a class="btn btn--live" href="market.html">Browse the market</a></div></div>';
+        }
+      }, 400);
+    });
+  }
+
+  /* ---------- stop watching a saved search: row rules itself out ---------- */
+  var searches = document.querySelector("[data-searches]");
+  if (searches) {
+    searches.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-stopwatch]"); if (!b) return;
+      var row = b.closest("[data-search-row]");
+      var name = row.querySelector(".order__name").textContent;
+      row.classList.add("is-gone");
+      window.lsToast("SEARCH RETIRED — " + name.replace(/"/g, "").toUpperCase());
+      setTimeout(function () {
+        row.remove();
+        if (!searches.querySelector("[data-search-row]")) {
+          searches.innerHTML =
+            '<div class="undrawn" style="border:0;background:transparent;padding:18px 0">' +
+            '<div class="undrawn__mark"><i class="ph ph-magnifying-glass" aria-hidden="true"></i></div>' +
+            '<h3>No searches running</h3>' +
+            '<p>Search the market once, then save it — it re-runs itself every time a part comes off a sheet.</p>' +
+            '<div style="margin-top:4px"><a class="btn btn--ghost" href="market.html">Search the market</a></div></div>';
+        }
+      }, 420);
+    });
+  }
+})();
+</script>
+</body>
+</html>

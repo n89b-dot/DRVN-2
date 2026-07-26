@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — DRVN MERIDIAN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="meridian.css">
+</head>
+<body>
+
+<nav class="mnav">
+  <div class="mnav__inner">
+    <a class="wordmark" href="index.html">DRVN <small>MERIDIAN</small></a>
+    <div class="mnav__tabs">
+      <a class="mnav__tab" href="dashboard.html" aria-current="page">Dashboard</a>
+      <a class="mnav__tab" href="garage.html">Garage</a>
+      <a class="mnav__tab" href="listings.html">Listings</a>
+    </div>
+    <div class="mnav__user">
+      <span>D. Vance</span>
+      <div class="mnav__avatar" aria-hidden="true">DV</div>
+    </div>
+  </div>
+</nav>
+
+<main class="page">
+  <header class="page-head ig" style="--ig-i:0">
+    <p class="mlabel mlabel--accent">Systems — Good evening, D. Vance</p>
+    <h1>All channels nominal.</h1>
+  </header>
+
+  <!-- ============ GAUGE CLUSTER ============ -->
+  <section class="gauge-row" aria-label="Key metrics">
+    <div class="glass glass--hover glass--tilt gauge-card ig" style="--ig-i:1">
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 172 172" data-value="0.7" aria-hidden="true">
+          <path class="gauge-track" d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+          <path class="gauge-arc"   d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-value">7<small>/10</small></div>
+          <div class="gauge-sub">CAPACITY</div>
+        </div>
+      </div>
+      <span class="mlabel">Listings live</span>
+    </div>
+
+    <div class="glass glass--hover glass--tilt gauge-card ig" style="--ig-i:2">
+      <div class="gauge-wrap">
+        <svg class="gauge" id="gauge-offers" viewBox="0 0 172 172" data-value="0.4" aria-hidden="true">
+          <path class="gauge-track" d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+          <path class="gauge-arc gauge-arc--amber" d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-value" id="offers-num">2</div>
+          <div class="gauge-sub">AWAITING REPLY</div>
+        </div>
+      </div>
+      <span class="mlabel">Offer pressure</span>
+    </div>
+
+    <div class="glass glass--hover glass--tilt gauge-card ig" style="--ig-i:3">
+      <div class="gauge-wrap">
+        <svg class="gauge" id="gauge-revenue" viewBox="0 0 172 172" data-value="0.568" aria-hidden="true">
+          <path class="gauge-track" d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+          <path class="gauge-arc"   d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-value" style="font-size:34px;" id="revenue-num" data-countup="3410" data-prefix="£">£0</div>
+          <div class="gauge-sub">NET OF FEES</div>
+        </div>
+      </div>
+      <span class="mlabel">30-day revenue</span>
+    </div>
+  </section>
+
+  <!-- ============ INCOMING OFFERS ============ -->
+  <section class="glass glass--hover panel-pad ig" style="--ig-i:4; margin-bottom:24px;">
+    <p class="mlabel">Incoming offers</p>
+    <div class="trim"></div>
+
+    <div class="offer-row" data-part="Garrett GTX3576R turbo" data-amount="980">
+      <div>
+        <div class="offer-part">Garrett GTX3576R Gen II turbo</div>
+        <div class="offer-meta"><span class="dot dot--amber"></span>From @tunedbybenny &middot; off the R35 GT-R &middot; 2h ago</div>
+      </div>
+      <div class="offer-figures">
+        <div class="offer-bid">£980</div>
+        <div class="offer-ask">ASKING £1,100</div>
+      </div>
+      <div class="offer-actions">
+        <button class="btn btn--fill btn--sm" data-offer-action="accept">Accept</button>
+        <button class="btn btn--ghost btn--sm" data-offer-action="counter">Counter</button>
+        <button class="btn btn--ghost btn--sm btn--danger" data-offer-action="decline">Decline</button>
+      </div>
+    </div>
+
+    <div class="offer-row" data-part="BBS LM 20&quot; wheels" data-amount="720">
+      <div>
+        <div class="offer-part">BBS LM 20&rdquo; forged wheels (set of 4)</div>
+        <div class="offer-meta"><span class="dot dot--amber"></span>From @na1_keith &middot; off the R35 GT-R &middot; 9h ago</div>
+      </div>
+      <div class="offer-figures">
+        <div class="offer-bid">£720</div>
+        <div class="offer-ask">ASKING £800</div>
+      </div>
+      <div class="offer-actions">
+        <button class="btn btn--fill btn--sm" data-offer-action="accept">Accept</button>
+        <button class="btn btn--ghost btn--sm" data-offer-action="counter">Counter</button>
+        <button class="btn btn--ghost btn--sm btn--danger" data-offer-action="decline">Decline</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ THE PADDOCK ============ -->
+  <section class="ig" style="--ig-i:5">
+    <p class="mlabel" style="margin-bottom:14px;">The paddock</p>
+    <div class="vehicle-grid">
+      <a class="glass glass--hover vehicle-card" href="garage.html">
+        <div class="vehicle-img" style="background-image:url('../assets/c8-hero-gtr.png')"></div>
+        <div class="vehicle-body">
+          <p class="mlabel">R35 &middot; VR38DETT &middot; 2013</p>
+          <h3 class="vehicle-name">Nissan GT-R</h3>
+          <div class="vehicle-stats">
+            <div class="vstat"><span class="mlabel">BHP</span><b>640</b></div>
+            <div class="vstat"><span class="mlabel">Parts released</span><b>11</b></div>
+            <div class="vstat"><span class="mlabel">Live</span><b>4</b></div>
+          </div>
+        </div>
+      </a>
+      <a class="glass glass--hover vehicle-card" href="garage.html#nsx">
+        <div class="vehicle-img" style="background-image:url('../assets/c8-car-nsx.png')"></div>
+        <div class="vehicle-body">
+          <p class="mlabel">NA1 &middot; C30A &middot; 1992</p>
+          <h3 class="vehicle-name">Honda NSX</h3>
+          <div class="vehicle-stats">
+            <div class="vstat"><span class="mlabel">BHP</span><b>274</b></div>
+            <div class="vstat"><span class="mlabel">Parts released</span><b>2</b></div>
+            <div class="vstat"><span class="mlabel">Live</span><b>1</b></div>
+          </div>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ TELEMETRY + ACTIVITY ============ -->
+  <section class="split ig" style="--ig-i:6">
+    <div class="glass glass--hover panel-pad">
+      <p class="mlabel">Telemetry — watchers, 14 days</p>
+      <div class="trim"></div>
+      <svg viewBox="0 0 560 180" style="width:100%;height:auto;" role="img" aria-label="Watchers over 14 days, all listings vs turbo listing">
+        <g stroke="rgba(255,255,255,.06)" stroke-width="1">
+          <line x1="0" y1="40" x2="560" y2="40"/><line x1="0" y1="85" x2="560" y2="85"/><line x1="0" y1="130" x2="560" y2="130"/>
+        </g>
+        <polyline fill="none" stroke="#7FB4C9" stroke-width="1.5" opacity=".85"
+          points="0,148 43,142 86,145 129,132 172,136 215,122 258,126 301,110 344,116 387,98 430,104 473,88 516,92 560,78"/>
+        <polyline fill="none" stroke="#D8C79A" stroke-width="2"
+          points="0,132 43,124 86,128 129,108 172,114 215,92 258,98 301,74 344,82 387,58 430,66 473,44 516,52 560,32"/>
+        <circle cx="560" cy="32" r="3.5" fill="#D8C79A"/>
+        <g fill="#5A6068" font-size="10" font-family="Outfit, sans-serif" letter-spacing="1">
+          <text x="0" y="176">27 JUN</text><text x="262" y="176">04 JUL</text><text x="518" y="176">11 JUL</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><i class="acc"></i>All listings</span>
+        <span><i class="ice"></i>GTX3576R turbo</span>
+      </div>
+    </div>
+
+    <div class="glass glass--hover panel-pad">
+      <p class="mlabel">Recent activity</p>
+      <div class="trim"></div>
+      <div class="act-row"><span><span class="dot"></span>BBS LM wheels — new offer £720</span><span class="act-time">09:41</span></div>
+      <div class="act-row"><span><span class="dot"></span>GTX3576R turbo — new offer £980</span><span class="act-time">16:12</span></div>
+      <div class="act-row"><span><span class="dot dot--muted"></span>Recaro Pole Position — 3 new watchers</span><span class="act-time">YDA</span></div>
+      <div class="act-row"><span><span class="dot dot--muted"></span>Akrapovič exhaust — question from @993sam</span><span class="act-time">YDA</span></div>
+      <div class="act-row"><span><span class="dot"></span>Öhlins DFV coilovers — sold £1,240</span><span class="act-time">08 JUL</span></div>
+      <div class="act-row"><span><span class="dot dot--muted"></span>NSX — build log updated</span><span class="act-time">06 JUL</span></div>
+    </div>
+  </section>
+
+  <footer style="margin-top:44px; text-align:center;">
+    <a class="mlabel" href="design.html" style="transition:color .4s;">Design system &rarr;</a>
+  </footer>
+</main>
+
+<!-- accept confirm overlay -->
+<div class="overlay" id="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+  <div class="glass modal">
+    <p class="mlabel mlabel--accent">Confirm sale</p>
+    <h3 id="confirm-title" data-confirm-part>Part</h3>
+    <p>Accept the offer of <strong style="color:var(--m-accent)" data-confirm-amount>£0</strong>?
+       The buyer is notified immediately and payment is held in escrow until dispatch is confirmed.</p>
+    <div class="modal__actions">
+      <button class="btn btn--ghost btn--sm" data-overlay-close>Cancel</button>
+      <button class="btn btn--fill btn--sm" data-confirm-accept>Accept offer</button>
+    </div>
+  </div>
+</div>
+
+<div class="glass toast" id="toast" role="status"><span class="dot"></span><span>Done</span></div>
+
+<script src="meridian.js"></script>
+</body>
+</html>

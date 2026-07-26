@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Order #1047 · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item is-active" href="orders.html" aria-current="page">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-D — ORDER SHEET · JOB CARD #1047</span>
+        <h1>AP Racing CP9660 Kit → @kessler.m</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="wb-tag wb-tag--fill" id="orderStateTag">DISPATCH DUE — 48 H</span>
+        <span class="wb-tag mono">£980 · PAID</span>
+      </div>
+    </header>
+
+    <!-- PIPELINE -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 01 — ORDER PIPELINE</span>
+        <span class="microlabel">OPENED 09 JUL 19:58</span>
+      </div>
+      <div class="wb-plate__body" style="padding:24px 32px 28px">
+        <div class="wb-pipe">
+          <div class="wb-pipe__step is-done">
+            <span class="wb-pipe__node"></span>
+            <div class="wb-pipe__label">Offer accepted</div>
+            <div class="wb-pipe__meta">09 JUL 19:58</div>
+          </div>
+          <div class="wb-pipe__step is-done">
+            <span class="wb-pipe__node"></span>
+            <div class="wb-pipe__label">Paid</div>
+            <div class="wb-pipe__meta">09 JUL 20:04</div>
+          </div>
+          <div class="wb-pipe__step is-current">
+            <span class="wb-pipe__node"></span>
+            <div class="wb-pipe__label">Dispatch due</div>
+            <div class="wb-pipe__meta">BY 11 JUL 20:00</div>
+          </div>
+          <div class="wb-pipe__step">
+            <span class="wb-pipe__node"></span>
+            <div class="wb-pipe__label">Delivered</div>
+            <div class="wb-pipe__meta">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="wb-grid-3-2 wb-section">
+
+      <div class="wb-stack">
+        <!-- ITEM -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 02 — ITEM · PROVENANCE ATTACHED</span>
+            <a class="ref-link" href="listings.html">LISTING L-118 →</a>
+          </div>
+          <div class="wb-plate__body" style="display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:center">
+            <div class="wb-img" style="height:120px"><img src="../assets/c4-part-brake.png" alt="AP Racing brake caliper and disc" onerror="this.remove()"></div>
+            <div>
+              <strong style="font-size:15px">AP Racing CP9660 Front Kit — 355 mm</strong>
+              <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:6px">
+                Off <a class="ref-link" href="garage.html">UNIT A — E46 M3 TRACK</a>. Fitted 05/2023,
+                removed 06/2026. Pads at 70%, discs within spec (measured 31.6 mm).
+                Paired on-car with KW Clubsport 3-Way and Apex ARC-8 18×9.5.
+              </p>
+              <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+                <span class="wb-tag">SERVICE LOG ATTACHED</span>
+                <span class="wb-tag">FITS E46 M3 / E9X W. BRACKET</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- DISPATCH FORM -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 04 — DISPATCH</span>
+            <span class="microlabel microlabel--accent">DUE 11 JUL 20:00</span>
+          </div>
+          <div class="wb-plate__body" style="display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:end">
+            <div class="wb-field">
+              <label class="microlabel" for="carrierSelect">Carrier</label>
+              <select class="wb-select" id="carrierSelect">
+                <option>DHL Express — insured</option>
+                <option>UPS Standard</option>
+                <option>DPD Classic</option>
+                <option>Freight — pallet (heavy parts)</option>
+              </select>
+            </div>
+            <div class="wb-field">
+              <label class="microlabel" for="trackingInput">Tracking no.</label>
+              <input class="wb-input" id="trackingInput" type="text" placeholder="e.g. JD014600003GB" autocomplete="off">
+            </div>
+            <button class="wb-btn wb-btn--accent" id="markDispatched">Mark dispatched</button>
+          </div>
+          <div class="wb-plate__body" style="padding-top:0">
+            <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Payout releases on delivery confirm + 24 h</span></div>
+          </div>
+        </section>
+
+        <!-- PAST ORDERS -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 05 — PAST ORDERS · LAST 90 DAYS</span>
+            <span class="microlabel">12 CLOSED</span>
+          </div>
+          <div class="wb-table-wrap">
+            <table class="wb-table">
+              <thead><tr><th>Ref</th><th>Part</th><th>Buyer</th><th>Closed</th><th>Payout</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="num">#1042</td><td>Recaro Pole Position (single)</td>
+                  <td class="num">@heljan_s</td><td class="num">05 JUL</td>
+                  <td class="num">£391.40</td><td><span class="wb-tag wb-tag--ok">PAID OUT</span></td>
+                </tr>
+                <tr>
+                  <td class="num">#1038</td><td>Eibach ARB kit (E46)</td>
+                  <td class="num">@drift.papi</td><td class="num">28 JUN</td>
+                  <td class="num">£182.40</td><td><span class="wb-tag wb-tag--ok">PAID OUT</span></td>
+                </tr>
+                <tr>
+                  <td class="num">#1031</td><td>Mk2 GTI rear hatch (oak green)</td>
+                  <td class="num">@vw.heritage.k</td><td class="num">19 JUN</td>
+                  <td class="num">£128.25</td><td><span class="wb-tag wb-tag--ok">PAID OUT</span></td>
+                </tr>
+                <tr>
+                  <td class="num">#1027</td><td>Style 68 wheels (staggered)</td>
+                  <td class="num">@e39.tourer</td><td class="num">11 JUN</td>
+                  <td class="num">£475.00</td><td><span class="wb-tag wb-tag--ok">PAID OUT</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <div class="wb-stack">
+        <!-- BUYER PANEL -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 03 — BUYER</span>
+          </div>
+          <div class="wb-plate__body">
+            <div style="display:flex;gap:12px;align-items:center">
+              <div class="wb-rail__avatar" style="width:44px;height:44px;font-size:13px">MK</div>
+              <div>
+                <strong>Matthias Kessler</strong>
+                <div class="mono" style="font-size:11px;color:var(--wb-ink-2)">@kessler.m · München · member since 2024</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:14px;font-family:var(--wb-mono);font-size:12px">
+              <span><b style="color:var(--wb-accent)">4.9★</b> RATING</span>
+              <span><b>23</b> BUYS</span>
+              <span><b>0</b> DISPUTES</span>
+            </div>
+            <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:12px">
+              Runs an E92 M3 track build — your kit bolts on with the E9X bracket set he
+              already owns. Message thread open.
+            </p>
+            <button class="wb-btn wb-btn--ghost wb-btn--sm" style="margin-top:12px" onclick="wbToast('MESSAGING — NOT IN THIS PROTOTYPE')">Message buyer</button>
+          </div>
+        </section>
+
+        <!-- PAYOUT BREAKDOWN -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 06 — PAYOUT BREAKDOWN</span>
+            <span class="microlabel">GBP</span>
+          </div>
+          <div class="wb-plate__body">
+            <table class="wb-table" style="font-family:var(--wb-mono)">
+              <tbody>
+                <tr><td style="padding-left:0">Sale price</td><td class="num" style="text-align:right;padding-right:0">£980.00</td></tr>
+                <tr><td style="padding-left:0">DRVN fee — 5%</td><td class="num" style="text-align:right;padding-right:0;color:var(--wb-ink-2)">−£49.00</td></tr>
+                <tr><td style="padding-left:0"><strong>Payout to Workshop 7</strong></td><td class="num" style="text-align:right;padding-right:0;color:var(--wb-accent);font-size:16px"><strong>£931.00</strong></td></tr>
+              </tbody>
+            </table>
+            <div class="wb-dim wb-dim--accent" data-dim style="margin-top:12px"><span class="wb-dim__line"></span><span class="wb-dim__label">£931.00 — releases on delivery + 24 h</span></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="home.html">HOME — PUBLIC FACE</a>
+      <span class="microlabel">DRVN / WERKBANK — ORDERS · SHEET 4 OF 4</span>
+      <a class="ref-link" href="index.html">← BACK TO DASHBOARD</a>
+    </footer>
+  </main>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

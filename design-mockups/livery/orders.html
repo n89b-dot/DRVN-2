@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LIVERY — Orders — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&family=Anton&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="livery.css" />
+</head>
+<body>
+
+<header class="nav-band">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-roundel">
+      <span class="roundel">23</span>
+      <span class="wordmark">DRVN</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="garage.html">Garage</a></li>
+        <li><a href="listings.html">Listings</a></li>
+        <li><a href="orders.html" aria-current="page">Orders</a></li>
+      </ul>
+    </nav>
+    <button class="burger" aria-expanded="false" aria-controls="nav">MENU</button>
+    <div class="nav-user">
+      <span class="avatar">RO</span>
+      <span class="who"><b>R. OKAFOR</b><span>TEAM RO23 · BRISTOL</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ORDER HEADER -->
+  <section class="order-header">
+    <div>
+      <p class="microlabel" style="color:#6b6b72;margin-bottom:6px">Active order</p>
+      <h1>OZ Rally Wheels ×4 → @minifan.tom</h1>
+      <p class="order-id">ORDER RO23-0341 · ACCEPTED 8 JULY, 19:12</p>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <span class="chip green">PAID — £340</span>
+      <span class="chip powder">SHIP BY FRI 11 JUL</span>
+    </div>
+  </section>
+
+  <!-- RACE LIGHTS PROGRESS -->
+  <section class="race-lights" aria-label="Order progress">
+    <div class="section-head" style="margin-bottom:32px">
+      <h2 style="color:var(--cream)">Formation lap → delivery</h2>
+      <span class="sub" style="color:#8a8a92">Lights go green as the order advances</span>
+    </div>
+    <div class="lights-row" id="race-lights">
+      <div class="light-stage done">
+        <div class="light"></div>
+        <p class="stage-name">Accepted</p>
+        <p class="stage-time">8 Jul · 19:12</p>
+      </div>
+      <div class="light-stage done">
+        <div class="light"></div>
+        <p class="stage-name">Paid</p>
+        <p class="stage-time">8 Jul · 19:14</p>
+      </div>
+      <div class="light-stage current">
+        <div class="light"></div>
+        <p class="stage-name">Packed</p>
+        <p class="stage-time">In progress</p>
+      </div>
+      <div class="light-stage pending">
+        <div class="light"></div>
+        <p class="stage-name">Dispatched</p>
+        <p class="stage-time">—</p>
+      </div>
+      <div class="light-stage pending">
+        <div class="light"></div>
+        <p class="stage-name">Delivered</p>
+        <p class="stage-time">—</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="order-cols">
+
+    <!-- DISPATCH FORM -->
+    <section class="block" aria-label="Dispatch">
+      <div class="section-head" style="margin-bottom:20px">
+        <h2 style="font-size:20px">Dispatch — lights out</h2>
+      </div>
+      <p style="font-size:13px;color:#4a4a50;margin-bottom:20px">Four wheels, boxed in pairs. Buyer is at CF10 2 — insured courier recommended over £300. Marking dispatched advances the lights and messages the buyer with tracking.</p>
+      <form id="dispatch-form" class="modal-form">
+        <div class="field-row">
+          <div class="field">
+            <label class="microlabel" for="carrier">Carrier</label>
+            <select id="carrier">
+              <option>DPD — insured</option>
+              <option>Parcelforce 48</option>
+              <option>Courier collection (Shiply)</option>
+              <option>Hand delivery — Bristol → Cardiff</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="microlabel" for="tracking">Tracking number</label>
+            <input id="tracking" type="text" placeholder="e.g. 15501234567890" />
+          </div>
+        </div>
+        <button type="submit" class="btn red">Lights out — mark dispatched</button>
+      </form>
+    </section>
+
+    <!-- PAYOUT PODIUM -->
+    <section class="block cream" aria-label="Payout">
+      <div class="section-head" style="margin-bottom:20px">
+        <h2 style="font-size:20px">Payout podium</h2>
+      </div>
+      <div class="podium">
+        <div class="step p2">
+          <span class="microlabel">P2 · Sale price</span>
+          <span class="amt numeral">£340</span>
+        </div>
+        <div class="step p1">
+          <span class="microlabel">P1 · Your payout</span>
+          <span class="amt numeral">£323</span>
+          <span class="microlabel" style="margin-top:6px">Lands 2 days after delivery</span>
+        </div>
+        <div class="step p3">
+          <span class="microlabel" style="color:#ffd9d7">P3 · DRVN fee 5%</span>
+          <span class="amt numeral">−£17</span>
+        </div>
+      </div>
+      <p style="font-size:11px;color:#6b6b72;margin-top:14px;letter-spacing:.06em;text-transform:uppercase;font-weight:600">Buyer paid via DRVN escrow — released on delivery confirmation.</p>
+    </section>
+
+  </div>
+
+  <div class="stripe-divider" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <!-- PAST ORDERS -->
+  <section aria-label="Past orders">
+    <div class="section-head">
+      <h2>Season results</h2>
+      <span class="sub">Finishing order — last 30 days · £2,140 total</span>
+    </div>
+    <table class="results-table">
+      <thead>
+        <tr><th>Pos</th><th>Part</th><th>Buyer</th><th>Source car</th><th>Sold</th><th>Payout</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="roundel sm pos">1</span></td>
+          <td><b>996 GT3 Front Lip — Genuine</b></td>
+          <td>@osloflat6</td>
+          <td><span class="source-sticker">Gulf Girl · 911</span></td>
+          <td class="money">£680</td>
+          <td class="money">£646</td>
+          <td><span class="chip green">DELIVERED</span></td>
+        </tr>
+        <tr>
+          <td><span class="roundel sm pos">2</span></td>
+          <td><b>Quaife ATB Diff — 996</b></td>
+          <td>@combecrew</td>
+          <td><span class="source-sticker">Gulf Girl · 911</span></td>
+          <td class="money">£540</td>
+          <td class="money">£513</td>
+          <td><span class="chip green">DELIVERED</span></td>
+        </tr>
+        <tr>
+          <td><span class="roundel sm pos">3</span></td>
+          <td><b>Minilite Reps ×4 — 12"</b></td>
+          <td>@barnfind.bee</td>
+          <td><span class="source-sticker">Pepperpot · Mini</span></td>
+          <td class="money">£290</td>
+          <td class="money">£275</td>
+          <td><span class="chip green">DELIVERED</span></td>
+        </tr>
+        <tr>
+          <td><span class="roundel sm pos">4</span></td>
+          <td><b>Stage 1 Head — 1275 A-series</b></td>
+          <td>@heritagehatch</td>
+          <td><span class="source-sticker">Pepperpot · Mini</span></td>
+          <td class="money">£265</td>
+          <td class="money">£251</td>
+          <td><span class="chip green">DELIVERED</span></td>
+        </tr>
+        <tr>
+          <td><span class="roundel sm pos">5</span></td>
+          <td><b>Momo Prototipo Wheel</b></td>
+          <td>@heritagehatch</td>
+          <td><span class="source-sticker">Pepperpot · Mini</span></td>
+          <td class="money">£185</td>
+          <td class="money">£175</td>
+          <td><span class="chip cobalt">IN TRANSIT</span></td>
+        </tr>
+        <tr>
+          <td><span class="roundel sm pos">6</span></td>
+          <td><b>996 Clear Side Repeaters</b></td>
+          <td>@novicehill</td>
+          <td><span class="source-sticker">Gulf Girl · 911</span></td>
+          <td class="money">£180</td>
+          <td class="money">£171</td>
+          <td><span class="chip green">DELIVERED</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="stripe"></div>
+  <div class="foot-inner">
+    <span>DRVN · Concept 05 — LIVERY</span>
+    <span>Run your garage like a race team</span>
+    <a href="design.html">Style guide →</a>
+  </div>
+</footer>
+
+<script src="livery.js"></script>
+</body>
+</html>

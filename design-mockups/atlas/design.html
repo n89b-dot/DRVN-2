@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATLAS — Design System · DRVN Field Guide</title>
+<meta name="description" content="Live style guide for ATLAS, DRVN Concept 10 — tokens, type scale, and components in every state.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ATLAS tokens — mirrors atlas.css :root exactly */
+  :root {
+    --kraft:#E9DFCB; --oat:#F3ECDD; --oat-deep:#E4D9BF;
+    --ink:#2C271E; --ink-2:#6E6552;
+    --olive:#5E6B47; --olive-deep:#495337; --olive-tint:#E1E0CC;
+    --clay:#B5502F; --clay-deep:#96401F; --clay-tint:#EFD9CC;
+    --contour:#C7B48F; --contour-soft:#D6C7A6;
+    --scrim:rgba(44,39,30,0.46);
+    --shadow-soft:0 2px 10px rgba(44,39,30,0.06);
+    --shadow-lift:0 10px 28px rgba(44,39,30,0.10);
+    --focus-ring:0 0 0 3px rgba(94,107,71,0.32);
+    --font-sans:"Hanken Grotesk","Bricolage Grotesque",system-ui,sans-serif;
+    --font-mono:"Spline Sans Mono","IBM Plex Mono",ui-monospace,monospace;
+    --r-card:6px; --r-sm:4px; --r-tag:4px; --r-pin:50%;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:72px;
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--kraft); color:var(--ink); font-family:var(--font-sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1060px; margin:0 auto; padding:0 clamp(20px,4vw,48px); }
+
+  header { border-bottom:1px solid var(--contour); padding:40px 0 28px; margin-bottom:8px; }
+  .kicker { font-family:var(--font-mono); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--olive); }
+  h1 { font-size:clamp(34px,5vw,58px); font-weight:600; letter-spacing:-0.015em; margin:10px 0 8px; }
+  .lede { color:var(--ink-2); max-width:60ch; }
+  header nav { margin-top:20px; display:flex; gap:18px; flex-wrap:wrap; }
+  header nav a { font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-2); text-decoration:none; }
+  header nav a:hover, header nav a:focus-visible { color:var(--olive); outline:none; }
+
+  section { padding:56px 0; border-bottom:1px solid var(--contour); }
+  h2 { font-size:clamp(22px,3vw,32px); font-weight:600; letter-spacing:-0.015em; }
+  .sec-label { font-family:var(--font-mono); font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--olive); margin-bottom:6px; }
+  .sec-head { margin-bottom:28px; }
+  .note { color:var(--ink-2); font-size:14.5px; max-width:64ch; margin-top:8px; }
+
+  /* swatches */
+  .swatches { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px; }
+  .swatch { border:1px solid var(--contour); border-radius:var(--r-card); overflow:hidden; background:var(--oat); box-shadow:var(--shadow-soft); }
+  .swatch .chip { height:82px; }
+  .swatch .meta { padding:10px 12px; }
+  .swatch .name { font-weight:600; font-size:13.5px; }
+  .swatch .val { font-family:var(--font-mono); font-size:11px; color:var(--ink-2); margin-top:2px; }
+  .swatch .tok { font-family:var(--font-mono); font-size:10px; color:var(--olive); letter-spacing:0.06em; }
+
+  /* type scale */
+  .type-row { padding:14px 0; border-bottom:1px solid var(--contour); display:flex; align-items:baseline; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .type-row:last-child { border-bottom:none; }
+  .type-tok { font-family:var(--font-mono); font-size:11px; color:var(--olive); letter-spacing:0.08em; white-space:nowrap; }
+  .mono { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .microlabel { font-family:var(--font-mono); font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--olive); }
+  .coord { font-family:var(--font-mono); font-size:12px; letter-spacing:0.04em; color:var(--ink-2); }
+
+  /* spacing */
+  .space-row { display:flex; align-items:center; gap:16px; padding:7px 0; }
+  .space-bar { height:16px; background:var(--olive); border-radius:2px; }
+  .space-tok { font-family:var(--font-mono); font-size:12px; color:var(--ink-2); width:120px; }
+
+  /* component grid */
+  .demo { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:20px; }
+  .cell { border:1px solid var(--contour); border-radius:var(--r-card); background:var(--oat); padding:20px; box-shadow:var(--shadow-soft); }
+  .cell .cap { font-family:var(--font-mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-2); margin-bottom:14px; display:block; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+  .btn { display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:12px; font-weight:500; letter-spacing:0.1em; text-transform:uppercase; padding:11px 18px; border-radius:var(--r-tag); border:1px solid transparent; cursor:pointer; transition:all .22s var(--ease); text-decoration:none; }
+  .btn:active { transform:translateY(1px); }
+  .btn--primary { background:var(--olive); color:var(--oat); border-color:var(--olive); }
+  .btn--primary:hover { background:var(--olive-deep); }
+  .btn--clay { background:var(--clay); color:var(--oat); border-color:var(--clay); }
+  .btn--clay:hover { background:var(--clay-deep); }
+  .btn--ghost { background:transparent; color:var(--ink); border-color:var(--contour); }
+  .btn--ghost:hover { background:var(--kraft); border-color:var(--ink-2); }
+  .btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+
+  .tag { display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:10px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; padding:4px 9px; border-radius:var(--r-tag); border:1px solid var(--contour); color:var(--ink-2); background:var(--oat); }
+  .tag .dot { width:6px; height:6px; border-radius:var(--r-pin); background:currentColor; }
+  .tag--fit { color:var(--olive); border-color:var(--olive); background:var(--olive-tint); }
+  .tag--clay { color:var(--clay); border-color:var(--clay); background:var(--clay-tint); }
+
+  .route-link { display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--olive); text-decoration:none; }
+  .route-link::before { content:""; width:22px; height:1px; background-image:linear-gradient(90deg,var(--olive) 0 4px,transparent 4px 8px); background-size:8px 1px; }
+
+  .fc { border:1px solid var(--contour); border-radius:var(--r-card); overflow:hidden; background:var(--oat); box-shadow:var(--shadow-soft); transition:all .48s var(--ease); text-decoration:none; color:inherit; display:block; }
+  .fc:hover { transform:translateY(-6px); box-shadow:var(--shadow-lift); border-color:var(--olive); }
+  .fc .media { aspect-ratio:4/3; background:var(--oat-deep); background-image:url('../assets/c10-part-rack.png'); background-size:cover; background-position:center; border-bottom:1px solid var(--contour); position:relative; }
+  .fc .sn { position:absolute; top:12px; left:12px; background:var(--kraft); border:1px solid var(--contour); border-radius:var(--r-tag); padding:3px 8px; font-family:var(--font-mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--olive); }
+  .fc .fb { padding:16px; }
+  .fc .ft { font-size:19px; font-weight:600; margin:8px 0 4px; }
+  .price { font-family:var(--font-mono); font-size:18px; font-weight:600; color:var(--clay); }
+
+  .fld input { width:100%; font-family:var(--font-mono); font-size:13px; background:var(--oat); border:1px solid var(--contour); border-radius:var(--r-sm); padding:9px 11px; color:var(--ink); }
+  .fld input:focus-visible { outline:none; box-shadow:var(--focus-ring); border-color:var(--olive); }
+
+  .basis { font-family:var(--font-mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; }
+  .basis--verified { color:var(--olive); } .basis--stated { color:var(--ink-2); }
+
+  .pin-demo { display:flex; gap:26px; align-items:center; }
+  .pin { width:26px; height:26px; border-radius:var(--r-pin); border:2px solid var(--kraft); }
+  .pin.rest { background:var(--olive); }
+  .pin.hot { background:var(--clay); box-shadow:0 0 0 6px var(--olive-tint); }
+
+  .dos { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .dos ul { list-style:none; }
+  .dos li { padding:7px 0 7px 22px; position:relative; color:var(--ink-2); font-size:14.5px; border-bottom:1px solid var(--contour); }
+  .dos li::before { position:absolute; left:0; top:7px; font-family:var(--font-mono); font-weight:600; }
+  .do li::before { content:"+"; color:var(--olive); }
+  .dont li::before { content:"–"; color:var(--clay); }
+  .dos h3 { font-size:16px; margin-bottom:6px; }
+
+  footer { padding:40px 0 64px; }
+  footer a { color:var(--olive); font-family:var(--font-mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; text-decoration:none; }
+  footer a:hover { color:var(--clay); }
+
+  @media (max-width:640px){ .dos{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <div class="kicker">DRVN · Field Guide · Concept 10</div>
+  <h1>ATLAS — Design System</h1>
+  <p class="lede">Every build is a documented specimen. Warm kraft paper, olive field-notes, clay for money, topographic contours and dotted provenance routes. A live rendering of every token and component — values mirror <span class="mono">atlas.css</span>.</p>
+  <nav>
+    <a href="index.html">Cover</a>
+    <a href="car.html">Field entry</a>
+    <a href="listing.html">Specimen</a>
+    <a href="atlas.html">The Atlas</a>
+    <a href="design.md">design.md</a>
+    <a href="BRIEF.md">Brief</a>
+  </nav>
+</header>
+
+<!-- Colors -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">01 · Palette</div><h2>Colours</h2>
+    <p class="note">Warm, matte, dusty. No pure white, no cool grey, no bright saturated hue. Olive is structural; clay is reserved for money and the one mark that matters.</p>
+  </div>
+  <div class="swatches">
+    <div class="swatch"><div class="chip" style="background:var(--kraft)"></div><div class="meta"><div class="name">Kraft</div><div class="val">#E9DFCB</div><div class="tok">--kraft · canvas</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--oat)"></div><div class="meta"><div class="name">Oat</div><div class="val">#F3ECDD</div><div class="tok">--oat · surface</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--oat-deep)"></div><div class="meta"><div class="name">Oat Deep</div><div class="val">#E4D9BF</div><div class="tok">--oat-deep</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--ink)"></div><div class="meta"><div class="name">Ink Brown</div><div class="val">#2C271E</div><div class="tok">--ink · text</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--ink-2)"></div><div class="meta"><div class="name">Ink 2</div><div class="val">#6E6552</div><div class="tok">--ink-2 · secondary</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--olive)"></div><div class="meta"><div class="name">Olive</div><div class="val">#5E6B47</div><div class="tok">--olive · primary</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--olive-deep)"></div><div class="meta"><div class="name">Olive Deep</div><div class="val">#495337</div><div class="tok">--olive-deep · hover</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--olive-tint)"></div><div class="meta"><div class="name">Olive Tint</div><div class="val">#E1E0CC</div><div class="tok">--olive-tint · wash</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--clay)"></div><div class="meta"><div class="name">Clay</div><div class="val">#B5502F</div><div class="tok">--clay · secondary</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--clay-tint)"></div><div class="meta"><div class="name">Clay Tint</div><div class="val">#EFD9CC</div><div class="tok">--clay-tint · wash</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--contour)"></div><div class="meta"><div class="name">Contour</div><div class="val">#C7B48F</div><div class="tok">--contour · hairlines</div></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--contour-soft)"></div><div class="meta"><div class="name">Contour Soft</div><div class="val">#D6C7A6</div><div class="tok">--contour-soft · field</div></div></div>
+  </div>
+</section>
+
+<!-- Type -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">02 · Type</div><h2>Typography</h2>
+    <p class="note">Hanken Grotesk for reading; Spline Sans Mono for coordinates, catalog numbers, dates and measurements only.</p>
+  </div>
+  <div class="type-row"><span style="font-size:52px;font-weight:600;letter-spacing:-0.015em">A field guide.</span><span class="type-tok">h1 · Hanken 600 · clamp 38–74</span></div>
+  <div class="type-row"><span style="font-size:32px;font-weight:600;letter-spacing:-0.015em">Recent specimens.</span><span class="type-tok">h2 · Hanken 600 · clamp 26–40</span></div>
+  <div class="type-row"><span style="font-size:22px;font-weight:600">Catalogue the vehicle</span><span class="type-tok">h3 · Hanken 600 · clamp 19–24</span></div>
+  <div class="type-row"><span style="font-size:16px;color:var(--ink-2)">Every part is logged like a specimen, with the vehicle it came off.</span><span class="type-tok">body · Hanken 400 · 16/1.55</span></div>
+  <div class="type-row"><span class="microlabel">Specimen 01 · Overland</span><span class="type-tok">microlabel · mono 11 · 0.16em</span></div>
+  <div class="type-row"><span class="coord">35.1983° N, 111.6513° W · Flagstaff AZ</span><span class="type-tok">coord · mono 12 · tabular</span></div>
+  <div class="type-row"><span class="price">£680</span><span class="type-tok">price · mono 600 · clay</span></div>
+</section>
+
+<!-- Spacing / radius -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">03 · Metrics</div><h2>Spacing &amp; radius</h2></div>
+  <div class="row" style="gap:40px;align-items:flex-start;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px">
+      <div class="space-row"><span class="space-tok">--s1 · 4px</span><div class="space-bar" style="width:4px"></div></div>
+      <div class="space-row"><span class="space-tok">--s2 · 8px</span><div class="space-bar" style="width:8px"></div></div>
+      <div class="space-row"><span class="space-tok">--s3 · 12px</span><div class="space-bar" style="width:12px"></div></div>
+      <div class="space-row"><span class="space-tok">--s4 · 16px</span><div class="space-bar" style="width:16px"></div></div>
+      <div class="space-row"><span class="space-tok">--s5 · 24px</span><div class="space-bar" style="width:24px"></div></div>
+      <div class="space-row"><span class="space-tok">--s6 · 32px</span><div class="space-bar" style="width:32px"></div></div>
+      <div class="space-row"><span class="space-tok">--s7 · 48px</span><div class="space-bar" style="width:48px"></div></div>
+      <div class="space-row"><span class="space-tok">--s8 · 72px</span><div class="space-bar" style="width:72px"></div></div>
+    </div>
+    <div style="flex:1;min-width:220px">
+      <div class="row" style="gap:16px">
+        <div style="text-align:center"><div style="width:80px;height:80px;background:var(--olive-tint);border:1px solid var(--olive);border-radius:6px"></div><div class="coord" style="margin-top:6px">--r-card · 6px</div></div>
+        <div style="text-align:center"><div style="width:80px;height:80px;background:var(--olive-tint);border:1px solid var(--olive);border-radius:4px"></div><div class="coord" style="margin-top:6px">--r-tag · 4px</div></div>
+        <div style="text-align:center"><div style="width:80px;height:80px;background:var(--olive-tint);border:1px solid var(--olive);border-radius:50%"></div><div class="coord" style="margin-top:6px">--r-pin · 50%</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Buttons -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">04 · Components</div><h2>Buttons</h2>
+    <p class="note">Hover and focus states are live — tab into them or roll over. Focus-visible shows the olive ring.</p>
+  </div>
+  <div class="demo">
+    <div class="cell"><span class="cap">Primary · olive</span><div class="row"><button class="btn btn--primary">Open the Atlas</button></div></div>
+    <div class="cell"><span class="cap">Clay · money / key mark</span><div class="row"><button class="btn btn--clay">Claim · £680</button></div></div>
+    <div class="cell"><span class="cap">Ghost</span><div class="row"><button class="btn btn--ghost">Ask the keeper</button></div></div>
+  </div>
+</section>
+
+<!-- Tags, routes, basis -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">05 · Marks</div><h2>Tags, routes &amp; fitment basis</h2></div>
+  <div class="demo">
+    <div class="cell"><span class="cap">Tags</span><div class="row">
+      <span class="tag"><span class="dot"></span>Neutral</span>
+      <span class="tag tag--fit"><span class="dot"></span>Fitment verified</span>
+      <span class="tag tag--clay"><span class="dot"></span>Key mark</span>
+    </div></div>
+    <div class="cell"><span class="cap">Route link</span><div class="row"><a href="#" class="route-link">Off "Kestrel" LC80</a></div></div>
+    <div class="cell"><span class="cap">Fitment basis</span><div class="row" style="gap:20px">
+      <span class="basis basis--verified">Platform-verified</span>
+      <span class="basis basis--stated">Keeper-stated</span>
+    </div></div>
+    <div class="cell"><span class="cap">Route line · trust primitive</span>
+      <svg width="100%" height="40" viewBox="0 0 240 40" aria-hidden="true"><path d="M8 20 C 80 20, 90 10, 160 10 L 232 10" fill="none" stroke="var(--olive)" stroke-width="1.5" stroke-dasharray="3 6" stroke-linecap="round"/></svg>
+    </div>
+    <div class="cell"><span class="cap">Map pin · rest / active</span><div class="pin-demo">
+      <div style="text-align:center"><div class="pin rest"></div><div class="coord" style="margin-top:8px">rest · olive</div></div>
+      <div style="text-align:center"><div class="pin hot"></div><div class="coord" style="margin-top:8px">active · clay</div></div>
+    </div></div>
+    <div class="cell"><span class="cap">Input · focus ring</span><div class="fld"><input type="text" value="34.0522° N" aria-label="coordinate"></div></div>
+  </div>
+</section>
+
+<!-- Field card -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">06 · Card</div><h2>Field card</h2>
+    <p class="note">Hover to see the 6px rise, soft warm lift and olive border. The specimen number sits on a kraft chip over the media.</p>
+  </div>
+  <div class="demo">
+    <a class="fc" href="listing.html">
+      <div class="media"><span class="sn">Cat. No. 08-A</span></div>
+      <div class="fb">
+        <div class="microlabel">Roof rack · full-length</div>
+        <div class="ft">ARB Steel Rack</div>
+        <a href="#" class="route-link" style="pointer-events:none">Off "Kestrel" LC80</a>
+        <div class="row" style="justify-content:space-between;margin-top:12px">
+          <span class="tag tag--fit"><span class="dot"></span>Fitment verified</span>
+          <span class="price">£680</span>
+        </div>
+      </div>
+    </a>
+  </div>
+</section>
+
+<!-- Do / Don't -->
+<section class="wrap">
+  <div class="sec-head"><div class="sec-label">07 · Guardrails</div><h2>Do's &amp; Don'ts</h2></div>
+  <div class="dos">
+    <div><h3>Do</h3><ul class="do">
+      <li>Set coordinates, catalog numbers and dates in Spline Sans Mono, tabular.</li>
+      <li>Number specimens; caption with coordinates.</li>
+      <li>Mark the basis of any fitment claim — verified vs stated.</li>
+      <li>Olive for structure and links; clay almost only for prices.</li>
+      <li>Calm motion — 400–550ms ease-out, lines draw, cards rise 6px.</li>
+    </ul></div>
+    <div><h3>Don't</h3><ul class="dont">
+      <li>No pure white, cool grey, or bright saturated colour.</li>
+      <li>No regular grid or dimension lines — contours only.</li>
+      <li>No radii above 6px, no shadow heavier than the soft lift.</li>
+      <li>Don't spend clay on decoration.</li>
+      <li>Don't set body or headings in the mono voice.</li>
+    </ul></div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <a href="index.html">← Back to the field guide cover</a>
+</footer>
+
+</body>
+</html>

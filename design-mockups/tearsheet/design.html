@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEARSHEET — Live Style Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #FAFAF7;
+  --ink: #141414;
+  --mid: #6E6E6A;
+  --red: #D42B1E;
+  --paper-dim: #F1F1EC;
+  --rule: #141414;
+  --rule-soft: #C9C9C2;
+  --paper-on-ink: #FAFAF7;
+  --grain-line: rgba(20, 20, 20, 0.012);
+  --halftone-line: rgba(20, 20, 20, 0.03);
+  --scrim: rgba(20, 20, 20, 0.55);
+  --font-display: "Archivo Narrow", "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "Inter", "Helvetica Neue", sans-serif;
+  --fs-body: 13px;
+  --fs-small: 11px;
+  --fs-micro: 10px;
+  --lh-tight: 1.35;
+  --gap: 16px;
+  --gap-lg: 28px;
+  --frame: 1000px;
+  --t-fast: 150ms;
+  --t-underscore: 180ms;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body); font-size: var(--fs-body); line-height: var(--lh-tight);
+  color: var(--ink); background: var(--paper);
+  background-image: repeating-linear-gradient(0deg, var(--grain-line) 0 1px, transparent 1px 3px);
+  padding: 40px 20px 80px;
+}
+a { color: inherit; }
+a:hover { color: var(--red); }
+:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.wrap { max-width: var(--frame); margin: 0 auto; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 52px; text-transform: uppercase; line-height: 0.95; }
+.section { margin-top: 48px; }
+.section > h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; text-transform: uppercase; }
+.section > .eyebrow { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--red); }
+.section > hr { border: 0; border-top: 3px solid var(--ink); margin: 8px 0 20px; }
+.note { color: var(--mid); font-size: var(--fs-small); margin-top: 8px; max-width: 60ch; }
+
+/* swatches */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); border: 1px solid var(--ink); border-right: 0; border-bottom: 0; }
+.sw { border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.sw__chip { height: 64px; border-bottom: 1px solid var(--ink); }
+.sw__label { padding: 8px 10px; font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: 0.06em; }
+.sw__label b { display: block; font-family: var(--font-display); font-size: 12px; }
+
+/* type specimens */
+.spec-type > div { border-bottom: 1px solid var(--rule-soft); padding: 14px 0; }
+.t-lead { font-family: var(--font-display); font-weight: 700; font-size: 56px; text-transform: uppercase; line-height: 0.95; }
+.t-sect { font-family: var(--font-display); font-weight: 700; font-size: 30px; text-transform: uppercase; line-height: 0.95; }
+.t-card { font-family: var(--font-display); font-weight: 600; font-size: 16px; text-transform: uppercase; line-height: 1.1; }
+.t-kicker { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--red); }
+.t-body { font-size: var(--fs-body); }
+.t-meta { font-size: var(--fs-small); color: var(--mid); }
+.spec-type .tag { font-size: var(--fs-micro); color: var(--mid); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 4px; }
+
+/* ported components */
+.kicker { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--red); }
+.price { font-family: var(--font-display); font-weight: 700; line-height: 1; display: inline-block; border-bottom: 3px solid var(--red); padding-bottom: 2px; }
+.price--sm { font-size: 18px; border-bottom-width: 2px; }
+.price--md { font-size: 24px; }
+.price--xl { font-size: 56px; border-bottom-width: 4px; }
+.flash { display: inline-block; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-micro); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper); background: var(--red); padding: 3px 7px 2px; }
+.flash--ghost { background: none; color: var(--red); border: 1px solid var(--red); }
+.btn { font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; padding: 12px 22px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast); }
+.btn:hover { background: var(--red); border-color: var(--red); }
+.btn--ghost { background: none; color: var(--ink); }
+.btn--ghost:hover { background: none; color: var(--red); border-color: var(--red); }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.specbox { border: 1px solid var(--ink); max-width: 420px; }
+.specbox__title { font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; padding: 8px 12px; background: var(--ink); color: var(--paper); display: block; }
+.specbox table { width: 100%; border-collapse: collapse; }
+.specbox td { padding: 7px 12px; font-size: var(--fs-small); border-top: 1px solid var(--rule-soft); }
+.specbox tr:first-child td { border-top: 0; }
+.specbox td:first-child { color: var(--mid); text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--fs-micro); width: 42%; }
+.specbox td:last-child { font-weight: 500; }
+.ruled-module { border: 1px solid var(--ink); padding: 18px; max-width: 420px; }
+.tabdemo { display: flex; gap: 18px; border-bottom: 1px solid var(--ink); max-width: 420px; }
+.tab { position: relative; background: none; border: 0; cursor: pointer; font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); padding: 8px 0 10px; transition: color var(--t-fast); }
+.tab:hover { color: var(--red); }
+.tab::after { content: ""; position: absolute; left: 0; bottom: -1px; height: 3px; width: 0; background: var(--red); transition: width var(--t-underscore) ease-out; }
+.tab.is-active { color: var(--ink); }
+.tab.is-active::after { width: 100%; }
+.rowdemo { display: grid; grid-template-columns: 56px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule-soft); max-width: 480px; transition: background var(--t-fast); }
+.rowdemo:hover { background: var(--paper-dim); }
+.rowdemo__thumb { width: 56px; height: 42px; border: 1px solid var(--ink); background: repeating-linear-gradient(45deg, var(--halftone-line) 0 6px, transparent 6px 12px), var(--paper-dim); display: grid; place-items: center; font-family: var(--font-display); font-size: 9px; font-weight: 600; color: var(--mid); }
+.statesrow { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.backlink { display: inline-block; margin-top: 12px; font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Concept 14 · DRVN · Live Style Guide</p>
+  <h1>Tearsheet</h1>
+  <p class="note">The print grammar of the 90s Japanese tuner press, ported to a living marketplace. Paper, ink, one red — every value below is the token used in tearsheet.css.</p>
+  <a class="backlink" href="index.html">← Back to the prototype</a>
+
+  <div class="section">
+    <p class="eyebrow">01 · Ink</p>
+    <h2>Color Tokens</h2>
+    <hr>
+    <div class="swatches">
+      <div class="sw"><div class="sw__chip" style="background:var(--paper)"></div><div class="sw__label"><b>--paper</b>#FAFAF7</div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--ink)"></div><div class="sw__label"><b>--ink</b>#141414</div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--mid)"></div><div class="sw__label"><b>--mid</b>#6E6E6A</div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--red)"></div><div class="sw__label"><b>--red</b>#D42B1E</div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--paper-dim)"></div><div class="sw__label"><b>--paper-dim</b>#F1F1EC</div></div>
+      <div class="sw"><div class="sw__chip" style="background:var(--rule-soft)"></div><div class="sw__label"><b>--rule-soft</b>#C9C9C2</div></div>
+    </div>
+    <p class="note">Red is a budget: kickers, price underscores, flash tags, active states, focus outlines. Nothing else.</p>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">02 · Set Tight</p>
+    <h2>Typography</h2>
+    <hr>
+    <div class="spec-type">
+      <div><span class="tag">headline--lead · Archivo Narrow 700 · clamp(40–84px) · lh 0.95</span><p class="t-lead">3,400 Parts. Real Builds.</p></div>
+      <div><span class="tag">headline--sect · Archivo Narrow 700 · clamp(22–34px)</span><p class="t-sect">Fresh Off The Car</p></div>
+      <div><span class="tag">headline--card · Archivo Narrow 600 · 16px</span><p class="t-card">TD06-20G Turbo + Manifold · SR20DET</p></div>
+      <div><span class="tag">kicker · 12px · tracking 0.18em · red</span><p class="t-kicker">Parts Market · Turbo</p></div>
+      <div><span class="tag">body · Inter 400 · 13px · lh 1.35</span><p class="t-body">Journal-bearing unit, shafts tight, light heat discolouration. Boxed and capped for shipping.</p></div>
+      <div><span class="tag">meta · Inter 400 · 11px · mid grey</span><p class="t-meta">Cond. B+ · @sato.s14works · 4.9★ · 41 watching</p></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">03 · Price Is Content</p>
+    <h2>Price Callout</h2>
+    <hr>
+    <div class="statesrow">
+      <span class="price price--sm">£390</span>
+      <span class="price price--md">£980</span>
+      <span class="price price--xl">£2,150</span>
+    </div>
+    <p class="note">Condensed numerals over a red underscore — sm (list rows) / md (cards) / xl (product spread). The magazine price-callout, working for its living.</p>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">04 · Red Ink</p>
+    <h2>Flash Tags</h2>
+    <hr>
+    <div class="statesrow">
+      <span class="flash">Fits Your Car</span>
+      <span class="flash">Order Confirmed</span>
+      <span class="flash flash--ghost">Fits Your Car</span>
+      <span class="flash flash--ghost">New</span>
+    </div>
+    <p class="note">Solid = platform-verified. Ghost = seller-stated. The distinction is a trust signal — never mix them up.</p>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">05 · Push / Hold</p>
+    <h2>Buttons</h2>
+    <hr>
+    <div class="statesrow">
+      <button class="btn">Buy Now</button>
+      <button class="btn btn--ghost">Make Offer</button>
+      <button class="btn" disabled>Sold Out</button>
+    </div>
+    <p class="note">Solid ink → red on hover. Ghost stays ruled, goes red. Focus everywhere: 2px red outline, 2px offset — tab to try it.</p>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">06 · Ruled Tables</p>
+    <h2>Spec Box</h2>
+    <hr>
+    <div class="specbox">
+      <span class="specbox__title">Spec Box</span>
+      <table>
+        <tr><td>Unit</td><td>Mitsubishi TD06-20G, journal bearing</td></tr>
+        <tr><td>Fits</td><td>SR20DET · S13 / S14 / S15</td></tr>
+        <tr><td>Condition</td><td>B+ · shafts tight, no play</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">07 · The Underscore</p>
+    <h2>Tabs (Live)</h2>
+    <hr>
+    <div class="tabdemo" id="tabdemo">
+      <button class="tab is-active">All Parts</button>
+      <button class="tab">Engine</button>
+      <button class="tab">Wheels</button>
+    </div>
+    <p class="note">The 180ms red underscore slide is one of only two motions in the system (the other: 150ms grid crossfade).</p>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">08 · Dense Rows</p>
+    <h2>Ruled Row-List</h2>
+    <hr>
+    <div class="rowdemo">
+      <span class="rowdemo__thumb">TURBO</span>
+      <span><span class="t-card">TD06-20G Turbo + Manifold</span><br><span class="t-meta">Cond. B+ · @sato.s14works · 4.9★</span></span>
+      <span class="price price--sm">£980</span>
+    </div>
+    <div class="rowdemo">
+      <span class="rowdemo__thumb">SUSP</span>
+      <span><span class="t-card">Tein Flex Z Coilovers · EK</span><br><span class="t-meta">Cond. B+ · @ek9.jules · 5.0★</span></span>
+      <span class="price price--sm">£390</span>
+    </div>
+    <p class="note">The halftone-striped thumb is also the missing-image fallback — a broken photo becomes a set caption, never a broken frame.</p>
+  </div>
+
+  <div class="section">
+    <p class="eyebrow">09 · No Depth</p>
+    <h2>Rules &amp; Space</h2>
+    <hr>
+    <div class="ruled-module">
+      <p class="t-body">Corners: 0px. Shadows: none. Structure is 1px ink rules; emphasis is a 3px rule or red. Gaps: 16 / 28px. Frame: 1240px.</p>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:48px">TEARSHEET · DRVN Concept 14 · <a href="index.html">index</a> · <a href="market.html">market</a> · <a href="listing.html">listing</a> · <a href="car.html">car</a></p>
+</div>
+
+<script>
+document.querySelectorAll('#tabdemo .tab').forEach(function (t) {
+  t.addEventListener('click', function () {
+    document.querySelectorAll('#tabdemo .tab').forEach(function (x) { x.classList.remove('is-active'); });
+    t.classList.add('is-active');
+  });
+});
+</script>
+</body>
+</html>

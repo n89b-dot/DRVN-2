@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Your sheet, live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link is-active" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 01 — TODAY · <span class="mono" data-seconds="8580"></span> UNTIL OLDEST OFFER LAPSES</span>
+    <h1>Morning, Dana.<br>Your sheet is <span class="live-word">live.</span></h1>
+    <p class="sub">Two offers arrived overnight. The Integrale picked up nine watchers while you slept — everything below is ticking in real time.</p>
+  </div>
+
+  <!-- KPI deck — measured values, alive -->
+  <section class="deck deck--kpi">
+    <div class="tile rv" data-stagger="0">
+      <span class="microlabel">Active listings</span>
+      <div class="num-giant" data-count="5">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">3 live · 2 under offer</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel microlabel--live">Offers waiting</span>
+      <div class="num-giant" style="color:var(--live)" data-count="2">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">Oldest lapses in</span>
+        <span class="val" data-seconds="8580"></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel">Week takings</span>
+      <div class="num-giant" data-takings="1430">$1,430</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">2 sales · payout Friday</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="3">
+      <span class="microlabel">Watching your garage</span>
+      <div class="num-giant"><span data-tick="71">71</span></div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">Counting now</span>
+        <span class="val">+9 overnight</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Offers inbox + garage -->
+  <section class="deck deck--two">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">WORK ORDERS — OFFERS NEED AN ANSWER</span>
+        <span class="chip chip--live">2 OPEN</span>
+      </div>
+      <div class="rowlist">
+        <div class="order" data-order data-price="$620" data-amount="620">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="Coilover pair with red springs" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">KW V2 coilovers — Delta fitment</div>
+            <div class="order__meta">@peaks.gravel offers <b>$620</b> vs $680 · lapses <span class="cd" data-seconds="8580"></span></div>
+          </div>
+          <div class="order__actions">
+            <button class="btn btn--live" data-act="accept">Accept $620</button>
+            <button class="btn btn--ghost" data-act="counter">Counter</button>
+            <button class="btn btn--ghost" data-act="decline">Pass</button>
+          </div>
+        </div>
+        <div class="order" data-order data-price="$240" data-amount="240">
+          <div class="order__img"><img src="../assets/c16-part-seat.png" alt="Bucket seat with red stitching" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Sabelt bucket seat — driver side</div>
+            <div class="order__meta">@torino.classics offers <b>$240</b> vs $290 · lapses <span class="cd" data-seconds="31300"></span></div>
+          </div>
+          <div class="order__actions">
+            <button class="btn btn--live" data-act="accept">Accept $240</button>
+            <button class="btn btn--ghost" data-act="counter">Counter</button>
+            <button class="btn btn--ghost" data-act="decline">Pass</button>
+          </div>
+        </div>
+      </div>
+      <p class="kv" style="margin-top:14px;color:var(--dim)">Accepting raises a job card and books the payout — the sheet updates itself.</p>
+    </div>
+
+    <a class="tile rv" href="car.html" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THE GARAGE</span>
+        <span class="chip"><span data-tick="34">34</span>&nbsp;WATCHING</span>
+      </div>
+      <div class="tile__img" style="aspect-ratio:3/2">
+        <img src="../assets/c16-hero-car.png" alt="Red Lancia Delta HF Integrale in a light studio" onerror="this.remove()">
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px">
+        <div>
+          <div class="order__name">Lancia Delta HF Integrale Evo</div>
+          <div class="order__meta">"Biscione" · 2 parts listed · full sheet →</div>
+        </div>
+        <span class="chip chip--live">LIVE</span>
+      </div>
+    </a>
+  </section>
+
+  <!-- Activity + week -->
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THE FEED — WHAT THE SHEET SAW</span>
+        <span class="microlabel mono">UTC+1</span>
+      </div>
+      <ul class="feed">
+        <li><time>07:42</time> New offer on the KW coilovers <span class="amt amt--live">$620</span></li>
+        <li><time>07:15</time> @peaks.gravel started watching the Integrale</li>
+        <li><time>01:03</time> Seat listing passed 200 views <span class="amt">204</span></li>
+        <li><time>YESTERDAY</time> Payout cleared — Momo Corse wheel set <span class="amt">$310</span></li>
+        <li><time>TUE</time> You marked the gravel springs FITTED on the sheet</li>
+      </ul>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THIS WEEK</span>
+        <span class="microlabel">JUL 20 — 26</span>
+      </div>
+      <div class="week">
+        <div class="week__day"><span class="microlabel">Mon</span><b>20</b></div>
+        <div class="week__day"><span class="microlabel">Tue</span><b>21</b></div>
+        <div class="week__day"><span class="microlabel">Wed</span><b>22</b></div>
+        <div class="week__day"><span class="microlabel">Thu</span><b>23</b></div>
+        <div class="week__day"><span class="microlabel">Fri</span><b>24</b></div>
+        <div class="week__day week__day--hot"><span class="microlabel">Sat</span><b>25</b><span class="tag">MEET</span></div>
+        <div class="week__day"><span class="microlabel">Sun</span><b>26</b></div>
+      </div>
+      <div class="livedim" style="margin-top:16px"><span class="livedim__tick"></span>
+        <span class="microlabel">Sat 25 · Alpine run, Buttertubs Pass · 08:00</span>
+        <span class="val">The Integrale is going</span>
+      </div>
+      <div style="margin-top:16px"><a class="btn btn--ghost" href="market.html">Browse the market</a></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — CONCEPT 16 · A DRAWING THAT KNOWS WHAT'S HAPPENING</span>
+    <a class="microlabel mono" href="empty-states.html">EMPTY-STATE SPEC →</a>
+    <span class="microlabel"><a class="mono" href="BRIEF.md">BRIEF</a></span>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

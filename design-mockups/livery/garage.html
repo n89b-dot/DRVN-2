@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LIVERY — Garage — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&family=Anton&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="livery.css" />
+</head>
+<body>
+
+<header class="nav-band">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-roundel">
+      <span class="roundel">23</span>
+      <span class="wordmark">DRVN</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="garage.html" aria-current="page">Garage</a></li>
+        <li><a href="listings.html">Listings</a></li>
+        <li><a href="orders.html">Orders</a></li>
+      </ul>
+    </nav>
+    <button class="burger" aria-expanded="false" aria-controls="nav">MENU</button>
+    <div class="nav-user">
+      <span class="avatar">RO</span>
+      <span class="who"><b>R. OKAFOR</b><span>TEAM RO23 · BRISTOL</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- CAR HERO -->
+  <section class="garage-hero" aria-label="Gulf Girl — 911 (996)">
+    <div class="hero-visual" style="background-image:url('../assets/c5-hero-livery.png')">
+      <span class="roundel lg">23</span>
+    </div>
+    <div class="hero-copy">
+      <p class="microlabel">Car 1 of 2 · Team RO23</p>
+      <h1>Gulf Girl<br />911 (996)</h1>
+      <p class="car-sub">2001 Carrera turned track car. Powder blue over marigold since 2023. Every take-off below came off this exact chassis — VIN-linked, photo-logged, fitment-verified.</p>
+      <div class="sticker-sheet">
+        <div class="spec-sticker"><span class="microlabel">Engine</span><span class="val numeral">3.6 F6</span></div>
+        <div class="spec-sticker"><span class="microlabel">Power</span><span class="val numeral">320 BHP</span></div>
+        <div class="spec-sticker"><span class="microlabel">Weight</span><span class="val numeral">1,270 KG</span></div>
+        <div class="spec-sticker"><span class="microlabel">Best lap · Combe</span><span class="val numeral">1:18.4</span></div>
+        <div class="spec-sticker"><span class="microlabel">Mods logged</span><span class="val numeral">27</span></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:auto">
+        <span class="chip cobalt">4 PARTS LISTED</span>
+        <span class="chip yellow">2 UNDER OFFER</span>
+        <span class="chip green">9 SOLD FROM THIS CAR</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAKE-OFF RACK -->
+  <section aria-label="Take-offs for sale">
+    <div class="section-head">
+      <h2>Take-offs for sale</h2>
+      <span class="sub">Team RO23 take-off rack — every part traces to its car</span>
+      <button class="btn sm red" id="release-open" style="margin-left:auto">+ Release a part</button>
+    </div>
+    <div class="rack-grid">
+
+      <a class="part-card blue-bg" href="listings.html">
+        <div class="part-visual" style="background-image:url('../assets/c5-part-wheel.png')">
+          <span class="chip cobalt">LIVE</span>
+        </div>
+        <div class="part-body">
+          <h3>OZ Rally Wheels ×4 — 13×6"</h3>
+          <p class="cond">Good — light track rash, straight and true. Ran on Pepperpot 2022–24.</p>
+        </div>
+        <div class="part-foot">
+          <span class="price numeral">£340</span>
+          <span class="chip">18 WATCHING</span>
+        </div>
+      </a>
+
+      <a class="part-card orange-bg" href="listings.html">
+        <div class="part-visual" style="background-image:url('../assets/c5-part-seat.png')">
+          <span class="chip yellow">UNDER OFFER</span>
+        </div>
+        <div class="part-body">
+          <h3>Recaro Pole Position — Driver Side</h3>
+          <p class="cond">Excellent — FIA valid to 2028. Swapped out for a halo seat. Side mounts included.</p>
+        </div>
+        <div class="part-foot">
+          <span class="price numeral">£450</span>
+          <span class="chip">24 WATCHING</span>
+        </div>
+      </a>
+
+      <a class="part-card" href="listings.html">
+        <div class="part-visual">
+          <span class="chip yellow">UNDER OFFER</span>
+        </div>
+        <div class="part-body">
+          <h3>KW Clubsport Coilovers — 996</h3>
+          <p class="cond">Very good — 6 track days since rebuild. Dyno sheet and setup notes in the listing.</p>
+        </div>
+        <div class="part-foot">
+          <span class="price numeral">£1,250</span>
+          <span class="chip">31 WATCHING</span>
+        </div>
+      </a>
+
+      <a class="part-card" href="listings.html">
+        <div class="part-visual">
+          <span class="chip cobalt">LIVE</span>
+        </div>
+        <div class="part-body">
+          <h3>Cobra 6-Point Harnesses ×2</h3>
+          <p class="cond">Good — dated 2027. Off the 996 after cage revision. Both sets, all hardware.</p>
+        </div>
+        <div class="part-foot">
+          <span class="price numeral">£110</span>
+          <span class="chip">9 WATCHING</span>
+        </div>
+      </a>
+
+      <button class="part-card release-card" id="release-open-2" onclick="document.getElementById('release-open').click()">
+        <span class="roundel">+</span>
+        <h3 class="display" style="font-size:15px">Release a part</h3>
+        <p style="font-size:12px;color:#6b6b72;max-width:26ch">Take it off the car, log the reason, set a price. Buyers see the full history.</p>
+      </button>
+
+    </div>
+  </section>
+
+  <div class="stripe-divider" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <!-- MOD TIMELINE -->
+  <section aria-label="Build timeline">
+    <div class="section-head">
+      <h2>Race weekend log</h2>
+      <span class="sub">Build history — buyers read this before they bid</span>
+    </div>
+    <div class="timeline">
+      <div class="timeline-entry">
+        <span class="session-tag">FP1</span>
+        <h4>Installed KW Clubsports</h4>
+        <p>Full corner-weight and geo at Centre Gravity. Ride height −25mm, 2.8° neg camber front. Transformed turn-in at Quarry.</p>
+        <time>March 2026</time>
+      </div>
+      <div class="timeline-entry">
+        <span class="session-tag">FP2</span>
+        <h4>Dyno day — 320 bhp confirmed</h4>
+        <p>Regal Autosport rolling road. Headers plus tune worth 24 bhp over stock. Sheet attached to the coilover listing since buyers kept asking.</p>
+        <time>April 2026</time>
+      </div>
+      <div class="timeline-entry">
+        <span class="session-tag">Q1</span>
+        <h4>Cage revision, seats out</h4>
+        <p>Custom Cages weld-in rear section. Recaros and Cobra harnesses came out for a halo seat — both released to the rack above.</p>
+        <time>May 2026</time>
+      </div>
+      <div class="timeline-entry">
+        <span class="session-tag">RACE</span>
+        <h4>Castle Combe — 1:18.4, new personal best</h4>
+        <p>First outing on the new setup. Two tenths found in the last sector alone. The car this good is why the take-offs sell.</p>
+        <time>June 2026</time>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- RELEASE A PART MODAL -->
+<div class="overlay" id="release-overlay" role="dialog" aria-modal="true" aria-labelledby="release-title">
+  <div class="board">
+    <p class="microlabel">Pit lane · new listing</p>
+    <h3 id="release-title">Release a part from Gulf Girl</h3>
+    <form class="modal-form">
+      <div class="field">
+        <label class="microlabel" for="rp-name">Part name</label>
+        <input id="rp-name" type="text" placeholder="e.g. GT3 front lip — genuine" required />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="microlabel" for="rp-cond">Condition</label>
+          <select id="rp-cond" required>
+            <option>New — never fitted</option>
+            <option selected>Excellent</option>
+            <option>Very good</option>
+            <option>Good — marks noted</option>
+            <option>For rebuild</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="microlabel" for="rp-price">Asking price (£)</label>
+          <input id="rp-price" type="number" min="1" placeholder="450" required />
+        </div>
+      </div>
+      <div class="board-actions">
+        <button type="submit" class="btn yellow">Release to pit lane</button>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="stripe"></div>
+  <div class="foot-inner">
+    <span>DRVN · Concept 05 — LIVERY</span>
+    <span>Run your garage like a race team</span>
+    <a href="design.html">Style guide →</a>
+  </div>
+</footer>
+
+<script src="livery.js"></script>
+</body>
+</html>

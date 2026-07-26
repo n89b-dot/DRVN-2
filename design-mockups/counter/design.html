@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COUNTER — Style guide</title>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --stone: #EFEBE4; --putty: #E2DCD2; --paper: #FBF9F6;
+    --ink: #262320; --taupe: #857D72;
+    --hairline: rgba(38,35,32,0.12); --hairline-soft: rgba(38,35,32,0.07);
+    --mine: #C4593A; --mine-tint: #F4E2DA; --mine-deep: #A2472E;
+    --theirs: #4F5D42; --theirs-tint: #E3E6DC; --theirs-deep: #3E4A33;
+    --ok: #4F5D42; --warn: #B0813B; --expired: #9A938A;
+    --breath: 0 1px 3px rgba(38,35,32,0.06);
+    --r-card: 14px; --r-bubble: 18px; --r-pill: 999px;
+    --font: "General Sans", "Cabinet Grotesk", system-ui, sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font); background:var(--stone); color:var(--ink); line-height:1.55; padding:48px 24px 80px; }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font-size:40px; font-weight:700; letter-spacing:-0.02em; }
+  .lead { color:var(--taupe); margin:8px 0 48px; max-width:56ch; }
+  h2 { font-size:24px; font-weight:700; margin:56px 0 8px; }
+  .sub { color:var(--taupe); font-size:14.5px; margin-bottom:20px; }
+  :focus-visible { outline:2px solid var(--mine); outline-offset:2px; }
+
+  .swatches { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px; }
+  .swatch { background:var(--paper); border:1px solid var(--hairline-soft); border-radius:var(--r-card); overflow:hidden; box-shadow:var(--breath); }
+  .swatch .chip { height:64px; }
+  .swatch .info { padding:10px 12px; font-size:12.5px; }
+  .swatch .info strong { display:block; font-size:13px; }
+  .swatch .info span { color:var(--taupe); }
+
+  .type-row { border-bottom:1px solid var(--hairline-soft); padding:14px 0; }
+  .type-row .label { font-size:12px; color:var(--taupe); margin-bottom:2px; }
+
+  .panel { background:var(--paper); border:1px solid var(--hairline-soft); border-radius:var(--r-card); box-shadow:var(--breath); padding:24px; }
+
+  .thread { display:flex; flex-direction:column; gap:14px; }
+  .bubble { border-radius:var(--r-bubble); padding:14px 18px; border:1px solid var(--hairline-soft); box-shadow:var(--breath); max-width:72%; }
+  .bubble-mine { align-self:flex-end; background:var(--mine-tint); border-bottom-right-radius:6px; border-color:rgba(196,89,58,0.22); }
+  .bubble-theirs { align-self:flex-start; background:var(--theirs-tint); border-bottom-left-radius:6px; border-color:rgba(79,93,66,0.22); }
+  .bubble-amount { font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.15; }
+  .bubble-mine .bubble-amount { color:var(--mine); }
+  .bubble-theirs .bubble-amount { color:var(--theirs); }
+  .bubble-note { font-size:14.5px; margin-top:4px; }
+  .bubble-meta { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:var(--taupe); }
+  .state-chip { display:inline-flex; padding:2px 9px; border-radius:var(--r-pill); font-size:11px; font-weight:600; }
+  .state-open { background:rgba(176,129,59,0.16); color:var(--warn); }
+  .state-countered { background:var(--putty); color:var(--taupe); }
+  .state-accepted { background:rgba(79,93,66,0.16); color:var(--ok); }
+  .state-expired { background:var(--putty); color:var(--expired); text-decoration:line-through; }
+  .sys-row { text-align:center; font-size:13px; color:var(--taupe); display:flex; align-items:center; gap:14px; }
+  .sys-row::before, .sys-row::after { content:""; flex:1; height:1px; background:var(--hairline-soft); }
+
+  .handshake { position:relative; overflow:hidden; border-radius:var(--r-card); border:1px solid var(--hairline-soft); display:grid; grid-template-columns:1fr 1fr; box-shadow:var(--breath); }
+  .handshake-side { padding:20px 22px; display:flex; align-items:center; gap:12px; }
+  .hs-mine { background:var(--mine-tint); }
+  .hs-theirs { background:var(--theirs-tint); justify-content:flex-end; text-align:right; }
+  .hs-name { font-weight:600; font-size:14.5px; }
+  .hs-role { font-size:12px; color:var(--taupe); }
+  .handshake-seam { position:absolute; left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%);
+    background:repeating-linear-gradient(to bottom, var(--mine) 0 7px, var(--theirs) 7px 14px); }
+  .handshake-center { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    background:var(--paper); border:1px solid var(--hairline); border-radius:var(--r-pill);
+    padding:7px 16px; font-weight:600; font-size:14px; white-space:nowrap; box-shadow:var(--breath); }
+  .mini-av { width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; color:var(--paper); font-size:11px; font-weight:600; }
+  .av-mine { background:var(--mine); } .av-theirs { background:var(--theirs); }
+  .money { font-weight:600; font-variant-numeric:tabular-nums; }
+
+  .btn { display:inline-flex; align-items:center; padding:12px 22px; border-radius:var(--r-pill); font-family:inherit; font-weight:600; font-size:15px; border:1px solid transparent; cursor:pointer; transition:background 160ms, border-color 160ms; }
+  .btn-primary { background:var(--mine); color:var(--paper); }
+  .btn-primary:hover { background:var(--mine-deep); }
+  .btn-moss { background:var(--theirs); color:var(--paper); }
+  .btn-moss:hover { background:var(--theirs-deep); }
+  .btn-ghost { background:transparent; color:var(--ink); border-color:var(--hairline); }
+  .btn-ghost:hover { background:var(--paper); }
+  .btn-quiet { background:transparent; border:none; color:var(--taupe); font-weight:500; }
+  .btn-quiet:hover { color:var(--ink); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+
+  footer { margin-top:72px; color:var(--taupe); font-size:13px; }
+  footer a { color:var(--mine); }
+</style>
+</head>
+<body>
+<main>
+  <h1>COUNTER</h1>
+  <p class="lead">Live style guide for DRVN concept 13. The deal is the design: two party colors, offer bubbles with a lifecycle, and a handshake close. Tokens here match <code>counter.css</code> 1:1.</p>
+
+  <h2>Color</h2>
+  <p class="sub">Warm neutral stage; terracotta = me, moss = them.</p>
+  <div class="swatches">
+    <div class="swatch"><div class="chip" style="background:var(--stone); border-bottom:1px solid var(--hairline-soft);"></div><div class="info"><strong>stone</strong><span>#EFEBE4 · canvas</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--putty);"></div><div class="info"><strong>putty</strong><span>#E2DCD2 · insets</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--paper); border-bottom:1px solid var(--hairline-soft);"></div><div class="info"><strong>paper</strong><span>#FBF9F6 · cards</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--ink);"></div><div class="info"><strong>ink</strong><span>#262320 · text</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--taupe);"></div><div class="info"><strong>taupe</strong><span>#857D72 · secondary</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--mine);"></div><div class="info"><strong>mine</strong><span>#C4593A · my side</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--mine-tint);"></div><div class="info"><strong>mine-tint</strong><span>#F4E2DA · my bubbles</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--theirs);"></div><div class="info"><strong>theirs</strong><span>#4F5D42 · their side</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--theirs-tint);"></div><div class="info"><strong>theirs-tint</strong><span>#E3E6DC · their bubbles</span></div></div>
+    <div class="swatch"><div class="chip" style="background:var(--warn);"></div><div class="info"><strong>warn</strong><span>#B0813B · open state</span></div></div>
+  </div>
+
+  <h2>Type</h2>
+  <p class="sub">General Sans throughout. Money is inline semibold with tabular numerals — no monospace, no boxed readouts.</p>
+  <div class="type-row"><p class="label">Display · 700</p><p style="font-size:44px; font-weight:700; letter-spacing:-0.02em; line-height:1.06;">Shake on it.</p></div>
+  <div class="type-row"><p class="label">Section · 27px 700</p><p style="font-size:27px; font-weight:700;">Live on the market</p></div>
+  <div class="type-row"><p class="label">Body · 16px 400, money inline</p><p>Priya countered at <span class="money" style="font-size:1.08em;">£1,150</span> — the tires alone are worth <span class="money" style="font-size:1.08em;">£400</span>.</p></div>
+  <div class="type-row"><p class="label">Meta · 12.5px taupe</p><p style="font-size:12.5px; color:var(--taupe);">★ 4.8 · 26 sales · responds in ~20 min</p></div>
+
+  <h2>Offer bubble — all states</h2>
+  <p class="sub">The signature component. Amount first, note second, lifecycle chip last. Only one bubble in a thread may be Open.</p>
+  <div class="panel thread">
+    <div class="bubble bubble-mine">
+      <div class="bubble-amount">£1,050</div>
+      <div class="bubble-note">Would you take £1,050? Collecting this weekend.</div>
+      <div class="bubble-meta"><span>Tue, 18:42</span><span class="state-chip state-countered">Countered</span></div>
+    </div>
+    <div class="bubble bubble-theirs">
+      <div class="bubble-amount">£1,150</div>
+      <div class="bubble-note">Meet in the middle and we have a deal.</div>
+      <div class="bubble-meta"><span>Tue, 21:02</span><span class="state-chip state-open">Open</span></div>
+    </div>
+    <div class="bubble bubble-mine">
+      <div class="bubble-amount">£1,150</div>
+      <div class="bubble-note">Done. See you Saturday.</div>
+      <div class="bubble-meta"><span>Tue, 21:14</span><span class="state-chip state-accepted">Accepted</span></div>
+    </div>
+    <div class="bubble bubble-theirs">
+      <div class="bubble-amount">£980</div>
+      <div class="bubble-note">Offer lapsed after 48h without a response.</div>
+      <div class="bubble-meta"><span>Last week</span><span class="state-chip state-expired">Expired</span></div>
+    </div>
+    <div class="sys-row">Deal agreed at £1,150</div>
+  </div>
+
+  <h2>Handshake band</h2>
+  <p class="sub">A close belongs to both parties: split tints joined by a two-color seam that draws once (600ms) when the deal completes.</p>
+  <div class="handshake">
+    <div class="handshake-side hs-mine"><span class="mini-av av-mine">JB</span><div><div class="hs-name">Jonah Barr</div><div class="hs-role">Buyer · Leeds</div></div></div>
+    <div class="handshake-side hs-theirs"><div><div class="hs-name">Priya S.</div><div class="hs-role">Seller · Sheffield</div></div><span class="mini-av av-theirs">PS</span></div>
+    <div class="handshake-seam"></div>
+    <div class="handshake-center">Shaken on <span class="money">£1,150</span></div>
+  </div>
+
+  <h2>Buttons</h2>
+  <p class="sub">Rust = my actions. Moss = closing/positive actions (Accept, Pay). Pills only.</p>
+  <div class="row">
+    <button class="btn btn-primary" type="button">Send offer</button>
+    <button class="btn btn-moss" type="button">Accept £1,150</button>
+    <button class="btn btn-ghost" type="button">Buy now £1,250</button>
+    <button class="btn btn-quiet" type="button">Walk away</button>
+  </div>
+
+  <footer>COUNTER · concept 13 for DRVN · tokens mirrored in <a href="design.md">design.md</a> · back to <a href="index.html">the prototype</a></footer>
+</main>
+</body>
+</html>

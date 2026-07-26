@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Dashboard · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <!-- ============ SIDEBAR TOOL-RAIL ============ -->
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item is-active" href="index.html" aria-current="page">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-A — DASHBOARD · SHEET 1 OF 4</span>
+        <h1>Guten Abend, Lena</h1>
+      </div>
+      <div class="wb-pagehead__status"><span class="dot"></span> Workshop status: 3 jobs open</div>
+    </header>
+
+    <!-- KPI PLATES -->
+    <section class="wb-kpis" aria-label="Key figures">
+      <div class="wb-plate wb-kpi wb-plate--hover">
+        <span class="microlabel">Active listings</span>
+        <div class="wb-kpi__value" data-count="7">0</div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">5 live · 2 under offer</span></div>
+      </div>
+      <div class="wb-plate wb-kpi wb-plate--hover">
+        <span class="microlabel">Offers awaiting reply</span>
+        <span class="wb-kpi__badge wb-tag wb-tag--fill">ACTION</span>
+        <div class="wb-kpi__value" data-count="3" style="color:var(--wb-accent)">0</div>
+        <div class="wb-dim wb-dim--accent" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Oldest expires 04 H</span></div>
+      </div>
+      <div class="wb-plate wb-kpi wb-plate--hover">
+        <span class="microlabel">30-day sales</span>
+        <div class="wb-kpi__value"><small>£</small><span data-count="4320" >0</span></div>
+        <svg class="wb-chart" viewBox="0 0 220 56" preserveAspectRatio="none" aria-hidden="true">
+          <line class="grid" x1="0" y1="46" x2="220" y2="46"/>
+          <line class="grid" x1="0" y1="26" x2="220" y2="26"/>
+          <line class="grid" x1="0" y1="8" x2="220" y2="8"/>
+          <path class="line" d="M8 44 L50 38 L92 40 L134 24 L176 28 L212 10"/>
+          <circle class="pt" cx="8" cy="44" r="2.5"/><circle class="pt" cx="50" cy="38" r="2.5"/>
+          <circle class="pt" cx="92" cy="40" r="2.5"/><circle class="pt" cx="134" cy="24" r="2.5"/>
+          <circle class="pt" cx="176" cy="28" r="2.5"/><circle class="pt pt--last" cx="212" cy="10" r="3"/>
+        </svg>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">£4,320 — 30-day sales · +38%</span></div>
+      </div>
+      <div class="wb-plate wb-kpi wb-plate--hover">
+        <span class="microlabel">Garage fitment matches</span>
+        <div class="wb-kpi__value" data-count="12">0</div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Buyers whose cars fit your parts</span></div>
+      </div>
+    </section>
+
+    <div class="wb-grid-3-2 wb-section">
+
+      <!-- OFFERS INBOX -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 02 — OFFERS INBOX</span>
+          <a class="ref-link" href="listings.html">VIEW ALL LISTINGS →</a>
+        </div>
+        <div class="wb-plate__body wb-plate__body--flush">
+
+          <div class="wb-offer" data-offer-row="of-118">
+            <div>
+              <div class="wb-offer__part">AP Racing CP9660 Front Kit</div>
+              <div class="wb-offer__buyer">@kessler.m · E92 M3 · 4.9★ · 23 buys</div>
+            </div>
+            <div class="wb-offer__nums">£980 <span class="ask">£1,150</span></div>
+            <div class="wb-offer__count">EXP <span data-countdown="04:12:33">04:12:33</span></div>
+            <div class="wb-offer__actions">
+              <button class="wb-btn wb-btn--accent wb-btn--sm" data-modal-open="acceptSheet"
+                data-payload='{"part":"AP Racing CP9660 Front Kit","buyer":"@kessler.m","offer":"£980","against":"vs £1,150 asking (−14.8%)"}'
+                data-offer-id="of-118">Accept</button>
+              <button class="wb-btn wb-btn--ghost wb-btn--sm" data-offer-counter="1060">Counter</button>
+              <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" data-offer-decline>Decline</button>
+            </div>
+          </div>
+
+          <div class="wb-offer" data-offer-row="of-121">
+            <div>
+              <div class="wb-offer__part">KW Clubsport 3-Way (E46)</div>
+              <div class="wb-offer__buyer">@ringtaxi_ben · E46 330Ci · 4.7★ · 11 buys</div>
+            </div>
+            <div class="wb-offer__nums">£1,450 <span class="ask">£1,700</span></div>
+            <div class="wb-offer__count">EXP <span data-countdown="11:47:02">11:47:02</span></div>
+            <div class="wb-offer__actions">
+              <button class="wb-btn wb-btn--accent wb-btn--sm" data-modal-open="acceptSheet"
+                data-payload='{"part":"KW Clubsport 3-Way (E46)","buyer":"@ringtaxi_ben","offer":"£1,450","against":"vs £1,700 asking (−14.7%)"}'
+                data-offer-id="of-121">Accept</button>
+              <button class="wb-btn wb-btn--ghost wb-btn--sm" data-offer-counter="1580">Counter</button>
+              <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" data-offer-decline>Decline</button>
+            </div>
+          </div>
+
+          <div class="wb-offer" data-offer-row="of-124">
+            <div>
+              <div class="wb-offer__part">BBS RS 16×8 ET11 (set of 4)</div>
+              <div class="wb-offer__buyer">@mk2.golfclub · Mk2 GTI · 5.0★ · 6 buys</div>
+            </div>
+            <div class="wb-offer__nums">£720 <span class="ask">£850</span></div>
+            <div class="wb-offer__count">EXP <span data-countdown="22:03:11">22:03:11</span></div>
+            <div class="wb-offer__actions">
+              <button class="wb-btn wb-btn--accent wb-btn--sm" data-modal-open="acceptSheet"
+                data-payload='{"part":"BBS RS 16×8 ET11 (set of 4)","buyer":"@mk2.golfclub","offer":"£720","against":"vs £850 asking (−15.3%)"}'
+                data-offer-id="of-124">Accept</button>
+              <button class="wb-btn wb-btn--ghost wb-btn--sm" data-offer-counter="790">Counter</button>
+              <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" data-offer-decline>Decline</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- RECENT ACTIVITY -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 04 — RECENT ACTIVITY</span>
+          <span class="microlabel">LEDGER · UTC+2</span>
+        </div>
+        <ul class="wb-ledger">
+          <li><time>19:42 · TODAY</time> New offer on AP Racing brake kit <span class="amt" style="color:var(--wb-accent)">£980</span></li>
+          <li><time>17:08 · TODAY</time> @kessler.m added your <a class="ref-link" href="car.html">E46 M3</a> to watched builds</li>
+          <li><time>14:31 · TODAY</time> Öhlins R&amp;T listing hit 200 views <span class="amt">200</span></li>
+          <li><time>09:12 · 08 JUL</time> Payout cleared — Recaro Pole Position <span class="amt">£412</span></li>
+          <li><time>18:55 · 07 JUL</time> Fitment match: 3 buyers run E46 chassis</li>
+          <li><time>11:20 · 07 JUL</time> You marked "Supersprint header" FITTED on Unit A</li>
+          <li><time>16:03 · 05 JUL</time> Order #1042 delivered — buyer confirmed <span class="amt">£931</span></li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- GARAGE PLATE -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 03 — GARAGE · 2 UNITS ON FILE</span>
+        <a class="ref-link" href="garage.html">OPEN GARAGE →</a>
+      </div>
+      <div class="wb-plate__body wb-plate__body--flush">
+        <a class="wb-carstrip" href="garage.html">
+          <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 on a two-post lift" loading="lazy" onerror="this.remove()"></div>
+          <div>
+            <div class="wb-carstrip__name">UNIT A — BMW E46 M3 · Track</div>
+            <div class="wb-carstrip__stats">
+              <span><b>34</b> PARTS TRACKED</span><span><b>5</b> LISTED</span><span><b>£11.2K</b> INVESTED</span>
+            </div>
+          </div>
+          <span class="wb-tag wb-tag--accent">3 REMOVED-FOR-SALE</span>
+        </a>
+        <a class="wb-carstrip" href="garage.html">
+          <div class="wb-img"><img src="../assets/c4-car-side.png" alt="Silver Mk2 Golf GTI side elevation" loading="lazy" onerror="this.remove()"></div>
+          <div>
+            <div class="wb-carstrip__name">UNIT B — VW GOLF GTI MK2 · Project</div>
+            <div class="wb-carstrip__stats">
+              <span><b>19</b> PARTS TRACKED</span><span><b>2</b> LISTED</span><span><b>£4.6K</b> INVESTED</span>
+            </div>
+          </div>
+          <span class="wb-tag">RESTORATION · 62%</span>
+        </a>
+      </div>
+    </section>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="home.html">HOME — PUBLIC FACE</a>
+      <span class="microlabel">DRVN / WERKBANK — CONCEPT 04 · DRAWN 09 JUL 2026 · SCALE 1:1</span>
+      <a class="ref-link" href="design.html">DESIGN SYSTEM — DESIGN.HTML →</a>
+    </footer>
+  </main>
+</div>
+
+<!-- ACCEPT CONFIRM SHEET -->
+<div class="wb-scrim" id="acceptSheet" role="dialog" aria-modal="true" aria-labelledby="acceptTitle">
+  <div class="wb-sheet">
+    <div class="wb-sheet__head">
+      <span class="microlabel microlabel--ink" id="acceptTitle">CONFIRM ACCEPT — WORK ORDER</span>
+      <button class="wb-sheet__close" data-modal-close aria-label="Close">ESC ×</button>
+    </div>
+    <div class="wb-sheet__body">
+      <div>
+        <span class="microlabel">Part</span>
+        <div style="font-weight:600;margin-top:2px" data-slot="part">—</div>
+      </div>
+      <div class="wb-grid-2">
+        <div><span class="microlabel">Buyer</span><div class="mono" style="margin-top:2px" data-slot="buyer">—</div></div>
+        <div><span class="microlabel">Offer</span><div class="mono" style="margin-top:2px;color:var(--wb-accent);font-size:18px" data-slot="offer">—</div></div>
+      </div>
+      <div class="microlabel" data-slot="against">—</div>
+      <div class="wb-dim wb-dim--accent is-drawn"><span class="wb-dim__line"></span><span class="wb-dim__label">Accepting raises an order &amp; locks the listing</span></div>
+    </div>
+    <div class="wb-sheet__foot">
+      <button class="wb-btn wb-btn--ghost" data-modal-close>Cancel</button>
+      <button class="wb-btn wb-btn--accent" data-offer-confirm="of-118">Accept offer</button>
+    </div>
+  </div>
+</div>
+
+<script src="werkbank.js"></script>
+<script>
+  /* wire accept sheet to the row that opened it */
+  document.querySelectorAll('[data-modal-open="acceptSheet"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelector('[data-offer-confirm]').setAttribute('data-offer-confirm', btn.dataset.offerId);
+    });
+  });
+</script>
+</body>
+</html>

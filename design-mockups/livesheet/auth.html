@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Open your sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="authwrap">
+
+    <div class="pagehead rv" style="padding-top:0">
+      <span class="microlabel">ACCESS — ALL FOUR STATES, RULED ONTO ONE PAGE</span>
+      <h1>Open your <span class="live-word">sheet.</span></h1>
+      <p class="sub">One sign-in holds your garage, your listings and the money. Nothing here is shared with anyone.</p>
+    </div>
+
+    <!-- ============ SIGN IN ============ -->
+    <span class="microlabel microlabel--ink" id="signin" style="display:block;margin:26px 0 10px">SIGN IN — SHOWN WITH ITS ERROR STATE</span>
+
+    <form class="tile rv" id="signinForm">
+      <div class="field">
+        <label class="microlabel microlabel--ink" for="inEmail">Email</label>
+        <input class="ctl ctl--block" id="inEmail" type="email" autocomplete="email" value="dana@rossi.works" style="max-width:none">
+        <span class="field__err">The sheet needs an email address to look you up.</span>
+      </div>
+
+      <div class="field is-invalid" id="fPass">
+        <label class="microlabel microlabel--ink" for="inPass">Password</label>
+        <input class="ctl ctl--block" id="inPass" type="password" autocomplete="current-password" value="integrale92" style="max-width:none">
+        <span style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+          <span class="field__hint">Case matters. Nothing else does.</span>
+          <button class="relbtn" type="button" data-showpw="inPass" aria-pressed="false">Show</button>
+        </span>
+        <span class="field__err">That pair doesn't match a sheet. Check the password, or reset it below.</span>
+      </div>
+
+      <button class="btn btn--live" type="submit" style="width:100%">Open your sheet</button>
+
+      <div class="authswap">
+        <a class="jumplink" href="#reset">Forgot the password</a>
+        <a class="jumplink" href="#signup" style="margin-left:auto">No sheet yet?</a>
+      </div>
+
+      <div class="dimline-h" aria-hidden="true"></div>
+      <span class="microlabel" style="display:block;margin-bottom:10px">OR CARRY AN ACCOUNT YOU ALREADY HAVE</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn--ghost" type="button" style="flex:1 1 150px" data-toast="OAUTH — NOT IN THIS PROTOTYPE"><i class="ph ph-google-logo" aria-hidden="true"></i> Google</button>
+        <button class="btn btn--ghost" type="button" style="flex:1 1 150px" data-toast="OAUTH — NOT IN THIS PROTOTYPE"><i class="ph ph-apple-logo" aria-hidden="true"></i> Apple</button>
+      </div>
+    </form>
+
+    <!-- ============ SIGN UP ============ -->
+    <span class="microlabel microlabel--ink" id="signup" style="display:block;margin:26px 0 10px">START A SHEET — NEW KEEPER</span>
+
+    <form class="tile tile--deep rv" id="signupForm">
+      <div class="field">
+        <label class="microlabel microlabel--ink" for="upEmail">Email</label>
+        <input class="ctl ctl--block" id="upEmail" type="email" autocomplete="email" placeholder="you@somewhere" style="max-width:none">
+        <span class="field__hint">Used for offers, job cards and payouts. Never shown on a public sheet.</span>
+        <span class="field__err">The sheet needs somewhere to send your offers.</span>
+      </div>
+
+      <div class="field">
+        <label class="microlabel microlabel--ink" for="upPass">Password</label>
+        <input class="ctl ctl--block" id="upPass" type="password" autocomplete="new-password" placeholder="Twelve characters beats seven clever ones" style="max-width:none">
+        <span style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+          <span class="field__hint">Strength is measured, not guessed.</span>
+          <button class="relbtn" type="button" data-showpw="upPass" aria-pressed="false">Show</button>
+        </span>
+        <div class="guide">
+          <div class="guide__track">
+            <span data-strength-fill style="position:absolute;top:0;bottom:0;left:0;width:0%;border-radius:999px;background:var(--live);transition:width var(--t-move) var(--spring)"></span>
+          </div>
+          <div class="guide__scale">
+            <span data-strength-label>NOTHING TYPED</span>
+            <span data-strength-hint>LENGTH IS THE ONLY THING THAT REALLY COUNTS</span>
+          </div>
+        </div>
+        <span class="field__err">Twelve characters minimum — the sheet holds money.</span>
+      </div>
+
+      <div class="field" id="fHandle">
+        <label class="microlabel microlabel--ink" for="upHandle">Handle</label>
+        <span class="ctl__prefix">
+          <span aria-hidden="true">@</span>
+          <input class="ctl" id="upHandle" type="text" autocomplete="username" placeholder="drossi.integrale">
+        </span>
+        <span class="field__hint">How the market knows you. Lower case, dots allowed, permanent once a part sells under it.</span>
+        <span class="field__ok" data-handle-ok>That handle is free — it's yours the moment you start the sheet.</span>
+        <span class="field__err" data-handle-err>Taken — a keeper in Bristol already draws under that one.</span>
+      </div>
+
+      <label class="field" for="upTerms" style="cursor:pointer">
+        <span style="display:flex;gap:10px;align-items:flex-start">
+          <input class="sq" type="checkbox" id="upTerms" style="margin-top:3px">
+          <span style="font-size:13px;line-height:1.55">I've read the <a href="legal.html" style="border-bottom:1px solid var(--dimline)">terms of sale</a> and the <a href="legal.html" style="border-bottom:1px solid var(--dimline)">privacy note</a> — including that provenance attached to a part I sell stays public after the sale.</span>
+        </span>
+        <span class="field__err" style="margin-left:26px">Tick this and the sheet can open.</span>
+      </label>
+
+      <button class="btn btn--live" type="submit" style="width:100%">Start a sheet</button>
+      <div class="authswap">
+        <a class="jumplink" href="#signin">Already keep one? Sign in</a>
+      </div>
+    </form>
+
+    <!-- ============ RESET ============ -->
+    <span class="microlabel microlabel--ink" id="reset" style="display:block;margin:26px 0 10px">RESET — LOST THE PASSWORD</span>
+
+    <form class="tile rv" id="resetForm">
+      <div data-reset-ask>
+        <p style="font-size:14px;margin-bottom:14px">Give the sheet the email it knows and it will send a single-use link. The old password keeps working until you use it.</p>
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="rsEmail">Email</label>
+          <input class="ctl ctl--block" id="rsEmail" type="email" autocomplete="email" value="dana@rossi.works" style="max-width:none">
+          <span class="field__err">Enter the email on your sheet.</span>
+        </div>
+        <button class="btn btn--live" type="submit" style="width:100%">Send the link</button>
+      </div>
+
+      <div data-reset-sent style="display:none">
+        <div class="alert alert--ok">
+          <span class="alert__ico"><i class="ph ph-envelope-simple-open" aria-hidden="true"></i></span>
+          <h4>Check your email.</h4>
+          <p>A link is on its way to <b data-reset-to>dana@rossi.works</b>. It expires in <b class="mono" data-reset-cd style="color:var(--live)">30:00</b> and works once. If it lapses, ask for another — nothing breaks.</p>
+        </div>
+        <div class="livedim livedim--live" style="margin-top:14px"><span class="livedim__tick"></span>
+          <span class="microlabel">Nothing has changed yet</span>
+          <span class="val">Your old password still opens the sheet until the link is used</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+          <button class="btn btn--ghost" type="button" data-reset-again>Use a different email</button>
+        </div>
+      </div>
+    </form>
+
+    <!-- ============ VERIFY ============ -->
+    <span class="microlabel microlabel--ink" style="display:block;margin:26px 0 10px">VERIFY — THE SHEET IS WAITING</span>
+
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">SHEET C-0417 — HELD</span>
+        <span class="capsule capsule--paper"><span class="dot"></span> LISTENING</span>
+      </div>
+      <p style="font-size:14px">We sent a confirmation to <b>dana@rossi.works</b>. This page will notice the moment you click it — you don't need to come back here.</p>
+      <div class="livedim" style="margin-top:14px"><span class="livedim__tick"></span>
+        <span class="microlabel">What's held until then</span>
+        <span class="val">You can browse and watch. Listing a part and taking money both wait on this.</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;align-items:center">
+        <button class="btn btn--ghost" type="button" data-resend disabled style="opacity:.5">Resend in <span class="mono" data-resend-cd>04:30</span></button>
+        <a class="jumplink" href="settings.html">Wrong address? Amend it</a>
+      </div>
+    </div>
+
+    <footer class="foot" style="margin-top:24px">
+      <span class="microlabel">DRVN / LIVESHEET — ACCESS</span>
+      <a class="microlabel mono" href="legal.html">TERMS &amp; PRIVACY →</a>
+    </footer>
+  </div>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+/* ---------- AUTH — four states, each one actually working ---------- */
+(function () {
+  "use strict";
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+
+  /* ---- show / hide password ---- */
+  Array.prototype.forEach.call(document.querySelectorAll("[data-showpw]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var input = document.getElementById(btn.getAttribute("data-showpw"));
+      var showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      btn.textContent = showing ? "Show" : "Hide";
+      btn.setAttribute("aria-pressed", String(!showing));
+    });
+  });
+
+  /* ---- sign in: the mismatch state, cleared the moment you edit ---- */
+  var fPass = $("#fPass"), inPass = $("#inPass"), inEmail = $("#inEmail");
+  inPass.addEventListener("input", function () { fPass.classList.remove("is-invalid"); });
+  $("#signinForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fEmail = inEmail.closest(".field");
+    fEmail.classList.toggle("is-invalid", !inEmail.value.trim());
+    if (!inEmail.value.trim()) { inEmail.focus(); return; }
+    if (inPass.value === "integrale92" || inPass.value.length < 6) {
+      fPass.classList.add("is-invalid");
+      inPass.focus();
+      window.lsToast("NO SHEET MATCHES THAT PAIR");
+      return;
+    }
+    fPass.classList.remove("is-invalid");
+    window.lsToast("SIGNED IN — OPENING SHEET C-0416");
+    setTimeout(function () { location.href = "index.html"; }, 900);
+  });
+
+  /* ---- sign up: strength meter ---- */
+  var upPass = $("#upPass"),
+      fill = $("[data-strength-fill]"),
+      slab = $("[data-strength-label]"),
+      shint = $("[data-strength-hint]");
+  function strength(v) {
+    var s = 0;
+    s += Math.min(v.length, 16) * 4;                 /* length carries it */
+    if (/[a-z]/.test(v) && /[A-Z]/.test(v)) s += 12;
+    if (/[0-9]/.test(v)) s += 10;
+    if (/[^A-Za-z0-9]/.test(v)) s += 14;
+    if (/^[0-9]+$/.test(v)) s = Math.min(s, 30);
+    return Math.min(s, 100);
+  }
+  upPass.addEventListener("input", function () {
+    var v = upPass.value, s = strength(v);
+    fill.style.width = s + "%";
+    if (!v.length) {
+      fill.style.background = "var(--live)";
+      slab.textContent = "NOTHING TYPED";
+      shint.textContent = "LENGTH IS THE ONLY THING THAT REALLY COUNTS";
+    } else if (s < 45) {
+      fill.style.background = "var(--live)";
+      slab.textContent = "THIN — " + v.length + " CHARACTERS";
+      shint.textContent = "GO LONGER BEFORE YOU GO CLEVERER";
+    } else if (s < 75) {
+      fill.style.background = "var(--live)";
+      slab.textContent = "HOLDS — " + v.length + " CHARACTERS";
+      shint.textContent = "ONE MORE WORD WOULD SETTLE IT";
+    } else {
+      fill.style.background = "var(--ok)";
+      slab.textContent = "SOLID — " + v.length + " CHARACTERS";
+      shint.textContent = "THAT WILL DO";
+    }
+    upPass.closest(".field").classList.remove("is-invalid");
+  });
+
+  /* ---- sign up: live handle availability ---- */
+  var handle = $("#upHandle"), fHandle = $("#fHandle"), hTimer;
+  handle.addEventListener("input", function () {
+    clearTimeout(hTimer);
+    var v = handle.value.trim().toLowerCase();
+    fHandle.classList.remove("is-ok", "is-invalid");
+    if (!v) return;
+    hTimer = setTimeout(function () {
+      var taken = v === "drossi" || v === "drossi.integrale" || v === "kessler.m";
+      fHandle.classList.toggle("is-invalid", taken);
+      fHandle.classList.toggle("is-ok", !taken);
+      $("[data-handle-ok]").textContent = "@" + v + " is free — it's yours the moment you start the sheet.";
+      $("[data-handle-err]").textContent = "@" + v + " is taken — a keeper in Bristol already draws under that one.";
+    }, 260);
+  });
+
+  $("#signupForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var ok = true;
+    var em = $("#upEmail"); em.closest(".field").classList.toggle("is-invalid", !em.value.trim());
+    if (!em.value.trim()) ok = false;
+    if (upPass.value.length < 12) { upPass.closest(".field").classList.add("is-invalid"); ok = false; }
+    if (!handle.value.trim() || fHandle.classList.contains("is-invalid")) {
+      fHandle.classList.add("is-invalid"); ok = false;
+    }
+    var terms = $("#upTerms");
+    terms.closest(".field").classList.toggle("is-invalid", !terms.checked);
+    if (!terms.checked) ok = false;
+    if (!ok) {
+      var first = $("#signupForm .field.is-invalid");
+      if (first) { var i = first.querySelector("input"); if (i) i.focus(); }
+      window.lsToast("THE SHEET CAN'T OPEN YET — SEE THE MARKED LINES");
+      return;
+    }
+    window.lsToast("SHEET STARTED — VERIFY YOUR EMAIL TO LIST PARTS");
+  });
+
+  /* ---- reset: send, then a link that visibly expires ---- */
+  var rsForm = $("#resetForm"), ask = $("[data-reset-ask]"), sent = $("[data-reset-sent]"),
+      cd = $("[data-reset-cd]"), cdTimer;
+  function runCountdown(el, secs, onZero) {
+    clearInterval(el._t);
+    function render() {
+      var m = Math.floor(secs / 60), s = secs % 60;
+      el.textContent = String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    }
+    render();
+    el._t = setInterval(function () {
+      if (secs > 0) { secs--; render(); }
+      else { clearInterval(el._t); if (onZero) onZero(); }
+    }, 1000);
+  }
+  rsForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var em = $("#rsEmail");
+    var bad = !em.value.trim() || em.value.indexOf("@") === -1;
+    em.closest(".field").classList.toggle("is-invalid", bad);
+    if (bad) { em.focus(); return; }
+    $("[data-reset-to]").textContent = em.value.trim();
+    ask.style.display = "none";
+    sent.style.display = "";
+    runCountdown(cd, 1800, function () {
+      cd.textContent = "LAPSED";
+      window.lsToast("THE LINK HAS LAPSED — ASK FOR ANOTHER");
+    });
+    window.lsToast("LINK SENT — IT WORKS ONCE, FOR 30 MINUTES");
+  });
+  $("[data-reset-again]").addEventListener("click", function () {
+    clearInterval(cd._t);
+    sent.style.display = "none";
+    ask.style.display = "";
+    $("#rsEmail").focus();
+  });
+
+  /* ---- verify: resend unlocks when the wait runs out ---- */
+  var rbtn = $("[data-resend]"), rcd = $("[data-resend-cd]");
+  runCountdown(rcd, 270, function () {
+    rbtn.disabled = false;
+    rbtn.style.opacity = "";
+    rbtn.textContent = "Resend the link";
+  });
+  rbtn.addEventListener("click", function () {
+    if (rbtn.disabled) return;
+    rbtn.disabled = true;
+    rbtn.style.opacity = ".5";
+    rbtn.innerHTML = 'Resend in <span class="mono" data-resend-cd>04:30</span>';
+    runCountdown(rbtn.querySelector("[data-resend-cd]"), 270, function () {
+      rbtn.disabled = false; rbtn.style.opacity = ""; rbtn.textContent = "Resend the link";
+    });
+    window.lsToast("CONFIRMATION RESENT TO DANA@ROSSI.WORKS");
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LIVERY — Listings — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&family=Anton&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="livery.css" />
+</head>
+<body>
+
+<header class="nav-band">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-roundel">
+      <span class="roundel">23</span>
+      <span class="wordmark">DRVN</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="garage.html">Garage</a></li>
+        <li><a href="listings.html" aria-current="page">Listings</a></li>
+        <li><a href="orders.html">Orders</a></li>
+      </ul>
+    </nav>
+    <button class="burger" aria-expanded="false" aria-controls="nav">MENU</button>
+    <div class="nav-user">
+      <span class="avatar">RO</span>
+      <span class="who"><b>R. OKAFOR</b><span>TEAM RO23 · BRISTOL</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="section-head">
+    <h2 style="font-size:clamp(26px,4vw,40px)" class="display">Timing tower</h2>
+    <span class="sub">Your listings, ranked by heat — tap a row for offer history</span>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs" role="tablist" aria-label="Filter listings">
+    <button class="tab" role="tab" aria-selected="true" data-filter="all">All <span class="count">6</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-filter="live">Live <span class="count">4</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-filter="offer">Under offer <span class="count">2</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-filter="sold">Sold <span class="count">9</span></button>
+  </div>
+
+  <!-- TIMING TOWER -->
+  <div class="tower" id="tower">
+    <div class="tower-head" aria-hidden="true">
+      <span>Pos</span><span></span><span>Part</span><span>Source car</span><span>Watch</span><span>Price</span><span>Top offer</span><span>Gap</span><span>Status</span>
+    </div>
+
+    <button class="tower-row" data-status="offer" aria-expanded="false" aria-controls="detail-1">
+      <span class="roundel sm">1</span>
+      <span class="thumb"></span>
+      <span class="l-name">KW Clubsport Coilovers<small>996 spec · 6 track days since rebuild</small></span>
+      <span><span class="source-sticker">Gulf Girl · 911</span></span>
+      <span class="num">31</span>
+      <span class="num">£1,250</span>
+      <span class="num">£1,150</span>
+      <span class="gap-neg">−£100</span>
+      <span><span class="chip yellow">UNDER OFFER</span></span>
+    </button>
+    <div class="tower-detail" id="detail-1">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Offer history</p>
+        <div class="offer-history">
+          <div class="oh-row"><span><b>@trackdaytom</b> · offer</span><span class="oh-amt">£1,150</span><span class="chip red" data-countdown="02:58:41">02:58:41</span></div>
+          <div class="oh-row"><span><b>@caged986</b> · declined by you</span><span class="oh-amt">£950</span><span class="chip">CLOSED</span></div>
+          <div class="oh-row"><span><b>@osloflat6</b> · expired</span><span class="oh-amt">£1,000</span><span class="chip">EXPIRED</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <a class="btn sm cobalt" href="index.html#offers">Respond to offer</a>
+        <button class="btn sm ghost">Edit listing</button>
+        <button class="btn sm ghost">Pause</button>
+        <button class="btn sm red">End listing</button>
+      </div>
+    </div>
+
+    <button class="tower-row" data-status="offer" aria-expanded="false" aria-controls="detail-2">
+      <span class="roundel sm">2</span>
+      <span class="thumb" style="background-image:url('../assets/c5-part-seat.png');background-color:#F07020"></span>
+      <span class="l-name">Recaro Pole Position Seat<small>Driver side · FIA to 2028 · mounts included</small></span>
+      <span><span class="source-sticker">Gulf Girl · 911</span></span>
+      <span class="num">24</span>
+      <span class="num">£450</span>
+      <span class="num">£410</span>
+      <span class="gap-neg">−£40</span>
+      <span><span class="chip yellow">UNDER OFFER</span></span>
+    </button>
+    <div class="tower-detail" id="detail-2">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Offer history</p>
+        <div class="offer-history">
+          <div class="oh-row"><span><b>@caged986</b> · offer</span><span class="oh-amt">£410</span><span class="chip yellow" data-countdown="22:05:33">22:05:33</span></div>
+          <div class="oh-row"><span><b>@novicehill</b> · countered £430, no reply</span><span class="oh-amt">£380</span><span class="chip">CLOSED</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <a class="btn sm cobalt" href="index.html#offers">Respond to offer</a>
+        <button class="btn sm ghost">Edit listing</button>
+        <button class="btn sm ghost">Pause</button>
+        <button class="btn sm red">End listing</button>
+      </div>
+    </div>
+
+    <button class="tower-row" data-status="live" aria-expanded="false" aria-controls="detail-3">
+      <span class="roundel sm">3</span>
+      <span class="thumb" style="background-image:url('../assets/c5-part-wheel.png');background-color:#1D4ED8"></span>
+      <span class="l-name">OZ Rally Wheels ×4 — 13×6"<small>Off Pepperpot · straight and true</small></span>
+      <span><span class="source-sticker">Pepperpot · Mini</span></span>
+      <span class="num">18</span>
+      <span class="num">£340</span>
+      <span class="num">£340</span>
+      <span class="gap-zero">AT ASK</span>
+      <span><span class="chip cobalt">LIVE</span></span>
+    </button>
+    <div class="tower-detail" id="detail-3">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Offer history</p>
+        <div class="offer-history">
+          <div class="oh-row"><span><b>@minifan.tom</b> · full-price offer</span><span class="oh-amt">£340</span><span class="chip yellow" data-countdown="11:24:07">11:24:07</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <a class="btn sm green" href="index.html#offers">Accept full price</a>
+        <button class="btn sm ghost">Edit listing</button>
+        <button class="btn sm ghost">Pause</button>
+        <button class="btn sm red">End listing</button>
+      </div>
+    </div>
+
+    <button class="tower-row" data-status="live" aria-expanded="false" aria-controls="detail-4">
+      <span class="roundel sm">4</span>
+      <span class="thumb"></span>
+      <span class="l-name">Cobra 6-Point Harnesses ×2<small>Dated 2027 · all hardware</small></span>
+      <span><span class="source-sticker">Gulf Girl · 911</span></span>
+      <span class="num">9</span>
+      <span class="num">£110</span>
+      <span class="num">—</span>
+      <span>—</span>
+      <span><span class="chip cobalt">LIVE</span></span>
+    </button>
+    <div class="tower-detail" id="detail-4">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Offer history</p>
+        <div class="offer-history">
+          <div class="oh-row"><span><b>@paddockpaul</b> · expired unanswered</span><span class="oh-amt">£95</span><span class="chip">EXPIRED</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn sm ghost">Edit listing</button>
+        <button class="btn sm ghost">Pause</button>
+        <button class="btn sm red">End listing</button>
+      </div>
+    </div>
+
+    <button class="tower-row" data-status="live" aria-expanded="false" aria-controls="detail-5">
+      <span class="roundel sm">5</span>
+      <span class="thumb"></span>
+      <span class="l-name">998 Front Discs & Pads — New<small>Bought twice by mistake · boxed</small></span>
+      <span><span class="source-sticker">Pepperpot · Mini</span></span>
+      <span class="num">7</span>
+      <span class="num">£85</span>
+      <span class="num">—</span>
+      <span>—</span>
+      <span><span class="chip cobalt">LIVE</span></span>
+    </button>
+    <div class="tower-detail" id="detail-5">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Offer history</p>
+        <div class="offer-history">
+          <div class="oh-row"><span>No offers yet — 7 watchers</span><span class="oh-amt">—</span><span class="chip">QUIET</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn sm ghost">Edit listing</button>
+        <button class="btn sm ghost">Pause</button>
+        <button class="btn sm red">End listing</button>
+      </div>
+    </div>
+
+    <button class="tower-row" data-status="live" aria-expanded="false" aria-controls="detail-6">
+      <span class="roundel sm">6</span>
+      <span class="thumb"></span>
+      <span class="l-name">996 Stock Springs & Dampers<small>Take-offs at 41k miles · collection only</small></span>
+      <span><span class="source-sticker">Gulf Girl · 911</span></span>
+      <span class="num">4</span>
+      <span class="num">£220</span>
+      <span class="num">—</span>
+      <span>—</span>
+      <span><span class="chip cobalt">LIVE</span></span>
+    </button>
+    <div class="tower-detail" id="detail-6">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Offer history</p>
+        <div class="offer-history">
+          <div class="oh-row"><span>No offers yet — 4 watchers</span><span class="oh-amt">—</span><span class="chip">QUIET</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <button class="btn sm ghost">Edit listing</button>
+        <button class="btn sm ghost">Pause</button>
+        <button class="btn sm red">End listing</button>
+      </div>
+    </div>
+
+    <button class="tower-row" data-status="sold" aria-expanded="false" aria-controls="detail-7" style="opacity:.75">
+      <span class="roundel sm">✓</span>
+      <span class="thumb"></span>
+      <span class="l-name">Momo Prototipo Wheel<small>Sold to @heritagehatch</small></span>
+      <span><span class="source-sticker">Pepperpot · Mini</span></span>
+      <span class="num">22</span>
+      <span class="num">£185</span>
+      <span class="num">£185</span>
+      <span class="gap-zero">AT ASK</span>
+      <span><span class="chip green">SOLD</span></span>
+    </button>
+    <div class="tower-detail" id="detail-7">
+      <div>
+        <p class="microlabel" style="margin-bottom:8px">Result</p>
+        <div class="offer-history">
+          <div class="oh-row"><span><b>@heritagehatch</b> · accepted</span><span class="oh-amt">£185</span><span class="chip green">PAID</span></div>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <a class="btn sm cobalt" href="orders.html">View order</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE COUNTDOWN BAR -->
+  <div class="live-countdown-bar">
+    <div>
+      <p class="microlabel" style="color:#ffd9d7">Hottest deadline</p>
+      <p class="display" style="font-size:18px">Offer expires on KW Clubsports — respond or it's gone</p>
+    </div>
+    <span class="cd" data-countdown="02:58:41" aria-live="off">02:58:41</span>
+    <a class="btn yellow" href="index.html#offers">Go to offer</a>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="stripe"></div>
+  <div class="foot-inner">
+    <span>DRVN · Concept 05 — LIVERY</span>
+    <span>Run your garage like a race team</span>
+    <a href="design.html">Style guide →</a>
+  </div>
+</footer>
+
+<script src="livery.js"></script>
+</body>
+</html>

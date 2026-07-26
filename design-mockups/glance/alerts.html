@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN — Glance · Alerts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="glance.css">
+</head>
+<body>
+
+<div class="statusbar" aria-hidden="true"><span>9:41</span><span>DRVN LTE ▪▪▪▪</span></div>
+
+<nav class="island" aria-label="Primary">
+  <span class="island__brand">DR<em>V</em>N</span>
+  <div class="island__links">
+    <a class="island__link" href="index.html">Home</a>
+    <a class="island__link" href="market.html">Market</a>
+    <a class="island__link" href="listing.html">Listing</a>
+    <a class="island__link" href="car.html">Car</a>
+    <a class="island__link" href="alerts.html" aria-current="page">Alerts<span class="dot" aria-hidden="true"></span></a>
+  </div>
+</nav>
+
+<main class="page">
+  <div class="wrap" style="max-width:760px">
+
+    <header class="ed-head enter">
+      <span class="mono">Notification center · 6 new</span>
+      <h1>Your move.<br>Buyers are watching.</h1>
+      <p>Every offer, drop, and sale lands here. Act inline — accept, counter, or let it slide off the screen.</p>
+    </header>
+
+    <section class="notif-group" aria-label="Needs action">
+      <span class="mono notif-group__label" style="color:var(--red)">Needs action</span>
+
+      <article class="notif enter">
+        <div class="notif__icon"><img src="../assets/c15-part-turbo.png" alt=""></div>
+        <div>
+          <div class="notif__title">Offer received — £940 <span class="chip chip--red"><i class="pulse"></i>LIVE!</span></div>
+          <p class="notif__body">@kaz.r32 offered £940 on your Garrett GT2860R (listed £980). Window closes in <strong data-countdown="8054" style="color:var(--red);font-variant-numeric:tabular-nums">02:14:14</strong>.</p>
+          <div class="notif__actions">
+            <button class="btn btn--primary btn--inline" data-notif="accept">[ ACCEPT £940 ]</button>
+            <button class="btn btn--inline" data-notif="counter">[ COUNTER £960 ]</button>
+          </div>
+        </div>
+        <div class="notif__meta">
+          <span class="mono">14m ago</span>
+          <button class="notif__dismiss" data-notif="dismiss" aria-label="Dismiss notification">CLEAR ✕</button>
+        </div>
+      </article>
+
+      <article class="notif enter">
+        <div class="notif__icon notif__icon--red">£</div>
+        <div>
+          <div class="notif__title">Second offer — £900</div>
+          <p class="notif__body">@boostjunkie86 came in lower. You can hold for the £940 or counter both — highest accepted wins.</p>
+          <div class="notif__actions">
+            <button class="btn btn--inline" data-notif="counter">[ COUNTER £960 ]</button>
+            <button class="btn btn--ghost btn--inline" data-notif="dismiss">[ DECLINE ]</button>
+          </div>
+        </div>
+        <div class="notif__meta">
+          <span class="mono">1h ago</span>
+          <button class="notif__dismiss" data-notif="dismiss" aria-label="Dismiss notification">CLEAR ✕</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="notif-group" aria-label="Watching you">
+      <span class="mono notif-group__label">Signals</span>
+
+      <article class="notif enter">
+        <div class="notif__icon">2</div>
+        <div>
+          <div class="notif__title">2 buyers are watching your Nismo shift knob</div>
+          <p class="notif__body">Both viewed it twice today. Listings with 2+ watchers sell 3× faster when the price moves.</p>
+          <div class="notif__actions">
+            <a class="btn btn--inline" href="listing.html">[ DROP TO £75 ]</a>
+          </div>
+        </div>
+        <div class="notif__meta">
+          <span class="mono">3h ago</span>
+          <button class="notif__dismiss" data-notif="dismiss" aria-label="Dismiss notification">CLEAR ✕</button>
+        </div>
+      </article>
+
+      <article class="notif enter">
+        <div class="notif__icon"><img src="../assets/c15-part-wheel.png" alt="" onerror="this.parentNode.textContent='Wh'"></div>
+        <div>
+          <div class="notif__title">Price drop on a part you watch</div>
+          <p class="notif__body">Rays TE37 Saga set in Leeds dropped £2,300 → £2,150. One other watcher was notified too.</p>
+          <div class="notif__actions">
+            <a class="btn btn--inline" href="market.html">[ VIEW LISTING ]</a>
+          </div>
+        </div>
+        <div class="notif__meta">
+          <span class="mono">5h ago</span>
+          <button class="notif__dismiss" data-notif="dismiss" aria-label="Dismiss notification">CLEAR ✕</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="notif-group" aria-label="Done">
+      <span class="mono notif-group__label">Earlier</span>
+
+      <article class="notif enter">
+        <div class="notif__icon" style="color:var(--green)">✓</div>
+        <div>
+          <div class="notif__title">Sold — HKS blow-off valve <span class="chip chip--green">£120</span></div>
+          <p class="notif__body">Payment cleared. Ship by Thursday — the label is in your email, and the buyer's been told it's coming.</p>
+        </div>
+        <div class="notif__meta">
+          <span class="mono">Yesterday</span>
+          <button class="notif__dismiss" data-notif="dismiss" aria-label="Dismiss notification">CLEAR ✕</button>
+        </div>
+      </article>
+
+      <article class="notif enter">
+        <div class="notif__icon"><img src="../assets/c15-car.png" alt=""></div>
+        <div>
+          <div class="notif__title">Peaks Run is live for Saturday</div>
+          <p class="notif__body">34 going · Snake Pass, 08:00. Your R33 is on the going list.</p>
+        </div>
+        <div class="notif__meta">
+          <span class="mono">Yesterday</span>
+          <button class="notif__dismiss" data-notif="dismiss" aria-label="Dismiss notification">CLEAR ✕</button>
+        </div>
+      </article>
+    </section>
+
+    <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+
+    <footer style="margin-top:70px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px" class="mono">
+      <span>DRVN · CONCEPT 15 · GLANCE</span>
+      <span>THE HOME FOR YOUR MODIFIED CAR</span>
+    </footer>
+
+  </div>
+</main>
+
+<script src="glance.js"></script>
+</body>
+</html>

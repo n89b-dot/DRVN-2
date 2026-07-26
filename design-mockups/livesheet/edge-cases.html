@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · When the content fights back</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  /* page-local: side-by-side comparison rig for normal vs extreme content */
+  .ec-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 720px) { .ec-pair { grid-template-columns: 1fr; } }
+  .ec-lab {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--dim); display: block; margin-bottom: 6px;
+  }
+  .ec-lab b { color: var(--live); font-weight: 500; }
+  .ec-slot { border-radius: calc(var(--r) - 8px); overflow: hidden; background: var(--img-fallback); }
+  .ec-slot img { width: 100%; height: 100%; object-fit: cover; }
+  .ec-nophoto {
+    display: grid; place-items: center; gap: 4px; text-align: center;
+    background: var(--ghost); border: 1px dashed var(--dimline);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
+  }
+  .ec-nophoto i { font-size: 20px; }
+  .ec-tokenbox { overflow-wrap: anywhere; word-break: normal; }
+  .ec-thread-scroll { max-height: 230px; overflow-y: auto; position: relative; }
+  .ec-jump { position: sticky; bottom: 6px; display: flex; justify-content: center; }
+  .ec-hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 97 — SPEC · THE CONTENT NOBODY DESIGNS FOR</span>
+    <h1>When the content<br>fights <span class="live-word">back.</span></h1>
+    <p class="sub">Prototypes are drawn with obedient data: four-word titles, three photos, tidy prices. Real sheets carry a 78-character part name, a $0 giveaway, a panorama, 200 build entries and a German microlabel. Each case below shows the same component twice — as designed, and as reality delivers it — with the rule that keeps the ruling straight.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">IN THIS SPEC</span>
+    <a class="jumplink" href="#text">Text</a>
+    <a class="jumplink" href="#numbers">Numbers</a>
+    <a class="jumplink" href="#media">Media</a>
+    <a class="jumplink" href="#volume">Volume</a>
+    <a class="jumplink" href="#time">Time</a>
+    <a class="jumplink" href="#locale">Locale</a>
+  </div>
+
+  <!-- ============ TEXT ============ -->
+  <section class="deck" id="text">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">01 — A 78-CHARACTER PART TITLE</span>
+        <span class="microlabel">LISTING ROW</span>
+      </div>
+      <div class="ec-pair">
+        <div>
+          <span class="ec-lab">AS DESIGNED — 24 CHARS</span>
+          <div class="rowlist">
+            <div class="order">
+              <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">KW</span></div>
+              <div style="min-width:0">
+                <div class="order__name clamp2">KW Variant 2 coilovers</div>
+                <div class="order__meta">$680 · Delta HF · <span data-tick="18">18</span> watching</div>
+              </div>
+              <div class="order__actions"><span class="chip chip--live">$680</span></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <span class="ec-lab">AS DELIVERED — <b>78 CHARS</b></span>
+          <div class="rowlist">
+            <div class="order">
+              <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">T3</span></div>
+              <div style="min-width:0">
+                <div class="order__name clamp2" title="Garrett T3/T4 hybrid turbocharger, freshly rebuilt with 0.63 A/R hot side">Garrett T3/T4 hybrid turbocharger, freshly rebuilt with 0.63 A/R hot side</div>
+                <div class="order__meta">$540 · Delta HF · <span data-tick="41">41</span> watching</div>
+              </div>
+              <div class="order__actions"><span class="chip chip--live">$540</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Where:</b> every listing row, market card and order line. <b>Rule:</b> titles clamp at <b>two lines</b> with <code>.clamp2</code> and carry the full string in <code>title</code> for hover and assistive tech. The <b>price never truncates and never wraps</b> — it holds its column and the title yields. Row height is allowed to grow to two lines but no further, so a list of ten rows can be scanned at a fixed rhythm. Input is capped at 80 characters (see <a href="form-states.html" style="border-bottom:1px solid var(--dimline)">form spec 05</a>) so two lines is always enough.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">02 — A CAR NICKNAME THAT WON'T STOP</span>
+        <span class="microlabel">SHEET HEADER</span>
+      </div>
+      <span class="ec-lab">AS DESIGNED</span>
+      <h2 style="font-size:clamp(22px,3vw,30px);font-weight:650;letter-spacing:-0.02em;line-height:1.08">Integrale <span style="color:var(--dim)">"Biscione"</span></h2>
+      <div class="dimline-h is-in" aria-hidden="true"></div>
+      <span class="ec-lab">AS DELIVERED — <b>52 CHARS, NO SPACES TO HELP</b></span>
+      <h2 class="clamp2 ec-tokenbox" style="font-size:clamp(22px,3vw,30px);font-weight:650;letter-spacing:-0.02em;line-height:1.08" title="The Perpetually Unfinished Group A Homologation Project">The Perpetually Unfinished Group A Homologation Project</h2>
+      <div class="bline" style="margin-top:12px"><span class="bline__label">Registered as</span><span class="bline__val">Lancia Delta HF Integrale 16v</span><span class="bline__note">The nickname is decoration; the model line is the identity</span></div>
+      <p class="spec-note"><b>Rule:</b> the sheet header displays the <b>nickname</b> at display size clamped to two lines, and the <b>model line</b> underneath at fixed size — never clamped, because that is the field buyers search and trust. Nicknames are capped at 60 characters on input. The header font-size is a <code>clamp()</code>, so it shrinks with the viewport before it ever wraps to three lines.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">03 — ONE UNBROKEN 40-CHAR TOKEN</span>
+        <span class="microlabel">PART NUMBER</span>
+      </div>
+      <div class="bline"><span class="bline__label">Manufacturer ref</span><span class="bline__val ec-tokenbox">HKS-GT2835ProS-RB26DETT-KITCOMPLETE-01A</span><span class="bline__note">39 characters, no spaces, no hyphenation points the browser trusts</span></div>
+      <div class="bline"><span class="bline__label">Serial</span><span class="bline__val ec-tokenbox">T3884277KX0416BISCIONE0000000000000119</span><span class="bline__note">Wraps mid-token rather than escaping the tile</span></div>
+      <p class="spec-note"><b>Rule:</b> every value column carries <code>overflow-wrap: anywhere</code>. An unbreakable token <b>wraps mid-token</b> — it never widens the tile, never triggers a horizontal scrollbar, and is never truncated with an ellipsis, because a half-shown part number is worse than an ugly wrap: it can be misread as complete. Codes are set in mono so a wrapped break is visibly a break. The only place a code truncates is a fixed-height chip, and there it must be copyable in full elsewhere on the page.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">04 — A HANDLE AT MAX LENGTH</span>
+        <span class="microlabel">TIGHT ROW</span>
+      </div>
+      <div class="rowlist">
+        <div class="order">
+          <div class="monogram monogram--sm">MK</div>
+          <div style="min-width:0">
+            <div class="order__name">Offer accepted</div>
+            <div class="order__meta trunc" title="@kessler.m — 12 July">@kessler.m · 12 July</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">PAID</span></div>
+        </div>
+        <div class="order">
+          <div class="monogram monogram--sm">NW</div>
+          <div style="min-width:0">
+            <div class="order__name">Offer accepted</div>
+            <div class="order__meta trunc" title="@northwest.rally.fabrication.co — 12 July">@northwest.rally.fabrication.co · 12 July</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">PAID</span></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> handles are capped at <b>30 characters</b> on signup. In a single-line meta row they truncate with <code>.trunc</code> — <b>tail ellipsis, never head</b>, because the start of a handle is the identifying part. The full handle is always in <code>title</code> and always rendered untruncated on the profile sheet itself. Avatars fall back to a two-letter monogram derived from the handle, never to a generic silhouette.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">05 — NO DESCRIPTION WRITTEN</span>
+        <span class="microlabel">OPTIONAL FIELD</span>
+      </div>
+      <span class="ec-lab">AS DESIGNED</span>
+      <p style="font-size:13.5px;line-height:1.6;max-width:58ch">Rebuilt by Turbo Dynamics in May, new CHRA, ceramic-coated hot side. Ran one gravel season then the car went to a GT28.</p>
+      <div class="dimline-h is-in" aria-hidden="true"></div>
+      <span class="ec-lab">AS DELIVERED — <b>SELLER WROTE NOTHING</b></span>
+      <div class="bline"><span class="bline__label">Seller's notes</span><span class="bline__val" style="color:var(--dim);font-weight:400;font-size:13.5px">No notes written</span><span class="bline__note">The measured spec above is platform-recorded and stands on its own</span></div>
+      <p class="spec-note"><b>Rule:</b> an empty <b>optional</b> field collapses to a single ruled line stating it is empty — it does not vanish, because absence is information a buyer should weigh, and it does not show a call-to-action to a visitor who cannot fill it. It never renders a dashed placeholder block: that language is reserved for <b>required</b> data not yet supplied. Owners viewing their own sheet get the "Add notes" action on the same line.</p>
+    </div>
+  </section>
+
+  <!-- ============ NUMBERS ============ -->
+  <section class="deck deck--three" id="numbers">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">06 — FIVE FIGURES</span>
+        <span class="chip chip--live">LIVE ASK</span>
+      </div>
+      <span class="ec-lab">AS DESIGNED — $680</span>
+      <div class="num-giant">$680</div>
+      <div class="dimline-h is-in" aria-hidden="true"></div>
+      <span class="ec-lab">AS DELIVERED — <b>$12,450</b></span>
+      <div class="num-giant" style="font-size:clamp(30px,5vw,46px)">$12,450</div>
+      <div class="guide">
+        <div class="guide__track">
+          <span class="guide__band" style="left:18%;right:34%"></span>
+          <span class="guide__you" style="left:100%"></span>
+        </div>
+        <div class="guide__scale"><span>$4,000</span><span>MARKET BAND</span><span>$9,500</span></div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> giant figures are <b>tabular-nums</b> and set in a <code>clamp()</code> that steps down at five digits, so $12,450 occupies the same box as $680 and no KPI tile reflows. Thousands always take a comma; the currency symbol is always <b>$</b> (USD) and never omitted. On the guidance bar, a price outside the band <b>clamps the marker to the track edge</b> — it is never drawn outside the rail — and the scale keeps the real band figures so the user can read how far out they are.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">07 — ZERO, AND FREE</span>
+        <span class="chip">GIVEAWAY</span>
+      </div>
+      <div class="num-giant">Free</div>
+      <div class="bline" style="margin-top:10px"><span class="bline__label">Asking</span><span class="bline__val">$0</span><span class="bline__note">Rendered as the word "Free" in headline position, "$0" in ledgers</span></div>
+      <div class="bline"><span class="bline__label">Buyer pays</span><span class="bline__val">$18.40</span><span class="bline__note">Shipping only — stated before checkout, never as a surprise</span></div>
+      <p class="spec-note"><b>Rule:</b> <b>$0 is a real value, not an empty state</b> — it never renders as "—". In display position it becomes the word "Free"; in any money column, ledger or receipt it stays "$0.00" so the arithmetic is auditable. A free part with non-zero shipping must show the buyer's actual total on the card, because "Free" plus a $18.40 surprise at checkout is the single fastest way to lose trust.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="2">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">08 — CENTS IN PAYOUT MATH</span>
+        <span class="microlabel">LEDGER</span>
+      </div>
+      <div class="bline"><span class="bline__label">Sale price</span><span class="bline__val">$333.33</span></div>
+      <div class="bline"><span class="bline__label">Platform fee 5%</span><span class="bline__val">−$16.67</span><span class="bline__note">$16.6665 rounded half-up to the cent, in the platform's favour, stated</span></div>
+      <div class="bline"><span class="bline__label">Shipping label</span><span class="bline__val">−$18.40</span></div>
+      <div class="bline"><span class="bline__label">You receive</span><span class="bline__val" style="color:var(--ok)">$298.26</span><span class="bline__note">Every line adds up exactly — no hidden rounding remainder</span></div>
+      <p class="spec-note"><b>Rule:</b> money is held in <b>integer cents</b> end-to-end and formatted once at the edge. Every money figure in a ledger shows <b>two decimal places always</b> — "$310" in a ledger is a bug even when the cents are zero. Rounding happens on the fee line only, is stated in the note, and the displayed lines must sum to the displayed total; if they don't, the page shows the discrepancy rather than silently fixing the total.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">09 — 999+, AND A COUNT OF ONE</span>
+        <span class="microlabel">COUNTS &amp; COPY</span>
+      </div>
+      <div class="ec-pair">
+        <div>
+          <span class="ec-lab">AS DESIGNED</span>
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel">Watching now</span>
+            <span class="val">41 people watching</span>
+          </div>
+        </div>
+        <div>
+          <span class="ec-lab">AS DELIVERED — <b>1,284</b></span>
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel">Watching now</span>
+            <span class="val" title="1,284 people watching">999+ people watching</span>
+          </div>
+        </div>
+      </div>
+      <div class="bline" style="margin-top:14px"><span class="bline__label">Count of 1</span><span class="bline__val">1 person watching · 1 offer · 1 part listed</span><span class="bline__note">Never "1 offers", never "1 result(s)", never "1 item(s)"</span></div>
+      <p class="spec-note"><b>Rule:</b> counts above 999 abbreviate to <b>999+</b> in the visible label, and the <b>exact figure stays in the <code>title</code> attribute</b> and in any export. Abbreviation applies to social counts only — money, order counts and inventory are always exact. Every count string has a <b>singular form written by hand</b>; parenthesised plurals like "(s)" are banned. Zero uses its own copy ("Nobody watching yet"), never "0 people watching".</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">10 — A RATING OF 0.0</span>
+        <span class="chip">NEW KEEPER</span>
+      </div>
+      <div class="bline"><span class="bline__label">Rating</span><span class="bline__val" style="color:var(--dim)">No sales yet</span><span class="bline__note">Appears after the first delivered order</span></div>
+      <div class="bline"><span class="bline__label">Rating (2 sales)</span><span class="bline__val">4.5 <span class="mono" style="font-size:11px;color:var(--dim)">· from 2 sales</span></span><span class="bline__note">Sample size is always printed beside the average</span></div>
+      <p class="spec-note"><b>Rule:</b> a computed average over an empty set is <b>undefined, not zero</b> — 0.0 must never render, and neither must an empty star row, because both read as "rated badly". Below <b>three</b> ratings the average is shown only with its sample size attached; below one it is replaced with the empty-state copy from <a href="empty-states.html" style="border-bottom:1px solid var(--dimline)">state 09</a>. The same rule governs "0% of buyers", "average dispatch time" and every other derived statistic.</p>
+    </div>
+  </section>
+
+  <!-- ============ MEDIA ============ -->
+  <section class="deck deck--three" id="media">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">11 — NO PHOTO AT ALL</span>
+      </div>
+      <div class="ec-slot ec-nophoto" style="aspect-ratio:3/2">
+        <i class="ph ph-crosshair" aria-hidden="true"></i>
+        <span>NO PHOTO ON SHEET</span>
+      </div>
+      <div class="mkt__name" style="margin-top:10px">Gearbox mount, poly</div>
+      <div class="mkt__price">$45 · Delta HF Integrale</div>
+      <p class="spec-note"><b>Rule:</b> a missing photo becomes a <b>dashed plate at the exact aspect ratio of a real one</b> (3:2) so grids never reflow and no card is taller than its neighbours. It says what is missing in mono, shows no stock imagery, no manufacturer logo and no "image coming soon" — inventing a picture for a used part is a provenance lie. Listings without a photo rank below listings with one and the seller is told why.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">12 — PORTRAIT IN A LANDSCAPE SLOT</span>
+      </div>
+      <div class="ec-pair">
+        <div>
+          <span class="ec-lab">SOURCE — 3:4 PORTRAIT</span>
+          <div class="ec-slot" style="aspect-ratio:3/4"><img src="../assets/c16-part-seat.png" alt="Sabelt bucket seat, full frame"></div>
+        </div>
+        <div>
+          <span class="ec-lab">IN THE 3:2 SLOT</span>
+          <div class="ec-slot" style="aspect-ratio:3/2"><img src="../assets/c16-part-seat.png" alt="Sabelt bucket seat, centre-cropped to the listing slot"></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> the slot's aspect ratio is fixed by the layout and the image is <b>centre-cropped with <code>object-fit: cover</code></b> — never letterboxed with bars, never stretched. The uncropped original is what opens in the lightbox and what the seller sees when choosing the cover shot, so nothing is lost, only framed. Sellers are told the crop is 3:2 at upload; a portrait shot is accepted, not rejected.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="2">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">13 — A 4:1 PANORAMA</span>
+      </div>
+      <div class="ec-slot" style="aspect-ratio:3/2"><img src="../assets/c16-hero-car.png" alt="Wide panorama of the car, centre-cropped into the 3:2 slot"></div>
+      <div class="thumbs">
+        <div class="thumb"><img src="../assets/c16-part-coilovers.png" alt="Coilovers"><span class="thumb__tag">COVER</span></div>
+        <div class="thumb"><img src="../assets/c16-part-seat.png" alt="Seat"></div>
+        <div class="thumb thumb--ghost"></div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> the same cover rule holds at any incoming ratio — the slot never changes shape to accommodate a photo. Thumbnails are square-ish (4:3) and crop from the <b>centre</b>, not the top, because a panorama cropped from the top is usually sky. The cover thumbnail is tagged so the seller knows which frame is doing the work in the market grid. Empty thumbnail wells stay drawn as dashed ghosts so the strip's length reads as "3 of 8 uploaded".</p>
+    </div>
+  </section>
+
+  <section class="deck">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">14 — THE IMAGE 404s</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> LIVE FALLBACK</span>
+      </div>
+      <div class="ec-pair">
+        <div>
+          <span class="ec-lab">SOURCE RESOLVES</span>
+          <div class="ec-slot" style="aspect-ratio:3/2"><img src="../assets/c16-part-coilovers.png" alt="KW Variant 2 coilovers"></div>
+        </div>
+        <div>
+          <span class="ec-lab">SOURCE IS <b>GONE</b> — RENDERED FALLBACK</span>
+          <div class="ec-slot" style="aspect-ratio:3/2" id="ec-broken-slot">
+            <img alt="KW Variant 2 coilovers" data-broken="1">
+          </div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Where:</b> every <code>&lt;img&gt;</code> on the platform. <b>Rule:</b> every image carries an <code>onerror</code> that swaps it for the <b>same dashed plate used for "no photo"</b> — a broken-image glyph must never reach a user. The fallback keeps the slot's exact dimensions, carries the alt text as visible mono copy so the subject is still named, and reports the dead asset once per session. It does not retry in a loop. The right-hand slot above is deliberately pointed at a file that does not exist; this is the real fallback, rendered live.</p>
+    </div>
+  </section>
+
+  <!-- ============ VOLUME ============ -->
+  <section class="deck deck--two" id="volume">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">15 — A BUILD SHEET WITH 200 ENTRIES</span>
+        <span class="microlabel" id="ec-build-count">SHOWING 6 OF 200</span>
+      </div>
+      <div class="bsec"><span class="microlabel">ENGINE &amp; DRIVELINE</span><span class="microlabel">64 ENTRIES</span></div>
+      <div id="ec-build-rows">
+        <div class="bline"><span class="bline__label">Turbocharger</span><span class="bline__val">Garrett T3/T4 hybrid, 0.63 A/R</span><span class="bline__note">Fitted 05/2024 · Turbo Dynamics</span></div>
+        <div class="bline"><span class="bline__label">Intercooler</span><span class="bline__val">Pace 600×300 bar-and-plate</span><span class="bline__note">Fitted 05/2024</span></div>
+        <div class="bline"><span class="bline__label">Injectors</span><span class="bline__val">Bosch 630cc, matched set</span><span class="bline__note">Fitted 06/2024 · flow-tested</span></div>
+        <div class="bline"><span class="bline__label">Fuel pump</span><span class="bline__val">Walbro 255 in-tank</span><span class="bline__note">Fitted 06/2024</span></div>
+        <div class="bline"><span class="bline__label">Clutch</span><span class="bline__val">Helix organic paddle, 4-puk</span><span class="bline__note">Fitted 09/2024</span></div>
+        <div class="bline"><span class="bline__label">Manifold</span><span class="bline__val">Tubular equal-length, ceramic</span><span class="bline__note">Fitted 09/2024</span></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
+        <button class="btn btn--ghost" id="ec-build-more" type="button">Show 50 more</button>
+        <span class="microlabel" id="ec-build-note">6 OF 200 DRAWN · 194 REMAINING</span>
+      </div>
+      <p class="spec-note"><b>Rule:</b> a section renders its <b>first six entries</b> and pages in <b>50 at a time</b> — never "show all 200" in one click, because that is a 200-row layout thrash on a phone and it destroys the scroll position. Above <b>300</b> rows the list virtualises and the paging control disappears. The header count is always <b>"showing N of TOTAL"</b>, so the user knows what they are not seeing before they scroll. Section subtotals are computed over the full set, never over what is drawn.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">16 — 1 RESULT VS 500</span>
+        <span class="microlabel">MARKET HEADER</span>
+      </div>
+      <label class="search" style="width:100%"><i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+        <input type="text" value="dogleg gearbox" aria-label="Search parts" readonly>
+      </label>
+      <div class="bline" style="margin-top:12px"><span class="bline__label">One match</span><span class="bline__val">1 part fits your search</span><span class="bline__note">Singular copy, no count chip, no "refine" prompt — there is nothing to refine</span></div>
+      <div class="bline"><span class="bline__label">Many matches</span><span class="bline__val">500+ parts · showing the first 48</span><span class="bline__note">Exact to 500, then capped — with the strongest filter offered inline</span></div>
+      <p class="spec-note"><b>Rule:</b> result counts are <b>exact up to 500</b> and read "500+" above that, because counting further costs a full table scan and buys nothing. The header always states <b>how many are drawn</b> alongside the total. One result gets singular copy and <b>no</b> refinement prompt; a capped result set gets one suggested filter (usually fitment) rather than a filter panel dumped open.</p>
+    </div>
+  </section>
+
+  <section class="deck">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">17 — A THREAD WITH 80 MESSAGES</span>
+        <span class="chip chip--live">3 UNREAD</span>
+      </div>
+      <div class="ec-thread-scroll" id="ec-thread-scroll">
+        <div class="thread">
+          <div class="msg msg--sys">
+            <span class="msg__who">SYSTEM</span>
+            <p class="msg__body">77 earlier messages — <button class="btn btn--ghost" type="button" data-toast="Loaded 25 earlier messages">Load 25 earlier</button></p>
+          </div>
+          <div class="msg">
+            <span class="msg__who">@kessler.m · 3 min ago</span>
+            <p class="msg__body">Is the CHRA the original Garrett cartridge or a hybrid replacement? Asking because of the emissions test.</p>
+          </div>
+          <div class="msg msg--me">
+            <span class="msg__who">You · 2 min ago</span>
+            <p class="msg__body">Hybrid — Turbo Dynamics cartridge, receipt is attached to the part sheet.</p>
+            <span class="msg__attach"><i class="ph ph-paperclip" aria-hidden="true"></i> TD-INVOICE-8842.pdf</span>
+          </div>
+          <div class="msg">
+            <span class="msg__who">@kessler.m · just now</span>
+            <p class="msg__body">Perfect. Sending an offer at $520.</p>
+          </div>
+        </div>
+        <div class="ec-jump"><button class="btn btn--live" type="button" id="ec-jump" data-toast="Jumped to the newest message">Jump to latest · 3 new</button></div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> a thread opens <b>anchored to the first unread message</b>, not the top and not the absolute bottom, and loads <b>25 older messages per request</b> while holding scroll position at the message the user was reading. The "jump to latest" control appears only when the newest message is off-screen, carries the unread count, and disappears the moment the bottom is reached. New messages arriving while the user is scrolled up <b>never</b> auto-scroll the view.</p>
+    </div>
+  </section>
+
+  <!-- ============ TIME ============ -->
+  <section class="deck deck--three" id="time">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">18 — THE RELATIVE-TIME LADDER</span>
+      </div>
+      <div class="bline"><span class="bline__label">Under 60s</span><span class="bline__val">Just now</span><span class="bline__note">No "0 minutes ago", ever</span></div>
+      <div class="bline"><span class="bline__label">Under an hour</span><span class="bline__val">3 minutes ago</span><span class="bline__note">Whole minutes, refreshed on a 30s tick</span></div>
+      <div class="bline"><span class="bline__label">Today</span><span class="bline__val">4 hours ago</span></div>
+      <div class="bline"><span class="bline__label">Under a year</span><span class="bline__val">14 July</span><span class="bline__note">Relative time stops at 7 days — after that, a date</span></div>
+      <div class="bline"><span class="bline__label">Older</span><span class="bline__val">14 July 2024</span><span class="bline__note">Year appears only when it isn't this year</span></div>
+      <p class="spec-note"><b>Rule:</b> relative time is used for <b>under 7 days only</b>; beyond that it becomes an absolute date, because "43 weeks ago" is arithmetic the reader shouldn't have to do. Every relative string carries the full timestamp in <code>title</code>. Ticking labels update on a 30-second interval, and a label must never display "in 3 minutes" because of clock skew — future timestamps under two minutes clamp to "Just now".</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">19 — UNDER 60 SECONDS LEFT</span>
+        <span class="capsule"><span class="dot"></span> CLOSING <b class="cd" data-seconds="47">0:47</b></span>
+      </div>
+      <div class="bline"><span class="bline__label">Offer on the table</span><span class="bline__val">$520 from @kessler.m</span><span class="bline__note">Auto-declines when the window closes</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn btn--live" type="button" data-toast="Offer accepted at $520 — job card raised">Accept $520</button>
+        <button class="btn btn--ghost" type="button" data-toast="Countered — window extended by 12 hours">Counter</button>
+      </div>
+      <p class="spec-note"><b>Rule:</b> a countdown switches from <b>H:MM:SS to M:SS under one hour</b> and drops the leading zero under ten minutes. Under <b>60 seconds</b> the capsule takes the solid ink treatment and the figure goes --live — but the pulse rate does <b>not</b> increase and nothing flashes: urgency is stated, never inflicted. At zero the row moves to the expired treatment below rather than disappearing mid-glance.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="2">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">20 — EXPIRED, AND WHOSE CLOCK</span>
+        <span class="chip chip--spent">EXPIRED</span>
+      </div>
+      <div class="bline"><span class="bline__label">Window closed</span><span class="bline__val" style="color:var(--dim)">14 July, 20:14</span><span class="bline__note">Your time (GMT+1) · seller was at 21:14 CEST</span></div>
+      <div class="bline"><span class="bline__label">Dispatch cut-off</span><span class="bline__val">17:00 CEST</span><span class="bline__note">Stated in the seller's timezone — that is the one that governs the van</span></div>
+      <p class="spec-note"><b>Rule:</b> timestamps render in the <b>reader's local timezone with the offset printed</b>, except operational deadlines tied to a physical place (courier cut-offs, collection windows), which render in the <b>place's</b> timezone with the label attached and the reader's equivalent beside it. Expired values keep their exact time — never "expired a while ago" — and the row desaturates rather than being removed.</p>
+    </div>
+  </section>
+
+  <!-- ============ LOCALE ============ -->
+  <section class="deck deck--two" id="locale">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">21 — A GERMAN COMPOUND IN A MONO LABEL</span>
+        <span class="microlabel">DE-DE</span>
+      </div>
+      <div class="ec-pair">
+        <div>
+          <span class="ec-lab">EN — 15 CHARS</span>
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel">SPEED LIMITER</span>
+            <span class="val">Removed 05/2024</span>
+          </div>
+        </div>
+        <div>
+          <span class="ec-lab">DE — <b>32 CHARS, ONE WORD</b></span>
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel ec-tokenbox">GESCHWINDIGKEITSBEGRENZER</span>
+            <span class="val">Entfernt 05/2024</span>
+          </div>
+        </div>
+      </div>
+      <div class="bline" style="margin-top:14px"><span class="bline__label ec-tokenbox">KRAFTFAHRZEUG&shy;HAFTPFLICHT&shy;VERSICHERUNG</span><span class="bline__val">Bestätigt</span><span class="bline__note">Soft hyphens supplied by the translation, so breaks land between morphemes</span></div>
+      <p class="spec-note"><b>Rule:</b> mono microlabels are <b>allowed to wrap</b> — they are never set <code>white-space: nowrap</code>, and layouts must survive a label growing <b>2.5×</b> from English (the German worst case). Letter-spacing is reduced, not the font size, when a label wraps, so the label doesn't visually shrink out of the hierarchy. Translations may include soft hyphens (<code>&amp;shy;</code>) to control break points; the renderer must not strip them. Any label that cannot wrap must be re-authored shorter in English first.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">22 — RIGHT-TO-LEFT</span>
+        <span class="microlabel">AR / HE — NOT YET SHIPPED</span>
+      </div>
+      <div class="bline"><span class="bline__label">Layout</span><span class="bline__val">Logical properties only</span><span class="bline__note">padding-inline, margin-inline, inset-inline — no left/right in new CSS</span></div>
+      <div class="bline"><span class="bline__label">Dimension lines</span><span class="bline__val">Mirror with the text</span><span class="bline__note">The livedim rule moves to the inline-end edge; ticks flip with it</span></div>
+      <div class="bline"><span class="bline__label">Numbers &amp; money</span><span class="bline__val">Stay LTR</span><span class="bline__note">$12,450 and 0:47 never reverse — they are bidi-isolated</span></div>
+      <div class="bline"><span class="bline__label">Icons</span><span class="bline__val">Directional ones mirror</span><span class="bline__note">Arrows and progress pips flip; the bell, gear and car do not</span></div>
+      <p class="spec-note"><b>Rule:</b> RTL is not on the roadmap, but the cost of retrofitting it is paid in CSS written today — so all new spacing uses <b>logical properties</b> and every directional chevron comes from a mirroring set. Numerals, currency, part numbers and countdowns are wrapped in bidi isolation so they never re-order inside Arabic text. This tile is the standing constraint, not a shipped feature; nothing here should be rendered as available.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 97 · THE LAYOUT HOLDS OR THE RULE IS WRONG</span>
+    <a class="microlabel mono" href="form-states.html">← FIELD STATES</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 14 — deliberate 404 + the real onerror fallback ---------- */
+  document.querySelectorAll("img[data-broken]").forEach(function (img) {
+    img.addEventListener("error", function () {
+      var slot = img.parentNode;
+      var alt = img.getAttribute("alt") || "Photo unavailable";
+      img.remove();
+      slot.classList.add("ec-nophoto");
+      slot.innerHTML =
+        '<i class="ph ph-image-broken" aria-hidden="true"></i><span>PHOTO UNAVAILABLE</span>' +
+        '<span style="letter-spacing:0;text-transform:none;max-width:22ch">' + alt + "</span>";
+    });
+    /* set last so the handler is attached before the request fails */
+    img.src = "../assets/c16-part-that-was-deleted.png";
+  });
+
+  /* ---------- 15 — page in 50 at a time, never "show all 200" ---------- */
+  var more = document.getElementById("ec-build-more"),
+      rows = document.getElementById("ec-build-rows"),
+      head = document.getElementById("ec-build-count"),
+      note = document.getElementById("ec-build-note");
+  if (more && rows) {
+    var TOTAL = 200, drawn = 6;
+    var parts = [
+      ["Wastegate", "Tial 38mm external, 0.8 bar spring"],
+      ["Boost control", "3-port MAC solenoid"],
+      ["Radiator", "Alloy twin-core, 42mm"],
+      ["Oil cooler", "Setrab 13-row, thermostatic"],
+      ["Cam belt", "Gates racing, 40k interval"],
+      ["Head gasket", "Cometic MLS 1.3mm"],
+      ["Throttle body", "Bored 62mm"],
+      ["Exhaust", "3in stainless, decat"],
+      ["Coilovers", "KW Variant 2, 8K / 6K"],
+      ["Anti-roll bar", "Whiteline 24mm adjustable"],
+      ["Bushings", "Powerflex Black, full set"],
+      ["Brakes", "Alcon 4-pot, 304mm floating"]
+    ];
+    function draw(n) {
+      var frag = document.createDocumentFragment();
+      for (var i = 0; i < n && drawn < TOTAL; i++, drawn++) {
+        var p = parts[drawn % parts.length];
+        var row = document.createElement("div");
+        row.className = "bline";
+        row.innerHTML =
+          '<span class="bline__label">' + p[0] + "</span>" +
+          '<span class="bline__val">' + p[1] + "</span>" +
+          '<span class="bline__note">Entry ' + (drawn + 1) + " of " + TOTAL + "</span>";
+        frag.appendChild(row);
+      }
+      rows.appendChild(frag);
+      head.textContent = "SHOWING " + drawn + " OF " + TOTAL;
+      var left = TOTAL - drawn;
+      note.textContent = drawn + " OF " + TOTAL + " DRAWN · " + left + " REMAINING";
+      if (left <= 0) {
+        note.textContent = "ALL " + TOTAL + " ENTRIES DRAWN";
+        more.remove();
+      } else if (left < 50) {
+        more.textContent = "Show " + left + " more";
+      }
+    }
+    more.addEventListener("click", function () { draw(50); });
+  }
+
+  /* ---------- 17 — jump to latest, only while the bottom is off-screen ---------- */
+  var scroller = document.getElementById("ec-thread-scroll"),
+      jump = document.getElementById("ec-jump");
+  if (scroller && jump) {
+    function atBottom() {
+      return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 24;
+    }
+    function sync() { jump.parentNode.classList.toggle("ec-hidden", atBottom()); }
+    jump.addEventListener("click", function () {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    });
+    scroller.addEventListener("scroll", sync);
+    sync();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Garage · Unit A · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item is-active" href="garage.html" aria-current="page">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-B — GARAGE PLATE · UNIT A OF 2</span>
+        <h1>BMW E46 M3 — Track Build</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="wb-tag">CHASSIS WBSBL9C04*PN29xxx</span>
+        <span class="wb-tag">S54B32 · 343 BHP DYNO'D</span>
+        <a class="ref-link" href="car.html">PUBLIC RECORD →</a>
+        <button class="wb-btn wb-btn--accent" data-modal-open="releaseModal">Release a part</button>
+      </div>
+    </header>
+
+    <!-- HERO PLATE with dimension callouts -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 01 — ELEVATION · TWO-POST LIFT · BAY 2</span>
+        <span class="microlabel">PHOTO REF 2026-06-28</span>
+      </div>
+      <div class="wb-hero">
+        <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="E46 M3 raised on a two-post lift in a bright workshop" onerror="this.remove()"></div>
+
+        <div class="wb-callout" style="left:6%;top:24%">
+          <span class="wb-callout__tag"><b>C-01</b> KW CLUBSPORT 3-WAY · FITTED 03/24</span>
+          <span class="wb-callout__line" style="width:90px"></span>
+        </div>
+        <div class="wb-callout" style="right:5%;top:48%;flex-direction:row-reverse">
+          <span class="wb-callout__tag"><b>C-02</b> AP RACING CP9660 · REMOVED-FOR-SALE</span>
+          <span class="wb-callout__line" style="width:70px;transform:scaleX(-1)"></span>
+        </div>
+        <div class="wb-callout" style="left:14%;bottom:14%">
+          <span class="wb-callout__tag"><b>C-03</b> SUPERSPRINT EXHAUST · FITTED 11/23</span>
+          <span class="wb-callout__line" style="width:110px"></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="wb-grid-3-2 wb-section">
+
+      <!-- MOD SHEET -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 02 — MOD SHEET · 34 COMPONENTS TRACKED</span>
+          <span class="microlabel">REV 12 · UPDATED 07 JUL</span>
+        </div>
+        <div class="wb-table-wrap">
+          <table class="wb-table">
+            <thead>
+              <tr><th>Component</th><th>Spec</th><th>Installed</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Coilovers</strong></td>
+                <td class="num">KW Clubsport 3-Way</td>
+                <td class="num">03/2024</td>
+                <td><a class="wb-tag wb-tag--accent" href="listings.html">REMOVED-FOR-SALE</a></td>
+              </tr>
+              <tr>
+                <td><strong>Front brakes</strong></td>
+                <td class="num">AP Racing CP9660 355mm</td>
+                <td class="num">05/2023</td>
+                <td><a class="wb-tag wb-tag--accent" href="listings.html">REMOVED-FOR-SALE</a></td>
+              </tr>
+              <tr>
+                <td><strong>Gearbox</strong></td>
+                <td class="num">Drenth DG400 sequential</td>
+                <td class="num">01/2025</td>
+                <td><span class="wb-tag wb-tag--ok">FITTED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Exhaust</strong></td>
+                <td class="num">Supersprint full system</td>
+                <td class="num">11/2023</td>
+                <td><span class="wb-tag wb-tag--ok">FITTED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Seats</strong></td>
+                <td class="num">Recaro Pole Position ×2</td>
+                <td class="num">06/2022</td>
+                <td><a class="wb-tag wb-tag--accent" href="listings.html">REMOVED-FOR-SALE</a></td>
+              </tr>
+              <tr>
+                <td><strong>Wheels</strong></td>
+                <td class="num">Apex ARC-8 18×9.5 ET35</td>
+                <td class="num">04/2024</td>
+                <td><span class="wb-tag wb-tag--ok">FITTED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Diff</strong></td>
+                <td class="num">Drexler 1.5-way LSD 3.91</td>
+                <td class="num">01/2025</td>
+                <td><span class="wb-tag wb-tag--ok">FITTED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Cage</strong></td>
+                <td class="num">Custom Cages FIA weld-in</td>
+                <td class="num">08/2023</td>
+                <td><span class="wb-tag wb-tag--ok">FITTED</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="wb-plate__body" style="border-top:1px solid var(--wb-hairline)">
+          <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">£11,240 total invested · £3,700 currently for sale</span></div>
+        </div>
+      </section>
+
+      <!-- SIDE COLUMN -->
+      <div class="wb-stack">
+
+        <!-- RELEASE A PART -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 03 — RELEASE A PART</span>
+          </div>
+          <div class="wb-plate__body">
+            <p style="font-size:13px;color:var(--wb-ink-2);margin-bottom:12px">
+              Removing a component? Release it straight from the mod sheet — the listing
+              inherits this car's chassis, spec and service history as provenance.
+            </p>
+            <button class="wb-btn wb-btn--accent" data-modal-open="releaseModal" style="width:100%">Open release form</button>
+            <div class="wb-dim" data-dim style="margin-top:16px"><span class="wb-dim__line"></span><span class="wb-dim__label">Avg. time to first offer — 2.1 days</span></div>
+          </div>
+        </section>
+
+        <!-- DOCUMENTS / SERVICE LOG -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 04 — DOCUMENTS · SERVICE LOG</span>
+            <span class="microlabel">6 ENTRIES</span>
+          </div>
+          <ul class="wb-ledger">
+            <li><time>28 JUN 26</time> Alignment sheet — Nürburgring setup <a class="ref-link amt" href="#">PDF ↗</a></li>
+            <li><time>14 MAY 26</time> Oil service — Motul 300V 10W-60, 74,210 km <a class="ref-link amt" href="#">PDF ↗</a></li>
+            <li><time>02 FEB 26</time> Drenth DG400 install invoice — RS Fahrzeugbau <a class="ref-link amt" href="#">PDF ↗</a></li>
+            <li><time>19 NOV 25</time> Corner-weight sheet — 1,388 kg wet <a class="ref-link amt" href="#">PDF ↗</a></li>
+            <li><time>05 SEP 25</time> Dyno run — 343 bhp / 356 Nm <a class="ref-link amt" href="#">PDF ↗</a></li>
+            <li><time>21 JUL 25</time> TÜV inspection — passed, cage certified <a class="ref-link amt" href="#">PDF ↗</a></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <!-- UNIT B strip -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 05 — NEXT UNIT</span>
+      </div>
+      <a class="wb-carstrip" href="#" onclick="wbToast('UNIT B SHEET — NOT IN THIS PROTOTYPE');return false;">
+        <div class="wb-img"><img src="../assets/c4-car-side.png" alt="Silver Mk2 Golf GTI, side elevation" loading="lazy" onerror="this.remove()"></div>
+        <div>
+          <div class="wb-carstrip__name">UNIT B — VW GOLF GTI MK2 · Project</div>
+          <div class="wb-carstrip__stats">
+            <span><b>19</b> PARTS TRACKED</span><span><b>2</b> LISTED</span><span><b>62%</b> RESTORED</span>
+          </div>
+        </div>
+        <span class="wb-tag">OPEN SHEET →</span>
+      </a>
+    </section>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="home.html">HOME — PUBLIC FACE</a>
+      <span class="microlabel">DRVN / WERKBANK — GARAGE · UNIT A · SHEET 2 OF 4</span>
+      <a class="ref-link" href="index.html">← BACK TO DASHBOARD</a>
+    </footer>
+  </main>
+</div>
+
+<!-- RELEASE-A-PART MODAL -->
+<div class="wb-scrim" id="releaseModal" role="dialog" aria-modal="true" aria-labelledby="releaseTitle">
+  <div class="wb-sheet">
+    <div class="wb-sheet__head">
+      <span class="microlabel microlabel--ink" id="releaseTitle">RELEASE A PART — UNIT A · E46 M3</span>
+      <button class="wb-sheet__close" data-modal-close aria-label="Close">ESC ×</button>
+    </div>
+    <form id="releaseForm">
+      <div class="wb-sheet__body">
+        <div class="wb-field">
+          <label class="microlabel" for="relName">Part name</label>
+          <input class="wb-input" id="relName" type="text" placeholder="e.g. Supersprint full exhaust system" required>
+        </div>
+        <div class="wb-grid-2">
+          <div class="wb-field">
+            <label class="microlabel" for="relCond">Condition</label>
+            <select class="wb-select" id="relCond">
+              <option>Excellent — as new</option>
+              <option selected>Good — track used</option>
+              <option>Fair — needs refresh</option>
+              <option>For rebuild / spares</option>
+            </select>
+          </div>
+          <div class="wb-field">
+            <label class="microlabel" for="relPrice">Asking price (£)</label>
+            <input class="wb-input" id="relPrice" type="number" min="0" step="10" placeholder="0">
+          </div>
+        </div>
+        <div class="wb-dim is-drawn"><span class="wb-dim__line"></span><span class="wb-dim__label">Provenance auto-attached: chassis · install date · service log</span></div>
+      </div>
+      <div class="wb-sheet__foot">
+        <button class="wb-btn wb-btn--ghost" type="button" data-modal-close>Cancel</button>
+        <button class="wb-btn wb-btn--accent" type="submit">Create draft listing</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

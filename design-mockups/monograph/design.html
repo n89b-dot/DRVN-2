@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DRVN · Monograph — Design System</title>
+  <meta name="description" content="Live style guide for the Monograph design system — tokens, type scale, and every component in its states.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --canvas:#FCFCFB; --paper:#F4F4F2; --ink:#111112; --grey:#9A9A98;
+      --hairline:#E4E4E1; --focus:#5C5F63;
+      --ink-70:rgba(17,17,18,.70); --ink-45:rgba(17,17,18,.45); --ink-12:rgba(17,17,18,.12);
+      --canvas-92:rgba(252,252,251,.92); --canvas-00:rgba(252,252,251,0);
+      --font:'Schibsted Grotesk',system-ui,-apple-system,sans-serif;
+      --track-label:.18em; --track-display:-.02em;
+      --ease:cubic-bezier(.22,1,.36,1); --dur:820ms; --dur-quick:460ms;
+      --gutter:clamp(1.5rem,6vw,6rem);
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--font);
+      font-weight:400;line-height:1.62;font-feature-settings:"tnum" 1,"lnum" 1;
+      -webkit-font-smoothing:antialiased;}
+    a{color:inherit;}
+    h1,h2,h3,p{margin:0;}
+    :focus-visible{outline:2px solid var(--focus);outline-offset:4px;}
+    .wrap{max-width:1200px;margin-inline:auto;padding-inline:var(--gutter);}
+    header.top{padding:clamp(4rem,10vw,8rem) 0 clamp(2rem,5vw,4rem);border-bottom:1px solid var(--hairline);margin-bottom:clamp(3rem,7vw,6rem);}
+    .eyebrow{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);}
+    .big{font-size:clamp(2.6rem,7vw,5rem);font-weight:300;letter-spacing:var(--track-display);line-height:1.04;margin-top:1.4rem;}
+    .sub{font-size:clamp(1.05rem,1.6vw,1.3rem);font-weight:300;color:var(--ink-70);max-width:46ch;margin-top:1.4rem;}
+    section{margin-bottom:clamp(3.5rem,8vw,7rem);}
+    .sec-label{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);
+      padding-bottom:1rem;border-bottom:1px solid var(--hairline);margin-bottom:2.5rem;}
+    .token{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);margin-top:.6rem;}
+    /* swatches */
+    .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1.5rem;}
+    .sw__chip{height:96px;border:1px solid var(--hairline);}
+    .sw__name{font-size:.875rem;margin-top:.8rem;}
+    .sw__val{font-size:.75rem;color:var(--grey);font-variant-numeric:tabular-nums;}
+    /* type scale */
+    .row{padding:1.4rem 0;border-top:1px solid var(--hairline);}
+    .row:last-child{border-bottom:1px solid var(--hairline);}
+    .d-display{font-size:clamp(2.4rem,6vw,4rem);font-weight:300;letter-spacing:var(--track-display);line-height:1.05;}
+    .d-h1{font-size:clamp(2rem,4vw,3rem);font-weight:300;letter-spacing:var(--track-display);}
+    .d-h2{font-size:1.6rem;font-weight:300;}
+    .d-lead{font-size:1.3rem;font-weight:300;color:var(--ink-70);}
+    .d-body{font-size:1rem;}
+    .d-label{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);}
+    /* component grids */
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2.5rem;}
+    .cell{}
+    .cell__cap{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);margin-bottom:1rem;}
+    /* buttons */
+    .btn{display:inline-flex;align-items:center;gap:.7em;font-size:.6875rem;text-transform:uppercase;
+      letter-spacing:var(--track-label);padding:1.05em 1.9em;border:1px solid var(--ink);background:var(--ink);
+      color:var(--canvas);cursor:pointer;transition:background var(--dur-quick) var(--ease),color var(--dur-quick) var(--ease),border-color var(--dur-quick) var(--ease);}
+    .btn:hover,.btn:focus-visible{background:var(--canvas);color:var(--ink);}
+    .btn--ghost{background:transparent;color:var(--ink);border-color:var(--ink-12);}
+    .btn--ghost:hover,.btn--ghost:focus-visible{border-color:var(--ink);}
+    .btn--invert{background:var(--canvas);color:var(--ink);}
+    /* tlink */
+    .tlink{position:relative;font-size:.875rem;padding-bottom:2px;text-decoration:none;}
+    .tlink::after{content:"";position:absolute;left:0;bottom:0;width:100%;height:1px;background:var(--ink);
+      transform:scaleX(0);transform-origin:left;transition:transform var(--dur-quick) var(--ease);}
+    .tlink:hover::after,.tlink:focus-visible::after{transform:scaleX(1);}
+    .tlink--on::after{transform:scaleX(1);}
+    /* plate */
+    .plate{margin:0;overflow:hidden;background:var(--grey);aspect-ratio:4/3;}
+    .plate img{width:100%;height:100%;object-fit:cover;filter:saturate(.86);transition:filter var(--dur) var(--ease);}
+    .plate:hover img{filter:saturate(1);}
+    .wall{margin-top:.75rem;display:flex;flex-wrap:wrap;gap:.3rem .8rem;align-items:baseline;}
+    .wall__t{font-size:.875rem;font-weight:500;}
+    .wall__p{margin-left:auto;font-size:.875rem;font-weight:300;font-variant-numeric:tabular-nums;}
+    .wall__l{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);}
+    /* spec + defs */
+    .spec__row,.defs__row{display:grid;grid-template-columns:.4fr .6fr;gap:1.5rem;padding:1rem 0;border-top:1px solid var(--hairline);align-items:baseline;}
+    .spec__row:last-child,.defs__row:last-child{border-bottom:1px solid var(--hairline);}
+    .k{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);}
+    .v{font-size:1rem;font-variant-numeric:tabular-nums;}
+    .v--sm{font-size:.875rem;}
+    /* fitment */
+    .fit__mark{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);}
+    .fit--verified .fit__mark{color:var(--ink);}
+    .fit--stated .fit__mark{color:var(--grey);}
+    .fit__note{display:block;margin-top:.35rem;font-size:.875rem;color:var(--grey);font-style:italic;}
+    /* filter */
+    .filters{display:flex;gap:.4rem 2rem;flex-wrap:wrap;align-items:baseline;}
+    .filter{background:none;border:0;padding:.4rem 0;font-size:.6875rem;text-transform:uppercase;
+      letter-spacing:var(--track-label);color:var(--grey);position:relative;cursor:pointer;}
+    .filter::after{content:"";position:absolute;left:0;bottom:-2px;width:100%;height:1px;background:var(--ink);
+      transform:scaleX(0);transform-origin:left;transition:transform var(--dur-quick) var(--ease);}
+    .filter:hover{color:var(--ink);}
+    .filter[aria-pressed="true"]{color:var(--ink);}
+    .filter[aria-pressed="true"]::after{transform:scaleX(1);}
+    /* confirm card demo */
+    .card{width:min(460px,100%);background:var(--canvas);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:2.2rem;}
+    .card__line{display:flex;justify-content:space-between;gap:1rem;padding:.8rem 0;border-top:1px solid var(--hairline);font-size:.875rem;}
+    .card__line:first-of-type{border-top:0;}
+    .card__line span:first-child{color:var(--grey);}
+    .card__line span:last-child{font-variant-numeric:tabular-nums;}
+    /* spacing */
+    .space{display:flex;flex-direction:column;gap:1rem;}
+    .space__item{display:flex;align-items:center;gap:1.5rem;}
+    .space__bar{height:20px;background:var(--ink);}
+    .space__name{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);min-width:80px;}
+    footer{border-top:1px solid var(--hairline);padding:3rem 0;display:flex;flex-wrap:wrap;gap:1rem 2rem;justify-content:space-between;}
+    footer span,footer a{font-size:.6875rem;text-transform:uppercase;letter-spacing:var(--track-label);color:var(--grey);}
+    @media(max-width:600px){.spec__row,.defs__row{grid-template-columns:1fr;gap:.35rem;}}
+  </style>
+</head>
+<body>
+
+  <header class="top wrap">
+    <p class="eyebrow">DRVN · Concept 09 · Live style guide</p>
+    <h1 class="big">Monograph.</h1>
+    <p class="sub">The car as a gallery monograph. A cold white cube, one thin grotesque, no accent colour, square corners, and slow reverent motion. Every value below matches <code>monograph.css</code>.</p>
+  </header>
+
+  <main>
+
+    <!-- COLOURS -->
+    <section class="wrap">
+      <p class="sec-label">Colour — a five-value greyscale, no chromatic accent</p>
+      <div class="swatches">
+        <div><div class="sw__chip" style="background:var(--canvas)"></div><div class="sw__name">Canvas</div><div class="sw__val">#FCFCFB · --canvas</div></div>
+        <div><div class="sw__chip" style="background:var(--paper)"></div><div class="sw__name">Paper</div><div class="sw__val">#F4F4F2 · --paper</div></div>
+        <div><div class="sw__chip" style="background:var(--ink)"></div><div class="sw__name">Ink</div><div class="sw__val">#111112 · --ink</div></div>
+        <div><div class="sw__chip" style="background:var(--grey)"></div><div class="sw__name">Grey</div><div class="sw__val">#9A9A98 · --grey</div></div>
+        <div><div class="sw__chip" style="background:var(--hairline)"></div><div class="sw__name">Hairline</div><div class="sw__val">#E4E4E1 · --hairline</div></div>
+        <div><div class="sw__chip" style="background:var(--focus)"></div><div class="sw__name">Focus</div><div class="sw__val">#5C5F63 · rings only</div></div>
+      </div>
+    </section>
+
+    <!-- TYPE -->
+    <section class="wrap">
+      <p class="sec-label">Typography — Schibsted Grotesk, weights 300 / 400 / 500</p>
+      <div class="row"><div class="d-display">Every machine, considered.</div><div class="token">Display · clamp(2.8–6.4rem) · weight 300 · -0.02em</div></div>
+      <div class="row"><div class="d-h1">1992 · Porsche 911 964</div><div class="token">H1 · clamp(2.1–3.6rem) · weight 300</div></div>
+      <div class="row"><div class="d-h2">Parts released from this subject</div><div class="token">H2 · clamp(1.5–2.1rem) · weight 300</div></div>
+      <div class="row"><div class="d-lead">A part here is never anonymous.</div><div class="token">Lead · clamp(1.05–1.4rem) · weight 300 · ink-70</div></div>
+      <div class="row"><div class="d-body">Body copy set at one rem with a generous 1.62 line-height for quiet, readable prose columns.</div><div class="token">Body · 1rem · weight 400</div></div>
+      <div class="row"><div class="d-label">Plate 01 — 1992 · Carrera 2 · Graphite</div><div class="token">Wall label · 0.6875rem (11px) · uppercase · 0.18em · grey</div></div>
+      <div class="row"><div class="d-body" style="font-variant-numeric:tabular-nums">£3,400 · 288 bhp · 1,268 kg · 6,700 rpm</div><div class="token">Numerals · tabular everywhere</div></div>
+    </section>
+
+    <!-- BUTTONS -->
+    <section class="wrap">
+      <p class="sec-label">Buttons — ink, understated, invert on hover</p>
+      <div class="grid">
+        <div class="cell"><div class="cell__cap">Primary · default</div><button class="btn">Acquire →</button></div>
+        <div class="cell"><div class="cell__cap">Primary · hover / focus</div><button class="btn btn--invert">Acquire →</button></div>
+        <div class="cell"><div class="cell__cap">Ghost · default</div><button class="btn btn--ghost">Make an enquiry</button></div>
+        <div class="cell"><div class="cell__cap">Text link · hover state</div><a class="tlink tlink--on" href="#">Read the monograph →</a></div>
+      </div>
+    </section>
+
+    <!-- PLATE -->
+    <section class="wrap">
+      <p class="sec-label">The plate — the atomic unit (photo + wall label)</p>
+      <div class="grid">
+        <div class="cell">
+          <div class="cell__cap">Plate + label + price</div>
+          <figure class="plate"><img src="../assets/c9-part-wheel.png" alt="Forged wheel on a plinth"></figure>
+          <div class="wall"><span class="wall__l">Plate 13 · Wheels</span></div>
+          <div class="wall" style="margin-top:.3rem"><span class="wall__t">Forged Motorsport · set of four</span><span class="wall__p">£3,400</span></div>
+        </div>
+        <div class="cell">
+          <div class="cell__cap">Hover: desaturate → full colour</div>
+          <figure class="plate"><img src="../assets/c9-part-engine.png" alt="Flat-six on a plinth"></figure>
+          <div class="wall"><span class="wall__l">Plate 12 · Engine</span></div>
+          <div class="wall" style="margin-top:.3rem"><span class="wall__t">3.6 Flat-Six · ITB block</span><span class="wall__p">£11,800</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SPEC + DEFS -->
+    <section class="wrap">
+      <p class="sec-label">Specification table &amp; definition list — hairlines, no boxes</p>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">
+        <div class="cell">
+          <div class="cell__cap">Specification</div>
+          <div class="spec__row"><span class="k">Engine</span><span class="v">3.6 L flat-six</span></div>
+          <div class="spec__row"><span class="k">Output</span><span class="v">288 bhp @ 6,700 rpm</span></div>
+          <div class="spec__row"><span class="k">Weight</span><span class="v">1,268 kg</span></div>
+        </div>
+        <div class="cell">
+          <div class="cell__cap">Certificate / provenance</div>
+          <div class="defs__row"><span class="k">Source car</span><span class="v v--sm">1992 · 911 964 “Graphite”</span></div>
+          <div class="defs__row"><span class="k">Keeper</span><span class="v v--sm">@holm.collection · 4.9</span></div>
+          <div class="defs__row"><span class="k">History</span><span class="v v--sm">Fitted 2019–2024 · 14,200 km</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FITMENT -->
+    <section class="wrap">
+      <p class="sec-label">Fitment — verified vs stated, never conflated</p>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">
+        <div class="cell fit fit--verified">
+          <div class="cell__cap">Verified (ink)</div>
+          <span class="fit__mark">Verified fitment</span> — Porsche 911 964 (1989–1994)
+        </div>
+        <div class="cell fit fit--stated">
+          <div class="cell__cap">Stated (grey + italic note)</div>
+          <span class="fit__mark">Keeper's note</span> — 993 with hub adapter
+          <span class="fit__note">Unverified by DRVN — confirm before purchase.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILTER -->
+    <section class="wrap">
+      <p class="sec-label">Collection filter — underline marks the active state</p>
+      <div class="filters">
+        <button class="filter" type="button" aria-pressed="true">All</button>
+        <button class="filter" type="button" aria-pressed="false">Air-cooled</button>
+        <button class="filter" type="button" aria-pressed="false">Modern</button>
+        <button class="filter" type="button" aria-pressed="false">Track</button>
+      </div>
+    </section>
+
+    <!-- CONFIRM -->
+    <section class="wrap">
+      <p class="sec-label">Acquire confirm card — bounded top &amp; bottom by one ink hairline</p>
+      <div class="card">
+        <p class="d-label" style="margin-bottom:1.4rem">Acquire · Plate 13</p>
+        <h3 class="d-h2" style="margin-bottom:1.4rem">Forged Motorsport Wheels</h3>
+        <div class="card__line"><span>Grade</span><span>Grade II</span></div>
+        <div class="card__line"><span>Keeper</span><span>@holm.collection · 4.9</span></div>
+        <div class="card__line"><span>Total</span><span>£3,400</span></div>
+        <div style="display:flex;gap:1rem;margin-top:1.8rem;flex-wrap:wrap">
+          <button class="btn">Confirm hold →</button>
+          <button class="btn btn--ghost">Not yet</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SPACING -->
+    <section class="wrap">
+      <p class="sec-label">Spacing — the vertical stack scale</p>
+      <div class="space">
+        <div class="space__item"><span class="space__name">stack-xs</span><div class="space__bar" style="width:12px"></div><span class="sw__val">0.75rem</span></div>
+        <div class="space__item"><span class="space__name">stack-s</span><div class="space__bar" style="width:24px"></div><span class="sw__val">1.5rem</span></div>
+        <div class="space__item"><span class="space__name">stack-m</span><div class="space__bar" style="width:64px"></div><span class="sw__val">clamp(2.5–4rem)</span></div>
+        <div class="space__item"><span class="space__name">stack-l</span><div class="space__bar" style="width:128px"></div><span class="sw__val">clamp(4–8rem)</span></div>
+        <div class="space__item"><span class="space__name">stack-xl</span><div class="space__bar" style="width:200px"></div><span class="sw__val">clamp(6–13rem)</span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="wrap">
+    <span>Monograph — Concept 09 for DRVN · Radii 0 · No shadows · No accent</span>
+    <a href="index.html">← Back to the prototype</a>
+  </footer>
+
+</body>
+</html>

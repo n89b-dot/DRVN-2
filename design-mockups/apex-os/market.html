@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX/OS — MARKET — Live Listings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="apex.css">
+<style>
+  .market-layout{display:grid;grid-template-columns:280px 1fr}
+  .rail{border-right:1px solid var(--line);background:var(--panel-2)}
+  @media(max-width:980px){
+    .market-layout{grid-template-columns:1fr}
+    .rail{border-right:none;border-bottom:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+
+<header class="cmdbar">
+  <a class="brand" href="index.html"><span class="dot"></span>APEX/OS <span class="sep">⏤</span> DRVN</a>
+  <nav>
+    <a href="index.html">HOME</a>
+    <a href="market.html" aria-current="page">MARKET</a>
+    <a href="car.html">GARAGE</a>
+    <a href="car.html">TELEMETRY</a>
+    <a href="listing.html">SELL</a>
+  </nav>
+  <div class="user">
+    <span class="clock" data-clock>00:00:00 LOC</span>
+    <span class="avatar">KT</span>
+    <span class="uname">K.TANAKA</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="syshead">
+    <span class="code">SYS/02</span>
+    <h2>Market — Live Listings</h2>
+    <span class="tail">RESULTS <b class="acid" data-result-count>08</b> ▪ SORT: NEWEST ▪ REFRESH 14:32:07</span>
+  </section>
+
+  <div class="market-layout">
+
+    <!-- ===== FILTER RAIL ===== -->
+    <aside class="rail" aria-label="Filters">
+      <div class="rail-group">
+        <button class="fit-toggle ticks" data-fit-toggle aria-pressed="false">
+          <span class="tick-b"></span>
+          <span class="ft-label">FITS: <b>EVO IX</b> ⏤ GARAGE FITMENT</span>
+          <span class="ft-state">OFF</span>
+        </button>
+        <p class="micro" style="margin-top:10px;line-height:1.7">
+          FILTERS TO PARTS CROSS-CHECKED AGAINST UNIT 07.
+          <span class="acid">FIT:VERIFIED</span> = PLATFORM DATA.
+          <span class="dim">FIT:CLAIMED</span> = SELLER STATEMENT.
+        </p>
+      </div>
+
+      <div class="rail-group">
+        <h3>CATEGORY</h3>
+        <div class="rail-opt"><label><input type="checkbox" checked> FORCED INDUCTION</label><span class="count">41</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> SUSPENSION</label><span class="count">63</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> AERO</label><span class="count">28</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> ENGINE MGMT</label><span class="count">19</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> INTERIOR</label><span class="count">34</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> WHEELS / BRAKES</label><span class="count">62</span></div>
+      </div>
+
+      <div class="rail-group">
+        <h3>CONDITION</h3>
+        <div class="rail-opt"><label><input type="checkbox" checked> BENCH-INSPECTED</label><span class="count">96</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> USED / LOGGED HOURS</label><span class="count">122</span></div>
+        <div class="rail-opt"><label><input type="checkbox"> NEW-IN-BOX</label><span class="count">29</span></div>
+      </div>
+
+      <div class="rail-group">
+        <h3>PRICE RANGE</h3>
+        <div class="kv"><span class="k">MIN</span><span>£0</span></div>
+        <div class="kv"><span class="k">MAX</span><span>£5,000</span></div>
+        <input type="range" min="0" max="5000" value="5000" style="width:100%;accent-color:var(--acid);margin-top:10px" aria-label="Maximum price">
+      </div>
+
+      <div class="rail-group">
+        <h3>PROVENANCE</h3>
+        <div class="rail-opt"><label><input type="checkbox" checked> FULL CHAIN (SOURCE→BENCH)</label><span class="count">74</span></div>
+        <div class="rail-opt"><label><input type="checkbox" checked> REMOVAL LOG ONLY</label><span class="count">98</span></div>
+      </div>
+    </aside>
+
+    <!-- ===== RESULTS ===== -->
+    <section aria-label="Listings">
+      <div class="listing-row" style="border-bottom:1px solid var(--line);background:var(--panel-2)">
+        <div class="micro" style="padding:10px 14px">IMG</div>
+        <div class="micro" style="padding:10px 14px">PART / NO. / FITMENT</div>
+        <div class="micro lr-src" style="padding:10px 14px">SOURCE UNIT</div>
+        <div class="micro lr-seller" style="padding:10px 14px">SELLER</div>
+        <div class="micro lr-cond" style="padding:10px 14px">COND.</div>
+        <div class="micro" style="padding:10px 14px">PRICE / STATUS</div>
+      </div>
+
+      <a class="listing-row scan" href="listing.html" data-fits="true">
+        <div class="lr-img"><img src="../assets/c2-part-turbo.png" alt=""></div>
+        <div>
+          <p class="lr-name">GARRETT G30-770 TURBOCHARGER</p>
+          <p class="micro" style="margin-top:4px">P/N 880694-5006S ▪ <span class="chip chip--verified">FIT:VERIFIED</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 07</b><br>EVO IX / K.TANAKA</p></div>
+        <div class="lr-seller"><p class="micro"><b>K.TANAKA</b><br>★ 4.9 ▪ 31 TXN</p></div>
+        <div class="lr-cond"><p class="micro">6,400 KM<br>BENCH-INSP.</p></div>
+        <div><p class="lr-price">£1,150</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 14 WATCHING</p></div>
+      </a>
+
+      <a class="listing-row scan" href="listing.html" data-fits="true">
+        <div class="lr-img"><img src="../assets/c2-part-coilover.png" alt=""></div>
+        <div>
+          <p class="lr-name">ÖHLINS DFV ROAD &amp; TRACK COILOVERS</p>
+          <p class="micro" style="margin-top:4px">P/N MIS MI10 ▪ <span class="chip chip--verified">FIT:VERIFIED</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 07</b><br>EVO IX / K.TANAKA</p></div>
+        <div class="lr-seller"><p class="micro"><b>K.TANAKA</b><br>★ 4.9 ▪ 31 TXN</p></div>
+        <div class="lr-cond"><p class="micro">11,200 KM<br>RESEALED 03/26</p></div>
+        <div><p class="lr-price">£1,680</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 9 WATCHING</p></div>
+      </a>
+
+      <a class="listing-row scan" href="listing.html" data-fits="false">
+        <div class="lr-img"><div class="noimg"><em>AER/1600</em></div></div>
+        <div>
+          <p class="lr-name">VOLTEX TYPE 7.5 GT WING 1600MM</p>
+          <p class="micro" style="margin-top:4px">P/N VTX-75-16 ▪ <span class="chip chip--claimed">FIT:CLAIMED — GC8/GD</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 22</b><br>IMPREZA GC8 / R.HOLT</p></div>
+        <div class="lr-seller"><p class="micro"><b>R.HOLT</b><br>★ 4.7 ▪ 18 TXN</p></div>
+        <div class="lr-cond"><p class="micro">2 SEASONS<br>NO REPAIRS</p></div>
+        <div><p class="lr-price">£890</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 6 WATCHING</p></div>
+      </a>
+
+      <a class="listing-row scan" href="listing.html" data-fits="true">
+        <div class="lr-img"><div class="noimg"><em>ECU/M130</em></div></div>
+        <div>
+          <p class="lr-name">MOTEC M130 ECU + EVO IX HARNESS</p>
+          <p class="micro" style="margin-top:4px">P/N 13130 ▪ <span class="chip chip--verified">FIT:VERIFIED</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 09</b><br>EVO IX / M.OKONKWO</p></div>
+        <div class="lr-seller"><p class="micro"><b>M.OKONKWO</b><br>★ 5.0 ▪ 44 TXN</p></div>
+        <div class="lr-cond"><p class="micro">1 SEASON<br>UNLOCKED</p></div>
+        <div><p class="lr-price">£2,250</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 21 WATCHING</p></div>
+      </a>
+
+      <a class="listing-row scan" href="listing.html" data-fits="false">
+        <div class="lr-img"><div class="noimg"><em>INT/CF-2</em></div></div>
+        <div>
+          <p class="lr-name">RECARO PODIUM CF SEAT PAIR</p>
+          <p class="micro" style="margin-top:4px">P/N 41A.00.CF ▪ <span class="chip chip--claimed">FIT:CLAIMED — UNIVERSAL</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 14</b><br>S2000 AP2 / J.LIN</p></div>
+        <div class="lr-seller"><p class="micro"><b>J.LIN</b><br>★ 4.8 ▪ 27 TXN</p></div>
+        <div class="lr-cond"><p class="micro">LIKE NEW<br>FIA 2029</p></div>
+        <div><p class="lr-price">£3,100</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 11 WATCHING</p></div>
+      </a>
+
+      <a class="listing-row scan" href="listing.html" data-fits="true">
+        <div class="lr-img"><div class="noimg"><em>WHL/18×9.5</em></div></div>
+        <div>
+          <p class="lr-name">RAYS TE37SL 18×9.5 +22 SET OF 4</p>
+          <p class="micro" style="margin-top:4px">P/N WTE37SL ▪ <span class="chip chip--verified">FIT:VERIFIED</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 03</b><br>EVO VIII / D.SZABO</p></div>
+        <div class="lr-seller"><p class="micro"><b>D.SZABO</b><br>★ 4.6 ▪ 12 TXN</p></div>
+        <div class="lr-cond"><p class="micro">REFINISHED<br>NO WELDS</p></div>
+        <div><p class="lr-price">£1,820</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 17 WATCHING</p></div>
+      </a>
+
+      <a class="listing-row scan is-sold" href="listing.html" data-fits="false">
+        <div class="lr-img"><div class="noimg"><em>EXH/TI-70</em></div></div>
+        <div>
+          <p class="lr-name">TOMEI EXPREME Ti FULL EXHAUST</p>
+          <p class="micro" style="margin-top:4px">P/N TB6090 ▪ <span class="chip chip--claimed">FIT:CLAIMED — Z33</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 31</b><br>350Z / A.FERRARA</p></div>
+        <div class="lr-seller"><p class="micro"><b>A.FERRARA</b><br>★ 4.9 ▪ 52 TXN</p></div>
+        <div class="lr-cond"><p class="micro">8,900 KM<br>NO DENTS</p></div>
+        <div><p class="lr-price">£740</p><p class="micro" style="margin-top:2px"><span class="chip chip--sold">SOLD</span></p></div>
+      </a>
+
+      <a class="listing-row scan" href="listing.html" data-fits="true">
+        <div class="lr-img"><div class="noimg"><em>BRK/355F</em></div></div>
+        <div>
+          <p class="lr-name">AP RACING CP9660 BBK 355MM FRONT</p>
+          <p class="micro" style="margin-top:4px">P/N CP9660-2S4L ▪ <span class="chip chip--verified">FIT:VERIFIED</span></p>
+        </div>
+        <div class="lr-src"><p class="micro"><b>UNIT 07</b><br>EVO IX / K.TANAKA</p></div>
+        <div class="lr-seller"><p class="micro"><b>K.TANAKA</b><br>★ 4.9 ▪ 31 TXN</p></div>
+        <div class="lr-cond"><p class="micro">3 TRACK DAYS<br>PADS 70%</p></div>
+        <div><p class="lr-price">£1,495</p><p class="micro" style="margin-top:2px"><span class="acid">▪ LIVE</span> ▪ 8 WATCHING</p></div>
+      </a>
+
+      <div style="padding:16px 14px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line)">
+        <p class="micro">SHOWING <b data-result-count-dup>08</b> OF 247 ▪ PAGE 01/31</p>
+        <a class="btn btn--dim" href="market.html">LOAD MORE ▸</a>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<footer class="statusbar wrap">
+  <div><span class="ok">▪</span> MARKET FEED LIVE</div>
+  <div>247 LISTINGS</div>
+  <div>BUILD 3.1.408</div>
+  <div>REGION UK-SE-2</div>
+  <div class="grow">APEX/OS ⏤ A DRVN INSTRUMENT © 2026</div>
+</footer>
+
+<script src="apex.js"></script>
+</body>
+</html>

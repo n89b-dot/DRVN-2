@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Keeper Record · L. Vogel · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item is-active" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-H — KEEPER RECORD · PUBLIC SHEET</span>
+        <h1>L. Vogel — Workshop 7</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="wb-tag wb-tag--ok">SELLER GRADE A</span>
+        <span class="wb-tag">SELLER ID 07-LV</span>
+      </div>
+    </header>
+
+    <!-- IDENTITY PLATE -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 01 — KEEPER OF RECORD · IDENTITY</span>
+        <span class="microlabel">ON REGISTRY SINCE 2024</span>
+      </div>
+      <div class="wb-plate__body">
+        <div class="wb-idplate">
+          <div class="wb-idplate__avatar">LV</div>
+          <div style="flex:1;min-width:220px">
+            <div class="wb-idplate__name">Lena Vogel <span class="ref-link" style="cursor:default">@werk7</span></div>
+            <div class="wb-owner__meta">Workshop 7 · Stuttgart, DE · member since 2024</div>
+            <div class="wb-owner__actions">
+              <button class="wb-btn wb-btn--sm" onclick="wbToast('NOW FOLLOWING @WERK7')">Follow</button>
+              <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('MESSAGE SHEET OPENED — NOT IN THIS PROTOTYPE')">Message</button>
+            </div>
+          </div>
+        </div>
+        <div class="wb-idplate__stats">
+          <div class="wb-idplate__stat">
+            <span class="microlabel">Rating</span>
+            <div class="wb-kpi__value">4.9<small>★</small></div>
+            <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Across 31 sales</span></div>
+          </div>
+          <div class="wb-idplate__stat">
+            <span class="microlabel">Sales completed</span>
+            <div class="wb-kpi__value" data-count="31">0</div>
+            <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">100% shipped on time</span></div>
+          </div>
+          <div class="wb-idplate__stat">
+            <span class="microlabel">Disputes</span>
+            <div class="wb-kpi__value">0</div>
+            <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Since first sale 03/24</span></div>
+          </div>
+          <div class="wb-idplate__stat">
+            <span class="microlabel">Median response</span>
+            <div class="wb-kpi__value"><span data-count="26">0</span><small>min</small></div>
+            <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Trailing 90 days</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB ROW -->
+    <div class="wb-tabrow wb-tabs" role="tablist" aria-label="Keeper record sections">
+      <button class="wb-tab is-active" data-panel-tab="overview" aria-selected="true">Overview</button>
+      <button class="wb-tab" data-panel-tab="listings" aria-selected="false">Listings <span class="n">4</span></button>
+      <button class="wb-tab" data-panel-tab="reviews" aria-selected="false">Reviews <span class="n">3</span></button>
+      <button class="wb-tab" data-panel-tab="activity" aria-selected="false">Activity</button>
+    </div>
+
+    <!-- OVERVIEW -->
+    <div class="wb-panel is-active" id="overview" role="tabpanel">
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 02 — WORKSHOP NOTE</span>
+          <span class="microlabel">WRITTEN BY THE KEEPER</span>
+        </div>
+        <div class="wb-plate__body">
+          <p style="font-size:13.5px;line-height:1.65;max-width:72ch">Two-car workshop in Stuttgart-Feuerbach. The E46 M3 is a documented track build — everything that goes on or comes off it is logged the day it happens, with invoices. The Mk2 Golf is a slow nut-and-bolt restoration. I only sell parts off my own cars, I photograph every flaw, and I ship within 48 hours in proper packaging. Ask for any document before you offer; that's what the file is for.</p>
+        </div>
+      </section>
+
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 03 — CURRENT CARS · 2 UNITS ON RECORD</span>
+        </div>
+        <div class="wb-plate__body wb-plate__body--flush">
+          <a class="wb-carstrip" href="car.html">
+            <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 on a two-post lift" loading="lazy" onerror="this.remove()"></div>
+            <div>
+              <div class="wb-carstrip__name">UNIT A — BMW E46 M3 · Track</div>
+              <div class="wb-carstrip__stats">
+                <span><b>34</b> PARTS ON RECORD</span><span><b>3</b> RELEASED</span><span><b>6</b> DOCS</span>
+              </div>
+            </div>
+            <span class="wb-tag wb-tag--ok">OPEN RECORD →</span>
+          </a>
+          <a class="wb-carstrip" href="#" onclick="wbToast('UNIT B PUBLIC SHEET — NOT IN THIS PROTOTYPE');return false;">
+            <div class="wb-img"><img src="../assets/c4-car-side.png" alt="Silver Mk2 Golf GTI side elevation" loading="lazy" onerror="this.remove()"></div>
+            <div>
+              <div class="wb-carstrip__name">UNIT B — VW GOLF GTI MK2 · Restoration</div>
+              <div class="wb-carstrip__stats">
+                <span><b>19</b> PARTS ON RECORD</span><span><b>2</b> RELEASED</span><span><b>62%</b> RESTORED</span>
+              </div>
+            </div>
+            <span class="wb-tag">RESTORATION · 62%</span>
+          </a>
+        </div>
+      </section>
+    </div>
+
+    <!-- LISTINGS -->
+    <div class="wb-panel" id="listings" role="tabpanel">
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 04 — ACTIVE LOTS · 4 LIVE</span>
+          <a class="ref-link" href="market.html">SEE ALL IN MARKETPLACE →</a>
+        </div>
+        <div class="wb-table-wrap">
+          <table class="wb-table">
+            <thead>
+              <tr><th>Lot</th><th>Part</th><th>Source car</th><th>Condition</th><th>Price</th><th>State</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">L-118</td>
+                <td><a class="ref-link" href="listings.html">AP Racing CP9660 Front Kit</a></td>
+                <td><a class="ref-link" href="car.html">DRVN-0417 · E46 M3</a></td>
+                <td>Good · track used</td>
+                <td class="num">£1,150</td>
+                <td><span class="wb-tag wb-tag--accent">UNDER OFFER</span></td>
+              </tr>
+              <tr>
+                <td class="num">L-121</td>
+                <td><a class="ref-link" href="listings.html">KW Clubsport 3-Way (E46)</a></td>
+                <td><a class="ref-link" href="car.html">DRVN-0417 · E46 M3</a></td>
+                <td>Very good · rebuilt 01/26</td>
+                <td class="num">£1,700</td>
+                <td><span class="wb-tag wb-tag--accent">UNDER OFFER</span></td>
+              </tr>
+              <tr>
+                <td class="num">L-122</td>
+                <td><a class="ref-link" href="listings.html">Getrag 420G 6-Speed (orig.)</a></td>
+                <td><a class="ref-link" href="car.html">DRVN-0417 · E46 M3</a></td>
+                <td>Good · 74k km</td>
+                <td class="num">£1,250</td>
+                <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+              </tr>
+              <tr>
+                <td class="num">L-124</td>
+                <td><a class="ref-link" href="market.html">BBS RS 16×8 ET11 (set of 4)</a></td>
+                <td><span class="mono" style="font-size:11px;color:var(--wb-ink-2)">UNIT B · MK2 GOLF</span></td>
+                <td>Fair · needs refinish</td>
+                <td class="num">£850</td>
+                <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- REVIEWS -->
+    <div class="wb-panel" id="reviews" role="tabpanel">
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 05 — BUYER REVIEWS · 3 OF 31</span>
+          <span class="microlabel">NEWEST FIRST</span>
+        </div>
+        <div class="wb-plate__body wb-plate__body--flush">
+          <article class="wb-review">
+            <div class="wb-review__head">
+              <span><strong>@kessler.m</strong> <span class="microlabel" style="margin-left:8px">VERIFIED PURCHASE · RECARO POLE POSITION ×2</span></span>
+              <span class="wb-review__stars" aria-label="5 of 5 stars">★★★★★ 5.0</span>
+            </div>
+            <p>Seats arrived exactly as photographed, down to the bolster wear she'd already flagged. Provenance file had the original invoice and the mount torque specs. Packed like the factory did it.</p>
+            <span class="microlabel">02 JUL 26 · ORDER #1042</span>
+          </article>
+          <article class="wb-review">
+            <div class="wb-review__head">
+              <span><strong>@ringtaxi_ben</strong> <span class="microlabel" style="margin-left:8px">VERIFIED PURCHASE · SUPERSPRINT HEADER</span></span>
+              <span class="wb-review__stars" aria-label="5 of 5 stars">★★★★★ 5.0</span>
+            </div>
+            <p>Asked for the dyno sheet before offering and had it in twenty minutes. Header was off the documented E46, fitted my 330Ci with the exact hardware list she included. Would buy again without hesitation.</p>
+            <span class="microlabel">14 MAY 26 · ORDER #0981</span>
+          </article>
+          <article class="wb-review">
+            <div class="wb-review__head">
+              <span><strong>@mk2.golfclub</strong> <span class="microlabel" style="margin-left:8px">VERIFIED PURCHASE · GTI INTERIOR TRIM SET</span></span>
+              <span class="wb-review__stars" aria-label="4 of 5 stars">★★★★☆ 4.0</span>
+            </div>
+            <p>Trim was honest to the listing — one clip broken and it was in the photos. Shipping took a day longer than quoted, which she flagged proactively. Communication is the best I've had on any parts platform.</p>
+            <span class="microlabel">28 FEB 26 · ORDER #0873</span>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="wb-panel" id="activity" role="tabpanel">
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 06 — PUBLIC ACTIVITY · LEDGER</span>
+          <span class="microlabel">UTC+2</span>
+        </div>
+        <ul class="wb-ledger">
+          <li><time>19:42 · 11 JUL</time> Listed <a class="ref-link" href="listings.html">AP Racing CP9660 Front Kit</a> — lot L-118 <span class="amt">£1,150</span></li>
+          <li><time>17:08 · 10 JUL</time> Logged build entry on <a class="ref-link" href="car.html">E46 M3</a> — valve adjustment + top-end reseal</li>
+          <li><time>09:12 · 08 JUL</time> Sold Recaro Pole Position ×2 — order #1042 confirmed <span class="amt">£412</span></li>
+          <li><time>18:55 · 07 JUL</time> Fitment verified — 3 buyers run E46 chassis against lot L-121</li>
+          <li><time>11:20 · 05 JUL</time> Listed <a class="ref-link" href="listings.html">Getrag 420G 6-Speed</a> — lot L-122 <span class="amt">£1,250</span></li>
+          <li><time>16:03 · 28 JUN</time> Logged build entry on <a class="ref-link" href="car.html">E46 M3</a> — Nürburgring alignment, geo sheet attached</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="home.html">HOME — PUBLIC FACE</a>
+      <span class="microlabel">DRVN / WERKBANK — KEEPER RECORD · REF 04-H · PUBLIC SHEET</span>
+      <a class="ref-link" href="car.html">E46 M3 CAR RECORD →</a>
+    </footer>
+  </main>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

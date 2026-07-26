@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Car Record · E46 M3 · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item is-active" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-F — CAR RECORD · PUBLIC SHEET · UNIT A</span>
+        <h1>BMW E46 M3 — Track Build</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="wb-tag">REGISTRY NO. DRVN-0417</span>
+        <span class="wb-tag wb-tag--ok">PROVENANCE ON FILE · 6 DOCS</span>
+        <button class="wb-btn wb-btn--ghost" onclick="wbToast('CAR ADDED TO WATCHED BUILDS')">Watch build</button>
+      </div>
+    </header>
+
+    <!-- REGISTRY PLATE HERO -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 01 — REGISTRY ELEVATION · PUBLIC RECORD</span>
+        <span class="microlabel">PHOTO REF 2026-06-28 · WORKSHOP 7, STUTTGART</span>
+      </div>
+      <div class="wb-hero">
+        <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 raised on a two-post lift in a bright workshop" onerror="this.remove()"></div>
+
+        <div class="wb-callout" style="left:6%;top:22%">
+          <span class="wb-callout__tag"><b>P-01</b> S54B32 · 343 BHP DYNO'D 09/25</span>
+          <span class="wb-callout__line" style="width:96px"></span>
+        </div>
+        <div class="wb-callout" style="right:5%;top:48%;flex-direction:row-reverse">
+          <span class="wb-callout__tag"><b>P-02</b> AP RACING CP9660 · RELEASED FOR SALE</span>
+          <span class="wb-callout__line" style="width:70px;transform:scaleX(-1)"></span>
+        </div>
+        <div class="wb-callout" style="left:14%;bottom:14%">
+          <span class="wb-callout__tag"><b>P-03</b> FIA WELD-IN CAGE · TÜV CERTIFIED</span>
+          <span class="wb-callout__line" style="width:112px"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB ROW — RECORD SECTIONS -->
+    <div class="wb-tabrow wb-tabs" role="tablist" aria-label="Car record sections">
+      <button class="wb-tab is-active" data-panel-tab="overview" aria-selected="true">Overview</button>
+      <button class="wb-tab" data-panel-tab="activity" aria-selected="false">Activity</button>
+      <button class="wb-tab" data-panel-tab="documents" aria-selected="false">Documents <span class="n">6</span></button>
+    </div>
+
+    <!-- OVERVIEW PANEL -->
+    <div class="wb-panel is-active" id="overview" role="tabpanel">
+
+    <div class="wb-grid-3-2 wb-section">
+
+      <!-- SPEC MATRIX -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 02 — SPECIFICATION MATRIX · AS DOCUMENTED</span>
+          <span class="microlabel">REV 12 · UPDATED 07 JUL 26</span>
+        </div>
+        <div class="wb-table-wrap">
+          <table class="wb-table">
+            <thead>
+              <tr><th>System</th><th>Specification</th><th>Basis</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Chassis</strong></td>
+                <td class="num">E46 coupé · WBSBL9C04·PN29xxx · 74,210 km</td>
+                <td><span class="wb-tag wb-tag--ok">PLATFORM-VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Engine</strong></td>
+                <td class="num">S54B32 3.2 i6 · stock internals · CSL-map ECU</td>
+                <td><span class="wb-tag wb-tag--ok">PLATFORM-VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Power</strong></td>
+                <td class="num">343 bhp / 356 Nm — dyno sheet 05 SEP 25</td>
+                <td><span class="wb-tag wb-tag--ok">PLATFORM-VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Weight</strong></td>
+                <td class="num">1,388 kg wet — corner-weight sheet 19 NOV 25</td>
+                <td><span class="wb-tag wb-tag--ok">PLATFORM-VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Suspension</strong></td>
+                <td class="num">KW Clubsport 3-Way · Nürburgring alignment</td>
+                <td><span class="wb-tag">SELLER-STATED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Brakes</strong></td>
+                <td class="num">AP Racing CP9660 355 mm F · stock M3 R</td>
+                <td><span class="wb-tag">SELLER-STATED</span></td>
+              </tr>
+              <tr>
+                <td><strong>Transmission</strong></td>
+                <td class="num">Drenth DG400 sequential · Drexler 1.5-way 3.91</td>
+                <td><span class="wb-tag">SELLER-STATED</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="wb-plate__body" style="border-top:1px solid var(--wb-hairline)">
+          <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">34 components on record · 6 documents attached · registry since 2024</span></div>
+        </div>
+      </section>
+
+      <!-- SIDE COLUMN: OWNER + BUILD LOG -->
+      <div class="wb-stack">
+
+        <!-- OWNER CARD -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 03 — KEEPER OF RECORD</span>
+            <span class="microlabel">SELLER ID 07-LV</span>
+          </div>
+          <div class="wb-plate__body">
+            <div class="wb-owner">
+              <div class="wb-owner__avatar">LV</div>
+              <div>
+                <div class="wb-owner__name">L. Vogel <a class="ref-link" href="profile.html">@werk7</a></div>
+                <div class="wb-owner__meta">Workshop 7 · Stuttgart, DE</div>
+                <div class="wb-owner__meta">4.9★ · 31 sales · member since 2024</div>
+                <div class="wb-owner__actions">
+                  <button class="wb-btn wb-btn--sm" onclick="wbToast('NOW FOLLOWING @WERK7')">Follow</button>
+                  <a class="wb-btn wb-btn--ghost wb-btn--sm" href="profile.html#listings">View seller's listings</a>
+                </div>
+              </div>
+            </div>
+            <div class="wb-dim" data-dim style="margin-top:16px"><span class="wb-dim__line"></span><span class="wb-dim__label">100% of sales shipped on time · 0 disputes</span></div>
+          </div>
+        </section>
+
+        <!-- PUBLIC BUILD LOG -->
+        <section class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 04 — BUILD LOG · PUBLIC ENTRIES</span>
+            <span class="microlabel">6 OF 23</span>
+          </div>
+          <ul class="wb-ledger">
+            <li><time>28 JUN 26</time> Nürburgring alignment set — −2.8° F camber, fresh geo sheet attached</li>
+            <li><time>02 FEB 26</time> Drenth DG400 sequential installed at RS Fahrzeugbau — invoice on file</li>
+            <li><time>19 NOV 25</time> Corner-weighted at 1,388 kg wet; 50.2/49.8 cross</li>
+            <li><time>05 SEP 25</time> Dyno day — 343 bhp / 356 Nm on CSL-map, chart attached <span class="amt" style="color:var(--wb-accent)">343 BHP</span></li>
+            <li><time>21 JUL 25</time> TÜV inspection passed, weld-in cage certified</li>
+            <li><time>03 MAR 24</time> KW Clubsport 3-Way fitted, replacing PSS10</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <!-- PARTS RELEASED FROM THIS CAR -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 05 — PARTS RELEASED FROM THIS CAR · 3 LIVE</span>
+        <a class="ref-link" href="market.html">SEE ALL IN MARKETPLACE →</a>
+      </div>
+      <div class="wb-plate__body">
+        <div class="wb-partcards">
+
+          <a class="wb-plate wb-partcard" href="part.html">
+            <div class="wb-img"><img src="../assets/c4-part-brake.png" alt="AP Racing brake caliper and disc, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+            <div class="wb-partcard__body">
+              <div class="wb-partcard__name">AP Racing CP9660 Front Kit</div>
+              <div class="wb-partcard__price">£1,150</div>
+              <div class="wb-partcard__tags">
+                <span class="wb-tag wb-tag--accent">UNDER OFFER</span>
+                <span class="wb-tag">GOOD · TRACK USED</span>
+              </div>
+              <span class="microlabel">PROVENANCE ATTACHED · FITTED 05/23 → REMOVED 06/26</span>
+            </div>
+          </a>
+
+          <a class="wb-plate wb-partcard" href="listings.html">
+            <div class="wb-img"><img src="../assets/c4-part-gearbox.png" alt="Getrag 420G gearbox, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+            <div class="wb-partcard__body">
+              <div class="wb-partcard__name">Getrag 420G 6-Speed (orig.)</div>
+              <div class="wb-partcard__price">£1,250</div>
+              <div class="wb-partcard__tags">
+                <span class="wb-tag wb-tag--ok">LIVE</span>
+                <span class="wb-tag">GOOD · 74K KM</span>
+              </div>
+              <span class="microlabel">PROVENANCE ATTACHED · REMOVED 01/25 · DRY STORED</span>
+            </div>
+          </a>
+
+          <a class="wb-plate wb-partcard" href="listings.html">
+            <div class="wb-img"><img src="../assets/c4-part-seat.png" alt="Recaro Pole Position bucket seat, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+            <div class="wb-partcard__body">
+              <div class="wb-partcard__name">Recaro Pole Position ABE ×2</div>
+              <div class="wb-partcard__price">£620</div>
+              <div class="wb-partcard__tags">
+                <span class="wb-tag wb-tag--ok">LIVE</span>
+                <span class="wb-tag">EXCELLENT · INC. MOUNTS</span>
+              </div>
+              <span class="microlabel">PROVENANCE ATTACHED · FITTED 06/22 → REMOVED 05/26</span>
+            </div>
+          </a>
+
+        </div>
+        <div class="wb-dim wb-dim--accent" data-dim style="margin-top:16px"><span class="wb-dim__line"></span><span class="wb-dim__label">Every listing inherits this record — chassis, install dates, service log</span></div>
+      </div>
+    </section>
+
+    <!-- ALSO IN THIS WORKSHOP -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 06 — ALSO IN THIS WORKSHOP</span>
+      </div>
+      <a class="wb-carstrip" href="#" onclick="wbToast('UNIT B PUBLIC SHEET — NOT IN THIS PROTOTYPE');return false;">
+        <div class="wb-img"><img src="../assets/c4-car-side.png" alt="Silver Mk2 Golf GTI, side elevation" loading="lazy" onerror="this.remove()"></div>
+        <div>
+          <div class="wb-carstrip__name">VW GOLF GTI MK2 · Restoration</div>
+          <div class="wb-carstrip__stats">
+            <span><b>19</b> PARTS ON RECORD</span><span><b>2</b> RELEASED</span><span><b>62%</b> RESTORED</span>
+          </div>
+        </div>
+        <span class="wb-tag">OPEN RECORD →</span>
+      </a>
+    </section>
+
+    </div><!-- /overview -->
+
+    <!-- ACTIVITY PANEL -->
+    <div class="wb-panel" id="activity" role="tabpanel">
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 07 — PUBLIC ACTIVITY · THIS CAR</span>
+          <span class="microlabel">LEDGER · UTC+2</span>
+        </div>
+        <ul class="wb-ledger">
+          <li><time>19:42 · 11 JUL</time> AP Racing CP9660 released for sale → <a class="ref-link" href="listings.html">L-118</a> <span class="amt" style="color:var(--wb-accent)">£1,150</span></li>
+          <li><time>17:08 · 10 JUL</time> Build log: valve adjustment + top-end reseal — entry 23 on file</li>
+          <li><time>18:55 · 07 JUL</time> Fitment verified: 3 buyers run E46 chassis against parts off this car</li>
+          <li><time>09:30 · 06 JUL</time> Watch count passed 80 <span class="amt">84</span></li>
+          <li><time>11:20 · 05 JUL</time> Getrag 420G 6-Speed released for sale → <a class="ref-link" href="listings.html">L-122</a> <span class="amt">£1,250</span></li>
+          <li><time>16:03 · 28 JUN</time> Build log: Nürburgring alignment set — geo sheet added to <a class="ref-link" href="#documents" onclick="document.querySelector('[data-panel-tab=documents]').click();return false;">documents</a></li>
+          <li><time>14:12 · 21 JUN</time> Keeper record updated by <a class="ref-link" href="profile.html">@werk7</a> — spec matrix rev 12</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- DOCUMENTS PANEL -->
+    <div class="wb-panel" id="documents" role="tabpanel">
+      <section class="wb-plate wb-section">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 08 — PROVENANCE FILE · 6 DOCUMENTS</span>
+          <span class="microlabel">ACCESS GRANTED PER REQUEST BY THE KEEPER</span>
+        </div>
+        <div class="wb-plate__body wb-plate__body--flush">
+          <div class="wb-doc">
+            <i class="ph ph-files" aria-hidden="true"></i>
+            <div>
+              <div class="wb-doc__name">Service log — full history</div>
+              <div class="wb-doc__meta">PDF · 41 PP · 2019 → 07/26 · REV 12</div>
+            </div>
+            <button class="wb-tag" onclick="wbToast('ACCESS REQUEST SENT TO @WERK7')">REQUEST ACCESS</button>
+          </div>
+          <div class="wb-doc">
+            <i class="ph ph-chart-line-up" aria-hidden="true"></i>
+            <div>
+              <div class="wb-doc__name">Dyno sheet — 343 bhp / 356 Nm</div>
+              <div class="wb-doc__meta">PDF · 05 SEP 25 · CSL-MAP · 4TH-GEAR PULL</div>
+            </div>
+            <button class="wb-tag" onclick="wbToast('ACCESS REQUEST SENT TO @WERK7')">REQUEST ACCESS</button>
+          </div>
+          <div class="wb-doc">
+            <i class="ph ph-shield-check" aria-hidden="true"></i>
+            <div>
+              <div class="wb-doc__name">TÜV cage certificate — FIA weld-in</div>
+              <div class="wb-doc__meta">PDF · 21 JUL 25 · CERT NO. S-2107-0093</div>
+            </div>
+            <button class="wb-tag" onclick="wbToast('ACCESS REQUEST SENT TO @WERK7')">REQUEST ACCESS</button>
+          </div>
+          <div class="wb-doc">
+            <i class="ph ph-receipt" aria-hidden="true"></i>
+            <div>
+              <div class="wb-doc__name">Purchase invoice — Jenvey ITBs</div>
+              <div class="wb-doc__meta">PDF · 11 APR 25 · SUPPLIER RS FAHRZEUGBAU</div>
+            </div>
+            <button class="wb-tag" onclick="wbToast('ACCESS REQUEST SENT TO @WERK7')">REQUEST ACCESS</button>
+          </div>
+          <div class="wb-doc">
+            <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>
+            <div>
+              <div class="wb-doc__name">Torque spec sheet — chassis + drivetrain</div>
+              <div class="wb-doc__meta">PDF · REV 4 · 02 FEB 26 · DRENTH INSTALL</div>
+            </div>
+            <button class="wb-tag" onclick="wbToast('ACCESS REQUEST SENT TO @WERK7')">REQUEST ACCESS</button>
+          </div>
+          <div class="wb-doc">
+            <i class="ph ph-image-square" aria-hidden="true"></i>
+            <div>
+              <div class="wb-doc__name">Photo record — 214 images</div>
+              <div class="wb-doc__meta">ARCHIVE · 2019 → 06/26 · EVERY INSTALL &amp; REMOVAL</div>
+            </div>
+            <button class="wb-tag" onclick="wbToast('ACCESS REQUEST SENT TO @WERK7')">REQUEST ACCESS</button>
+          </div>
+        </div>
+        <div class="wb-plate__body" style="border-top:1px solid var(--wb-hairline)">
+          <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Documents stay attached to parts released from this car</span></div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="home.html">HOME — PUBLIC FACE</a>
+      <span class="microlabel">DRVN / WERKBANK — CAR RECORD · REF 04-F · PUBLIC SHEET</span>
+      <a class="ref-link" href="explore.html">← BACK TO EXPLORE</a>
+    </footer>
+  </main>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

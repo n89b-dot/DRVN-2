@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN — Glance · @jm.r33 R33 GT-R</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="glance.css">
+</head>
+<body>
+
+<div class="statusbar" aria-hidden="true"><span>9:41</span><span>DRVN LTE ▪▪▪▪</span></div>
+
+<nav class="island" aria-label="Primary">
+  <span class="island__brand">DR<em>V</em>N</span>
+  <div class="island__links">
+    <a class="island__link" href="index.html">Home</a>
+    <a class="island__link" href="market.html">Market</a>
+    <a class="island__link" href="listing.html">Listing</a>
+    <a class="island__link" href="car.html" aria-current="page">Car</a>
+    <a class="island__link" href="alerts.html">Alerts<span class="dot" aria-hidden="true"></span></a>
+  </div>
+</nav>
+
+<main class="page">
+  <div class="wrap">
+
+    <div class="enter" style="margin-bottom:18px">
+      <span class="mono">Public car profile · Sheffield</span>
+    </div>
+
+    <section class="bento" aria-label="Car profile">
+
+      <!-- Hero car tile -->
+      <div class="widget widget--img span-6 enter" style="min-height:440px">
+        <img src="../assets/c15-car.png" alt="Gunmetal 1995 Nissan Skyline R33 GT-R in a black void">
+        <div class="widget__scrim"></div>
+        <div class="widget__body" style="display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap">
+          <div>
+            <span class="mono">1995 Nissan Skyline</span>
+            <div style="font-weight:800;font-size:clamp(36px,5.5vw,64px);letter-spacing:var(--track-tight);line-height:.96">R33 GT-R</div>
+            <div class="mono" style="margin-top:8px">@jm.r33 · Building since 2019</div>
+          </div>
+          <div class="capsule" style="background:var(--tile-3)">
+            <span class="chip chip--red"><i class="pulse"></i>LIVE!</span>
+            <span class="mono" style="color:var(--text)">3 watching now</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Giant-numeral stats -->
+      <div class="widget span-2 enter">
+        <span class="mono">Parts listed</span>
+        <div class="numeral">3</div>
+      </div>
+      <div class="widget widget--2 span-2 enter">
+        <span class="mono">Parts sold</span>
+        <div class="numeral">9</div>
+      </div>
+      <div class="widget span-2 enter">
+        <span class="mono">Watchers</span>
+        <div class="numeral">12</div>
+      </div>
+
+      <!-- Owner widget -->
+      <div class="widget widget--2 span-3 enter">
+        <div class="widget__head">
+          <span class="mono">Owner</span>
+          <span class="chip">★ 4.9 · 23 SALES</span>
+        </div>
+        <div style="font-weight:800;font-size:26px;letter-spacing:var(--track-tight);margin:10px 0 4px">Jordan Ma</div>
+        <div class="mono">@jm.r33 · Sheffield</div>
+        <div class="kv mono" style="margin-top:12px"><span class="k">Response time</span><span class="v">Usually within 2h</span></div>
+        <div class="kv mono"><span class="k">Member since</span><span class="v">2021 · 14 meets</span></div>
+        <div class="widget__foot">
+          <button class="btn btn--primary btn--inline" id="follow-btn" data-follow aria-pressed="false">[ FOLLOW ]</button>
+        </div>
+      </div>
+
+      <!-- Build activity feed -->
+      <div class="widget span-3 enter">
+        <span class="mono" style="margin-bottom:8px">Build activity</span>
+        <div class="kv mono"><span class="k">Turbo listed · £980</span><span class="v">2h ago</span></div>
+        <div class="kv mono"><span class="k">Offer received · £940</span><span class="v">14m ago</span></div>
+        <div class="kv mono"><span class="k">TE37s fitted, take-offs listed</span><span class="v">3d ago</span></div>
+        <div class="kv mono"><span class="k">Dyno day · 468 bhp</span><span class="v">2w ago</span></div>
+        <div class="kv mono"><span class="k">BOV sold · £120</span><span class="v">2w ago</span></div>
+      </div>
+
+      <!-- For sale from this car -->
+      <div class="widget span-6 enter" style="min-height:0">
+        <div class="widget__head" style="margin-bottom:14px">
+          <span class="mono">For sale from this car</span>
+          <a class="mono" href="market.html" style="color:var(--text-dim)">SEE ALL IN MARKET →</a>
+        </div>
+        <div class="appgrid" style="grid-template-columns:repeat(3,1fr)">
+          <a class="app" href="listing.html" style="background:var(--tile-2)">
+            <img src="../assets/c15-part-turbo.png" alt="Garrett GT2860R turbo" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:var(--r-tile);opacity:.85">
+            <span class="app__badge">2</span>
+            <span class="mono" style="position:relative;margin-top:auto;color:var(--text)">GT2860R · £980</span>
+          </a>
+          <a class="app" href="market.html" style="background:var(--tile-2)">
+            <img src="../assets/c15-part-wheel.png" alt="Bronze TE37 wheel" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:var(--r-tile);opacity:.85" onerror="this.remove()">
+            <span class="mono" style="position:relative;margin-top:auto;color:var(--text)">TE37 take-offs · £1,400</span>
+          </a>
+          <a class="app" href="market.html" style="background:var(--tile-2)">
+            <span class="app__glyph">Nk</span>
+            <span class="chip chip--red-soft" style="position:absolute;top:12px;right:12px">DROP</span>
+            <span class="mono">Nismo knob · £85</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Spec widget -->
+      <div class="widget span-3 enter">
+        <span class="mono" style="margin-bottom:8px">Spec</span>
+        <div class="kv mono"><span class="k">Engine</span><span class="v">RB26DETT · -5 twins</span></div>
+        <div class="kv mono"><span class="k">Power</span><span class="v">468 bhp @ 1.4 bar</span></div>
+        <div class="kv mono"><span class="k">Weight</span><span class="v">1,480 kg</span></div>
+        <div class="kv mono"><span class="k">Wheels</span><span class="v">TE37 Saga 18×9.5</span></div>
+        <div class="kv mono"><span class="k">Suspension</span><span class="v">HKS Hipermax IV GT</span></div>
+      </div>
+
+      <!-- Week strip -->
+      <div class="widget span-3 enter">
+        <span class="mono" style="margin-bottom:12px">This car, this week</span>
+        <div class="week" role="list">
+          <span class="week__day" role="listitem">MON<strong>14</strong></span>
+          <span class="week__day" role="listitem">TUE<strong>15</strong></span>
+          <span class="week__day" role="listitem">WED<strong>16</strong></span>
+          <span class="week__day" role="listitem">THU<strong>17</strong></span>
+          <span class="week__day" role="listitem">FRI<strong>18</strong></span>
+          <span class="week__day week__day--live" role="listitem">SAT<strong>19</strong>MEET</span>
+          <span class="week__day" role="listitem">SUN<strong>20</strong></span>
+        </div>
+        <div class="mono" style="margin-top:14px">Sat 19 · Peaks Run, Snake Pass · 08:00 · this car is going</div>
+      </div>
+
+    </section>
+
+    <div class="dots" aria-hidden="true"><i></i><i></i><i class="on"></i></div>
+
+    <footer style="margin-top:70px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px" class="mono">
+      <span>DRVN · CONCEPT 15 · GLANCE</span>
+      <span>THE HOME FOR YOUR MODIFIED CAR</span>
+    </footer>
+
+  </div>
+</main>
+
+<script src="glance.js"></script>
+</body>
+</html>

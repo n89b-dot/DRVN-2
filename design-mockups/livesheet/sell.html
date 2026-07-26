@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · List a part — draft L-0692</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link is-active" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">PART SHEET L-0692 — DRAFT · AUTOSAVED 2 MIN AGO · NOT YET PUBLIC</span>
+    <h1>Draw a new <span class="live-word">line.</span></h1>
+    <p class="sub">Fill the sheet on the left and the listing draws itself on the right. Nothing reaches the market until you publish it.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#photos">Photos</a>
+    <a class="jumplink" href="#part">The part</a>
+    <a class="jumplink" href="#origin">Where it came from</a>
+    <a class="jumplink" href="#condition">Condition</a>
+    <a class="jumplink" href="#price">Price</a>
+    <a class="jumplink" href="#review">Review</a>
+  </div>
+
+  <form id="sellForm" novalidate>
+  <section class="deck deck--two" style="margin-top:14px">
+
+    <!-- ============ LEFT: THE SHEET ITSELF ============ -->
+    <div>
+
+      <!-- PHOTOS -->
+      <div class="tile rv" id="photos">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink"><i class="ph ph-camera" aria-hidden="true"></i>&nbsp;PHOTOS — <span data-photo-count>3</span> OF 8</span>
+          <span class="microlabel">FIRST FRAME IS THE COVER</span>
+        </div>
+        <button class="drop" type="button" style="width:100%" data-toast="PHOTO PICKER — NOT IN THIS PROTOTYPE">
+          <span class="drop__mark"><i class="ph ph-tray-arrow-up" aria-hidden="true"></i></span>
+          <h4>Drop photos, or choose files</h4>
+          <p>Four angles sell a part: sitting square, the mounting face, the worst mark on it, and the receipt. JPG or PNG, up to 12&nbsp;MB each.</p>
+        </button>
+        <div class="thumbs" data-thumbs>
+          <div class="thumb" data-thumb data-src="../assets/c16-part-coilovers.png">
+            <img src="../assets/c16-part-coilovers.png" alt="KW Variant 2 coilovers, red springs, studio still" onerror="this.remove()">
+            <span class="thumb__tag">Cover</span>
+            <button class="thumb__x" type="button" aria-label="Remove cover photo">✕</button>
+          </div>
+          <div class="thumb" data-thumb data-src="../assets/c16-part-coilovers.png">
+            <img src="../assets/c16-part-coilovers.png" alt="Damper body and adjuster detail" onerror="this.remove()">
+            <span class="thumb__tag">Detail</span>
+            <button class="thumb__x" type="button" aria-label="Remove detail photo">✕</button>
+          </div>
+          <div class="thumb" data-thumb data-src="../assets/c16-hero-car.png">
+            <img src="../assets/c16-hero-car.png" alt="The Integrale the coilovers came off" onerror="this.remove()">
+            <span class="thumb__tag">On the car</span>
+            <button class="thumb__x" type="button" aria-label="Remove on-the-car photo">✕</button>
+          </div>
+          <div class="thumb thumb--ghost" aria-hidden="true"></div>
+          <div class="thumb thumb--ghost" aria-hidden="true"></div>
+        </div>
+        <p class="spec-note"><b>Receipts count as photos.</b> A legible invoice in frame six is the single thing buyers ask for most — parts listed with one clear ~2× faster.</p>
+      </div>
+
+      <!-- THE PART -->
+      <div class="tile rv" id="part" data-stagger="1" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">THE PART — WHAT YOU'RE RELEASING</span>
+          <span class="microlabel">DRAFT L-0692</span>
+        </div>
+
+        <div class="field" id="fTitle">
+          <label class="microlabel microlabel--ink" for="selTitle">Title</label>
+          <input class="ctl ctl--block" id="selTitle" type="text" maxlength="80" style="max-width:none"
+                 value="KW Variant 2 coilovers — Delta HF" placeholder="Brand, model, fitment">
+          <span class="field__hint">Clear titles sell faster — brand, model, then the car it fits. <b class="mono" data-title-count>32</b>&nbsp;/&nbsp;80</span>
+          <span class="field__err">Give the part a name. Buyers search by brand and model, not by category.</span>
+        </div>
+
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="selCat">Category</label>
+          <select class="ctl ctl--block" id="selCat" style="max-width:none">
+            <option value="Suspension" selected>Suspension — coilovers, springs, arms</option>
+            <option value="Brakes">Brakes — calipers, discs, lines</option>
+            <option value="Engine">Engine — induction, turbo, cooling</option>
+            <option value="Interior">Interior — seats, harnesses, trim</option>
+            <option value="Wheels">Wheels &amp; tyres</option>
+            <option value="Exhaust">Exhaust</option>
+          </select>
+          <span class="field__hint">Category drives where the part lands in the market and which fitment filters catch it.</span>
+        </div>
+
+        <div class="field field--row">
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="selBrand">Brand</label>
+            <input class="ctl ctl--block" id="selBrand" type="text" value="KW Automotive" style="max-width:none">
+          </span>
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="selModel">Model / spec</label>
+            <input class="ctl ctl--block" id="selModel" type="text" value="Variant 2 — inox line" style="max-width:none">
+          </span>
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <label class="microlabel microlabel--ink" for="selPn">Part number</label>
+          <input class="ctl ctl--block" id="selPn" type="text" value="15281016" style="max-width:none">
+          <span class="field__hint">Optional, but a part number turns a browse into a match — the market cross-checks it against watched sheets.</span>
+        </div>
+      </div>
+
+      <!-- WHERE IT CAME FROM -->
+      <div class="tile tile--deep rv" id="origin" data-stagger="2" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink"><i class="ph ph-git-branch" aria-hidden="true"></i>&nbsp;WHERE IT CAME FROM</span>
+          <span class="microlabel">THE PART OF DRVN NOBODY ELSE HAS</span>
+        </div>
+
+        <div class="bline bline--ctl" style="border-top:0">
+          <span class="bline__label">Source</span>
+          <label class="bline__val" for="srcSheet" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px">
+            <input class="sq" type="radio" id="srcSheet" name="src" checked>
+            Off my sheet — it came off a car I keep
+          </label>
+          <span class="chip chip--ok">HISTORY TRAVELS WITH IT</span>
+        </div>
+
+        <div data-prov-on>
+          <div class="bline bline--ctl">
+            <span class="bline__label">Which sheet</span>
+            <select class="ctl" id="srcCar" aria-label="Source car sheet" style="max-width:none">
+              <option>Lancia Delta HF Integrale "Biscione" — sheet C-0416</option>
+              <option>Open a second sheet to list from another car…</option>
+            </select>
+            <span class="chip chip--ok" id="provChip">PROVENANCE ATTACHED ✓</span>
+          </div>
+          <div class="rowlist" style="margin-top:2px">
+            <a class="order" href="car.html">
+              <div class="order__img"><img src="../assets/c16-hero-car.png" alt="Red Lancia Delta HF Integrale" onerror="this.remove()"></div>
+              <div>
+                <div class="order__name">Lancia Delta HF Integrale "Biscione"</div>
+                <div class="order__meta">C-0416 · 1992 · <span data-tick="34">34</span> watching · public sheet →</div>
+              </div>
+              <div class="order__actions"><span class="chip chip--live">SHEET IS LIVE</span></div>
+            </a>
+          </div>
+          <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+            <span class="microlabel">Inherited automatically — you don't type any of this</span>
+            <span class="val">Fitted 05/2024 → removed 07/2026 · ~9,400 km · 3 receipts · what it ran with</span>
+          </div>
+          <p class="spec-note"><b>Why it matters:</b> a buyer reading this listing can click through to the car, see the day these went on, the day they came off, and every line filed in between. That is the whole difference between a part and a part with a past.</p>
+        </div>
+
+        <div class="bline bline--ctl">
+          <span class="bline__label">Or</span>
+          <label class="bline__val" for="srcSpare" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px">
+            <input class="sq" type="radio" id="srcSpare" name="src">
+            Bought spare / never fitted — no car sheet behind it
+          </label>
+        </div>
+
+        <div data-prov-off style="display:none">
+          <div class="livedim livedim--blank" style="margin-top:12px"><span class="livedim__tick"></span>
+            <span class="microlabel">No provenance to attach</span>
+            <span class="val">Lists as a spare. Buyers see no fitted dates, no mileage, no source sheet.</span>
+          </div>
+          <p class="spec-note">Perfectly fine — plenty of good parts never made it onto a car. It just means this listing competes on price and photos alone.</p>
+        </div>
+      </div>
+
+      <!-- CONDITION -->
+      <div class="tile rv" id="condition" data-stagger="3" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">CONDITION — HONEST BEATS FLATTERING</span>
+          <span class="microlabel">48H INSPECTION WINDOW APPLIES</span>
+        </div>
+
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="selCond">Condition</label>
+          <select class="ctl ctl--block" id="selCond" style="max-width:none">
+            <option value="EXCELLENT">Excellent — as new, negligible use</option>
+            <option value="GOOD" selected>Good — used, works exactly as intended</option>
+            <option value="FAIR">Fair — serviceable, needs a refresh</option>
+            <option value="SPARES">For rebuild / spares</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="selWear">Honest wear</label>
+          <textarea class="ctl ctl--block" id="selWear" rows="4">Powder coat is chipped on the front-left perch where a stone got in — photographed in frame two. Damper travel measured 62 mm of 68 mm new. Adjusters free through the full range, no weeping seals. One gravel season, always garaged after.</textarea>
+          <span class="field__hint">Name the worst thing about it in your own words. Sellers who do get 40% fewer returns.</span>
+        </div>
+
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="selFit">Fitment note — your words</label>
+          <input class="ctl ctl--block" id="selFit" type="text" style="max-width:none"
+                 value="Ran with 16&quot; Speedlines and the softer gravel springs; 9K set suits tarmac better.">
+          <span class="field__hint">Anything you know that the sheet can't prove. Kept separate from verified fitment, always.</span>
+        </div>
+
+        <div class="alert">
+          <span class="alert__ico"><i class="ph ph-seal-check" aria-hidden="true"></i></span>
+          <h4>Two kinds of fitment. Never mixed.</h4>
+          <p><b>Platform-verified</b> — <span class="mono">FITS: DELTA HF (1988–1994)</span> — comes from sheet C-0416 and the part number. DRVN stands behind it. <b>Seller-stated</b> is everything you type above; it shows on the listing under your name, marked as yours. A buyer can always tell which is which, and so can you.</p>
+        </div>
+      </div>
+
+      <!-- PRICE -->
+      <div class="tile tile--deep rv" id="price" data-stagger="4" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink"><i class="ph ph-hand-coins" aria-hidden="true"></i>&nbsp;PRICE — USD · SETTLED WEEKLY</span>
+          <span class="microlabel">5.0% ON SALE</span>
+        </div>
+
+        <div class="field" id="fPrice">
+          <label class="microlabel microlabel--ink" for="selPrice">Asking price</label>
+          <span class="ctl__prefix" style="max-width:220px">
+            <span aria-hidden="true">$</span>
+            <input class="ctl" id="selPrice" type="text" inputmode="numeric" value="680" aria-describedby="priceHint">
+          </span>
+          <span class="field__hint" id="priceHint">You keep <b class="mono" data-net>$646.00</b> after the 5% platform fee. Delivery is quoted separately.</span>
+          <span class="field__err">The market floor is $20 — below that, fees eat the sale. Ask $20 or more.</span>
+        </div>
+
+        <div class="guide">
+          <div class="guide__track">
+            <span class="guide__band" style="left:28%;right:28%"></span>
+            <span class="guide__you" data-you style="left:72%"></span>
+          </div>
+          <div class="guide__scale" style="gap:14px"><span>$420</span><span class="microlabel" style="text-align:center">SOLD $540–$680 · LAST 90 DAYS · DELTA HF COILOVERS</span><span>$920</span></div>
+        </div>
+        <p class="spec-note" data-guide-read><b>You're at $680</b> — the top of the sold band. Fair for a set with 91% travel left and receipts, but expect offers around $620.</p>
+
+        <div class="bline bline--ctl" style="margin-top:6px">
+          <span class="bline__label">Open to offers</span>
+          <label class="bline__val" for="selOffers" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px">
+            <input class="sq" type="checkbox" id="selOffers" checked>
+            Let buyers make an offer on a 24-hour window
+          </label>
+          <span class="chip chip--live">ON</span>
+        </div>
+
+        <div data-floor-wrap>
+          <div class="field" id="fFloor" style="margin:12px 0 0">
+            <label class="microlabel microlabel--ink" for="selFloor">Auto-decline below</label>
+            <span class="ctl__prefix" style="max-width:220px">
+              <span aria-hidden="true">$</span>
+              <input class="ctl" id="selFloor" type="text" inputmode="numeric" value="600">
+            </span>
+            <span class="field__hint">Private. Anything under this is declined the moment it lands — you never see it, the buyer never waits.</span>
+            <span class="field__err">Your floor sits at or above your asking price — no offer could ever clear it.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- REVIEW -->
+      <div class="tile rv" id="review" data-stagger="5" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">REVIEW — WHAT GETS FILED</span>
+          <span class="microlabel">L-0692</span>
+        </div>
+        <div class="bline" style="border-top:0">
+          <span class="bline__label">Part</span>
+          <span class="bline__val" data-sum-title>KW Variant 2 coilovers — Delta HF</span>
+          <span class="bline__note" data-sum-brand>KW Automotive · Variant 2 — inox line · 15281016</span>
+          <span class="chip" data-sum-cat>SUSPENSION</span>
+        </div>
+        <div class="bline">
+          <span class="bline__label">Provenance</span>
+          <span class="bline__val" data-sum-prov>Off sheet C-0416 — the Integrale</span>
+          <span class="bline__note">Fitted 05/2024 → removed 07/2026 · 3 receipts travel with it</span>
+          <span class="chip chip--ok" data-sum-provchip>ATTACHED ✓</span>
+        </div>
+        <div class="bline">
+          <span class="bline__label">Condition</span>
+          <span class="bline__val" data-sum-cond>Good — used, works exactly as intended</span>
+          <span class="bline__note">Chipped perch declared · 62 mm of 68 mm travel measured</span>
+          <span class="chip">SELLER-STATED</span>
+        </div>
+        <div class="bline">
+          <span class="bline__label">Asking</span>
+          <span class="bline__val" data-sum-price>$680</span>
+          <span class="bline__note" data-sum-floor>Offers on · auto-decline under $600</span>
+          <span class="chip chip--live">USD</span>
+        </div>
+        <div class="bline">
+          <span class="bline__label">Delivery</span>
+          <span class="bline__val">DPD insured — 2 days — $14</span>
+          <span class="bline__note">Buyer pays; 48-hour inspection window applies on arrival</span>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn btn--live" type="submit">Publish to market</button>
+          <button class="btn btn--ghost" type="button" data-toast="DRAFT L-0692 SAVED — RESUME FROM THE WORKBENCH">Save draft</button>
+        </div>
+        <div class="livedim" style="margin-top:16px"><span class="livedim__tick"></span>
+          <span class="microlabel">Before you publish</span>
+          <span class="val">You can edit or retire this listing at any time — provenance stays attached either way</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: THE LIVE PREVIEW ============ -->
+    <div>
+      <div style="position:sticky;top:88px">
+        <div class="tile rv" data-stagger="1">
+          <div class="tile__head">
+            <span class="microlabel microlabel--ink">LIVE PREVIEW — WHAT THE MARKET SEES</span>
+            <span class="chip chip--live">DRAFT</span>
+          </div>
+          <div class="tile__img" style="aspect-ratio:3/2" data-pv-media>
+            <img src="../assets/c16-part-coilovers.png" alt="Listing cover preview" onerror="this.remove()">
+          </div>
+          <div class="mkt__name" data-pv-name>KW Variant 2 coilovers — Delta HF</div>
+          <div class="mkt__price" data-pv-price>$680</div>
+          <div class="mkt__meta">
+            <span class="chip chip--ok" data-pv-prov>PROVENANCE ✓</span>
+            <span class="chip" data-pv-fit>FITS: DELTA HF</span>
+            <span class="chip" data-pv-cond>GOOD</span>
+          </div>
+          <div class="dimline-h" aria-hidden="true"></div>
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel">Drawing itself</span>
+            <span class="val">Every keystroke on the left redraws this card</span>
+          </div>
+          <p class="spec-note"><b>Card, then sheet.</b> This is the tile buyers scroll past in the market. Tapping it opens the full part sheet — photos, measured spec, and the car it left.</p>
+        </div>
+
+        <div class="tile tile--deep rv" data-stagger="2" style="margin-top:14px">
+          <div class="tile__head"><span class="microlabel microlabel--ink">SHEET COMPLETENESS</span><span class="microlabel"><b class="mono" data-done-count>5</b>&nbsp;/&nbsp;5</span></div>
+          <div class="steps">
+            <div class="step is-done"><span class="step__n"></span><span class="step__t">Photos</span><span class="step__d">3 frames · cover set</span><span class="chip chip--ok" data-chk="photos">DONE</span></div>
+            <div class="step is-done"><span class="step__n"></span><span class="step__t">The part</span><span class="step__d">Titled and categorised</span><span class="chip chip--ok" data-chk="part">DONE</span></div>
+            <div class="step is-done"><span class="step__n"></span><span class="step__t">Provenance</span><span class="step__d">Sheet C-0416 attached</span><span class="chip chip--ok" data-chk="prov">DONE</span></div>
+            <div class="step is-done"><span class="step__n"></span><span class="step__t">Condition</span><span class="step__d">Wear declared in your words</span><span class="chip chip--ok" data-chk="cond">DONE</span></div>
+            <div class="step is-now"><span class="step__n"></span><span class="step__t">Price</span><span class="step__d">$680 · offers on</span><span class="chip chip--live" data-chk="price">LAST LINE</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  </form>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — DRAFT L-0692 · NOTHING PUBLIC UNTIL YOU PUBLISH</span>
+    <a class="microlabel mono" href="market.html">← BACK TO MARKET</a>
+  </footer>
+</main>
+
+<!-- PUBLISHED -->
+<div class="sheetwrap" id="pubSheet" aria-modal="true" role="dialog" aria-label="Listing published">
+  <div class="sheet">
+    <div class="tile__head"><span class="microlabel microlabel--ink">FILED — PART SHEET L-0692</span><button class="microlabel mono" type="button" data-close-pub>ESC ✕</button></div>
+    <span class="stamp">LIVE ON THE MARKET — L-0692</span>
+    <p style="font-size:14px;margin:10px 0 4px" data-pub-line>KW Variant 2 coilovers — Delta HF, asking $680.</p>
+    <p style="font-size:13px;color:var(--dim)">Provenance from sheet C-0416 is attached and public. Watchers whose sheets fit a Delta HF have been signalled — 12 of them.</p>
+    <div class="sheet__row" style="margin-top:10px"><span>Offer window</span><b>24 h per offer</b></div>
+    <div class="sheet__row"><span>Auto-decline under</span><b data-pub-floor>$600</b></div>
+    <div class="sheet__row sheet__total"><span>You keep on a full-ask sale</span><b data-pub-net>$646.00</b></div>
+    <div class="sheet__actions">
+      <a class="btn btn--live" href="listing.html" style="white-space:nowrap">View the listing</a>
+      <a class="btn btn--ghost" href="market.html" style="white-space:nowrap">To the market</a>
+    </div>
+  </div>
+</div>
+
+<script src="livesheet.js"></script>
+<script>
+/* ---------- SELL — the sheet annotates itself as you draw it ---------- */
+(function () {
+  "use strict";
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  var form   = $("#sellForm");
+  var title  = $("#selTitle"), cat = $("#selCat"), brand = $("#selBrand"),
+      model  = $("#selModel"), pn = $("#selPn"), cond = $("#selCond"),
+      price  = $("#selPrice"), floor = $("#selFloor"), offers = $("#selOffers");
+  var fTitle = $("#fTitle"), fPrice = $("#fPrice"), fFloor = $("#fFloor");
+
+  function money(n) { return "$" + n.toLocaleString("en-US"); }
+  function num(el) { return parseInt(String(el.value).replace(/[^0-9]/g, ""), 10); }
+
+  /* ---- live preview + review summary ---- */
+  function redraw() {
+    var t = title.value.trim();
+    var p = num(price);
+    var f = num(floor);
+
+    $("[data-pv-name]").textContent  = t || "Untitled part";
+    $("[data-sum-title]").textContent = t || "—";
+    $("[data-title-count]").textContent = title.value.length;
+
+    $("[data-pv-price]").textContent = isNaN(p) ? "—" : money(p);
+    $("[data-sum-price]").textContent = isNaN(p) ? "—" : money(p);
+
+    var condTxt = cond.options[cond.selectedIndex].text;
+    $("[data-pv-cond]").textContent = cond.value;
+    $("[data-sum-cond]").textContent = condTxt;
+
+    $("[data-pv-fit]").textContent = "FITS: DELTA HF";
+    $("[data-sum-cat]").textContent = cat.value.toUpperCase();
+    $("[data-sum-brand]").textContent =
+      [brand.value.trim(), model.value.trim(), pn.value.trim()].filter(Boolean).join(" · ") || "—";
+
+    /* net + guidance marker */
+    if (!isNaN(p)) {
+      var net = (p * 0.95).toFixed(2);
+      $("[data-net]").textContent = "$" + net;
+      $("[data-pub-net]").textContent = "$" + net;
+      var pct = Math.max(2, Math.min(98, (p - 420) / 500 * 100));
+      $("[data-you]").style.left = pct + "%";
+      var read;
+      if (p < 540)      read = "<b>You're at " + money(p) + "</b> — under the sold band. It will move fast; you're leaving money on the bench.";
+      else if (p <= 680) read = "<b>You're at " + money(p) + "</b> — inside the sold band for Delta HF coilovers. Expect offers around " + money(Math.round(p * 0.91)) + ".";
+      else              read = "<b>You're at " + money(p) + "</b> — above the sold band. Receipts and 91% travel justify it, but sit on it longer.";
+      $("[data-guide-read]").innerHTML = read;
+    }
+
+    /* offers + floor */
+    var on = offers.checked;
+    $("[data-floor-wrap]").style.display = on ? "" : "none";
+    $("#selOffers").closest(".bline").querySelector(".chip").textContent = on ? "ON" : "OFF";
+    $("[data-sum-floor]").textContent = on
+      ? "Offers on · auto-decline under " + (isNaN(f) ? "—" : money(f))
+      : "Fixed price · no offers taken";
+    $("[data-pub-floor]").textContent = on ? (isNaN(f) ? "—" : money(f)) : "Offers off";
+
+    /* completeness spine */
+    $('[data-chk="part"]').className = t ? "chip chip--ok" : "chip chip--live";
+    $('[data-chk="part"]').textContent = t ? "DONE" : "NEEDS A TITLE";
+    $("[data-done-count]").textContent = $$(".chip--ok[data-chk]").length;
+  }
+
+  ["input", "change"].forEach(function (ev) { form.addEventListener(ev, redraw); });
+
+  /* ---- provenance: the differentiator, switched live ---- */
+  function provenance() {
+    var on = $("#srcSheet").checked;
+    $("[data-prov-on]").style.display  = on ? "" : "none";
+    $("[data-prov-off]").style.display = on ? "none" : "";
+    var pv = $("[data-pv-prov]");
+    pv.className = on ? "chip chip--ok" : "chip chip--spent";
+    pv.textContent = on ? "PROVENANCE ✓" : "NO SOURCE SHEET";
+    $("[data-sum-prov]").textContent = on ? "Off sheet C-0416 — the Integrale" : "Bought spare — never fitted";
+    var sc = $("[data-sum-provchip]");
+    sc.className = on ? "chip chip--ok" : "chip chip--spent";
+    sc.textContent = on ? "ATTACHED ✓" : "NONE";
+    var st = $('[data-chk="prov"]');
+    st.className = on ? "chip chip--ok" : "chip";
+    st.textContent = on ? "DONE" : "SPARE";
+    $("[data-done-count]").textContent = $$(".chip--ok[data-chk]").length;
+    if (on) window.lsToast("PROVENANCE ATTACHED — SHEET C-0416 TRAVELS WITH THIS PART");
+    else window.lsToast("LISTING AS A SPARE — NO HISTORY ATTACHED");
+  }
+  $("#srcSheet").addEventListener("change", provenance);
+  $("#srcSpare").addEventListener("change", provenance);
+
+  /* ---- photos: removing the cover promotes the next frame ---- */
+  $("[data-thumbs]").addEventListener("click", function (e) {
+    var x = e.target.closest(".thumb__x"); if (!x) return;
+    var thumb = x.closest("[data-thumb]");
+    var wasCover = !!thumb.querySelector(".thumb__tag") &&
+                   thumb.querySelector(".thumb__tag").textContent === "Cover";
+    thumb.remove();
+    var left = $$("[data-thumb]");
+    $("[data-photo-count]").textContent = left.length;
+    if (wasCover && left.length) {
+      var tag = left[0].querySelector(".thumb__tag");
+      if (tag) tag.textContent = "Cover"; else {
+        var s = document.createElement("span"); s.className = "thumb__tag"; s.textContent = "Cover";
+        left[0].appendChild(s);
+      }
+    }
+    var media = $("[data-pv-media]");
+    if (left.length) {
+      media.innerHTML = "";
+      var img = document.createElement("img");
+      img.alt = "Listing cover preview";
+      img.onerror = function () { img.remove(); };
+      img.setAttribute("src", left[0].getAttribute("data-src"));
+      media.appendChild(img);
+    } else {
+      media.innerHTML = '<div class="undrawn" style="height:100%;border-radius:inherit">' +
+        '<div class="undrawn__mark"><i class="ph ph-image"></i></div>' +
+        '<h3>No cover yet</h3><p>A listing without a photo never gets opened.</p></div>';
+      var ps = $('[data-chk="photos"]'); ps.className = "chip chip--live"; ps.textContent = "NEEDS A PHOTO";
+      $("[data-done-count]").textContent = $$(".chip--ok[data-chk]").length;
+    }
+    window.lsToast(left.length ? "FRAME REMOVED — " + left.length + " LEFT ON THE SHEET" : "ALL FRAMES REMOVED");
+  });
+
+  /* ---- validation: only two rules, both real ---- */
+  function validate() {
+    var ok = true;
+    var t = title.value.trim();
+    fTitle.classList.toggle("is-invalid", !t);
+    if (!t) ok = false;
+
+    var p = num(price);
+    var badPrice = isNaN(p) || p < 20;
+    fPrice.classList.toggle("is-invalid", badPrice);
+    if (badPrice) ok = false;
+
+    var f = num(floor);
+    var badFloor = offers.checked && !isNaN(f) && !isNaN(p) && f >= p;
+    fFloor.classList.toggle("is-invalid", badFloor);
+    if (badFloor) ok = false;
+
+    if (!ok) {
+      var first = document.querySelector(".field.is-invalid");
+      if (first) {
+        first.scrollIntoView({ block: "center", behavior: "smooth" });
+        var i = first.querySelector("input, textarea, select"); if (i) i.focus({ preventScroll: true });
+      }
+      window.lsToast(!t ? "THE SHEET IS MISSING A TITLE" : "CHECK THE PRICE LINES");
+    }
+    return ok;
+  }
+
+  /* ---- publish ---- */
+  var pub = $("#pubSheet");
+  function closePub() { pub.classList.remove("is-open"); }
+  pub.addEventListener("click", function (e) {
+    if (e.target === pub || e.target.closest("[data-close-pub]")) closePub();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closePub(); });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!validate()) return;
+    var p = num(price);
+    $("[data-pub-line]").textContent = title.value.trim() + ", asking " + money(p) + ".";
+    pub.classList.add("is-open");
+    window.lsToast("PUBLISHED — L-0692 IS LIVE ON THE MARKET");
+  });
+
+  redraw();
+})();
+</script>
+</body>
+</html>

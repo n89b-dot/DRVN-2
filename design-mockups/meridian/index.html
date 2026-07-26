@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN MERIDIAN — Every part. Full telemetry of where it's been.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="meridian.css">
+</head>
+<body>
+
+<nav class="mnav">
+  <div class="mnav__inner">
+    <a class="wordmark" href="index.html">DRVN <small>MERIDIAN</small></a>
+    <div class="mnav__user">
+      <a class="btn btn--keyline btn--sm" href="dashboard.html">Sign in</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero__bg" style="background-image:url('../assets/c8-hero-gtr.png')"></div>
+  <div class="hero__content">
+    <p class="mlabel mlabel--accent ig" style="--ig-i:0">The build-aware marketplace</p>
+    <h1 class="ig" style="--ig-i:1">Every part. Full telemetry of where it&rsquo;s been.</h1>
+    <p class="ig" style="--ig-i:2; color:var(--m-text-2); max-width:46ch; margin-bottom:34px;">
+      Modified-car parts, sold with their history intact — the source car, the seller&rsquo;s
+      record, the setup they ran in. Provenance, read like instrumentation.
+    </p>
+    <a class="btn btn--keyline ig" style="--ig-i:3" href="dashboard.html">Launch cockpit</a>
+  </div>
+</header>
+
+<section class="section">
+  <div class="section-head ig" style="--ig-i:4">
+    <p class="mlabel">Why it holds value</p>
+    <h2>Trust, rendered as instrumentation</h2>
+    <div class="trim"></div>
+  </div>
+  <div class="feature-grid">
+    <article class="glass glass--hover feature ig" style="--ig-i:5">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l3-7h10l3 7v5H4zM7 13h10M6.5 16.5h.01M17.5 16.5h.01"/></svg>
+      <h3>Source car verified</h3>
+      <p>Every listing is decommissioned from a documented build. You see the exact car it came off — spec, mileage, and running condition at removal.</p>
+    </article>
+    <article class="glass glass--hover feature ig" style="--ig-i:6">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9M12 12l5-5M21 3v5h-5"/></svg>
+      <h3>Seller telemetry</h3>
+      <p>Sales history, response time, dispute rate. A seller&rsquo;s record reads like a service log — long, boring, and reassuring.</p>
+    </article>
+    <article class="glass glass--hover feature ig" style="--ig-i:7">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V8m5 10V5m5 13v-7m5 7V10M2 21h20"/></svg>
+      <h3>Pairing history</h3>
+      <p>What the part ran alongside — the tune, the supporting mods, the power figure it made. Fitment answered before you ask.</p>
+    </article>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0;">
+  <div class="section-head">
+    <p class="mlabel">In the paddock now</p>
+    <h2>Builds releasing parts this week</h2>
+    <div class="trim"></div>
+  </div>
+  <div class="paddock-grid">
+    <article class="glass glass--hover vehicle-card">
+      <div class="vehicle-img" style="background-image:url('../assets/c8-hero-gtr.png')"></div>
+      <div class="vehicle-body">
+        <p class="mlabel">R35 &middot; Leeds &middot; @vance.r35</p>
+        <h3 class="vehicle-name">Nissan GT-R — Litchfield Stage 4.25</h3>
+        <div class="vehicle-stats">
+          <div class="vstat"><span class="mlabel">Power</span><b>640</b></div>
+          <div class="vstat"><span class="mlabel">Parts live</span><b>4</b></div>
+        </div>
+      </div>
+    </article>
+    <article class="glass glass--hover vehicle-card">
+      <div class="vehicle-img" style="background-image:url('../assets/c8-car-nsx.png')"></div>
+      <div class="vehicle-body">
+        <p class="mlabel">NA1 &middot; Leeds &middot; @vance.r35</p>
+        <h3 class="vehicle-name">Honda NSX — Preservation spec</h3>
+        <div class="vehicle-stats">
+          <div class="vstat"><span class="mlabel">Power</span><b>274</b></div>
+          <div class="vstat"><span class="mlabel">Parts live</span><b>1</b></div>
+        </div>
+      </div>
+    </article>
+    <article class="glass glass--hover vehicle-card">
+      <div class="vehicle-img" style="background-image:url('../assets/c8-car-911t.png')"></div>
+      <div class="vehicle-body">
+        <p class="mlabel">993 &middot; Harrogate &middot; @airkult</p>
+        <h3 class="vehicle-name">Porsche 911 Turbo — RS refresh</h3>
+        <div class="vehicle-stats">
+          <div class="vstat"><span class="mlabel">Power</span><b>408</b></div>
+          <div class="vstat"><span class="mlabel">Parts live</span><b>6</b></div>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<footer class="mfooter">
+  <div class="mfooter__inner">
+    <span>DRVN Meridian &middot; MMXXVI</span>
+    <span><a href="dashboard.html">Launch cockpit</a> &middot; <a href="design.html">Design system</a></span>
+  </div>
+</footer>
+
+<script src="meridian.js"></script>
+</body>
+</html>

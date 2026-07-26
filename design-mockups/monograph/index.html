@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DRVN · Monograph — Every machine, considered.</title>
+  <meta name="description" content="A monograph of modified cars. A part here is never anonymous — it carries its car, its keeper, its history.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="monograph.css">
+</head>
+<body>
+
+  <!-- whisper-quiet top bar -->
+  <header class="bar" data-over-image="true">
+    <a class="bar__mark" href="index.html" aria-label="DRVN home">DRVN</a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index-cars.html">Index</a>
+      <a class="bar__link" href="listing.html">Sell</a>
+      <a class="bar__link" href="car.html">Sign in</a>
+    </nav>
+  </header>
+
+  <main class="shell">
+
+    <!-- HERO — near-silent, image nearly full-bleed -->
+    <section class="hero" aria-label="Introduction">
+      <div class="hero__plate drift">
+        <img class="plate__img" src="../assets/c9-hero-car.png"
+             alt="A graphite 1992 Porsche 911 964, side profile, on a pale gallery wall">
+      </div>
+      <div class="hero__wash"></div>
+      <div class="hero__inner wrap">
+        <p class="label hero__eyebrow reveal">The DRVN Monograph — Vol. I</p>
+        <h1 class="display reveal">Every machine,<br>considered.</h1>
+        <p class="lead reveal" style="margin-top:1.4rem">
+          A part here is never anonymous. It carries its car, its keeper, and the
+          history of everything it was paired with.
+        </p>
+        <a class="btn hero__cta reveal" href="index-cars.html">
+          Enter the collection <span class="btn__arrow" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
+    <span data-hero-sentinel aria-hidden="true"></span>
+
+    <!-- MANIFESTO -->
+    <section class="section wrap" aria-label="On provenance">
+      <div class="split">
+        <p class="label reveal">On provenance</p>
+        <div class="reveal">
+          <p class="h2">
+            We treat a build the way a gallery treats a photograph — hung in
+            silence, captioned plainly, its origin never in doubt.
+          </p>
+          <p class="prose" style="margin-top:2rem">
+            A modified car is an argument made in steel: a sequence of decisions,
+            each one traceable to a maker and a reason. When a part leaves the car,
+            that argument should travel with it. So every plate on DRVN answers the
+            same four quiet questions — what car it came from, who kept it, whether
+            it will fit yours, and what it once ran alongside.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule wrap" style="max-width:var(--max)">
+
+    <!-- FEATURED BUILD PLATE -->
+    <section class="section wrap" aria-label="Featured subject">
+      <a class="reveal" href="car.html" style="display:block">
+        <figure class="plate frame-219" data-lightbox>
+          <img class="plate__img" src="../assets/c9-hero-car.png"
+               alt="The 964 Graphite, the featured subject of this volume">
+        </figure>
+      </a>
+      <div class="wall reveal-cap">
+        <span class="label">Plate 01 · Featured subject</span>
+        <span class="wall__title">1992 · Porsche 911 964 · “Graphite”</span>
+        <span class="wall__price">Kept by @holm.collection</span>
+      </div>
+      <a class="tlink reveal-cap" href="car.html" style="margin-top:1.4rem;display:inline-block">
+        Read the monograph →
+      </a>
+    </section>
+
+    <!-- RECENTLY CATALOGUED PARTS -->
+    <section class="section wrap" aria-label="Recently catalogued">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:1rem;margin-bottom:var(--stack-m)">
+        <h2 class="label reveal">Recently catalogued</h2>
+        <a class="tlink reveal" href="index-cars.html">The full index →</a>
+      </div>
+
+      <div class="row3">
+        <article class="reveal">
+          <a href="listing.html" style="display:block">
+            <figure class="plate frame-45" data-lightbox>
+              <img class="plate__img" src="../assets/c9-part-engine.png"
+                   alt="A 3.6 flat-six long block presented on a grey plinth">
+            </figure>
+          </a>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 12 · Engine</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">3.6 Flat-Six · ITB long block</span>
+            <span class="wall__price">£11,800</span>
+          </div>
+        </article>
+
+        <article class="reveal">
+          <a href="listing.html" style="display:block">
+            <figure class="plate frame-45" data-lightbox>
+              <img class="plate__img" src="../assets/c9-part-wheel.png"
+                   alt="A forged motorsport wheel on a grey plinth">
+            </figure>
+          </a>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 13 · Wheels</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">Forged Motorsport · set of four</span>
+            <span class="wall__price">£3,400</span>
+          </div>
+        </article>
+
+        <article class="reveal">
+          <a href="listing.html" style="display:block">
+            <figure class="plate frame-45" data-lightbox>
+              <img class="plate__img" src="../assets/c9-detail.png"
+                   alt="An abstract reflection across the car's bodywork">
+            </figure>
+          </a>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 14 · Detail</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">Bilstein coilover · matched pair</span>
+            <span class="wall__price">£1,150</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- FULL-BLEED DETAIL + PULL QUOTE -->
+    <section class="section" aria-label="Reflection">
+      <figure class="plate frame-219 bleed reveal" style="margin-bottom:var(--stack-m)">
+        <img class="plate__img" src="../assets/c9-detail.png"
+             alt="A close, abstract reflection across graphite bodywork">
+      </figure>
+      <div class="wrap">
+        <blockquote class="quote reveal">
+          A car remembered honestly is worth more than a car merely photographed.
+          <cite class="quote__cite">— From the colophon, Vol. I</cite>
+        </blockquote>
+      </div>
+    </section>
+
+    <!-- SECOND SUBJECT -->
+    <section class="section wrap" aria-label="Also in the collection">
+      <div class="split">
+        <a class="reveal" href="car.html" style="display:block">
+          <figure class="plate frame-32" data-lightbox>
+            <img class="plate__img" src="../assets/c9-car-2.png"
+                 alt="A white E30 M3 in side profile, in the gallery">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 02</span>
+            <span class="wall__title">1990 · BMW E30 M3 · “Alpine”</span>
+          </div>
+        </a>
+        <div class="reveal">
+          <p class="label">Also in the collection</p>
+          <p class="h2" style="margin-top:1.4rem">A second subject, kept to the same standard.</p>
+          <p class="prose" style="margin-top:1.6rem">
+            Every car admitted to the collection is catalogued the same way: a plate,
+            a specification, a provenance, and the parts it has released — each one
+            able to stand on its own and still point home.
+          </p>
+          <a class="btn btn--ghost" href="index-cars.html" style="margin-top:2rem">
+            View the index <span class="btn__arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- COLOPHON -->
+  <footer class="colophon wrap" aria-label="Colophon">
+    <div class="colophon__grid">
+      <div>
+        <div class="colophon__mark">DRVN</div>
+        <p class="prose" style="margin-top:1.4rem;max-width:36ch">
+          The home for your modified car. Show the build; release the parts behind
+          it — each one carrying its car, its keeper, its history.
+        </p>
+      </div>
+      <div class="colophon__col">
+        <p class="label" style="margin-bottom:1rem">Collection</p>
+        <a class="tlink" href="index-cars.html">The index</a>
+        <a class="tlink" href="car.html">Featured subject</a>
+        <a class="tlink" href="listing.html">Catalogued parts</a>
+      </div>
+      <div class="colophon__col">
+        <p class="label" style="margin-bottom:1rem">Reference</p>
+        <a class="tlink" href="design.html">Design system</a>
+        <a class="tlink" href="BRIEF.md">Brief</a>
+        <a class="tlink" href="../index.html">All concepts</a>
+      </div>
+    </div>
+    <div class="colophon__base">
+      <span class="label">Vol. I · Curated by @holm.collection · Copenhagen</span>
+      <span class="label">Monograph — Concept 09 for DRVN</span>
+    </div>
+  </footer>
+
+  <script src="monograph.js"></script>
+</body>
+</html>

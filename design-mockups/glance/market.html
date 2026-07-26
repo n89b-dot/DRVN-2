@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN — Glance · Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="glance.css">
+</head>
+<body>
+
+<div class="statusbar" aria-hidden="true"><span>9:41</span><span>DRVN LTE ▪▪▪▪</span></div>
+
+<nav class="island" aria-label="Primary">
+  <span class="island__brand">DR<em>V</em>N</span>
+  <div class="island__links">
+    <a class="island__link" href="index.html">Home</a>
+    <a class="island__link" href="market.html" aria-current="page">Market</a>
+    <a class="island__link" href="listing.html">Listing</a>
+    <a class="island__link" href="car.html">Car</a>
+    <a class="island__link" href="alerts.html">Alerts<span class="dot" aria-hidden="true"></span></a>
+  </div>
+</nav>
+
+<main class="page">
+  <div class="wrap">
+
+    <header class="ed-head enter">
+      <span class="mono">Marketplace · 2,412 parts live</span>
+      <h1>Every part,<br>one glance.</h1>
+      <p>Take-offs from real builds. Search by part, car, or fitment — it filters as you type.</p>
+    </header>
+
+    <div class="enter" style="margin-bottom:14px">
+      <label class="mono" for="market-search" style="display:block;margin-bottom:10px">Search the grid</label>
+      <input class="search" id="market-search" type="search" placeholder="Try: turbo · RB26 · coilovers" autocomplete="off">
+    </div>
+
+    <!-- NOW! drop capsule -->
+    <div class="widget span-6 enter" style="flex-direction:row;align-items:center;gap:18px;min-height:0;margin-bottom:28px">
+      <span class="chip chip--red"><i class="pulse"></i>NOW!</span>
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:18px;letter-spacing:var(--track-tight)">Nismo drop — 14 parts from a broken R34 build</div>
+        <span class="mono">Prices unlock when the timer hits zero</span>
+      </div>
+      <span class="capsule__timer" data-countdown="2612">00:43:32</span>
+      <a class="btn btn--inline" href="listing.html">[ SET REMINDER ]</a>
+    </div>
+
+    <section class="section-head enter">
+      <h2>Categories</h2>
+      <span class="mono">Red dot = new since your last visit</span>
+    </section>
+
+    <section class="appgrid" aria-label="Categories">
+      <a class="app enter" href="listing.html" data-filter-text="turbo forced induction garrett gt2860r boost">
+        <span class="app__glyph">Tb</span><span class="app__badge">6</span>
+        <span class="mono">Turbos &amp; boost</span>
+      </a>
+      <a class="app enter" href="listing.html" data-filter-text="wheels rays te37 bronze 18">
+        <span class="app__glyph">Wh</span><span class="app__badge">12</span>
+        <span class="mono">Wheels</span>
+      </a>
+      <a class="app enter" href="listing.html" data-filter-text="suspension coilovers hks arms">
+        <span class="app__glyph">Su</span>
+        <span class="mono">Suspension</span>
+      </a>
+      <a class="app enter" href="listing.html" data-filter-text="engine internals rb26 cams pistons">
+        <span class="app__glyph">En</span><span class="app__badge">3</span>
+        <span class="mono">Engine</span>
+      </a>
+      <a class="app enter" href="listing.html" data-filter-text="interior seats bride nardi shift">
+        <span class="app__glyph">In</span>
+        <span class="mono">Interior</span>
+      </a>
+      <a class="app enter" href="listing.html" data-filter-text="aero body kits nismo lips spoilers">
+        <span class="app__glyph">Ae</span><span class="app__badge">2</span>
+        <span class="mono">Aero &amp; body</span>
+      </a>
+    </section>
+
+    <section class="section-head enter">
+      <h2>Fresh listings</h2>
+      <span class="mono">Sorted by: just landed</span>
+    </section>
+
+    <section aria-label="Listings" style="display:grid;gap:var(--gap)">
+
+      <a class="listing-row enter" href="listing.html" data-filter-text="garrett gt2860r turbo rb26 r33 skyline turbos boost">
+        <img class="listing-row__img" src="../assets/c15-part-turbo.png" alt="Garrett GT2860R turbocharger">
+        <div>
+          <div class="listing-row__title">Garrett GT2860R -5 turbo · 8k miles</div>
+          <div class="listing-row__chips">
+            <span class="chip">FITS RB26</span><span class="chip">SHEFFIELD</span>
+            <span class="chip chip--red-soft"><i class="pulse"></i>4 WATCHING</span>
+          </div>
+        </div>
+        <div class="listing-row__price">£980<span class="mono">@jm.r33 · off an R33 GT-R</span></div>
+      </a>
+
+      <a class="listing-row enter" href="listing.html" data-filter-text="rays te37 saga bronze wheels 18x9.5 5x114">
+        <img class="listing-row__img" src="../assets/c15-part-wheel.png" alt="Bronze Rays TE37 wheel" onerror="this.removeAttribute('src')">
+        <div>
+          <div class="listing-row__title">Rays TE37 Saga, bronze · 18×9.5 ET22 ×4</div>
+          <div class="listing-row__chips">
+            <span class="chip">5×114.3</span><span class="chip">LEEDS</span><span class="chip">NO KERBING</span>
+          </div>
+        </div>
+        <div class="listing-row__price">£2,150<span class="mono">@keiko.s14 · off a 180SX</span></div>
+      </a>
+
+      <a class="listing-row enter" href="listing.html" data-filter-text="hks hipermax coilovers suspension s-chassis nissan">
+        <img class="listing-row__img" src="../assets/c15-car.png" alt="HKS Hipermax coilovers, pictured on the donor car">
+        <div>
+          <div class="listing-row__title">HKS Hipermax IV GT coilovers · 1 season</div>
+          <div class="listing-row__chips">
+            <span class="chip">FITS S14/S15</span><span class="chip">MANCHESTER</span>
+          </div>
+        </div>
+        <div class="listing-row__price">£640<span class="mono">@driftdad · off an S14a</span></div>
+      </a>
+
+      <a class="listing-row enter" href="listing.html" data-filter-text="nismo shifter shift knob interior gt solid">
+        <img class="listing-row__img" src="../assets/c15-astro.png" alt="Nismo GT shift knob">
+        <div>
+          <div class="listing-row__title">Nismo GT solid shift knob · boxed</div>
+          <div class="listing-row__chips">
+            <span class="chip">M10×1.25</span><span class="chip">SHEFFIELD</span>
+            <span class="chip chip--red-soft">PRICE DROP</span>
+          </div>
+        </div>
+        <div class="listing-row__price">£85<span class="mono">@jm.r33 · off an R33 GT-R</span></div>
+      </a>
+
+    </section>
+
+    <div class="dots" aria-hidden="true"><i></i><i class="on"></i><i></i></div>
+
+    <footer style="margin-top:70px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px" class="mono">
+      <span>DRVN · CONCEPT 15 · GLANCE</span>
+      <span>THE HOME FOR YOUR MODIFIED CAR</span>
+    </footer>
+
+  </div>
+</main>
+
+<script src="glance.js"></script>
+</body>
+</html>

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Every state a field can be in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  /* page-local: the shared .ctl is borderless, so the validity border needs a base to colour */
+  .ctl { border: 1px solid transparent; }
+  .ctl__prefix .ctl { border: 0; }
+  .ctl[readonly] { color: var(--dim); cursor: default; }
+  .ctl[disabled] { opacity: 0.55; cursor: not-allowed; }
+  .fs-spin {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    border: 1.5px solid var(--dimline); border-top-color: var(--live);
+    animation: fs-turn 700ms linear infinite; vertical-align: -1px; margin-right: 6px;
+  }
+  @keyframes fs-turn { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .fs-spin { animation: none; } }
+  .fs-count { font-family: var(--mono); font-size: 11px; color: var(--dim); justify-self: end; }
+  .fs-count.is-near { color: var(--live); }
+  .fs-summary a { border-bottom: 1px solid var(--dimline); }
+  .fs-summary a:hover { color: var(--live); border-color: var(--live); }
+  .fs-flash { animation: fs-revert 900ms var(--spring); }
+  @keyframes fs-revert {
+    0% { background: var(--live-tint); transform: translateX(6px); }
+    100% { background: transparent; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .fs-flash { animation: none; } }
+  .fs-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .fs-stamp {
+    font-family: var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ok);
+    border: 2px solid var(--ok); border-radius: 8px; padding: 8px 14px;
+    display: inline-block; transform: rotate(-3deg); margin: 6px 0 4px; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 98 — SPEC · INPUT, VALIDATION, SUBMISSION, REGRET</span>
+    <h1>Every state a field<br>can be <span class="live-word">in.</span></h1>
+    <p class="sub">The empty-states spec covers what happens when there's no data. This one covers what happens when there's <b>wrong</b> data — and what happens after the user commits it. One governing principle: the sheet never loses a keystroke the user typed, and never tells them off while they're still typing.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">IN THIS SPEC</span>
+    <a class="jumplink" href="#fields">Field states</a>
+    <a class="jumplink" href="#validation">Validation</a>
+    <a class="jumplink" href="#submission">Submission</a>
+    <a class="jumplink" href="#destructive">Destructive</a>
+    <a class="jumplink" href="#recovery">Recovery</a>
+  </div>
+
+  <!-- ============ FIELD STATES ============ -->
+  <section class="deck deck--two" id="fields">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">01 — REST &amp; FOCUS</span>
+        <span class="microlabel">RELEASE A PART</span>
+      </div>
+      <label class="field">
+        <span class="microlabel microlabel--ink">PART TITLE <span style="color:var(--live)">*</span></span>
+        <input class="ctl ctl--block" type="text" placeholder="e.g. Garrett T3 hybrid turbo">
+        <span class="field__hint">At rest. Click in to see the focus ring.</span>
+      </label>
+      <label class="field" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">FITMENT NOTE <span style="color:var(--live)">*</span></span>
+        <input class="ctl ctl--block" type="text" placeholder="Which cars does it bolt to?">
+        <span class="field__hint">Focus is a 2px --live outline offset 3px — the same signal as a live figure.</span>
+      </label>
+      <p class="spec-note"><b>Where:</b> every text input on the platform. <b>Rule:</b> the focus ring is the browser's <code>:focus-visible</code> outline in <b>--live</b>, 2px at 3px offset — never removed, never restyled per-form, and never replaced by a colour change alone. Labels sit <b>above</b> the control as a mono microlabel and stay visible when filled; placeholders are examples, never labels. Hover changes nothing: a field is not a button.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">02 — FILLED &amp; READ-ONLY</span>
+        <span class="chip">SHEET C-0416</span>
+      </div>
+      <label class="field">
+        <span class="microlabel microlabel--ink">PART TITLE <span style="color:var(--live)">*</span></span>
+        <input class="ctl ctl--block" type="text" value="Garrett T3 hybrid turbo — fresh rebuild">
+      </label>
+      <label class="field" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">CAME OFF</span>
+        <input class="ctl ctl--block" type="text" value="Lancia Delta HF Integrale &quot;Biscione&quot;" readonly>
+        <span class="field__hint">Read-only — provenance is set by the sheet the part was released from.</span>
+      </label>
+      <p class="spec-note"><b>Rule:</b> a <b>filled</b> field looks identical to a rest field with a value in it — no "success" green just for having text. A <b>read-only</b> field keeps full contrast on the label, dims the value, stays focusable and copyable, and always carries a hint naming <b>what owns the value</b>. Read-only is never used to mean "you can't do this yet" — that is state 03.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--three">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">03 — DISABLED, WITH A REASON</span>
+      </div>
+      <label class="field" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">PAYOUT ACCOUNT</span>
+        <input class="ctl ctl--block" type="text" placeholder="Bank account" disabled>
+        <span class="field__hint">Locked until your identity check clears — usually under an hour.</span>
+      </label>
+      <div class="fs-actions"><a class="chip chip--live" href="settings.html">CHECK STATUS</a></div>
+      <p class="spec-note"><b>Rule:</b> a disabled control must always be accompanied by <b>the reason it is disabled</b> and, where one exists, <b>the action that enables it</b>. A disabled field with no explanation is a bug, not a state. Disabled controls stay in the DOM and keep their label so the form's shape doesn't change when they unlock.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">04 — REQUIRED VS OPTIONAL</span>
+      </div>
+      <label class="field">
+        <span class="microlabel microlabel--ink">ASKING PRICE <span style="color:var(--live)">*</span></span>
+        <div class="ctl__prefix"><span>$</span><input class="ctl" type="text" inputmode="numeric" value="540"></div>
+      </label>
+      <label class="field" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">RESERVE / FLOOR <span class="mono" style="text-transform:none;letter-spacing:0;color:var(--dim)">(optional)</span></span>
+        <div class="ctl__prefix"><span>$</span><input class="ctl" type="text" inputmode="numeric" placeholder="Lowest you'd take"></div>
+      </label>
+      <p class="spec-note"><b>Rule:</b> required is marked with a <b>--live asterisk</b> on the label; optional is marked with the word "(optional)" in lower-case mono. Never both conventions in one form, and never mark <b>nothing</b> — a form where most fields are required marks the optional ones and says so once at the top. Money fields use a fixed <code>$</code> prefix inside the control so the user never types the symbol.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="2">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">05 — HINT + COUNTER NEAR LIMIT</span>
+        <span class="microlabel" id="fs-counter-lab">80 MAX</span>
+      </div>
+      <label class="field" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">LISTING TITLE <span style="color:var(--live)">*</span></span>
+        <textarea class="ctl ctl--block" id="fs-title" maxlength="80" rows="2" style="min-height:64px">Garrett T3 hybrid turbo, fresh rebuild, 0.63 A/R hot side</textarea>
+        <span class="fs-count" id="fs-count">57 / 80</span>
+        <span class="field__hint">Buyers scan the first 40 characters. Lead with the part, not the car.</span>
+      </label>
+      <p class="spec-note"><b>Rule:</b> the counter is <b>silent until 90% of the limit</b> (72 of 80 here), then turns --live and stays visible. It counts <b>up to</b> the limit, never down from it, and the control hard-stops at the limit rather than accepting text it will later truncate. Type into it to see the threshold flip.</p>
+    </div>
+  </section>
+
+  <!-- ============ VALIDATION ============ -->
+  <section class="deck deck--two" id="validation">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">06 — INLINE ERROR, AFTER BLUR</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> INTERACTIVE</span>
+      </div>
+      <label class="field" id="fs-f-price" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">ASKING PRICE <span style="color:var(--live)">*</span></span>
+        <div class="ctl__prefix"><span>$</span><input class="ctl" id="fs-price" type="text" inputmode="numeric" value="four hundred"></div>
+        <span class="field__hint">Whole dollars. Clear the field or type letters, then click away.</span>
+        <span class="field__err" id="fs-price-err">Enter a price in whole dollars — numbers only.</span>
+        <span class="field__ok">Reads as $400 to buyers.</span>
+      </label>
+      <p class="spec-note"><b>Where:</b> every validated control. <b>Rule:</b> validate on <b>blur</b>, never on keystroke — a field the user is still typing into has not failed yet, it is unfinished. Once a field has been marked invalid it switches to <b>validate-on-input</b>, so the error clears the moment it is fixed and the user is never punished for a corrected mistake. The error message names the <b>expected format</b>, not the violation ("Enter whole dollars", not "Invalid input").</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">07 — SUMMARY AT THE TOP</span>
+        <span class="chip chip--live">3 TO FIX</span>
+      </div>
+      <div class="alert alert--live fs-summary">
+        <i class="ph ph-warning-circle alert__ico" aria-hidden="true"></i>
+        <h4>Three lines need attention before this listing goes live</h4>
+        <p>
+          <a href="#fs-price">Asking price</a> — not a number ·
+          <a href="#fs-handle">Handle</a> — already taken ·
+          <a href="#fs-floor">Floor price</a> — above the asking price
+        </p>
+      </div>
+      <p class="spec-note"><b>Where:</b> any form over six fields, and every form after a failed submit. <b>Rule:</b> the summary renders <b>only after a submit attempt</b>, is placed above the first field, receives focus, and is announced via <code>role="alert"</code>. Each entry is an anchor to the field's id, and following it focuses the control — not just scrolls to it. The count in the header is exact; the summary disappears the instant the last error clears.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">08 — ASYNC CHECK: PENDING → RESULT</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> INTERACTIVE</span>
+      </div>
+      <label class="field" id="fs-f-handle" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">YOUR HANDLE <span style="color:var(--live)">*</span></span>
+        <div class="ctl__prefix"><span>@</span><input class="ctl" id="fs-handle" type="text" value="kessler.m" autocomplete="off" spellcheck="false"></div>
+        <span class="field__hint" id="fs-handle-status" aria-live="polite">Type to check — <b>kessler.m</b>, <b>torino.classics</b> and <b>drvn</b> are taken.</span>
+        <span class="field__err" id="fs-handle-err">That handle is taken. <b>kessler.m2</b> and <b>m.kessler</b> are free.</span>
+        <span class="field__ok" id="fs-handle-ok">Available — yours when you save.</span>
+      </label>
+      <p class="spec-note"><b>Rule:</b> async checks are <b>debounced 400ms</b> after the last keystroke, then show a pending row that <b>reserves its own height</b> so nothing below jumps when the answer lands. The submit button is not blocked while a check is in flight — it queues, and the server is the final arbiter. A failed <b>network</b> call is not a failed <b>validation</b>: it reads "Couldn't check right now — we'll confirm on save", never "taken". When taken, offer at least two free alternatives.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">09 — CROSS-FIELD ERROR</span>
+        <span class="microlabel">TWO FIELDS, ONE RULE</span>
+      </div>
+      <div class="field field--row" style="margin-bottom:8px">
+        <label class="field" style="margin-bottom:0">
+          <span class="microlabel microlabel--ink">ASKING</span>
+          <div class="ctl__prefix"><span>$</span><input class="ctl" type="text" value="540" readonly></div>
+        </label>
+        <label class="field is-invalid" id="fs-f-floor" style="margin-bottom:0">
+          <span class="microlabel microlabel--ink">FLOOR</span>
+          <div class="ctl__prefix"><span>$</span><input class="ctl" id="fs-floor" type="text" value="620" readonly></div>
+        </label>
+      </div>
+      <span class="field__err" style="display:flex">Your floor of $620 is above your $540 asking price — nobody could buy it.</span>
+      <p class="spec-note"><b>Rule:</b> a cross-field error attaches to the <b>field the user most recently touched</b>, not the first one alphabetically, and the message states <b>both values</b> so the conflict is legible without scrolling. Only one of the pair is marked invalid — marking both implies both are wrong. The rule is re-run when <b>either</b> field blurs.</p>
+    </div>
+  </section>
+
+  <section class="deck">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">10 — SERVER REJECTED IT AFTER SUBMIT</span>
+        <span class="chip chip--spent">NOT SAVED</span>
+      </div>
+      <div class="alert alert--live">
+        <i class="ph ph-seal-warning alert__ico" aria-hidden="true"></i>
+        <h4>This turbo is already listed on another sheet</h4>
+        <p>Serial <b>T3-8842-K</b> is live as "Garrett T3 hybrid" from @torino.classics. A part can only be listed once. If you bought it from them, transfer it to your sheet instead of relisting — the history comes with it.</p>
+      </div>
+      <div class="fs-actions">
+        <button class="btn btn--live" type="button" data-toast="Transfer request sent to @torino.classics">Claim the transfer</button>
+        <a class="btn btn--ghost" href="listing.html">See the existing listing</a>
+      </div>
+      <p class="spec-note"><b>Where:</b> anything the client cannot know (uniqueness, stock, fraud, price collisions). <b>Rule:</b> client-side validation is a <b>courtesy</b>; the server is the authority, and a server rejection must render in the same visual language as a client error so it doesn't read as a crash. It names the <b>conflicting record</b>, and gives the correct route forward — never "Error 409".</p>
+    </div>
+  </section>
+
+  <!-- ============ SUBMISSION ============ -->
+  <section class="deck deck--two" id="submission">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">11 — IDLE → PENDING → FILED</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> INTERACTIVE</span>
+      </div>
+      <form id="fs-form" autocomplete="off">
+        <div id="fs-form-body">
+          <label class="field">
+            <span class="microlabel microlabel--ink">PART <span style="color:var(--live)">*</span></span>
+            <input class="ctl ctl--block" type="text" value="Sabelt bucket seat, FIA to 2028" name="part">
+          </label>
+          <label class="field" style="margin-bottom:12px">
+            <span class="microlabel microlabel--ink">ASKING <span style="color:var(--live)">*</span></span>
+            <div class="ctl__prefix"><span>$</span><input class="ctl" type="text" inputmode="numeric" value="310" name="ask"></div>
+          </label>
+        </div>
+        <div class="fs-actions">
+          <button class="btn btn--live" id="fs-submit" type="submit">File the listing</button>
+          <span class="microlabel" id="fs-submit-note">Nothing is public until you file it.</span>
+        </div>
+      </form>
+      <div id="fs-success" style="display:none">
+        <span class="fs-stamp">FILED — REV 18</span>
+        <div class="bline"><span class="bline__label">Listing</span><span class="bline__val">Sabelt bucket seat</span><span class="bline__note">Live in the market · $310 asking</span><a class="chip chip--ok" href="listing.html">VIEW</a></div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> submit moves through exactly three visible states. <b>Pending</b>: the button becomes non-interactive and states the verb in progress ("Filing…"), the form's inputs go read-only so nothing can be edited mid-flight, and no spinner replaces the page. <b>Success</b>: the form is replaced by the record it created — a stamped line the user can act on — never a bare "Saved!" alert. Pending must be reachable within 100ms of the click; if the request resolves faster, the pending state is still shown for a minimum of 300ms so it doesn't flicker.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">12 — SUBMIT FAILED SERVER-SIDE</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> INTERACTIVE</span>
+      </div>
+      <div id="fs-fail-alert" style="display:none;margin-bottom:12px"></div>
+      <label class="field">
+        <span class="microlabel microlabel--ink">PART <span style="color:var(--live)">*</span></span>
+        <input class="ctl ctl--block" id="fs-fail-a" type="text" value="KW Variant 2 coilovers, 9,400 km">
+      </label>
+      <label class="field" style="margin-bottom:12px">
+        <span class="microlabel microlabel--ink">ASKING <span style="color:var(--live)">*</span></span>
+        <div class="ctl__prefix"><span>$</span><input class="ctl" id="fs-fail-b" type="text" inputmode="numeric" value="680"></div>
+      </label>
+      <div class="fs-actions">
+        <button class="btn" id="fs-fail-btn" type="button">File it (this one fails)</button>
+      </div>
+      <p class="spec-note"><b>Rule — the one that matters most:</b> on failure <b>every value the user typed is preserved</b>, exactly as typed, including the invalid ones. The form is re-enabled, the error says <b>what happened</b> and <b>what to do</b>, and the same button retries the same payload. Never redirect away from a failed form. Never clear a field to "reset" it. Idempotency keys are attached at first attempt so a retry cannot create two listings.</p>
+    </div>
+  </section>
+
+  <!-- ============ DESTRUCTIVE ============ -->
+  <section class="deck deck--two" id="destructive">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">13 — TWO-STEP CONFIRM</span>
+        <span class="chip chip--spent">IRREVERSIBLE</span>
+      </div>
+      <div class="bline"><span class="bline__label">Listing</span><span class="bline__val">Sabelt bucket seat</span><span class="bline__note">$310 asking · 3 offers on the table · 41 watching</span></div>
+      <div class="fs-actions" id="fs-del-step1">
+        <button class="btn btn--ghost" id="fs-del-open" type="button">Delete this listing</button>
+      </div>
+      <div id="fs-del-step2" style="display:none">
+        <div class="alert alert--live" style="margin-bottom:12px">
+          <i class="ph ph-trash alert__ico" aria-hidden="true"></i>
+          <h4>Deleting removes 3 live offers and the part's sale history</h4>
+          <p>The provenance line stays on the car sheet, but the offers, the watcher list and the price history are gone for good. If you just want it off the market, <b>end the listing</b> instead — that's reversible.</p>
+        </div>
+        <label class="field" style="margin-bottom:12px">
+          <span class="microlabel microlabel--ink">TYPE <b style="color:var(--live)">DELETE</b> TO CONFIRM</span>
+          <input class="ctl ctl--block" id="fs-del-type" type="text" placeholder="DELETE" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="fs-actions">
+          <button class="btn btn--live" id="fs-del-go" type="button" disabled style="opacity:.5">Delete permanently</button>
+          <button class="btn btn--ghost" id="fs-del-cancel" type="button">Keep it</button>
+          <button class="btn btn--ghost" type="button" data-toast="Listing ended — it can be relisted any time">End listing instead</button>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> a confirm dialog is only worth showing if it demands an <b>intentional act</b> — typing the word, not clicking a second button in the same place the first one was. The dialog states the <b>specific, counted consequence</b> ("3 live offers"), never "Are you sure?", and always offers the <b>reversible alternative</b> as a peer action. The destructive button stays disabled until the typed confirmation matches exactly, case-sensitive. Cancel is the safe default and is what Escape does.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">14 — UNDO INSTEAD OF CONFIRM</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> INTERACTIVE</span>
+      </div>
+      <div class="rowlist" id="fs-undo-list">
+        <div class="order" id="fs-undo-row">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">T3</span></div>
+          <div>
+            <div class="order__name">Garrett T3 hybrid — fresh rebuild</div>
+            <div class="order__meta" id="fs-undo-meta">$540 ask · 2 offers · <span data-tick="41">41</span> watching</div>
+          </div>
+          <div class="order__actions" id="fs-undo-actions"><button class="btn btn--ghost" id="fs-undo-end" type="button">End</button></div>
+        </div>
+      </div>
+      <div id="fs-undo-bar" style="display:none;margin-top:12px"></div>
+      <p class="spec-note"><b>Rule:</b> if an action is reversible, <b>do it immediately and offer undo</b> — do not interrupt with a confirm. The undo affordance lives in a persistent bar next to the affected row (not only in a toast that can be missed), runs a <b>visible 10-second countdown</b>, and the destructive write is not committed to the server until the window elapses. Undo restores the exact prior state including offers and watcher count. Confirm dialogs are reserved for the un-undoable — see 13.</p>
+    </div>
+  </section>
+
+  <!-- ============ RECOVERY ============ -->
+  <section class="deck deck--three" id="recovery">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">15 — LEAVING WITH UNSAVED WORK</span>
+      </div>
+      <div class="alert">
+        <i class="ph ph-arrow-u-up-left alert__ico" aria-hidden="true"></i>
+        <h4>You have 4 unsaved changes on this sheet</h4>
+        <p>Price, condition note, two photos. Leave now and they're kept as a draft for 30 days — nothing goes public.</p>
+      </div>
+      <div class="fs-actions">
+        <button class="btn btn--live" type="button" data-toast="Saved — rev 18 filed">Save and leave</button>
+        <button class="btn btn--ghost" type="button" data-toast="Stayed on the sheet">Keep editing</button>
+      </div>
+      <p class="spec-note"><b>Rule:</b> the warning fires only when the form is <b>genuinely dirty</b> — a field touched and returned to its original value is clean. It <b>counts</b> the changes and <b>names</b> them, and because DRVN autosaves drafts it can promise where the work goes rather than threatening loss. Three options in fixed order: save, discard-by-leaving, stay. Never a bare browser <code>beforeunload</code> string as the only defence.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">16 — AUTOSAVED DRAFT FOUND</span>
+        <span class="chip">DRAFT · 2 DAYS AGO</span>
+      </div>
+      <div class="alert alert--ok">
+        <i class="ph ph-clock-counter-clockwise alert__ico" aria-hidden="true"></i>
+        <h4>Picking up where you left off</h4>
+        <p>An unfinished listing for the KW Variant 2 coilovers — 6 of 9 fields and 3 photos, autosaved Monday 20:14.</p>
+      </div>
+      <div class="fs-actions">
+        <button class="btn btn--live" type="button" data-toast="Draft restored — 6 fields and 3 photos back on the sheet">Restore the draft</button>
+        <button class="btn btn--ghost" type="button" data-toast="Draft discarded — starting a blank sheet">Start fresh</button>
+      </div>
+      <p class="spec-note"><b>Rule:</b> the draft is <b>offered, never auto-applied</b> — silently repopulating a form the user thought was blank is worse than losing it. The banner states <b>how complete</b> the draft is and <b>when</b> it was saved in absolute local time. "Start fresh" does not delete the draft immediately; it moves it to drafts for the remainder of the 30-day window.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="2">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">17 — OPTIMISTIC UPDATE, ROLLED BACK</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> INTERACTIVE</span>
+      </div>
+      <div class="rowlist">
+        <div class="order" id="fs-opt-row">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">KW</span></div>
+          <div>
+            <div class="order__name">KW Variant 2 coilovers</div>
+            <div class="order__meta" id="fs-opt-meta">$680 ask · not reserved</div>
+          </div>
+          <div class="order__actions"><button class="btn btn--ghost" id="fs-opt-btn" type="button">Reserve</button></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> optimistic writes are allowed for <b>low-stakes, single-row</b> changes (reserve, watch, follow) and <b>never</b> for money movement. When the write fails, the row <b>flashes back to its prior value in place</b> — it does not vanish, and the page does not reload. The failure note replaces the row's meta line, states the value has been reverted, and the control returns to its pre-click state so a retry is one click. Press Reserve to watch it fail and revert.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 98 · NEVER LOSE A KEYSTROKE, NEVER SCOLD MID-TYPE</span>
+    <a class="microlabel mono" href="empty-states.html">← EMPTY STATES</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 05 — character counter ---------- */
+  var ta = document.getElementById("fs-title"),
+      cnt = document.getElementById("fs-count");
+  if (ta && cnt) {
+    var max = parseInt(ta.getAttribute("maxlength"), 10);
+    function count() {
+      var n = ta.value.length;
+      cnt.textContent = n + " / " + max;
+      cnt.classList.toggle("is-near", n >= Math.floor(max * 0.9));
+    }
+    ta.addEventListener("input", count);
+    count();
+  }
+
+  /* ---------- 06 — blur validation, then live re-validation ---------- */
+  var priceF = document.getElementById("fs-f-price"),
+      price = document.getElementById("fs-price");
+  if (priceF && price) {
+    var touched = false;
+    function checkPrice() {
+      var v = price.value.trim();
+      var okv = /^[0-9]+$/.test(v) && parseInt(v, 10) > 0;
+      priceF.classList.toggle("is-invalid", !okv);
+      priceF.classList.toggle("is-ok", okv);
+      var ok = priceF.querySelector(".field__ok");
+      if (ok && okv) ok.textContent = "Reads as $" + parseInt(v, 10).toLocaleString("en-US") + " to buyers.";
+    }
+    price.addEventListener("blur", function () { touched = true; checkPrice(); });
+    price.addEventListener("input", function () { if (touched) checkPrice(); });
+  }
+
+  /* ---------- 08 — debounced async handle check ---------- */
+  var hF = document.getElementById("fs-f-handle"),
+      h = document.getElementById("fs-handle"),
+      hS = document.getElementById("fs-handle-status"),
+      hE = document.getElementById("fs-handle-err");
+  if (hF && h) {
+    var taken = ["kessler.m", "torino.classics", "drvn"], timer, req;
+    function settle(state, val) {
+      hF.classList.toggle("is-invalid", state === "taken");
+      hF.classList.toggle("is-ok", state === "free");
+      if (state === "taken") {
+        hE.innerHTML = "@" + val + " is taken. <b>" + val + "2</b> and <b>m." + val.split(".")[0] + "</b> are free.";
+        hS.textContent = "Checked just now.";
+      } else {
+        hS.textContent = "Checked just now.";
+      }
+    }
+    h.addEventListener("input", function () {
+      var val = h.value.trim().toLowerCase();
+      hF.classList.remove("is-invalid", "is-ok");
+      clearTimeout(timer); clearTimeout(req);
+      if (!val) { hS.textContent = "Pick a handle — it becomes your sheet address."; return; }
+      timer = setTimeout(function () {
+        hS.innerHTML = '<span class="fs-spin" aria-hidden="true"></span>Checking @' + val + "…";
+        req = setTimeout(function () { settle(taken.indexOf(val) !== -1 ? "taken" : "free", val); }, 850);
+      }, 400);
+    });
+  }
+
+  /* ---------- 11 — submit: idle → pending → filed ---------- */
+  var form = document.getElementById("fs-form"),
+      sBtn = document.getElementById("fs-submit"),
+      sNote = document.getElementById("fs-submit-note"),
+      sBody = document.getElementById("fs-form-body"),
+      sOK = document.getElementById("fs-success");
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (sBtn.disabled) return;
+      sBtn.disabled = true;
+      sBtn.textContent = "Filing…";
+      sBtn.style.opacity = ".7";
+      sNote.textContent = "LOCKED WHILE FILING — NOTHING EDITABLE";
+      sBody.querySelectorAll("input").forEach(function (i) { i.readOnly = true; });
+      setTimeout(function () {
+        form.style.display = "none";
+        sOK.style.display = "";
+        window.lsToast && window.lsToast("Listing filed — live in the market");
+      }, 1500);
+    });
+  }
+
+  /* ---------- 12 — submit that fails, values preserved ---------- */
+  var fBtn = document.getElementById("fs-fail-btn"),
+      fAlert = document.getElementById("fs-fail-alert"),
+      fa = document.getElementById("fs-fail-a"),
+      fb = document.getElementById("fs-fail-b");
+  if (fBtn) {
+    var tries = 0;
+    fBtn.addEventListener("click", function () {
+      if (fBtn.disabled) return;
+      tries++;
+      fAlert.style.display = "none";
+      fBtn.disabled = true;
+      fBtn.style.opacity = ".7";
+      fBtn.textContent = "Filing…";
+      [fa, fb].forEach(function (i) { i.readOnly = true; });
+      setTimeout(function () {
+        fBtn.disabled = false;
+        fBtn.style.opacity = "";
+        fBtn.textContent = tries === 1 ? "Try again" : "Try again (attempt " + (tries + 1) + ")";
+        [fa, fb].forEach(function (i) { i.readOnly = false; });
+        fAlert.style.display = "";
+        fAlert.innerHTML =
+          '<div class="alert alert--live" role="alert">' +
+          '<i class="ph ph-cloud-slash alert__ico" aria-hidden="true"></i>' +
+          "<h4>Couldn't reach the market — nothing was filed</h4>" +
+          "<p>Your part name and the $" + fb.value.replace(/[^0-9]/g, "") +
+          " asking price are still here, exactly as typed. This is a connection problem on our side, not your listing. Try again — attempt " +
+          (tries + 1) + " will reuse the same reference, so you can't end up with two listings. Ref LS-8841-" + (1000 + tries) + ".</p></div>";
+      }, 1400);
+    });
+  }
+
+  /* ---------- 13 — two-step confirm ---------- */
+  var dOpen = document.getElementById("fs-del-open"),
+      dS1 = document.getElementById("fs-del-step1"),
+      dS2 = document.getElementById("fs-del-step2"),
+      dType = document.getElementById("fs-del-type"),
+      dGo = document.getElementById("fs-del-go"),
+      dCancel = document.getElementById("fs-del-cancel");
+  if (dOpen) {
+    function closeDel() { dS2.style.display = "none"; dS1.style.display = ""; dType.value = ""; dGo.disabled = true; dGo.style.opacity = ".5"; }
+    dOpen.addEventListener("click", function () { dS1.style.display = "none"; dS2.style.display = ""; dType.focus(); });
+    dCancel.addEventListener("click", closeDel);
+    dType.addEventListener("input", function () {
+      var ok = dType.value === "DELETE";
+      dGo.disabled = !ok;
+      dGo.style.opacity = ok ? "" : ".5";
+    });
+    dGo.addEventListener("click", function () {
+      closeDel();
+      window.lsToast && window.lsToast("Listing deleted — 3 offers withdrawn");
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && dS2.style.display !== "none") closeDel();
+    });
+  }
+
+  /* ---------- 14 — do it, then offer undo ---------- */
+  var uBtn = document.getElementById("fs-undo-end"),
+      uRow = document.getElementById("fs-undo-row"),
+      uMeta = document.getElementById("fs-undo-meta"),
+      uActions = document.getElementById("fs-undo-actions"),
+      uBar = document.getElementById("fs-undo-bar");
+  if (uBtn) {
+    var prevMeta = uMeta.innerHTML, prevActions = uActions.innerHTML, tick;
+    function restore() {
+      clearInterval(tick);
+      uBar.style.display = "none";
+      uBar.innerHTML = "";
+      uRow.style.opacity = "";
+      uMeta.innerHTML = prevMeta;
+      uActions.innerHTML = prevActions;
+      bind();
+      window.lsToast && window.lsToast("Listing restored — offers and watchers intact");
+    }
+    function bind() {
+      var b = document.getElementById("fs-undo-end");
+      if (b) b.addEventListener("click", end);
+    }
+    function end() {
+      uRow.style.opacity = ".6";
+      uMeta.innerHTML = "Ended — off the market · offers held for 10 seconds";
+      uActions.innerHTML = '<span class="chip chip--spent">ENDED</span>';
+      var left = 10;
+      uBar.style.display = "";
+      uBar.innerHTML =
+        '<div class="alert" role="status"><i class="ph ph-arrow-counter-clockwise alert__ico" aria-hidden="true"></i>' +
+        "<h4>Listing ended — <button class=\"btn\" id=\"fs-undo-go\" type=\"button\" style=\"margin-left:6px\">Undo</button></h4>" +
+        '<p>Committing in <b id="fs-undo-n">10</b>s. Until then nothing has been written — the 2 offers and 41 watchers are still held.</p></div>';
+      document.getElementById("fs-undo-go").addEventListener("click", restore);
+      clearInterval(tick);
+      tick = setInterval(function () {
+        left--;
+        var n = document.getElementById("fs-undo-n");
+        if (n) n.textContent = left;
+        if (left <= 0) {
+          clearInterval(tick);
+          uBar.innerHTML =
+            '<div class="alert"><i class="ph ph-check alert__ico" aria-hidden="true"></i>' +
+            "<h4>Committed</h4><p>The listing is off the market. It can still be relisted from your workbench.</p></div>";
+        }
+      }, 1000);
+    }
+    bind();
+  }
+
+  /* ---------- 17 — optimistic update that fails and reverts ---------- */
+  var oBtn = document.getElementById("fs-opt-btn"),
+      oRow = document.getElementById("fs-opt-row"),
+      oMeta = document.getElementById("fs-opt-meta");
+  if (oBtn) {
+    oBtn.addEventListener("click", function () {
+      if (oBtn.disabled) return;
+      var wasMeta = oMeta.innerHTML, wasLabel = oBtn.textContent;
+      oBtn.disabled = true;
+      oBtn.textContent = "Reserved";
+      oBtn.classList.remove("btn--ghost");
+      oBtn.classList.add("btn--live");
+      oMeta.innerHTML = "$680 ask · <b>reserved for you</b> · 30 min hold";
+      setTimeout(function () {
+        oRow.classList.remove("fs-flash");
+        void oRow.offsetWidth;
+        oRow.classList.add("fs-flash");
+        oMeta.innerHTML = wasMeta + " — <b style=\"color:var(--live)\">Couldn't save, reverted</b>";
+        oBtn.disabled = false;
+        oBtn.textContent = wasLabel;
+        oBtn.classList.remove("btn--live");
+        oBtn.classList.add("btn--ghost");
+        window.lsToast && window.lsToast("Couldn't reserve — reverted, nothing charged");
+      }, 1300);
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garage — BMW 325i (E30) — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="sunday.css">
+</head>
+<body>
+
+<!-- ===== TOP BAR ===== -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html" aria-label="DRVN home">
+      <span class="mark"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12 7 2l5 10" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      DRVN
+    </a>
+    <nav class="topbar-tabs" aria-label="App navigation">
+      <a class="topbar-tab" href="dashboard.html">Dashboard</a>
+      <a class="topbar-tab is-active" href="garage.html" aria-current="page">Garage</a>
+      <a class="topbar-tab" href="listings.html">Listings</a>
+    </nav>
+    <span class="topbar-spacer"></span>
+    <label class="topbar-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" placeholder="Search parts, cars…" aria-label="Search">
+      <kbd>/</kbd>
+    </label>
+    <button class="avatar" aria-label="Account — Maya K.">MK</button>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap">
+
+    <div class="page-head">
+      <div>
+        <p class="page-sub" style="margin:0 0 4px;"><a href="dashboard.html">Garage</a> · Project 30</p>
+        <h1 class="page-greeting">BMW 325i (E30)</h1>
+      </div>
+      <button class="btn btn-primary btn-lg" data-open-list-part>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        List a part from this car
+      </button>
+    </div>
+
+    <!-- ===== HERO CARD ===== -->
+    <div class="card garage-hero" style="margin-bottom:32px;">
+      <div class="garage-hero-photo" data-bg="../assets/c7-car-e30.png" role="img" aria-label="Dove blue BMW E30 on a driveway, morning light"></div>
+      <div class="garage-hero-body">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div>
+            <h2 style="font-size:19px; font-weight:700;">"Project 30" — weekend car, Sunday therapy</h2>
+            <p style="color:var(--secondary); font-size:14px; margin-top:4px;">Owned since 2021 · Dove Blue over Anthracite · Manchester</p>
+          </div>
+          <span class="pill pill-success"><span class="dot dot-success"></span>Public build page</span>
+        </div>
+        <div class="spec-chips">
+          <span class="pill pill-outline">M20B25 · 2.5 straight-six</span>
+          <span class="pill pill-outline">5-speed manual</span>
+          <span class="pill pill-outline">118,000 mi</span>
+          <span class="pill pill-outline">168 bhp</span>
+          <span class="pill pill-outline">312 followers</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="dash-main">
+
+        <!-- ===== MODS ===== -->
+        <section aria-labelledby="mods-h">
+          <div class="section-head">
+            <h2 id="mods-h">Mod list</h2>
+            <span class="page-sub" style="margin:0; font-size:13px;">14 mods · 2 listed for sale</span>
+          </div>
+          <div class="card">
+            <div class="mod-row">
+              <span class="mod-name">Bilstein B12 Pro-Kit suspension</span>
+              <span class="mod-cat">Chassis</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Installed</span>
+            </div>
+            <div class="mod-row">
+              <span class="mod-name">MST 16&Prime; alloys, silver <span style="color:var(--secondary); font-weight:400;">— replaced the BBS RS</span></span>
+              <span class="mod-cat">Wheels</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Installed</span>
+            </div>
+            <div class="mod-row">
+              <span class="mod-name">BBS RS 16&Prime; bronze — set of 4</span>
+              <span class="mod-cat">Wheels</span>
+              <span class="pill pill-indigo"><span class="dot dot-indigo"></span>Listed for sale</span>
+            </div>
+            <div class="mod-row">
+              <span class="mod-name">ITG foam filter intake, carbon airbox</span>
+              <span class="mod-cat">Engine</span>
+              <span class="pill pill-indigo"><span class="dot dot-indigo"></span>Listed for sale</span>
+            </div>
+            <div class="mod-row">
+              <span class="mod-name">Stainless exhaust, quad-tip delete → single</span>
+              <span class="mod-cat">Exhaust</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Installed</span>
+            </div>
+            <div class="mod-row">
+              <span class="mod-name">Recaro LX-C retrim, Anthracite cloth</span>
+              <span class="mod-cat">Interior</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Installed</span>
+            </div>
+            <div class="mod-row">
+              <span class="mod-name">Polybush full chassis kit</span>
+              <span class="mod-cat">Chassis</span>
+              <span class="pill pill-amber"><span class="dot dot-amber"></span>Fitting soon</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== PARTS FROM THIS CAR ===== -->
+        <section aria-labelledby="parts-h">
+          <div class="section-head">
+            <h2 id="parts-h">Parts from this car</h2>
+            <a class="link-more" href="listings.html">Manage in Listings →</a>
+          </div>
+          <div class="part-grid">
+            <a class="card part-card card-hover" href="listings.html">
+              <div class="part-photo" data-bg="../assets/c7-part-wheels.png" role="img" aria-label="Stack of bronze BBS wheels"></div>
+              <div class="part-body">
+                <h3>BBS RS 16&Prime; bronze — set of 4</h3>
+                <div class="part-meta">
+                  <span>8k mi on refurb · with tyres</span>
+                  <strong>£600</strong>
+                </div>
+                <span class="pill pill-success">
+                  <svg class="check-icon" width="11" height="11" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.2 4 7.7 8.5 2.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Provenance attached
+                </span>
+              </div>
+            </a>
+            <a class="card part-card card-hover" href="listings.html">
+              <div class="part-photo" data-bg="../assets/c7-part-intake.png" role="img" aria-label="Carbon intake on a pale grey studio background"></div>
+              <div class="part-body">
+                <h3>ITG carbon airbox intake — M20</h3>
+                <div class="part-meta">
+                  <span>Ran 14 months · dyno sheet incl.</span>
+                  <strong>£240</strong>
+                </div>
+                <span class="pill pill-success">
+                  <svg class="check-icon" width="11" height="11" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.2 4 7.7 8.5 2.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Provenance attached
+                </span>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <!-- ===== TIMELINE ===== -->
+        <section aria-labelledby="tl-h">
+          <div class="section-head">
+            <h2 id="tl-h">Build timeline</h2>
+          </div>
+          <div class="card" style="padding:32px;">
+            <div class="timeline">
+              <div class="tl-item">
+                <span class="tl-date">Jun 2026</span>
+                <h3 class="tl-title">Wheels swapped — MST on, BBS off</h3>
+                <p class="tl-body">Went silver for summer. The BBS set is up for sale with its full history attached — 8k miles since refurb, always stored indoors.</p>
+              </div>
+              <div class="tl-item">
+                <span class="tl-date">Apr 2026</span>
+                <h3 class="tl-title">Timing belt &amp; water pump day</h3>
+                <p class="tl-body">Preventative — the M20 golden rule. Genuine belt, INA tensioner, new coolant. Four hours and two coffees.</p>
+              </div>
+              <div class="tl-item">
+                <span class="tl-date">Jan 2026</span>
+                <h3 class="tl-title">Recaro retrim finished</h3>
+                <p class="tl-body">Anthracite cloth by a local trimmer. The interior finally matches the outside's calm.</p>
+              </div>
+              <div class="tl-item">
+                <span class="tl-date">Oct 2025</span>
+                <h3 class="tl-title">Bilstein B12 kit fitted</h3>
+                <p class="tl-body">Ride height down 25mm, ride quality somehow up. Old shocks sold on DRVN in three days.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ===== SIDE ===== -->
+      <aside class="dash-side">
+        <div class="card" style="padding:24px;">
+          <div class="section-head" style="margin-bottom:12px;"><h2 style="font-size:15px;">Also in your garage</h2></div>
+          <a class="card car-card card-hover" href="garage.html" style="box-shadow:none; border:1px solid var(--hairline);">
+            <div class="car-photo" data-bg="../assets/c7-hero-gti.png" style="height:120px;" role="img" aria-label="Red Mk8 Golf GTI">
+              <span class="pill">Daily</span>
+            </div>
+            <div class="car-body" style="padding:12px 16px 16px;">
+              <h3 style="font-size:14.5px;">Golf GTI Mk8</h3>
+              <p class="car-sub" style="margin-bottom:0;">9 mods · 2 parts listed</p>
+            </div>
+          </a>
+        </div>
+        <div class="card tips-card">
+          <h4>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.7.5 1 1.2 1.1 2.1h4.8c.1-.9.4-1.6 1.1-2.1A6 6 0 0 0 12 3Z"/></svg>
+            Worth knowing
+          </h4>
+          <p>Take-offs listed within a week of a swap get <strong>40% more watchers</strong> — the story's still warm. The MST swap was 3 weeks ago; the BBS listing is doing fine, but don't sit on the intake.</p>
+        </div>
+      </aside>
+    </div>
+
+  </div>
+</main>
+
+<footer class="app-footer">
+  <div class="wrap">DRVN · SUNDAY concept prototype · <a href="design.html">Style guide</a></div>
+</footer>
+
+<!-- ===== LIST-A-PART MODAL ===== -->
+<div class="sheet-backdrop" id="list-part-modal" role="dialog" aria-modal="true" aria-labelledby="listpart-h">
+  <div class="sheet">
+    <h3 id="listpart-h">List a part from the E30</h3>
+    <p class="sheet-sub">Provenance is attached automatically — buyers will see this car, its mileage, and your seller history.</p>
+    <form>
+      <label class="field" for="part-name" style="display:block;">
+        <span>Part</span>
+        <input class="input" id="part-name" type="text" placeholder="e.g. M20 exhaust manifold" required>
+      </label>
+      <label class="field" for="part-cond">
+        <span>Condition</span>
+        <select class="input" id="part-cond" required>
+          <option value="" selected disabled>Choose condition…</option>
+          <option>New — never fitted</option>
+          <option>Used — excellent</option>
+          <option>Used — good</option>
+          <option>Used — fair, priced accordingly</option>
+          <option>For rebuild / spares</option>
+        </select>
+      </label>
+      <label class="field" for="part-price">
+        <span>Asking price</span>
+        <span class="input-prefix" style="display:block; font-weight:400;">
+          <span class="prefix">£</span>
+          <input class="input" id="part-price" type="number" min="1" placeholder="0" required>
+        </span>
+      </label>
+      <div class="sheet-actions" style="margin-top:24px;">
+        <button class="btn btn-ghost" type="button" data-sheet-cancel>Cancel</button>
+        <button class="btn btn-primary" type="submit">List it</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="sunday.js"></script>
+</body>
+</html>

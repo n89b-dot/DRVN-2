@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — DRVN · The drawing comes apart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<style>
+  /* ============ SHEET B — WebGL exploded-drawing hero ============ */
+  .v2-hero { height: 280vh; position: relative; }
+  .v2-sticky {
+    position: sticky; top: 0; height: 100vh; overflow: hidden;
+  }
+  #v2-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  .v2-head {
+    position: absolute; z-index: 3;
+    left: clamp(20px, 5vw, 72px); top: clamp(84px, 16vh, 160px);
+    max-width: 560px; pointer-events: none;
+    transition: opacity 300ms ease-out, transform 300ms ease-out;
+  }
+  .v2-head h1 {
+    font-size: clamp(30px, 4.6vw, 54px);
+    font-weight: 600; letter-spacing: -0.02em; line-height: 1.05;
+    margin: 14px 0 16px;
+  }
+  .v2-head p { color: var(--wb-ink-2); font-size: 15px; max-width: 44ch; }
+  .v2-head .wb-homehero__cta { pointer-events: auto; display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
+
+  .v2-cue {
+    position: absolute; z-index: 3; left: 50%; bottom: 26px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: opacity 300ms ease-out;
+  }
+  .v2-cue .bar { width: 1px; height: 44px; background: var(--wb-accent); position: relative; overflow: hidden; }
+  .v2-cue .bar::after {
+    content: ""; position: absolute; left: 0; top: -50%; width: 100%; height: 50%;
+    background: var(--wb-bg); animation: v2drop 1.6s cubic-bezier(0.2,0,0,1) infinite;
+  }
+  @keyframes v2drop { to { top: 110%; } }
+
+  /* 3D-tracked callout chips */
+  .v2-tag {
+    position: absolute; z-index: 4; transform: translate(-50%, -50%);
+    background: var(--wb-surface); border: 1px solid var(--wb-ink);
+    padding: 7px 11px; border-radius: var(--wb-r);
+    font-family: var(--wb-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    white-space: nowrap; opacity: 0; transition: opacity 260ms ease-out;
+    pointer-events: none;
+  }
+  .v2-tag b { color: var(--wb-accent); font-weight: 500; }
+  .v2-tag small { display: block; color: var(--wb-ink-2); letter-spacing: 0.08em; font-size: 9.5px; margin-top: 3px; }
+  .v2-tag.is-on { opacity: 1; pointer-events: auto; }
+  .v2-tag a { color: var(--wb-blue); }
+
+  /* end-state CTA plate */
+  .v2-endplate {
+    position: absolute; z-index: 4; left: 50%; bottom: clamp(20px, 6vh, 56px);
+    transform: translate(-50%, 12px);
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: center;
+    background: var(--wb-surface); border: 1px solid var(--wb-hairline);
+    padding: 14px 18px; border-radius: var(--wb-r);
+    opacity: 0; transition: opacity 300ms ease-out, transform 300ms ease-out;
+    max-width: min(92vw, 720px);
+  }
+  .v2-endplate.is-on { opacity: 1; transform: translate(-50%, 0); }
+  .v2-endplate .microlabel { white-space: normal; }
+
+  .v2-progress {
+    position: absolute; z-index: 3; right: clamp(16px, 4vw, 56px); top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .v2-progress .rail { width: 1px; height: 140px; background: var(--wb-hairline); position: relative; }
+  .v2-progress .rail i {
+    position: absolute; left: -1.5px; top: 0; width: 4px; background: var(--wb-accent);
+    transition: height 80ms linear;
+  }
+  .v2-progress .microlabel { writing-mode: vertical-rl; letter-spacing: 0.2em; }
+
+  .v2-fallback { position: absolute; inset: 0; display: none; }
+  .v2-fallback .wb-img { width: 100%; height: 100%; }
+  .v2-fallback .wb-img img { width: 100%; height: 100%; object-fit: cover; }
+  .no-webgl #v2-canvas { display: none; }
+  .no-webgl .v2-fallback { display: block; }
+
+  @media (max-width: 640px) {
+    .v2-hero { height: 240vh; }
+    .v2-head { top: 96px; }
+    .v2-progress { display: none; }
+    .v2-endplate { gap: 10px; padding: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v2-cue { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ PUBLIC MASTHEAD ============ -->
+<header class="wb-mast">
+  <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+  <div class="wb-rail__sub">Rev 04 · Sheet B</div>
+  <nav class="wb-mast__links" aria-label="Public">
+    <a class="wb-mast__link" href="home.html" data-mobile-link>Sheet A</a>
+    <a class="wb-mast__link" href="explore.html" data-mobile-link>Explore</a>
+    <a class="wb-mast__link" href="market.html" data-mobile-link>Marketplace</a>
+    <a class="wb-mast__link" href="index.html" data-mobile-link>Sign in</a>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-btn wb-btn--accent" href="index.html">Open the workshop</a>
+  </nav>
+  <button id="wbBurger" type="button"></button>
+</header>
+
+<main class="wb-public">
+
+  <!-- ============ WEBGL HERO — THE PART-OUT, DRAWN LIVE ============ -->
+  <section class="v2-hero" id="v2hero">
+    <div class="v2-sticky">
+      <canvas id="v2-canvas" aria-hidden="true"></canvas>
+
+      <div class="v2-fallback" aria-hidden="true">
+        <div class="wb-img"><img src="../assets/c4-part-brake.png" alt="" onerror="this.remove()"></div>
+      </div>
+
+      <div class="v2-head" id="v2head">
+        <span class="microlabel">REF 04-G — PUBLIC FACE · SHEET B · LIVE DRAWING</span>
+        <h1>Every part arrives<br>with a drawing.</h1>
+        <p>This one is real. Scroll to take the brake assembly apart — every component you pull off is a listing with its source car, keeper and fitment on file.</p>
+        <div class="wb-homehero__cta">
+          <a class="wb-btn wb-btn--accent" href="index.html">Open the workshop</a>
+          <a class="wb-btn wb-btn--ghost" href="part.html">Inspect lot L-118</a>
+        </div>
+      </div>
+
+      <div class="v2-cue" id="v2cue">
+        <span class="microlabel">SCROLL — DISASSEMBLE</span>
+        <span class="bar"></span>
+      </div>
+
+      <div class="v2-progress" aria-hidden="true">
+        <span class="microlabel">TEARDOWN</span>
+        <span class="rail"><i id="v2bar" style="height:0%"></i></span>
+        <span class="microlabel mono" id="v2pct">0%</span>
+      </div>
+
+      <!-- 3D-tracked callouts -->
+      <div class="v2-tag" id="tag-caliper"><b>P-01</b> 6-POT CALIPER · LOT L-118<small><a href="part.html">£1,150 — buy with provenance →</a></small></div>
+      <div class="v2-tag" id="tag-disc"><b>P-02</b> 355MM SLOTTED DISC PAIR<small>MEASURED 31.6 MM · MIN 30.0</small></div>
+      <div class="v2-tag" id="tag-pads"><b>P-03</b> PADS — 70% REMAINING<small>SELLER-STATED · PHOTO ON FILE</small></div>
+      <div class="v2-tag" id="tag-hub"><b>REF</b> SOURCE CAR DRVN-0417<small><a href="car.html">E46 M3 track build — registry →</a></small></div>
+
+      <div class="v2-endplate" id="v2end">
+        <span class="microlabel microlabel--ink">FULL TEARDOWN ON FILE — EVERY COMPONENT ABOVE IS A DOCUMENTED LOT</span>
+        <a class="wb-btn wb-btn--accent" href="part.html" style="pointer-events:auto">Buy the brake kit — £1,150</a>
+        <a class="wb-btn wb-btn--ghost" href="market.html" style="pointer-events:auto">Survey the marketplace</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW THE WORKSHOP RUNS ============ -->
+  <section class="wb-section">
+    <div class="wb-pagehead" style="margin-bottom:16px">
+      <div><span class="microlabel">SHEET 2</span><h1 style="font-size:18px">How the workshop runs</h1></div>
+      <span class="microlabel">THREE OPERATIONS · NO EXCEPTIONS</span>
+    </div>
+    <div class="wb-steps">
+      <div class="wb-plate wb-step wb-plate--hover">
+        <span class="wb-step__idx">OP 01</span>
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <h3>Register the car</h3>
+        <p>Open a registry record for your build: chassis number, spec matrix, build log, documents. The car — not the seller's word — becomes the source of truth.</p>
+      </div>
+      <div class="wb-plate wb-step wb-plate--hover">
+        <span class="wb-step__idx">OP 02</span>
+        <i class="ph ph-wrench" aria-hidden="true"></i>
+        <h3>Release parts with provenance</h3>
+        <p>Take a component off the car and the listing writes itself: fitted and removed dates, dyno sheets, invoices, and the record of what it was paired with.</p>
+      </div>
+      <div class="wb-plate wb-step wb-plate--hover">
+        <span class="wb-step__idx">OP 03</span>
+        <i class="ph ph-seal-check" aria-hidden="true"></i>
+        <h3>Sell to verified fitment</h3>
+        <p>Buyers shop with their own garage on file. Offers arrive from people whose chassis your part actually fits — fewer questions, fewer returns, faster sales.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FROM THE REGISTRY ============ -->
+  <section class="wb-section">
+    <div class="wb-pagehead" style="margin-bottom:16px">
+      <div><span class="microlabel">SHEET 3</span><h1 style="font-size:18px">From the registry</h1></div>
+      <a class="ref-link" href="explore.html">SURVEY ALL RECORDS →</a>
+    </div>
+    <div class="wb-partcards">
+      <a class="wb-plate wb-partcard" href="car.html">
+        <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 on a two-post lift" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">BMW E46 M3 — Track Build</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--ok">PROVENANCE · 6 DOCS</span>
+            <span class="wb-tag">3 PARTS LIVE</span>
+          </div>
+          <span class="microlabel">DRVN-0417 · STUTTGART · 84 WATCHING</span>
+        </div>
+      </a>
+      <a class="wb-plate wb-partcard" href="explore.html">
+        <div class="wb-img"><img src="../assets/c4-car-911.png" alt="Porsche 993 in a workshop" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">Porsche 993 'Unit 12'</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--ok">PROVENANCE · 9 DOCS</span>
+            <span class="wb-tag">ENGINE-OUT REBUILD</span>
+          </div>
+          <span class="microlabel">DRVN-0292 · HAMBURG · 141 WATCHING</span>
+        </div>
+      </a>
+      <a class="wb-plate wb-partcard" href="explore.html">
+        <div class="wb-img"><img src="../assets/c4-car-evo.png" alt="Mitsubishi Evo IX" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">Mitsubishi Evo IX — Time Attack</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--ok">PROVENANCE · 4 DOCS</span>
+            <span class="wb-tag">2 PARTS LIVE</span>
+          </div>
+          <span class="microlabel">DRVN-0533 · MANCHESTER · 67 WATCHING</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ INK BAND — THE NUMBERS ============ -->
+  <section class="wb-band wb-section">
+    <span class="microlabel">SHEET 4 — REGISTRY TOTALS · AUDITED MONTHLY</span>
+    <div class="wb-band__stats">
+      <div>
+        <div class="wb-kpi__value" data-count="48210">0</div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Parts documented</span></div>
+      </div>
+      <div>
+        <div class="wb-kpi__value" data-count="3914">0</div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Cars on record</span></div>
+      </div>
+      <div>
+        <div class="wb-kpi__value"><span data-count="6">0</span> <small style="color:inherit;opacity:.6">days</small></div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Median sale time</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="wb-foot">
+    <span class="microlabel">DRVN / WERKBANK — PUBLIC FACE · SHEET B (LIVE DRAWING) · <a class="ref-link" href="home.html">SHEET A</a></span>
+    <a class="ref-link" href="design.html">DESIGN SYSTEM — DESIGN.HTML →</a>
+  </footer>
+</main>
+
+<script src="werkbank.js"></script>
+<script type="module">
+/* ============================================================
+   SHEET B — scroll-driven exploded brake assembly (Three.js)
+   Drawing-office render: flat paper fills + ink edge lines,
+   isometric orthographic camera, safety-orange leader lines.
+   ============================================================ */
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+
+const canvas = document.getElementById("v2-canvas");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+} catch (e) {
+  document.documentElement.classList.add("no-webgl");
+}
+
+if (renderer) {
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  /* ---------- theme-reactive palette ---------- */
+  const css = () => getComputedStyle(document.documentElement);
+  const col = (name) => new THREE.Color(css().getPropertyValue(name).trim());
+  const palette = { ink: col("--wb-ink"), accent: col("--wb-accent"), surface: col("--wb-surface"), hairline: col("--wb-hairline") };
+
+  const scene = new THREE.Scene();
+
+  /* isometric orthographic camera — a living technical drawing */
+  const frustum = 7.2;
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  camera.position.set(10, 8.2, 10);
+  camera.lookAt(0, 0, 0);
+
+  function sizeCamera() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    renderer.setSize(w, h, false);
+    const aspect = w / h;
+    camera.left = -frustum * aspect / 2;
+    camera.right = frustum * aspect / 2;
+    camera.top = frustum / 2;
+    camera.bottom = -frustum / 2;
+    camera.updateProjectionMatrix();
+  }
+
+  /* ---------- materials (rebuilt on theme change) ---------- */
+  let fillMat, inkLine, accentLine, gridHelper;
+  function buildMaterials() {
+    fillMat = new THREE.MeshBasicMaterial({ color: palette.surface, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    inkLine = new THREE.LineBasicMaterial({ color: palette.ink });
+    accentLine = new THREE.LineBasicMaterial({ color: palette.accent });
+  }
+  buildMaterials();
+
+  /* drawing-style mesh: flat fill + ink edges */
+  const edgeLines = [], fillMeshes = [], accentEdgeLines = [];
+  function draw(geo, { accent = false } = {}) {
+    const g = new THREE.Group();
+    const mesh = new THREE.Mesh(geo, fillMat);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 24), accent ? accentLine : inkLine);
+    g.add(mesh); g.add(edges);
+    fillMeshes.push(mesh);
+    (accent ? accentEdgeLines : edgeLines).push(edges);
+    return g;
+  }
+
+  /* ---------- the assembly ---------- */
+  const assembly = new THREE.Group();
+  scene.add(assembly);
+
+  const parts = []; // { group, base:Vector3, exploded:Vector3 }
+  function part(group, base, exploded) {
+    group.position.copy(base);
+    assembly.add(group);
+    parts.push({ group, base: base.clone(), exploded: exploded.clone() });
+    return group;
+  }
+
+  /* disc — slotted rotor (flat cylinder + hub + bolt circle) */
+  const disc = new THREE.Group();
+  disc.add(draw(new THREE.CylinderGeometry(2.05, 2.05, 0.14, 56)));
+  disc.add(draw(new THREE.CylinderGeometry(0.72, 0.72, 0.34, 32)));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const bolt = draw(new THREE.CylinderGeometry(0.09, 0.09, 0.4, 10));
+    bolt.position.set(Math.cos(a) * 1.05, 0, Math.sin(a) * 1.05);
+    disc.add(bolt);
+  }
+  /* slot marks — radial accent lines on the face */
+  const slotGeo = new THREE.BufferGeometry();
+  const slotPts = [];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    slotPts.push(new THREE.Vector3(Math.cos(a) * 1.35, 0.08, Math.sin(a) * 1.35));
+    slotPts.push(new THREE.Vector3(Math.cos(a + 0.28) * 1.95, 0.08, Math.sin(a + 0.28) * 1.95));
+  }
+  slotGeo.setFromPoints(slotPts);
+  const slots = new THREE.LineSegments(slotGeo, inkLine);
+  edgeLines.push(slots);
+  disc.add(slots);
+  part(disc, new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0));
+
+  /* caliper — bridge + two piston housings (accent edges) */
+  const caliper = new THREE.Group();
+  const bridge = draw(new THREE.BoxGeometry(1.5, 0.55, 1.05), { accent: true });
+  bridge.position.y = 0.0;
+  caliper.add(bridge);
+  const housingA = draw(new THREE.BoxGeometry(1.3, 0.34, 0.34), { accent: true });
+  housingA.position.set(0, -0.05, 0.62);
+  const housingB = housingA.clone(); housingB.position.z = -0.62;
+  // clone shares materials/edges; register its lines for theme swap
+  housingB.traverse((o) => { if (o.isLineSegments) accentEdgeLines.push(o); if (o.isMesh) fillMeshes.push(o); });
+  caliper.add(housingA, housingB);
+  caliper.position.y = 0; // sits over disc top
+  part(caliper, new THREE.Vector3(0, 2.02, 0), new THREE.Vector3(0, 4.3, 0));
+
+  /* pads — thin blocks either side of the disc plane */
+  const padL = new THREE.Group(); padL.add(draw(new THREE.BoxGeometry(1.15, 0.5, 0.12)));
+  part(padL, new THREE.Vector3(0, 1.78, 0.22), new THREE.Vector3(-2.9, 2.4, 1.6));
+  const padR = new THREE.Group(); padR.add(draw(new THREE.BoxGeometry(1.15, 0.5, 0.12)));
+  part(padR, new THREE.Vector3(0, 1.78, -0.22), new THREE.Vector3(2.9, 2.4, -1.6));
+
+  /* mounting bracket + bolts */
+  const bracket = new THREE.Group(); bracket.add(draw(new THREE.BoxGeometry(0.5, 1.15, 0.42)));
+  part(bracket, new THREE.Vector3(-1.55, 1.3, 0), new THREE.Vector3(-3.9, 0.6, 0));
+  for (let i = 0; i < 2; i++) {
+    const b = new THREE.Group(); b.add(draw(new THREE.CylinderGeometry(0.075, 0.075, 0.55, 10)));
+    part(b, new THREE.Vector3(-1.55, 0.85 + i * 0.9, 0.0), new THREE.Vector3(-4.6 - i * 0.5, 0.4 + i * 1.1, 1.0));
+  }
+
+  assembly.position.y = -0.3;
+
+  /* drafting grid floor */
+  function buildGrid() {
+    if (gridHelper) scene.remove(gridHelper);
+    gridHelper = new THREE.GridHelper(26, 26, palette.hairline, palette.hairline);
+    gridHelper.material.transparent = true;
+    gridHelper.material.opacity = 0.55;
+    gridHelper.position.y = -2.6;
+    scene.add(gridHelper);
+  }
+  buildGrid();
+
+  /* orange leader lines: from part anchor outward (world-space, updated per frame) */
+  const leaders = [
+    { id: "tag-caliper", part: caliper, offset: new THREE.Vector3(2.4, 0.9, 0.4), at: 0.30 },
+    { id: "tag-disc",    part: disc,    offset: new THREE.Vector3(-2.7, -0.4, 1.3), at: 0.48 },
+    { id: "tag-pads",    part: padR,    offset: new THREE.Vector3(1.7, 1.0, -0.6), at: 0.62 },
+    { id: "tag-hub",     part: disc,    offset: new THREE.Vector3(2.5, -1.6, -1.4), at: 0.80 },
+  ].map((l) => {
+    const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    const line = new THREE.Line(geo, accentLine);
+    line.visible = false;
+    scene.add(line);
+    return { ...l, line, el: document.getElementById(l.id) };
+  });
+
+  /* ---------- theme reactivity ---------- */
+  function retheme() {
+    palette.ink = col("--wb-ink"); palette.accent = col("--wb-accent");
+    palette.surface = col("--wb-surface"); palette.hairline = col("--wb-hairline");
+    fillMat.color.copy(palette.surface);
+    inkLine.color.copy(palette.ink);
+    accentLine.color.copy(palette.accent);
+    buildGrid();
+  }
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  /* ---------- scroll + pointer state ---------- */
+  const hero = document.getElementById("v2hero");
+  const head = document.getElementById("v2head");
+  const cue = document.getElementById("v2cue");
+  const endplate = document.getElementById("v2end");
+  const bar = document.getElementById("v2bar");
+  const pct = document.getElementById("v2pct");
+
+  let target = reduceMotion ? 0.62 : 0, t = target;   // explode factor
+  let mx = 0, my = 0, rx = 0, ry = 0;                  // pointer parallax
+
+  function readScroll() {
+    const rect = hero.getBoundingClientRect();
+    const span = rect.height - window.innerHeight;
+    target = Math.min(1, Math.max(0, -rect.top / span));
+  }
+  if (!reduceMotion) {
+    window.addEventListener("scroll", readScroll, { passive: true });
+    window.addEventListener("pointermove", (e) => {
+      mx = (e.clientX / window.innerWidth - 0.5) * 2;
+      my = (e.clientY / window.innerHeight - 0.5) * 2;
+    }, { passive: true });
+    readScroll();
+  }
+
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+  const v = new THREE.Vector3();
+
+  function frame(now) {
+    t += (target - t) * 0.085;
+    rx += (my * 0.06 - rx) * 0.06;
+    ry += (mx * 0.14 - ry) * 0.06;
+
+    const e = easeOut(t);
+    parts.forEach((p) => { p.group.position.lerpVectors(p.base, p.exploded, e); });
+
+    assembly.rotation.y = now * 0.00012 + ry + e * 0.7;
+    assembly.rotation.x = rx * 0.4;
+
+    /* HUD */
+    const pc = Math.round(t * 100);
+    bar.style.height = pc + "%";
+    pct.textContent = pc + "%";
+    head.style.opacity = String(Math.max(0, 1 - t * 3.2));
+    head.style.transform = "translateY(" + (-t * 60) + "px)";
+    cue.style.opacity = String(Math.max(0, 1 - t * 5));
+    endplate.classList.toggle("is-on", t > 0.86);
+
+    /* leader lines + tracked tags */
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    leaders.forEach((l) => {
+      const on = t > l.at;
+      l.line.visible = on;
+      l.el.classList.toggle("is-on", on);
+      if (!on) return;
+      const from = l.part.getWorldPosition(v).clone();
+      const to = from.clone().add(l.offset);
+      l.line.geometry.setFromPoints([from, to]);
+      const p = to.project(camera);
+      l.el.style.left = ((p.x * 0.5 + 0.5) * w) + "px";
+      l.el.style.top = ((-p.y * 0.5 + 0.5) * h) + "px";
+    });
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  sizeCamera();
+  window.addEventListener("resize", sizeCamera);
+  requestAnimationFrame(frame);
+} else {
+  document.documentElement.classList.add("no-webgl");
+}
+</script>
+</body>
+</html>

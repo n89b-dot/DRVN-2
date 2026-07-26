@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN · CIRCUIT — See where every part has been.</title>
+<meta name="description" content="DRVN — the home for your modified car. Provenance drawn as a wiring diagram: every part traces back to its source car, its keeper, and what it was paired with.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="circuit.css">
+</head>
+<body>
+
+<!-- ============================ TOP BAR ============================ -->
+<header class="topbar">
+  <div class="topbar__inner">
+    <a class="brand" href="index.html" aria-label="DRVN home">
+      <svg class="brand__glyph" viewBox="0 0 20 20" aria-hidden="true">
+        <path class="trace" d="M3 10 H8 M12 10 H17 M10 6 V8 M10 12 V14"/>
+        <circle class="node" cx="10" cy="10" r="2.6"/>
+        <circle class="node" cx="3" cy="10" r="1.4"/>
+        <circle class="node" cx="17" cy="10" r="1.4"/>
+        <circle class="node" cx="10" cy="4.6" r="1.4"/>
+        <circle class="node" cx="10" cy="15.4" r="1.4"/>
+      </svg>
+      DRVN
+    </a>
+    <nav>
+      <a class="navlink" href="network.html">Network</a>
+      <a class="navlink" href="#grid">Marketplace</a>
+      <a class="navlink navlink--keep nav-cta" href="#" >Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<!-- ============================ HERO ============================ -->
+<section class="hero">
+  <div class="hero__media" style="background-image:url('../assets/c11-hero-car.png');"></div>
+  <div class="wrap hero__inner">
+    <div style="max-width:640px; padding-top:var(--s-7);">
+      <span class="eyebrow reveal">Provenance is a wiring diagram</span>
+      <h1 class="h-display reveal" style="margin-top:var(--s-4);">See where<br>every part<br>has been.</h1>
+      <p class="lede reveal" style="margin-top:var(--s-5);">DRVN is the home for your modified car — show off the build, then sell the parts behind it. Every part stays wired to the car it came off, the keeper who ran it, and what it was paired with.</p>
+      <div class="row gap-4 wrap-flex reveal" style="margin-top:var(--s-6);">
+        <a class="btn btn--primary" href="network.html">Trace the network →</a>
+        <a class="btn btn--ghost" href="#how">How the trace works</a>
+      </div>
+    </div>
+
+    <!-- animated schematic: central car node -> SOURCE / KEEPER / FITMENT / PAIRED -->
+    <div class="panel panel--noded reveal" data-cmap style="margin-top:var(--s-8); padding:var(--s-5); background:var(--canvas-72);">
+      <div class="row between" style="margin-bottom:var(--s-4);">
+        <span class="data-label">Unit trace · NODE ZERO / R34 GT-R</span>
+        <span class="tag tag--fit">Live</span>
+      </div>
+      <svg viewBox="0 0 900 300" width="100%" style="max-height:320px;" role="img" aria-label="Schematic: the car node connected by traces to Source, Keeper, Fitment and Paired-with nodes.">
+        <!-- traces (auto-draw on load) -->
+        <path class="trace-path autodraw" data-link="core src" d="M450 150 C 330 150 300 70 200 70"/>
+        <path class="trace-path autodraw" data-link="core keeper" d="M450 150 C 330 150 300 230 200 230"/>
+        <path class="trace-path autodraw" data-link="core fit" d="M450 150 C 570 150 600 70 700 70"/>
+        <path class="trace-path autodraw" data-link="core paired" d="M450 150 C 570 150 600 230 700 230"/>
+        <!-- core car node -->
+        <g data-node="core" data-core="true">
+          <circle class="node-dot is-core node-pulse" cx="450" cy="150" r="9"/>
+          <text class="node-label" x="450" y="182" text-anchor="middle" style="fill:var(--cyan);">THE CAR</text>
+        </g>
+        <!-- leaf nodes -->
+        <g data-node="src"><circle class="node-dot" cx="200" cy="70" r="6"/><text class="node-label" x="200" y="52" text-anchor="middle">Source</text></g>
+        <g data-node="keeper"><circle class="node-dot" cx="200" cy="230" r="6"/><text class="node-label" x="200" y="255" text-anchor="middle">Keeper</text></g>
+        <g data-node="fit"><circle class="node-dot" cx="700" cy="70" r="6"/><text class="node-label" x="700" y="52" text-anchor="middle">Fitment</text></g>
+        <g data-node="paired"><circle class="node-dot" cx="700" cy="230" r="6"/><text class="node-label" x="700" y="255" text-anchor="middle">Paired-with</text></g>
+      </svg>
+      <p class="text-dim" style="font-size:14px; margin-top:var(--s-3);">Hover a node — its trace lights, the rest dim. That is the whole promise: you can <span class="text-cyan">see</span> what a part was connected to.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ HOW THE TRACE WORKS ============================ -->
+<section class="section" id="how">
+  <div class="wrap">
+    <span class="eyebrow reveal">How the trace works</span>
+    <h2 class="h-1 reveal" style="margin-top:var(--s-3); max-width:20ch;">Three nodes. One continuous wire from car to buyer.</h2>
+
+    <div class="reveal trace-draw" style="margin-top:var(--s-7);" data-cmap>
+      <!-- connecting trace behind the three steps -->
+      <svg viewBox="0 0 1100 60" width="100%" height="60" preserveAspectRatio="none" aria-hidden="true" style="display:block;">
+        <path class="trace-path" data-link="*" d="M120 30 H520 M580 30 H980"/>
+        <circle class="node-dot is-core" cx="120" cy="30" r="6"/>
+        <circle class="node-dot" cx="550" cy="30" r="6"/>
+        <circle class="node-dot" cx="980" cy="30" r="6"/>
+      </svg>
+      <div class="grid-3" style="margin-top:var(--s-4);">
+        <div class="panel panel__body">
+          <span class="data-label text-cyan">01 · Register</span>
+          <h3 class="h-3" style="margin:var(--s-3) 0;">Register the car as a node</h3>
+          <p class="text-dim" style="font-size:15px;">Your build becomes a schematic — platform, power, mods and every fitment fact, verified where the platform can confirm it.</p>
+        </div>
+        <div class="panel panel__body">
+          <span class="data-label text-cyan">02 · Release</span>
+          <h3 class="h-3" style="margin:var(--s-3) 0;">Release a part — it inherits the wires</h3>
+          <p class="text-dim" style="font-size:15px;">List a take-off and it stays wired to the car node: source, keeper rating, fitment basis and what it ran alongside travel with it.</p>
+        </div>
+        <div class="panel panel__body">
+          <span class="data-label text-cyan">03 · Trace</span>
+          <h3 class="h-3" style="margin:var(--s-3) 0;">Buyers see the whole diagram</h3>
+          <p class="text-dim" style="font-size:15px;">No detective work. The buyer reads the connection map and knows exactly what they are acquiring, and whether it fits.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LIVE NODES (cars) ============================ -->
+<section class="section--tight" id="cars">
+  <div class="wrap">
+    <div class="row between wrap-flex reveal" style="margin-bottom:var(--s-6);">
+      <div>
+        <span class="eyebrow">Live nodes</span>
+        <h2 class="h-2" style="margin-top:var(--s-3);">Cars currently on the grid</h2>
+      </div>
+      <a class="navlink" href="network.html" style="align-self:flex-end;">Open full network →</a>
+    </div>
+    <div class="grid-3">
+      <!-- GT-R -> car.html -->
+      <a class="ncard reveal" href="car.html">
+        <div class="ncard__media" style="background-image:url('../assets/c11-hero-car.png');">
+          <span class="ncard__id">NODE-00 · R34</span>
+          <span class="ncard__conn">6 conn</span>
+        </div>
+        <div class="ncard__body">
+          <div class="ncard__row"><span class="ncard__title">Node Zero</span><span class="tag tag--fit">4.9</span></div>
+          <span class="ncard__meta">R34 GT-R · RB26DETT · 620 whp</span>
+          <div class="ncard__tags"><span class="tag">Yokohama</span><span class="tag">27 sales</span></div>
+        </div>
+      </a>
+      <!-- NSX -->
+      <a class="ncard reveal" href="car.html">
+        <div class="ncard__media" style="background-image:url('../assets/c11-car-2.png');">
+          <span class="ncard__id">NODE-04 · NSX</span>
+          <span class="ncard__conn">3 conn</span>
+        </div>
+        <div class="ncard__body">
+          <div class="ncard__row"><span class="ncard__title">Meridian NA1</span><span class="tag tag--fit">4.9</span></div>
+          <span class="ncard__meta">Honda NSX · C30A · 310 whp</span>
+          <div class="ncard__tags"><span class="tag">Yokohama</span><span class="tag">Same keeper</span></div>
+        </div>
+      </a>
+      <!-- third car -->
+      <a class="ncard reveal" href="car.html">
+        <div class="ncard__media" style="background-color:var(--panel-2); background-image:url('../assets/c11-detail.png');">
+          <span class="ncard__id">NODE-07 · S15</span>
+          <span class="ncard__conn">4 conn</span>
+        </div>
+        <div class="ncard__body">
+          <div class="ncard__row"><span class="ncard__title">Silhouette</span><span class="tag">4.7</span></div>
+          <span class="ncard__meta">Silvia S15 · SR20DET · 400 whp</span>
+          <div class="ncard__tags"><span class="tag">Nagoya</span><span class="tag">11 sales</span></div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ PARTS ON THE GRID ============================ -->
+<section class="section--tight" id="grid">
+  <div class="wrap">
+    <div class="row between wrap-flex reveal" style="margin-bottom:var(--s-6);">
+      <div>
+        <span class="eyebrow">Parts on the grid</span>
+        <h2 class="h-2" style="margin-top:var(--s-3);">Every listing shows its source trace</h2>
+      </div>
+    </div>
+    <div class="grid-3">
+      <!-- ECU -> listing.html -->
+      <a class="ncard reveal" href="listing.html">
+        <div class="ncard__media" style="background-image:url('../assets/c11-part-ecu.png');">
+          <span class="ncard__id">PART-11 · ECU</span>
+        </div>
+        <div class="ncard__body">
+          <div class="ncard__row"><span class="ncard__title">Link G4X Xtreme</span><span class="ncard__price">£690</span></div>
+          <span class="ncard__meta mono">↳ off NODE-00 · Node Zero R34</span>
+          <div class="ncard__tags"><span class="tag tag--fit">Fits R34</span><span class="tag">Grade A</span></div>
+        </div>
+      </a>
+      <!-- turbo -->
+      <a class="ncard reveal" href="listing.html">
+        <div class="ncard__media" style="background-color:var(--panel-2); background-image:url('../assets/c11-part-turbo.png');">
+          <span class="ncard__id">PART-08 · TURBO</span>
+        </div>
+        <div class="ncard__body">
+          <div class="ncard__row"><span class="ncard__title">Garrett G35-1050</span><span class="ncard__price">£1,480</span></div>
+          <span class="ncard__meta mono">↳ off NODE-00 · Node Zero R34</span>
+          <div class="ncard__tags"><span class="tag tag--fit">Fits R34</span><span class="tag tag--warn">Stated R33</span></div>
+        </div>
+      </a>
+      <!-- third part -->
+      <a class="ncard reveal" href="listing.html">
+        <div class="ncard__media" style="background-color:var(--panel-2); background-image:url('../assets/c11-detail.png');">
+          <span class="ncard__id">PART-15 · COILOVER</span>
+        </div>
+        <div class="ncard__body">
+          <div class="ncard__row"><span class="ncard__title">Öhlins Road & Track</span><span class="ncard__price">£820</span></div>
+          <span class="ncard__meta mono">↳ off NODE-04 · Meridian NSX</span>
+          <div class="ncard__tags"><span class="tag tag--fit">Fits NA1</span><span class="tag">Grade B+</span></div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ STAT BAND ============================ -->
+<section class="section">
+  <div class="wrap">
+    <div class="panel panel--noded panel__body reveal" style="padding:var(--s-7) var(--s-6);">
+      <div class="statband">
+        <div class="stat">
+          <div class="stat__num"><span data-count="8420">0</span></div>
+          <div class="stat__label">Nodes mapped</div>
+        </div>
+        <div class="stat">
+          <div class="stat__num"><span data-count="31600">0</span></div>
+          <div class="stat__label">Connections traced</div>
+        </div>
+        <div class="stat">
+          <div class="stat__num"><span data-count="6.2" data-decimals="1">0</span> <span style="font-size:0.4em; color:var(--ink-dim);">days</span></div>
+          <div class="stat__label">Median trace-to-sale</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ============================ FOOTER ============================ -->
+<footer class="footer">
+  <div class="wrap footer__grid">
+    <div class="footer__col">
+      <div class="footer__mark">
+        <svg class="brand__glyph" viewBox="0 0 20 20" aria-hidden="true">
+          <path class="trace" d="M3 10 H8 M12 10 H17 M10 6 V8 M10 12 V14"/>
+          <circle class="node" cx="10" cy="10" r="2.6"/><circle class="node" cx="3" cy="10" r="1.4"/><circle class="node" cx="17" cy="10" r="1.4"/><circle class="node" cx="10" cy="4.6" r="1.4"/><circle class="node" cx="10" cy="15.4" r="1.4"/>
+        </svg>
+        DRVN
+      </div>
+      <p class="text-dim" style="font-size:14px; max-width:34ch; margin-top:var(--s-3);">Provenance is a wiring diagram. The home for your modified car.</p>
+    </div>
+    <div class="footer__links">
+      <div class="footer__col">
+        <span class="data-label">Platform</span>
+        <a href="network.html">Network</a>
+        <a href="#grid">Marketplace</a>
+        <a href="car.html">Car nodes</a>
+      </div>
+      <div class="footer__col">
+        <span class="data-label">Trust</span>
+        <a href="listing.html">A part node</a>
+        <a href="#how">How the trace works</a>
+        <a href="design.html">Design system</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="circuit.js"></script>
+</body>
+</html>

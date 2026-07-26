@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · The sheet is alive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<!-- public masthead — visitors, not keepers -->
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="home.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · PUBLIC</span></a>
+    <nav class="bar__nav" aria-label="Public">
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="index.html">Sign in</a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+      <a class="btn btn--live" href="index.html" style="padding:9px 14px">Open your sheet</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- HERO — the thesis, drawn on the motion plate -->
+  <div class="pagehead rv">
+    <span class="microlabel">DRVN — THE PARTS MARKET WHERE EVERY LISTING COMES OFF A DRAWING · <span class="microlabel--live"><span data-tick="212">212</span> SHEETS OPEN NOW</span></span>
+    <h1>The sheet is <span class="live-word">alive.</span></h1>
+    <p class="sub">Every car on DRVN is a live drawing. List a part and it goes to market annotated — what it came off, when it was fitted, who's watching it right now. Buyers see the sheet, not a promise.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+      <a class="btn btn--live" href="index.html">Open your sheet</a>
+      <a class="btn btn--ghost" href="market.html">Browse the market</a>
+    </div>
+  </div>
+
+  <section class="hero-media rv" data-hero style="margin-bottom:14px">
+    <video autoplay muted loop playsinline poster="../assets/c16-hero-car.png" aria-label="Slow studio dolly around a red Lancia Delta Integrale">
+      <source src="../assets/c16-motion-orbit.mp4" type="video/mp4">
+    </video>
+    <div class="callout" style="left:5%; top:10%" data-anchor="26,62">
+      <span class="microlabel--live">LIVE</span>
+      KW V2 COILOVERS · $680 · <span data-tick="12">12</span> WATCHING
+    </div>
+    <div class="callout" style="right:4%; top:38%" data-anchor="60,46">
+      SABELT SEAT · $290 · UNDER OFFER
+    </div>
+    <div class="callout" style="left:8%; bottom:8%" data-anchor="42,80">
+      <span class="microlabel--live">NOW</span>
+      <span data-tick="34">34</span> WATCHING THIS CAR
+    </div>
+  </section>
+
+  <!-- HOW THE SHEET WORKS — three steps, each already ticking -->
+  <div class="jumprow rv">
+    <span class="microlabel">HOW THE SHEET WORKS</span>
+    <span class="microlabel">THREE MOVES · NOTHING ELSE TO LEARN</span>
+  </div>
+  <section class="deck deck--three" style="margin-top:14px">
+    <div class="tile rv" data-stagger="0">
+      <div class="tile__head"><span class="microlabel microlabel--ink"><i class="ph ph-pencil-ruler"></i>&nbsp;STEP 01</span><span class="chip">2 MIN</span></div>
+      <div class="order__name">Open a sheet</div>
+      <p style="font-size:13.5px;color:var(--dim);margin-top:6px">Your car becomes a live drawing — the build, the receipts, the history, ruled onto one page that updates itself.</p>
+      <div class="livedim" style="margin-top:14px"><span class="livedim__tick"></span>
+        <span class="microlabel">Sheets opened this week</span>
+        <span class="val"><span data-tick="61">61</span></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink"><i class="ph ph-tag"></i>&nbsp;STEP 02</span><span class="chip">FROM THE SHEET</span></div>
+      <div class="order__name">List parts off it</div>
+      <p style="font-size:13.5px;color:var(--dim);margin-top:6px">Release a component and the listing writes itself off the drawing — fitted dates, mileage, what it ran with.</p>
+      <div class="livedim" style="margin-top:14px"><span class="livedim__tick"></span>
+        <span class="microlabel">Parts listed today</span>
+        <span class="val"><span data-tick="147">147</span></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <div class="tile__head"><span class="microlabel microlabel--live"><i class="ph ph-bell-ringing"></i>&nbsp;STEP 03</span><span class="chip chip--live">LIVE</span></div>
+      <div class="order__name">Sell while it's watched</div>
+      <p style="font-size:13.5px;color:var(--dim);margin-top:6px">Offers arrive as work orders on your sheet — accept, counter, or pass while the watch-counts tick.</p>
+      <div class="livedim livedim--live" style="margin-top:14px"><span class="livedim__tick"></span>
+        <span class="microlabel">Next offer window closes in</span>
+        <span class="val" data-seconds="8580"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- LIVE SHEETS — cars drawn right now -->
+  <div class="jumprow rv">
+    <span class="microlabel">SHEETS BEING DRAWN NOW</span>
+    <a class="jumplink" href="explore.html">Survey all sheets →</a>
+  </div>
+  <section class="deck deck--three" style="margin-top:14px">
+    <a class="tile rv" href="car.html" data-stagger="0">
+      <div class="tile__head"><span class="microlabel microlabel--ink">SHEET C-0416</span><span class="chip chip--live"><span data-tick="34">34</span>&nbsp;WATCHING</span></div>
+      <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c16-hero-car.png" alt="Red Lancia Delta HF Integrale in a light studio" loading="lazy" onerror="this.remove()"></div>
+      <div class="order__name" style="margin-top:10px">Lancia Delta HF Integrale "Biscione"</div>
+      <div class="order__meta">2 parts listed · 7 sold · full sheet →</div>
+    </a>
+    <a class="tile rv" href="explore.html" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">SHEET C-0292</span><span class="chip"><span data-tick="141">141</span>&nbsp;WATCHING</span></div>
+      <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c4-car-911.png" alt="Porsche 993 in a workshop" loading="lazy" onerror="this.remove()"></div>
+      <div class="order__name" style="margin-top:10px">Porsche 993 "Unit 12"</div>
+      <div class="order__meta">Engine-out rebuild · sheet updating daily</div>
+    </a>
+    <a class="tile rv" href="explore.html" data-stagger="2">
+      <div class="tile__head"><span class="microlabel microlabel--ink">SHEET C-0533</span><span class="chip"><span data-tick="67">67</span>&nbsp;WATCHING</span></div>
+      <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c4-car-evo.png" alt="Mitsubishi Evo IX time attack build" loading="lazy" onerror="this.remove()"></div>
+      <div class="order__name" style="margin-top:10px">Mitsubishi Evo IX — Time Attack</div>
+      <div class="order__meta">2 parts live · dyno sheet on the drawing</div>
+    </a>
+  </section>
+
+  <!-- PARTS OFF THE SHEET -->
+  <div class="jumprow rv">
+    <span class="microlabel">PARTS OFF A LIVE SHEET</span>
+    <a class="jumplink" href="market.html">Open the market →</a>
+  </div>
+  <section class="deck deck--three" style="margin-top:14px">
+    <a class="tile rv" href="listing.html" data-stagger="0">
+      <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c16-part-coilovers.png" alt="KW V2 coilovers with red springs" loading="lazy" onerror="this.remove()"></div>
+      <div class="mkt__name">KW Variant 2 coilovers</div>
+      <div class="mkt__price">$680 · off sheet C-0416</div>
+      <div class="mkt__meta"><span class="chip chip--live">OFFER WINDOW <span class="cd" data-seconds="8580"></span></span><span class="chip"><span data-tick="12">12</span>&nbsp;WATCHING</span></div>
+    </a>
+    <a class="tile rv" href="listing.html" data-stagger="1">
+      <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c16-part-seat.png" alt="Sabelt bucket seat with red stitching" loading="lazy" onerror="this.remove()"></div>
+      <div class="mkt__name">Sabelt bucket seat — driver side</div>
+      <div class="mkt__price">$290 · off sheet C-0416</div>
+      <div class="mkt__meta"><span class="chip chip--live">UNDER OFFER</span><span class="chip">204 VIEWS</span></div>
+    </a>
+    <a class="tile rv" href="market.html" data-stagger="2">
+      <div class="tile__img" style="aspect-ratio:3/2"><img src="../assets/c4-part-brake.png" alt="AP Racing brake caliper and disc" loading="lazy" onerror="this.remove()"></div>
+      <div class="mkt__name">AP Racing CP9660 front kit</div>
+      <div class="mkt__price">$1,150 · fitted 05/23 → removed 06/26</div>
+      <div class="mkt__meta"><span class="chip">LIVE</span><span class="chip">DISCS MEASURED 31.6 MM</span></div>
+    </a>
+  </section>
+
+  <!-- INK BAND — the market, measured -->
+  <section class="deck">
+    <div class="band rv">
+      <span class="microlabel">THE MARKET, MEASURED — AUDITED MONTHLY</span>
+      <div class="band__stats">
+        <div>
+          <div class="num-giant" data-count="48210">0</div>
+          <div class="bandrule" aria-hidden="true"></div>
+          <span class="microlabel">Parts documented on sheets</span>
+        </div>
+        <div>
+          <div class="num-giant" data-count="3914">0</div>
+          <div class="bandrule" aria-hidden="true"></div>
+          <span class="microlabel">Sheets open and updating</span>
+        </div>
+        <div>
+          <div class="num-giant"><span data-count="6">0</span> <small style="font-size:0.4em;opacity:0.6">DAYS</small></div>
+          <div class="bandrule" aria-hidden="true"></div>
+          <span class="microlabel">Median time to sold</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- colophon -->
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — PUBLIC SHEET · A DRAWING THAT KNOWS WHAT'S HAPPENING</span>
+    <span class="microlabel"><a class="mono" href="explore.html">EXPLORE</a> · <a class="mono" href="market.html">MARKET</a> · <a class="mono" href="index.html">SIGN IN</a></span>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deal — Bronze forged wheels · DRVN</title>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="counter.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+    <div class="nav-links">
+      <a class="nav-link" href="market.html">Market</a>
+      <a class="nav-link" href="deal.html" aria-current="page">My deals<span class="nav-badge">2</span></a>
+      <a class="nav-link" href="listing.html">Sell</a>
+    </div>
+    <div class="nav-spacer"></div>
+    <button class="avatar mine-av" type="button" aria-label="Your profile — Jonah Barr">JB</button>
+  </div>
+</nav>
+
+<div class="wrap deal-layout">
+
+  <aside class="deal-rail" aria-label="My deals">
+    <p class="rail-title">My deals</p>
+    <button class="rail-item active" type="button">
+      <span class="ri-title">Bronze forged wheels</span>
+      <span class="ri-sub">Buying from Priya S. · best £1,150 · active</span>
+    </button>
+    <button class="rail-item" type="button">
+      <span class="ri-title">Adjustable coilover kit</span>
+      <span class="ri-sub">Selling to Marcus O. · shaken on £455</span>
+      <span class="rail-hs-preview" aria-hidden="true"></span>
+    </button>
+    <button class="rail-item" type="button">
+      <span class="ri-title">330mm suede steering wheel</span>
+      <span class="ri-sub">Buying from Nia H. · offer expired · reopen?</span>
+    </button>
+  </aside>
+
+  <main class="deal-main">
+
+    <div class="card deal-header">
+      <div class="deal-thumb"><img src="../assets/c13-part-wheels.png" alt="Bronze forged wheels" data-fallback="Wheels"></div>
+      <div class="deal-head-info">
+        <p class="deal-head-title">Bronze forged wheels — 18×9.5 ET35 · Priya S. ★ 4.8</p>
+        <p class="deal-head-sub" id="dealHeadSub">Current best <span class="money" id="bestAmount">£1,150</span> · her counter expires in <span class="countdown" id="countdown">4h 12m 33s</span></p>
+      </div>
+      <div class="deal-actions">
+        <button class="btn btn-moss btn-sm" type="button" id="acceptBtn">Accept £1,150</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="counterBtn">Counter</button>
+        <button class="btn btn-quiet btn-sm" type="button" id="walkBtn">Walk away</button>
+      </div>
+    </div>
+
+    <div class="thread" id="thread" aria-live="polite">
+
+      <div class="sys-row">Deal opened Tuesday · listed at £1,250</div>
+
+      <div class="bubble bubble-mine">
+        <div class="bubble-amount">£1,050</div>
+        <div class="bubble-note">Would you take £1,050? I can collect from Sheffield this weekend, cash or transfer.</div>
+        <div class="bubble-meta"><span>Tue, 18:42</span><span class="state-chip state-countered">Countered</span></div>
+      </div>
+
+      <div class="bubble bubble-theirs">
+        <div class="bubble-amount">£1,200</div>
+        <div class="bubble-note">Appreciate the offer! The tires are nearly new though — £1,200 and they're yours.</div>
+        <div class="bubble-meta"><span>Tue, 19:05</span><span class="state-chip state-countered">Countered</span></div>
+      </div>
+
+      <div class="bubble bubble-mine">
+        <div class="bubble-amount">£1,120</div>
+        <div class="bubble-note">Fair on the tires. £1,120 — and I'll bring biscuits for the dog I saw in photo 4.</div>
+        <div class="bubble-meta"><span>Tue, 20:31</span><span class="state-chip state-countered">Countered</span></div>
+      </div>
+
+      <div class="bubble bubble-theirs">
+        <div class="bubble-amount">£1,150</div>
+        <div class="bubble-note">Ha — Biscuit approves. Meet in the middle at £1,150 and we have a deal.</div>
+        <div class="bubble-meta"><span>Tue, 21:02</span><span class="state-chip state-open">Open</span></div>
+      </div>
+
+      <div class="sys-row">Priya sent a counter — it's your move</div>
+
+    </div>
+
+    <div class="card deal-composer" id="dealComposer">
+      <form id="dealComposerForm" novalidate>
+        <div class="composer-row">
+          <label class="amount-field" aria-label="Your counter in pounds">
+            <span class="cur">£</span>
+            <input type="number" id="dealAmount" inputmode="numeric" placeholder="1,135" min="0" step="5">
+          </label>
+          <textarea class="note-field" id="dealNote" rows="2" placeholder="Add a note to your counter…"></textarea>
+        </div>
+        <div class="composer-actions">
+          <button class="btn btn-primary" type="submit">Send counter</button>
+          <p class="composer-error" id="dealError" role="alert"></p>
+        </div>
+      </form>
+    </div>
+
+  </main>
+</div>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <small>© 2026 DRVN — the home for your modified car.</small>
+    <div class="footer-links">
+      <a href="market.html">Market</a>
+      <a href="listing.html">Sell</a>
+      <a href="design.html">Style guide</a>
+    </div>
+  </div>
+</footer>
+
+<script src="counter.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "num": 16,
+  "name": "Livesheet",
+  "slug": "livesheet",
+  "family": "hybrid (era-media x artifact) \u2014 Glance x Werkbank cross",
+  "thesis": "A drawing that knows what's happening.",
+  "hero_asset": "c16-hero-car.png",
+  "accent_hex": "#F03A20",
+  "thumb_fallback_hex": "#EFEDE6",
+  "pages": {
+    "index.html": "your live sheet \u2014 KPI dims, offer work-orders, garage, feed, week",
+    "market.html": "market sheet \u2014 live search, icon category chips, fitment switch, 9 listings",
+    "car.html": "public car sheet \u2014 motion hero with live callouts; ruled 18-entry build sheet, for-sale, live activity \u2014 quiet anchor jump-row, no tabs",
+    "listing.html": "part sheet \u2014 measured spec, live offer window, 2-step job-card buy sheet",
+    "dashboard.html": "the workbench \u2014 listings manager, job pipelines, payout ledger",
+    "explore.html": "survey \u2014 live car sheets, parts and fresh entries with type filters",
+    "home.html": "public landing \u2014 motion hero under live callouts, 3 ticking steps, sheet + parts strips, ink stat band",
+    "orders.html": "job card #1058 \u2014 pipeline dots, dispatch form that advances it, payout math, buyer tile, past jobs",
+    "profile.html": "keeper sheet \u2014 identity + measured seller grade, follow/message, cars, listings, ruled reviews, live activity",
+    "garage.html": "owner's desk \u2014 annotated hero, owner-mode build sheet with [ RELEASE ] lines + working prefilled modal, documents, second-sheet teaser",
+    "settings.html": "configuration sheet \u2014 ruled control rows, signal matrix, fees, theme select synced to bar toggle, dirty flag + sticky save"
+  },
+  "showpiece": "car.html hero: Higgsfield dolly video under live leader-line callouts with ticking watch counts",
+  "themes": [
+    "day",
+    "night \u2014 token remap, SHEET DAY/NIGHT toggle in the bar, localStorage 'ls-theme'"
+  ]
+}

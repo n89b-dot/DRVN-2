@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Registry — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --surface:#F4F0E6; --surface-panel:#ECE7D9; --on-surface:#171412;
+    --on-surface-muted:#6E675B; --hairline:#C9C1AE; --accent:#7A2E24;
+    --accent-deep:#5E211A; --on-accent:#F4F0E6; --image-fallback:#E7E2D6;
+    --serif:"Fraunces",Georgia,serif; --sans:"Archivo",Inter,sans-serif;
+    --gutter:clamp(20px,4vw,56px); --max:1100px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--surface); color:var(--on-surface); font-family:var(--sans);
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  }
+  .wrap{max-width:var(--max);margin:0 auto;padding:0 var(--gutter)}
+  .label{font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-muted)}
+  .label--ox{color:var(--accent)}
+  a{color:var(--accent)}
+
+  /* header */
+  header{border-bottom:1px solid var(--hairline);padding:clamp(48px,7vw,96px) 0 40px;margin-bottom:8px}
+  .folio{display:flex;justify-content:space-between;padding-bottom:28px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-muted)}
+  h1.title{font-family:var(--serif);font-weight:340;font-size:clamp(2.6rem,7vw,5.4rem);line-height:.98;letter-spacing:-.025em;margin:16px 0 20px}
+  h1.title em{font-style:italic;color:var(--accent)}
+  .lede{max-width:52ch;color:var(--on-surface-muted);font-size:16px}
+  .mirror-note{margin-top:20px;font-size:12.5px;color:var(--on-surface-muted)}
+  .mirror-note code{font-family:var(--serif);font-style:italic;color:var(--accent);font-size:14px}
+
+  /* sections */
+  section{padding:clamp(48px,7vw,88px) 0;border-bottom:1px solid var(--hairline)}
+  .sec-head{display:flex;align-items:baseline;gap:20px;margin-bottom:40px}
+  .sec-num{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(28px,4vw,42px);color:var(--accent);line-height:1}
+  .sec-head h2{font-family:var(--serif);font-weight:400;font-size:clamp(24px,3vw,36px);letter-spacing:-.01em}
+
+  /* colors */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px;background:var(--hairline);border:1px solid var(--hairline)}
+  .sw{background:var(--surface);padding:0}
+  .sw__chip{height:96px;display:flex;align-items:flex-end;padding:12px}
+  .sw__chip span{font-size:12px}
+  .sw__meta{padding:14px 16px 18px}
+  .sw__name{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+  .sw__hex{font-family:var(--sans);font-size:12px;color:var(--on-surface-muted);margin-top:4px;letter-spacing:.04em}
+
+  /* type specimens */
+  .spec{padding:24px 0;border-top:1px solid var(--hairline);display:grid;grid-template-columns:1fr;gap:14px}
+  .spec:first-child{border-top:none}
+  .spec__meta{display:flex;flex-wrap:wrap;gap:16px}
+  .spec__meta span{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--on-surface-muted)}
+
+  /* spacing + radius */
+  .scale-row{display:flex;align-items:center;gap:20px;padding:10px 0}
+  .scale-row .bar{background:var(--accent);height:24px}
+  .scale-row .tag{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-muted);min-width:130px}
+  .radius-row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}
+  .radius-box{width:120px}
+  .radius-box .box{height:90px;background:var(--surface-panel);border:1px solid var(--hairline)}
+  .radius-box .cap{margin-top:10px}
+
+  /* components */
+  .comp-grid{display:grid;grid-template-columns:1fr;gap:34px}
+  .comp{border:1px solid var(--hairline);background:var(--surface)}
+  .comp__label{padding:12px 18px;border-bottom:1px solid var(--hairline);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-muted)}
+  .comp__body{padding:28px 22px;display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+
+  .btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;padding:15px 32px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;transition:background .25s,color .25s,border-color .25s}
+  .btn:hover{background:var(--accent);color:var(--on-accent)}
+  .btn--solid{background:var(--accent);color:var(--on-accent)}
+  .btn--solid.is-hover,.btn--solid:hover{background:var(--accent-deep);border-color:var(--accent-deep)}
+  .btn--ink{border-color:var(--on-surface);color:var(--on-surface)}
+  .btn--ink.is-hover,.btn--ink:hover{background:var(--on-surface);color:var(--on-accent)}
+  .state-tag{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--on-surface-muted);align-self:flex-end}
+
+  .chip{display:inline-flex;font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--on-surface-muted);background:var(--surface-panel);padding:6px 12px;border:1px solid var(--hairline)}
+  .input{width:min(320px,100%);font-family:var(--sans);font-size:15px;padding:12px 14px;border:1px solid var(--hairline);background:var(--surface);color:var(--on-surface)}
+  .input:focus{outline:2px solid var(--accent);outline-offset:2px}
+  .stamp{display:inline-block;font-family:var(--sans);font-size:11px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);border:2px solid var(--accent);padding:8px 14px;transform:rotate(-4deg);border-radius:3px;opacity:.85;
+    -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.12' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -0.15'/%3E%3CfeComposite operator='in' in2='SourceGraphic'/%3E%3C/filter%3E%3Crect width='120' height='60' fill='%23000' filter='url(%23r)'/%3E%3C/svg%3E");
+    mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='60'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.12' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -0.15'/%3E%3CfeComposite operator='in' in2='SourceGraphic'/%3E%3C/filter%3E%3Crect width='120' height='60' fill='%23000' filter='url(%23r)'/%3E%3C/svg%3E");
+    -webkit-mask-size:cover;mask-size:cover}
+  .price{font-family:var(--serif);font-size:2rem;color:var(--accent)}
+  .ledger{width:100%}
+  .ledger__row{display:grid;grid-template-columns:130px 1fr auto;gap:20px;padding:22px 0;border-top:1px solid var(--hairline)}
+  .ledger__row:first-child{border-top:none}
+  .ledger__date{font-size:11px;letter-spacing:.14em;color:var(--on-surface-muted)}
+  .ledger__title{font-family:var(--serif);font-size:19px;font-weight:500}
+  .ledger__body{font-size:14px;color:var(--on-surface-muted);margin-top:4px;max-width:52ch}
+
+  /* dos donts */
+  .dd{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--hairline);border:1px solid var(--hairline)}
+  .dd__col{background:var(--surface);padding:28px 24px}
+  .dd__col h3{font-family:var(--serif);font-weight:500;font-size:20px;margin-bottom:16px}
+  .dd__col ul{list-style:none}
+  .dd__col li{padding:9px 0 9px 24px;position:relative;font-size:14.5px;border-top:1px solid var(--hairline);color:var(--on-surface-muted)}
+  .dd__col li:first-child{border-top:none}
+  .dd__col li::before{position:absolute;left:0;top:9px;font-family:var(--serif)}
+  .dd--do li::before{content:"✓";color:var(--accent)}
+  .dd--dont li::before{content:"✗";color:var(--on-surface-muted)}
+
+  footer{padding:44px 0 80px}
+  footer .label{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+  @media(max-width:720px){.dd{grid-template-columns:1fr}.ledger__row{grid-template-columns:1fr}.folio span:nth-child(2){display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="folio"><span>The Registry — Design System</span><span>Google design.md · rendered</span><span>Folio DS</span></div>
+    <p class="label label--ox">The system behind the catalogue</p>
+    <h1 class="title">Tokens, set in <em>ink and paper.</em></h1>
+    <p class="lede">The human-readable mirror of <strong>design.md</strong> — every color, type level, and component rendered live in The Registry's own language. The <code>.md</code> is the source of truth a coding agent implements from; this page is what a person reads.</p>
+    <p class="mirror-note">Source of truth: <a href="design.md">design.md</a> · Concept brief: <a href="BRIEF.md">BRIEF.md</a> · Live prototype: <a href="index.html">the-registry/index.html</a></p>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>Colors</h2></div>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>Typography</h2></div>
+    <div class="spec">
+      <div style="font-family:var(--serif);font-weight:340;font-size:clamp(2.6rem,6vw,5rem);line-height:.98;letter-spacing:-.025em">Every part has a <em style="color:var(--accent)">past.</em></div>
+      <div class="spec__meta"><span>display</span><span>Fraunces</span><span>340</span><span>-0.025em</span></div>
+    </div>
+    <div class="spec">
+      <div style="font-family:var(--serif);font-weight:400;font-size:clamp(2rem,4vw,3.2rem);line-height:1.04">Registry entry — Folio 42</div>
+      <div class="spec__meta"><span>h1</span><span>Fraunces</span><span>400</span></div>
+    </div>
+    <div class="spec">
+      <div style="font-family:var(--serif);font-weight:400;font-size:1.8rem">Provenance ledger</div>
+      <div class="spec__meta"><span>h2</span><span>Fraunces</span><span>400</span></div>
+    </div>
+    <div class="spec">
+      <div style="font-size:15.5px;max-width:60ch;color:var(--on-surface)">Body copy is set in Archivo — the grotesque that carries everything a person reads as running prose: descriptions, notes on the record, and the essay a seller attaches to a lot.</div>
+      <div class="spec__meta"><span>body</span><span>Archivo</span><span>400</span><span>1.6</span></div>
+    </div>
+    <div class="spec">
+      <div class="label">Lot No. 217 — Accessioned 04.2026</div>
+      <div class="spec__meta"><span>label</span><span>Archivo</span><span>500</span><span>0.18em / uppercase</span></div>
+    </div>
+    <div class="spec">
+      <div class="price">£2,450</div>
+      <div class="spec__meta"><span>price</span><span>Fraunces</span><span>400</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Spacing</h2></div>
+    <div id="spacing"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>Shapes</h2></div>
+    <div class="radius-row">
+      <div class="radius-box"><div class="box" style="border-radius:0"></div><div class="cap label">none · 0px</div></div>
+      <div class="radius-box"><div class="box" style="border-radius:3px"></div><div class="cap label">stamp · 3px</div></div>
+    </div>
+    <p style="margin-top:24px;color:var(--on-surface-muted);font-size:14.5px;max-width:60ch">Paper documents have corners. Everything stays square; the sole softening is the 3px stamp, which paired with a turbulence mask reads as physical ink.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Elevation &amp; Depth</h2></div>
+    <p style="color:var(--on-surface-muted);font-size:14.5px;max-width:62ch;margin-bottom:28px">No drop shadows. Depth is paper craft — hairline rules, a fractal-noise grain across the whole surface (visible on this very page), an inset panel tone, and the stamp's rough edge.</p>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:1;min-width:200px;background:var(--surface-panel);border:1px solid var(--hairline);padding:26px"><div class="label">surface-panel inset</div><p style="margin-top:10px;font-size:14px;color:var(--on-surface-muted)">A deeper paper tone marks an inset region.</p></div>
+      <div style="flex:1;min-width:200px;border-top:1px solid var(--on-surface);padding:26px 0"><div class="label">hairline rule</div><p style="margin-top:10px;font-size:14px;color:var(--on-surface-muted)">Structure drawn with a single line.</p></div>
+      <div style="flex:1;min-width:200px;padding:26px 0;display:flex;align-items:center;justify-content:center"><span class="stamp">Verified Provenance</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2>Components</h2></div>
+    <div class="comp-grid">
+      <div class="comp"><div class="comp__label">button-primary · default / hover</div><div class="comp__body">
+        <button class="btn btn--solid">Acquire — £2,450</button>
+        <button class="btn btn--solid is-hover">Acquire — £2,450</button><span class="state-tag">hover</span>
+      </div></div>
+      <div class="comp"><div class="comp__label">button-ink · default / hover</div><div class="comp__body">
+        <button class="btn btn--ink">Submit an offer</button>
+        <button class="btn btn--ink is-hover">Submit an offer</button><span class="state-tag">hover</span>
+      </div></div>
+      <div class="comp"><div class="comp__label">chip · input · default / focus</div><div class="comp__body">
+        <span class="chip">Grade II — Excellent</span>
+        <input class="input" placeholder="Search the registry"><span class="state-tag">focus me</span>
+      </div></div>
+      <div class="comp"><div class="comp__label">ledger-entry</div><div class="comp__body">
+        <div class="ledger">
+          <div class="ledger__row"><div class="ledger__date">11 · 04 · 2026</div><div><div class="ledger__title">ITB kit removed and consigned</div><div class="ledger__body">Jenvey throttle bodies removed at 128,100 mi and consigned with full papers.</div></div><div class="label label--ox">Lot No. 217</div></div>
+          <div class="ledger__row"><div class="ledger__date">02 · 09 · 2025</div><div><div class="ledger__title">Wheel change — Fuchs fitted</div><div class="ledger__body">Outgoing forged wheels released for sale with tyre-date records.</div></div><div class="label label--ox">Lot No. 190</div></div>
+        </div>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2>Do's and Don'ts</h2></div>
+    <div class="dd">
+      <div class="dd__col dd--do"><h3>Do</h3><ul>
+        <li>Keep one accent — oxblood — for links, prices, and stamps.</li>
+        <li>Set headlines in Fraunces, coordinates in Archivo smallcaps.</li>
+        <li>Draw structure with the hairline rule and paper grain.</li>
+        <li>Give every listing a real certificate of provenance.</li>
+      </ul></div>
+      <div class="dd__col dd--dont"><h3>Don't</h3><ul>
+        <li>Round a card, button, or input past 0px (stamp is the exception).</li>
+        <li>Add a drop shadow — depth is rules, grain, and stamp only.</li>
+        <li>State seller fitment as fact; stamp it "not verified."</li>
+        <li>Let motion get quick or bouncy; reveals stay 400–700ms.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="label"><span>The Registry — a DRVN design concept</span><span>Mirror of design.md</span></div>
+  </footer>
+</div>
+
+<script>
+  const colors=[
+    ["surface","#F4F0E6","on-surface"],["surface-panel","#ECE7D9","on-surface"],
+    ["on-surface","#171412","surface"],["on-surface-muted","#6E675B","surface"],
+    ["hairline","#C9C1AE","on-surface"],["accent","#7A2E24","on-accent"],
+    ["accent-deep","#5E211A","on-accent"],["on-accent","#F4F0E6","accent"],
+    ["image-fallback","#E7E2D6","on-surface"]
+  ];
+  const val={surface:"#F4F0E6","on-surface":"#171412","on-accent":"#F4F0E6",accent:"#7A2E24"};
+  document.getElementById("swatches").innerHTML=colors.map(([n,hex,on])=>`
+    <div class="sw"><div class="sw__chip" style="background:${hex}"><span style="color:${val[on]||'#171412'}">${on}</span></div>
+    <div class="sw__meta"><div class="sw__name">${n}</div><div class="sw__hex">${hex}</div></div></div>`).join("");
+  const spaces=[["xs",8],["sm",12],["md",20],["lg",32],["xl",56],["xxl",96]];
+  document.getElementById("spacing").innerHTML=spaces.map(([n,px])=>`
+    <div class="scale-row"><span class="tag">${n} · ${px}px</span><div class="bar" style="width:${px}px"></div></div>`).join("");
+</script>
+</body>
+</html>

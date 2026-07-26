@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — This Week's Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tearsheet.css">
+</head>
+<body>
+
+<nav class="topnav" aria-label="Main">
+  <div class="topnav__inner">
+    <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+    <ul class="topnav__links">
+      <li><a href="market.html">Market</a></li>
+      <li><a href="car.html">Builds</a></li>
+      <li><a href="market.html">Sell</a></li>
+    </ul>
+    <button class="nav-search" aria-label="Search the market" onclick="location.href='market.html'">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6"/></svg>
+    </button>
+  </div>
+</nav>
+
+<main class="frame">
+
+  <!-- LEAD MODULE -->
+  <section class="lead" aria-labelledby="lead-headline">
+    <div class="lead__main">
+      <p class="kicker">Parts Market · Week 29 · 214 New Listings</p>
+      <div class="photo lead__hero">
+        <img src="../assets/c14-hero-silvia.png" alt="Gunmetal Nissan Silvia S14, flash-lit at dusk">
+      </div>
+      <h1 class="headline headline--lead lead__head" id="lead-headline">3,400 Parts.<br>Real Builds.<br>This Week's Market.</h1>
+      <div class="lead__dekrow">
+        <span class="vlabel" aria-hidden="true">Front of Book</span>
+        <p class="dek">The home for your modified car. Show off your build, buy or sell the parts behind it — turbos, coilovers, three-piece wheels, all listed by the people who actually ran them.</p>
+      </div>
+    </div>
+
+    <aside class="lead__side" aria-labelledby="justlisted-h">
+      <p class="kicker">Just Listed</p>
+      <h2 class="headline headline--sect" id="justlisted-h">Fresh Off The Car</h2>
+      <hr class="rule rule--heavy" style="margin:8px 0 4px">
+      <ul class="rowlist">
+        <li><a class="rowlist__link" href="listing.html">
+          <span class="rowlist__thumb"><img src="../assets/c14-part-turbo.png" alt="TD06 turbo and manifold"></span>
+          <span><span class="rowlist__title">TD06-20G Turbo + Manifold</span><span class="rowlist__meta">Cond. B+ · @sato.s14works · 4.9★</span></span>
+          <span class="rowlist__price"><span class="price price--sm">£980</span></span>
+        </a></li>
+        <li><a class="rowlist__link" href="market.html">
+          <span class="rowlist__thumb"><img src="../assets/c14-part-wheels2.png" alt="Deep-dish three-piece wheel"></span>
+          <span><span class="rowlist__title">Work Meister S1 · 17×9.5 -19</span><span class="rowlist__meta">Cond. A · @ek9.jules · 5.0★</span></span>
+          <span class="rowlist__price"><span class="price price--sm">£2,150</span></span>
+        </a></li>
+        <li><a class="rowlist__link" href="market.html">
+          <span class="rowlist__thumb">ECU</span>
+          <span><span class="rowlist__title">Link G4X Plug-In · SR20</span><span class="rowlist__meta">Cond. A · @boostlab.ldn · 4.8★</span></span>
+          <span class="rowlist__price"><span class="price price--sm">£640</span></span>
+        </a></li>
+        <li><a class="rowlist__link" href="market.html">
+          <span class="rowlist__thumb">SEAT</span>
+          <span><span class="rowlist__title">Bride Zeta III · FIA 2019</span><span class="rowlist__meta">Cond. B · @track.rat.gt · 4.7★</span></span>
+          <span class="rowlist__price"><span class="price price--sm">£430</span></span>
+        </a></li>
+        <li><a class="rowlist__link" href="market.html">
+          <span class="rowlist__thumb">SUSP</span>
+          <span><span class="rowlist__title">Tein Flex Z Coilovers · EK</span><span class="rowlist__meta">Cond. B+ · @ek9.jules · 5.0★</span></span>
+          <span class="rowlist__price"><span class="price price--sm">£390</span></span>
+        </a></li>
+        <li><a class="rowlist__link" href="market.html">
+          <span class="rowlist__thumb">EXH</span>
+          <span><span class="rowlist__title">HKS Hi-Power Cat-Back · JZA80</span><span class="rowlist__meta">Cond. B · @supra.dan.uk · 4.9★</span></span>
+          <span class="rowlist__price"><span class="price price--sm">£520</span></span>
+        </a></li>
+      </ul>
+      <a class="btn btn--ghost btn--block" href="market.html" style="margin-top:12px">Open The Market →</a>
+    </aside>
+  </section>
+
+  <!-- CATEGORY RULE-GRID -->
+  <section aria-labelledby="cats-h">
+    <div class="sect-head">
+      <div class="sect-head__row">
+        <div>
+          <p class="kicker">Shop The Market</p>
+          <h2 class="headline headline--sect" id="cats-h">By Category</h2>
+        </div>
+        <a class="sect-head__more" href="market.html">All 3,400 parts →</a>
+      </div>
+      <hr class="rule rule--heavy">
+    </div>
+    <div class="catgrid">
+      <a class="catcell" href="market.html"><span class="catcell__name">Engine &amp; Turbo</span><span class="catcell__count"><b>812</b> listings <span>from £45</span></span></a>
+      <a class="catcell" href="market.html"><span class="catcell__name">Wheels &amp; Tyres</span><span class="catcell__count"><b>644</b> listings <span>from £120</span></span></a>
+      <a class="catcell" href="market.html"><span class="catcell__name">Suspension</span><span class="catcell__count"><b>538</b> listings <span>from £60</span></span></a>
+      <a class="catcell" href="market.html"><span class="catcell__name">Interior &amp; Seats</span><span class="catcell__count"><b>417</b> listings <span>from £30</span></span></a>
+      <a class="catcell" href="market.html"><span class="catcell__name">Exhaust</span><span class="catcell__count"><b>386</b> listings <span>from £55</span></span></a>
+      <a class="catcell" href="market.html"><span class="catcell__name">Electronics</span><span class="catcell__count"><b>603</b> listings <span>from £25</span></span></a>
+    </div>
+  </section>
+
+  <!-- FEATURED BUILD + TOP SELLERS -->
+  <section class="duo">
+    <a class="duo__feature" href="car.html" aria-labelledby="feat-h">
+      <p class="kicker">Featured Build</p>
+      <div class="photo">
+        <img src="../assets/c14-car-civic.png" alt="Yellow Honda Civic EK9, studio flash">
+      </div>
+      <h2 class="headline headline--sect" id="feat-h">Sato's S14: The London Silvia Parting Out Its Old Spec</h2>
+      <p class="dek" style="margin-top:8px">Osaka to London, one owner, eight years of upgrades — and every superseded part now listed on the market. Read the build →</p>
+    </a>
+    <aside class="duo__side" aria-labelledby="sellers-h">
+      <p class="kicker">Top Sellers This Month</p>
+      <h2 class="headline headline--sect" id="sellers-h">The Trade List</h2>
+      <hr class="rule rule--heavy" style="margin:8px 0 4px">
+      <ol class="sellers">
+        <li><span class="sellers__handle">@sato.s14works</span><span class="sellers__stat">33 sales · 4.9★</span></li>
+        <li><span class="sellers__handle">@ek9.jules</span><span class="sellers__stat">28 sales · 5.0★</span></li>
+        <li><span class="sellers__handle">@boostlab.ldn</span><span class="sellers__stat">24 sales · 4.8★</span></li>
+        <li><span class="sellers__handle">@supra.dan.uk</span><span class="sellers__stat">21 sales · 4.9★</span></li>
+        <li><span class="sellers__handle">@track.rat.gt</span><span class="sellers__stat">17 sales · 4.7★</span></li>
+      </ol>
+      <p class="dek" style="margin-top:14px; font-size:12px">Ratings are buyer-left, verified per completed order. Sell your first part in under three minutes.</p>
+      <a class="btn btn--block" href="market.html" style="margin-top:12px">Start Selling</a>
+    </aside>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__grid">
+    <div>
+      <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+      <p class="colophon__tag">The home for your modified car. Show off your build, buy or sell the parts behind it.</p>
+    </div>
+    <div>
+      <h4>Market</h4>
+      <ul>
+        <li><a href="market.html">Browse parts</a></li>
+        <li><a href="listing.html">Featured listing</a></li>
+        <li><a href="market.html">Sell a part</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Builds</h4>
+      <ul>
+        <li><a href="car.html">Featured build</a></li>
+        <li><a href="car.html">More builds</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="design.html">Style guide</a></li>
+        <li><a href="index.html">Front of book</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="colophon__bottom">
+    <div class="colophon__bottom-inner">
+      <span>DRVN Concept 14 — Tearsheet</span>
+      <span>Set in Archivo Narrow &amp; Inter · One red, printed heavy</span>
+    </div>
+  </div>
+</footer>
+
+<script src="tearsheet.js"></script>
+</body>
+</html>

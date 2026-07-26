@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+/* ------------------------------------------------------------------
+   STYLE-GUIDE FURNITURE ONLY.
+   Layout and measurement rules for the catalogue itself. Every colour,
+   font, radius, duration and easing below is a var() read from
+   livesheet.css — this block declares no design value of its own, so
+   the guide cannot drift from the system it documents.
+   ------------------------------------------------------------------ */
+.swrow {
+  display: grid; grid-template-columns: 44px 1fr 128px 128px; gap: 12px;
+  align-items: center; padding: 9px 2px; border-top: 1px solid var(--rule-soft);
+}
+.swrow:first-child { border-top: 0; }
+.swrow__chip {
+  width: 44px; height: 28px; border-radius: 8px; overflow: hidden;
+  background: var(--paper); position: relative; flex: none;
+}
+.swrow__chip i { position: absolute; inset: 0; display: block; }
+.swrow__name { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.swrow__val {
+  font-family: var(--mono); font-size: 10.5px; color: var(--dim);
+  text-align: right; overflow-wrap: anywhere; line-height: 1.4;
+}
+.swhead { display: grid; grid-template-columns: 44px 1fr 128px 128px; gap: 12px; padding-bottom: 8px; }
+.swhead > :nth-child(n+3) { text-align: right; }
+@media (max-width: 720px) {
+  .swrow, .swhead { grid-template-columns: 36px 1fr; }
+  .swrow__chip { width: 36px; }
+  .swrow__val { grid-column: 2; text-align: left; }
+  .swhead > :nth-child(n+3) { display: none; }
+}
+.sg-item { border-top: 1px solid var(--rule-soft); padding: 16px 0 4px; }
+.sg-item:first-child { border-top: 0; padding-top: 2px; }
+.sg-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.sg-stack { display: grid; gap: 10px; }
+.sg-bar { height: 12px; border-radius: 999px; background: var(--ghost-strong); }
+.sg-swatchbox { border-radius: var(--r); background: var(--paper-deep); height: 64px; }
+.sg-radii { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 10px; }
+.sg-radii > div { background: var(--paper-deep); height: 62px; display: grid; place-items: end center; padding-bottom: 6px; }
+.sg-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .sg-two { grid-template-columns: 1fr; } }
+.sg-theme { border-radius: var(--r); padding: 16px; }
+.sg-scroll { overflow-x: auto; }
+#nightprobe { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<div id="nightprobe" data-theme="dark" aria-hidden="true"></div>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SPEC SHEET — DESIGN SYSTEM · EVERY TOKEN READ FROM <span class="mono">LIVESHEET.CSS</span> AT PAGE LOAD</span>
+    <h1>The system, drawn<br>from its own <span class="live-word">source.</span></h1>
+    <p class="sub">This page links the production stylesheet and renders the real classes. The values in the tables are parsed out of <span class="mono">livesheet.css</span> in the browser — nothing here is transcribed by hand, so the catalogue cannot drift from the system.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#foundations">Foundations</a>
+    <a class="jumplink" href="#color">Color</a>
+    <a class="jumplink" href="#type">Type</a>
+    <a class="jumplink" href="#motion">Motion</a>
+    <a class="jumplink" href="#components">Components</a>
+    <a class="jumplink" href="#patterns">Patterns</a>
+    <a class="jumplink" href="#a11y">Accessibility</a>
+  </div>
+
+
+  <!-- ══════════════════════════════ FOUNDATIONS ══════════════════════════════ -->
+  <section class="deck" id="foundations">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">01 — THE THESIS</span>
+        <span class="capsule capsule--paper"><span class="dot"></span> LIVE SPEC — <span class="cd" data-seconds="5400"></span> OF PROTOTYPE CLOCK</span>
+      </div>
+      <div class="bline"><span class="bline__label">Thesis</span><span class="bline__val">A drawing that knows what's happening</span><span class="bline__note">Warm drafting paper, ruled and precise, whose annotations are alive.</span></div>
+      <div class="bline"><span class="bline__label">Lineage</span><span class="bline__val">Glance × Werkbank</span><span class="bline__note">Device-live tiles and one signal colour, crossed with the drawing office's dimension lines and mono annotation.</span></div>
+      <div class="bline"><span class="bline__label">Product</span><span class="bline__val">A marketplace for parts off modified cars</span><span class="bline__note">The marketplace is the point. Provenance is the line underneath that makes the price believable — never the headline.</span><span class="chip chip--live">MARKETPLACE FIRST</span></div>
+      <div class="bline"><span class="bline__label">Never reads as</span><span class="bline__val">Dashboard · terminal · fintech · magazine</span><span class="bline__note">No neon-on-black, no gradients on surfaces, no glass, no boxes inside boxes.</span></div>
+      <p class="spec-note"><b>Voice:</b> calm, measured, present tense — the interface reports what it just saw. "Two offers arrived overnight." Never exclamatory, never gamified.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">02 — SPACING RHYTHM</span>
+        <span class="microlabel">BASE 2PX · STEP 4PX</span>
+      </div>
+      <div class="sg-stack" data-scale></div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="bline"><span class="bline__label">Deck gap</span><span class="bline__val mono">14px</span><span class="bline__note">The single grid gap in the system — every <span class="mono">.deck</span> uses it.</span></div>
+      <div class="bline"><span class="bline__label">Tile padding</span><span class="bline__val mono">18px</span><span class="bline__note">A tile closes 18px after its last row. Measured, not eyeballed.</span></div>
+      <div class="bline"><span class="bline__label">Row padding</span><span class="bline__val mono">12–13px vertical</span><span class="bline__note"><span class="mono">.bline</span> 12px · <span class="mono">.rowlist .order</span>, <span class="mono">.step</span>, <span class="mono">.ghostrow</span> 13px</span></div>
+      <div class="bline"><span class="bline__label">Section close</span><span class="bline__val mono">clamp(48px, 7vw, 80px)</span><span class="bline__note">Bottom padding on every <span class="mono">.deck</span>.</span></div>
+      <div class="bline"><span class="bline__label">Page gutter</span><span class="bline__val mono">clamp(16px, 4vw, 40px)</span><span class="bline__note"><span class="mono">.wrap</span>, matched by <span class="mono">.bar__inner</span>.</span></div>
+      <div class="bline"><span class="bline__label">Max width</span><span class="bline__val mono" data-token="--maxw">—</span><span class="bline__note">Token <span class="mono">--maxw</span>. Nothing is full-bleed.</span></div>
+      <p class="spec-note"><b>Rule:</b> the rhythm is 2px-based but reads in 4px steps. If a value isn't on the scale, it's usually a mistake — the exceptions are the half-pixel type sizes (10.5, 12.5, 13.5, 15.5) which exist to hit optical, not geometric, alignment.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">03 — RADII &amp; SHAPE</span>
+        <span class="chip">2 TOKENS · 7 LITERALS</span>
+      </div>
+      <div class="sg-radii">
+        <div style="border-radius:var(--r)"><span class="microlabel">--r 20</span></div>
+        <div style="border-radius:var(--r-cap)"><span class="microlabel">--r-cap</span></div>
+        <div style="border-radius:16px"><span class="microlabel">16</span></div>
+        <div style="border-radius:14px"><span class="microlabel">14</span></div>
+        <div style="border-radius:12px"><span class="microlabel">12</span></div>
+        <div style="border-radius:10px"><span class="microlabel">10</span></div>
+        <div style="border-radius:8px"><span class="microlabel">8</span></div>
+        <div style="border-radius:4px"><span class="microlabel">4 focus</span></div>
+      </div>
+      <div class="livedim" style="margin-top:16px"><span class="livedim__tick"></span>
+        <span class="microlabel">Tile image radius is derived, not fixed</span>
+        <span class="val">calc(var(--r) − 8px) = 12px</span>
+      </div>
+      <p class="spec-note"><b>Discrepancy, documented:</b> only <b>--r</b> (20px) and <b>--r-cap</b> (999px) are tokens. The 16 / 14 / 12 / 10 / 8 / 4px radii are literals inside component rules in <span class="mono">livesheet.css</span>. That is what the CSS does, so it is what this page shows. <b>Porting note:</b> promote them to <span class="mono">--radius-*</span> in the Tailwind <span class="mono">@theme</span> block. <b>Rule:</b> radius descends with the size of the thing — plates 20, controls 12, small media 10.</p>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════ COLOR ══════════════════════════════ -->
+  <section class="deck" id="color">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">04 — THE SINGLE-ACCENT RULE</span>
+        <span class="chip chip--live">--LIVE IS FOR SIGNALS ONLY</span>
+      </div>
+      <div class="sg-two">
+        <div>
+          <span class="microlabel microlabel--live">Live is for</span>
+          <div class="sg-row" style="margin-top:10px">
+            <span class="capsule"><span class="dot"></span> ARRIVING NOW</span>
+            <span class="chip chip--live">2 OPEN</span>
+          </div>
+          <div class="sg-row" style="margin-top:10px">
+            <span class="capsule capsule--paper"><span class="dot"></span> LAPSES IN <span class="cd" data-seconds="2145"></span></span>
+            <button class="btn btn--live" type="button">Accept $620</button>
+          </div>
+          <div class="livedim livedim--live" style="margin-top:14px"><span class="livedim__tick"></span>
+            <span class="microlabel">Counting now</span>
+            <span class="val"><span data-tick="34">34</span> watching</span>
+          </div>
+          <p class="spec-note"><b>Use:</b> pulsing dots, countdowns, LIVE/NOW/OPEN chips, arriving events, the one primary CTA on a surface, the focus ring, text selection. <b>Test:</b> if it isn't moving, changing, or about to expire, it isn't live.</p>
+        </div>
+        <div>
+          <span class="microlabel">Live is never</span>
+          <div class="sg-stack" style="margin-top:10px">
+            <div class="alert">
+              <i class="ph ph-x-circle alert__ico" aria-hidden="true"></i>
+              <h4>A brand fill</h4>
+              <p>There are exactly four background uses of <span class="mono">--live</span> in the stylesheet, and each is a signal: <span class="mono">.btn--live</span>, <span class="mono">.week__day--hot</span>, <span class="mono">.pipe .pip.is-on</span>, <span class="mono">::selection</span>.</p>
+            </div>
+            <div class="alert">
+              <i class="ph ph-x-circle alert__ico" aria-hidden="true"></i>
+              <h4>A headline colour</h4>
+              <p>One exception, once per page: the <span class="mono">.live-word</span> device in the h1 — a single word plus a 3px underline that draws in on entry.</p>
+            </div>
+          </div>
+          <p class="spec-note"><b>No second accent.</b> <span class="mono">--ok</span> is a <b>terminal state</b> (accepted, sold, dispatched, verified), not a brand colour — it only appears after the live thing has stopped being live. Explanation uses <span class="mono">--dim</span>, never a blue "info" colour.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">05 — SURFACES &amp; INK</span>
+        <span class="microlabel">TONE, NOT BORDERS</span>
+      </div>
+      <div class="swhead">
+        <span></span><span class="microlabel">TOKEN</span><span class="microlabel">DAY</span><span class="microlabel">NIGHT</span>
+      </div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--paper)"></i></span><span class="swrow__name">--paper</span><span class="swrow__val" data-token="--paper">—</span><span class="swrow__val" data-token="--paper" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--paper-deep)"></i></span><span class="swrow__name">--paper-deep</span><span class="swrow__val" data-token="--paper-deep">—</span><span class="swrow__val" data-token="--paper-deep" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--tile)"></i></span><span class="swrow__name">--tile</span><span class="swrow__val" data-token="--tile">—</span><span class="swrow__val" data-token="--tile" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--tile-2)"></i></span><span class="swrow__name">--tile-2</span><span class="swrow__val" data-token="--tile-2">—</span><span class="swrow__val" data-token="--tile-2" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ink)"></i></span><span class="swrow__name">--ink</span><span class="swrow__val" data-token="--ink">—</span><span class="swrow__val" data-token="--ink" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--dim)"></i></span><span class="swrow__name">--dim</span><span class="swrow__val" data-token="--dim">—</span><span class="swrow__val" data-token="--dim" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--on-ink)"></i></span><span class="swrow__name">--on-ink</span><span class="swrow__val" data-token="--on-ink">—</span><span class="swrow__val" data-token="--on-ink" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--img-fallback)"></i></span><span class="swrow__name">--img-fallback</span><span class="swrow__val" data-token="--img-fallback">—</span><span class="swrow__val" data-token="--img-fallback" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--scrim)"></i></span><span class="swrow__name">--scrim</span><span class="swrow__val" data-token="--scrim">—</span><span class="swrow__val" data-token="--scrim" data-of="night">—</span></div>
+      <p class="spec-note"><b>The stack:</b> <span class="mono">paper-deep → paper → tile-2 → tile</span>, ascending in lightness in <b>both</b> themes. A tile reads as raised because it is lighter than the page — it has no border and no shadow. <b>Never</b> use <span class="mono">--dimline</span> as a card edge.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">06 — SIGNAL, STATE &amp; LINES</span>
+        <span class="microlabel">ALPHA TOKENS SHOWN OVER --PAPER</span>
+      </div>
+      <div class="swhead">
+        <span></span><span class="microlabel">TOKEN</span><span class="microlabel">DAY</span><span class="microlabel">NIGHT</span>
+      </div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--live)"></i></span><span class="swrow__name">--live</span><span class="swrow__val" data-token="--live">—</span><span class="swrow__val" data-token="--live" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--live-tint)"></i></span><span class="swrow__name">--live-tint</span><span class="swrow__val" data-token="--live-tint">—</span><span class="swrow__val" data-token="--live-tint" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ok)"></i></span><span class="swrow__name">--ok</span><span class="swrow__val" data-token="--ok">—</span><span class="swrow__val" data-token="--ok" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ok-tint)"></i></span><span class="swrow__name">--ok-tint</span><span class="swrow__val" data-token="--ok-tint">—</span><span class="swrow__val" data-token="--ok-tint" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--dimline)"></i></span><span class="swrow__name">--dimline</span><span class="swrow__val" data-token="--dimline">—</span><span class="swrow__val" data-token="--dimline" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--rule-soft)"></i></span><span class="swrow__name">--rule-soft</span><span class="swrow__val" data-token="--rule-soft">—</span><span class="swrow__val" data-token="--rule-soft" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--rule-mid)"></i></span><span class="swrow__name">--rule-mid</span><span class="swrow__val" data-token="--rule-mid">—</span><span class="swrow__val" data-token="--rule-mid" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ghost)"></i></span><span class="swrow__name">--ghost</span><span class="swrow__val" data-token="--ghost">—</span><span class="swrow__val" data-token="--ghost" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ghost-strong)"></i></span><span class="swrow__name">--ghost-strong</span><span class="swrow__val" data-token="--ghost-strong">—</span><span class="swrow__val" data-token="--ghost-strong" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--grid-line)"></i></span><span class="swrow__name">--grid-line</span><span class="swrow__val" data-token="--grid-line">—</span><span class="swrow__val" data-token="--grid-line" data-of="night">—</span></div>
+      <p class="spec-note"><b>Line hierarchy:</b> <span class="mono">--dimline</span> draws annotation (dimension lines, leaders, dashed empty plates, the <span class="mono">.jumplink</span> underline). <span class="mono">--rule-soft</span> separates rows. <span class="mono">--rule-mid</span> frames structure (footer, mail, message spine). Three weights, three jobs — don't substitute.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">07 — INTERACTION TOKENS</span>
+        <span class="microlabel">HOVER ONLY</span>
+      </div>
+      <div class="swhead"><span></span><span class="microlabel">TOKEN</span><span class="microlabel">DAY</span><span class="microlabel">NIGHT</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ink-hover)"></i></span><span class="swrow__name">--ink-hover</span><span class="swrow__val" data-token="--ink-hover">—</span><span class="swrow__val" data-token="--ink-hover" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--live-hover)"></i></span><span class="swrow__name">--live-hover</span><span class="swrow__val" data-token="--live-hover">—</span><span class="swrow__val" data-token="--live-hover" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--ghost-hover)"></i></span><span class="swrow__name">--ghost-hover</span><span class="swrow__val" data-token="--ghost-hover">—</span><span class="swrow__val" data-token="--ghost-hover" data-of="night">—</span></div>
+      <div class="swrow"><span class="swrow__chip"><i style="background:var(--paper-deep)"></i></span><span class="swrow__name">--photo-filter</span><span class="swrow__val" data-token="--photo-filter">—</span><span class="swrow__val" data-token="--photo-filter" data-of="night">—</span></div>
+      <p class="spec-note"><b>Why these exist:</b> Pass 1's literal audit caught seven hard-coded colours in hover and rule declarations. They were tokenised. <b>Rule:</b> a hover state is a token, not a lightened guess. <span class="mono">--photo-filter</span> is not a colour — it dims photography in NIGHT so images don't glare out of a dark sheet.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">08 — DAY &amp; NIGHT</span>
+        <button class="fbtn" data-theme-toggle type="button">SWITCH LIGHTING</button>
+      </div>
+      <div class="sg-two">
+        <div class="sg-theme" style="background:var(--paper)">
+          <span class="microlabel">DAY — <span class="mono">:root</span></span>
+          <div class="tile" style="margin-top:10px;padding:12px">
+            <span class="microlabel microlabel--ink">DRAFTING PAPER</span>
+            <div class="num-giant" style="font-size:34px;margin-top:4px">1,430</div>
+            <div class="sg-row" style="margin-top:8px"><span class="chip chip--live">LIVE</span><span class="chip chip--ok">SOLD</span></div>
+          </div>
+        </div>
+        <div class="sg-theme" data-theme="dark" style="background:var(--paper)">
+          <span class="microlabel">NIGHT — <span class="mono">[data-theme="dark"]</span></span>
+          <div class="tile" style="margin-top:10px;padding:12px">
+            <span class="microlabel microlabel--ink">THE OFFICE AFTER HOURS</span>
+            <div class="num-giant" style="font-size:34px;margin-top:4px">1,430</div>
+            <div class="sg-row" style="margin-top:8px"><span class="chip chip--live">LIVE</span><span class="chip chip--ok">SOLD</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="spec-note"><b>NIGHT is a token remap, never a second stylesheet.</b> Identical variable names, different values, declared once under <span class="mono">[data-theme="dark"]</span> on <span class="mono">&lt;html&gt;</span>. No component rule in <span class="mono">livesheet.css</span> is duplicated for dark — the only dark-specific selectors in the whole file are the photo filter and the theme-switch pip fill. The right-hand plate above proves it: the same markup, one attribute, nested inside a DAY page. <b>Rule:</b> a token that exists only in <span class="mono">:root</span> is a bug.</p>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════ TYPE ══════════════════════════════ -->
+  <section class="deck" id="type">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">09 — TYPE SPECIMENS</span>
+        <span class="microlabel">IBM PLEX SANS + MONO · NO THIRD FAMILY</span>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">DISPLAY — <span class="mono">.pagehead h1</span></span>
+        <div style="font-weight:650;letter-spacing:-0.02em;line-height:1.05;font-size:clamp(28px,4vw,44px);margin-top:8px">Your sheet is <span class="live-word">live.</span></div>
+        <p class="spec-note"><span class="mono">--sans · clamp(28px, 4vw, 44px) · 650 · 1.05 · -0.02em</span> — <b>Use:</b> once per page, in the h1 only. The <span class="mono">.live-word</span> takes <span class="mono">--live</span> and draws a 3px underline on entry.</p>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">NUM-GIANT — <span class="mono">.num-giant</span></span>
+        <div class="num-giant" style="margin-top:8px" data-count="1430" data-prefix="$">$0</div>
+        <p class="spec-note"><span class="mono">--sans · clamp(40px, 5.4vw, 64px) · 650 · 0.95 · -0.03em · tabular-nums</span> — <b>Use:</b> the measured value on a KPI plate. <b>Rule:</b> always tabular, because it will change while someone is looking at it. This one counts up on reveal via <span class="mono">[data-count]</span>.</p>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">VALUE — <span class="mono">.bline__val</span> / <span class="mono">.step__t</span></span>
+        <div class="bline__val" style="margin-top:8px">KW Variant 2 coilovers — Delta fitment</div>
+        <p class="spec-note"><span class="mono">--sans · 15.5px (16.5px ≤720px) · 600 · 1.35 · -0.01em</span> — <b>Use:</b> the value cell of every ruled row. It steps <b>up</b> a point on mobile, where it becomes the row's headline.</p>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">BODY — <span class="mono">body</span></span>
+        <p style="margin-top:8px;max-width:62ch">An offer holds for 48 hours. The seller can accept, counter once, or let it lapse — a counter restarts the clock on your side, and it only runs once.</p>
+        <p class="spec-note"><span class="mono">--sans · 15px · 400 · 1.5</span> — <b>Use:</b> running text. Secondary sizes: 14.5px (<span class="mono">.msg__body</span>, 1.55), 14px (<span class="mono">.prose p</span>, 1.65), 13.5px (<span class="mono">.feed li</span>, <span class="mono">.review p</span>, <span class="mono">.spec td</span>). <b>Measure:</b> 58–72ch, capped per component.</p>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">MICROLABEL — <span class="mono">.microlabel</span></span>
+        <div class="sg-row" style="margin-top:8px">
+          <span class="microlabel">DEFAULT — SECONDARY</span>
+          <span class="microlabel microlabel--ink">--INK — SECTION HEADING</span>
+          <span class="microlabel microlabel--live">--LIVE — LIVE ANNOTATION</span>
+        </div>
+        <p class="spec-note"><span class="mono">--mono · 10.5px · 500 · uppercase · 0.14em · --dim</span> — the connective tissue of the whole system. <b>Use:</b> two to six words. It <b>labels</b>; it never explains. <span class="mono">--ink</span> promotes it to a section heading inside a <span class="mono">.tile__head</span>.</p>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">MONO-DATA — <span class="mono">.kv</span> / <span class="mono">.livedim .val</span> / <span class="mono">.cd</span></span>
+        <div class="sg-row" style="margin-top:8px">
+          <span class="kv">FITMENT <b>DELTA HF INTEGRALE EVO</b></span>
+          <span class="capsule capsule--paper"><span class="dot"></span> LAPSES <span class="cd" data-seconds="3725"></span></span>
+        </div>
+        <p class="spec-note"><span class="mono">--mono · 12–13px · 500 · tabular-nums</span> — <b>Use:</b> key-values, prices, countdowns, timestamps, spec tables. <b>The split is semantic:</b> Mono means "the sheet wrote this on the drawing"; Sans means "this is content". Never mix the two inside one phrase for decoration.</p>
+      </div>
+
+      <div class="sg-item">
+        <span class="microlabel">MONO-META &amp; BUTTON LABEL</span>
+        <div class="sg-row" style="margin-top:8px">
+          <span class="order__meta">@peaks.gravel offers <b>$620</b> vs $680 · 07:42</span>
+          <a class="btn btn--ghost" href="#type">Bracketed label</a>
+        </div>
+        <p class="spec-note"><span class="mono">--mono · 10–11px · --dim</span> for metadata; <span class="mono">--mono · 12px · 0.1em · uppercase</span> for <span class="mono">.btn</span>. The <span class="mono">[ ]</span> brackets are drawn by <span class="mono">::before</span>/<span class="mono">::after</span> at 0.5 opacity — a drawing-office convention for a control on a plan. <b>Do not remove them to "clean up" a button.</b></p>
+      </div>
+
+      <p class="spec-note"><b>Discrepancy, documented:</b> the stylesheet asks for <span class="mono">font-weight: 650</span> on eight selectors, but the pages load only the static faces 400/500/600/700 — browsers resolve 650 to 700. In production, load <b>IBM Plex Sans Variable</b> so 650 renders as specified; it is noticeably calmer than 700 at display sizes.</p>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════ MOTION ══════════════════════════════ -->
+  <section class="deck deck--two" id="motion">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">10 — ONE SPRING, THREE DURATIONS</span>
+        <button class="fbtn" type="button" data-replay>REPLAY THE DRAW-IN</button>
+      </div>
+      <div data-replay-stage>
+        <div class="dimline-h" aria-hidden="true"></div>
+        <div class="rv" data-stagger="0"><span class="microlabel">STAGGER 0 — 0MS</span></div>
+        <div class="rv" data-stagger="1" style="margin-top:6px"><span class="microlabel">STAGGER 1 — 70MS</span></div>
+        <div class="rv" data-stagger="2" style="margin-top:6px"><span class="microlabel">STAGGER 2 — 140MS</span></div>
+        <div class="dimline-h" aria-hidden="true"></div>
+      </div>
+      <div class="bline"><span class="bline__label">--spring</span><span class="bline__val mono" data-token="--spring">—</span><span class="bline__note">The one easing. Device spring: fast out, long settle, no overshoot.</span></div>
+      <div class="bline"><span class="bline__label">--t-fast</span><span class="bline__val mono" data-token="--t-fast">—</span><span class="bline__note">Colour, background, press.</span></div>
+      <div class="bline"><span class="bline__label">--t-move</span><span class="bline__val mono" data-token="--t-move">—</span><span class="bline__note">Tiles, sheets, order rows, toast travel.</span></div>
+      <div class="bline"><span class="bline__label">--t-draw</span><span class="bline__val mono" data-token="--t-draw">—</span><span class="bline__note">Rules drawing themselves in — <span class="mono">scaleX(0 → 1)</span> from the left origin.</span></div>
+      <p class="spec-note"><b>Sequence:</b> the drawing draws itself, <i>then</i> the data starts moving. <span class="mono">.rv</span> springs in (<span class="mono">--t-move</span>, staggered 70ms per <span class="mono">data-stagger</span> index), <span class="mono">.dimline-h</span> draws over <span class="mono">--t-draw</span> with a 120ms lead-in, and the <span class="mono">.live-word</span> underline lands at 400ms. Reveals fire once — the observer unobserves each element.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">11 — LIVE BEHAVIOUR</span>
+        <span class="chip chip--live">WATCH THE NUMBERS</span>
+      </div>
+      <div class="bline"><span class="bline__label">[data-count]</span><span class="bline__val"><span data-count="204">0</span></span><span class="bline__note">0 → target over 900ms, ease-out cubic, then stops. For values that are true but newly arrived.</span></div>
+      <div class="bline"><span class="bline__label">[data-tick]</span><span class="bline__val"><span data-tick="71">71</span></span><span class="bline__note">Every 4200ms, a 40% chance of +1 with a 900ms flash to <span class="mono">--live</span>. Never decrements. This is what makes the sheet feel watched.</span><span class="chip chip--live">LIVE</span></div>
+      <div class="bline"><span class="bline__label">[data-seconds]</span><span class="bline__val mono" data-seconds="6142">—</span><span class="bline__note">H:MM:SS, hours only when non-zero, decrements every 1000ms, stops at zero.</span></div>
+      <div class="bline"><span class="bline__label">pulse</span><span class="bline__val"><span class="capsule capsule--paper"><span class="dot"></span> 2.2S EASE-IN-OUT</span></span><span class="bline__note">Live dots on <span class="mono">.capsule</span>, <span class="mono">.bar__link</span>, <span class="mono">.livedim--live</span>.</span></div>
+      <div class="bline"><span class="bline__label">draw (skeleton)</span><span class="bline__val" style="max-width:200px"><span class="is-loading" style="display:block"><span class="gbar" style="display:block"></span></span></span><span class="bline__note">1.5s gradient sweep — ink being drawn left to right. <b>Never a spinner.</b></span></div>
+      <p class="spec-note"><b><code>prefers-reduced-motion: reduce</code> obligations — CSS and JS, both required.</b> CSS: <span class="mono">.rv</span> renders at rest, <span class="mono">.dimline-h</span> renders drawn, every pulse stops, the skeleton sweep stops, the live-word underline is static. JS: reveals apply immediately without the observer, <span class="mono">[data-count]</span> prints its final value, <span class="mono">[data-tick]</span> prints its value and <b>never starts its interval</b>. <b>Countdowns keep running deliberately</b> — a countdown is information, not decoration.</p>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════ COMPONENTS ══════════════════════════════ -->
+  <section class="deck deck--two" id="components">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">12 — BUTTONS</span><span class="microlabel">.BTN</span></div>
+      <div class="sg-row" style="margin-top:4px">
+        <button class="btn" type="button">Default</button>
+        <button class="btn btn--live" type="button">Primary</button>
+        <button class="btn btn--ghost" type="button">Secondary</button>
+      </div>
+      <div class="sg-row" style="margin-top:10px">
+        <button class="btn" type="button" style="background:var(--ink-hover)">Hover — ink-hover</button>
+        <button class="btn btn--live" type="button" style="background:var(--live-hover)">Hover — live-hover</button>
+        <button class="btn btn--ghost" type="button" style="background:var(--ghost-hover)">Hover — ghost-hover</button>
+      </div>
+      <div class="sg-row" style="margin-top:10px">
+        <button class="btn" type="button" style="transform:scale(0.97)">Active — scale(0.97)</button>
+        <button class="btn btn--ghost" type="button" style="outline:2px solid var(--live);outline-offset:3px">Focus ring</button>
+      </div>
+      <p class="spec-note"><b>Use:</b> <span class="mono">.btn</span> is the default action, <span class="mono">--ghost</span> is secondary, <span class="mono">--live</span> is the <b>one</b> primary action on a surface. <b>Rule:</b> maximum one <span class="mono">.btn--live</span> per view. There is no loading variant — a button that has fired is <b>replaced</b> by a <span class="mono">.chip--ok</span> reporting what happened. The rows above show hover/active/focus as static reproductions so they can be inspected; the real states are transitions over <span class="mono">--t-fast</span>.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">13 — CHIPS &amp; CAPSULES</span><span class="microlabel">STATUS, NEVER NAVIGATION</span></div>
+      <div class="sg-row" style="margin-top:4px">
+        <span class="chip">BASE — NEUTRAL FACT</span>
+        <span class="chip chip--live">LIVE — HAPPENING NOW</span>
+        <span class="chip chip--ok">OK — SETTLED</span>
+        <span class="chip chip--spent">SPENT — EXPIRED</span>
+        <span class="chip chip--ink">INK — EMPHASIS</span>
+      </div>
+      <div class="sg-stack" style="margin-top:14px">
+        <span class="capsule" style="justify-self:start"><span class="dot"></span> DROP — GROUP A LOT LANDS IN <span class="cd" data-seconds="5230"></span></span>
+        <span class="capsule capsule--paper" style="justify-self:start"><span class="dot"></span> ON A LIGHT GROUND</span>
+        <span class="capsule capsule--quiet" style="justify-self:start"><span class="dot"></span> NOTHING LIVE</span>
+      </div>
+      <p class="spec-note"><b>Chip use:</b> the status at the end of a ruled row, or a fact in a <span class="mono">.tile__head</span>. Never a filter, never a tab, never a link target unless it is genuinely an action (<span class="mono">.chip--live</span> as "SET UP"). <b>Capsule use:</b> live furniture — a band that says something is running. <span class="mono">--quiet</span> keeps the furniture when nothing is live, with the dot desaturated and its pulse switched off, so the layout doesn't jump when the sheet wakes up.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">14 — LIVE DIMENSION</span><span class="chip chip--live">THE SIGNATURE</span></div>
+      <div class="sg-two">
+        <div>
+          <span class="microlabel">Active listings</span>
+          <div class="num-giant" style="font-size:40px" data-count="5">0</div>
+          <div class="dimline-h" aria-hidden="true"></div>
+          <div class="livedim"><span class="livedim__tick"></span>
+            <span class="microlabel">3 live · 2 under offer</span>
+            <span class="val">Static annotation</span>
+          </div>
+          <div class="livedim livedim--live" style="margin-top:16px"><span class="livedim__tick"></span>
+            <span class="microlabel">Oldest lapses in</span>
+            <span class="val" data-seconds="8580">—</span>
+          </div>
+        </div>
+        <div>
+          <span class="microlabel">Nothing measured yet</span>
+          <div class="num-giant num-giant--blank" style="font-size:40px">—</div>
+          <div class="dimline-h" aria-hidden="true"></div>
+          <div class="livedim livedim--blank"><span class="livedim__tick"></span>
+            <span class="microlabel">Fills when you list a part</span>
+            <span class="val">—</span>
+          </div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Use:</b> whenever a static number needs a live footnote. The value is the fact; the dimension line beneath it is what is happening to that fact <b>right now</b>. <span class="mono">--live</span> turns the value red and adds a pulsing dot after the label. <span class="mono">--blank</span> dashes the spine and dims the value. <b>Rule:</b> an empty value reads <b>"—"</b>, and the label names what will fill it — never "no data".</p>
+    </div>
+
+    <div class="tile tile--deep rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">15 — WORK ORDERS</span><span class="chip chip--live">2 OPEN</span></div>
+      <div class="rowlist">
+        <div class="order" data-order data-price="$620" data-amount="620">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="Coilover pair" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">KW V2 coilovers — Delta fitment</div>
+            <div class="order__meta">@peaks.gravel offers <b>$620</b> vs $680 · lapses <span class="cd" data-seconds="8580"></span></div>
+          </div>
+          <div class="order__actions">
+            <button class="btn btn--live" data-act="accept">Accept $620</button>
+            <button class="btn btn--ghost" data-act="counter">Counter</button>
+            <button class="btn btn--ghost" data-act="decline">Pass</button>
+          </div>
+        </div>
+        <div class="order is-done">
+          <div class="order__img"><div class="gbox" style="width:56px;height:44px"></div></div>
+          <div>
+            <div class="order__name">Momo Corse wheel set</div>
+            <div class="order__meta">ACCEPTED — job card raised · payout on delivery</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">SOLD $310</span></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Use:</b> an offer is a <b>work order</b>, not a notification — it needs an answer. Accept (<span class="mono">--live</span>) / Counter (ghost) / Pass (ghost). Accepting turns the row <span class="mono">.is-done</span> (ok-tint) and replaces the actions with a <span class="mono">.chip--ok</span>; passing slides the row out and removes it after 420ms; countering swaps the actions for an inline price input. <b>Try the top row</b> — it is wired to the production behaviour.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">16 — RULED ROWS</span><span class="microlabel">.BLINE</span></div>
+      <div class="bline"><span class="bline__label">Engine</span><span class="bline__val">Garrett GT2867R turbo</span><span class="bline__note">Fitted at 84,100km · dyno sheet on file</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Suspension</span><span class="bline__val">KW Variant 2 coilovers</span><span class="bline__note">Coming off — listed with 8,000km of use</span><a class="chip chip--live" href="listing.html">LISTED $680</a></div>
+      <div class="bline"><span class="bline__label">Interior</span><span class="bline__val">Sabelt bucket, driver side</span><span class="bline__note">Passenger side still original</span><span class="chip">PLANNED</span></div>
+      <div class="bline bline--own"><span class="bline__label">Wheels</span><span class="bline__val">Speedline Corse 2118</span><span class="bline__note">Owner view — every fitted line carries a quiet release action</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-toast="RELEASE OPENS THE PREFILLED LISTING SHEET">Release</button></div>
+      <p class="spec-note"><b>Use:</b> label · value · note · status, on one rule. This is the system's answer to almost every list — build sheets, ledgers, settings, specs. <b>Rule:</b> at ≤720px the label spans the full width, the value grows to 16.5px and becomes the row's headline, and the chip drops to row 2. <b>Never</b> right-align label/value pairs in a narrow column.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">17 — STEPS &amp; PIPELINE</span><span class="microlabel">.STEPS / .PIPE</span></div>
+      <div class="steps">
+        <div class="step is-done"><span class="step__n"></span><span class="step__t">Offer accepted</span><span class="step__d">Job card raised, payout booked</span><span class="chip chip--ok">DONE</span></div>
+        <div class="step is-now"><span class="step__n"></span><span class="step__t">Pack and dispatch</span><span class="step__d">Tracking number required before the pipeline advances</span><span class="chip chip--live">DUE <span class="cd" data-seconds="14400"></span></span></div>
+        <div class="step"><span class="step__n"></span><span class="step__t">Delivered</span><span class="step__d">Payout clears 48 hours after delivery</span><span class="chip">WAITING</span></div>
+      </div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="pipe"><span class="pip is-on"></span><span class="pip is-on"></span><span class="pip"></span><span class="pip"></span><span class="lbl">Accepted · Paid · Dispatch · Delivered</span></div>
+      <div class="pipe" style="margin-top:10px;opacity:.5"><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="lbl">Empty — shown before the first order</span></div>
+      <p class="spec-note"><b>Steps:</b> numbered ruled rows (<span class="mono">01</span>, <span class="mono">02</span>…). <span class="mono">.is-now</span> turns the number live; <span class="mono">.is-done</span> dims the whole row. Not a progress bar, not a stepper widget. <b>Pipe:</b> show the <b>empty</b> pipeline at reduced opacity before the user has any orders, so the four stages are learned before the first sale.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">18 — FORM FIELDS</span><span class="microlabel">.FIELD / .CTL</span></div>
+      <div class="field">
+        <span class="microlabel">Part name</span>
+        <input class="ctl ctl--block" type="text" value="KW Variant 2 coilovers" aria-describedby="f1h">
+        <span class="field__hint" id="f1h">Rest state — hint visible, error and confirmation hidden.</span>
+      </div>
+      <div class="field is-invalid">
+        <span class="microlabel">Asking price</span>
+        <div class="ctl__prefix"><span>$</span><input class="ctl" type="text" inputmode="numeric" value="0" aria-invalid="true" aria-describedby="f2e"></div>
+        <span class="field__err" id="f2e">A listing needs a price above zero</span>
+      </div>
+      <div class="field is-ok">
+        <span class="microlabel">Fitment</span>
+        <input class="ctl ctl--block" type="text" value="Lancia Delta HF Integrale Evo" aria-describedby="f3o">
+        <span class="field__ok" id="f3o">Matches a car on your sheet — provenance will attach automatically</span>
+      </div>
+      <div class="field">
+        <span class="microlabel">Notes</span>
+        <textarea class="ctl" rows="3">8,000km of use. Rebuild receipts on file.</textarea>
+      </div>
+      <div class="field field--row">
+        <label class="sg-row" style="gap:8px"><input class="sq" type="checkbox" checked> <span class="microlabel">Attach provenance</span></label>
+        <label class="sg-row" style="gap:8px"><input class="sq" type="checkbox"> <span class="microlabel">Accept offers</span></label>
+      </div>
+      <p class="spec-note"><b>Discrepancy, documented:</b> <span class="mono">.ctl</span> declares <span class="mono">border: 0</span>, so the <span class="mono">border-color</span> set by <span class="mono">.field.is-invalid .ctl</span> and <span class="mono">.field.is-ok .ctl</span> has nothing to paint. In practice invalid is carried by the <span class="mono">--live-tint</span> fill plus the <span class="mono">▸</span> error line, and valid by the confirmation line alone — which is what you see above. <b>Production fix:</b> give <span class="mono">.ctl</span> <span class="mono">border: 1px solid transparent</span> at rest so the state borders paint without shifting layout.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">19 — DROPZONE &amp; ALERTS</span><span class="microlabel">.DROP / .ALERT</span></div>
+      <div class="drop" tabindex="0" role="button" aria-label="Add photos">
+        <span class="drop__mark ph ph-image-square" aria-hidden="true"></span>
+        <h4>Drop photos of the part</h4>
+        <p>Six or more, including the mounting faces and any wear. Hover or focus this plate to see the live state.</p>
+      </div>
+      <div class="thumbs">
+        <div class="thumb"><span class="thumb__tag">COVER</span><span class="thumb__x">×</span></div>
+        <div class="thumb"><span class="thumb__x">×</span></div>
+        <div class="thumb thumb--ghost"></div>
+      </div>
+      <div class="sg-stack" style="margin-top:16px">
+        <div class="alert alert--live">
+          <i class="ph ph-warning alert__ico" aria-hidden="true"></i>
+          <h4>Two offers lapse today</h4>
+          <p><span class="mono">--live</span> — something needs an answer now.</p>
+        </div>
+        <div class="alert alert--ok">
+          <i class="ph ph-check-circle alert__ico" aria-hidden="true"></i>
+          <h4>Payout method verified</h4>
+          <p><span class="mono">--ok</span> — confirmation of something already settled.</p>
+        </div>
+        <div class="alert">
+          <i class="ph ph-info alert__ico" aria-hidden="true"></i>
+          <h4>How offer windows work</h4>
+          <p>Base — explanation. Uses <span class="mono">--dim</span>, never a blue "info" colour.</p>
+        </div>
+      </div>
+      <p class="spec-note"><b>Drop:</b> reuses the blank-sheet dashed language — the same dashed <span class="mono">--dimline</span> border as <span class="mono">.undrawn</span>, because both mean "nothing drawn here yet". <b>Alert:</b> a left-ruled banner, <b>never</b> a modal. Interrupt with a sheet only when the user must decide before continuing.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">20 — MESSAGES</span><span class="microlabel">.MSG — ANNOTATIONS, NOT BUBBLES</span></div>
+      <div class="thread">
+        <div class="msg">
+          <span class="msg__who">@PEAKS.GRAVEL</span>
+          <p class="msg__body">Are the coilovers still on the car, or already pulled? I'd want them shipped without the top mounts.</p>
+          <span class="msg__meta">07:42 · READ</span>
+        </div>
+        <div class="msg msg--me">
+          <span class="msg__who">YOU</span>
+          <p class="msg__body">Still on the car until Saturday. Happy to ship without the mounts — I'll knock $40 off.</p>
+          <span class="msg__attach"><i class="ph ph-paperclip" aria-hidden="true"></i> dyno-sheet-c0416.pdf</span>
+          <span class="msg__meta">07:51 · DELIVERED</span>
+        </div>
+        <div class="msg msg--sys">
+          <span class="msg__who">SYSTEM</span>
+          <p class="msg__body">Offer of $620 recorded against this thread. It lapses in <span class="mono cd" data-seconds="8580"></span>.</p>
+        </div>
+      </div>
+      <div class="composer">
+        <textarea class="ctl" rows="2" placeholder="Write a line…"></textarea>
+        <div class="composer__row"><button class="btn" type="button" data-toast="MESSAGE SENT — @PEAKS.GRAVEL NOTIFIED">Send</button><span class="microlabel">MONO AUTHOR · SANS BODY · 62CH MEASURE</span></div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> no chat bubbles. A message is an annotation in the margin — a 2px left spine, an uppercase mono author, sans body at 14.5px. <span class="mono">--me</span> turns the spine live, <span class="mono">--sys</span> dashes it. Bubbles would import a social-app voice this system does not have.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">21 — TRANSACTIONAL MAIL</span><span class="microlabel">.MAIL</span></div>
+      <div class="mail">
+        <div class="mail__bar">
+          <span class="microlabel">DRVN · NO-REPLY</span>
+          <span class="mail__subj">Your offer on the KW V2 coilovers was accepted</span>
+          <span class="microlabel">TO DANA · 07:52</span>
+        </div>
+        <div class="mail__body">
+          <p>The seller accepted $620. A job card is open and the part ships once they add tracking — you'll get one more note when it moves.</p>
+          <a class="btn mail__cta" href="#components">Open the job card</a>
+        </div>
+        <div class="mail__foot">DRVN — A MARKETPLACE FOR PARTS OFF MODIFIED CARS · PROVENANCE ATTACHED FROM SHEET C-0416 · UNSUBSCRIBE</div>
+      </div>
+      <p class="spec-note"><b>The only framed component in the system</b> (<span class="mono">1px solid --rule-mid</span>) — because it depicts an artifact that exists <b>outside</b> the app. Everywhere else, a frame would be a boxes-inside-boxes violation. Mail keeps the mono voice: telegraphic subject, one action, provenance in the footer rather than the headline.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">22 — SEARCH &amp; FILTERS</span><span class="microlabel">.SEARCH / .FBTN</span></div>
+      <label class="search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+        <input type="text" placeholder="Search the sheets — 'coilovers', 'ECU'…" aria-label="Search parts (demo)">
+      </label>
+      <div class="filters" style="margin-bottom:6px">
+        <button class="fbtn is-on" type="button">ALL</button>
+        <button class="fbtn" type="button"><i class="ph ph-gear" aria-hidden="true"></i>&nbsp;DRIVETRAIN</button>
+        <button class="fbtn" type="button">CHASSIS</button>
+        <button class="fbtn" type="button" aria-pressed="true">FITS: DELTA HF — <b class="mono">ON</b></button>
+      </div>
+      <p class="spec-note"><b>Use:</b> <span class="mono">.fbtn</span> is a filter — a <b>set</b> operation on a list you can see. <span class="mono">.is-on</span> takes the ink ground; <span class="mono">[aria-pressed="true"]</span> takes the live ground, reserved for filters that change what the marketplace <i>means</i> to you (fitment). <b>Never use .fbtn as a tab</b> — it must not change what page you are on. The search field is the only pill-shaped input; it is a <span class="mono">&lt;label&gt;</span> wrapping its input so the whole pill is the hit target.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">23 — TOAST &amp; JUMPROW</span><span class="microlabel">.TOAST / .JUMPLINK</span></div>
+      <div class="sg-row" style="margin-top:4px">
+        <button class="btn btn--live" type="button" id="toastDemo">Fire a toast</button>
+        <button class="btn btn--ghost" type="button" data-toast="DECLARATIVE — [DATA-TOAST] DELEGATES TO WINDOW.LSTOAST">Declarative toast</button>
+      </div>
+      <div class="jumprow">
+        <span class="microlabel">ON THIS SHEET</span>
+        <a class="jumplink" href="#foundations">Foundations</a>
+        <a class="jumplink" href="#color">Color</a>
+        <a class="jumplink" href="#a11y">Accessibility</a>
+      </div>
+      <p class="spec-note"><b>Toast:</b> <span class="mono">window.lsToast(msg)</span>, or <span class="mono">[data-toast="MESSAGE"]</span> on any element. Ink pill, <span class="mono">role="status"</span>, 2600ms dwell, uppercase mono, telegraphic — "SHEET SAVED — REV 17 FILED". One instance, reused. <b>Jumprow:</b> the system's tab replacement — a quiet mono row of underlined ref-links. Hover turns the link and its rule live. See Patterns for why tabs were removed.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">24 — EMPTY &amp; LOADING</span><span class="microlabel">.UNDRAWN / .GHOSTROW</span></div>
+      <div class="undrawn">
+        <div class="undrawn__mark"><i class="ph ph-car-profile" aria-hidden="true"></i></div>
+        <h3>Your car goes here</h3>
+        <p>Add the car you're building. Photos, spec, and every part that comes off it hang from this one sheet.</p>
+        <div style="margin-top:6px"><a class="btn btn--live" href="first-run.html">Open your first sheet</a></div>
+      </div>
+      <div style="margin-top:14px">
+        <span class="microlabel">GHOST ROWS — STATIC</span>
+        <div style="margin-top:8px">
+          <div class="ghostrow" aria-hidden="true"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+          <div class="ghostrow" aria-hidden="true"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <span class="microlabel">GHOST ROWS — <span class="microlabel--live">.IS-LOADING</span></span>
+        <div class="is-loading" style="margin-top:8px" aria-busy="true">
+          <div class="ghostrow" aria-hidden="true"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+          <div class="ghostrow" aria-hidden="true"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> empty and loading share <b>identical geometry</b>, so nothing reflows on arrival. The loading state is the empty state <b>in motion</b> — a sweep that reads as ink being drawn left to right. Never a spinner: spinners say "wait", ruled ghosts say "this is a sheet, and it's filling". The container carries <span class="mono">aria-busy="true"</span>.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">25 — TILES &amp; PLATES</span><span class="microlabel">.TILE</span></div>
+      <div class="sg-two">
+        <div class="tile tile--hover" style="background:var(--tile)">
+          <span class="microlabel microlabel--ink">.TILE</span>
+          <p class="kv" style="margin-top:8px;color:var(--dim)">Raised plate — <span class="mono">--tile</span> on <span class="mono">--paper</span>. Hover me.</p>
+        </div>
+        <div class="tile tile--deep tile--hover">
+          <span class="microlabel microlabel--ink">.TILE--DEEP</span>
+          <p class="kv" style="margin-top:8px;color:var(--dim)">Secondary plate — <span class="mono">--tile-2</span>. For a container that holds other content.</p>
+        </div>
+      </div>
+      <div class="tile__img" style="aspect-ratio:16/6;margin-top:14px"></div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="sg-row">
+        <span class="monogram monogram--sm">DK</span>
+        <div class="week" style="flex:1;min-width:0">
+          <div class="week__day"><span class="microlabel">Mon</span><b>20</b></div>
+          <div class="week__day"><span class="microlabel">Tue</span><b>21</b></div>
+          <div class="week__day week__day--hot"><span class="microlabel">Wed</span><b>22</b><span class="tag">MEET</span></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> a tile has <b>no border and no shadow</b> — it reads as raised because it is lighter than the page. <span class="mono">.tile__img</span> uses <span class="mono">--img-fallback</span> so a media box has a defined tone before the photo arrives (shown empty above). <b>Never nest a .tile inside a .tile</b> — see Patterns.</p>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════ PATTERNS ══════════════════════════════ -->
+  <section class="deck deck--two" id="patterns">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">26 — RULED ROWS vs NESTED BOXES</span><span class="chip chip--live">PASS 8 FINDING</span></div>
+      <span class="microlabel microlabel--ink">RIGHT — RULED ROWS INSIDE ONE PLATE</span>
+      <div class="rowlist" style="margin-top:8px">
+        <div class="order">
+          <div class="order__img"><div class="gbox" style="width:56px;height:44px"></div></div>
+          <div><div class="order__name">KW V2 coilovers</div><div class="order__meta">$680 · 34 watching</div></div>
+          <div class="order__actions"><span class="chip chip--live">LIVE</span></div>
+        </div>
+        <div class="order">
+          <div class="order__img"><div class="gbox" style="width:56px;height:44px"></div></div>
+          <div><div class="order__name">Sabelt bucket seat</div><div class="order__meta">$290 · 11 watching</div></div>
+          <div class="order__actions"><span class="chip">QUIET</span></div>
+        </div>
+      </div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <span class="microlabel">WRONG — A PLATE PER ROW</span>
+      <div class="deck" style="gap:10px;padding-bottom:0;margin-top:8px">
+        <div class="order" style="background:var(--tile-2)">
+          <div class="order__img"><div class="gbox" style="width:56px;height:44px"></div></div>
+          <div><div class="order__name">KW V2 coilovers</div><div class="order__meta">$680 · 34 watching</div></div>
+          <div class="order__actions"><span class="chip chip--live">LIVE</span></div>
+        </div>
+        <div class="order" style="background:var(--tile-2)">
+          <div class="order__img"><div class="gbox" style="width:56px;height:44px"></div></div>
+          <div><div class="order__name">Sabelt bucket seat</div><div class="order__meta">$290 · 11 watching</div></div>
+          <div class="order__actions"><span class="chip">QUIET</span></div>
+        </div>
+      </div>
+      <p class="spec-note"><b>The rule:</b> a plate inside a plate is always wrong. Wrap the list in <span class="mono">.rowlist</span> — it strips each row's background and radius and gives it a 1px <span class="mono">--rule-soft</span> top rule. The two blocks above carry identical content; the lower one adds five extra edges and reads busier at no informational gain. <b>Also banned:</b> a nested <span class="mono">.deck</span> — it inherits the section's 48–80px bottom padding and leaves a hollow band at the bottom of its parent tile. <b>Keep the ruling, drop the ink.</b></p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">27 — JUMPROW, NOT TABS</span><span class="chip chip--live">PASS 7 TASTE CALL</span></div>
+      <span class="microlabel microlabel--ink">RIGHT — ONE CONTINUOUS SHEET, QUIET REF-LINKS</span>
+      <div class="jumprow" style="margin-top:4px">
+        <span class="microlabel">ON THIS SHEET</span>
+        <a class="jumplink" href="#patterns">The build — 18 entries</a>
+        <a class="jumplink" href="#patterns">For sale · 2</a>
+        <a class="jumplink" href="#patterns">Activity — live</a>
+      </div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <span class="microlabel">WRONG — A PILL TAB ROW</span>
+      <div class="filters" style="margin:8px 0 0">
+        <button class="fbtn is-on" type="button">OVERVIEW</button>
+        <button class="fbtn" type="button">THE BUILD</button>
+        <button class="fbtn" type="button">ACTIVITY</button>
+      </div>
+      <p class="spec-note"><b>Why:</b> pill tabs were built in Pass 6 and removed in Pass 7 — too blocky against the sheet's calm, and they hide two thirds of the content behind a click. A drawing shows everything at once and tells you where to look. The jumprow also gives every section a real anchor, so a link into <span class="mono">#build</span> lands on content rather than on a tab that has to be restored. <b>Same rule for segmented controls and cell grids:</b> prefer ruled, annotated surfaces.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">28 — HOW LIVE ANNOTATES STATIC</span><span class="microlabel">THE COMPOSITION RULE</span></div>
+      <div class="sg-two">
+        <div>
+          <span class="microlabel">Week takings</span>
+          <div class="num-giant" style="font-size:40px" data-count="1430" data-prefix="$">$0</div>
+          <div class="dimline-h" aria-hidden="true"></div>
+          <div class="livedim"><span class="livedim__tick"></span>
+            <span class="microlabel">2 sales · payout Friday</span>
+          </div>
+        </div>
+        <div>
+          <span class="microlabel microlabel--live">Offers waiting</span>
+          <div class="num-giant" style="font-size:40px;color:var(--live)" data-count="2">0</div>
+          <div class="dimline-h" aria-hidden="true"></div>
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel">Oldest lapses in</span>
+            <span class="val" data-seconds="8580">—</span>
+          </div>
+        </div>
+      </div>
+      <p class="spec-note"><b>The rule:</b> the <b>fact</b> is set in sans and holds still. The <b>live thing</b> hangs off it on a dimension line, in mono, and moves. Left plate: a settled number with a static footnote. Right plate: the same structure where the annotation is genuinely live, so the label gains a pulsing dot and the value turns red. <b>Never</b> make the fact itself blink — a number that flashes for no reason is noise, and it burns the one signal colour on something that isn't a signal.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">29 — LIFECYCLE OF ONE ROW</span><span class="microlabel">EMPTY → LOADING → LIVE → SPENT</span></div>
+      <div style="margin-top:4px">
+        <span class="microlabel">01 — EMPTY</span>
+        <div class="rowlist" style="margin-top:6px">
+          <div class="order">
+            <div class="order__img"><div class="gbox" style="width:56px;height:44px;background:var(--ghost)"></div></div>
+            <div><div class="order__name" style="color:var(--dim)">No offers on this listing</div><div class="order__meta">Median first offer ~3 days after listing</div></div>
+            <div class="order__actions"><span class="chip">WAITING</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <span class="microlabel">02 — LOADING</span>
+        <div class="is-loading" style="margin-top:6px" aria-busy="true">
+          <div class="ghostrow" aria-hidden="true"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <span class="microlabel microlabel--live">03 — LIVE</span>
+        <div class="rowlist" style="margin-top:6px">
+          <div class="order">
+            <div class="order__img"><div class="gbox" style="width:56px;height:44px"></div></div>
+            <div><div class="order__name">KW V2 coilovers — Delta fitment</div><div class="order__meta">@peaks.gravel offers <b>$620</b> · lapses <span class="cd" data-seconds="4210"></span></div></div>
+            <div class="order__actions"><span class="chip chip--live">OPEN</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <span class="microlabel">04 — SPENT</span>
+        <div class="rowlist" style="margin-top:6px">
+          <div class="order">
+            <div class="order__img"><div class="gbox" style="width:56px;height:44px;background:var(--ghost)"></div></div>
+            <div><div class="order__name" style="color:var(--dim)">KW V2 coilovers — Delta fitment</div><div class="order__meta">Offer lapsed unanswered · 19 Jul</div></div>
+            <div class="order__actions"><span class="chip chip--spent">LAPSED</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="spec-note"><b>The rule:</b> one geometry, four states — the row never changes shape, so the list never jumps. <b>Empty is not "no data"</b>: it keeps the row, names the mechanism and sets an expectation, so silence reads as normal rather than broken. <b>Spent desaturates, it does not disappear</b> — the name dims, the media goes to <span class="mono">--ghost</span>, the chip goes <span class="mono">--spent</span>, and the row stays on the sheet. History is part of the drawing.</p>
+    </div>
+  </section>
+
+
+  <!-- ══════════════════════════════ ACCESSIBILITY ══════════════════════════════ -->
+  <section class="deck deck--two" id="a11y">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">30 — FOCUS &amp; TARGETS</span><span class="microlabel">COMMITMENTS, NOT ASPIRATIONS</span></div>
+      <div class="sg-row" style="margin-top:4px">
+        <button class="btn btn--ghost" type="button">Tab to me</button>
+        <button class="btn btn--ghost" type="button">Then me</button>
+        <a class="jumplink" href="#a11y">And me</a>
+      </div>
+      <div class="bline" style="margin-top:10px"><span class="bline__label">Focus ring</span><span class="bline__val mono">2px solid var(--live) · offset 3px · radius 4px</span><span class="bline__note">Global <span class="mono">:focus-visible</span>. The ring is the accent precisely <i>because</i> the accent is otherwise scarce — nothing competes with it. 3.36:1 on DAY paper, 5.42:1 on NIGHT — clears the 3:1 non-text minimum in both.</span><span class="chip chip--ok">PASSES</span></div>
+      <div class="bline"><span class="bline__label">Target size</span><span class="bline__val mono">.btn ≈ 40px · .bar__link ≈ 32px</span><span class="bline__note">Clears WCAG 2.2 minimum (24×24) but falls short of the 44×44 platform guideline.</span><span class="chip chip--live">FIX IN PRODUCTION</span></div>
+      <div class="bline"><span class="bline__label">Labels</span><span class="bline__val">Associated, not placeholder-only</span><span class="bline__note"><span class="mono">.search</span> is a <span class="mono">&lt;label&gt;</span> wrapping its input; every <span class="mono">.field</span> pairs a <span class="mono">.microlabel</span> with its control and wires hints and errors through <span class="mono">aria-describedby</span>. Icon-only nav links carry <span class="mono">aria-label</span>.</span><span class="chip chip--ok">PASSES</span></div>
+      <div class="bline"><span class="bline__label">Reduced motion</span><span class="bline__val">Honoured in CSS and JS</span><span class="bline__note">Reveals render at rest, rules render drawn, pulses and skeleton sweeps stop, <span class="mono">[data-tick]</span> never starts its interval. Nothing essential is animation-only.</span><span class="chip chip--ok">PASSES</span></div>
+      <div class="bline"><span class="bline__label">ARIA in use</span><span class="bline__val mono">aria-pressed · aria-busy · role=status</span><span class="bline__note"><span class="mono">aria-pressed</span> on toggles (fitment switch, follow); <span class="mono">aria-busy="true"</span> on any <span class="mono">.is-loading</span> container; <span class="mono">role="status"</span> on the toast; <span class="mono">aria-hidden</span> on every decorative icon, <span class="mono">.dimline-h</span> and pure-shape <span class="mono">.ghostrow</span>; <span class="mono">aria-label="Primary"</span> on the nav.</span></div>
+      <p class="spec-note"><b>Deliberate omission:</b> ticking values (<span class="mono">[data-tick]</span>) are <b>not</b> live regions. A number that changes every four seconds would flood a screen reader with meaningless updates. The countdown is read when a user reaches the row; the watcher count is available on demand, not announced.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head"><span class="microlabel microlabel--ink">31 — CONTRAST, HONESTLY</span><span class="chip chip--live">TWO PAIRS FAIL</span></div>
+      <div class="sg-scroll">
+        <table class="spec">
+          <tr><td>--ink on --paper</td><td>13.6 : 1 &nbsp;DAY</td></tr>
+          <tr><td>--on-ink on --ink</td><td>14.7 : 1 &nbsp;DAY</td></tr>
+          <tr><td>--dim on --tile</td><td>3.5 : 1 DAY · 5.0 : 1 NIGHT</td></tr>
+          <tr><td>--live on --paper</td><td>3.4 : 1 DAY · 5.4 : 1 NIGHT</td></tr>
+          <tr><td>--live on --live-tint</td><td>3.2 : 1 &nbsp;DAY</td></tr>
+          <tr><td>--ok on --ok-tint</td><td>4.2 : 1 &nbsp;DAY</td></tr>
+        </table>
+      </div>
+      <div class="alert alert--live" style="margin-top:14px">
+        <i class="ph ph-warning alert__ico" aria-hidden="true"></i>
+        <h4>--dim is not a body-text colour in DAY</h4>
+        <p>3.5:1 fails AA for text. It is acceptable for <b>microlabels and non-essential metadata</b> whose content is duplicated elsewhere. It is <b>not</b> acceptable for the running prose that currently uses it — <span class="mono">.pagehead .sub</span>, <span class="mono">.alert p</span>, <span class="mono">.undrawn p</span>, <span class="mono">.step__d</span>, <span class="mono">.drop p</span>. Production fix: darken DAY <span class="mono">--dim</span> to ≈ <span class="mono">#6B6E78</span> (4.7:1). One token, no component changes. NIGHT already passes at 5.0:1.</p>
+      </div>
+      <div class="alert" style="margin-top:10px">
+        <i class="ph ph-info alert__ico" aria-hidden="true"></i>
+        <h4>--live must never be the only carrier</h4>
+        <p>At 3.4:1 on DAY paper, a red value fails AA for small text. Every live value in the system is therefore <b>redundantly coded</b>: a pulsing dot, a "LAPSES IN" microlabel, or a state change alongside the colour. <span class="mono">.chip--live</span> at 3.2:1 is the weakest pair in the system — chips are redundant labels by design, but production should darken the chip foreground rather than lighten the tint, which would weaken the state read.</p>
+      </div>
+      <p class="spec-note"><b>Method:</b> WCAG 2.x relative-luminance ratios computed against the tokens as declared, with alpha tints composited over <span class="mono">--tile</span>. <b>Rule for new tokens:</b> any colour proposed for text must be measured against <span class="mono">--paper</span> <b>and</b> <span class="mono">--tile</span> in <b>both</b> themes before it enters the file.</p>
+    </div>
+  </section>
+
+  <section class="deck">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">32 — HOW THIS PAGE STAYS TRUE</span>
+        <span class="capsule capsule--paper"><span class="dot"></span> READS THE STYLESHEET AT LOAD</span>
+      </div>
+      <div class="bline"><span class="bline__label">Stylesheet</span><span class="bline__val mono">livesheet.css</span><span class="bline__note">Linked, not copied. Every specimen above is a real class — if a component changes, this page changes with it.</span></div>
+      <div class="bline"><span class="bline__label">Token values</span><span class="bline__val mono">Parsed from CSSOM</span><span class="bline__note">The DAY and NIGHT columns are read out of the <span class="mono">:root</span> and <span class="mono">[data-theme="dark"]</span> rules in the browser, so a hand-typed value cannot go stale.</span><span class="chip chip--ok">NO DRIFT</span></div>
+      <div class="bline"><span class="bline__label">Local CSS</span><span class="bline__val">Furniture only</span><span class="bline__note">The one <span class="mono">&lt;style&gt;</span> block on this page declares grid tracks and measurement boxes. Every colour, font, radius and duration in it is a <span class="mono">var()</span> — it forks no value.</span></div>
+      <div class="bline"><span class="bline__label">Written companion</span><span class="bline__val mono"><a class="jumplink" href="design.md">design.md</a></span><span class="bline__note">Google design.md standard — YAML token frontmatter for the coding agent, prose for the human, plus the porting notes for Next.js + Tailwind v4 + Supabase.</span></div>
+      <p class="spec-note"><b>If the app and this page disagree, this page is wrong</b> — it links the same stylesheet, so it can only drift if someone forks a value. Fix the fork, not the guide.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — DESIGN SYSTEM · A DRAWING THAT KNOWS WHAT'S HAPPENING</span>
+    <a class="microlabel mono" href="design.md">DESIGN.MD →</a>
+    <span class="microlabel"><a class="mono" href="BRIEF.md">BRIEF</a></span>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+/* Style-guide instrumentation. Reads the real stylesheet — declares no design value. */
+(function () {
+  "use strict";
+
+  /* ---- token values, parsed straight out of livesheet.css ---- */
+  function rulesFor(sel) {
+    var out = {}, sheets = document.styleSheets;
+    for (var i = 0; i < sheets.length; i++) {
+      var rules;
+      try { rules = sheets[i].cssRules; } catch (e) { continue; }
+      if (!rules) continue;
+      for (var j = 0; j < rules.length; j++) {
+        var r = rules[j];
+        if (r.selectorText === sel && r.style) {
+          for (var k = 0; k < r.style.length; k++) {
+            var p = r.style[k];
+            if (p.indexOf("--") === 0) out[p] = r.style.getPropertyValue(p).trim();
+          }
+        }
+      }
+    }
+    return out;
+  }
+  var day = rulesFor(":root");
+  var night = rulesFor('[data-theme="dark"]');
+  var probe = document.getElementById("nightprobe");
+
+  document.querySelectorAll("[data-token]").forEach(function (el) {
+    var name = el.getAttribute("data-token");
+    var isNight = el.getAttribute("data-of") === "night";
+    var v = isNight ? night[name] : day[name];
+    if (!v) {
+      /* fallback: computed value from the document (day) or the night probe */
+      var src = isNight && probe ? probe : document.documentElement;
+      v = getComputedStyle(src).getPropertyValue(name).trim();
+    }
+    if (v) el.textContent = v;
+  });
+
+  /* ---- spacing rhythm: measured bars ---- */
+  var scale = document.querySelector("[data-scale]");
+  if (scale) {
+    [4, 8, 10, 12, 14, 16, 18, 20, 22].forEach(function (n) {
+      var row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "38px 1fr";
+      row.style.gap = "10px";
+      row.style.alignItems = "center";
+      var lab = document.createElement("span");
+      lab.className = "microlabel";
+      lab.textContent = n;
+      var bar = document.createElement("div");
+      bar.className = "sg-bar";
+      bar.style.width = (n * 8) + "px";
+      bar.style.maxWidth = "100%";
+      row.appendChild(lab);
+      row.appendChild(bar);
+      scale.appendChild(row);
+    });
+  }
+
+  /* ---- replay the reveal + draw-in demo ---- */
+  var replay = document.querySelector("[data-replay]");
+  var stage = document.querySelector("[data-replay-stage]");
+  if (replay && stage) {
+    replay.addEventListener("click", function () {
+      var els = stage.querySelectorAll(".rv, .dimline-h");
+      els.forEach(function (el) { el.classList.remove("is-in"); });
+      stage.classList.remove("is-in");
+      /* force reflow so the transition restarts */
+      void stage.offsetWidth;
+      setTimeout(function () {
+        stage.classList.add("is-in");
+        stage.querySelectorAll(".rv").forEach(function (el) {
+          var idx = parseInt(el.getAttribute("data-stagger") || "0", 10);
+          setTimeout(function () { el.classList.add("is-in"); }, idx * 70);
+        });
+      }, 40);
+    });
+  }
+
+  /* ---- toast demo via the public API ---- */
+  var td = document.getElementById("toastDemo");
+  if (td) {
+    td.addEventListener("click", function () {
+      if (window.lsToast) window.lsToast("WINDOW.LSTOAST — SPEC SHEET READ AT " + new Date().toTimeString().slice(0, 8));
+    });
+  }
+})();
+</script>
+</body>
+</html>

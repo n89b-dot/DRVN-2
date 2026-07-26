@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · A blank sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link is-active" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 00 — NOTHING DRAWN YET · <span class="microlabel--live">DAY ONE</span></span>
+    <h1>Welcome, Dana.<br>Your sheet is <span style="color:var(--dim)">blank.</span></h1>
+    <p class="sub">A sheet starts empty and fills itself as you go — every part you fit, list or sell writes a line here. Open one and the annotations start moving.</p>
+  </div>
+
+  <!-- THE UNDRAWN SHEET — the signature device, measuring nothing -->
+  <section class="rv" style="position:relative">
+    <div class="undrawn undrawn--hero">
+      <div class="undrawn__mark"><i class="ph ph-car-profile" aria-hidden="true"></i></div>
+      <h3>Your car goes here</h3>
+      <p>Add the car you're building. Photos, spec, and every part that comes off it hang from this one sheet.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px">
+        <a class="btn btn--live" href="garage.html">Open your first sheet</a>
+        <a class="btn btn--ghost" href="explore.html">See other people's</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI deck — the same four measures, nothing to measure yet -->
+  <section class="deck deck--kpi" style="margin-top:14px">
+    <div class="tile rv" data-stagger="0">
+      <span class="microlabel">Active listings</span>
+      <div class="num-giant num-giant--blank">—</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--blank"><span class="livedim__tick"></span>
+        <span class="microlabel">Fills when you list a part</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel">Offers waiting</span>
+      <div class="num-giant num-giant--blank">—</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--blank"><span class="livedim__tick"></span>
+        <span class="microlabel">Buyers can't offer yet</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel">Week takings</span>
+      <div class="num-giant num-giant--blank">$0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--blank"><span class="livedim__tick"></span>
+        <span class="microlabel">First payout lands here</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="3">
+      <span class="microlabel">Watching your garage</span>
+      <div class="num-giant num-giant--blank">—</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--blank"><span class="livedim__tick"></span>
+        <span class="microlabel">Starts counting on day one</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- What happens next — three ruled steps, not cards -->
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">HOW A SHEET FILLS ITSELF</span>
+        <span class="microlabel">THREE LINES</span>
+      </div>
+      <div class="bline"><span class="bline__label">Line 01</span><span class="bline__val">Open a sheet for your car</span><span class="bline__note">Chassis, spec, photos — five minutes, and it's public if you want it.</span><span class="chip chip--live">START HERE</span></div>
+      <div class="bline"><span class="bline__label">Line 02</span><span class="bline__val">Log what you fit</span><span class="bline__note">Each entry carries dates and receipts. That's what buyers read later.</span><span class="chip">NEXT</span></div>
+      <div class="bline"><span class="bline__label">Line 03</span><span class="bline__val">Release what comes off</span><span class="bline__note">One tap turns a removed part into a listing, annotated by the sheet it left.</span><span class="chip">NEXT</span></div>
+      <div class="livedim" style="margin-top:16px"><span class="livedim__tick"></span>
+        <span class="microlabel">Typical first sale</span>
+        <span class="val">Sheets with receipts sell ~2× faster</span>
+      </div>
+    </div>
+
+    <!-- Ghost preview of the offers inbox -->
+    <div class="tile tile--deep rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">WORK ORDERS</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> NOTHING LIVE YET</span>
+      </div>
+      <div class="rowlist" aria-hidden="true">
+        <div class="ghostrow"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+        <div class="ghostrow"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+      </div>
+      <p class="spec-note"><b>When an offer lands</b> it arrives here as a work order — buyer, amount against your ask, and a window that counts down. You answer from this row.</p>
+    </div>
+  </section>
+
+  <!-- The week — structure with nothing in it -->
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THIS WEEK</span>
+        <span class="microlabel">JUL 20 — 26</span>
+      </div>
+      <div class="week">
+        <div class="week__day"><span class="microlabel">Mon</span><b>20</b></div>
+        <div class="week__day"><span class="microlabel">Tue</span><b>21</b></div>
+        <div class="week__day"><span class="microlabel">Wed</span><b>22</b></div>
+        <div class="week__day"><span class="microlabel">Thu</span><b>23</b></div>
+        <div class="week__day"><span class="microlabel">Fri</span><b>24</b></div>
+        <div class="week__day"><span class="microlabel">Sat</span><b>25</b></div>
+        <div class="week__day"><span class="microlabel">Sun</span><b>26</b></div>
+      </div>
+      <div class="livedim livedim--blank" style="margin-top:16px"><span class="livedim__tick"></span>
+        <span class="microlabel">Nothing booked</span>
+        <span class="val">Meets and drops you follow show up here</span>
+      </div>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THE FEED</span>
+        <span class="microlabel">QUIET</span>
+      </div>
+      <div class="undrawn" style="border:0;background:transparent;padding:22px 0 6px">
+        <div class="undrawn__mark"><i class="ph ph-pen-nib" aria-hidden="true"></i></div>
+        <h3>The ink is dry</h3>
+        <p>Views, watchers, offers and sales all land in this feed the moment your sheet goes live.</p>
+      </div>
+      <div style="text-align:center"><a class="btn btn--ghost" href="explore.html">Browse live sheets meanwhile</a></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 00 · THE BLANK SHEET</span>
+    <a class="microlabel mono" href="empty-states.html">EMPTY-STATE CATALOG →</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registry No. DRVN-0042 — 1992 Porsche 911 (964) · The Registry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Archivo:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="registry.css">
+<style>
+  /* --- page-specific: car registry entry --- */
+  .entry-head { padding: clamp(36px, 5vw, 64px) 0 0; }
+  .entry-head__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: clamp(24px, 3vw, 40px);
+  }
+  .entry-head h1 {
+    font-family: var(--serif);
+    font-weight: 340;
+    font-size: clamp(2.2rem, 5.6vw, 4.8rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    max-width: 18ch;
+  }
+  .entry-head h1 em { font-style: italic; font-weight: 300; color: var(--oxblood); }
+  .entry-grid {
+    display: grid;
+    grid-template-columns: 7fr 5fr;
+    gap: clamp(28px, 4vw, 64px);
+    align-items: start;
+    margin-top: clamp(28px, 4vw, 48px);
+  }
+  .entry-grid .img-reveal { aspect-ratio: 4 / 3; position: relative; }
+  .entry-grid figure { position: relative; }
+  .entry-grid figure .stamp { position: absolute; top: -16px; left: -8px; z-index: 2; background: var(--paper); }
+  .spec-sheet { border-top: 1px solid var(--ink); }
+  .spec-sheet > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: 13.5px;
+  }
+  .spec-sheet dt { color: var(--ink-muted); }
+  .spec-sheet dd { text-align: right; font-weight: 500; }
+  .owner-line {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 24px;
+    padding: 18px;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+  }
+  .monogram {
+    width: 52px; height: 52px;
+    border: 1px solid var(--ink);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .owner-line p { font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+  .owner-line strong { display: block; color: var(--ink); font-weight: 500; font-size: 15px; }
+
+  .gallery-strip {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: clamp(16px, 2vw, 32px);
+    margin-top: clamp(40px, 5vw, 72px);
+  }
+  .gallery-strip .img-reveal:first-child { aspect-ratio: 16 / 8; }
+  .gallery-strip .img-reveal:last-child { aspect-ratio: 1 / 1; align-self: stretch; height: 100%; }
+  .gallery-strip figcaption {
+    grid-column: 1 / -1;
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .released-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(24px, 3vw, 48px); }
+  .released-card {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 24px;
+    text-decoration: none;
+    border: 1px solid var(--rule);
+    padding: 24px;
+    background: var(--panel);
+    transition: border-color 250ms ease;
+  }
+  .released-card:hover, .released-card:focus-visible { border-color: var(--oxblood); }
+  .released-card .img-reveal { aspect-ratio: 1/1; }
+  .released-card h3 { font-family: var(--serif); font-size: 20px; font-weight: 500; line-height: 1.2; margin: 6px 0 8px; transition: color 250ms ease; }
+  .released-card:hover h3 { color: var(--oxblood); }
+  .released-card p { font-size: 13px; color: var(--ink-muted); }
+  .released-card .reg-card__price { margin-top: 12px; }
+  .released-card .sold-flag { color: var(--ink-muted); font-family: var(--serif); font-style: italic; font-size: 18px; margin-top: 12px; }
+
+  @media (max-width: 860px) {
+    .entry-grid, .released-grid, .gallery-strip { grid-template-columns: 1fr; }
+    .released-card { grid-template-columns: 120px 1fr; padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap masthead__inner">
+    <a class="wordmark" href="index.html">THE&nbsp;REGISTRY <small>by DRVN</small></a>
+    <button class="menu-toggle" aria-expanded="false" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="masthead__nav" aria-label="Primary">
+      <a class="nav-link" href="index.html" aria-current="page">Browse Registry</a>
+      <a class="nav-link" href="listing.html">Marketplace</a>
+      <a class="nav-link" href="listing.html">Consign a Part</a>
+      <a class="nav-link nav-signin" href="#">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============ ENTRY HEAD ============ -->
+  <section class="entry-head">
+    <div class="wrap">
+      <div class="folio-corner reveal" style="margin-bottom: clamp(28px,4vw,48px)">
+        <span><a class="tlink" href="index.html" style="text-transform:none;letter-spacing:0.04em">← Registry index</a></span>
+        <span>Registry entry — Folio 42</span>
+        <span>Accessioned 03.2026</span>
+      </div>
+
+      <div class="entry-head__top">
+        <p class="meta-label meta-label--ox reveal">Registry No. DRVN-0042 — Marque: Porsche</p>
+        <p class="meta-label reveal" style="--d:80ms">Status: In active ownership · 2 lots released</p>
+      </div>
+
+      <h1 class="reveal" style="--d:100ms">1992 Porsche 911 Carrera&nbsp;2 (964)<br><em>&ldquo;The Slate Commission&rdquo;</em></h1>
+
+      <div class="entry-grid">
+        <figure class="reveal" style="--d:160ms">
+          <span class="stamp" aria-hidden="true">Verified Provenance</span>
+          <div class="img-reveal">
+            <img src="../assets/c1-hero-964.png" alt="1992 Porsche 911 Carrera 2 (964) in slate grey" loading="eager">
+          </div>
+          <figcaption class="meta-label" style="padding-top:12px;border-top:1px solid var(--rule);margin-top:12px">
+            Plate I — Slate Grey over Cashmere, studio record, 03.2026
+          </figcaption>
+        </figure>
+
+        <div class="reveal" style="--d:220ms">
+          <h2 class="meta-label meta-label--ink" style="margin-bottom:16px">Registry particulars</h2>
+          <dl class="spec-sheet">
+            <div><dt>Chassis</dt><dd>WP0ZZZ96ZNS4­01187</dd></div>
+            <div><dt>Engine</dt><dd>3.6L M64/01 flat-six, air-cooled</dd></div>
+            <div><dt>Recorded mileage</dt><dd>128,400 mi</dd></div>
+            <div><dt>Colour</dt><dd>Slate Grey Metallic (22D)</dd></div>
+            <div><dt>Documented modifications</dt><dd>31</dd></div>
+            <div><dt>Parts released</dt><dd>2 active · 5 sold</dd></div>
+            <div><dt>Ledger opened</dt><dd>14 March 2026</dd></div>
+          </dl>
+
+          <a class="owner-line card-link" href="seller.html">
+            <span class="monogram" aria-hidden="true">MH</span>
+            <p>
+              <strong>Marcus Hale — <span style="color:var(--oxblood)">@airkult</span></strong>
+              Registrar-verified member since 2023 · 14 sales · 4.9★ ·
+              <span class="tlink">Open seller dossier №&nbsp;88 →</span>
+            </p>
+          </a>
+        </div>
+      </div>
+
+      <figure class="gallery-strip" data-stagger="140">
+        <div class="img-reveal"><img src="../assets/c1-detail-engine.png" alt="Air-cooled flat-six engine bay of the 964" loading="lazy"></div>
+        <div class="img-reveal"><img src="../assets/c1-part-itb.png" alt="Individual throttle body kit before removal" loading="lazy"></div>
+        <figcaption class="reveal">Plates II–III — Engine bay following the ITB conversion of 08.2024; the Jenvey kit photographed prior to release as Lot No. 217.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============ PROVENANCE LEDGER ============ -->
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">01</span>
+        <h2 class="reveal" style="--d:60ms">Provenance ledger</h2>
+        <p class="side-note reveal" style="--d:120ms">A dated record of every intervention. Entries cross-reference the parts they concern.</p>
+      </div>
+
+      <div class="ledger" data-stagger="110">
+        <article class="ledger-entry reveal">
+          <div class="ledger-entry__date">11 · 04 · 2026</div>
+          <div class="ledger-entry__body">
+            <h4>ITB kit removed and consigned</h4>
+            <p>Jenvey throttle bodies removed at 128,100 mi in favour of a period-correct factory intake for a concours entry. Kit serviced, photographed, and consigned to the marketplace with full papers.</p>
+          </div>
+          <div class="ledger-entry__ref">
+            <span class="meta-label">Cross-ref</span>
+            <a class="tlink" href="listing.html">Lot No. 217 — active</a>
+          </div>
+        </article>
+
+        <article class="ledger-entry reveal">
+          <div class="ledger-entry__date">02 · 09 · 2025</div>
+          <div class="ledger-entry__body">
+            <h4>Wheel change — Fuchs restoration fitted</h4>
+            <p>Refinished 17″ Fuchs replicas installed. The outgoing forged wheels (staggered 17″, anthracite) released for sale with tyre-date records and torque history.</p>
+          </div>
+          <div class="ledger-entry__ref">
+            <span class="meta-label">Cross-ref</span>
+            <a class="tlink" href="listing.html">Lot No. 190 — active</a>
+          </div>
+        </article>
+
+        <article class="ledger-entry reveal">
+          <div class="ledger-entry__date">17 · 08 · 2024</div>
+          <div class="ledger-entry__body">
+            <h4>ITB conversion — Jenvey 3.6L kit fitted</h4>
+            <p>Individual throttle bodies fitted with Emerald K6 standalone, mapped by Regal Autosport, Southampton. Dyno sheet on file: 291 bhp at the crank. Paired with lightweight flywheel (entry 09.2023).</p>
+          </div>
+          <div class="ledger-entry__ref">
+            <span class="meta-label">Attachments</span>
+            <span>Dyno sheet · invoice · 14 photographs</span>
+          </div>
+        </article>
+
+        <article class="ledger-entry reveal">
+          <div class="ledger-entry__date">21 · 09 · 2023</div>
+          <div class="ledger-entry__body">
+            <h4>Lightweight flywheel &amp; clutch</h4>
+            <p>RS-specification single-mass flywheel and Sachs Sport clutch installed during gearbox-out service. Gearbox oil, mounts, and slave cylinder renewed concurrently.</p>
+          </div>
+          <div class="ledger-entry__ref">
+            <span class="meta-label">Attachments</span>
+            <span>Invoice — Canford Classics</span>
+          </div>
+        </article>
+
+        <article class="ledger-entry reveal">
+          <div class="ledger-entry__date">03 · 05 · 2023</div>
+          <div class="ledger-entry__body">
+            <h4>Engine-out reseal — ledger opening entry</h4>
+            <p>Full top-end reseal at 121,600 mi: cylinder base gaskets, valve covers, oil return tubes, chain tensioners updated. Compression 165–172 psi across all six. This entry opens the car's documented history on the Registry.</p>
+          </div>
+          <div class="ledger-entry__ref">
+            <span class="meta-label">Attachments</span>
+            <span>Compression report · 32 photographs</span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MOD SHEET ============ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">02</span>
+        <h2 class="reveal" style="--d:60ms">Catalogue of modifications</h2>
+        <p class="side-note reveal" style="--d:120ms">Structured mod sheet as currently fitted. Removed items pass to the marketplace.</p>
+      </div>
+
+      <div class="reveal" style="overflow-x:auto">
+        <table class="cat-table">
+          <thead>
+            <tr><th>System</th><th>Specification</th><th>Fitted</th><th>Disposition</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Induction</td><td>Factory 964 intake, refurbished (concours spec)</td><td>04.2026</td><td>Current</td></tr>
+            <tr><td>Engine mgmt</td><td>Emerald K6 standalone, Regal Autosport map</td><td>08.2024</td><td>Current</td></tr>
+            <tr><td>Driveline</td><td>RS single-mass flywheel · Sachs Sport clutch</td><td>09.2023</td><td>Current</td></tr>
+            <tr><td>Suspension</td><td>KW V3 coilovers · RS front control arms</td><td>06.2023</td><td>Current</td></tr>
+            <tr><td>Wheels</td><td>17″ Fuchs restoration, polished lips</td><td>09.2025</td><td>Current</td></tr>
+            <tr><td>Induction (prev.)</td><td>Jenvey ITB kit, 3.6L M64</td><td>08.2024 – 04.2026</td><td><a class="tlink" href="listing.html">Released — Lot 217</a></td></tr>
+            <tr><td>Wheels (prev.)</td><td>Forged staggered 17″, anthracite</td><td>2021 – 09.2025</td><td><a class="tlink" href="listing.html">Released — Lot 190</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PARTS RELEASED ============ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">03</span>
+        <h2 class="reveal" style="--d:60ms">Parts released from this car</h2>
+        <p class="side-note reveal" style="--d:120ms">Every lot carries this car's registry number and the ledger entry it left under.</p>
+      </div>
+      <hr class="rule-h rule-draw" style="margin-bottom: clamp(28px,4vw,48px)">
+
+      <div class="released-grid" data-stagger="150">
+        <a class="released-card reveal" href="listing.html">
+          <div class="img-reveal"><img src="../assets/c1-part-itb.png" alt="Jenvey ITB kit still life" loading="lazy"></div>
+          <div>
+            <span class="meta-label meta-label--ox">Lot No. 217 — Grade II</span>
+            <h3>Jenvey Individual Throttle Body Kit, 3.6L M64</h3>
+            <p>Removed 04.2026 at 128,100 mi. Includes linkage, trumpets, Emerald base map, dyno sheet.</p>
+            <p class="reg-card__price">£2,450 — <span class="tlink" style="font-family:var(--sans);font-size:12px">view certificate →</span></p>
+          </div>
+        </a>
+
+        <a class="released-card reveal" href="listing.html">
+          <div class="img-reveal"><img src="../assets/c1-part-wheel.png" alt="Forged wheel still life" loading="lazy"></div>
+          <div>
+            <span class="meta-label meta-label--ox">Lot No. 190 — Grade II</span>
+            <h3>Forged staggered 17″ set, anthracite</h3>
+            <p>Removed 09.2025. Straightness certified, torque history on ledger, tyres dated 2024.</p>
+            <p class="reg-card__price">£1,150</p>
+          </div>
+        </a>
+      </div>
+
+      <p class="reveal" style="margin-top:32px;color:var(--ink-muted);font-size:13.5px">
+        Five further lots from DRVN-0042 have sold through the Registry —
+        <a class="tlink" href="seller.html">see the seller's full record</a>.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer class="colophon">
+  <div class="wrap">
+    <div class="colophon__grid">
+      <div>
+        <a class="wordmark" href="index.html" style="margin-bottom:16px;display:inline-flex">THE&nbsp;REGISTRY <small>by DRVN</small></a>
+        <p class="colophon__note">Set in Fraunces &amp; Archivo, on ivory paper stock.</p>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Registry</h5>
+        <ul>
+          <li><a href="car.html">Registry entries</a></li>
+          <li><a href="index.html">Recent accessions</a></li>
+          <li><a href="seller.html">Seller dossiers</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Marketplace</h5>
+        <ul>
+          <li><a href="listing.html">Active lots</a></li>
+          <li><a href="listing.html">Consign a part</a></li>
+          <li><a href="listing.html">Condition grading</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Institution</h5>
+        <ul>
+          <li><a href="#">About the archive</a></li>
+          <li><a href="#">Provenance policy</a></li>
+          <li><a href="#">Contact the registrar</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="colophon__base">
+      <span>© MMXXVI DRVN Ltd. — The Registry</span>
+      <span>Fitment claims are seller-stated unless marked verified</span>
+      <span>Folio 42 of 4,182</span>
+    </div>
+  </div>
+</footer>
+
+<script src="registry.js"></script>
+</body>
+</html>

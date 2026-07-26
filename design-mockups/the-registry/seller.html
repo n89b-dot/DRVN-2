@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seller Dossier № 88 — Marcus Hale (@airkult) · The Registry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Archivo:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="registry.css">
+<style>
+  /* --- page-specific: seller dossier --- */
+  .dossier-head { padding: clamp(36px, 5vw, 64px) 0 0; }
+  .dossier-grid {
+    display: grid;
+    grid-template-columns: 4fr 8fr;
+    gap: clamp(28px, 4vw, 72px);
+    align-items: start;
+    margin-top: clamp(28px, 4vw, 48px);
+  }
+  .monogram-plate {
+    aspect-ratio: 4 / 5;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    position: relative;
+  }
+  .monogram-plate .mono {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(72px, 9vw, 128px);
+    line-height: 1;
+    color: var(--ink);
+  }
+  .monogram-plate .stamp { position: absolute; bottom: 22px; transform: rotate(-5deg); background: var(--panel); }
+  .dossier-head h1 {
+    font-family: var(--serif);
+    font-weight: 340;
+    font-size: clamp(2.4rem, 6vw, 5.2rem);
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    margin: 12px 0 14px;
+  }
+  .dossier-head h1 em { font-style: italic; font-weight: 300; color: var(--oxblood); }
+  .dossier-bio { color: var(--ink-muted); font-size: 15px; max-width: 52ch; margin-bottom: 30px; }
+
+  .stats-table { width: 100%; border-collapse: collapse; }
+  .stats-table td {
+    padding: 13px 16px 13px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: 14px;
+  }
+  .stats-table tr:first-child td { border-top: 1px solid var(--ink); }
+  .stats-table td:first-child { color: var(--ink-muted); }
+  .stats-table td:last-child { text-align: right; font-weight: 500; }
+  .stats-table .big { font-family: var(--serif); font-size: 22px; font-weight: 400; }
+
+  .quotes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: clamp(24px, 3vw, 48px); }
+  .quote { border-top: 1px solid var(--ink); padding-top: 22px; }
+  .quote blockquote {
+    font-family: var(--serif);
+    font-weight: 300;
+    font-style: italic;
+    font-size: clamp(18px, 1.8vw, 22px);
+    line-height: 1.35;
+    margin-bottom: 16px;
+  }
+  .quote cite { font-style: normal; font-size: 12px; color: var(--ink-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .quote cite b { color: var(--oxblood); font-weight: 500; }
+
+  @media (max-width: 900px) {
+    .dossier-grid { grid-template-columns: 1fr; }
+    .monogram-plate { max-width: 320px; }
+    .quotes { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap masthead__inner">
+    <a class="wordmark" href="index.html">THE&nbsp;REGISTRY <small>by DRVN</small></a>
+    <button class="menu-toggle" aria-expanded="false" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="masthead__nav" aria-label="Primary">
+      <a class="nav-link" href="index.html">Browse Registry</a>
+      <a class="nav-link" href="listing.html">Marketplace</a>
+      <a class="nav-link" href="listing.html">Consign a Part</a>
+      <a class="nav-link nav-signin" href="#">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ============ DOSSIER HEAD ============ -->
+  <section class="dossier-head">
+    <div class="wrap">
+      <div class="folio-corner reveal" style="margin-bottom: clamp(20px,3vw,36px)">
+        <span><a class="tlink" href="index.html" style="text-transform:none;letter-spacing:0.04em">← Registry index</a></span>
+        <span>Seller dossier — File № 88</span>
+        <span>Opened 06.2023</span>
+      </div>
+
+      <div class="dossier-grid">
+        <div class="monogram-plate reveal">
+          <span class="mono" aria-hidden="true">M.H.</span>
+          <span class="meta-label">No portrait supplied — monogram of record</span>
+          <span class="stamp" aria-hidden="true">Registrar Verified</span>
+        </div>
+
+        <div class="reveal" style="--d:120ms">
+          <p class="meta-label meta-label--ox">Seller Dossier № 88 — Standing: Excellent</p>
+          <h1>Marcus Hale <em>@airkult</em></h1>
+          <p class="dossier-bio">
+            Air-cooled specialist, Bristol. Keeps one car at a time and documents it obsessively —
+            his 964 ledger is among the most complete in the archive. Sells only what has come off
+            his own registered cars; every lot ships with its papers, its photographs, and usually
+            an unprompted essay on why it came off.
+          </p>
+
+          <h2 class="meta-label meta-label--ink" style="margin-bottom:4px">File statistics</h2>
+          <table class="stats-table">
+            <tr><td>Completed sales</td><td class="big">14</td></tr>
+            <tr><td>Mean rating</td><td class="big">4.9★</td></tr>
+            <tr><td>Median response time</td><td>2 hours</td></tr>
+            <tr><td>Member since</td><td>June 2023</td></tr>
+            <tr><td>Provenance disputes</td><td>0</td></tr>
+            <tr><td>Lots currently active</td><td><a class="tlink" href="listing.html">2 — see below</a></td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REVIEWS ============ -->
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">01</span>
+        <h2 class="reveal" style="--d:60ms">From the record of sale</h2>
+        <p class="side-note reveal" style="--d:120ms">Buyer remarks, excerpted from completed transactions.</p>
+      </div>
+
+      <div class="quotes" data-stagger="150">
+        <div class="quote reveal">
+          <blockquote>&ldquo;The flywheel arrived with the original invoice, the torque figures, and a note on which bolts to reuse. Nobody does this.&rdquo;</blockquote>
+          <cite><b>@drivetrainpete</b> — Lot 141, RS flywheel · 5★</cite>
+        </div>
+        <div class="quote reveal">
+          <blockquote>&ldquo;Asked one fitment question at 11pm; had a measured answer with photos by breakfast. The part was better than graded.&rdquo;</blockquote>
+          <cite><b>@carrera_kate</b> — Lot 156, KW dampers · 5★</cite>
+        </div>
+        <div class="quote reveal">
+          <blockquote>&ldquo;You are not buying a part from Marcus. You are adopting a chapter of his car's history, fully annotated.&rdquo;</blockquote>
+          <cite><b>@flat6files</b> — Lot 178, exhaust system · 5★</cite>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ REGISTERED CARS ============ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">02</span>
+        <h2 class="reveal" style="--d:60ms">Cars on the Registry</h2>
+        <p class="side-note reveal" style="--d:120ms">One current; one archived after sale, ledger preserved.</p>
+      </div>
+      <hr class="rule-h rule-draw" style="margin-bottom: clamp(28px,4vw,48px)">
+
+      <div class="card-grid" data-stagger="140" style="grid-template-columns:repeat(2,1fr)">
+        <a class="card-link reveal" href="car.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-hero-964.png" alt="Porsche 911 (964) in slate grey" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Registry No. DRVN-0042 — Current</span>
+              <span class="folio-num">acc. 03.2026</span>
+            </div>
+            <h3>1992 Porsche 911 Carrera 2 (964), &ldquo;The Slate Commission&rdquo;</h3>
+            <p class="reg-card__meta">
+              <span>31 documented modifications</span>
+              <span>2 active lots · 5 sold</span>
+            </p>
+          </article>
+        </a>
+
+        <a class="card-link reveal" href="car.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-detail-engine.png" alt="Air-cooled flat-six engine detail" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label">Registry No. DRVN-0009 — Archived</span>
+              <span class="folio-num">2023–2025</span>
+            </div>
+            <h3>1987 Porsche 911 Carrera 3.2 (sold on, ledger retained)</h3>
+            <p class="reg-card__meta">
+              <span>22 documented modifications</span>
+              <span>7 lots sold from this car</span>
+            </p>
+          </article>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ACTIVE LOTS ============ -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="num reveal">03</span>
+        <h2 class="reveal" style="--d:60ms">Active lots</h2>
+        <p class="side-note reveal" style="--d:120ms">Both released from DRVN-0042, papers attached.</p>
+      </div>
+      <hr class="rule-h rule-draw" style="margin-bottom: clamp(28px,4vw,48px)">
+
+      <div class="card-grid" data-stagger="140" style="grid-template-columns:repeat(2,1fr)">
+        <a class="card-link reveal" href="listing.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-part-itb.png" alt="Jenvey ITB kit still life" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Lot No. 217</span>
+              <span class="folio-num">Grade II</span>
+            </div>
+            <h3>Jenvey Individual Throttle Body Kit, 3.6L M64</h3>
+            <p class="reg-card__meta"><span>Removed 04.2026 · dyno sheet &amp; base map included</span></p>
+            <p class="reg-card__price">£2,450</p>
+          </article>
+        </a>
+
+        <a class="card-link reveal" href="listing.html">
+          <article class="reg-card">
+            <div class="img-reveal"><img src="../assets/c1-part-wheel.png" alt="Forged wheel still life" loading="lazy"></div>
+            <div class="reg-card__no">
+              <span class="meta-label meta-label--ox">Lot No. 190</span>
+              <span class="folio-num">Grade II</span>
+            </div>
+            <h3>Forged staggered 17″ set, anthracite</h3>
+            <p class="reg-card__meta"><span>Removed 09.2025 · straightness certified</span></p>
+            <p class="reg-card__price">£1,150</p>
+          </article>
+        </a>
+      </div>
+
+      <p class="reveal" style="margin-top:36px;color:var(--ink-muted);font-size:13.5px">
+        Enquiries to the seller are relayed through the registrar —
+        <a class="tlink" href="listing.html">ask a question on an active lot</a>, or return to
+        <a class="tlink" href="car.html">his registry entry</a>.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer class="colophon">
+  <div class="wrap">
+    <div class="colophon__grid">
+      <div>
+        <a class="wordmark" href="index.html" style="margin-bottom:16px;display:inline-flex">THE&nbsp;REGISTRY <small>by DRVN</small></a>
+        <p class="colophon__note">Set in Fraunces &amp; Archivo, on ivory paper stock.</p>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Registry</h5>
+        <ul>
+          <li><a href="car.html">Registry entries</a></li>
+          <li><a href="index.html">Recent accessions</a></li>
+          <li><a href="seller.html">Seller dossiers</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Marketplace</h5>
+        <ul>
+          <li><a href="listing.html">Active lots</a></li>
+          <li><a href="listing.html">Consign a part</a></li>
+          <li><a href="listing.html">Condition grading</a></li>
+        </ul>
+      </div>
+      <div>
+        <h5 class="meta-label meta-label--ink">Institution</h5>
+        <ul>
+          <li><a href="#">About the archive</a></li>
+          <li><a href="#">Provenance policy</a></li>
+          <li><a href="#">Contact the registrar</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="colophon__base">
+      <span>© MMXXVI DRVN Ltd. — The Registry</span>
+      <span>Fitment claims are seller-stated unless marked verified</span>
+      <span>Dossier 88 of 1,204</span>
+    </div>
+  </div>
+</footer>
+
+<script src="registry.js"></script>
+</body>
+</html>

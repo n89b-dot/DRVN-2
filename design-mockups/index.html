@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Sixteen Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root { --bg:#0C0D0F; --text:#EDEDEA; --dim:#8B8E94; --line:#232529; }
+  body { background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; min-height:100vh; }
+  .wrap { max-width:1280px; margin:0 auto; padding:56px 40px 80px; }
+  header { display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:12px; }
+  .mark { font-weight:700; letter-spacing:.28em; font-size:15px; }
+  .meta { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--dim); letter-spacing:.12em; text-transform:uppercase; }
+  h1 { font-family:'Fraunces',serif; font-weight:340; font-size:clamp(38px,5.4vw,72px); line-height:1.04; margin:48px 0 16px; letter-spacing:-.01em;}
+  h1 em { font-style:italic; }
+  .sub { color:var(--dim); font-size:17px; max-width:640px; line-height:1.6; margin-bottom:64px; }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  @media (max-width:960px){ .cards{grid-template-columns:1fr;} }
+  .card { display:flex; flex-direction:column; border:1px solid var(--line); overflow:hidden; transition:transform .35s cubic-bezier(.16,1,.3,1), border-color .35s; background:#101114; }
+  .card:hover { transform:translateY(-4px); border-color:#4a4d55; }
+  .card__main { display:block; text-decoration:none; color:inherit; }
+  .thumb { height:220px; background-size:cover; background-position:center; filter:saturate(.95); transition:filter .4s; }
+  .card:hover .thumb { filter:saturate(1.1); }
+  .card__links { margin-top:auto; display:flex; border-top:1px solid var(--line); }
+  .card__links a { flex:1; text-align:center; text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); padding:14px 6px; transition:color .25s, background .25s; }
+  .card__links a + a { border-left:1px solid var(--line); }
+  .card__links a:hover { color:var(--text); background:rgba(255,255,255,.03); }
+  .body { padding:26px 24px 30px; }
+  .num { font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; color:var(--dim); }
+  .name { font-size:24px; font-weight:700; margin:10px 0 6px; letter-spacing:.01em; }
+  .thesis { color:var(--dim); font-size:14px; line-height:1.55; min-height:44px; }
+  .tags { margin-top:18px; display:flex; gap:8px; flex-wrap:wrap; }
+  .tag { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; padding:5px 9px; border:1px solid var(--line); color:var(--dim); text-transform:uppercase; }
+  /* concept accents */
+  .c1 .name{ font-family:'Fraunces',serif; font-weight:400;} .c1:hover{border-color:#7A2E24;} .c1 .thumb{background-color:#E9E4D5;}
+  .c2 .name{ font-family:'JetBrains Mono',monospace; font-size:20px;} .c2:hover{border-color:#D8FF3E;} .c2 .thumb{background-color:#151719; filter:grayscale(1) contrast(1.1);}
+  .c3:hover{border-color:#FF7A1F;} .c3 .thumb{background-color:#131722;}
+  .c4:hover{border-color:#FF4D00;} .c4 .thumb{background-color:#E8E6E1;}
+  .c5:hover{border-color:#FFC700;} .c5 .thumb{background-color:#F2E9DA;}
+  .c6 .name{ font-family:'Fraunces',serif; font-weight:400;} .c6:hover{border-color:#C9A96A;} .c6 .thumb{background-color:#241E19;}
+  .c7:hover{border-color:#4F46E5;} .c7 .thumb{background-color:#E9EDF2;}
+  .c8:hover{border-color:#D8C79A;} .c8 .thumb{background-color:#16181C;}
+  .c9:hover{border-color:#111112;} .c9 .thumb{background-color:#9A9A98;}
+  .c10:hover{border-color:#5E6B47;} .c10 .thumb{background-color:#E9DFCB;}
+  .c11:hover{border-color:#35E0F0;} .c11 .thumb{background-color:#0A0F1A;}
+  .c12:hover{border-color:#35507E;} .c12 .thumb{background-color:#C8CBD1;}
+  .c13:hover{border-color:#B0562F;} .c13 .thumb{background-color:#EDE7DD;}
+  .c16:hover{border-color:#F03A20;} .c16 .thumb{background-color:#EFEDE6;}
+  .c15:hover{border-color:#FF2D1A;} .c15 .thumb{background-color:#0A0A0B;}
+  .c14:hover{border-color:#D62828;} .c14 .thumb{background-color:#F2EFE9;}
+  .series { margin:72px 0 28px; display:flex; align-items:baseline; gap:16px; border-bottom:1px solid var(--line); padding-bottom:16px; }
+  .series h2 { font-family:'Fraunces',serif; font-weight:340; font-size:clamp(24px,3vw,36px); letter-spacing:-.01em; }
+  .cards--two { grid-template-columns:repeat(2,1fr); max-width:880px; }
+  @media (max-width:960px){ .cards--two{grid-template-columns:1fr;} }
+  footer { margin-top:72px; border-top:1px solid var(--line); padding-top:24px; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">DRVN</div>
+    <div class="meta">Design Exploration · 16 Concepts · 07.2026</div>
+  </header>
+  <h1>Sixteen theses on the<br><em>build-aware marketplace.</em></h1>
+  <p class="sub">DRVN is the home for your modified car — show off the build, buy and sell the parts behind it. Each concept below is a complete, clickable answer to the same question: what should buying and selling the parts behind a build feel like?</p>
+  <div class="cards">
+    <div class="card c1">
+      <a class="card__main" href="the-registry/index.html">
+        <div class="thumb" style="background-image:url('assets/c1-hero-964.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 01</div>
+          <div class="name">The Registry</div>
+          <div class="thesis">"A part is only worth its paperwork." The marketplace as an archival institution — auction-catalogue provenance for street cars.</div>
+          <div class="tags"><span class="tag">Ivory / Ink / Oxblood</span><span class="tag">Fraunces</span><span class="tag">Slow reveal</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="the-registry/index.html">Prototype</a>
+        <a href="the-registry/BRIEF.md">Brief</a>
+        <a href="the-registry/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c2">
+      <a class="card__main" href="apex-os/index.html">
+        <div class="thumb" style="background-image:url('assets/c2-hero-pit.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 02</div>
+          <div class="name">APEX/OS</div>
+          <div class="thesis">"Data density is respect." A race engineer's console — the marketplace as telemetry, every screen an instrument.</div>
+          <div class="tags"><span class="tag">Black / Acid</span><span class="tag">JetBrains Mono</span><span class="tag">Stepped motion</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="apex-os/index.html">Prototype</a>
+        <a href="apex-os/BRIEF.md">Brief</a>
+        <a href="apex-os/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c3">
+      <a class="card__main" href="after-hours/index.html">
+        <div class="thumb" style="background-image:url('assets/c3-hero-garage.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 03</div>
+          <div class="name">After Hours</div>
+          <div class="thesis">"Buy the part. Keep the night." Scroll-driven cinema — sodium light, haze, and the 1am meet as interface.</div>
+          <div class="tags"><span class="tag">Night / Sodium</span><span class="tag">Clash Display</span><span class="tag">Parallax film</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="after-hours/index.html">Prototype</a>
+        <a href="after-hours/BRIEF.md">Brief</a>
+        <a href="after-hours/design.html">Design system</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="series">
+    <h2>The dashboard series.</h2>
+    <div class="meta">Concepts 04–05 · Logged-in product surfaces: pit wall, garage, listings, orders</div>
+  </div>
+  <div class="cards cards--two">
+    <div class="card c4">
+      <a class="card__main" href="werkbank/index.html">
+        <div class="thumb" style="background-image:url('assets/c4-hero-lift.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 04</div>
+          <div class="name">Werkbank</div>
+          <div class="thesis">"The dashboard is a work order." A drawing-office product — dimension-lined KPIs, garage plates, offers as job cards.</div>
+          <div class="tags"><span class="tag">Drafting grey / Safety orange</span><span class="tag">IBM Plex</span><span class="tag">Dimension lines</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="werkbank/index.html">Prototype</a>
+        <a href="werkbank/BRIEF.md">Brief</a>
+        <a href="werkbank/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c5">
+      <a class="card__main" href="livery/index.html">
+        <div class="thumb" style="background-image:url('assets/c5-hero-livery.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 05</div>
+          <div class="name">Livery</div>
+          <div class="thesis">"Run your garage like a race team." Pit-wall pop modernism — color-block KPIs, sticker chips, race-light order tracking.</div>
+          <div class="tags"><span class="tag">Cream / Cobalt / Red / Yellow</span><span class="tag">Archivo Black</span><span class="tag">Springy pop</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="livery/index.html">Prototype</a>
+        <a href="livery/BRIEF.md">Brief</a>
+        <a href="livery/design.html">Design system</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="series">
+    <h2>The second dashboard series.</h2>
+    <div class="meta">Concepts 06–08 · Home page + dashboard, garage, listings flows</div>
+  </div>
+  <div class="cards">
+    <div class="card c6">
+      <a class="card__main" href="atelier/index.html">
+        <div class="thumb" style="background-image:url('assets/c6-hero-aston.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 06</div>
+          <div class="name">Atelier</div>
+          <div class="thesis">"A dealership back office from a world with taste." Espresso and brass — the dashboard as a coach-builder's private ledger.</div>
+          <div class="tags"><span class="tag">Espresso / Brass</span><span class="tag">Cormorant</span><span class="tag">Velvet motion</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="atelier/dashboard.html">Dashboard</a>
+        <a href="atelier/BRIEF.md">Brief</a>
+        <a href="atelier/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c7">
+      <a class="card__main" href="sunday/index.html">
+        <div class="thumb" style="background-image:url('assets/c7-hero-gti.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 07</div>
+          <div class="name">Sunday</div>
+          <div class="thesis">"Selling a part should feel like a Sunday morning drive." Mainstream excellence — airy light UI, soft depth, one confident indigo.</div>
+          <div class="tags"><span class="tag">Cool light / Indigo</span><span class="tag">Inter + Manrope</span><span class="tag">Quiet delight</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="sunday/dashboard.html">Dashboard</a>
+        <a href="sunday/BRIEF.md">Brief</a>
+        <a href="sunday/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c8">
+      <a class="card__main" href="meridian/index.html">
+        <div class="thumb" style="background-image:url('assets/c8-hero-gtr.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 08</div>
+          <div class="name">Meridian</div>
+          <div class="thesis">"The cockpit for your build's second life." Automotive HMI — gunmetal glass, gauge-sweep data, champagne trim.</div>
+          <div class="tags"><span class="tag">Obsidian / Champagne</span><span class="tag">Outfit</span><span class="tag">Gauge sweeps</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="meridian/dashboard.html">Dashboard</a>
+        <a href="meridian/BRIEF.md">Brief</a>
+        <a href="meridian/design.html">Design system</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="series">
+    <h2>The showcase series.</h2>
+    <div class="meta">Concepts 09–11 · Image-led trust flows: landing → car profile → part listing → index</div>
+  </div>
+  <div class="cards">
+    <div class="card c9">
+      <a class="card__main" href="monograph/index.html">
+        <div class="thumb" style="background-image:url('assets/c9-hero-car.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 09</div>
+          <div class="name">Monograph</div>
+          <div class="thesis">"The car as a gallery monograph." A cold white cube — thin grotesque type, no accent colour, photography as art, museum wall-label trust.</div>
+          <div class="tags"><span class="tag">Gallery white / Ink</span><span class="tag">Schibsted Grotesk</span><span class="tag">Reverent fades</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="monograph/index.html">Prototype</a>
+        <a href="monograph/BRIEF.md">Brief</a>
+        <a href="monograph/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c10">
+      <a class="card__main" href="atlas/index.html">
+        <div class="thumb" style="background-image:url('assets/c10-hero-car.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 10</div>
+          <div class="name">Atlas</div>
+          <div class="thesis">"Every build is a documented specimen." A naturalist's field guide — warm kraft, olive & clay, topographic contours, coordinates and route lines.</div>
+          <div class="tags"><span class="tag">Kraft / Olive / Clay</span><span class="tag">Hanken Grotesk</span><span class="tag">Contour draw-in</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="atlas/index.html">Prototype</a>
+        <a href="atlas/BRIEF.md">Brief</a>
+        <a href="atlas/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c11">
+      <a class="card__main" href="circuit/index.html">
+        <div class="thumb" style="background-image:url('assets/c11-hero-car.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 11</div>
+          <div class="name">Circuit</div>
+          <div class="thesis">"Provenance is a wiring diagram." Deep navy + electric cyan — every part a node, wired by animated traces to its source car, keeper and pairings.</div>
+          <div class="tags"><span class="tag">Navy / Cyan</span><span class="tag">Chivo + Spline Mono</span><span class="tag">Trace draw</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="circuit/network.html">Network</a>
+        <a href="circuit/BRIEF.md">Brief</a>
+        <a href="circuit/design.html">Design system</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="series">
+    <h2>The generator series.</h2>
+    <div class="meta">Concepts 12–14 · New thesis families: material, interaction, era-media — marketplace-first framing</div>
+  </div>
+  <div class="cards">
+    <div class="card c12">
+      <a class="card__main" href="billet/index.html">
+        <div class="thumb" style="background-image:url('assets/c12-hero-manifold.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 12</div>
+          <div class="name">Billet</div>
+          <div class="thesis">"An interface machined from aluminum." Material-generated — chamfered blocks, milled-slot inputs, press-in buttons, one anodized blue.</div>
+          <div class="tags"><span class="tag">Aluminum / Anodized blue</span><span class="tag">Material-first</span><span class="tag">Tooling curves</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="billet/index.html">Prototype</a>
+        <a href="billet/BRIEF.md">Brief</a>
+        <a href="billet/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c13">
+      <a class="card__main" href="counter/index.html">
+        <div class="thumb" style="background-image:url('assets/c13-part-wheels.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 13</div>
+          <div class="name">Counter</div>
+          <div class="thesis">"The marketplace is the negotiation." Interaction-generated — deals as living offer threads, terracotta buyer vs moss seller, handshake close.</div>
+          <div class="tags"><span class="tag">Stone / Terracotta / Moss</span><span class="tag">Interaction-first</span><span class="tag">Offer threads</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="counter/deal.html">The deal</a>
+        <a href="counter/BRIEF.md">Brief</a>
+        <a href="counter/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c14">
+      <a class="card__main" href="tearsheet/index.html">
+        <div class="thumb" style="background-image:url('assets/c14-hero-silvia.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 14</div>
+          <div class="name">Tearsheet</div>
+          <div class="thesis">"90s tuner-press print, alive." Era-media-generated — paper, ink, one process red, ruled columns and condensed headlines running a real market.</div>
+          <div class="tags"><span class="tag">Paper / Ink / Process red</span><span class="tag">Era-media</span><span class="tag">Ruled grid</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="tearsheet/index.html">Prototype</a>
+        <a href="tearsheet/BRIEF.md">Brief</a>
+        <a href="tearsheet/design.html">Design system</a>
+      </div>
+    </div>
+    <div class="card c15">
+      <a class="card__main" href="glance/index.html">
+        <div class="thumb" style="background-image:url('assets/c15-hero-earth.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 15 · ERA-MEDIA</div>
+          <div class="name">Glance</div>
+          <div class="thesis">"Selling parts should feel like checking your phone." Device-OS grammar — void-black bento widgets, live-activity offers, a drifting Earth under the deck.</div>
+          <div class="tags"><span class="tag">Void / Signal red</span><span class="tag">Inter + Mono</span><span class="tag">Live widgets</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="glance/index.html">Prototype</a>
+        <a href="glance/BRIEF.md">Brief</a>
+        <a href="glance/alerts.html">Notifications</a>
+      </div>
+    </div>
+    <div class="card c16">
+      <a class="card__main" href="livesheet/index.html">
+        <div class="thumb" style="background-image:url('assets/c16-hero-car.png')"></div>
+        <div class="body">
+          <div class="num">CONCEPT 16 · GLANCE × WERKBANK</div>
+          <div class="name">Livesheet</div>
+          <div class="thesis">"A drawing that knows what's happening." Drafting paper + live device data — dimension lines whose measured values tick in real time.</div>
+          <div class="tags"><span class="tag">Paper / Signal red</span><span class="tag">IBM Plex</span><span class="tag">Live dimensions</span></div>
+        </div>
+      </a>
+      <div class="card__links">
+        <a href="livesheet/index.html">Prototype</a>
+        <a href="livesheet/BRIEF.md">Brief</a>
+        <a href="livesheet/car.html">Car sheet</a>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <div class="meta">Built for DRVN — the home for your modified car</div>
+    <div class="meta">Each concept: Prototype · Brief · Design system (design.md + live style guide)</div>
+  </footer>
+</div>
+</body>
+</html>

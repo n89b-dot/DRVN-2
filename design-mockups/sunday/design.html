@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SUNDAY — Live Style Guide — DRVN Concept 07</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  /* SUNDAY tokens — mirrors sunday.css exactly */
+  :root{
+    --canvas:#F4F6F9; --card:#FFFFFF; --ink:#16181D; --secondary:#626977;
+    --hairline:#E3E7ED; --accent:#4F46E5; --accent-hover:#4338CA; --accent-tint:#EEF0FE;
+    --success:#16A34A; --success-tint:#EAF7EF; --amber:#D97706; --amber-tint:#FCF3E5;
+    --dark:#101217; --img-fallback:#E9EDF2;
+    --font-ui:"Inter",-apple-system,sans-serif; --font-display:"Manrope","Inter",sans-serif;
+    --r-card:12px; --r-control:10px; --r-pill:999px; --r-media:20px;
+    --shadow-1:0 1px 2px rgba(16,24,40,.05); --shadow-2:0 4px 12px rgba(16,24,40,.08);
+    --shadow-3:0 12px 32px rgba(16,24,40,.12);
+    --ease:cubic-bezier(.16,1,.3,1); --t-fast:180ms; --t-med:240ms;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--font-ui);background:var(--canvas);color:var(--ink);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1000px;margin:0 auto;padding:48px 24px 96px}
+  h1{font-family:var(--font-display);font-weight:800;font-size:34px;letter-spacing:-.02em}
+  .lede{color:var(--secondary);margin:8px 0 48px;max-width:60ch}
+  section{margin-bottom:56px}
+  h2{font-size:18px;font-weight:600;letter-spacing:-.02em;margin-bottom:4px}
+  .sec-sub{font-size:13px;color:var(--secondary);margin-bottom:20px}
+  .token{font-size:11.5px;color:var(--secondary);background:var(--card);border:1px solid var(--hairline);border-radius:6px;padding:2px 7px;display:inline-block}
+  .grid{display:grid;gap:16px}
+  .g4{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .card{background:var(--card);border:1px solid var(--hairline);border-radius:var(--r-card);box-shadow:var(--shadow-1);transition:box-shadow var(--t-med) var(--ease),transform var(--t-med) var(--ease)}
+  .pad{padding:24px}
+  /* swatches */
+  .swatch .chip{height:64px;border-radius:var(--r-control);border:1px solid var(--hairline)}
+  .swatch{padding:10px;display:flex;flex-direction:column;gap:8px}
+  .swatch .name{font-size:13px;font-weight:600}
+  .swatch .hex{font-size:12px;color:var(--secondary)}
+  /* type scale */
+  .type-row{display:flex;align-items:baseline;gap:20px;padding:16px 24px;border-bottom:1px solid var(--hairline);flex-wrap:wrap}
+  .type-row:last-child{border-bottom:0}
+  .type-row .spec{font-size:12px;color:var(--secondary);min-width:230px}
+  /* spacing */
+  .space-row{display:flex;align-items:center;gap:16px;margin-bottom:10px}
+  .space-bar{height:16px;background:var(--accent-tint);border:1px solid var(--accent);border-radius:4px}
+  .space-row span{font-size:12.5px;color:var(--secondary)}
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-ui);font-size:14px;font-weight:600;padding:10px 18px;border-radius:var(--r-control);border:1px solid transparent;cursor:pointer;transition:all var(--t-fast) var(--ease);line-height:1.2}
+  .btn:active{transform:translateY(1px) scale(.99)}
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:var(--shadow-1)}
+  .btn-primary:hover{background:var(--accent-hover);box-shadow:var(--shadow-2)}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--hairline)}
+  .btn-ghost:hover{background:#F8FAFC;border-color:#CBD2DC}
+  .btn-tint{background:var(--accent-tint);color:var(--accent)}
+  .btn-tint:hover{background:#E2E5FD;color:var(--accent-hover)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .row+.row{margin-top:16px}
+  .state{font-size:12px;color:var(--secondary);width:84px}
+  /* pills */
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;line-height:1;padding:6px 11px;border-radius:var(--r-pill);background:var(--canvas);color:var(--secondary)}
+  .pill-indigo{background:var(--accent-tint);color:var(--accent)}
+  .pill-success{background:var(--success-tint);color:var(--success)}
+  .pill-amber{background:var(--amber-tint);color:var(--amber)}
+  .pill-outline{background:var(--card);border:1px solid var(--hairline)}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .dot-indigo{background:var(--accent)}.dot-success{background:var(--success)}.dot-amber{background:var(--amber)}
+  /* segment */
+  .segment{display:inline-flex;gap:2px;background:#E9EDF3;border-radius:var(--r-pill);padding:3px}
+  .segment button{border:0;cursor:pointer;font-family:var(--font-ui);font-size:13.5px;font-weight:500;color:var(--secondary);background:transparent;padding:7px 15px;border-radius:var(--r-pill);transition:all var(--t-fast) var(--ease)}
+  .segment button.is-active{background:var(--card);color:var(--ink);font-weight:600;box-shadow:var(--shadow-1)}
+  /* input */
+  .input{width:100%;max-width:320px;font-family:var(--font-ui);font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--hairline);border-radius:var(--r-control);padding:10px 12px;transition:all var(--t-fast) var(--ease)}
+  .input:hover{border-color:#CBD2DC}
+  .input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-tint)}
+  /* topbar tab */
+  .topbar-tab{font-size:14px;font-weight:500;color:var(--secondary);padding:8px 14px;border-radius:var(--r-pill);text-decoration:none;transition:all var(--t-fast) var(--ease)}
+  .topbar-tab:hover{color:var(--ink);background:var(--canvas)}
+  .topbar-tab.is-active{color:var(--accent);background:var(--accent-tint);font-weight:600}
+  /* stat */
+  .stat-card{padding:24px;display:flex;flex-direction:column;gap:6px}
+  .stat-label{font-size:12.5px;font-weight:500;color:var(--secondary);display:flex;align-items:center;gap:7px}
+  .stat-value{font-family:var(--font-display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1}
+  .stat-sub{font-size:12.5px;color:var(--secondary)}
+  /* offer card */
+  .offer-card{padding:24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .offer-thumb{width:72px;height:72px;border-radius:var(--r-control);background:var(--img-fallback)}
+  .offer-title{font-size:15px;font-weight:600;margin-bottom:3px}
+  .offer-meta{font-size:13px;color:var(--secondary);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* toggle */
+  .toggle{width:40px;height:24px;border-radius:var(--r-pill);background:#D5DAE2;border:0;cursor:pointer;position:relative;transition:background var(--t-fast) var(--ease)}
+  .toggle .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:var(--shadow-1);transition:transform var(--t-med) var(--ease)}
+  .toggle.is-on{background:var(--accent)}
+  .toggle.is-on .knob{transform:translateX(16px)}
+  /* shadow demo */
+  .shadow-demo{height:90px;border-radius:var(--r-card);background:var(--card);display:flex;align-items:flex-end;padding:12px;font-size:12px;color:var(--secondary)}
+  .avatar{width:34px;height:34px;border-radius:50%;background:var(--accent-tint);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .back{font-size:13.5px;color:var(--accent);text-decoration:none}
+  .back:hover{color:var(--accent-hover)}
+  .card-hover:hover{box-shadow:var(--shadow-2);transform:translateY(-2px)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="dashboard.html">← Back to dashboard</a>
+  <h1 style="margin-top:16px;">SUNDAY</h1>
+  <p class="lede">The live style guide for DRVN Concept 07. Every value on this page is a token mirrored exactly in <code>sunday.css</code> and <code>design.md</code>. One indigo, soft depth, rounded calm.</p>
+
+  <section>
+    <h2>Color</h2>
+    <p class="sec-sub">One accent. Status colors are dots and pills, never surfaces.</p>
+    <div class="grid g4">
+      <div class="card swatch"><div class="chip" style="background:#F4F6F9"></div><span class="name">Canvas</span><span class="hex">#F4F6F9 · <span class="token">--canvas</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#FFFFFF"></div><span class="name">Card</span><span class="hex">#FFFFFF · <span class="token">--card</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#16181D"></div><span class="name">Ink</span><span class="hex">#16181D · <span class="token">--ink</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#626977"></div><span class="name">Secondary</span><span class="hex">#626977 · <span class="token">--secondary</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#E3E7ED"></div><span class="name">Hairline</span><span class="hex">#E3E7ED · <span class="token">--hairline</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#4F46E5"></div><span class="name">Accent — Electric Indigo</span><span class="hex">#4F46E5 · <span class="token">--accent</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#EEF0FE"></div><span class="name">Accent tint</span><span class="hex">#EEF0FE · <span class="token">--accent-tint</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#16A34A"></div><span class="name">Success (dots only)</span><span class="hex">#16A34A · <span class="token">--success</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#D97706"></div><span class="name">Amber (dots only)</span><span class="hex">#D97706 · <span class="token">--amber</span></span></div>
+      <div class="card swatch"><div class="chip" style="background:#101217"></div><span class="name">Dark section</span><span class="hex">#101217 · <span class="token">--dark</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Typography</h2>
+    <p class="sec-sub">Inter for UI, Manrope for display. Tabular numerals everywhere. No monospace.</p>
+    <div class="card">
+      <div class="type-row"><span class="spec">Display · Manrope 800 · clamp(38–58px) · -0.025em</span><span style="font-family:var(--font-display);font-weight:800;font-size:44px;letter-spacing:-.025em;line-height:1.04">The home for your car.</span></div>
+      <div class="type-row"><span class="spec">H1 / greeting · Manrope 800 · 32px · -0.02em</span><span style="font-family:var(--font-display);font-weight:800;font-size:32px;letter-spacing:-.02em">Morning, Maya</span></div>
+      <div class="type-row"><span class="spec">H2 / section · Inter 600 · 18px · -0.02em</span><span style="font-weight:600;font-size:18px;letter-spacing:-.02em">Needs your reply</span></div>
+      <div class="type-row"><span class="spec">Body · Inter 400 · 15px / 1.55</span><span>Buyers see the exact car a part came off, and what it was paired with.</span></div>
+      <div class="type-row"><span class="spec">Label · Inter 500 · 12.5px · secondary</span><span style="font-size:12.5px;font-weight:500;color:var(--secondary)">ACTIVE LISTINGS</span></div>
+      <div class="type-row"><span class="spec">Number · Manrope 800 · 30px · tabular-nums</span><span style="font-family:var(--font-display);font-weight:800;font-size:30px;letter-spacing:-.02em">£1,240</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Spacing — 8pt rhythm</h2>
+    <p class="sec-sub"><span class="token">--s-1</span> through <span class="token">--s-12</span></p>
+    <div class="card pad">
+      <div class="space-row"><div class="space-bar" style="width:8px"></div><span>8 — icon gaps, dot spacing</span></div>
+      <div class="space-row"><div class="space-bar" style="width:16px"></div><span>16 — card grids, chip rows</span></div>
+      <div class="space-row"><div class="space-bar" style="width:24px"></div><span>24 — card padding, gutters</span></div>
+      <div class="space-row"><div class="space-bar" style="width:32px"></div><span>32 — section gaps</span></div>
+      <div class="space-row"><div class="space-bar" style="width:48px"></div><span>48 — page head clearance</span></div>
+      <div class="space-row"><div class="space-bar" style="width:96px"></div><span>96 — marketing section rhythm</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Elevation</h2>
+    <p class="sec-sub">Shadows carry depth; borders stay whisper-light.</p>
+    <div class="grid g3">
+      <div class="shadow-demo" style="box-shadow:var(--shadow-1)">rest · <span class="token">--shadow-1</span></div>
+      <div class="shadow-demo" style="box-shadow:var(--shadow-2)">hover · <span class="token">--shadow-2</span></div>
+      <div class="shadow-demo" style="box-shadow:var(--shadow-3)">overlay · <span class="token">--shadow-3</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Buttons</h2>
+    <p class="sec-sub">Primary / ghost / tint. Hover blooms the shadow; active nudges 1px.</p>
+    <div class="card pad">
+      <div class="row"><span class="state">Rest</span><button class="btn btn-primary">Accept offer</button><button class="btn btn-ghost">Counter</button><button class="btn btn-tint">View match</button></div>
+      <div class="row"><span class="state">Disabled</span><button class="btn btn-primary" disabled>Accept offer</button><button class="btn btn-ghost" disabled>Counter</button></div>
+      <div class="row"><span class="state">Focus</span><span style="font-size:12.5px;color:var(--secondary)">Tab to any control — 2px indigo ring, 2px offset.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Pills &amp; status</h2>
+    <div class="card pad row">
+      <span class="pill">Neutral</span>
+      <span class="pill pill-indigo"><span class="dot dot-indigo"></span>Under offer</span>
+      <span class="pill pill-success"><span class="dot dot-success"></span>Live</span>
+      <span class="pill pill-amber"><span class="dot dot-amber"></span>Expires soon</span>
+      <span class="pill pill-outline">From: E30 Project</span>
+      <span class="pill pill-success"><svg width="11" height="11" viewBox="0 0 10 10" fill="none"><path d="M1.5 5.2 4 7.7 8.5 2.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Provenance attached</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Segmented control &amp; tabs</h2>
+    <div class="card pad row" style="gap:32px;">
+      <div class="segment" id="demo-seg">
+        <button class="is-active">All <span style="color:var(--accent)">6</span></button>
+        <button>Live</button>
+        <button>Sold</button>
+      </div>
+      <span class="row" style="gap:4px;">
+        <a class="topbar-tab is-active" href="#">Dashboard</a>
+        <a class="topbar-tab" href="#">Garage</a>
+        <a class="topbar-tab" href="#">Listings</a>
+      </span>
+      <button class="toggle is-on" id="demo-toggle" role="switch" aria-checked="true" aria-label="Demo toggle"><span class="knob"></span></button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Inputs</h2>
+    <div class="card pad row">
+      <input class="input" placeholder="e.g. M20 exhaust manifold">
+      <input class="input" style="border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-tint);max-width:220px" value="Focused state">
+    </div>
+  </section>
+
+  <section>
+    <h2>Stat card</h2>
+    <div class="grid g3">
+      <div class="card stat-card card-hover"><span class="stat-label"><span class="dot dot-indigo"></span>Offers waiting</span><span class="stat-value">2</span><span class="stat-sub">Newest 7h ago</span></div>
+      <div class="card stat-card card-hover"><span class="stat-label">This month</span><span class="stat-value">£890</span><span class="stat-sub"><span style="color:var(--success);font-weight:600">↑ 32%</span> vs June</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Offer card</h2>
+    <div class="card offer-card card-hover">
+      <span class="offer-thumb"></span>
+      <span style="flex:1;min-width:180px;">
+        <span class="offer-title" style="display:block">BBS RS 16&Prime; bronze — set of 4</span>
+        <span class="offer-meta"><strong style="color:var(--ink)">£540 offered</strong><span style="text-decoration:line-through">£600</span><span class="pill pill-outline">From: E30 Project</span></span>
+      </span>
+      <span class="row">
+        <button class="btn btn-primary" style="padding:7px 13px;font-size:13px">Accept</button>
+        <button class="btn btn-ghost" style="padding:7px 13px;font-size:13px">Counter</button>
+        <button class="btn btn-ghost" style="padding:7px 13px;font-size:13px">Decline</button>
+      </span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Shapes &amp; radii</h2>
+    <div class="card pad row" style="gap:24px;">
+      <span class="row" style="gap:8px"><span style="width:56px;height:56px;background:var(--accent-tint);border-radius:12px"></span><span class="token">--r-card 12px</span></span>
+      <span class="row" style="gap:8px"><span style="width:56px;height:56px;background:var(--accent-tint);border-radius:10px"></span><span class="token">--r-control 10px</span></span>
+      <span class="row" style="gap:8px"><span style="width:56px;height:32px;background:var(--accent-tint);border-radius:999px"></span><span class="token">--r-pill 999px</span></span>
+      <span class="row" style="gap:8px"><span style="width:56px;height:56px;background:var(--accent-tint);border-radius:20px"></span><span class="token">--r-media 20px</span></span>
+      <span class="row" style="gap:8px"><span class="avatar">MK</span><span class="token">avatar 34px</span></span>
+    </div>
+  </section>
+
+  <p style="font-size:12.5px;color:var(--secondary)">SUNDAY v1.0.0 · tokens mirrored in <code>design.md</code> (Google design.md standard) and <code>sunday.css</code>.</p>
+</div>
+<script>
+  document.getElementById("demo-toggle").addEventListener("click", function(){
+    var on = this.classList.toggle("is-on");
+    this.setAttribute("aria-checked", on ? "true" : "false");
+  });
+  document.getElementById("demo-seg").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("is-active", x===b); });
+  });
+</script>
+</body>
+</html>

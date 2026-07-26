@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LIVERY — Style Guide — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&family=Anton&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --cream:#F5EDDD; --cream-panel:#F2E9DA; --ink:#1B1B1E;
+    --cobalt:#1D4ED8; --red:#E4342C; --yellow:#FFC700; --powder:#9EC5E8;
+    --green:#1E9E52; --white:#FFF; --muted:#6B6B72;
+    --spring:cubic-bezier(.34,1.56,.64,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--cream);color:var(--ink);font-family:"Archivo",sans-serif;font-size:15px;line-height:1.5;padding-bottom:80px}
+  .head{background:var(--ink);color:var(--cream);padding:48px 32px;border-bottom:3px solid var(--ink)}
+  .head::after{content:"";display:block;height:0}
+  .stripe{height:10px;background:linear-gradient(to right,var(--cobalt) 0 33.4%,var(--red) 33.4% 66.7%,var(--yellow) 66.7% 100%)}
+  .head h1{font-family:"Archivo Black";text-transform:uppercase;font-size:clamp(30px,5vw,56px);line-height:.95}
+  .head p{color:var(--yellow);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 32px}
+  section{margin-top:56px}
+  h2{font-family:"Archivo Black";text-transform:uppercase;font-size:24px;margin-bottom:6px}
+  .sub{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:20px}
+  .token{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted)}
+  .grid{display:grid;gap:20px}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  /* swatches */
+  .swatch{border:2px solid var(--ink)}
+  .swatch .chipfield{height:96px;border-bottom:2px solid var(--ink)}
+  .swatch .meta{background:var(--white);padding:10px 12px}
+  .swatch .meta b{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+  /* type rows */
+  .type-row{border-bottom:2px solid var(--ink);padding:18px 0;display:flex;align-items:baseline;gap:24px;flex-wrap:wrap}
+  .type-row .spec{min-width:220px}
+  /* components */
+  .chip{display:inline-flex;align-items:center;background:var(--white);border:2px solid var(--ink);border-radius:90px;padding:4px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;box-shadow:4px 4px 0 var(--ink);transition:transform 240ms var(--spring)}
+  .chip:hover{transform:rotate(-2deg) translate(-1px,-1px)}
+  .chip.yellow{background:var(--yellow)}.chip.red{background:var(--red);color:#fff}
+  .chip.cobalt{background:var(--cobalt);color:#fff}.chip.green{background:var(--green);color:#fff}
+  .chip.powder{background:var(--powder)}.chip.ink{background:var(--ink);color:var(--cream)}
+  .btn{display:inline-flex;font-family:"Archivo Black";font-size:12px;text-transform:uppercase;letter-spacing:.08em;padding:12px 22px;border:2px solid var(--ink);background:var(--yellow);color:var(--ink);box-shadow:4px 4px 0 var(--ink);cursor:pointer;transition:transform 240ms var(--spring),box-shadow 240ms var(--spring)}
+  .btn:hover,.btn:focus-visible{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink);outline:none}
+  .btn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--ink)}
+  .btn.cobalt{background:var(--cobalt);color:#fff}.btn.red{background:var(--red);color:#fff}
+  .btn.green{background:var(--green);color:#fff}.btn.ghost{background:var(--white)}
+  .roundel{display:inline-grid;place-items:center;border-radius:50%;border:3px solid var(--ink);background:var(--white);font-family:"Anton"}
+  .r-sm{width:38px;height:38px;font-size:17px;border-width:2px}.r-md{width:56px;height:56px;font-size:26px}.r-lg{width:84px;height:84px;font-size:42px;border-width:4px}
+  .block{border:2px solid var(--ink);padding:24px;background:var(--white)}
+  .block.hover{box-shadow:4px 4px 0 var(--ink);transition:transform 240ms var(--spring),box-shadow 240ms var(--spring)}
+  .block.hover:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+  .block.cobalt{background:var(--cobalt);color:#fff}.block.red{background:var(--red);color:#fff}
+  .block.yellow{background:var(--yellow)}.block.powder{background:var(--powder)}
+  input,select{width:100%;font-family:"Archivo";font-size:14px;padding:11px 14px;border:2px solid var(--ink);background:var(--white)}
+  input:focus,select:focus{outline:none;box-shadow:3px 3px 0 var(--cobalt);transform:translate(-1px,-1px)}
+  .micro{font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
+  .light{width:56px;height:56px;border-radius:50%;border:4px solid var(--cream);background:#3a3a40;margin:0 auto 10px}
+  .lights{background:var(--ink);color:var(--cream);border:2px solid var(--ink);padding:32px;display:grid;grid-template-columns:repeat(5,1fr);gap:16px;text-align:center}
+  .lights .done .light{background:var(--green)} .lights .cur .light{background:var(--red);transform:scale(1.12)}
+  .sp-demo{display:flex;align-items:flex-end;gap:12px}
+  .sp-demo div{background:var(--cobalt);border:2px solid var(--ink)}
+  .flag{display:inline-flex;align-items:center;gap:7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;border:2px solid var(--ink);padding:4px 10px;background:var(--white)}
+  .flag::before{content:"";width:12px;height:12px;border:1px solid var(--ink)}
+  .fy::before{background:var(--yellow)}.fg::before{background:var(--green)}.fb::before{background:var(--cobalt)}.fr::before{background:var(--red)}
+  .divider{height:26px;display:flex;overflow:hidden;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+  .divider span{flex:1;transform:skewX(-24deg) scaleX(1.2)}
+  .divider :nth-child(1){background:var(--cobalt)}.divider :nth-child(2){background:var(--red)}
+  .divider :nth-child(3){background:var(--yellow)}.divider :nth-child(4){background:var(--powder)}
+  a.back{color:var(--cobalt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.1em}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div class="wrap">
+    <p>DRVN · Concept 05 · Design tokens & components</p>
+    <h1>LIVERY Style Guide</h1>
+  </div>
+</div>
+<div class="stripe"></div>
+
+<div class="wrap">
+
+  <section>
+    <h2>Palette</h2>
+    <p class="sub">Cream stock + ink + five closed livery inks · flat only, no gradients</p>
+    <div class="grid g4">
+      <div class="swatch"><div class="chipfield" style="background:var(--cream)"></div><div class="meta"><b>Cream</b><span class="token">--cream · #F5EDDD · page stock</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--ink)"></div><div class="meta"><b>Ink</b><span class="token">--ink · #1B1B1E · rules & type</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--cobalt)"></div><div class="meta"><b>Cobalt</b><span class="token">--cobalt · #1D4ED8 · live</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--red)"></div><div class="meta"><b>Racing red</b><span class="token">--red · #E4342C · needs action</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--yellow)"></div><div class="meta"><b>Signal yellow</b><span class="token">--yellow · #FFC700 · money / CTA</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--powder)"></div><div class="meta"><b>Powder blue</b><span class="token">--powder · #9EC5E8 · context</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--green)"></div><div class="meta"><b>Green</b><span class="token">--green · #1E9E52 · done / sold</span></div></div>
+      <div class="swatch"><div class="chipfield" style="background:var(--cream-panel)"></div><div class="meta"><b>Cream panel</b><span class="token">--cream-panel · #F2E9DA · fallback</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Type scale</h2>
+    <p class="sub">Archivo Black display · Anton numbers · Archivo body</p>
+    <div class="type-row"><span class="spec token">display · Archivo Black · clamp(26–46px)</span><span style="font-family:'Archivo Black';text-transform:uppercase;font-size:44px;line-height:.95">Box box, Rae</span></div>
+    <div class="type-row"><span class="spec token">number · Anton · clamp(52–84px) · tabular</span><span style="font-family:'Anton';font-size:76px;line-height:.9">£2,140</span></div>
+    <div class="type-row"><span class="spec token">h2 · Archivo Black · 24–30px</span><span style="font-family:'Archivo Black';text-transform:uppercase;font-size:26px">Timing tower</span></div>
+    <div class="type-row"><span class="spec token">body · Archivo 400 · 15px</span><span>Every listing traces back to the car it came off — VIN-linked, photo-logged, fitment-verified.</span></div>
+    <div class="type-row"><span class="spec token">label · Archivo 600 · 10px · .18em</span><span class="micro">Offers — respond before lights out</span></div>
+  </section>
+
+  <section>
+    <h2>Spacing</h2>
+    <p class="sub">4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 — tokens --sp-1 … --sp-8 · frame 1280px</p>
+    <div class="sp-demo">
+      <div style="width:4px;height:4px"></div><div style="width:8px;height:8px"></div>
+      <div style="width:12px;height:12px"></div><div style="width:16px;height:16px"></div>
+      <div style="width:24px;height:24px"></div><div style="width:32px;height:32px"></div>
+      <div style="width:48px;height:48px"></div><div style="width:64px;height:64px"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Buttons</h2>
+    <p class="sub">.btn — Archivo Black face · hard shadow 4px→6px · spring pop · hover any of these</p>
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <button class="btn">Primary — yellow</button>
+      <button class="btn cobalt">Cobalt</button>
+      <button class="btn red">Red — act now</button>
+      <button class="btn green">Green — confirm</button>
+      <button class="btn ghost">Secondary / ghost</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sticker chips</h2>
+    <p class="sub">.chip — white pill, 2px ink border, hard shadow, 2° wobble on hover</p>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+      <span class="chip">Default</span>
+      <span class="chip yellow">Under offer</span>
+      <span class="chip cobalt">Live</span>
+      <span class="chip red">02:58:41</span>
+      <span class="chip green">Sold</span>
+      <span class="chip powder">Ship by Fri</span>
+      <span class="chip ink">P1 Seller</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Roundels</h2>
+    <p class="sub">.roundel — door-number circles · Anton numerals · sm 38 / md 56 / lg 84</p>
+    <div style="display:flex;gap:20px;align-items:center">
+      <span class="roundel r-sm">3</span>
+      <span class="roundel r-md">23</span>
+      <span class="roundel r-lg">87</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Color-block cards</h2>
+    <p class="sub">.block — solid ink fields, 2px border · .hoverable pops with growing shadow</p>
+    <div class="grid g3">
+      <div class="block hover"><span class="micro">White block</span><p style="font-family:'Anton';font-size:40px">6</p><p class="micro">Live listings</p></div>
+      <div class="block cobalt hover"><span class="micro">Cobalt block</span><p style="font-family:'Anton';font-size:40px">31</p><p class="micro">Watchers</p></div>
+      <div class="block red hover"><span class="micro">Red block</span><p style="font-family:'Anton';font-size:40px">3</p><p class="micro">Needs action</p></div>
+      <div class="block yellow hover"><span class="micro">Yellow block</span><p style="font-family:'Anton';font-size:40px">£323</p><p class="micro">Payout</p></div>
+      <div class="block powder hover"><span class="micro">Powder block</span><p style="font-family:'Anton';font-size:40px">P2</p><p class="micro">Context</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Flag chips</h2>
+    <p class="sub">.flag — CSS color squares, never emoji · event taxonomy for Race Control</p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <span class="flag fy">Yellow — question</span>
+      <span class="flag fg">Green — sale</span>
+      <span class="flag fb">Blue — watchers</span>
+      <span class="flag fr">Red — expired</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Inputs</h2>
+    <p class="sub">2px ink border · cobalt offset on focus — click into one</p>
+    <div class="grid g3">
+      <div><label class="micro" for="d1">Part name</label><input id="d1" placeholder="e.g. GT3 front lip — genuine" /></div>
+      <div><label class="micro" for="d2">Condition</label><select id="d2"><option>Excellent</option><option>Very good</option></select></div>
+      <div><label class="micro" for="d3">Asking price (£)</label><input id="d3" type="number" placeholder="450" /></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Race lights</h2>
+    <p class="sub">.race-lights — order stepper · pending #3A3A40 → current red (scaled) → done green</p>
+    <div class="lights">
+      <div class="done"><div class="light"></div><span class="micro" style="color:var(--green)">Accepted</span></div>
+      <div class="done"><div class="light"></div><span class="micro" style="color:var(--green)">Paid</span></div>
+      <div class="cur"><div class="light"></div><span class="micro" style="color:var(--red)">Packed</span></div>
+      <div><div class="light"></div><span class="micro" style="color:#8a8a92">Dispatched</span></div>
+      <div><div class="light"></div><span class="micro" style="color:#8a8a92">Delivered</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stripe divider</h2>
+    <p class="sub">.stripe-divider — skewed −24° livery bands · slides in on scroll in product</p>
+    <div class="divider"><span></span><span></span><span></span><span></span></div>
+  </section>
+
+  <section>
+    <h2>Motion</h2>
+    <p class="sub token">--spring: cubic-bezier(.34,1.56,.64,1) · --dur: 240ms · hard cap 300ms · hard shadows only, no blur ever</p>
+    <a class="back" href="index.html">← Back to the pit wall</a>
+  </section>
+
+</div>
+</body>
+</html>

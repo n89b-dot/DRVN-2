@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Open a sheet — C-0417</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link is-active" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">CAR SHEET C-0417 — UNOPENED · DRAFT SAVED ON EVERY LINE</span>
+    <h1>Open a <span class="live-word">sheet.</span></h1>
+    <p class="sub">A car sheet is the spine everything else hangs from — every part you fit writes a line, and every part that comes off leaves with the line attached.</p>
+  </div>
+
+  <form id="carForm" novalidate>
+  <section class="deck deck--two" style="margin-top:14px">
+
+    <!-- ============ LEFT: THE SHEET ============ -->
+    <div>
+
+      <!-- PROGRESS SPINE -->
+      <div class="tile tile--deep rv">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">OPENING A SHEET — FOUR LINES</span>
+          <span class="microlabel">ONE PAGE · NO WIZARD</span>
+        </div>
+        <div class="steps" data-spine>
+          <div class="step is-done" data-step="identify">
+            <span class="step__n"></span>
+            <span class="step__t"><a class="jumplink" href="#identify" style="letter-spacing:0;text-transform:none;font-family:var(--sans);font-size:15.5px;font-weight:600">Identify</a></span>
+            <span class="step__d">Year, make, model, chassis. What the car actually is.</span>
+            <span class="chip chip--ok">DONE</span>
+          </div>
+          <div class="step is-done" data-step="photos">
+            <span class="step__n"></span>
+            <span class="step__t"><a class="jumplink" href="#photos" style="letter-spacing:0;text-transform:none;font-family:var(--sans);font-size:15.5px;font-weight:600">Photos</a></span>
+            <span class="step__d">A clean three-quarter for the cover, then the details.</span>
+            <span class="chip chip--ok">DONE</span>
+          </div>
+          <div class="step is-now" data-step="build">
+            <span class="step__n"></span>
+            <span class="step__t"><a class="jumplink" href="#build" style="letter-spacing:0;text-transform:none;font-family:var(--sans);font-size:15.5px;font-weight:600">The build</a></span>
+            <span class="step__d">Seed the lines. You can add to them forever after.</span>
+            <span class="chip chip--live" data-build-chip>3 LINES</span>
+          </div>
+          <div class="step" data-step="publish">
+            <span class="step__n"></span>
+            <span class="step__t"><a class="jumplink" href="#publish" style="letter-spacing:0;text-transform:none;font-family:var(--sans);font-size:15.5px;font-weight:600">Publish</a></span>
+            <span class="step__d">Decide who can read it, then open the sheet.</span>
+            <span class="chip">WAITING</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 01 IDENTIFY -->
+      <div class="tile rv" id="identify" data-stagger="1" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">01 — IDENTIFY</span>
+          <span class="microlabel">SHOWN ON THE PUBLIC SHEET</span>
+        </div>
+
+        <div class="field field--row">
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="carYear">Year</label>
+            <input class="ctl ctl--block" id="carYear" type="text" inputmode="numeric" value="1992" style="max-width:none">
+          </span>
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="carMake">Make</label>
+            <input class="ctl ctl--block" id="carMake" type="text" value="Lancia" style="max-width:none">
+          </span>
+        </div>
+
+        <div class="field field--row">
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="carModel">Model</label>
+            <input class="ctl ctl--block" id="carModel" type="text" value="Delta HF Integrale" style="max-width:none">
+          </span>
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="carTrim">Trim / series</label>
+            <input class="ctl ctl--block" id="carTrim" type="text" value="Evoluzione I — 16v" style="max-width:none">
+          </span>
+        </div>
+
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="carVin">Chassis / VIN</label>
+          <input class="ctl ctl--block" id="carVin" type="text" value="ZLA831AB000587xxx" style="max-width:none">
+          <span class="field__hint"><i class="ph ph-lock-simple" aria-hidden="true"></i>&nbsp;Stays private, always. The public sheet shows a <b>CHASSIS VERIFIED</b> badge and nothing else — buyers get the assurance, nobody gets your numbers.</span>
+        </div>
+
+        <div class="field">
+          <label class="microlabel microlabel--ink" for="carNick">Nickname</label>
+          <input class="ctl ctl--block" id="carNick" type="text" value="Biscione" placeholder="What you actually call it" style="max-width:none">
+          <span class="field__hint">Optional. It heads the sheet and it's what people search for you by.</span>
+        </div>
+
+        <div class="field field--row" style="margin-bottom:0">
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="carMiles">Mileage</label>
+            <span class="ctl__prefix">
+              <input class="ctl" id="carMiles" type="text" inputmode="numeric" value="118400">
+              <span aria-hidden="true" style="padding:0 14px 0 4px">km</span>
+            </span>
+          </span>
+          <span class="field" style="margin:0">
+            <label class="microlabel microlabel--ink" for="carLoc">Kept in</label>
+            <input class="ctl ctl--block" id="carLoc" type="text" value="Bristol, UK" style="max-width:none">
+          </span>
+        </div>
+      </div>
+
+      <!-- 02 PHOTOS -->
+      <div class="tile rv" id="photos" data-stagger="2" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">02 — PHOTOS · <span data-photo-count>3</span> ON THE SHEET</span>
+          <span class="microlabel">FIRST FRAME IS THE COVER</span>
+        </div>
+        <button class="drop" type="button" style="width:100%" data-toast="PHOTO PICKER — NOT IN THIS PROTOTYPE">
+          <span class="drop__mark"><i class="ph ph-tray-arrow-up" aria-hidden="true"></i></span>
+          <h4>Drop photos, or choose files</h4>
+          <p>A clean three-quarter in flat light makes the best cover — the whole car, nothing cropped, nothing behind it. Interior and engine bay after that.</p>
+        </button>
+        <div class="thumbs" data-thumbs>
+          <div class="thumb" data-thumb data-src="../assets/c16-hero-car.png">
+            <img src="../assets/c16-hero-car.png" alt="Red Lancia Delta HF Integrale, three-quarter view" onerror="this.remove()">
+            <span class="thumb__tag">Cover</span>
+            <button class="thumb__x" type="button" aria-label="Remove cover photo">✕</button>
+          </div>
+          <div class="thumb" data-thumb data-src="../assets/c16-part-seat.png">
+            <img src="../assets/c16-part-seat.png" alt="Recaro seat fitted in the cabin" onerror="this.remove()">
+            <span class="thumb__tag">Interior</span>
+            <button class="thumb__x" type="button" aria-label="Remove interior photo">✕</button>
+          </div>
+          <div class="thumb" data-thumb data-src="../assets/c16-part-coilovers.png">
+            <img src="../assets/c16-part-coilovers.png" alt="KW coilovers before fitting" onerror="this.remove()">
+            <span class="thumb__tag">Under it</span>
+            <button class="thumb__x" type="button" aria-label="Remove underside photo">✕</button>
+          </div>
+          <div class="thumb thumb--ghost" aria-hidden="true"></div>
+          <div class="thumb thumb--ghost" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <!-- 03 THE BUILD -->
+      <div class="tile tile--deep rv" id="build" data-stagger="3" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">03 — THE BUILD · SEED THE LINES</span>
+          <span class="microlabel"><b class="mono" data-entry-count>3</b>&nbsp;ENTRIES</span>
+        </div>
+
+        <div data-entries>
+          <div class="bline bline--ctl" data-entry style="border-top:0">
+            <span class="bline__label" data-entry-label>Entry 01</span>
+            <input class="ctl" style="max-width:none" aria-label="Entry 1 component" value="KW Variant 2 coilovers">
+            <span class="bline__checks" style="gap:8px">
+              <select class="ctl" style="max-width:140px" aria-label="Entry 1 status">
+                <option selected>Fitted</option>
+                <option>Planned</option>
+              </select>
+              <input class="ctl" type="month" value="2024-05" style="max-width:150px" aria-label="Entry 1 date">
+            </span>
+            <span class="bline__note" style="display:block">
+              <input class="ctl" style="max-width:none" aria-label="Entry 1 spec" value="8K front / 6K rear — gravel valving, top mounts included">
+            </span>
+          </div>
+
+          <div class="bline bline--ctl" data-entry>
+            <span class="bline__label" data-entry-label>Entry 02</span>
+            <input class="ctl" style="max-width:none" aria-label="Entry 2 component" value="Recaro Pole Position seat">
+            <span class="bline__checks" style="gap:8px">
+              <select class="ctl" style="max-width:140px" aria-label="Entry 2 status">
+                <option selected>Fitted</option>
+                <option>Planned</option>
+              </select>
+              <input class="ctl" type="month" value="2026-06" style="max-width:150px" aria-label="Entry 2 date">
+            </span>
+            <span class="bline__note" style="display:block">
+              <input class="ctl" style="max-width:none" aria-label="Entry 2 spec" value="Driver's side, Sabelt subframe, original runners kept">
+            </span>
+          </div>
+
+          <div class="bline bline--ctl" data-entry>
+            <span class="bline__label" data-entry-label>Entry 03</span>
+            <input class="ctl" style="max-width:none" aria-label="Entry 3 component" placeholder="Component — e.g. Whiteline rear ARB">
+            <span class="bline__checks" style="gap:8px">
+              <select class="ctl" style="max-width:140px" aria-label="Entry 3 status">
+                <option>Fitted</option>
+                <option selected>Planned</option>
+              </select>
+              <input class="ctl" type="month" style="max-width:150px" aria-label="Entry 3 date">
+            </span>
+            <span class="bline__note" style="display:block">
+              <input class="ctl" style="max-width:none" aria-label="Entry 3 spec" placeholder="Spec — size, part number, what it replaced">
+            </span>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+          <button class="btn btn--ghost" type="button" data-add-entry>+ Add entry</button>
+          <button class="btn btn--ghost" type="button" data-toast="RECEIPT UPLOAD — NOT IN THIS PROTOTYPE">Attach a receipt</button>
+        </div>
+
+        <div class="alert alert--ok" style="margin-top:16px">
+          <span class="alert__ico"><i class="ph ph-receipt" aria-hidden="true"></i></span>
+          <h4>Receipts are what make a part sell.</h4>
+          <p>Every line with a dated receipt behind it carries that proof into any listing you raise off it later. Parts released from receipted lines sell roughly twice as fast, and hold their asking price. You can back-fill receipts any time — the sheet never closes.</p>
+        </div>
+      </div>
+
+      <!-- 04 PUBLISH -->
+      <div class="tile rv" id="publish" data-stagger="4" style="margin-top:14px">
+        <div class="tile__head">
+          <span class="microlabel microlabel--ink">04 — PUBLISH</span>
+          <span class="microlabel">REVERSIBLE ANY TIME</span>
+        </div>
+
+        <div class="bline bline--ctl" style="border-top:0">
+          <span class="bline__label">Visibility</span>
+          <label class="bline__val" for="visPublic" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px">
+            <input class="sq" type="radio" id="visPublic" name="vis" checked>
+            Public sheet — anyone can read it, parts can be listed off it
+          </label>
+          <span class="chip chip--ok">RECOMMENDED</span>
+        </div>
+        <div class="bline bline--ctl">
+          <span class="bline__label">Or</span>
+          <label class="bline__val" for="visPrivate" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px">
+            <input class="sq" type="radio" id="visPrivate" name="vis">
+            Private — only you. Listings raised off it show no source car
+          </label>
+        </div>
+
+        <div class="livedim livedim--live" style="margin-top:14px" data-vis-note><span class="livedim__tick"></span>
+          <span class="microlabel">What that means today</span>
+          <span class="val">Chassis stays private either way · a public sheet is what lets a buyer trace a part back to this car</span>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
+          <button class="btn btn--live" type="submit">Open the sheet</button>
+          <button class="btn btn--ghost" type="button" data-toast="DRAFT C-0417 SAVED — RESUME FROM THE GARAGE">Save and finish later</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: THE PUBLIC SHEET, DRAWING ITSELF ============ -->
+    <div>
+      <div style="position:sticky;top:88px">
+        <div class="tile rv" data-stagger="1">
+          <div class="tile__head">
+            <span class="microlabel microlabel--ink">PREVIEW — THE PUBLIC SHEET</span>
+            <span class="chip chip--live" data-pv-state>UNOPENED</span>
+          </div>
+
+          <div class="tile__img" style="aspect-ratio:16/10" data-pv-media>
+            <img src="../assets/c16-hero-car.png" alt="Public sheet cover preview" onerror="this.remove()">
+          </div>
+
+          <div class="mkt__name" style="font-size:17px" data-pv-name>Lancia Delta HF Integrale "Biscione"</div>
+          <div class="mkt__price" data-pv-sub>1992 · Evoluzione I — 16v · Bristol, UK</div>
+          <div class="mkt__meta">
+            <span class="chip chip--ok">CHASSIS VERIFIED</span>
+            <span class="chip" data-pv-vis>PUBLIC</span>
+            <span class="chip" data-pv-miles>118,400 KM</span>
+          </div>
+
+          <div class="dimline-h" aria-hidden="true"></div>
+
+          <div class="livedim livedim--live"><span class="livedim__tick"></span>
+            <span class="microlabel">Build lines seeded</span>
+            <span class="val"><b data-pv-lines>2</b> filled · 1 waiting on a component name</span>
+          </div>
+          <div class="livedim livedim--blank"><span class="livedim__tick"></span>
+            <span class="microlabel">Watchers</span>
+            <span class="val">— starts counting the minute you open it</span>
+          </div>
+
+          <div class="undrawn" style="margin-top:14px" data-undrawn>
+            <div class="undrawn__mark"><i class="ph ph-pen-nib" aria-hidden="true"></i></div>
+            <h3>Sheet C-0417 — not opened yet</h3>
+            <p>Everything above is a draft. The moment you open it, the annotations start moving: views, watchers, and every part you release.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  </form>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — CAR SHEET C-0417 · DRAFT</span>
+    <a class="microlabel mono" href="first-run.html">← BACK TO THE BLANK SHEET</a>
+  </footer>
+</main>
+
+<!-- SHEET OPENED -->
+<div class="sheetwrap" id="openSheet" aria-modal="true" role="dialog" aria-label="Sheet opened">
+  <div class="sheet">
+    <div class="tile__head"><span class="microlabel microlabel--ink">FILED — CAR SHEET C-0417</span><button class="microlabel mono" type="button" data-close-open>ESC ✕</button></div>
+    <span class="stamp">SHEET C-0417 OPENED</span>
+    <p style="font-size:14px;margin:10px 0 4px" data-open-line>Lancia Delta HF Integrale "Biscione" is on the drawing board.</p>
+    <p style="font-size:13px;color:var(--dim)">Chassis verified privately. Three build lines seeded — every part you release from them carries their dates and receipts automatically.</p>
+    <div class="sheet__row" style="margin-top:10px"><span>Visibility</span><b data-open-vis>Public</b></div>
+    <div class="sheet__row"><span>Build lines</span><b data-open-lines>3</b></div>
+    <div class="sheet__row sheet__total"><span>Next</span><b>Release your first part</b></div>
+    <div class="sheet__actions">
+      <a class="btn btn--live" href="garage.html" style="white-space:nowrap">Go to the sheet</a>
+      <a class="btn btn--ghost" href="sell.html" style="white-space:nowrap">List a part off it</a>
+    </div>
+  </div>
+</div>
+
+<script src="livesheet.js"></script>
+<script>
+/* ---------- ADD-CAR — the sheet fills as you draw it ---------- */
+(function () {
+  "use strict";
+  var $  = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  var form = $("#carForm");
+  var wrap = $("[data-entries]");
+
+  function filledEntries() {
+    return $$("[data-entry]", wrap).filter(function (row) {
+      var i = row.querySelector("input"); return i && i.value.trim();
+    }).length;
+  }
+
+  function redraw() {
+    var year  = $("#carYear").value.trim();
+    var make  = $("#carMake").value.trim();
+    var model = $("#carModel").value.trim();
+    var trim  = $("#carTrim").value.trim();
+    var nick  = $("#carNick").value.trim();
+    var loc   = $("#carLoc").value.trim();
+    var miles = String($("#carMiles").value).replace(/[^0-9]/g, "");
+
+    var name = [make, model].filter(Boolean).join(" ") || "Unnamed car";
+    if (nick) name += ' "' + nick + '"';
+    $("[data-pv-name]").textContent = name;
+    $("[data-pv-sub]").textContent = [year, trim, loc].filter(Boolean).join(" · ") || "—";
+
+    var m = $("[data-pv-miles]");
+    if (miles) { m.className = "chip"; m.textContent = parseInt(miles, 10).toLocaleString("en-US") + " KM"; }
+    else { m.className = "chip chip--spent"; m.textContent = "NO MILEAGE"; }
+
+    var total = $$("[data-entry]", wrap).length;
+    var filled = filledEntries();
+    $("[data-entry-count]").textContent = total;
+    $("[data-pv-lines]").textContent = filled;
+    $("[data-pv-lines]").parentNode.lastChild.textContent = " filled · " + (total - filled) + " waiting on a component name";
+    $("[data-build-chip]").textContent = total + (total === 1 ? " LINE" : " LINES");
+    $("[data-open-lines]").textContent = filled;
+
+    var pub = $("#visPublic").checked;
+    var v = $("[data-pv-vis]");
+    v.className = pub ? "chip" : "chip chip--spent";
+    v.textContent = pub ? "PUBLIC" : "PRIVATE";
+    $("[data-open-vis]").textContent = pub ? "Public" : "Private";
+    $("[data-vis-note]").querySelector(".val").textContent = pub
+      ? "Chassis stays private either way · a public sheet is what lets a buyer trace a part back to this car"
+      : "Nobody but you reads this sheet · parts listed off it lose their provenance chip";
+  }
+  ["input", "change"].forEach(function (ev) { form.addEventListener(ev, redraw); });
+
+  /* ---- add an entry: a new ruled line, drawn on the spot ---- */
+  function renumber() {
+    $$("[data-entry]", wrap).forEach(function (row, i) {
+      row.querySelector("[data-entry-label]").textContent = "Entry " + String(i + 1).padStart(2, "0");
+      var n = i + 1;
+      $$("input, select", row).forEach(function (c) {
+        var l = c.getAttribute("aria-label");
+        if (l) c.setAttribute("aria-label", l.replace(/Entry \d+/, "Entry " + n));
+      });
+    });
+  }
+
+  $("[data-add-entry]").addEventListener("click", function () {
+    var n = $$("[data-entry]", wrap).length + 1;
+    var row = document.createElement("div");
+    row.className = "bline bline--ctl";
+    row.setAttribute("data-entry", "");
+    row.innerHTML =
+      '<span class="bline__label" data-entry-label>Entry ' + String(n).padStart(2, "0") + '</span>' +
+      '<input class="ctl" style="max-width:none" aria-label="Entry ' + n + ' component" placeholder="Component — e.g. Whiteline rear ARB">' +
+      '<span class="bline__checks" style="gap:8px">' +
+        '<select class="ctl" style="max-width:140px" aria-label="Entry ' + n + ' status">' +
+          '<option>Fitted</option><option selected>Planned</option></select>' +
+        '<input class="ctl" type="month" style="max-width:150px" aria-label="Entry ' + n + ' date">' +
+      '</span>' +
+      '<span class="bline__note" style="display:block">' +
+        '<input class="ctl" style="max-width:none" aria-label="Entry ' + n + ' spec" placeholder="Spec — size, part number, what it replaced">' +
+      '</span>';
+    wrap.appendChild(row);
+    renumber();
+    redraw();
+    row.querySelector("input").focus();
+    window.lsToast("LINE " + String(n).padStart(2, "0") + " DRAWN — SHEET C-0417");
+  });
+
+  /* ---- photos: pull the cover and the preview goes undrawn ---- */
+  $("[data-thumbs]").addEventListener("click", function (e) {
+    var x = e.target.closest(".thumb__x"); if (!x) return;
+    var thumb = x.closest("[data-thumb]");
+    var tag = thumb.querySelector(".thumb__tag");
+    var wasCover = tag && tag.textContent === "Cover";
+    thumb.remove();
+    var left = $$("[data-thumb]");
+    $("[data-photo-count]").textContent = left.length;
+    if (wasCover && left.length) {
+      var t2 = left[0].querySelector(".thumb__tag");
+      if (t2) t2.textContent = "Cover";
+    }
+    var media = $("[data-pv-media]");
+    if (left.length) {
+      media.innerHTML = "";
+      var img = document.createElement("img");
+      img.alt = "Public sheet cover preview";
+      img.onerror = function () { img.remove(); };
+      img.setAttribute("src", left[0].getAttribute("data-src"));
+      media.appendChild(img);
+    } else {
+      media.innerHTML = '<div class="undrawn" style="height:100%;border-radius:inherit">' +
+        '<div class="undrawn__mark"><i class="ph ph-car-profile"></i></div>' +
+        '<h3>No cover yet</h3><p>A sheet without a photo gets scrolled past.</p></div>';
+    }
+    var step = $('[data-step="photos"]');
+    step.classList.toggle("is-done", left.length > 0);
+    var chip = step.querySelector(".chip");
+    chip.className = left.length ? "chip chip--ok" : "chip chip--live";
+    chip.textContent = left.length ? "DONE" : "NEEDS A COVER";
+    window.lsToast(left.length ? left.length + " FRAMES LEFT ON THE SHEET" : "NO FRAMES LEFT — ADD A COVER");
+  });
+
+  /* ---- open the sheet ---- */
+  var modal = $("#openSheet");
+  function close() { modal.classList.remove("is-open"); }
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal || e.target.closest("[data-close-open]")) close();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var model = $("#carModel").value.trim();
+    if (!model) {
+      $("#carModel").focus();
+      window.lsToast("THE SHEET NEEDS A MODEL BEFORE IT CAN OPEN");
+      return;
+    }
+    $("[data-open-line]").textContent = $("[data-pv-name]").textContent + " is on the drawing board.";
+    $('[data-step="build"]').classList.remove("is-now");
+    $('[data-step="build"]').classList.add("is-done");
+    var pubStep = $('[data-step="publish"]');
+    pubStep.classList.add("is-done");
+    pubStep.querySelector(".chip").className = "chip chip--ok";
+    pubStep.querySelector(".chip").textContent = "OPENED";
+    var un = $("[data-undrawn]");
+    if (un) {
+      un.style.borderStyle = "solid";
+      un.querySelector("h3").textContent = "Sheet C-0417 is open";
+      un.querySelector("p").textContent = "It's live and reading. Release a part and the listing inherits every line above.";
+    }
+    var state = $("[data-pv-state]");
+    state.className = "chip chip--ok";
+    state.textContent = "OPEN";
+    modal.classList.add("is-open");
+    window.lsToast("SHEET C-0417 OPENED — THE ANNOTATIONS ARE MOVING");
+  });
+
+  redraw();
+})();
+</script>
+</body>
+</html>

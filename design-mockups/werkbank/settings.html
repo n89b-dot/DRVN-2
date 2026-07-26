@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Settings · Workshop Configuration · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item is-active" href="settings.html" aria-current="page">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main" data-config>
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-I — SETTINGS · WORKSHOP CONFIGURATION</span>
+        <h1>Workshop configuration</h1>
+      </div>
+      <span class="wb-tag" id="configRev">REV 12 · FILED 21 JUN 26</span>
+    </header>
+
+    <div class="wb-stack">
+
+      <!-- PLATE 01 — KEEPER DETAILS -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 01 — KEEPER DETAILS</span>
+          <span class="microlabel">SELLER ID 07-LV</span>
+        </div>
+        <div class="wb-plate__body">
+          <div class="wb-avatarblock" style="margin-bottom:16px">
+            <div class="wb-rail__avatar">LV</div>
+            <div>
+              <span class="microlabel">Workshop mark</span>
+              <div style="margin-top:6px"><button class="wb-btn wb-btn--ghost wb-btn--sm" type="button" onclick="wbToast('MARK UPLOAD — NOT IN THIS PROTOTYPE')">Replace mark</button></div>
+            </div>
+          </div>
+          <div class="wb-setgrid">
+            <div class="wb-field">
+              <label class="microlabel" for="kName">Keeper name</label>
+              <input class="wb-input" id="kName" type="text" value="Lena Vogel" autocomplete="name">
+            </div>
+            <div class="wb-field">
+              <label class="microlabel" for="kHandle">Handle</label>
+              <input class="wb-input" id="kHandle" type="text" value="@werk7">
+            </div>
+            <div class="wb-field">
+              <label class="microlabel" for="kShop">Workshop name</label>
+              <input class="wb-input" id="kShop" type="text" value="Workshop 7">
+            </div>
+            <div class="wb-field">
+              <label class="microlabel" for="kLoc">Location</label>
+              <input class="wb-input" id="kLoc" type="text" value="Stuttgart, DE">
+            </div>
+            <div class="wb-field span-2">
+              <label class="microlabel" for="kBio">Workshop bio — shown on the keeper record</label>
+              <textarea class="wb-textarea" id="kBio">Two-car workshop in Stuttgart. Unit A is an E46 M3 track build documented since 2019 — every install and removal photographed and logged. Unit B is a Mk2 GTI restoration. Parts released for sale carry their full service history.</textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLATE 02 — GARAGE UNITS & FITMENT -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 02 — GARAGE UNITS &amp; FITMENT</span>
+          <span class="microlabel">DEFAULT UNIT DRIVES THE MARKETPLACE FITS TOGGLE</span>
+        </div>
+        <div class="wb-plate__body wb-plate__body--flush">
+          <label class="wb-unitrow" for="unitA">
+            <input class="wb-radio" type="radio" id="unitA" name="defaultUnit" checked>
+            <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 on a two-post lift" loading="lazy" onerror="this.remove()"></div>
+            <div>
+              <div class="wb-carstrip__name">UNIT A — BMW E46 M3 · Track</div>
+              <div class="wb-carstrip__stats"><span><b>34</b> PARTS TRACKED</span><span>REGISTRY DRVN-0417</span></div>
+            </div>
+            <span class="wb-tag wb-tag--accent">DEFAULT FITMENT UNIT</span>
+          </label>
+          <label class="wb-unitrow" for="unitB">
+            <input class="wb-radio" type="radio" id="unitB" name="defaultUnit">
+            <div class="wb-img"><img src="../assets/c4-car-side.png" alt="Silver Mk2 Golf GTI side elevation" loading="lazy" onerror="this.remove()"></div>
+            <div>
+              <div class="wb-carstrip__name">UNIT B — VW GOLF GTI MK2 · Project</div>
+              <div class="wb-carstrip__stats"><span><b>19</b> PARTS TRACKED</span><span>REGISTRY DRVN-0417B</span></div>
+            </div>
+            <span class="wb-tag">RESTORATION · 62%</span>
+          </label>
+          <div style="padding:12px 16px;border-top:1px solid var(--wb-hairline)">
+            <button class="wb-btn wb-btn--ghost wb-btn--sm" type="button" onclick="wbToast('REGISTER A UNIT — NOT IN THIS PROTOTYPE')">Register a new unit</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLATE 03 — NOTIFICATIONS -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 03 — NOTIFICATIONS · SIGNAL MATRIX</span>
+          <span class="microlabel">IN-APP ALWAYS LOGGED TO THE LEDGER</span>
+        </div>
+        <div class="wb-table-wrap">
+          <table class="wb-table">
+            <thead>
+              <tr><th>Signal</th><th style="width:96px;text-align:center">In-app</th><th style="width:96px;text-align:center">Email</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>New offer</strong><div class="microlabel">A BUYER FILES AN OFFER ON A LISTING</div></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="New offer — in-app"></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="New offer — email"></td>
+              </tr>
+              <tr>
+                <td><strong>Offer expiring</strong><div class="microlabel">AN OPEN OFFER HAS UNDER 6 H LEFT</div></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="Offer expiring — in-app"></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="Offer expiring — email"></td>
+              </tr>
+              <tr>
+                <td><strong>Item sold</strong><div class="microlabel">AN ORDER IS RAISED AGAINST A LISTING</div></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="Item sold — in-app"></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="Item sold — email"></td>
+              </tr>
+              <tr>
+                <td><strong>New follower</strong><div class="microlabel">SOMEONE FOLLOWS THE WORKSHOP</div></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="New follower — in-app"></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" aria-label="New follower — email"></td>
+              </tr>
+              <tr>
+                <td><strong>Fitment match</strong><div class="microlabel">A BUYER'S REGISTERED CAR FITS ONE OF YOUR PARTS</div></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" checked aria-label="Fitment match — in-app"></td>
+                <td style="text-align:center"><input class="wb-check" type="checkbox" aria-label="Fitment match — email"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PLATE 04 — PAYMENTS & PAYOUT -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 04 — PAYMENTS &amp; PAYOUT</span>
+          <span class="microlabel">GBP · UK SETTLEMENT</span>
+        </div>
+        <div class="wb-plate__body">
+          <div class="wb-deliv" style="border-top:none;padding-top:0">
+            <div>
+              <strong>Payout method</strong>
+              <div class="mono">BANK TRANSFER · SPARKASSE ****2201</div>
+            </div>
+            <button class="wb-btn wb-btn--ghost wb-btn--sm" type="button" onclick="wbToast('PAYOUT AMENDMENT — NOT IN THIS PROTOTYPE')">Amend</button>
+          </div>
+          <div style="margin:16px 0">
+            <span class="microlabel">Fee schedule — applied at settlement</span>
+            <table class="wb-table" style="margin-top:8px">
+              <tbody>
+                <tr><td style="padding-left:0">Platform fee</td><td class="num" style="text-align:right;padding-right:0">5.0%</td></tr>
+                <tr><td style="padding-left:0">Payment processing</td><td class="num" style="text-align:right;padding-right:0">1.4% + 20p</td></tr>
+              </tbody>
+            </table>
+            <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">£980 sale → £931.00 payout after platform fee</span></div>
+          </div>
+          <div class="wb-setgrid">
+            <div class="wb-field">
+              <label class="microlabel" for="cadence">Payout cadence</label>
+              <select class="wb-select" id="cadence">
+                <option>Weekly — every Friday</option>
+                <option>Instant — 1% expedite fee</option>
+              </select>
+            </div>
+            <div class="wb-field">
+              <label class="microlabel" for="vatToggle">VAT / business seller</label>
+              <select class="wb-select" id="vatToggle">
+                <option>Private seller — no VAT invoicing</option>
+                <option>Business — issue VAT invoices (DE311…)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLATE 05 — APPEARANCE & CONDUCT -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 05 — APPEARANCE &amp; CONDUCT</span>
+          <span class="microlabel">APPLIES ACROSS EVERY SHEET</span>
+        </div>
+        <div class="wb-plate__body">
+          <div class="wb-setgrid">
+            <div class="wb-field">
+              <label class="microlabel" for="themePref">Shift — drawing-office lighting</label>
+              <select class="wb-select" id="themePref" data-nodirty>
+                <option value="day">Day — drafting paper</option>
+                <option value="night">Night shift — graphite</option>
+              </select>
+            </div>
+            <div class="wb-field">
+              <label class="microlabel" for="unitsPref">Measurement units</label>
+              <select class="wb-select" id="unitsPref">
+                <option>Metric — mm / km / kg</option>
+                <option>Imperial — in / mi / lb</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top:16px;display:grid;gap:10px">
+            <span class="microlabel">Public visibility — keeper record</span>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer">
+              <input class="wb-check" type="checkbox" checked> Show workshop location (Stuttgart, DE)
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer">
+              <input class="wb-check" type="checkbox" checked> Show sales count (31 sales · 4.9★)
+            </label>
+          </div>
+          <div class="wb-dangerrow" style="margin-top:20px">
+            <div>
+              <span class="microlabel">DANGER — IRREVERSIBLE AFTER THE 14-DAY COOLING PERIOD</span>
+              <div style="font-size:13px;margin-top:4px">Close the workshop — retires listings, archives both unit records.</div>
+            </div>
+            <button class="wb-btn wb-btn--danger" type="button" data-modal-open="closeSheet">Close the workshop</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- SAVE BAR -->
+    <div class="wb-savebar" id="configSaveBar">
+      <span class="microlabel wb-savebar__pending">CHANGES PENDING — NOT YET FILED</span>
+      <button class="wb-btn wb-btn--accent" id="configSave" type="button">Save configuration</button>
+    </div>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="index.html">← BACK TO DASHBOARD</a>
+      <span class="microlabel">DRVN / WERKBANK — SETTINGS · REF 04-I · WORKSHOP CONFIGURATION</span>
+      <a class="ref-link" href="profile.html">KEEPER RECORD — @WERK7 →</a>
+    </footer>
+  </main>
+</div>
+
+<!-- CLOSE WORKSHOP CONFIRM SHEET -->
+<div class="wb-scrim" id="closeSheet" role="dialog" aria-modal="true" aria-labelledby="closeTitle">
+  <div class="wb-sheet">
+    <div class="wb-sheet__head">
+      <span class="microlabel" id="closeTitle" style="color:var(--wb-danger)">CONFIRM — CLOSE THE WORKSHOP</span>
+      <button class="wb-sheet__close" data-modal-close aria-label="Close">ESC ×</button>
+    </div>
+    <div class="wb-sheet__body">
+      <p style="font-size:13px;line-height:1.55">Closing Workshop 7 retires <strong>7 live listings</strong>, declines
+      <strong>3 open offers</strong>, and archives both unit records. Provenance stays attached to parts already sold.
+      A 14-day cooling period applies before anything is deleted.</p>
+      <div class="wb-dim is-drawn"><span class="wb-dim__line"></span><span class="wb-dim__label">Nothing is filed until you confirm — cancel is always safe</span></div>
+    </div>
+    <div class="wb-sheet__foot">
+      <button class="wb-btn wb-btn--ghost" data-modal-close>Cancel — keep the workshop</button>
+      <button class="wb-btn wb-btn--danger" id="closeWorkshopConfirm" type="button">Begin closure</button>
+    </div>
+  </div>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

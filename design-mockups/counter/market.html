@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market — DRVN</title>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="counter.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+    <div class="nav-links">
+      <a class="nav-link" href="market.html" aria-current="page">Market</a>
+      <a class="nav-link" href="deal.html">My deals<span class="nav-badge">2</span></a>
+      <a class="nav-link" href="listing.html">Sell</a>
+    </div>
+    <div class="nav-spacer"></div>
+    <button class="avatar mine-av" type="button" aria-label="Your profile — Jonah Barr">JB</button>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="wrap">
+    <h1>The market</h1>
+    <p>Parts off real builds, priced by real people. Every price is a starting point.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="filter-bar" role="toolbar" aria-label="Filter listings">
+    <button class="chip" data-cat="all" aria-pressed="true" type="button">All</button>
+    <button class="chip" data-cat="wheels" aria-pressed="false" type="button">Wheels &amp; tires</button>
+    <button class="chip" data-cat="suspension" aria-pressed="false" type="button">Suspension</button>
+    <button class="chip" data-cat="interior" aria-pressed="false" type="button">Seats &amp; interior</button>
+    <button class="chip" data-cat="engine" aria-pressed="false" type="button">Engine &amp; intake</button>
+    <button class="chip" data-cat="brakes" aria-pressed="false" type="button">Brakes</button>
+    <div class="toggle-wrap">
+      <span id="oboLabel">Open to offers only</span>
+      <button class="toggle" id="oboToggle" type="button" aria-pressed="false" aria-labelledby="oboLabel"></button>
+    </div>
+  </div>
+
+  <div class="market-grid" id="marketGrid">
+
+    <article class="part-card" data-cat="wheels" data-obo="true">
+      <span class="fit-tag">Fits your E36</span>
+      <div class="part-img"><img src="../assets/c13-part-wheels.png" alt="Bronze forged 18-inch wheels" data-fallback="Wheels"></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Bronze forged wheels — 18×9.5 ET35, 5×120</a></h3>
+        <div class="part-meta">Excellent · tires included</div>
+        <div class="part-price-row"><span class="part-price">£1,250</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.8 · Priya S.</span><span>14 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="suspension" data-obo="true">
+      <div class="part-img"><img src="../assets/c13-part-coilovers.png" alt="Green coilover kit" data-fallback="Coilovers"></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Adjustable coilover kit — 8k/6k, fresh seals</a></h3>
+        <div class="part-meta">Good · 12k miles use</div>
+        <div class="part-price-row"><span class="part-price">£480</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.9 · Jonah B. (you)</span><span>9 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="interior" data-obo="true">
+      <div class="part-img"><img src="../assets/c13-part-seats.png" alt="Bucket seat with harness" data-fallback="Seats"></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Fixed-back bucket seat + 4-point harness</a></h3>
+        <div class="part-meta">Very good · FIA tags present</div>
+        <div class="part-price-row"><span class="part-price">£390</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.7 · Marcus O.</span><span>21 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="engine" data-obo="true">
+      <div class="part-img"><img src="../assets/c13-part-intake.png" alt="Cold air intake kit" data-fallback="Intake"></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Cold air intake kit — full hardware, 800 miles</a></h3>
+        <div class="part-meta">Like new · boxed</div>
+        <div class="part-price-row"><span class="part-price">£210</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.6 · Dan W.</span><span>6 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="brakes" data-obo="false">
+      <div class="part-img"><span class="img-fallback">Big brake kit</span></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">4-pot big brake kit — 330mm discs, 60% pads</a></h3>
+        <div class="part-meta">Good · fixed price</div>
+        <div class="part-price-row"><span class="part-price">£620</span></div>
+        <div class="part-foot"><span class="rating">★ 5.0 · Ade K.</span><span>11 watching</span></div>
+      </div>
+    </article>
+
+    <article class="part-card" data-cat="suspension" data-obo="true">
+      <span class="fit-tag">Fits your E36</span>
+      <div class="part-img"><span class="img-fallback">Rear subframe kit</span></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Reinforced rear subframe + poly bushes, E36</a></h3>
+        <div class="part-meta">Refurbished · powder-coated</div>
+        <div class="part-price-row"><span class="part-price">£340</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.8 · Tomasz W.</span><span>7 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="wheels" data-obo="false">
+      <div class="part-img"><span class="img-fallback">17" mesh wheels</span></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">17" mesh wheels — staggered, needs refurb</a></h3>
+        <div class="part-meta">Fair · fixed price</div>
+        <div class="part-price-row"><span class="part-price">£450</span></div>
+        <div class="part-foot"><span class="rating">★ 4.5 · Callum R.</span><span>18 watching</span></div>
+      </div>
+    </article>
+
+    <article class="part-card" data-cat="engine" data-obo="true">
+      <div class="part-img"><span class="img-fallback">Exhaust manifold</span></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Equal-length exhaust manifold, ceramic coated</a></h3>
+        <div class="part-meta">Very good · no cracks</div>
+        <div class="part-price-row"><span class="part-price">£290</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.9 · Sofia L.</span><span>13 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="interior" data-obo="true">
+      <div class="part-img"><span class="img-fallback">Steering wheel</span></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">330mm suede steering wheel + quick release</a></h3>
+        <div class="part-meta">Good · light wear on 12 o'clock</div>
+        <div class="part-price-row"><span class="part-price">£165</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.7 · Nia H.</span><span>5 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+    <article class="part-card" data-cat="brakes" data-obo="true">
+      <div class="part-img"><span class="img-fallback">Braided lines</span></div>
+      <div class="part-body">
+        <h3 class="part-title"><a href="listing.html">Braided brake line set — never fitted</a></h3>
+        <div class="part-meta">New · sealed</div>
+        <div class="part-price-row"><span class="part-price">£75</span><span class="obo">or best offer</span></div>
+        <div class="part-foot"><span class="rating">★ 4.8 · Priya S.</span><span>3 watching</span></div>
+      </div>
+      <div class="offer-reveal"><a class="btn btn-primary btn-sm" href="listing.html#offer">Make an offer</a></div>
+    </article>
+
+  </div>
+  <p class="market-empty" id="marketEmpty">Nothing matches those filters — try widening the category or switching off "open to offers".</p>
+</div>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <small>© 2026 DRVN — the home for your modified car.</small>
+    <div class="footer-links">
+      <a href="index.html">Home</a>
+      <a href="deal.html">My deals</a>
+      <a href="design.html">Style guide</a>
+    </div>
+  </div>
+</footer>
+
+<script src="counter.js"></script>
+</body>
+</html>

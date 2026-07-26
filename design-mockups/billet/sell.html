@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sell a part — DRVN · BILLET</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="billet.css">
+</head>
+<body>
+
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a href="index.html" class="wordmark"><span class="bolt" aria-hidden="true"></span>DRVN</a>
+    <div class="nav-links">
+      <a href="market.html" class="nav-link">Market</a>
+      <a href="sell.html" class="nav-link active" aria-current="page">Sell</a>
+      <a href="#" class="nav-link">Sign in</a>
+    </div>
+  </div>
+</nav>
+
+<div id="sell-success" style="display:none;">
+  <div class="wrap" style="padding: 96px 0; max-width: 560px;">
+    <div class="block" style="padding: 44px; text-align: center;">
+      <div class="confirm-badge" aria-hidden="true">✓</div>
+      <span class="etch-label">Listing published</span>
+      <h1 style="font-size: 28px; margin: 10px 0 8px;">It's on the market</h1>
+      <p style="color: var(--shadow-deep); font-size: 15px;">Your part is live and searchable. Buyers with a matching garage will see the fitment tag straight away.</p>
+      <div style="display: flex; gap: 12px; justify-content: center; margin-top: 26px; flex-wrap: wrap;">
+        <a href="market.html" class="btn btn-primary">View it on the market</a>
+        <a href="sell.html" class="btn">List another part</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main id="sell-body">
+  <header class="market-head">
+    <div class="wrap">
+      <span class="etch-label">Sell</span>
+      <h1>List a part in minutes</h1>
+      <p>Fill it in, watch the preview take shape, publish. No fees until it sells.</p>
+    </div>
+  </header>
+
+  <div class="wrap sell-grid">
+    <form id="sell-form" novalidate>
+      <section class="block sell-section">
+        <span class="etch-label">01 · Part basics</span>
+        <h2>What are you selling?</h2>
+        <div class="field">
+          <label class="etch-label" for="f-name">Part name</label>
+          <input id="f-name" class="slot" type="text" placeholder="e.g. Billet intake manifold — 987.2" aria-describedby="f-name-err">
+          <p id="f-name-err" class="field-err" role="alert"></p>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="etch-label" for="f-cat">Category</label>
+            <select id="f-cat" class="slot" aria-describedby="f-cat-err">
+              <option value="">Select…</option>
+              <option>Performance</option>
+              <option>Engine</option>
+              <option>Exterior</option>
+              <option>Interior</option>
+              <option>Brakes &amp; Suspension</option>
+              <option>Wheels &amp; Tires</option>
+            </select>
+            <p id="f-cat-err" class="field-err" role="alert"></p>
+          </div>
+          <div class="field">
+            <label class="etch-label" for="f-cond">Condition</label>
+            <select id="f-cond" class="slot">
+              <option>Used — excellent</option>
+              <option>New — never fitted</option>
+              <option>Used — good</option>
+              <option>Used — needs work</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="block sell-section">
+        <span class="etch-label">02 · Photos</span>
+        <h2>Show the surfaces</h2>
+        <div class="tray-row">
+          <button type="button" class="tray" aria-label="Add photo 1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="13" rx="1"/><circle cx="12" cy="12.5" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg>
+            <span class="tray-lbl">Add photo</span>
+          </button>
+          <button type="button" class="tray" aria-label="Add photo 2">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="13" rx="1"/><circle cx="12" cy="12.5" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg>
+            <span class="tray-lbl">Add photo</span>
+          </button>
+          <button type="button" class="tray" aria-label="Add photo 3">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="13" rx="1"/><circle cx="12" cy="12.5" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg>
+            <span class="tray-lbl">Add photo</span>
+          </button>
+        </div>
+        <p class="mono" style="font-size: 11px; color: var(--shadow-deep); margin-top: 12px;">Tip: shoot the mating faces and any tool marks — buyers of machined parts read surfaces first.</p>
+      </section>
+
+      <section class="block sell-section">
+        <span class="etch-label">03 · Price &amp; shipping</span>
+        <h2>Set the numbers</h2>
+        <div class="field-row">
+          <div class="field">
+            <label class="etch-label" for="f-price">Asking price (GBP)</label>
+            <input id="f-price" class="slot mono" type="number" min="1" placeholder="1850" aria-describedby="f-price-err">
+            <p id="f-price-err" class="field-err" role="alert"></p>
+          </div>
+          <div class="field">
+            <label class="etch-label" for="f-ship">Shipping</label>
+            <select id="f-ship" class="slot">
+              <option value="world">Ships worldwide</option>
+              <option value="uk">Ships UK only</option>
+              <option value="collect">Collection only</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="block sell-section">
+        <span class="etch-label">04 · Optional · link a car</span>
+        <h2>Came off a build?</h2>
+        <div class="pocket garage-row">
+          <span class="seller-avatar" aria-hidden="true" style="width: 38px; height: 38px; font-size: 13px;">GT4</span>
+          <div class="info">
+            <p class="n">Cayman GT4 — “Grå”</p>
+            <p class="s">987.2 · from your garage · adds fitment context for buyers</p>
+          </div>
+          <button type="button" id="garage-toggle" class="switch" role="switch" aria-checked="true" aria-label="Link Cayman GT4 to this listing"></button>
+        </div>
+      </section>
+
+      <button type="button" id="sell-publish" class="btn btn-primary" style="width: 100%; padding: 15px;">Publish listing</button>
+    </form>
+
+    <aside class="preview-rail" aria-label="Live preview">
+      <span class="etch-label">Live preview — what buyers see</span>
+      <div class="block part-card">
+        <div class="thumb" style="display:flex; align-items:center; justify-content:center;">
+          <span id="pv-photos" class="mono" style="font-size: 12px; color: var(--shadow);">No photos yet</span>
+        </div>
+        <div class="body">
+          <span id="pv-fit" class="tag tag-fit">✓ Fitment linked · 987.2</span>
+          <span class="title" id="pv-title">Untitled part</span>
+          <span class="cond"><span id="pv-cond">Used — excellent</span> · <span id="pv-cat">Uncategorised</span></span>
+          <div class="meta">
+            <span class="price" id="pv-price">£ —</span>
+            <span class="rating">★ 4.9 · 41</span>
+          </div>
+          <span class="cond" id="pv-ship" style="margin-top: 2px;">Ships worldwide</span>
+        </div>
+      </div>
+      <p class="mono" style="font-size: 11px; color: var(--shadow-deep); margin-top: 14px;">Seller card, rating, and fitment tag are added automatically from your profile.</p>
+    </aside>
+  </div>
+</main>
+
+<footer class="footer on-slate">
+  <div class="wrap">
+    <hr class="groove inverse">
+    <div class="footer-grid" style="margin-top: 28px;">
+      <div>
+        <span class="wordmark" style="color: var(--al-brushed); text-shadow: var(--etch-on-slate);">DRVN</span>
+        <p class="mono" style="margin-top: 10px;">machined from billet · rev 12</p>
+      </div>
+      <div class="footer-links">
+        <a href="market.html">Market</a>
+        <a href="listing.html">Featured listing</a>
+        <a href="index.html">Home</a>
+        <a href="design.html">Style guide</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div id="toast" class="block toast" role="status"><span class="bolt" aria-hidden="true"></span><span class="toast-msg"></span></div>
+<script src="billet.js"></script>
+</body>
+</html>

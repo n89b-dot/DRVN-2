@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BILLET — Live Style Guide · DRVN Concept 12</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --al-mill: #C9CCD1; --al-brushed: #DEE1E5; --al-bright: #EAECEF;
+    --slate: #2A2D33; --slate-deep: #22242A; --graphite: #1B1D21;
+    --shadow: #9AA0A8; --shadow-deep: #7E848D;
+    --anodize: #35507E; --anodize-bright: #46639A; --anodize-deep: #2A4066;
+    --anodize-tint: #B8C3D6; --anodize-wash: #DCE2EC;
+    --edge-light: rgba(255,255,255,.85); --edge-light-soft: rgba(255,255,255,.5);
+    --edge-dark: rgba(27,29,33,.28); --edge-dark-soft: rgba(27,29,33,.14); --edge-dark-hard: rgba(27,29,33,.45);
+    --grain: repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, rgba(27,29,33,.025) 1px 2px, transparent 2px 3px);
+    --etch: 0 -1px 0 rgba(27,29,33,.25), 0 1px 0 rgba(255,255,255,.7);
+    --r: 6px; --tool: cubic-bezier(.3,0,.1,1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Archivo", system-ui, sans-serif; background: var(--al-mill) var(--grain); background-blend-mode: normal;
+    background-image: var(--grain); background-color: var(--al-mill);
+    color: var(--graphite); line-height: 1.55; padding: 48px 28px 96px; }
+  .frame { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 40px; letter-spacing: -0.015em; margin: 10px 0 6px; }
+  h2 { font-size: 22px; margin: 0 0 18px; }
+  p.lede { color: var(--shadow-deep); max-width: 60ch; }
+  .lab { font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--shadow-deep); text-shadow: var(--etch); display: block; }
+  .mono { font-family: "IBM Plex Mono", monospace; }
+  .groove { border: 0; height: 2px; margin: 44px 0 28px;
+    background: linear-gradient(var(--edge-dark) 50%, var(--edge-light) 50%); }
+  section { margin-top: 8px; }
+
+  /* swatches */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 12px; }
+  .sw { border-radius: var(--r); overflow: hidden;
+    box-shadow: inset 1px 1px 0 var(--edge-light), inset -1px -1px 0 var(--edge-dark); background: var(--al-brushed); }
+  .sw .chip { height: 64px; }
+  .sw .info { padding: 10px 12px; font-size: 12px; }
+  .sw .info .mono { color: var(--shadow-deep); font-size: 11px; }
+
+  /* blocks & pockets */
+  .block { background-color: var(--al-brushed); background-image: var(--grain); border-radius: var(--r);
+    box-shadow: inset 1px 1px 0 var(--edge-light), inset -1px -1px 0 var(--edge-dark), 0 1px 2px var(--edge-dark-soft); }
+  .pocket { background: var(--al-mill); border-radius: 4px;
+    box-shadow: inset 1px 1px 2px var(--edge-dark), inset -1px -1px 0 var(--edge-light-soft); }
+  .demo-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .demo-row > * { padding: 20px; min-width: 180px; }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; padding: 12px 24px; border: 0; border-radius: var(--r);
+    font: 600 15px "Archivo", sans-serif; cursor: pointer;
+    background-color: var(--al-brushed); background-image: var(--grain); color: var(--graphite);
+    box-shadow: inset 1px 1px 0 var(--edge-light), inset -1px -1px 0 var(--edge-dark), 0 2px 3px var(--edge-dark-soft);
+    transition: box-shadow 180ms var(--tool), transform 180ms var(--tool), background-color 180ms var(--tool); }
+  .btn:hover { box-shadow: inset 1px 1px 0 var(--anodize-bright), inset -1px -1px 0 var(--anodize-deep), 0 2px 3px var(--edge-dark-soft); }
+  .btn:focus-visible { outline: 2px solid var(--anodize); outline-offset: 2px; }
+  .btn:active { transform: translateY(1px);
+    box-shadow: inset 1px 1px 3px var(--edge-dark-hard), inset -1px -1px 0 var(--edge-light-soft); }
+  .btn-primary { background-color: var(--anodize); color: var(--al-bright);
+    box-shadow: inset 1px 1px 0 var(--anodize-bright), inset -1px -1px 0 var(--anodize-deep), 0 2px 3px var(--edge-dark); }
+  .btn-primary:hover { background-color: var(--anodize-bright); }
+  .btn-primary:active { background-color: var(--anodize-deep); transform: translateY(1px);
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,.5), inset -1px -1px 0 var(--anodize-bright); }
+  .btn-ghost { background: none; box-shadow: inset 0 0 0 1px var(--shadow); }
+  .btn-ghost:hover { box-shadow: inset 0 0 0 1px var(--anodize); color: var(--anodize); }
+  .btn-ghost:active { transform: translateY(1px); box-shadow: inset 1px 1px 3px var(--edge-dark-soft), inset 0 0 0 1px var(--anodize); }
+  .pressed-demo { transform: translateY(1px);
+    box-shadow: inset 1px 1px 3px var(--edge-dark-hard), inset -1px -1px 0 var(--edge-light-soft); }
+
+  /* slot */
+  .slot { width: 260px; max-width: 100%; padding: 11px 14px; border: 0; border-radius: 3px; font: 400 15px "Archivo", sans-serif;
+    background: var(--al-mill); color: var(--graphite);
+    box-shadow: inset 1px 1px 2px var(--edge-dark), inset -1px -1px 0 var(--edge-light-soft); }
+  .slot:focus-visible { outline: none;
+    box-shadow: inset 1px 1px 2px var(--edge-dark), inset -1px -1px 0 var(--edge-light-soft), 0 0 0 2px var(--anodize); }
+
+  /* chips, tags, switch, bolt */
+  .chipbtn { padding: 7px 15px; border: 0; border-radius: var(--r); font: 500 13px "Archivo", sans-serif; cursor: pointer;
+    background-color: var(--al-brushed); background-image: var(--grain); color: var(--shadow-deep);
+    box-shadow: inset 1px 1px 0 var(--edge-light), inset -1px -1px 0 var(--edge-dark); }
+  .chipbtn.on { color: var(--al-bright); background-color: var(--anodize);
+    box-shadow: inset 1px 1px 3px var(--anodize-deep), inset -1px -1px 0 var(--anodize-bright); }
+  .tag { display: inline-flex; gap: 5px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; padding: 3px 9px; border-radius: 4px; }
+  .tag-fit { background: var(--anodize-wash); color: var(--anodize); box-shadow: inset 0 0 0 1px var(--anodize-tint); }
+  .tag-seller { color: var(--shadow-deep); box-shadow: inset 0 0 0 1px var(--shadow); }
+  .switch { position: relative; width: 52px; height: 28px; border: 0; border-radius: 14px; cursor: pointer;
+    background: var(--al-mill); box-shadow: inset 1px 1px 3px var(--edge-dark), inset -1px -1px 0 var(--edge-light-soft);
+    transition: background-color 280ms var(--tool); }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+    background: linear-gradient(160deg, var(--al-bright), var(--al-mill));
+    box-shadow: inset 0 1px 0 var(--edge-light), inset 0 -1px 1px var(--edge-dark), 0 1px 2px var(--edge-dark);
+    transition: transform 280ms var(--tool); }
+  .switch[aria-checked="true"] { background: var(--anodize); }
+  .switch[aria-checked="true"]::after { transform: translateX(24px); }
+  .switch:focus-visible { outline: 2px solid var(--anodize); outline-offset: 2px; }
+  .bolt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; position: relative;
+    background: linear-gradient(160deg, var(--al-bright), var(--shadow));
+    box-shadow: inset 0 1px 0 var(--edge-light), inset 0 -1px 1px var(--edge-dark), 0 1px 1px var(--edge-dark-soft); }
+  .bolt::after { content: ""; position: absolute; left: 2px; right: 2px; top: 50%; height: 1.5px;
+    transform: translateY(-50%) rotate(28deg); background: var(--edge-dark-hard); border-radius: 1px; }
+
+  .price { font-family: "IBM Plex Mono", monospace; font-weight: 600; color: var(--anodize); text-shadow: var(--etch); }
+  .on-slate { background-color: var(--slate); color: var(--al-brushed); border-radius: var(--r); padding: 24px;
+    box-shadow: inset 1px 1px 0 rgba(255,255,255,.12), inset -1px -1px 0 rgba(0,0,0,.5); }
+  .on-slate .lab { color: var(--shadow); text-shadow: 0 -1px 0 rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.08); }
+  table { border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 8px 18px 8px 0; border-bottom: 1px solid var(--edge-dark-soft); }
+  th { color: var(--shadow-deep); font-weight: 500; }
+  .back { color: var(--anodize); font-weight: 600; text-decoration: none; }
+  .back:hover { color: var(--anodize-bright); }
+  .back:focus-visible { outline: 2px solid var(--anodize); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <a class="back" href="index.html">← Back to DRVN</a>
+  <span class="lab" style="margin-top: 28px;">Concept 12 · Live style guide</span>
+  <h1>BILLET</h1>
+  <p class="lede">An interface machined from billet. Four laws govern everything: the edge law (light top-left, dark bottom-right), the recession law (press = raised, type/read = milled), the anodize law (one accent, only where you paid for it), and the motion law (tooling curves, no bounce).</p>
+
+  <hr class="groove">
+  <section>
+    <span class="lab">Tokens · Color</span>
+    <h2>Aluminum + one anodize</h2>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#C9CCD1"></div><div class="info">al-mill<br><span class="mono">#C9CCD1</span></div></div>
+      <div class="sw"><div class="chip" style="background:#DEE1E5"></div><div class="info">al-brushed<br><span class="mono">#DEE1E5</span></div></div>
+      <div class="sw"><div class="chip" style="background:#EAECEF"></div><div class="info">al-bright<br><span class="mono">#EAECEF</span></div></div>
+      <div class="sw"><div class="chip" style="background:#2A2D33"></div><div class="info">slate<br><span class="mono">#2A2D33</span></div></div>
+      <div class="sw"><div class="chip" style="background:#1B1D21"></div><div class="info">graphite<br><span class="mono">#1B1D21</span></div></div>
+      <div class="sw"><div class="chip" style="background:#9AA0A8"></div><div class="info">shadow<br><span class="mono">#9AA0A8</span></div></div>
+      <div class="sw"><div class="chip" style="background:#7E848D"></div><div class="info">shadow-deep<br><span class="mono">#7E848D</span></div></div>
+      <div class="sw"><div class="chip" style="background:#35507E"></div><div class="info">anodize<br><span class="mono">#35507E</span></div></div>
+      <div class="sw"><div class="chip" style="background:#46639A"></div><div class="info">anodize-bright<br><span class="mono">#46639A</span></div></div>
+      <div class="sw"><div class="chip" style="background:#2A4066"></div><div class="info">anodize-deep<br><span class="mono">#2A4066</span></div></div>
+    </div>
+  </section>
+
+  <hr class="groove">
+  <section>
+    <span class="lab">The edge system</span>
+    <h2>Chamfers, not shadows</h2>
+    <div class="demo-row">
+      <div class="block"><span class="lab">Raised block</span><p style="font-size:13px; margin-top:6px;">Light top/left, dark bottom/right — a chamfer catching shop light. Only a 1px contact shadow beneath.</p></div>
+      <div class="pocket"><span class="lab">Milled pocket</span><p style="font-size:13px; margin-top:6px; color: var(--shadow-deep);">Inner shadow at cutter entry (top-left), light burr break bottom-right. Inputs live here.</p></div>
+      <div class="on-slate" style="min-width:180px;"><span class="lab">Shop-floor slate</span><p style="font-size:13px; margin-top:6px;">Same laws, inverted light values.</p></div>
+    </div>
+  </section>
+
+  <hr class="groove">
+  <section>
+    <span class="lab">Typography</span>
+    <h2>Archivo + etched figures</h2>
+    <p style="font-size:34px; font-weight:700; letter-spacing:-0.015em;">Parts worth machining.</p>
+    <p style="margin:8px 0;">Body — Archivo 400/16. Secondary in <span style="color:var(--shadow-deep)">shadow-deep</span>.</p>
+    <span class="lab">Etched label · 10.5px · 0.14em · dual text-shadow</span>
+    <p class="price" style="font-size:26px; margin-top:10px;">£1,850</p>
+    <p class="mono" style="font-size:13px; color:var(--shadow-deep);">6061-T6 · PL-IM-987-006 · 3.4 kg — mono for figures only</p>
+  </section>
+
+  <hr class="groove">
+  <section>
+    <span class="lab">Controls</span>
+    <h2>Machined buttons — press them</h2>
+    <div class="demo-row" style="align-items:center; padding: 0;">
+      <button class="btn btn-primary">Buy now</button>
+      <button class="btn">Default</button>
+      <button class="btn btn-ghost">Make an offer</button>
+      <button class="btn pressed-demo" aria-pressed="true">Pressed-in state</button>
+    </div>
+    <p style="font-size:13px; color:var(--shadow-deep); margin-top:14px;">Rest = raised chamfer. Hover = anodize creeps into the edge. Active = travels 1px inward with an inset shadow — machined tolerance.</p>
+    <div class="demo-row" style="margin-top:22px; align-items:center; padding:0;">
+      <input class="slot" placeholder="Milled slot input">
+      <button class="chipbtn on">Engine</button>
+      <button class="chipbtn">Brakes</button>
+      <button class="switch" role="switch" aria-checked="true" aria-label="Demo switch" onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked')==='true'?'false':'true')"></button>
+      <span class="tag tag-fit">✓ Fits your car</span>
+      <span class="tag tag-seller">Seller-stated</span>
+      <span class="bolt" aria-hidden="true"></span>
+    </div>
+  </section>
+
+  <hr class="groove">
+  <section>
+    <span class="lab">Motion</span>
+    <h2>Tooling curves</h2>
+    <table>
+      <tr><th>Curve</th><td class="mono">cubic-bezier(.3, 0, .1, 1)</td></tr>
+      <tr><th>Durations</th><td class="mono">180 / 280 / 340 ms</td></tr>
+      <tr><th>Signature</th><td>clip-path mill wipe, left → right, 600ms</td></tr>
+      <tr><th>Forbidden</th><td>bounce, overshoot, fade-in modals, floating</td></tr>
+    </table>
+  </section>
+</div>
+</body>
+</html>

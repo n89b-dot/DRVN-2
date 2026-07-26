@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Lancia Delta HF Integrale "Biscione"</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link is-active" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">CAR SHEET C-0416 — PUBLIC · <span class="microlabel--live">DRAWN LIVE</span> · <a class="mono" href="garage.html">MANAGE THIS SHEET →</a></span>
+    <h1>Lancia Delta HF Integrale Evo<br><span style="color:var(--dim)">"Biscione" · 1992</span></h1>
+  </div>
+
+  <!-- HERO — the live drawing: motion under live dimension callouts -->
+  <section class="hero-media rv" data-hero>
+    <video autoplay muted loop playsinline poster="../assets/c16-hero-car.png" aria-label="Slow studio dolly around the Integrale">
+      <source src="../assets/c16-motion-orbit.mp4" type="video/mp4">
+    </video>
+    <div class="callout" style="left:5%; top:10%" data-anchor="26,62">
+      <span class="microlabel--live">LIVE</span>
+      KW V2 COILOVERS · $680 · <span data-tick="12">12</span> WATCHING
+    </div>
+    <div class="callout" style="right:4%; top:38%" data-anchor="60,46">
+      SABELT SEAT · $290 · UNDER OFFER
+    </div>
+    <div class="callout" style="left:8%; bottom:8%" data-anchor="42,80">
+      <span class="microlabel--live">NOW</span>
+      <span data-tick="34">34</span> WATCHING THIS CAR
+    </div>
+  </section>
+
+  <!-- quiet jump row — annotations, not pills -->
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#build">The build — 18 entries</a>
+    <a class="jumplink" href="#forsale">For sale · 2</a>
+    <a class="jumplink" href="#activity">Activity — live</a>
+  </div>
+
+  <!-- Keeper + numbers -->
+  <section class="deck deck--three" style="margin-top:14px">
+    <div class="tile rv">
+      <div class="tile__head"><span class="microlabel microlabel--ink">KEEPER</span><span class="chip chip--ok">4.9 ★ · 23 SALES</span></div>
+      <div class="order__name">Dana Rossi</div>
+      <div class="order__meta">@drossi.integrale · Turin → Bristol · answers in ~20 min</div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn" data-follow aria-pressed="false">Follow</button>
+        <a class="btn btn--ghost" href="profile.html">Keeper sheet</a>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel">Parts listed from this car</span>
+      <div class="num-giant" data-count="2">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">Coilovers · seat</span></div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel">Sold from this car</span>
+      <div class="num-giant" data-count="7">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">$2,140 lifetime</span></div>
+    </div>
+  </section>
+
+  <!-- For sale -->
+  <section class="deck" id="forsale">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">FOR SALE FROM THIS CAR</span>
+        <a class="microlabel mono" href="market.html">SEE ALL →</a>
+      </div>
+      <div class="rowlist">
+        <a class="order" href="listing.html">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="KW coilovers" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">KW Variant 2 coilovers</div>
+            <div class="order__meta">$680 · gravel-spec springs · <span class="cd">OFFER OPEN</span></div>
+          </div>
+          <div class="order__actions"><span class="chip chip--live">LIVE</span></div>
+        </a>
+        <a class="order" href="listing.html">
+          <div class="order__img"><img src="../assets/c16-part-seat.png" alt="Sabelt seat" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Sabelt bucket seat</div>
+            <div class="order__meta">$290 · driver side · under offer at $240</div>
+          </div>
+          <div class="order__actions"><span class="chip">UNDER OFFER</span></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE BUILD — one ruled sheet, no boxes -->
+  <section class="deck" id="build">
+    <div class="tile rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">THE BUILD — SHEET REV 12</span>
+        <span class="microlabel">18 ENTRIES · RECEIPTS WHERE NOTED</span>
+      </div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">ENGINE &amp; DRIVELINE</span><span class="microlabel">246 BHP · 1.1 BAR</span></div>
+      <div class="bline"><span class="bline__label">Turbo</span><span class="bline__val">Garrett T3 hybrid</span><span class="bline__note">Balanced &amp; flowed · receipts on sheet</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Engine management</span><span class="bline__val">Mapped ECU — 246 bhp file</span><span class="bline__note">Dyno sheet attached</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Boost control</span><span class="bline__val">3-port electronic solenoid</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Intercooler</span><span class="bline__val">Alloy front-mount, 60 mm core</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Injectors</span><span class="bline__val">440 cc — flow-matched set</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Clutch</span><span class="bline__val">Organic uprated + lightened flywheel</span><span class="bline__note">~6,000 km ago</span><span class="chip chip--ok">FITTED</span></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">CHASSIS &amp; SUSPENSION</span></div>
+      <div class="bline"><span class="bline__label">Coilovers</span><span class="bline__val">KW Variant 2 — gravel springs</span><span class="bline__note">Coming off for the Bilstein setup</span><a class="chip chip--live" href="listing.html">LISTED $680</a></div>
+      <div class="bline"><span class="bline__label">Next suspension</span><span class="bline__val">Bilstein B8 + H&amp;R — alpine spec</span><span class="chip">PLANNED</span></div>
+      <div class="bline"><span class="bline__label">Anti-roll</span><span class="bline__val">Whiteline rear ARB, 22 mm</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Bushes</span><span class="bline__val">Powerflex throughout</span><span class="bline__note">Full kit, 2025</span><span class="chip chip--ok">FITTED</span></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">WHEELS &amp; BRAKES</span></div>
+      <div class="bline"><span class="bline__label">Wheels</span><span class="bline__val">Speedline Montecarlo 16×7</span><span class="bline__note">Refinished white · correct ET</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Brakes</span><span class="bline__val">Brembo 4-pot front, braided lines</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Pads</span><span class="bline__val">Ferodo DS2500 front / rear</span><span class="chip chip--ok">FITTED</span></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">INTERIOR</span></div>
+      <div class="bline"><span class="bline__label">Driver seat</span><span class="bline__val">Recaro Pole Position</span><span class="bline__note">Replaced the Sabelt below</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Previous seat</span><span class="bline__val">Sabelt bucket — driver side</span><a class="chip chip--live" href="listing.html">LISTED $290</a></div>
+      <div class="bline"><span class="bline__label">Wheel</span><span class="bline__val">Momo Prototipo 350 + quick-release</span><span class="chip chip--ok">FITTED</span></div>
+      <div class="bline"><span class="bline__label">Harness bar</span><span class="bline__val">Bolt-in rear bar, FIA pads</span><span class="chip chip--ok">FITTED</span></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">BODY &amp; MAINTENANCE</span></div>
+      <div class="bline"><span class="bline__label">Arches</span><span class="bline__val">Evo-width — seller-stated</span><span class="bline__note">Noted honestly; not platform-verified</span><span class="chip">NOTE</span></div>
+      <div class="bline"><span class="bline__label">Cambelt</span><span class="bline__val">Belt, tensioners, water pump</span><span class="bline__note">84,200 km · receipts on sheet</span><span class="chip chip--ok">JUL 2026</span></div>
+    </div>
+  </section>
+
+  <!-- ACTIVITY -->
+  <section class="deck" id="activity">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">ACTIVITY — WHAT THIS SHEET SAW</span>
+        <span class="chip chip--live"><span data-tick="34">34</span>&nbsp;WATCHING NOW</span>
+      </div>
+      <ul class="feed">
+        <li><time>NOW</time> Offer window on the coilovers closes in <span class="amt amt--live"><span class="cd" data-seconds="8100"></span></span></li>
+        <li><time>2H AGO</time> Coilovers listed — going Bilstein for the alpine runs <span class="amt amt--live">$680</span></li>
+        <li><time>7H AGO</time> @peaks.gravel started watching this car</li>
+        <li><time>SAT</time> Buttertubs Pass shakedown — 340 mi, zero drama</li>
+        <li><time>JUL 16</time> Seat listing passed 200 views <span class="amt">204</span></li>
+        <li><time>JUL 08</time> Cambelt + tensioners done at 84,200 km — receipts on the sheet</li>
+        <li><time>JUN 30</time> Seat swapped to Recaro — Sabelt listed <span class="amt">$290</span></li>
+        <li><time>JUN 24</time> Momo Corse wheel set sold to @kessler.m <span class="amt">$310</span></li>
+        <li><time>JUN 12</time> Sheet opened — seven parts sold since <span class="amt">$2,140</span></li>
+      </ul>
+      <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">This sheet updates itself</span>
+        <span class="val">Listings, sales and entries land here as they happen</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — CAR SHEET C-0416 · WATCHERS COUNT IS LIVE</span>
+    <a class="microlabel mono" href="index.html">← BACK TO YOUR SHEET</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

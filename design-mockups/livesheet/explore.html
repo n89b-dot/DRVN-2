@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Explore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link is-active" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 03 — SURVEY · <span data-tick="212">212</span> SHEETS DREW SOMETHING IN THE LAST HOUR</span>
+    <h1>Other people's sheets,<br>while the ink is <span class="live-word">wet.</span></h1>
+  </div>
+
+  <div class="filters rv" data-filters>
+    <button class="fbtn is-on" data-f="all">All</button>
+    <button class="fbtn" data-f="cars"><i class="ph ph-car-profile"></i>&nbsp;Car sheets</button>
+    <button class="fbtn" data-f="parts"><i class="ph ph-wrench"></i>&nbsp;Parts</button>
+    <button class="fbtn" data-f="entries"><i class="ph ph-note-pencil"></i>&nbsp;Fresh entries</button>
+  </div>
+
+  <section class="mkt" style="padding-bottom:60px">
+    <a class="tile tile--hover rv" href="car.html" data-cat="cars">
+      <div class="tile__img"><img src="../assets/c16-hero-car.png" alt="Lancia Delta Integrale" onerror="this.remove()"></div>
+      <div class="mkt__name">Lancia Delta HF Integrale "Biscione"</div>
+      <div class="mkt__price mono">@drossi.integrale · C-0416</div>
+      <div class="mkt__meta"><span class="chip chip--live"><span data-tick="34">34</span>&nbsp;WATCHING NOW</span><span class="chip">2 PARTS LIVE</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="car.html" data-cat="cars" data-stagger="1">
+      <div class="tile__img"><img src="../assets/c4-car-911.png" alt="Porsche 993" onerror="this.remove()"></div>
+      <div class="mkt__name">Porsche 993 — engine-out winter</div>
+      <div class="mkt__price mono">@luftkuehl · C-0292</div>
+      <div class="mkt__meta"><span class="chip chip--live">ENTRY 1H AGO</span><span class="chip">4 PARTS LIVE</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="car.html" data-cat="cars" data-stagger="2">
+      <div class="tile__img"><img src="../assets/c4-car-evo.png" alt="Mitsubishi Evo IX" onerror="this.remove()"></div>
+      <div class="mkt__name">Evo IX — time attack build</div>
+      <div class="mkt__price mono">@tarmac.rally · C-0533</div>
+      <div class="mkt__meta"><span class="chip">SHEET REV 31</span></div>
+    </a>
+
+    <a class="tile tile--hover rv" href="listing.html" data-cat="parts">
+      <div class="tile__img"><img src="../assets/c4-part-brake.png" alt="AP Racing brake kit" onerror="this.remove()"></div>
+      <div class="mkt__name">AP Racing CP9660 front kit</div>
+      <div class="mkt__price">$1,150 · off C-0417</div>
+      <div class="mkt__meta"><span class="chip chip--live">OFFER WINDOW <span class="cd" data-seconds="10240"></span></span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="parts" data-stagger="1">
+      <div class="tile__img"><img src="../assets/c4-part-exhaust.png" alt="Stainless exhaust" onerror="this.remove()"></div>
+      <div class="mkt__name">Supersprint race exhaust</div>
+      <div class="mkt__price">$890 · off C-0417</div>
+      <div class="mkt__meta"><span class="chip"><span data-tick="9">9</span>&nbsp;WATCHING</span></div>
+    </a>
+    <div class="tile tile--deep rv" data-cat="entries" data-stagger="2">
+      <span class="microlabel microlabel--live"><i class="ph ph-note-pencil"></i>&nbsp;FRESH ENTRY · 20 MIN AGO</span>
+      <p style="margin:10px 0 6px;font-weight:600">"Cambelt, tensioners, water pump — 84,200 km. Receipts on the sheet."</p>
+      <div class="order__meta">@drossi.integrale on C-0416</div>
+      <div class="livedim" style="margin-top:10px"><span class="livedim__tick"></span>
+        <span class="microlabel">Reactions</span><span class="val"><span data-tick="14">14</span> keepers rate this sheet</span>
+      </div>
+    </div>
+    <div class="tile tile--deep rv" data-cat="entries">
+      <span class="microlabel microlabel--live"><i class="ph ph-note-pencil"></i>&nbsp;FRESH ENTRY · 1H AGO</span>
+      <p style="margin:10px 0 6px;font-weight:600">"Cage is in, TÜV signed it off. Interior parts going up for sale this week — watch the sheet."</p>
+      <div class="order__meta">@luftkuehl on C-0292</div>
+      <div class="livedim livedim--live" style="margin-top:10px"><span class="livedim__tick"></span>
+        <span class="microlabel">Parts incoming</span><span class="val">6 announced</span>
+      </div>
+    </div>
+    <a class="tile tile--hover rv" href="car.html" data-cat="cars" data-stagger="1">
+      <div class="tile__img"><img src="../assets/c4-car-miata.png" alt="NA Miata" onerror="this.remove()"></div>
+      <div class="mkt__name">NA Miata — the $3k track sheet</div>
+      <div class="mkt__price mono">@roadster.log · C-0561</div>
+      <div class="mkt__meta"><span class="chip">SHEET OPENED THIS WEEK</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="parts" data-stagger="2">
+      <div class="tile__img"><img src="../assets/c4-part-seat.png" alt="Bucket seat" onerror="this.remove()"></div>
+      <div class="mkt__name">Recaro Pole Position ABE</div>
+      <div class="mkt__price">$620 · off C-0417</div>
+      <div class="mkt__meta"><span class="chip chip--ok">DOCS ON SHEET</span></div>
+    </a>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 03 · EVERY TILE IS DRAWN FROM A LIVE SHEET</span>
+    <a class="microlabel mono" href="market.html">OPEN THE MARKET →</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

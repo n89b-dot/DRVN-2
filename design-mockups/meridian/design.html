@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MERIDIAN — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* self-contained — mirrors meridian.css token values exactly */
+:root{
+  --canvas:#0E1013; --canvas-deep:#0A0C0F;
+  --glass:rgba(255,255,255,.05); --glass-strong:rgba(255,255,255,.07); --glass-solid:#16191E;
+  --border:rgba(255,255,255,.09); --border-bright:rgba(255,255,255,.18); --specular:rgba(255,255,255,.16);
+  --text:#E8EAEE; --text2:#8B929E; --text3:#5A6068;
+  --accent:#D8C79A; --accent-dim:rgba(216,199,154,.35); --accent-faint:rgba(216,199,154,.12);
+  --ice:#7FB4C9; --green:#58C27D; --amber:#D8A15A; --red:#C97F7F;
+  --r:14px; --r-sm:9px; --r-pill:90px;
+  --ease:cubic-bezier(.3,.7,.2,1); --dur:600ms;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font:400 14px/1.6 "Outfit","Helvetica Neue",sans-serif;color:var(--text);
+  background:var(--canvas);background-image:linear-gradient(180deg,#101318,var(--canvas) 34%,var(--canvas-deep));
+  background-attachment:fixed;-webkit-font-smoothing:antialiased;padding:56px 28px 90px}
+main{max-width:1080px;margin:0 auto}
+a{color:var(--accent);text-decoration:none}
+h1{font-weight:300;font-size:38px;letter-spacing:.02em;margin:8px 0 4px}
+h2{font-weight:300;font-size:26px;margin:0 0 4px}
+section{margin-top:64px}
+.mlabel{font-size:11px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--text2)}
+.mlabel--accent{color:var(--accent)}
+.trim{position:relative;height:1px;background:var(--border);margin:14px 0 26px}
+.trim::before{content:"";position:absolute;left:0;top:-1px;width:44px;height:3px;background:var(--accent);border-radius:2px}
+.token{font-size:10px;letter-spacing:.08em;color:var(--text3);display:block;margin-top:6px}
+.glass{background:var(--glass-solid);border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:inset 0 1px 0 var(--specular),0 18px 40px -24px rgba(0,0,0,.7)}
+@supports (backdrop-filter:blur(18px)){.glass{background:var(--glass);backdrop-filter:blur(18px)}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+.sw{padding:14px}.sw i{display:block;height:52px;border-radius:var(--r-sm);border:1px solid var(--border);margin-bottom:10px}
+.sw b{font-weight:500;font-size:12px}
+.typerow{display:flex;align-items:baseline;gap:24px;border-top:1px solid var(--border);padding:16px 0}
+.typerow:first-of-type{border-top:0}
+.typerow .token{min-width:220px;margin:0}
+.sprow{display:flex;align-items:center;gap:18px;padding:8px 0}
+.sprow i{height:10px;background:var(--accent-faint);border:1px solid var(--accent-dim);border-radius:3px;display:block}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 30px;border-radius:var(--r-pill);
+  font:600 11px "Outfit";letter-spacing:.22em;text-transform:uppercase;border:1px solid transparent;
+  background:transparent;color:inherit;cursor:pointer;transition:all var(--dur) var(--ease)}
+.btn--keyline{border-color:var(--accent-dim);color:var(--accent)}
+.btn--keyline:hover{border-color:var(--accent);background:var(--accent-faint)}
+.btn--fill{background:var(--accent);color:#14120C}
+.btn--fill:hover{background:#E6D8B0;transform:translateY(-1px)}
+.btn--ghost{border-color:var(--border);color:var(--text2)}
+.btn--ghost:hover{border-color:var(--border-bright);color:var(--text)}
+.tag{display:inline-block;padding:4px 12px;border-radius:var(--r-pill);font-size:10px;font-weight:500;
+  letter-spacing:.18em;text-transform:uppercase;border:1px solid var(--border);color:var(--text2)}
+.tag--sale{border-color:var(--accent-dim);color:var(--accent)}
+.tag--live{border-color:rgba(88,194,125,.4);color:var(--green)}
+.tag--offer{border-color:rgba(216,161,90,.45);color:var(--amber)}
+.tag--sold{color:var(--text3)}
+.input{width:100%;max-width:320px;padding:12px 16px;background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:var(--r-sm);color:var(--text);font:inherit;transition:border-color var(--dur) var(--ease)}
+.input:focus{outline:none;border-color:var(--accent-dim)}
+.demo{padding:26px;display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.gauge-wrap{position:relative;width:172px}
+.gauge-wrap svg{width:100%;display:block}
+.gauge-track{stroke:rgba(255,255,255,.07)}
+.gauge-arc{stroke:var(--accent);transition:stroke-dashoffset 900ms var(--ease)}
+.gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:6px}
+.gauge-value{font-weight:300;font-size:42px;line-height:1;font-variant-numeric:tabular-nums}
+.gauge-sub{margin-top:6px;font-size:11px;color:var(--text3);letter-spacing:.1em}
+.navtab{position:relative;padding:8px 18px;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--text2);cursor:pointer}
+.navtab.active{color:var(--text)}
+.navtab.active::after{content:"";position:absolute;left:18px;right:18px;bottom:0;height:2px;background:var(--accent);border-radius:2px}
+.offer-demo{display:grid;grid-template-columns:1fr auto auto;gap:18px;align-items:center;padding:18px 26px;width:100%}
+.offer-bid{font-weight:300;font-size:24px;color:var(--accent);font-variant-numeric:tabular-nums}
+.offer-ask{font-size:11px;color:var(--text3);letter-spacing:.08em}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:8px;vertical-align:1px}
+@media(max-width:640px){.offer-demo{grid-template-columns:1fr}.typerow{flex-direction:column;gap:6px}}
+</style>
+</head>
+<body>
+<main>
+  <p class="mlabel mlabel--accent">MERIDIAN &middot; Design System v1.0.0</p>
+  <h1>The cockpit for your build&rsquo;s second life</h1>
+  <p style="color:var(--text2);max-width:60ch">Every token below matches <code style="color:var(--accent)">meridian.css</code> and the YAML frontmatter of <a href="design.md">design.md</a>. Back to the <a href="dashboard.html">dashboard</a>.</p>
+
+  <section>
+    <p class="mlabel">Colors</p><div class="trim"></div>
+    <div class="grid">
+      <div class="glass sw"><i style="background:#0E1013"></i><b>Canvas</b><span class="token">colors.canvas · #0E1013</span></div>
+      <div class="glass sw"><i style="background:#0A0C0F"></i><b>Canvas deep</b><span class="token">colors.canvas-deep · #0A0C0F</span></div>
+      <div class="glass sw"><i style="background:rgba(255,255,255,.05)"></i><b>Glass</b><span class="token">colors.glass · white 5%</span></div>
+      <div class="glass sw"><i style="background:#16191E"></i><b>Glass solid</b><span class="token">colors.glass-solid · #16191E</span></div>
+      <div class="glass sw"><i style="background:rgba(255,255,255,.09)"></i><b>Border</b><span class="token">colors.border · white 9%</span></div>
+      <div class="glass sw"><i style="background:#E8EAEE"></i><b>Text</b><span class="token">colors.text · #E8EAEE</span></div>
+      <div class="glass sw"><i style="background:#8B929E"></i><b>Text secondary</b><span class="token">colors.text-secondary · #8B929E</span></div>
+      <div class="glass sw"><i style="background:#5A6068"></i><b>Text tertiary</b><span class="token">colors.text-tertiary · #5A6068</span></div>
+      <div class="glass sw"><i style="background:#D8C79A"></i><b>Champagne</b><span class="token">colors.accent · #D8C79A</span></div>
+      <div class="glass sw"><i style="background:#7FB4C9"></i><b>Petrol-ice</b><span class="token">colors.ice · data series only</span></div>
+      <div class="glass sw"><i style="background:#58C27D"></i><b>Green</b><span class="token">colors.green · status dots only</span></div>
+      <div class="glass sw"><i style="background:#D8A15A"></i><b>Amber</b><span class="token">colors.amber · #D8A15A</span></div>
+      <div class="glass sw"><i style="background:#C97F7F"></i><b>Red</b><span class="token">colors.red · destructive hover</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="mlabel">Type scale — Outfit 300/400/500/600</p><div class="trim"></div>
+    <div class="glass" style="padding:10px 26px">
+      <div class="typerow"><span class="token">typography.display · 78px / 300</span><span style="font-weight:300;font-size:clamp(38px,6vw,78px);line-height:1.06">Aa 640</span></div>
+      <div class="typerow"><span class="token">typography.numeral · 42px / 300 / tabular</span><span style="font-weight:300;font-size:42px;font-variant-numeric:tabular-nums">£3,410</span></div>
+      <div class="typerow"><span class="token">typography.h1 · 38px / 300</span><span style="font-weight:300;font-size:38px">All channels nominal.</span></div>
+      <div class="typerow"><span class="token">typography.h2 · 34px / 300</span><span style="font-weight:300;font-size:34px">Parts in circulation</span></div>
+      <div class="typerow"><span class="token">typography.body · 14px / 400</span><span>Every listing answers: what car did this come off, and what did it run alongside?</span></div>
+      <div class="typerow"><span class="token">typography.label · 11px / 500 / .22em</span><span class="mlabel">Offer pressure — awaiting reply</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="mlabel">Spacing &amp; shape</p><div class="trim"></div>
+    <div class="glass" style="padding:22px 26px">
+      <div class="sprow"><span class="token" style="min-width:180px">spacing.unit · 4px</span><i style="width:4px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">grid-gap · 20px</span><i style="width:20px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">panel-pad · 24px</span><i style="width:24px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">section · 84px</span><i style="width:84px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">rounded.panel · 14px</span><i style="width:52px;height:28px;border-radius:14px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">rounded.small · 9px</span><i style="width:52px;height:28px;border-radius:9px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">rounded.pill · 90px</span><i style="width:80px;height:28px;border-radius:90px"></i></div>
+      <div class="sprow"><span class="token" style="min-width:180px">motion.ease</span><span style="font-size:12px;color:var(--text2)">cubic-bezier(.3,.7,.2,1) &middot; 600ms UI &middot; 900ms gauges &middot; 110ms ignition stagger</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="mlabel">Buttons — rest &amp; hover states live</p><div class="trim"></div>
+    <div class="glass demo">
+      <button class="btn btn--keyline">Keyline &middot; launch cockpit</button>
+      <button class="btn btn--fill">Fill &middot; accept offer</button>
+      <button class="btn btn--ghost">Ghost &middot; counter</button>
+      <span class="token">components.button-* — hover brightens border / lifts fill</span>
+    </div>
+  </section>
+
+  <section>
+    <p class="mlabel">Tags &amp; status</p><div class="trim"></div>
+    <div class="glass demo">
+      <span class="tag tag--live">Live</span>
+      <span class="tag tag--offer">Under offer</span>
+      <span class="tag tag--sold">Sold</span>
+      <span class="tag tag--sale">For sale &rarr;</span>
+      <span class="tag">Installed</span>
+      <span><span class="dot"></span><span class="token" style="display:inline">6px status dot — colors.green</span></span>
+    </div>
+  </section>
+
+  <section>
+    <p class="mlabel">Gauge — live 270&deg; sweep</p><div class="trim"></div>
+    <div class="glass demo">
+      <div class="gauge-wrap">
+        <svg id="demo-gauge" viewBox="0 0 172 172" aria-hidden="true">
+          <path class="gauge-track" d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+          <path class="gauge-arc"   d="M39.3 132.7 A66 66 0 1 1 132.7 132.7" fill="none" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+        <div class="gauge-center"><div class="gauge-value" id="demo-num">0</div><div class="gauge-sub">DEMO READING</div></div>
+      </div>
+      <div>
+        <button class="btn btn--keyline" id="resweep">Re-sweep</button>
+        <span class="token">components.gauge — stroke-dashoffset · 900ms · {motion.ease}</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="mlabel">Nav tabs, input, offer row</p><div class="trim"></div>
+    <div class="glass demo" style="gap:0 24px">
+      <span class="navtab active">Dashboard</span><span class="navtab">Garage</span><span class="navtab">Listings</span>
+      <span class="token">components.nav-tab — champagne trim underline on active</span>
+    </div>
+    <div class="glass demo" style="margin-top:14px">
+      <input class="input" placeholder="Asking price (£)">
+      <span class="token">components.input — focus border {colors.accent-dim}</span>
+    </div>
+    <div class="glass" style="margin-top:14px">
+      <div class="offer-demo">
+        <div>
+          <div style="font-weight:500;font-size:15px">Garrett GTX3576R Gen II turbo</div>
+          <div style="font-size:12px;color:var(--text2)"><span class="dot" style="background:var(--amber)"></span>From @tunedbybenny &middot; off the R35 GT-R</div>
+        </div>
+        <div style="text-align:right"><div class="offer-bid">£980</div><div class="offer-ask">ASKING £1,100</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn--fill" style="padding:8px 18px;font-size:10px">Accept</button>
+          <button class="btn btn--ghost" style="padding:8px 18px;font-size:10px">Counter</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+(function(){
+  var arc=document.querySelector("#demo-gauge .gauge-arc"),num=document.getElementById("demo-num");
+  var len=arc.getTotalLength();arc.style.strokeDasharray=len;arc.style.strokeDashoffset=len;
+  function sweep(v){
+    arc.getBoundingClientRect();
+    arc.style.strokeDashoffset=len*(1-v);
+    var t0=null,target=Math.round(v*100);
+    function f(t){if(!t0)t0=t;var p=Math.min(1,(t-t0)/900);num.textContent=Math.round(target*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f);}
+    requestAnimationFrame(f);
+  }
+  setTimeout(function(){sweep(.72)},400);
+  document.getElementById("resweep").addEventListener("click",function(){
+    arc.style.transitionDuration="400ms";arc.style.strokeDashoffset=len;num.textContent=0;
+    setTimeout(function(){arc.style.transitionDuration="900ms";sweep(.3+Math.random()*.65)},430);
+  });
+})();
+</script>
+</body>
+</html>

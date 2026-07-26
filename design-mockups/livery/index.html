@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LIVERY — Pit Wall — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Black&family=Anton&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="livery.css" />
+</head>
+<body>
+
+<header class="nav-band">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-roundel">
+      <span class="roundel">23</span>
+      <span class="wordmark">DRVN</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="index.html" aria-current="page">Dashboard</a></li>
+        <li><a href="garage.html">Garage</a></li>
+        <li><a href="listings.html">Listings</a></li>
+        <li><a href="orders.html">Orders</a></li>
+      </ul>
+    </nav>
+    <button class="burger" aria-expanded="false" aria-controls="nav">MENU</button>
+    <div class="nav-user">
+      <span class="avatar">RO</span>
+      <span class="who"><b>R. OKAFOR</b><span>TEAM RO23 · BRISTOL</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- PIT BOARD GREETING -->
+  <section class="pitboard" aria-label="Pit board">
+    <div>
+      <p class="microlabel">Pit wall · Wednesday 9 July · Session live</p>
+      <h1>Box box, Rae — <span class="flip-slot" data-flip="3 OFFERS,2 EXPIRING,£505 PENDING">3 OFFERS</span> on the table</h1>
+      <div class="board-meta">
+        <span class="chip yellow">P1 SELLER — SOUTH WEST</span>
+        <span class="chip"><span class="dot" style="background:var(--green)"></span> 100% FEEDBACK · 32 SALES</span>
+      </div>
+    </div>
+    <div class="pitboard-clock" data-countdown="02:58:41" aria-label="Next offer expires in">02:58:41</div>
+  </section>
+
+  <!-- KPI ROUNDEL ROW -->
+  <section aria-label="Key numbers" class="kpi-grid">
+    <a class="kpi cobalt" href="listings.html">
+      <span class="roundel sm">6</span>
+      <span class="kpi-num numeral">6</span>
+      <span class="kpi-label">Live listings</span>
+      <span class="kpi-note">4 live · 2 under offer</span>
+    </a>
+    <a class="kpi red" href="#offers">
+      <span class="roundel sm">3</span>
+      <span class="kpi-num numeral">3</span>
+      <span class="kpi-label">Offers — needs action</span>
+      <span class="kpi-note">First expires in under 3 hrs</span>
+    </a>
+    <a class="kpi yellow" href="orders.html">
+      <span class="roundel sm">£</span>
+      <span class="kpi-num numeral">£2,140</span>
+      <span class="kpi-label">30-day sales</span>
+      <span class="kpi-note">Up £430 on last month</span>
+    </a>
+    <a class="kpi cream" href="listings.html">
+      <span class="roundel sm">87</span>
+      <span class="kpi-num numeral">87</span>
+      <span class="kpi-label">Watchers</span>
+      <span class="kpi-note">+12 this week on the KWs</span>
+    </a>
+  </section>
+
+  <div class="stripe-divider" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <!-- OFFERS -->
+  <section id="offers" aria-label="Open offers">
+    <div class="section-head">
+      <h2>Offers — respond before lights out</h2>
+      <span class="sub">3 open · oldest first</span>
+    </div>
+    <div class="offer-grid">
+
+      <article class="offer-card">
+        <div class="offer-top">
+          <div>
+            <h3 class="part-name">KW Clubsport Coilovers</h3>
+            <p class="from">from <b>@trackdaytom</b> · Cheltenham · 14 sales</p>
+          </div>
+          <span class="chip red countdown-chip" data-countdown="02:58:41">02:58:41</span>
+        </div>
+        <div class="offer-body">
+          <span class="offer-amount numeral">£1,150</span>
+          <span class="vs-ask under">−£100 vs asking £1,250</span>
+        </div>
+        <div class="offer-actions">
+          <button class="act-accept" data-accept data-part="KW Clubsport Coilovers" data-amount="£1,150" data-buyer="@trackdaytom">Accept</button>
+          <button class="act-counter">Counter</button>
+          <button class="act-decline">Decline</button>
+        </div>
+      </article>
+
+      <article class="offer-card">
+        <div class="offer-top">
+          <div>
+            <h3 class="part-name">OZ Rally Wheels ×4</h3>
+            <p class="from">from <b>@minifan.tom</b> · Cardiff · 8 sales</p>
+          </div>
+          <span class="chip yellow countdown-chip" data-countdown="11:24:07">11:24:07</span>
+        </div>
+        <div class="offer-body">
+          <span class="offer-amount numeral">£340</span>
+          <span class="vs-ask at">at asking price</span>
+        </div>
+        <div class="offer-actions">
+          <button class="act-accept" data-accept data-part="OZ Rally Wheels ×4" data-amount="£340" data-buyer="@minifan.tom">Accept</button>
+          <button class="act-counter">Counter</button>
+          <button class="act-decline">Decline</button>
+        </div>
+      </article>
+
+      <article class="offer-card">
+        <div class="offer-top">
+          <div>
+            <h3 class="part-name">Recaro Pole Position Seat</h3>
+            <p class="from">from <b>@caged986</b> · Swindon · new buyer</p>
+          </div>
+          <span class="chip yellow countdown-chip" data-countdown="22:05:33">22:05:33</span>
+        </div>
+        <div class="offer-body">
+          <span class="offer-amount numeral">£410</span>
+          <span class="vs-ask under">−£40 vs asking £450</span>
+        </div>
+        <div class="offer-actions">
+          <button class="act-accept" data-accept data-part="Recaro Pole Position Seat" data-amount="£410" data-buyer="@caged986">Accept</button>
+          <button class="act-counter">Counter</button>
+          <button class="act-decline">Decline</button>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <div class="stripe-divider" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <!-- THE TEAM -->
+  <section aria-label="Your garage">
+    <div class="section-head">
+      <h2>The team</h2>
+      <span class="sub">2 cars · every listing traces back here</span>
+      <a class="btn sm ghost" href="garage.html" style="margin-left:auto">Manage garage</a>
+    </div>
+    <div class="team-grid">
+      <a class="team-card powder-card" href="garage.html">
+        <div class="car-visual" style="background-image:url('../assets/c5-hero-livery.png')">
+          <span class="roundel">23</span>
+        </div>
+        <div class="car-meta">
+          <div>
+            <h3>Gulf Girl — 911 (996) Track Car</h3>
+            <p class="spec-line">3.6 flat-six · 320 bhp · Castle Combe regular</p>
+          </div>
+          <span class="chip cobalt">4 PARTS LISTED</span>
+        </div>
+      </a>
+      <a class="team-card yellow-card" href="garage.html">
+        <div class="car-visual" style="background-image:url('../assets/c5-car-mini.png')">
+          <span class="roundel">7</span>
+        </div>
+        <div class="car-meta">
+          <div>
+            <h3>Pepperpot — Rally Mini Cooper S</h3>
+            <p class="spec-line">1275cc A-series · 1968-spec livery · hillclimb build</p>
+          </div>
+          <span class="chip cobalt">2 PARTS LISTED</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <div class="stripe-divider" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <!-- RACE CONTROL -->
+  <section aria-label="Activity feed">
+    <div class="section-head">
+      <h2>Race control</h2>
+      <span class="sub">Last 48 hours</span>
+    </div>
+    <div class="feed">
+      <div class="feed-row">
+        <span class="flag green-flag">Green</span>
+        <p class="feed-text"><b>SOLD</b> — Momo Prototipo wheel went to <b>@heritagehatch</b> for <b>£185</b>. Payout on its way.</p>
+        <time>2h ago</time>
+      </div>
+      <div class="feed-row">
+        <span class="flag yellow-flag">Yellow</span>
+        <p class="feed-text"><b>@caged986</b> asked on the Recaro seat: <i>"Any sub-frame corrosion on the side mounts?"</i></p>
+        <time>5h ago</time>
+      </div>
+      <div class="feed-row">
+        <span class="flag blue-flag">Blue</span>
+        <p class="feed-text"><b>12 new watchers</b> on KW Clubsport Coilovers after your FP2 dyno post.</p>
+        <time>Yesterday</time>
+      </div>
+      <div class="feed-row">
+        <span class="flag yellow-flag">Yellow</span>
+        <p class="feed-text"><b>@barnfind.bee</b> asked on the OZ wheels: <i>"Will these clear 8.4-inch discs on a 998?"</i></p>
+        <time>Yesterday</time>
+      </div>
+      <div class="feed-row">
+        <span class="flag red-flag">Red</span>
+        <p class="feed-text">Offer of <b>£95</b> on the Cobra harnesses <b>expired unanswered</b>. Buyer moved on.</p>
+        <time>2d ago</time>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ACCEPT CONFIRM OVERLAY -->
+<div class="overlay" id="accept-overlay" role="dialog" aria-modal="true" aria-labelledby="accept-title">
+  <div class="board">
+    <p class="microlabel">Pit board · confirm</p>
+    <h3 id="accept-title">Accept this offer?</h3>
+    <p style="font-size:13px;opacity:.85">The buyer is charged immediately and the listing moves to SOLD. This can't be undone.</p>
+    <div class="board-detail">
+      <div>
+        <b data-board-part style="font-size:13px;text-transform:uppercase">Part</b><br />
+        <span data-board-buyer style="font-size:11px;color:#6b6b72">buyer</span>
+      </div>
+      <span class="amt numeral" data-board-amt>£0</span>
+    </div>
+    <div class="board-actions">
+      <button class="btn green" data-confirm-accept>Confirm — deal done</button>
+      <button class="btn ghost" data-close>Back to pit wall</button>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="stripe"></div>
+  <div class="foot-inner">
+    <span>DRVN · Concept 05 — LIVERY</span>
+    <span>Run your garage like a race team</span>
+    <a href="design.html">Style guide →</a>
+  </div>
+</footer>
+
+<script src="livery.js"></script>
+</body>
+</html>

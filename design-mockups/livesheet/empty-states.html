@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Empty, loading & terminal states</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 99 — SPEC · STATES THE PROTOTYPE USUALLY HIDES</span>
+    <h1>When the sheet is <span style="color:var(--dim)">blank</span>,<br>slow, or <span class="live-word">spent.</span></h1>
+    <p class="sub">Every surface in Livesheet has three lives beyond the happy path: before there's data, while it's arriving, and after it's over. The rule is the same throughout — keep the ruling, drop the ink. Structure stays visible so the page never collapses; values read "—" until the sheet earns them.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">IN THIS SPEC</span>
+    <a class="jumplink" href="#first">Day one</a>
+    <a class="jumplink" href="#seller">Seller surfaces</a>
+    <a class="jumplink" href="#browse">Browse &amp; search</a>
+    <a class="jumplink" href="#public">Public sheets</a>
+    <a class="jumplink" href="#loading">Loading</a>
+    <a class="jumplink" href="#failure">Failure</a>
+    <a class="jumplink" href="#spent">Spent</a>
+  </div>
+
+  <!-- DAY ONE -->
+  <section class="deck" id="first">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">01 — DAY ONE, NOTHING EXISTS</span>
+        <a class="microlabel mono" href="first-run.html">SEE THE FULL PAGE →</a>
+      </div>
+      <div class="undrawn">
+        <div class="undrawn__mark"><i class="ph ph-car-profile" aria-hidden="true"></i></div>
+        <h3>Your car goes here</h3>
+        <p>Add the car you're building. Photos, spec, and every part that comes off it hang from this one sheet.</p>
+        <div style="margin-top:6px"><a class="btn btn--live" href="first-run.html">Open your first sheet</a></div>
+      </div>
+      <p class="spec-note"><b>Where:</b> dashboard on first login. <b>Rule:</b> the hero becomes a dashed plate the exact size of the real one, so the page doesn't reflow when the photo arrives. KPI tiles keep their dimension lines and read "—" with a note naming what fills them. <b>One</b> primary action, never two.</p>
+    </div>
+  </section>
+
+  <!-- SELLER SURFACES -->
+  <section class="deck deck--two" id="seller">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">02 — NO LISTINGS YET</span>
+        <span class="microlabel">WORKBENCH</span>
+      </div>
+      <div class="undrawn" style="border:0;background:transparent;padding:18px 0">
+        <div class="undrawn__mark"><i class="ph ph-tag" aria-hidden="true"></i></div>
+        <h3>Nothing listed off this sheet</h3>
+        <p>When you pull a part, release it from the build line and it lands here with its history attached.</p>
+        <div style="margin-top:4px"><a class="btn" href="garage.html">Release a part</a></div>
+      </div>
+      <p class="spec-note"><b>Where:</b> workbench listings, garage "for sale". <b>Rule:</b> the empty copy names the mechanism (release from the build line) rather than saying "no data" — it teaches the flow at the moment the user needs it.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">03 — LISTED, NO OFFERS</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> NOTHING LIVE</span>
+      </div>
+      <div class="rowlist">
+        <div class="order" style="opacity:.9">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">T3</span></div>
+          <div>
+            <div class="order__name">Garrett T3 hybrid — fresh rebuild</div>
+            <div class="order__meta">$540 ask · <b>no offers yet</b> · <span data-tick="8">8</span> watching</div>
+          </div>
+          <div class="order__actions"><span class="chip">LIVE</span></div>
+        </div>
+      </div>
+      <div class="livedim livedim--blank" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">Median first offer</span>
+        <span class="val">~3 days after listing</span>
+      </div>
+      <p class="spec-note"><b>Rule:</b> a listing with no offers is not empty — it's <b>waiting</b>. Keep the row, keep the live watcher count, and replace the offer figure with an expectation ("median first offer ~3 days") so silence reads as normal, not broken.</p>
+    </div>
+  </section>
+
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">04 — NO JOBS IN MOTION</span>
+        <span class="microlabel">ORDERS</span>
+      </div>
+      <div class="undrawn" style="border:0;background:transparent;padding:18px 0">
+        <div class="undrawn__mark"><i class="ph ph-truck" aria-hidden="true"></i></div>
+        <h3>Nothing to dispatch</h3>
+        <p>Accept an offer and a job card opens here — pipeline, address, tracking and payout in one line.</p>
+      </div>
+      <div class="pipe" style="margin-top:4px;opacity:.5">
+        <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+        <span class="lbl">Accepted · Paid · Dispatch · Delivered</span>
+      </div>
+      <p class="spec-note"><b>Rule:</b> show the <b>empty pipeline</b> at reduced opacity. The user learns the four stages before they ever have an order — so the first sale is legible instead of surprising.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">05 — NO PAYOUT HISTORY</span>
+        <span class="microlabel">LEDGER</span>
+      </div>
+      <div class="bline"><span class="bline__label">Booked payout</span><span class="bline__val" style="color:var(--dim)">$0.00</span><span class="bline__note">Nothing cleared yet</span></div>
+      <div class="bline"><span class="bline__label">Platform fee</span><span class="bline__val" style="color:var(--dim)">5%</span><span class="bline__note">Charged only when a part sells</span></div>
+      <div class="bline"><span class="bline__label">Payout method</span><span class="bline__val">Not set up</span><span class="bline__note">Add one before your first sale clears</span><a class="chip chip--live" href="settings.html">SET UP</a></div>
+      <p class="spec-note"><b>Rule:</b> a money-empty state is a <b>setup opportunity</b>. Zero balances stay factual ($0.00, not "—") because money must never look broken, and the missing payout method becomes the one live action.</p>
+    </div>
+  </section>
+
+  <!-- BROWSE & SEARCH -->
+  <section class="deck deck--two" id="browse">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">06 — SEARCH FOUND NOTHING</span>
+        <span class="microlabel"><span data-result-count>0</span> SHOWING</span>
+      </div>
+      <label class="search" style="width:100%"><i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+        <input type="text" value="dogleg gearbox" aria-label="Search parts" readonly>
+      </label>
+      <div class="undrawn" style="border:0;background:transparent;padding:20px 0 10px">
+        <h3>No lines match "dogleg gearbox"</h3>
+        <p>Nothing on the sheets right now. Widen the fitment filter, or let us watch for it.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px">
+          <button class="btn btn--live" type="button" data-toast="Saved — we'll ping you when one is listed">Watch this search</button>
+          <a class="btn btn--ghost" href="market.html">Clear filters</a>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> quote the query back, name the likely cause (filter too narrow), and convert the dead end into <b>demand signal</b> — a saved search is worth more to the marketplace than a bounce.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">07 — NOTHING FITS YOUR CAR</span>
+        <span class="chip chip--live">FITS: DELTA HF — ON</span>
+      </div>
+      <div class="undrawn" style="border:0;background:transparent;padding:18px 0">
+        <div class="undrawn__mark"><i class="ph ph-funnel" aria-hidden="true"></i></div>
+        <h3>Nothing for the Delta in Brakes</h3>
+        <p>39 brake parts are listed, but none are marked as fitting a Delta HF Integrale.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px">
+          <button class="btn" type="button" data-toast="Showing all brake parts — fitment filter off">Show all 39 anyway</button>
+        </div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> never hide the wider result count. Say exactly how many exist beyond the filter and offer the escape — and keep platform-verified fitment honest rather than loosening it silently.</p>
+    </div>
+  </section>
+
+  <!-- PUBLIC SHEETS -->
+  <section class="deck deck--two" id="public">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">08 — A SHEET WITH NO BUILD YET</span>
+        <span class="microlabel">CAR SHEET · REV 1</span>
+      </div>
+      <div class="bsec"><span class="microlabel">ENGINE &amp; DRIVELINE</span><span class="microlabel">NO ENTRIES</span></div>
+      <div class="ghostrow" aria-hidden="true"><div class="stack" style="grid-column:1/3"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div></div></div>
+      <div class="bsec"><span class="microlabel">CHASSIS &amp; SUSPENSION</span><span class="microlabel">NO ENTRIES</span></div>
+      <div class="ghostrow" aria-hidden="true"><div class="stack" style="grid-column:1/3"><div class="gbar"></div></div><div></div></div>
+      <p class="spec-note"><b>Where:</b> a car page whose owner hasn't logged mods. <b>Rule:</b> keep the section headings — they show the shape a finished sheet takes and quietly prompt the owner. Public visitors see an honest "no entries", never a fake spec.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">09 — NO REVIEWS / NO DOCUMENTS</span>
+        <span class="microlabel">KEEPER SHEET</span>
+      </div>
+      <div class="bline"><span class="bline__label">Reviews</span><span class="bline__val" style="color:var(--dim)">No sales yet</span><span class="bline__note">Rating appears after the first delivered order</span></div>
+      <div class="bline"><span class="bline__label">Documents</span><span class="bline__val" style="color:var(--dim)">None attached</span><span class="bline__note">Receipts and dyno sheets show here when uploaded</span></div>
+      <div class="bline"><span class="bline__label">Member since</span><span class="bline__val">July 2026</span><span class="bline__note">New keeper — no history to read yet</span><span class="chip">NEW</span></div>
+      <p class="spec-note"><b>Rule:</b> a new seller must not look <b>untrustworthy</b>, only new. State the fact plainly and name the condition that produces a rating — never show an empty star row or a "0.0" score.</p>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section class="deck" id="loading">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">10 — WHILE IT'S ARRIVING</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> DRAWING…</span>
+      </div>
+      <div class="rowlist is-loading" aria-busy="true" aria-label="Loading listings">
+        <div class="ghostrow"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+        <div class="ghostrow"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+        <div class="ghostrow"><div class="gbox"></div><div class="stack"><div class="gbar"></div><div class="gbar gbar--sm"></div></div><div class="gbar gbar--sm"></div></div>
+      </div>
+      <p class="spec-note"><b>Rule:</b> the loading state is the empty state <b>in motion</b> — identical ghost rows, with the sweep reading as ink being drawn left-to-right. Same geometry as the real rows, so nothing jumps on arrival. Honours <code>prefers-reduced-motion</code> by holding still. Never a spinner: spinners say "wait", ruled ghosts say "this is a sheet, and it's filling".</p>
+    </div>
+  </section>
+
+  <!-- FAILURE -->
+  <section class="deck deck--two" id="failure">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">11 — THE LIVE LAYER DROPPED</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> RECONNECTING…</span>
+      </div>
+      <div class="bline"><span class="bline__label">Watching now</span><span class="bline__val" style="color:var(--dim)">34 <span class="mono" style="font-size:11px">· last known</span></span><span class="bline__note">Live count paused — figures are from 40 seconds ago</span></div>
+      <div class="bline"><span class="bline__label">Offer window</span><span class="bline__val">2:17:04</span><span class="bline__note">Counts down locally; confirmed against the server on reconnect</span></div>
+      <p class="spec-note"><b>Rule:</b> the thesis is liveness, so losing the socket must be <b>stated, not hidden</b>. Freeze values, mark them "last known", stop the pulse, keep countdowns running locally. Never show a stale number as if it were live.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">12 — SOMETHING BROKE</span>
+        <span class="microlabel">ERROR</span>
+      </div>
+      <div class="undrawn" style="border:0;background:transparent;padding:18px 0">
+        <div class="undrawn__mark"><i class="ph ph-warning" aria-hidden="true"></i></div>
+        <h3>This sheet didn't load</h3>
+        <p>The market is fine — this page isn't. Try again, and if it sticks, the reference below helps us find it.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px">
+          <button class="btn btn--live" type="button" data-toast="Retrying…">Try again</button>
+          <a class="btn btn--ghost" href="index.html">Back to your sheet</a>
+        </div>
+        <span class="microlabel" style="margin-top:6px">REF LS-4402-C0416</span>
+      </div>
+      <p class="spec-note"><b>Rule:</b> scope the failure (this page, not the platform), give a retry and an exit, and print a reference code. No apology paragraphs, no illustrations of broken robots.</p>
+    </div>
+  </section>
+
+  <!-- SPENT / TERMINAL -->
+  <section class="deck deck--two" id="spent">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">13 — THE WINDOW CLOSED</span>
+        <span class="chip chip--spent">EXPIRED</span>
+      </div>
+      <div class="rowlist">
+        <div class="order" style="opacity:.75">
+          <div class="order__img"><img src="../assets/c16-part-seat.png" alt="Sabelt seat" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Sabelt bucket seat</div>
+            <div class="order__meta">Offer of <b>$240</b> lapsed · no answer in 48 hours</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--spent">LAPSED</span></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button class="btn" type="button" data-toast="Relisted — the window is open again">Relist it</button>
+        <button class="btn btn--ghost" type="button" data-toast="Message sent to @torino.classics">Ask if they're still keen</button>
+      </div>
+      <p class="spec-note"><b>Rule:</b> spent states <b>desaturate, never disappear</b> — the red signal drops out (it's no longer live), the row dims, and recovery actions replace the countdown. History stays readable on the sheet.</p>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">14 — SOLD / NO LONGER AVAILABLE</span>
+        <span class="chip chip--spent">SOLD</span>
+      </div>
+      <div class="bline"><span class="bline__label">Sold for</span><span class="bline__val">$310</span><span class="bline__note">14 July · to @kessler.m · delivered</span></div>
+      <div class="bline"><span class="bline__label">Came off</span><span class="bline__val">Integrale "Biscione"</span><span class="bline__note">The sheet keeps the line — that's the provenance</span><a class="chip" href="car.html">VIEW SHEET</a></div>
+      <div style="margin-top:12px"><a class="btn btn--ghost" href="market.html">Find a similar part</a></div>
+      <p class="spec-note"><b>Rule:</b> a sold listing stays <b>permanently reachable</b> — dead links lose search traffic and break provenance. Show the closed price, keep the source-car link, and offer the sideways route to a live equivalent.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 99 · KEEP THE RULING, DROP THE INK</span>
+    <a class="microlabel mono" href="first-run.html">← DAY ONE</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

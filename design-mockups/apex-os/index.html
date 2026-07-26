@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX/OS — DRVN — System Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="apex.css">
+</head>
+<body>
+
+<header class="cmdbar">
+  <a class="brand" href="index.html"><span class="dot"></span>APEX/OS <span class="sep">⏤</span> DRVN</a>
+  <nav>
+    <a href="index.html" aria-current="page">HOME</a>
+    <a href="market.html">MARKET</a>
+    <a href="car.html">GARAGE</a>
+    <a href="car.html">TELEMETRY</a>
+    <a href="listing.html">SELL</a>
+  </nav>
+  <div class="user">
+    <span class="clock" data-clock>00:00:00 LOC</span>
+    <span class="avatar">KT</span>
+    <span class="uname">K.TANAKA</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ===== HERO / DASHBOARD ===== -->
+  <section class="syshead">
+    <span class="code">SYS/00</span>
+    <h2>Command Deck</h2>
+    <span class="tail">SESSION 4F-22 ▪ OPERATOR K.TANAKA ▪ REGION UK-SE</span>
+  </section>
+
+  <div class="grid" style="grid-template-columns:1.4fr 1fr" data-hero-grid>
+    <div class="cell" data-reveal>
+      <p class="micro">▸ BUILD-AWARE MARKETPLACE ⏤ V3.1</p>
+      <h1 class="disp" style="font-size:clamp(38px,5.6vw,74px);line-height:.95;margin:18px 0 20px">
+        YOUR BUILD,<br>INSTRUMENTED<span class="cursor"></span>
+      </h1>
+      <p class="dim" style="max-width:52ch;font-size:12px;line-height:1.7">
+        Every part on the market traces back to a real car, a real removal log and a
+        real operator. Show off the build. Sell the parts behind it. Buy with the
+        full telemetry of where a component has been.
+      </p>
+      <div style="display:flex;gap:12px;margin-top:26px;flex-wrap:wrap">
+        <a class="btn" href="market.html">ENTER MARKET ▸</a>
+        <a class="btn btn--ghost" href="car.html">OPEN GARAGE</a>
+      </div>
+    </div>
+
+    <div class="cell cell--flush ticks scan" data-reveal>
+      <span class="tick-b"></span>
+      <div class="feed" style="height:100%;min-height:320px">
+        <div class="feed-label">
+          <span>CAM/02 — BAY 4 ▪ PIT GARAGE</span>
+          <span class="rec">REC</span>
+        </div>
+        <img src="../assets/c2-hero-pit.png" alt="Time-attack car in pit garage, monochrome monitor feed">
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STAT CELLS ===== -->
+  <div class="grid grid-4">
+    <div class="cell" data-reveal>
+      <p class="micro">PARTS TRACKED</p>
+      <p class="num-xl acid" data-count="27">0</p>
+      <p class="micro" style="margin-top:8px">ACROSS 2 UNITS ▪ +3 THIS WK</p>
+    </div>
+    <div class="cell" data-reveal>
+      <p class="micro">SPEND LOGGED</p>
+      <p class="num-xl" data-count="14720" data-prefix="£">£0</p>
+      <p class="micro" style="margin-top:8px">≈ ¥2.4M ▪ SINCE 2023-04</p>
+    </div>
+    <div class="cell" data-reveal>
+      <p class="micro">WATCHERS</p>
+      <p class="num-xl" data-count="143">0</p>
+      <p class="micro" style="margin-top:8px">UNIT 07 FEED ▪ <span class="acid">▲ 12 / 24H</span></p>
+    </div>
+    <div class="cell" data-reveal>
+      <p class="micro">FITMENT MATCHES</p>
+      <p class="num-xl acid" data-count="12">0</p>
+      <p class="micro" style="margin-top:8px">LIVE ON MARKET ▪ <a href="market.html" style="color:var(--acid)">VIEW ▸</a></p>
+    </div>
+  </div>
+
+  <!-- ===== LIVE TICKER ===== -->
+  <div class="ticker" aria-label="Recent marketplace events">
+    <div class="tk-label"><span class="chip chip--live" style="border:none;padding:0">LIVE</span> MARKET FEED</div>
+    <div class="tk-viewport">
+      <div class="tk-track">
+        <span class="tk-item">14:32:07 ▸ <span class="t">GC8 COILOVERS LISTED</span> — <span class="p">£680</span></span>
+        <span class="tk-item">14:31:44 ▸ <span class="t">G30-770 TURBO</span> +4 WATCHERS</span>
+        <span class="tk-item">14:29:12 ▸ <span class="t">FD RX-7 SEQ. TWINS SOLD</span> — <span class="p">£2,340</span></span>
+        <span class="tk-item">14:27:58 ▸ <span class="t">R34 GT-R NISMO WING</span> OFFER RECEIVED — <span class="p">£1,050</span></span>
+        <span class="tk-item">14:25:31 ▸ <span class="t">EVO IX ECU / MOTEC M130</span> FIT:VERIFIED ISSUED</span>
+        <span class="tk-item">14:22:05 ▸ <span class="t">S2000 AP2 HARDTOP LISTED</span> — <span class="p">£1,495</span></span>
+        <span class="tk-item">14:19:47 ▸ <span class="t">UNIT 07 MOD LOG UPDATED</span> — REMOVAL: TURBOCHARGER</span>
+        <span class="tk-item">14:15:20 ▸ <span class="t">TE37SL 18×9.5 SET SOLD</span> — <span class="p">£1,820</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ACTIVE SYSTEMS ===== -->
+  <section class="syshead">
+    <span class="code">SYS/01</span>
+    <h2>Active Systems</h2>
+    <span class="tail">4 MODULES ONLINE</span>
+  </section>
+
+  <div class="grid grid-4">
+    <a class="sys-card scan" href="market.html" data-reveal>
+      <span class="sc-arrow">▸</span>
+      <p class="sc-code">MOD/01</p>
+      <h3>MARKET</h3>
+      <p>247 live listings. Fitment-filtered to your garage. Every part carries a provenance chain back to its source unit.</p>
+      <p class="micro" style="margin-top:14px"><span class="acid">▪ 12 MATCHES</span> FOR EVO IX</p>
+    </a>
+    <a class="sys-card scan" href="car.html" data-reveal>
+      <span class="sc-arrow">▸</span>
+      <p class="sc-code">MOD/02</p>
+      <h3>GARAGE</h3>
+      <p>UNIT 07 — LANCER EVO IX. 412whp / 1,240kg. Full spec matrix, mod log and components currently offline for sale.</p>
+      <p class="micro" style="margin-top:14px"><span class="acid">▪ 3 COMPONENTS</span> LISTED</p>
+    </a>
+    <a class="sys-card scan" href="listing.html" data-reveal>
+      <span class="sc-arrow">▸</span>
+      <p class="sc-code">MOD/03</p>
+      <h3>SELL</h3>
+      <p>List a component with its removal log, bench inspection and hours. Verified provenance sells 2.7× faster.</p>
+      <p class="micro" style="margin-top:14px"><span class="acid">▪ G30-770</span> DRAFT ACTIVE</p>
+    </a>
+    <a class="sys-card scan" href="car.html" data-reveal>
+      <span class="sc-arrow">▸</span>
+      <p class="sc-code">MOD/04</p>
+      <h3>TELEMETRY</h3>
+      <p>Spend, watchers, dyno deltas and market value of your build tracked per component, per session.</p>
+      <p class="micro" style="margin-top:14px"><span class="dim">▪ LAST SYNC</span> 14:31:02</p>
+    </a>
+  </div>
+
+  <!-- ===== SECONDARY FEED ROW ===== -->
+  <div class="grid" style="grid-template-columns:1fr 1fr 1.2fr" data-hero-grid>
+    <div class="cell cell--flush scan" data-reveal>
+      <div class="feed" style="height:240px">
+        <div class="feed-label"><span>ASSET/TURBO — BENCH 2</span><span class="chip chip--live">LISTED</span></div>
+        <img src="../assets/c2-part-turbo.png" alt="Turbocharger on workbench">
+      </div>
+      <div style="padding:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+        <a href="listing.html" class="micro" style="color:var(--text)">GARRETT G30-770 ▸</a>
+        <span class="disp acid" style="font-size:15px;font-weight:700">£1,150</span>
+      </div>
+    </div>
+    <div class="cell cell--flush scan" data-reveal>
+      <div class="feed" style="height:240px">
+        <div class="feed-label"><span>ASSET/SUSP — SHELF C4</span><span class="chip">DRAFT</span></div>
+        <img src="../assets/c2-part-coilover.png" alt="Coilover unit">
+      </div>
+      <div style="padding:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+        <a href="market.html" class="micro" style="color:var(--text)">ÖHLINS DFV R&amp;T ▸</a>
+        <span class="disp dim" style="font-size:15px;font-weight:700">£1,680</span>
+      </div>
+    </div>
+    <div class="cell" data-reveal>
+      <p class="rule-label">MARKET VALUE / UNIT 07 — 90D</p>
+      <svg class="sparkline" viewBox="0 0 320 90" preserveAspectRatio="none" width="100%" height="110" role="img" aria-label="Market value trend, rising over 90 days">
+        <line class="base" x1="0" y1="80" x2="320" y2="80"/>
+        <polyline points="0,72 24,70 48,66 72,68 96,60 120,58 144,52 168,55 192,46 216,42 240,38 264,30 288,26 320,18"/>
+      </svg>
+      <div class="kv"><span class="k">EST. BUILD VALUE</span><span class="acid">£38,400</span></div>
+      <div class="kv"><span class="k">Δ 90 DAYS</span><span class="acid">+6.2%</span></div>
+      <div class="kv"><span class="k">LIQUID COMPONENTS</span><span>£4,325</span></div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="statusbar wrap">
+  <div><span class="ok">▪</span> ALL SYSTEMS NOMINAL</div>
+  <div>UPTIME 99.98%</div>
+  <div>BUILD 3.1.408</div>
+  <div>REGION UK-SE-2</div>
+  <div class="grow">APEX/OS ⏤ A DRVN INSTRUMENT © 2026</div>
+</footer>
+
+<script src="apex.js"></script>
+<style>@media(max-width:980px){[data-hero-grid]{grid-template-columns:1fr!important}}</style>
+</body>
+</html>

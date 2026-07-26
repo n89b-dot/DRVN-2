@@ -1,0 +1,18 @@
+{
+  "num": 15,
+  "name": "Glance",
+  "slug": "glance",
+  "family": "era-media",
+  "thesis": "Selling parts should feel like checking your phone.",
+  "hero_asset": "c15-hero-earth.png",
+  "accent_hex": "#FF2D1A",
+  "thumb_fallback_hex": "#0A0A0B",
+  "pages": {
+    "index.html": "Home screen — video Earth backdrop under a bento deck of live widgets with ticking LIVE! offer countdown",
+    "market.html": "Browse as app grid + listing widget rows with working search filter and a NOW! drop capsule",
+    "listing.html": "Part as widget stack — giant price numeral, live-activity capsule, 2-step confirm sheet",
+    "car.html": "Public car profile as a home screen for one machine — hero car tile, live watchers capsule, giant-numeral stats, follow toggle, for-sale app tiles",
+    "alerts.html": "Notification center as commerce surface — inline accept/counter with state change, dismissals"
+  },
+  "showpiece": "Index home-screen deck: drifting orbital Earth video under spring-staggered live widgets with a working LIVE! countdown capsule"
+}

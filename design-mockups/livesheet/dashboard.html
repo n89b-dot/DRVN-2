@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link is-active" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 02 — OPERATIONS · EVERYTHING BELOW IS THE SELLER'S DESK</span>
+    <h1>The workbench.</h1>
+    <p class="sub">Listings, offers, jobs and payouts on one sheet — each line annotated with what it's doing right now.</p>
+  </div>
+
+  <!-- compact KPI strip -->
+  <section class="deck deck--kpi">
+    <div class="tile rv" data-stagger="0">
+      <span class="microlabel"><i class="ph ph-tag"></i>&nbsp;Live listings</span>
+      <div class="num-giant" data-count="5">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">$2,580 total asking</span></div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel microlabel--live"><i class="ph ph-bell-ringing"></i>&nbsp;Needs an answer</span>
+      <div class="num-giant" style="color:var(--live)" data-count="2">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">Oldest lapses in</span><span class="val" data-seconds="8280"></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel"><i class="ph ph-package"></i>&nbsp;Jobs in motion</span>
+      <div class="num-giant" data-count="2">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">1 to dispatch · 1 delivering</span></div>
+    </div>
+    <div class="tile rv" data-stagger="3">
+      <span class="microlabel"><i class="ph ph-hand-coins"></i>&nbsp;Booked payout</span>
+      <div class="num-giant" data-takings="1430">$1,430</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">Clears Friday · Monzo ··2201</span></div>
+    </div>
+  </section>
+
+  <!-- listings manager -->
+  <section class="deck">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">LISTINGS — RANKED BY HEAT</span>
+        <a class="btn btn--live" href="listing.html" style="padding:9px 14px">List a part</a>
+      </div>
+      <div class="rowlist">
+        <a class="order" href="listing.html">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="KW coilovers" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">KW Variant 2 coilovers</div>
+            <div class="order__meta">$680 ask · best <b>$620</b> · <span data-tick="12">12</span> watching · window <span class="cd" data-seconds="8280"></span></div>
+          </div>
+          <div class="order__actions"><span class="chip chip--live">UNDER OFFER</span></div>
+        </a>
+        <a class="order" href="listing.html">
+          <div class="order__img"><img src="../assets/c16-part-seat.png" alt="Sabelt seat" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Sabelt bucket seat — driver side</div>
+            <div class="order__meta">$290 ask · best <b>$240</b> · 204 views · 6 watching</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--live">UNDER OFFER</span></div>
+        </a>
+        <a class="order" href="listing.html">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">T3</span></div>
+          <div>
+            <div class="order__name">Garrett T3 hybrid — fresh rebuild</div>
+            <div class="order__meta">$540 ask · no offers yet · <span data-tick="8">8</span> watching</div>
+          </div>
+          <div class="order__actions"><span class="chip">LIVE</span></div>
+        </a>
+        <a class="order" href="listing.html">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">16″</span></div>
+          <div>
+            <div class="order__name">Speedline Montecarlo ×4</div>
+            <div class="order__meta">$820 ask · 148 views · 5 watching</div>
+          </div>
+          <div class="order__actions"><span class="chip">LIVE</span></div>
+        </a>
+        <a class="order" href="listing.html">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">ECU</span></div>
+          <div>
+            <div class="order__name">Mapped ECU — 246 bhp file</div>
+            <div class="order__meta">$310 ask · 61 views · 2 watching</div>
+          </div>
+          <div class="order__actions"><span class="chip">LIVE</span></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- jobs + payout ledger -->
+  <section class="deck deck--two">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-truck"></i>&nbsp;JOBS IN MOTION</span>
+        <span class="microlabel">JOB CARDS</span>
+      </div>
+      <div class="rowlist">
+        <div class="jobrow">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+            <div>
+              <a class="order__name" href="orders.html" style="display:block">#1058 — Momo Corse wheel set → @kessler.m</a>
+              <div class="order__meta">$310 · accepted Tue · dispatch due <span class="cd">TOMORROW 18:00</span></div>
+            </div>
+            <a class="btn" href="orders.html" style="padding:9px 14px">Job card</a>
+          </div>
+          <div class="pipe" id="pipe1058" style="margin-top:12px">
+            <span class="pip is-on"></span><span class="pip is-on"></span><span class="pip"></span><span class="pip"></span>
+            <span class="lbl">Accepted · Paid · Dispatch · Delivered</span>
+          </div>
+        </div>
+        <div class="jobrow">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+            <div>
+              <a class="order__name" href="orders.html#past" style="display:block">#1052 — Cusco strut brace → @garage.iida</a>
+              <div class="order__meta">$95 · DPD says delivering today</div>
+            </div>
+            <span class="chip chip--live">OUT FOR DELIVERY</span>
+          </div>
+          <div class="pipe" style="margin-top:12px">
+            <span class="pip is-on"></span><span class="pip is-on"></span><span class="pip is-on"></span><span class="pip"></span>
+            <span class="lbl">Accepted · Paid · Dispatch · Delivered</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-receipt"></i>&nbsp;PAYOUT LEDGER</span>
+        <span class="microlabel">JULY</span>
+      </div>
+      <ul class="feed">
+        <li><time>FRI 25</time> Booked payout clears <span class="amt amt--live">$1,430</span></li>
+        <li><time>JUL 18</time> Momo wheels — buyer confirmed <span class="amt">$310</span></li>
+        <li><time>JUL 15</time> Strut brace — paid, in transit <span class="amt">$95</span></li>
+        <li><time>JUL 11</time> Fee — 5% platform on $405 <span class="amt">−$20</span></li>
+        <li><time>JUL 04</time> Exhaust manifold — delivered <span class="amt">$240</span></li>
+      </ul>
+      <div class="dimline-h is-in" aria-hidden="true" style="margin-top:8px"></div>
+      <span class="kv" style="color:var(--dim)">LIFETIME THROUGH THE SHEET <b>$2,140</b> · 7 PARTS</span>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 02 · THE WORKBENCH UPDATES ITSELF</span>
+    <a class="microlabel mono" href="empty-states.html">EMPTY-STATE SPEC →</a>
+    <a class="microlabel mono" href="index.html">← YOUR SHEET</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

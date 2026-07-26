@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — DRVN · Every part arrives with a drawing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+
+<!-- ============ PUBLIC MASTHEAD ============ -->
+<header class="wb-mast">
+  <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+  <div class="wb-rail__sub">Rev 04</div>
+  <nav class="wb-mast__links" aria-label="Public">
+    <a class="wb-mast__link" href="home-v2.html" data-mobile-link>Sheet B — live</a>
+    <a class="wb-mast__link" href="explore.html" data-mobile-link>Explore</a>
+    <a class="wb-mast__link" href="market.html" data-mobile-link>Marketplace</a>
+    <a class="wb-mast__link" href="index.html" data-mobile-link>Sign in</a>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-btn wb-btn--accent" href="index.html">Open the workshop</a>
+  </nav>
+  <button id="wbBurger" type="button"></button>
+</header>
+
+<main class="wb-public">
+
+  <!-- ============ HERO ============ -->
+  <section class="wb-homehero">
+    <div>
+      <span class="microlabel">REF 04-G — PUBLIC FACE · DRVN, THE BUILD-AWARE MARKETPLACE</span>
+      <h1>Every part arrives with a drawing.</h1>
+      <p>DRVN sells used performance parts the way engineers document assemblies. Each listing is cut from a registered car — so you can see the exact chassis it came off, the keeper who ran it, when it was fitted and removed, and whether it will bolt to your own unit before money moves.</p>
+      <div class="wb-homehero__cta">
+        <a class="wb-btn wb-btn--accent" href="index.html">Open the workshop</a>
+        <a class="wb-btn wb-btn--ghost" href="explore.html">Survey the registry</a>
+      </div>
+      <div class="wb-dim wb-dim--accent" data-dim style="max-width:360px;margin-top:24px"><span class="wb-dim__line"></span><span class="wb-dim__label">Source car · credible seller · honest fitment</span></div>
+    </div>
+
+    <div class="wb-plate">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 01 — REGISTRY ELEVATION · SPECIMEN</span>
+        <span class="microlabel">DRVN-0417</span>
+      </div>
+      <div class="wb-hero" style="min-height:320px">
+        <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 raised on a two-post lift in a bright workshop" onerror="this.remove()"></div>
+        <div class="wb-callout" style="left:6%;top:24%">
+          <span class="wb-callout__tag"><b>P-01</b> S54B32 · DYNO SHEET ON FILE</span>
+          <span class="wb-callout__line" style="width:88px"></span>
+        </div>
+        <div class="wb-callout" style="right:5%;bottom:18%;flex-direction:row-reverse">
+          <span class="wb-callout__tag"><b>P-02</b> BRAKE KIT · RELEASED FOR SALE</span>
+          <span class="wb-callout__line" style="width:72px;transform:scaleX(-1)"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW THE WORKSHOP RUNS ============ -->
+  <section class="wb-section">
+    <div class="wb-pagehead" style="margin-bottom:16px">
+      <div><span class="microlabel">SHEET 2</span><h1 style="font-size:18px">How the workshop runs</h1></div>
+      <span class="microlabel">THREE OPERATIONS · NO EXCEPTIONS</span>
+    </div>
+    <div class="wb-steps">
+      <div class="wb-plate wb-step wb-plate--hover">
+        <span class="wb-step__idx">OP 01</span>
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <h3>Register the car</h3>
+        <p>Open a registry record for your build: chassis number, spec matrix, build log, documents. The car — not the seller's word — becomes the source of truth.</p>
+      </div>
+      <div class="wb-plate wb-step wb-plate--hover">
+        <span class="wb-step__idx">OP 02</span>
+        <i class="ph ph-wrench" aria-hidden="true"></i>
+        <h3>Release parts with provenance</h3>
+        <p>Take a component off the car and the listing writes itself: fitted and removed dates, dyno sheets, invoices, and the record of what it was paired with.</p>
+      </div>
+      <div class="wb-plate wb-step wb-plate--hover">
+        <span class="wb-step__idx">OP 03</span>
+        <i class="ph ph-seal-check" aria-hidden="true"></i>
+        <h3>Sell to verified fitment</h3>
+        <p>Buyers shop with their own garage on file. Offers arrive from people whose chassis your part actually fits — fewer questions, fewer returns, faster sales.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FROM THE REGISTRY ============ -->
+  <section class="wb-section">
+    <div class="wb-pagehead" style="margin-bottom:16px">
+      <div><span class="microlabel">SHEET 3</span><h1 style="font-size:18px">From the registry</h1></div>
+      <a class="ref-link" href="explore.html">SURVEY ALL RECORDS →</a>
+    </div>
+    <div class="wb-partcards">
+      <a class="wb-plate wb-partcard" href="car.html">
+        <div class="wb-img"><img src="../assets/c4-hero-lift.png" alt="BMW E46 M3 on a two-post lift" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">BMW E46 M3 — Track Build</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--ok">PROVENANCE · 6 DOCS</span>
+            <span class="wb-tag">3 PARTS LIVE</span>
+          </div>
+          <span class="microlabel">DRVN-0417 · STUTTGART · 84 WATCHING</span>
+        </div>
+      </a>
+      <a class="wb-plate wb-partcard" href="explore.html">
+        <div class="wb-img"><img src="../assets/c4-car-911.png" alt="Porsche 993 in a workshop" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">Porsche 993 'Unit 12'</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--ok">PROVENANCE · 9 DOCS</span>
+            <span class="wb-tag">ENGINE-OUT REBUILD</span>
+          </div>
+          <span class="microlabel">DRVN-0292 · HAMBURG · 141 WATCHING</span>
+        </div>
+      </a>
+      <a class="wb-plate wb-partcard" href="explore.html">
+        <div class="wb-img"><img src="../assets/c4-car-evo.png" alt="Mitsubishi Evo IX" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">Mitsubishi Evo IX — Time Attack</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--ok">PROVENANCE · 4 DOCS</span>
+            <span class="wb-tag">2 PARTS LIVE</span>
+          </div>
+          <span class="microlabel">DRVN-0533 · MANCHESTER · 67 WATCHING</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ PARTS WITH PAPERWORK ============ -->
+  <section class="wb-section">
+    <div class="wb-pagehead" style="margin-bottom:16px">
+      <div><span class="microlabel">SHEET 4</span><h1 style="font-size:18px">Parts with paperwork</h1></div>
+      <a class="ref-link" href="market.html">OPEN THE MARKETPLACE →</a>
+    </div>
+    <div class="wb-partcards">
+      <a class="wb-plate wb-partcard" href="market.html">
+        <div class="wb-img"><img src="../assets/c4-part-brake.png" alt="AP Racing brake caliper and disc, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">AP Racing CP9660 Front Kit</div>
+          <div class="wb-partcard__price">£1,150</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--accent">FIT: E46 CHASSIS</span>
+            <span class="wb-tag">GOOD · TRACK USED</span>
+          </div>
+          <span class="microlabel">SOURCE CAR DRVN-0417 · FITTED 05/23 → REMOVED 06/26</span>
+        </div>
+      </a>
+      <a class="wb-plate wb-partcard" href="market.html">
+        <div class="wb-img"><img src="../assets/c4-part-exhaust.png" alt="Stainless performance exhaust system, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">Supersprint Race Exhaust</div>
+          <div class="wb-partcard__price">£890</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--accent">FIT: E46 CHASSIS</span>
+            <span class="wb-tag">VERY GOOD · 9K KM</span>
+          </div>
+          <span class="microlabel">SOURCE CAR DRVN-0417 · INVOICE &amp; DB SHEET ON FILE</span>
+        </div>
+      </a>
+      <a class="wb-plate wb-partcard" href="market.html">
+        <div class="wb-img"><img src="../assets/c4-part-seat.png" alt="Recaro Pole Position bucket seat, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+        <div class="wb-partcard__body">
+          <div class="wb-partcard__name">Recaro Pole Position ABE ×2</div>
+          <div class="wb-partcard__price">£620</div>
+          <div class="wb-partcard__tags">
+            <span class="wb-tag wb-tag--accent">FIT: UNIVERSAL RAIL</span>
+            <span class="wb-tag">EXCELLENT · INC. MOUNTS</span>
+          </div>
+          <span class="microlabel">SOURCE CAR DRVN-0417 · FITTED 06/22 → REMOVED 05/26</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- ============ INK BAND — THE NUMBERS ============ -->
+  <section class="wb-band wb-section">
+    <span class="microlabel">SHEET 5 — REGISTRY TOTALS · AUDITED MONTHLY</span>
+    <div class="wb-band__stats">
+      <div>
+        <div class="wb-kpi__value" data-count="48210">0</div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Parts documented</span></div>
+      </div>
+      <div>
+        <div class="wb-kpi__value" data-count="3914">0</div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Cars on record</span></div>
+      </div>
+      <div>
+        <div class="wb-kpi__value"><span data-count="6">0</span> <small style="color:inherit;opacity:.6">days</small></div>
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">Median sale time</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="wb-foot">
+    <span class="microlabel">DRVN / WERKBANK — PUBLIC FACE · REF 04-G · DRAWN 12 JUL 2026 · SCALE 1:1</span>
+    <a class="ref-link" href="design.html">DESIGN SYSTEM — DESIGN.HTML →</a>
+  </footer>
+</main>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

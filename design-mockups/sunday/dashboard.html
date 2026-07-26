@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="sunday.css">
+</head>
+<body>
+
+<!-- ===== TOP BAR ===== -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html" aria-label="DRVN home">
+      <span class="mark"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12 7 2l5 10" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      DRVN
+    </a>
+    <nav class="topbar-tabs" aria-label="App navigation">
+      <a class="topbar-tab is-active" href="dashboard.html" aria-current="page">Dashboard</a>
+      <a class="topbar-tab" href="garage.html">Garage</a>
+      <a class="topbar-tab" href="listings.html">Listings</a>
+    </nav>
+    <span class="topbar-spacer"></span>
+    <label class="topbar-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" placeholder="Search parts, cars…" aria-label="Search">
+      <kbd>/</kbd>
+    </label>
+    <button class="avatar" aria-label="Account — Maya K.">MK</button>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap">
+
+    <div class="page-head">
+      <div>
+        <h1 class="page-greeting">Morning, Maya ☀</h1>
+        <p class="page-sub">Nice — two offers came in overnight. Coffee first, then have a look.</p>
+      </div>
+      <a class="btn btn-primary" href="garage.html">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        List a part
+      </a>
+    </div>
+
+    <!-- ===== STATS ===== -->
+    <div class="stat-grid" style="margin-bottom:32px;">
+      <div class="card stat-card card-hover">
+        <span class="stat-label">Active listings</span>
+        <span class="stat-value" data-count="6">0</span>
+        <span class="stat-sub">4 live · 2 under offer</span>
+      </div>
+      <div class="card stat-card card-hover">
+        <span class="stat-label"><span class="dot dot-indigo"></span>Offers waiting</span>
+        <span class="stat-value" data-count="2">0</span>
+        <span class="stat-sub">Newest 7h ago</span>
+      </div>
+      <div class="card stat-card card-hover">
+        <span class="stat-label">This month</span>
+        <span class="stat-value" data-count="890" data-prefix="£">£0</span>
+        <span class="stat-sub"><span class="up">↑ 32%</span> vs June</span>
+      </div>
+      <div class="card stat-card card-hover">
+        <span class="stat-label">Saved searches matching</span>
+        <span class="stat-value" data-count="4">0</span>
+        <span class="stat-sub">3 fit the E30</span>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="dash-main">
+
+        <!-- ===== NEEDS YOUR REPLY ===== -->
+        <section aria-labelledby="reply-h">
+          <div class="section-head">
+            <h2 id="reply-h">Needs your reply</h2>
+            <a class="link-more" href="listings.html">All offers →</a>
+          </div>
+          <div class="card offer-card card-hover" data-offer-card style="margin-bottom:16px;">
+            <span class="offer-thumb" data-bg="../assets/c7-part-wheels.png" role="img" aria-label="Bronze BBS wheels"></span>
+            <div class="offer-body">
+              <div class="offer-title">BBS RS 16&Prime; bronze — set of 4</div>
+              <div class="offer-meta">
+                <span class="offer-price">£540 offered</span>
+                <span class="offer-was">£600 asking</span>
+                <span class="pill pill-outline"><span class="dot dot-muted"></span>From: E30 Project</span>
+                <span>Tom H. · joined 2022 · ★ 4.8</span>
+              </div>
+            </div>
+            <div class="offer-actions">
+              <button class="btn btn-primary btn-sm" data-accept data-item="BBS RS 16&quot; bronze — set of 4" data-offer="540" data-buyer="Tom H.">Accept</button>
+              <button class="btn btn-ghost btn-sm" data-counter>Counter</button>
+              <button class="btn btn-ghost btn-sm" data-decline>Decline</button>
+            </div>
+          </div>
+          <div class="card offer-card card-hover" data-offer-card>
+            <span class="offer-thumb" data-bg="../assets/c7-part-intake.png" role="img" aria-label="Carbon intake"></span>
+            <div class="offer-body">
+              <div class="offer-title">Eventuri carbon intake — Mk8 GTI</div>
+              <div class="offer-meta">
+                <span class="offer-price">£180 offered</span>
+                <span class="offer-was">£210 asking</span>
+                <span class="pill pill-outline"><span class="dot dot-muted"></span>From: GTI Daily</span>
+                <span>Priya S. · joined 2024 · ★ 5.0</span>
+              </div>
+            </div>
+            <div class="offer-actions">
+              <button class="btn btn-primary btn-sm" data-accept data-item="Eventuri carbon intake — Mk8 GTI" data-offer="180" data-buyer="Priya S.">Accept</button>
+              <button class="btn btn-ghost btn-sm" data-counter>Counter</button>
+              <button class="btn btn-ghost btn-sm" data-decline>Decline</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== YOUR GARAGE ===== -->
+        <section aria-labelledby="garage-h">
+          <div class="section-head">
+            <h2 id="garage-h">Your garage</h2>
+            <a class="link-more" href="garage.html">Manage garage →</a>
+          </div>
+          <div class="car-grid">
+            <a class="card car-card card-hover" href="garage.html">
+              <div class="car-photo" data-bg="../assets/c7-hero-gti.png" role="img" aria-label="Red Mk8 Golf GTI">
+                <span class="pill">Daily</span>
+              </div>
+              <div class="car-body">
+                <h3>Volkswagen Golf GTI Mk8</h3>
+                <p class="car-sub">2021 · Kings Red · 34,200 mi</p>
+                <div class="car-stats">
+                  <span><strong>9</strong> mods</span>
+                  <span><strong>2</strong> parts listed</span>
+                  <span><strong>184</strong> followers</span>
+                </div>
+              </div>
+            </a>
+            <a class="card car-card card-hover" href="garage.html">
+              <div class="car-photo" data-bg="../assets/c7-car-e30.png" role="img" aria-label="Dove blue BMW E30 on a driveway">
+                <span class="pill">Project 30</span>
+              </div>
+              <div class="car-body">
+                <h3>BMW 325i (E30)</h3>
+                <p class="car-sub">1989 · Dove Blue · 118,000 mi</p>
+                <div class="car-stats">
+                  <span><strong>14</strong> mods</span>
+                  <span><strong>4</strong> parts listed</span>
+                  <span><strong>312</strong> followers</span>
+                </div>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <!-- ===== ACTIVITY ===== -->
+        <section aria-labelledby="activity-h">
+          <div class="section-head">
+            <h2 id="activity-h">Activity</h2>
+          </div>
+          <div class="card feed">
+            <div class="feed-row">
+              <span class="avatar avatar-sm" aria-hidden="true">TH</span>
+              <span class="feed-text"><strong>Tom H.</strong> offered <strong>£540</strong> on your BBS RS wheels <span class="muted">— his third set of period BBS, apparently.</span></span>
+              <span class="feed-time">7h</span>
+            </div>
+            <div class="feed-row">
+              <span class="avatar avatar-sm avatar-green" aria-hidden="true">PS</span>
+              <span class="feed-text"><strong>Priya S.</strong> offered <strong>£180</strong> on the Eventuri intake.</span>
+              <span class="feed-time">9h</span>
+            </div>
+            <div class="feed-row">
+              <span class="avatar avatar-sm avatar-amber" aria-hidden="true">JW</span>
+              <span class="feed-text"><strong>Jess W.</strong> started watching your Recaro LX-C seats <span class="muted">— 5 watchers now.</span></span>
+              <span class="feed-time">Yesterday</span>
+            </div>
+            <div class="feed-row">
+              <span class="avatar avatar-sm" aria-hidden="true">E30</span>
+              <span class="feed-text">Your build update <strong>"Timing belt &amp; water pump day"</strong> got 23 likes on the E30 page.</span>
+              <span class="feed-time">Tue</span>
+            </div>
+            <div class="feed-row">
+              <span class="avatar avatar-sm avatar-green" aria-hidden="true">£</span>
+              <span class="feed-text"><strong>£350</strong> from the H&amp;R spring sale cleared to your account.</span>
+              <span class="feed-time">Mon</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ===== SIDE ===== -->
+      <aside class="dash-side">
+        <div class="card tips-card">
+          <h4>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.7.5 1 1.2 1.1 2.1h4.8c.1-.9.4-1.6 1.1-2.1A6 6 0 0 0 12 3Z"/></svg>
+            Worth knowing
+          </h4>
+          <p>Listings with a source car sell <strong>2.3× faster</strong>. Your intake listing isn't linked yet — link the GTI to it in about ten seconds.</p>
+          <p><a href="listings.html">Link it now →</a></p>
+        </div>
+
+        <div class="card" style="padding:24px;">
+          <div class="section-head" style="margin-bottom:12px;">
+            <h2 style="font-size:15px;">Saved search matches</h2>
+          </div>
+          <div class="feed" style="margin:0 -24px;">
+            <div class="feed-row" style="padding:12px 24px;">
+              <span class="feed-text">E30 rear subframe bushes, poly <span class="muted">· £45 · Leeds</span></span>
+              <span class="pill pill-indigo">Fits E30</span>
+            </div>
+            <div class="feed-row" style="padding:12px 24px;">
+              <span class="feed-text">M20 valve cover, powder-coated <span class="muted">· £70 · Sheffield</span></span>
+              <span class="pill pill-indigo">Fits E30</span>
+            </div>
+            <div class="feed-row" style="padding:12px 24px;">
+              <span class="feed-text">Momo Prototipo 350mm <span class="muted">· £180 · Manchester</span></span>
+              <span class="pill pill-indigo">Fits E30</span>
+            </div>
+            <div class="feed-row" style="padding:12px 24px;">
+              <span class="feed-text">Mk8 golf ball gear knob, OEM <span class="muted">· £35 · Stockport</span></span>
+              <span class="pill">Fits GTI</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:24px;">
+          <div class="section-head" style="margin-bottom:12px;">
+            <h2 style="font-size:15px;">Quiet hours</h2>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13.5px;">
+            <span style="color:var(--secondary);">Pause offer notifications overnight</span>
+            <button class="toggle is-on" role="switch" aria-checked="true" aria-label="Quiet hours" data-toggle-label="Quiet hours"><span class="knob"></span></button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+  </div>
+</main>
+
+<footer class="app-footer">
+  <div class="wrap">DRVN · SUNDAY concept prototype · <a href="design.html">Style guide</a></div>
+</footer>
+
+<!-- ===== ACCEPT SHEET ===== -->
+<div class="sheet-backdrop" id="accept-sheet" role="dialog" aria-modal="true" aria-labelledby="accept-h">
+  <div class="sheet">
+    <h3 id="accept-h">Accept this offer?</h3>
+    <p class="sheet-sub">We'll notify the buyer and open a pickup chat. You can still cancel within an hour.</p>
+    <div class="sheet-summary">
+      <div class="row"><span>Item</span><strong data-sheet-item>—</strong></div>
+      <div class="row"><span>Buyer</span><strong data-sheet-buyer>—</strong></div>
+      <div class="row"><span>Offer</span><strong data-sheet-offer>—</strong></div>
+      <div class="row"><span>DRVN fee (5%)</span><strong data-sheet-fee>—</strong></div>
+      <div class="row total"><span>You receive</span><strong data-sheet-total>—</strong></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" data-sheet-cancel>Not yet</button>
+      <button class="btn btn-primary" data-sheet-confirm>Accept offer</button>
+    </div>
+  </div>
+</div>
+
+<script src="sunday.js"></script>
+</body>
+</html>

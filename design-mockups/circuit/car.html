@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN · CIRCUIT — Node Zero / R34 GT-R</title>
+<meta name="description" content="Node Zero — a Nissan Skyline R34 GT-R schematic profile: spec matrix, fitment basis, and the connected components released from this car.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="circuit.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <a class="brand" href="index.html" aria-label="DRVN home">
+      <svg class="brand__glyph" viewBox="0 0 20 20" aria-hidden="true">
+        <path class="trace" d="M3 10 H8 M12 10 H17 M10 6 V8 M10 12 V14"/>
+        <circle class="node" cx="10" cy="10" r="2.6"/><circle class="node" cx="3" cy="10" r="1.4"/><circle class="node" cx="17" cy="10" r="1.4"/><circle class="node" cx="10" cy="4.6" r="1.4"/><circle class="node" cx="10" cy="15.4" r="1.4"/>
+      </svg>
+      DRVN
+    </a>
+    <nav>
+      <a class="navlink" href="network.html">Network</a>
+      <a class="navlink" href="index.html#grid">Marketplace</a>
+      <a class="navlink navlink--keep nav-cta" href="#">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- breadcrumb -->
+  <div class="row gap-3" style="padding:var(--s-5) 0; font-family:var(--font-mono); font-size:12px; letter-spacing:0.1em; color:var(--ink-faint);">
+    <a href="network.html" class="navlink" style="padding:0;">NETWORK</a>
+    <span>/</span>
+    <span class="text-cyan">NODE-00 · NODE ZERO</span>
+  </div>
+
+  <!-- ============================ HERO PANEL ============================ -->
+  <section class="panel panel--noded reveal" style="overflow:hidden;">
+    <div style="display:grid; grid-template-columns:1.15fr 1fr; align-items:stretch;">
+      <div style="min-height:340px; background:var(--panel-2) center/cover no-repeat; background-image:url('../assets/c11-hero-car.png');"></div>
+      <div style="padding:var(--s-6);">
+        <div class="row between">
+          <span class="data-label text-cyan">UNIT · NODE-00</span>
+          <span class="tag tag--fit">Verified keeper</span>
+        </div>
+        <h1 class="h-1" style="margin:var(--s-4) 0 var(--s-2);">Node Zero</h1>
+        <p class="mono text-dim" style="letter-spacing:0.08em;">Nissan Skyline R34 GT-R · 1999</p>
+
+        <!-- keeper mini-node -->
+        <div class="rel-node" style="margin-top:var(--s-5);">
+          <div class="rel-node__glyph" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" fill="currentColor"/><path d="M2 15c0-3.3 2.7-5 6-5s6 1.7 6 5" fill="currentColor"/></svg>
+          </div>
+          <div>
+            <div class="rel-node__k">Keeper</div>
+            <div class="rel-node__v">@mori.r34 · Kenji Mori</div>
+          </div>
+          <div style="margin-left:auto; text-align:right;">
+            <div class="ncard__price">4.9</div>
+            <div class="rel-node__k">27 sales · Yokohama</div>
+          </div>
+        </div>
+
+        <div class="row gap-3 wrap-flex" style="margin-top:var(--s-5);">
+          <a class="btn btn--ghost" href="network.html">View in network</a>
+          <a class="btn btn--ghost" href="#components">Jump to components</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ SPEC MATRIX ============================ -->
+  <section class="section--tight">
+    <div class="grid-2" style="align-items:start;">
+      <div class="panel reveal">
+        <div class="panel__head">
+          <span class="data-label">Spec matrix · readout</span>
+        </div>
+        <div class="panel__body">
+          <table class="matrix">
+            <tr><th>Engine</th><td>RB26DETT · 2.6L I6 twin-turbo</td></tr>
+            <tr><th>Power</th><td>620 whp @ 1.5 bar</td></tr>
+            <tr><th>Torque</th><td>561 lb-ft</td></tr>
+            <tr><th>Weight</th><td>1,540 kg</td></tr>
+            <tr><th>Drivetrain</th><td>ATTESA E-TS AWD</td></tr>
+            <tr><th>Management</th><td>Link G4X Xtreme</td></tr>
+            <tr><th>Chassis</th><td>Nismo R-tune, Öhlins DFV</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- fitment basis split -->
+      <div class="panel reveal">
+        <div class="panel__head">
+          <span class="data-label">Fitment basis · how we know</span>
+        </div>
+        <div class="panel__body stack gap-4">
+          <p class="text-dim" style="font-size:14px;">Every fact is tagged by how it was confirmed. Platform-verified facts are checked against DRVN's fitment database; keeper-stated facts are declared by the seller and never conflated with verified data.</p>
+          <div class="stack gap-3">
+            <div class="row between rel-node" style="cursor:default;">
+              <span>Chassis code · BNR34</span><span class="tag tag--fit">Platform-verified</span>
+            </div>
+            <div class="row between rel-node" style="cursor:default;">
+              <span>Engine family · RB26</span><span class="tag tag--fit">Platform-verified</span>
+            </div>
+            <div class="row between rel-node" style="cursor:default;">
+              <span>Dyno figure · 620 whp</span><span class="tag tag--warn">Keeper-stated</span>
+            </div>
+            <div class="row between rel-node" style="cursor:default;">
+              <span>Boost target · 1.5 bar</span><span class="tag tag--warn">Keeper-stated</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CONNECTED COMPONENTS DIAGRAM ============================ -->
+  <section class="section--tight" id="components">
+    <span class="eyebrow reveal">Connected components</span>
+    <h2 class="h-2 reveal" style="margin-top:var(--s-3);">Parts released from this car</h2>
+    <p class="lede reveal" style="margin-top:var(--s-3);">Hover the car node to light every trace. Hover a part node to isolate its wire — the rest dim.</p>
+
+    <div class="panel panel--noded reveal trace-draw" style="margin-top:var(--s-6); padding:var(--s-5);" data-cmap>
+      <svg viewBox="0 0 900 420" width="100%" style="max-height:460px;" role="img" aria-label="Diagram: the Node Zero car node connected by traces to the parts released from it.">
+        <!-- traces from core car to each part -->
+        <path class="trace-path" data-link="core ecu"     d="M450 210 C 300 210 260 90 150 90"/>
+        <path class="trace-path" data-link="core turbo"   d="M450 210 C 300 210 260 330 150 330"/>
+        <path class="trace-path" data-link="core coil"    d="M450 210 C 620 210 660 90 770 90"/>
+        <path class="trace-path" data-link="core wheels"  d="M450 210 C 620 210 660 330 770 330"/>
+
+        <!-- core car node -->
+        <a href="network.html">
+          <g data-node="core" data-core="true" tabindex="0">
+            <circle class="node-dot is-core node-pulse" cx="450" cy="210" r="11"/>
+            <text class="node-label" x="450" y="246" text-anchor="middle" style="fill:var(--cyan); font-size:12px;">NODE-00 · NODE ZERO</text>
+          </g>
+        </a>
+
+        <!-- part nodes (links to listing) -->
+        <a href="listing.html">
+          <g data-node="ecu" tabindex="0">
+            <rect class="node-dot" x="132" y="72" width="16" height="16" rx="3"/>
+            <text class="node-label" x="150" y="60" text-anchor="middle">PART-11 · Link G4X ECU</text>
+            <text class="node-label" x="150" y="112" text-anchor="middle" style="fill:var(--cyan);">£690</text>
+          </g>
+        </a>
+        <a href="listing.html">
+          <g data-node="turbo" tabindex="0">
+            <rect class="node-dot" x="132" y="312" width="16" height="16" rx="3"/>
+            <text class="node-label" x="150" y="300" text-anchor="middle">PART-08 · Garrett G35</text>
+            <text class="node-label" x="150" y="352" text-anchor="middle" style="fill:var(--cyan);">£1,480</text>
+          </g>
+        </a>
+        <a href="listing.html">
+          <g data-node="coil" tabindex="0">
+            <rect class="node-dot" x="762" y="72" width="16" height="16" rx="3"/>
+            <text class="node-label" x="770" y="60" text-anchor="middle">PART-03 · Öhlins DFV</text>
+            <text class="node-label" x="770" y="112" text-anchor="middle" style="fill:var(--cyan);">£940</text>
+          </g>
+        </a>
+        <a href="listing.html">
+          <g data-node="wheels" tabindex="0">
+            <rect class="node-dot" x="762" y="312" width="16" height="16" rx="3"/>
+            <text class="node-label" x="770" y="300" text-anchor="middle">PART-19 · Nismo LMGT4</text>
+            <text class="node-label" x="770" y="352" text-anchor="middle" style="fill:var(--cyan);">£1,120</text>
+          </g>
+        </a>
+      </svg>
+      <p class="text-dim mono" style="font-size:12px; letter-spacing:0.08em; margin-top:var(--s-3);">4 components released · all wired to NODE-00 · click any node to open its listing</p>
+    </div>
+  </section>
+
+  <!-- ============================ BUILD LOG ============================ -->
+  <section class="section--tight">
+    <span class="eyebrow reveal">Build log</span>
+    <h2 class="h-2 reveal" style="margin-top:var(--s-3); margin-bottom:var(--s-5);">Timestamped history</h2>
+    <div class="panel panel__body reveal">
+      <div class="log">
+        <div class="log__row"><span class="log__time">2026.05.02</span><span class="log__what">Garrett G35-1050 released as PART-08<span>Take-off after moving to a single-turbo conversion. Wired to NODE-00.</span></span></div>
+        <div class="log__row"><span class="log__time">2026.03.18</span><span class="log__what">Retune on Link G4X — 620 whp @ 1.5 bar<span>Dyno sheet attached; figure logged as keeper-stated.</span></span></div>
+        <div class="log__row"><span class="log__time">2025.11.09</span><span class="log__what">Öhlins DFV fitted, R-tune springs<span>Original Nismo dampers released as PART-03.</span></span></div>
+        <div class="log__row"><span class="log__time">2025.07.24</span><span class="log__what">Node registered · platform-verified BNR34<span>Chassis + engine family confirmed against DRVN fitment database.</span></span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__grid">
+    <div class="footer__col">
+      <div class="footer__mark">
+        <svg class="brand__glyph" viewBox="0 0 20 20" aria-hidden="true"><path class="trace" d="M3 10 H8 M12 10 H17 M10 6 V8 M10 12 V14"/><circle class="node" cx="10" cy="10" r="2.6"/><circle class="node" cx="3" cy="10" r="1.4"/><circle class="node" cx="17" cy="10" r="1.4"/><circle class="node" cx="10" cy="4.6" r="1.4"/><circle class="node" cx="10" cy="15.4" r="1.4"/></svg>
+        DRVN
+      </div>
+      <p class="text-dim" style="font-size:14px; max-width:34ch; margin-top:var(--s-3);">Provenance is a wiring diagram. The home for your modified car.</p>
+    </div>
+    <div class="footer__links">
+      <div class="footer__col"><span class="data-label">Platform</span><a href="network.html">Network</a><a href="index.html#grid">Marketplace</a><a href="listing.html">A part node</a></div>
+      <div class="footer__col"><span class="data-label">More</span><a href="index.html">Home</a><a href="design.html">Design system</a></div>
+    </div>
+  </div>
+</footer>
+
+<script src="circuit.js"></script>
+</body>
+</html>

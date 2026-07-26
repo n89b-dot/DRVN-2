@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link is-active" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 04 — MARKET · <span data-result-count>9</span> PARTS SHOWING · COUNTS ARE LIVE</span>
+    <h1>Parts, straight off<br>the sheets they live on.</h1>
+  </div>
+
+  <div class="rv" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+    <label class="search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+      <input type="text" data-search placeholder="Search the sheets — 'coilovers', 'ECU', 'Speedline'…" aria-label="Search parts">
+    </label>
+    <button class="fbtn" data-fitswitch aria-pressed="false" title="Only parts that fit your registered car">
+      <i class="ph ph-car-profile"></i>&nbsp;FITS: DELTA HF — <b class="mono">OFF</b>
+    </button>
+    <span class="capsule"><span class="dot"></span> DROP — Group A rally lot lands in <span class="cd" data-seconds="5230"></span></span>
+  </div>
+
+  <div class="filters rv" data-filters>
+    <button class="fbtn is-on" data-f="all">All</button>
+    <button class="fbtn" data-f="susp"><i class="ph ph-arrows-vertical"></i>&nbsp;Suspension</button>
+    <button class="fbtn" data-f="engine"><i class="ph ph-engine"></i>&nbsp;Engine</button>
+    <button class="fbtn" data-f="brakes"><i class="ph ph-record"></i>&nbsp;Brakes</button>
+    <button class="fbtn" data-f="interior"><i class="ph ph-armchair"></i>&nbsp;Interior</button>
+    <button class="fbtn" data-f="wheels"><i class="ph ph-circle-dashed"></i>&nbsp;Wheels</button>
+  </div>
+
+  <section class="mkt" style="padding-bottom:60px">
+    <a class="tile tile--hover rv" href="listing.html" data-cat="susp" data-fit="yes" data-name="KW Variant 2 coilovers Delta">
+      <div class="tile__img"><img src="../assets/c16-part-coilovers.png" alt="KW coilovers" onerror="this.remove()"></div>
+      <div class="mkt__name">KW Variant 2 — Delta HF</div>
+      <div class="mkt__price">$680 · best offer $620</div>
+      <div class="mkt__meta"><span class="chip chip--live">WINDOW <span class="cd" data-seconds="8280"></span></span><span class="chip chip--ok">FITS YOUR DELTA</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="interior" data-fit="yes" data-name="Sabelt bucket seat" data-stagger="1">
+      <div class="tile__img"><img src="../assets/c16-part-seat.png" alt="Sabelt seat" onerror="this.remove()"></div>
+      <div class="mkt__name">Sabelt bucket — driver side</div>
+      <div class="mkt__price">$290 · under offer</div>
+      <div class="mkt__meta"><span class="chip">UNDER OFFER</span><span class="chip chip--ok">FITS YOUR DELTA</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="brakes" data-fit="no" data-name="AP Racing CP9660 brake kit" data-stagger="2">
+      <div class="tile__img"><img src="../assets/c4-part-brake.png" alt="AP Racing brake kit" onerror="this.remove()"></div>
+      <div class="mkt__name">AP Racing CP9660 front kit</div>
+      <div class="mkt__price">$1,150 · off C-0417</div>
+      <div class="mkt__meta"><span class="chip chip--live"><span data-tick="31">31</span>&nbsp;WATCHING</span><span class="chip">E46 CHASSIS</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="engine" data-fit="no" data-name="Supersprint race exhaust">
+      <div class="tile__img"><img src="../assets/c4-part-exhaust.png" alt="Stainless exhaust" onerror="this.remove()"></div>
+      <div class="mkt__name">Supersprint race exhaust</div>
+      <div class="mkt__price">$890 · off C-0417</div>
+      <div class="mkt__meta"><span class="chip">E46 CHASSIS</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="engine" data-fit="yes" data-name="Garrett T3 hybrid turbo" data-stagger="1">
+      <div class="tile__img" style="display:grid;place-items:center;background:var(--paper-deep)">
+        <span class="num-giant" style="font-size:40px;color:var(--dim)">T3</span>
+      </div>
+      <div class="mkt__name">Garrett T3 hybrid — fresh rebuild</div>
+      <div class="mkt__price">$540 · <span data-tick="8">8</span> watching</div>
+      <div class="mkt__meta"><span class="chip chip--ok">RECEIPTS ON SHEET</span><span class="chip chip--ok">FITS YOUR DELTA</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="wheels" data-fit="yes" data-name="Speedline Montecarlo wheels" data-stagger="2">
+      <div class="tile__img" style="display:grid;place-items:center;background:var(--paper-deep)">
+        <span class="num-giant" style="font-size:40px;color:var(--dim)">16″</span>
+      </div>
+      <div class="mkt__name">Speedline Montecarlo ×4</div>
+      <div class="mkt__price">$820 · straight, refinished</div>
+      <div class="mkt__meta"><span class="chip">OFF C-0301</span><span class="chip chip--ok">FITS YOUR DELTA</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="susp" data-fit="yes" data-name="Whiteline ARB kit Delta">
+      <div class="tile__img" style="display:grid;place-items:center;background:var(--paper-deep)">
+        <span class="num-giant" style="font-size:40px;color:var(--dim)">ARB</span>
+      </div>
+      <div class="mkt__name">Whiteline ARB kit — Delta</div>
+      <div class="mkt__price">$150 · never fitted</div>
+      <div class="mkt__meta"><span class="chip chip--ok">NEW IN BOX</span><span class="chip chip--ok">FITS YOUR DELTA</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="engine" data-fit="yes" data-name="Mapped ECU 246 bhp" data-stagger="1">
+      <div class="tile__img" style="display:grid;place-items:center;background:var(--paper-deep)">
+        <span class="num-giant" style="font-size:40px;color:var(--dim)">ECU</span>
+      </div>
+      <div class="mkt__name">Mapped ECU — 246 bhp file</div>
+      <div class="mkt__price">$310 · dyno sheet attached</div>
+      <div class="mkt__meta"><span class="chip chip--live">2 WATCHING NOW</span></div>
+    </a>
+    <a class="tile tile--hover rv" href="listing.html" data-cat="interior" data-fit="no" data-name="Recaro Pole Position seat" data-stagger="2">
+      <div class="tile__img"><img src="../assets/c4-part-seat.png" alt="Recaro seat" onerror="this.remove()"></div>
+      <div class="mkt__name">Recaro Pole Position ABE</div>
+      <div class="mkt__price">$620 · off C-0417</div>
+      <div class="mkt__meta"><span class="chip chip--ok">DOCS ON SHEET</span><span class="chip">UNIVERSAL RAIL</span></div>
+    </a>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — EVERY LISTING IS A LIVE SHEET, NOT A DEAD AD</span>
+    <a class="microlabel mono" href="index.html">← YOUR SHEET</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

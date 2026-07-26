@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Garage · The Ludlow V8 · DRVN — Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Figtree:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="atelier.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="nav__wordmark" href="index.html">DRVN <em>— Atelier</em></a>
+    <button class="nav__burger" aria-expanded="false" aria-controls="nav-links">Menu</button>
+    <div class="nav__links" id="nav-links">
+      <a class="nav__link" href="index.html">Home</a>
+      <a class="nav__link" href="dashboard.html">Dashboard</a>
+      <a class="nav__link nav__link--active" href="garage.html">Garage</a>
+      <a class="nav__link" href="listings.html">Listings</a>
+      <div class="nav__user">
+        <span class="nav__avatar">EH</span>
+        <span class="nav__user-meta">
+          <span class="nav__user-name">E. HARGREAVES</span><br />
+          <span class="nav__user-sub">Atelier No. 12</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <section class="car-hero reveal">
+    <div class="frame frame--emphasis">
+      <div class="frame__inner">
+        <div class="car-hero__img" style="background-image:url('../assets/c6-hero-aston.png')" role="img" aria-label="The Ludlow V8 — a dark green 1977 Aston Martin V8"></div>
+      </div>
+    </div>
+    <div class="car-hero__caption">
+      <div>
+        <span class="label">Registry entry No. 12-A · acquired March 2019 · Ludlow, Shropshire</span>
+        <h1>"The Ludlow V8" — <em>Aston Martin V8, 1977</em></h1>
+      </div>
+      <button class="btn" data-modal-open>Enter a new part into the ledger</button>
+    </div>
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. I</span> Coach-builder's specification</span>
+  </div>
+
+  <table class="spec reveal" aria-label="Specification">
+    <tr>
+      <td>Engine</td>
+      <td>5.3-litre V8, converted from Bosch mechanical injection to four Weber 42 DCNF carburettors on a period Vantage-pattern manifold.
+        <span class="spec__note">Rebuilt 2023 by Hargreaves &amp; Son · 328 bhp on the rolling road at Shrewsbury.</span></td>
+    </tr>
+    <tr>
+      <td>Suspension</td>
+      <td>Koni adjustable dampers all round; front springs uprated one grade; original de Dion tube retained and re-bushed in polyurethane.</td>
+    </tr>
+    <tr>
+      <td>Brakes</td>
+      <td>Ventilated front discs with four-piston callipers; braided lines throughout; original servo rebuilt rather than replaced.</td>
+    </tr>
+    <tr>
+      <td>Wheels &amp; tyres</td>
+      <td>15″ GKN alloys (currently fitted) on Avon CR6ZZ; the chrome wire wheels it wore at purchase are released for sale below.</td>
+    </tr>
+    <tr>
+      <td>Interior</td>
+      <td>Full retrim in Connolly-pattern tan hide with contrast saddle stitching; new Wilton carpet; original Smiths instruments superseded by a restored set.
+        <span class="spec__note">Retrim by Askew Trimming, Leominster, winter 2024.</span></td>
+    </tr>
+  </table>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. II</span> The build journal</span>
+  </div>
+
+  <section aria-label="Build journal" style="border-top:1px solid var(--rule)">
+    <article class="journal__entry reveal">
+      <div class="journal__date">Entry XIV · 6 July 2026</div>
+      <h3>Carburettors, at last</h3>
+      <p>Four Webers sit where the Bosch pump used to sulk, and the car has found a voice it never had on injection. Cold starts want two pumps of the throttle and a moment's patience; warm, it clears to an even idle at nine hundred. The old injection gear is crated, labelled, and will be entered into the ledger whole — someone restoring to factory will want it far more than I do.</p>
+    </article>
+    <article class="journal__entry reveal">
+      <div class="journal__date">Entry XIII · 18 May 2026</div>
+      <h3>The de Dion question</h3>
+      <p>Purists will tell you the de Dion tube is sacred; the bushes within it are not. Polyurethane all round, the tube itself blasted and painted in chassis black, and the rear of the car no longer wanders on the crown of a B-road. Alignment set at Bridgnorth with the fuel tank half full, as it should be.</p>
+    </article>
+    <article class="journal__entry reveal">
+      <div class="journal__date">Entry XII · 2 February 2026</div>
+      <h3>On wire wheels, and letting go</h3>
+      <p>Handsome as the chrome wires are, they belong to a gentler idea of this car than the one I am building. The GKN alloys save eleven pounds a corner and stiffen the steering's first inch. The wires come off with their hubs, their spinners, and their history — all recorded — and go to the ledger as a five-piece lot.</p>
+    </article>
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. III</span> Released from this motorcar</span>
+  </div>
+
+  <section class="ledger reveal" aria-label="Parts released from this car">
+    <a class="ledger__row ledger__row--link" href="listings.html">
+      <span class="ledger__no">i.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-part-wheel.png')"></span>
+      <span>
+        <span class="ledger__title">Chrome wire wheels, set of five — 15″</span>
+        <span class="ledger__meta" style="display:block">Removed February 2026 · with hubs and two-eared spinners · 24 watchers</span>
+      </span>
+      <span class="tag tag--brass">Provenance recorded</span>
+      <span class="ledger__price">£850</span>
+    </a>
+    <a class="ledger__row ledger__row--link" href="listings.html">
+      <span class="ledger__no">ii.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-part-gauges.png')"></span>
+      <span>
+        <span class="ledger__title">Smiths chrome-bezel gauge set, six pieces</span>
+        <span class="ledger__meta" style="display:block">Removed winter 2024 during the retrim · all functioning when removed · 17 watchers</span>
+      </span>
+      <span class="tag tag--brass">Provenance recorded</span>
+      <span class="ledger__price">£340</span>
+    </a>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span class="serif" style="font-size:17px">DRVN <em class="italic" style="color:var(--brass)">— Atelier</em></span>
+    <span>Registry entry No. 12-A · kept by E. Hargreaves (@hargreaves.works)</span>
+    <span><a href="listings.html">All lots from this atelier</a></span>
+    <span>MMXXVI</span>
+  </div>
+</footer>
+
+<!-- Modal: enter a new part -->
+<div class="modal-backdrop" data-modal role="dialog" aria-modal="true" aria-label="Enter a new part into the ledger">
+  <div class="modal">
+    <div class="modal__inner">
+      <div data-modal-form>
+        <span class="label">The Ludlow V8 · new entry</span>
+        <h3>Enter a part into the ledger</h3>
+        <form>
+          <div class="field">
+            <label for="part-name">Name of the part</label>
+            <input class="input" id="part-name" name="part-name" type="text" placeholder="e.g. Bosch injection system, complete" required />
+          </div>
+          <div class="field">
+            <label for="condition">Condition</label>
+            <select class="input" id="condition" name="condition">
+              <option>Excellent — as removed, serviced</option>
+              <option>Good — honest wear, fully working</option>
+              <option>Fair — for restoration</option>
+              <option>For parts or pattern</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="asking">Asking price (£)</label>
+            <input class="input" id="asking" name="asking" type="text" inputmode="numeric" placeholder="e.g. 1,200" />
+          </div>
+          <div class="modal__actions">
+            <button class="btn-text" type="button" data-modal-close>Close the ledger</button>
+            <button class="btn" type="submit">Enter it</button>
+          </div>
+        </form>
+      </div>
+      <div class="modal__done" data-modal-done hidden>
+        <div class="serif">Entered, and witnessed.</div>
+        <p data-modal-done-text></p>
+        <p style="margin-top:22px"><button class="btn-text" data-modal-close>Return to the motorcar</button></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="atelier.js"></script>
+</body>
+</html>

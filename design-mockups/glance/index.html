@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN — Glance · Home Screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="glance.css">
+</head>
+<body>
+
+<div class="statusbar" aria-hidden="true"><span>9:41</span><span>DRVN LTE ▪▪▪▪</span></div>
+
+<nav class="island" aria-label="Primary">
+  <span class="island__brand">DR<em>V</em>N</span>
+  <div class="island__links">
+    <a class="island__link" href="index.html" aria-current="page">Home</a>
+    <a class="island__link" href="market.html">Market</a>
+    <a class="island__link" href="listing.html">Listing</a>
+    <a class="island__link" href="car.html">Car</a>
+    <a class="island__link" href="alerts.html">Alerts<span class="dot" aria-hidden="true"></span></a>
+  </div>
+</nav>
+
+<div class="backdrop" aria-hidden="true">
+  <video autoplay muted loop playsinline poster="../assets/c15-hero-earth.png">
+    <source src="../assets/c15-motion-hero.mp4" type="video/mp4">
+  </video>
+</div>
+
+<main class="page">
+  <div class="wrap">
+
+    <header class="enter">
+      <span class="mono">Sheffield · Sat 19 Jul · @jm.r33</span>
+      <h1 class="hero-line">Your build<br>never sleeps.</h1>
+      <p class="hero-sub">While you were away: two offers landed, four people started watching your turbo, and Saturday's meet went live.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:44px">
+        <a class="btn btn--primary" href="market.html">[ BROWSE PARTS ]</a>
+        <a class="btn" href="alerts.html">[ OPEN ALERTS ]</a>
+      </div>
+    </header>
+
+    <section class="bento" aria-label="Glance deck">
+
+      <!-- LIVE offer widget -->
+      <a class="widget widget--2 span-3 enter" href="alerts.html" id="offers">
+        <div class="widget__head">
+          <span class="chip chip--red"><i class="pulse"></i>LIVE!</span>
+          <span class="mono">Offer · Garrett GT2860R</span>
+        </div>
+        <div class="numeral">£940</div>
+        <div class="mono" style="margin-top:8px">Best offer of 2 · window closes in</div>
+        <div class="capsule" style="margin-top:14px;background:var(--tile-3);align-self:flex-start">
+          <span class="capsule__timer" data-countdown="8054">02:14:14</span>
+          <span class="chip chip--red-soft">RESPOND</span>
+        </div>
+        <div class="bar bar--red"><i style="width:62%"></i></div>
+      </a>
+
+      <!-- Garage widget -->
+      <a class="widget widget--img span-3 tall enter" href="car.html" id="garage">
+        <img src="../assets/c15-car.png" alt="Jordan's gunmetal Nissan Skyline R33 GT-R">
+        <div class="widget__scrim"></div>
+        <div class="widget__body">
+          <span class="mono">Garage · 1995 Skyline R33 GT-R</span>
+          <div class="numeral" style="font-size:64px">3<small> live listings</small></div>
+          <div class="mono" style="margin-top:6px">Last seen: 2h ago · 41 parts logged</div>
+        </div>
+      </a>
+
+      <!-- Stats pair -->
+      <div class="widget enter span-3" style="flex-direction:row;gap:24px;align-items:flex-end">
+        <div style="flex:1">
+          <span class="mono">Watchers this week</span>
+          <div class="numeral">12</div>
+        </div>
+        <div style="flex:1">
+          <span class="mono">Listing views up</span>
+          <div class="numeral">51<small>%</small></div>
+        </div>
+      </div>
+
+      <!-- Activity feed -->
+      <div class="widget widget--2 span-3 enter">
+        <span class="mono" style="margin-bottom:10px">Activity</span>
+        <div class="kv mono"><span class="k">Offer received</span><span class="v">£940 · 14m ago</span></div>
+        <div class="kv mono"><span class="k">New watcher</span><span class="v">GT2860R · 1h ago</span></div>
+        <div class="kv mono"><span class="k">Price-drop alert sent</span><span class="v">Nismo shift · 3h ago</span></div>
+        <div class="kv mono"><span class="k">Meet RSVP</span><span class="v">Peaks Run · 5h ago</span></div>
+        <div class="widget__foot"><a class="btn btn--ghost btn--inline" href="alerts.html">[ VIEW ALL ]</a></div>
+      </div>
+
+      <!-- Week strip -->
+      <div class="widget span-3 enter">
+        <span class="mono" style="margin-bottom:12px">This week · meets &amp; drops</span>
+        <div class="week" role="list">
+          <span class="week__day" role="listitem">MON<strong>14</strong></span>
+          <span class="week__day" role="listitem">TUE<strong>15</strong></span>
+          <span class="week__day" role="listitem">WED<strong>16</strong>DROP</span>
+          <span class="week__day" role="listitem">THU<strong>17</strong></span>
+          <span class="week__day" role="listitem">FRI<strong>18</strong></span>
+          <span class="week__day week__day--live" role="listitem">SAT<strong>19</strong>MEET</span>
+          <span class="week__day" role="listitem">SUN<strong>20</strong></span>
+        </div>
+        <div class="mono" style="margin-top:14px">Sat 19 · Peaks Run, Snake Pass · 08:00 · 34 going</div>
+      </div>
+
+      <!-- Astro / editorial widget -->
+      <div class="widget widget--img span-3 enter">
+        <img src="../assets/c15-astro.png" alt="Tiny astronaut floating in the void">
+        <div class="widget__scrim"></div>
+        <div class="widget__body">
+          <span class="mono">While you sleep</span>
+          <div style="font-weight:800;font-size:26px;letter-spacing:var(--track-tight);line-height:1.05;margin-top:6px">Someone in Leeds<br>is watching your car.</div>
+        </div>
+      </div>
+
+      <!-- Turbo quick tile -->
+      <a class="widget widget--img span-2 enter" href="listing.html">
+        <img src="../assets/c15-part-turbo.png" alt="Garrett turbocharger floating in black void">
+        <div class="widget__scrim"></div>
+        <div class="widget__body">
+          <span class="mono">Your listing</span>
+          <div style="font-weight:800;font-size:22px;letter-spacing:var(--track-tight)">GT2860R · £980</div>
+          <span class="chip chip--red-soft" style="margin-top:8px"><i class="pulse"></i>4 WATCHING</span>
+        </div>
+      </a>
+
+      <!-- Sell CTA widget -->
+      <div class="widget widget--2 span-2 enter">
+        <span class="mono">List a part</span>
+        <div style="font-weight:800;font-size:24px;letter-spacing:var(--track-tight);margin-top:8px">90 seconds.<br>Photo, price, done.</div>
+        <div class="widget__foot"><a class="btn btn--primary btn--inline" href="market.html">[ START LISTING ]</a></div>
+      </div>
+
+      <!-- Market shortcut -->
+      <a class="widget span-2 enter" href="market.html">
+        <span class="mono">Marketplace</span>
+        <div class="numeral" style="font-size:64px">2.4<small>k parts live</small></div>
+        <div class="widget__foot"><span class="mono">RB26 fitment: 118 new this week</span></div>
+      </a>
+
+    </section>
+
+    <div class="dots" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+
+    <footer style="margin-top:70px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px" class="mono">
+      <span>DRVN · CONCEPT 15 · GLANCE</span>
+      <span>THE HOME FOR YOUR MODIFIED CAR</span>
+    </footer>
+
+  </div>
+</main>
+
+<script src="glance.js"></script>
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Listings · The lots · DRVN — Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Figtree:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="atelier.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="nav__wordmark" href="index.html">DRVN <em>— Atelier</em></a>
+    <button class="nav__burger" aria-expanded="false" aria-controls="nav-links">Menu</button>
+    <div class="nav__links" id="nav-links">
+      <a class="nav__link" href="index.html">Home</a>
+      <a class="nav__link" href="dashboard.html">Dashboard</a>
+      <a class="nav__link" href="garage.html">Garage</a>
+      <a class="nav__link nav__link--active" href="listings.html">Listings</a>
+      <div class="nav__user">
+        <span class="nav__avatar">EH</span>
+        <span class="nav__user-meta">
+          <span class="nav__user-name">E. HARGREAVES</span><br />
+          <span class="nav__user-sub">Atelier No. 12</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <header class="greeting reveal">
+    <span class="label">The lots manager · Atelier No. 12</span>
+    <h1>The <em>lots.</em></h1>
+    <p class="greeting__date">Five active, two under offer. Select a record to review its offer history.</p>
+  </header>
+
+  <div class="filters reveal" role="tablist" aria-label="Filter lots">
+    <button class="btn-text is-active" data-filter="all">All <span class="count">5</span></button>
+    <button class="btn-text" data-filter="open">Open <span class="count">3</span></button>
+    <button class="btn-text" data-filter="offer">Under offer <span class="count">2</span></button>
+    <button class="btn-text" data-filter="sold">Sold <span class="count">14</span></button>
+  </div>
+
+  <section aria-label="Lots ledger">
+
+    <div class="lot reveal" data-state="offer">
+      <div class="lot__row" aria-expanded="false">
+        <span class="ledger__no">i.</span>
+        <span class="thumb" style="background-image:url('../assets/c6-part-wheel.png')"></span>
+        <span style="flex:1;min-width:180px">
+          <span class="lot__name">Chrome wire wheels, set of five — 15″</span>
+          <span class="lot__source" style="display:block">Off "The Ludlow V8" · Aston Martin V8, 1977</span>
+        </span>
+        <span class="lot__watchers num">24 watching</span>
+        <span class="lot__cell"><span class="label">Asking</span><span class="lot__figure">£850</span></span>
+        <span class="lot__cell"><span class="label">Best offer</span><span class="lot__figure">£780</span></span>
+        <span class="tag">Under offer</span>
+      </div>
+      <div class="lot__detail">
+        <div class="lot__detail-inner">
+          <span class="label">Offer history</span>
+          <div class="lot__history">
+            <div class="lot__history-row"><span>R. Beaumont (@beaumont.garage) · 8 Jul, 8:42 pm</span><span class="price">£780</span></div>
+            <div class="lot__history-row"><span>T. Ferraro (@ferraro.speed) · 4 Jul, 1:17 pm — declined</span><span class="price" style="color:var(--muted)">£650</span></div>
+            <div class="lot__history-row"><span>Watcher enquiry, no offer · 1 Jul</span><span class="price" style="color:var(--muted)">—</span></div>
+          </div>
+          <div class="lot__detail-actions">
+            <button class="btn-text btn-text--accept">Amend the asking</button>
+            <button class="btn-text btn-text--decline">Withdraw the lot</button>
+            <span class="countdown" data-countdown>Offer lapses in <strong>05:41:12</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lot reveal" data-state="offer">
+      <div class="lot__row" aria-expanded="false">
+        <span class="ledger__no">ii.</span>
+        <span class="thumb" style="background-image:url('../assets/c6-part-gauges.png')"></span>
+        <span style="flex:1;min-width:180px">
+          <span class="lot__name">Smiths chrome-bezel gauge set, six pieces</span>
+          <span class="lot__source" style="display:block">Off "The Ludlow V8" · Aston Martin V8, 1977</span>
+        </span>
+        <span class="lot__watchers num">17 watching</span>
+        <span class="lot__cell"><span class="label">Asking</span><span class="lot__figure">£340</span></span>
+        <span class="lot__cell"><span class="label">Best offer</span><span class="lot__figure">£310</span></span>
+        <span class="tag">Under offer</span>
+      </div>
+      <div class="lot__detail">
+        <div class="lot__detail-inner">
+          <span class="label">Offer history</span>
+          <div class="lot__history">
+            <div class="lot__history-row"><span>H. Okafor (@okafor.classics) · 10 Jul, 11:03 am</span><span class="price">£310</span></div>
+            <div class="lot__history-row"><span>Enquiry regarding the tachometer alone · 7 Jul — declined; sold as a set</span><span class="price" style="color:var(--muted)">—</span></div>
+          </div>
+          <div class="lot__detail-actions">
+            <button class="btn-text btn-text--accept">Amend the asking</button>
+            <button class="btn-text btn-text--decline">Withdraw the lot</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lot reveal" data-state="open">
+      <div class="lot__row" aria-expanded="false">
+        <span class="ledger__no">iii.</span>
+        <span class="thumb" style="background-color:var(--img-fallback)"></span>
+        <span style="flex:1;min-width:180px">
+          <span class="lot__name">Bosch mechanical injection system, complete</span>
+          <span class="lot__source" style="display:block">Off "The Ludlow V8" · crated with pump, metering unit, and lines</span>
+        </span>
+        <span class="lot__watchers num">9 watching</span>
+        <span class="lot__cell"><span class="label">Asking</span><span class="lot__figure">£1,900</span></span>
+        <span class="lot__cell"><span class="label">Best offer</span><span class="lot__figure lot__figure--muted">—</span></span>
+        <span class="tag tag--muted">Open</span>
+      </div>
+      <div class="lot__detail">
+        <div class="lot__detail-inner">
+          <span class="label">Offer history</span>
+          <div class="lot__history">
+            <div class="lot__history-row"><span>No offers yet — listed 8 July. Two enquiries on originality; both answered with journal Entry XIV.</span><span class="price" style="color:var(--muted)">—</span></div>
+          </div>
+          <div class="lot__detail-actions">
+            <button class="btn-text btn-text--accept">Amend the asking</button>
+            <button class="btn-text btn-text--decline">Withdraw the lot</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lot reveal" data-state="open">
+      <div class="lot__row" aria-expanded="false">
+        <span class="ledger__no">iv.</span>
+        <span class="thumb" style="background-color:var(--img-fallback)"></span>
+        <span style="flex:1;min-width:180px">
+          <span class="lot__name">Original front springs, pair — Aston V8</span>
+          <span class="lot__source" style="display:block">Off "The Ludlow V8" · superseded by uprated items, May 2026</span>
+        </span>
+        <span class="lot__watchers num">6 watching</span>
+        <span class="lot__cell"><span class="label">Asking</span><span class="lot__figure">£160</span></span>
+        <span class="lot__cell"><span class="label">Best offer</span><span class="lot__figure lot__figure--muted">—</span></span>
+        <span class="tag tag--muted">Open</span>
+      </div>
+      <div class="lot__detail">
+        <div class="lot__detail-inner">
+          <span class="label">Offer history</span>
+          <div class="lot__history">
+            <div class="lot__history-row"><span>No offers yet — listed 20 May. One watcher asked for free length; measured and answered, 11¾″.</span><span class="price" style="color:var(--muted)">—</span></div>
+          </div>
+          <div class="lot__detail-actions">
+            <button class="btn-text btn-text--accept">Amend the asking</button>
+            <button class="btn-text btn-text--decline">Withdraw the lot</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lot reveal" data-state="open">
+      <div class="lot__row" aria-expanded="false">
+        <span class="ledger__no">v.</span>
+        <span class="thumb" style="background-image:url('../assets/c6-car-alfa.png')"></span>
+        <span style="flex:1;min-width:180px">
+          <span class="lot__name">Alfa Giulia bumper set, stainless — over-riders included</span>
+          <span class="lot__source" style="display:block">Off the Giulia Sprint GT, 1966 · removed for the bumperless look</span>
+        </span>
+        <span class="lot__watchers num">5 watching</span>
+        <span class="lot__cell"><span class="label">Asking</span><span class="lot__figure">£420</span></span>
+        <span class="lot__cell"><span class="label">Best offer</span><span class="lot__figure lot__figure--muted">—</span></span>
+        <span class="tag tag--muted">Open</span>
+      </div>
+      <div class="lot__detail">
+        <div class="lot__detail-inner">
+          <span class="label">Offer history</span>
+          <div class="lot__history">
+            <div class="lot__history-row"><span>No offers yet — listed 28 June. Provenance photographs added at a watcher's request, 2 July.</span><span class="price" style="color:var(--muted)">—</span></div>
+          </div>
+          <div class="lot__detail-actions">
+            <button class="btn-text btn-text--accept">Amend the asking</button>
+            <button class="btn-text btn-text--decline">Withdraw the lot</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lot reveal" data-state="sold" style="display:none">
+      <div class="lot__row" aria-expanded="false">
+        <span class="ledger__no">—</span>
+        <span class="thumb" style="background-color:var(--img-fallback)"></span>
+        <span style="flex:1;min-width:180px">
+          <span class="lot__name">Original steel wheels, set of four</span>
+          <span class="lot__source" style="display:block">Off the Giulia Sprint GT · sold 3 July to @tandy.restorations</span>
+        </span>
+        <span class="lot__watchers num">—</span>
+        <span class="lot__cell"><span class="label">Asking</span><span class="lot__figure lot__figure--muted">£240</span></span>
+        <span class="lot__cell"><span class="label">Hammer</span><span class="lot__figure">£220</span></span>
+        <span class="tag tag--brass">Sold</span>
+      </div>
+      <div class="lot__detail">
+        <div class="lot__detail-inner">
+          <span class="label">Closed record</span>
+          <div class="lot__history">
+            <div class="lot__history-row"><span>Sold to M. Tandy (@tandy.restorations) · collected 5 July · escrow released</span><span class="price">£220</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. II</span> Season's sales</span>
+  </div>
+
+  <table class="sales reveal" aria-label="Season's sales">
+    <thead>
+      <tr><th>No.</th><th>Lot</th><th>Source motorcar</th><th>Buyer</th><th>Closed</th><th>Hammer</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>xiv.</td><td class="sales__lot">Original steel wheels, set of four</td><td>Giulia Sprint GT</td><td>@tandy.restorations</td><td>3 Jul 2026</td><td>£220</td></tr>
+      <tr><td>xiii.</td><td class="sales__lot">GKN centre caps, set of four, NOS</td><td>The Ludlow V8</td><td>@beaumont.garage</td><td>21 Jun 2026</td><td>£95</td></tr>
+      <tr><td>xii.</td><td class="sales__lot">Original Koni dampers, rear pair</td><td>The Ludlow V8</td><td>@astera.works</td><td>14 Jun 2026</td><td>£240</td></tr>
+      <tr><td>xi.</td><td class="sales__lot">Wilton carpet set, original — pattern for retrimmers</td><td>The Ludlow V8</td><td>@askew.trimming</td><td>30 May 2026</td><td>£140</td></tr>
+      <tr><td>x.</td><td class="sales__lot">Weber jetting kit, spare — 42 DCNF</td><td>The Ludlow V8</td><td>@ferraro.speed</td><td>18 May 2026</td><td>£85</td></tr>
+      <tr><td>ix.</td><td class="sales__lot">Original exhaust manifolds, pair</td><td>The Ludlow V8</td><td>@okafor.classics</td><td>2 May 2026</td><td>£380</td></tr>
+      <tr><td>viii.</td><td class="sales__lot">Campagnolo alloys, staggered set — period</td><td>Giulia Sprint GT</td><td>@marchetti.milano</td><td>19 Apr 2026</td><td>£1,650</td></tr>
+      <tr><td>vii.</td><td class="sales__lot">Original seats, pair — for retrim</td><td>The Ludlow V8</td><td>@tandy.restorations</td><td>6 Apr 2026</td><td>£310</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td colspan="5" class="label" style="border:none">Quarter takings, nine lots</td><td>£6,840</td></tr>
+    </tfoot>
+  </table>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span class="serif" style="font-size:17px">DRVN <em class="italic" style="color:var(--brass)">— Atelier</em></span>
+    <span>Every hammer price above is bound to a motorcar record.</span>
+    <span><a href="garage.html">The motorcars</a> · <a href="dashboard.html">The daily ledger</a></span>
+    <span>MMXXVI</span>
+  </div>
+</footer>
+
+<script src="atelier.js"></script>
+</body>
+</html>

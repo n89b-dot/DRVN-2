@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listings — DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="sunday.css">
+</head>
+<body>
+
+<!-- ===== TOP BAR ===== -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="wordmark" href="index.html" aria-label="DRVN home">
+      <span class="mark"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12 7 2l5 10" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      DRVN
+    </a>
+    <nav class="topbar-tabs" aria-label="App navigation">
+      <a class="topbar-tab" href="dashboard.html">Dashboard</a>
+      <a class="topbar-tab" href="garage.html">Garage</a>
+      <a class="topbar-tab is-active" href="listings.html" aria-current="page">Listings</a>
+    </nav>
+    <span class="topbar-spacer"></span>
+    <label class="topbar-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" placeholder="Search parts, cars…" aria-label="Search">
+      <kbd>/</kbd>
+    </label>
+    <button class="avatar" aria-label="Account — Maya K.">MK</button>
+  </div>
+</header>
+
+<main class="page">
+  <div class="wrap">
+
+    <div class="page-head">
+      <div>
+        <h1 class="page-greeting">Listings</h1>
+        <p class="page-sub">Six live or under offer, £890 sold this month. Steady Sunday trade.</p>
+      </div>
+      <a class="btn btn-primary" href="garage.html">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        New listing
+      </a>
+    </div>
+
+    <!-- ===== SEGMENTED FILTER ===== -->
+    <div class="segment" data-segment role="group" aria-label="Filter listings" style="margin-bottom:24px;">
+      <button data-filter="all" class="is-active" aria-pressed="true">All <span class="count">6</span></button>
+      <button data-filter="live" aria-pressed="false">Live <span class="count">4</span></button>
+      <button data-filter="offer" aria-pressed="false">Under offer <span class="count">2</span></button>
+      <button data-filter="sold" aria-pressed="false">Sold <span class="count">2</span></button>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:12px;">
+
+      <!-- Under offer: BBS wheels (countdown) -->
+      <div class="card listing-row" data-status="offer">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb" data-bg="../assets/c7-part-wheels.png" role="img" aria-label="Bronze BBS wheels"></span>
+          <span>
+            <span class="listing-title" style="display:block;">BBS RS 16&Prime; bronze — set of 4</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: E30 Project</span>
+              <span class="pill pill-amber"><span class="dot dot-amber"></span><span class="countdown" data-countdown="11520">Offer expires in 3h 12m</span></span>
+            </span>
+          </span>
+          <span class="listing-metric">
+            <strong>412</strong> views · 9 watching
+            <svg class="spark" width="72" height="22" viewBox="0 0 72 22" aria-hidden="true"><polygon class="fill" points="0,20 0,15 12,13 24,14 36,9 48,10 60,5 72,3 72,22 0,22"/><polyline points="0,15 12,13 24,14 36,9 48,10 60,5 72,3"/></svg>
+          </span>
+          <span class="listing-price"><strong>£600</strong><span>best offer £540</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <span class="pill pill-indigo"><span class="dot dot-indigo"></span>2 offers</span>
+            <div class="offer-history">
+              <div class="offer-history-row"><span class="avatar avatar-sm">TH</span><span><strong>Tom H.</strong> offered <strong>£540</strong></span><span class="spacer"></span><span>7h ago</span></div>
+              <div class="offer-history-row"><span class="avatar avatar-sm avatar-amber">RB</span><span><strong>Rob B.</strong> offered <strong>£480</strong> — declined</span><span class="spacer"></span><span>3d ago</span></div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">Edit</button>
+              <button class="btn btn-ghost btn-sm">Pause</button>
+              <button class="btn btn-ghost btn-sm">End listing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Under offer: Eventuri intake -->
+      <div class="card listing-row" data-status="offer">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb" data-bg="../assets/c7-part-intake.png" role="img" aria-label="Carbon intake"></span>
+          <span>
+            <span class="listing-title" style="display:block;">Eventuri carbon intake — Mk8 GTI</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: GTI Daily</span>
+              <span class="pill pill-indigo"><span class="dot dot-indigo"></span>Under offer</span>
+            </span>
+          </span>
+          <span class="listing-metric">
+            <strong>268</strong> views · 6 watching
+            <svg class="spark" width="72" height="22" viewBox="0 0 72 22" aria-hidden="true"><polygon class="fill" points="0,20 0,18 12,16 24,17 36,12 48,13 60,8 72,6 72,22 0,22"/><polyline points="0,18 12,16 24,17 36,12 48,13 60,8 72,6"/></svg>
+          </span>
+          <span class="listing-price"><strong>£210</strong><span>best offer £180</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <span class="pill pill-indigo"><span class="dot dot-indigo"></span>1 offer</span>
+            <div class="offer-history">
+              <div class="offer-history-row"><span class="avatar avatar-sm avatar-green">PS</span><span><strong>Priya S.</strong> offered <strong>£180</strong></span><span class="spacer"></span><span>9h ago</span></div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">Edit</button>
+              <button class="btn btn-ghost btn-sm">Pause</button>
+              <button class="btn btn-ghost btn-sm">End listing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live: ITG intake -->
+      <div class="card listing-row" data-status="live">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb" data-bg="../assets/c7-part-intake.png" role="img" aria-label="ITG carbon airbox"></span>
+          <span>
+            <span class="listing-title" style="display:block;">ITG carbon airbox intake — M20</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: E30 Project</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Live</span>
+            </span>
+          </span>
+          <span class="listing-metric">
+            <strong>96</strong> views · 3 watching
+            <svg class="spark" width="72" height="22" viewBox="0 0 72 22" aria-hidden="true"><polygon class="fill" points="0,20 0,19 12,18 24,15 36,16 48,12 60,13 72,10 72,22 0,22"/><polyline points="0,19 12,18 24,15 36,16 48,12 60,13 72,10"/></svg>
+          </span>
+          <span class="listing-price"><strong>£240</strong><span>no offers yet</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <p style="font-size:13px; color:var(--secondary); margin-bottom:16px;">No offers yet — listed 6 days ago. Listings with a dyno sheet photo get more watchers; yours has one attached.</p>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">Edit</button>
+              <button class="btn btn-ghost btn-sm">Pause</button>
+              <button class="btn btn-ghost btn-sm">End listing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live: Recaro seats -->
+      <div class="card listing-row" data-status="live">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb"></span>
+          <span>
+            <span class="listing-title" style="display:block;">Recaro LX-C seats, original cloth — pair</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: E30 Project</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Live</span>
+            </span>
+          </span>
+          <span class="listing-metric">
+            <strong>187</strong> views · 5 watching
+            <svg class="spark" width="72" height="22" viewBox="0 0 72 22" aria-hidden="true"><polygon class="fill" points="0,20 0,17 12,15 24,16 36,13 48,14 60,10 72,9 72,22 0,22"/><polyline points="0,17 12,15 24,16 36,13 48,14 60,10 72,9"/></svg>
+          </span>
+          <span class="listing-price"><strong>£450</strong><span>no offers yet</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <p style="font-size:13px; color:var(--secondary); margin-bottom:16px;">5 watchers, no offers — the classic "waiting for payday" pattern. Hold price for now.</p>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">Edit</button>
+              <button class="btn btn-ghost btn-sm">Pause</button>
+              <button class="btn btn-ghost btn-sm">End listing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live: gear knob -->
+      <div class="card listing-row" data-status="live">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb"></span>
+          <span>
+            <span class="listing-title" style="display:block;">Mk8 GTI OEM shift surround + trim, unmarked</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: GTI Daily</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Live</span>
+            </span>
+          </span>
+          <span class="listing-metric">
+            <strong>41</strong> views · 1 watching
+            <svg class="spark" width="72" height="22" viewBox="0 0 72 22" aria-hidden="true"><polygon class="fill" points="0,20 0,19 12,19 24,17 36,18 48,16 60,17 72,15 72,22 0,22"/><polyline points="0,19 12,19 24,17 36,18 48,16 60,17 72,15"/></svg>
+          </span>
+          <span class="listing-price"><strong>£60</strong><span>no offers yet</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <p style="font-size:13px; color:var(--secondary); margin-bottom:16px;">Small interior parts move slowly in summer. Consider bundling with the armrest trim.</p>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">Edit</button>
+              <button class="btn btn-ghost btn-sm">Pause</button>
+              <button class="btn btn-ghost btn-sm">End listing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live: e30 lamps -->
+      <div class="card listing-row" data-status="live">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb"></span>
+          <span>
+            <span class="listing-title" style="display:block;">E30 US-spec rear lamps, good lenses</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: E30 Project</span>
+              <span class="pill pill-success"><span class="dot dot-success"></span>Live</span>
+            </span>
+          </span>
+          <span class="listing-metric">
+            <strong>73</strong> views · 2 watching
+            <svg class="spark" width="72" height="22" viewBox="0 0 72 22" aria-hidden="true"><polygon class="fill" points="0,20 0,18 12,17 24,18 36,15 48,16 60,14 72,13 72,22 0,22"/><polyline points="0,18 12,17 24,18 36,15 48,16 60,14 72,13"/></svg>
+          </span>
+          <span class="listing-price"><strong>£85</strong><span>no offers yet</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <p style="font-size:13px; color:var(--secondary); margin-bottom:16px;">Niche part, patient market. Two watchers in a week is healthy for US-spec lamps.</p>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">Edit</button>
+              <button class="btn btn-ghost btn-sm">Pause</button>
+              <button class="btn btn-ghost btn-sm">End listing</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sold rows (subdued) -->
+      <div class="card listing-row is-sold" data-status="sold">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb"></span>
+          <span>
+            <span class="listing-title" style="display:block;">H&amp;R lowering springs — Mk8 GTI take-off</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: GTI Daily</span>
+              <span class="pill"><span class="dot dot-muted"></span>Sold · 6 Jul</span>
+            </span>
+          </span>
+          <span class="listing-metric"><strong>523</strong> views · listed 11 days</span>
+          <span class="listing-price"><strong>£350</strong><span>sold at asking</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <div class="offer-history">
+              <div class="offer-history-row"><span class="avatar avatar-sm avatar-green">LM</span><span><strong>Leah M.</strong> bought at <strong>£350</strong> — collected Sunday, left ★★★★★</span><span class="spacer"></span><span>5d ago</span></div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">View receipt</button>
+              <button class="btn btn-ghost btn-sm">Relist similar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card listing-row is-sold" data-status="sold">
+        <button class="listing-main" aria-expanded="false">
+          <span class="listing-thumb"></span>
+          <span>
+            <span class="listing-title" style="display:block;">E30 Bilstein shock take-offs — full set</span>
+            <span class="listing-chips">
+              <span class="pill pill-outline">From: E30 Project</span>
+              <span class="pill"><span class="dot dot-muted"></span>Sold · 28 Jun</span>
+            </span>
+          </span>
+          <span class="listing-metric"><strong>301</strong> views · listed 3 days</span>
+          <span class="listing-price"><strong>£540</strong><span>after counter</span></span>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="listing-detail">
+          <div class="listing-detail-inner">
+            <div class="offer-history">
+              <div class="offer-history-row"><span class="avatar avatar-sm">KO</span><span><strong>Kwame O.</strong> offered £480 → you countered £540 → accepted</span><span class="spacer"></span><span>2w ago</span></div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm">View receipt</button>
+              <button class="btn btn-ghost btn-sm">Relist similar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer class="app-footer">
+  <div class="wrap">DRVN · SUNDAY concept prototype · <a href="design.html">Style guide</a></div>
+</footer>
+
+<script src="sunday.js"></script>
+</body>
+</html>

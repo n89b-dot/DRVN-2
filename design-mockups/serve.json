@@ -1,0 +1,172 @@
+{
+  "cleanUrls": false,
+  "directoryListing": false,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/after-hours",
+      "destination": "/after-hours/index.html",
+      "type": 301
+    },
+    {
+      "source": "/after-hours/",
+      "destination": "/after-hours/index.html",
+      "type": 301
+    },
+    {
+      "source": "/apex-os",
+      "destination": "/apex-os/index.html",
+      "type": 301
+    },
+    {
+      "source": "/apex-os/",
+      "destination": "/apex-os/index.html",
+      "type": 301
+    },
+    {
+      "source": "/atelier",
+      "destination": "/atelier/index.html",
+      "type": 301
+    },
+    {
+      "source": "/atelier/",
+      "destination": "/atelier/index.html",
+      "type": 301
+    },
+    {
+      "source": "/atlas",
+      "destination": "/atlas/index.html",
+      "type": 301
+    },
+    {
+      "source": "/atlas/",
+      "destination": "/atlas/index.html",
+      "type": 301
+    },
+    {
+      "source": "/billet",
+      "destination": "/billet/index.html",
+      "type": 301
+    },
+    {
+      "source": "/billet/",
+      "destination": "/billet/index.html",
+      "type": 301
+    },
+    {
+      "source": "/circuit",
+      "destination": "/circuit/index.html",
+      "type": 301
+    },
+    {
+      "source": "/circuit/",
+      "destination": "/circuit/index.html",
+      "type": 301
+    },
+    {
+      "source": "/counter",
+      "destination": "/counter/index.html",
+      "type": 301
+    },
+    {
+      "source": "/counter/",
+      "destination": "/counter/index.html",
+      "type": 301
+    },
+    {
+      "source": "/glance",
+      "destination": "/glance/index.html",
+      "type": 301
+    },
+    {
+      "source": "/glance/",
+      "destination": "/glance/index.html",
+      "type": 301
+    },
+    {
+      "source": "/livery",
+      "destination": "/livery/index.html",
+      "type": 301
+    },
+    {
+      "source": "/livery/",
+      "destination": "/livery/index.html",
+      "type": 301
+    },
+    {
+      "source": "/livesheet",
+      "destination": "/livesheet/index.html",
+      "type": 301
+    },
+    {
+      "source": "/livesheet/",
+      "destination": "/livesheet/index.html",
+      "type": 301
+    },
+    {
+      "source": "/meridian",
+      "destination": "/meridian/index.html",
+      "type": 301
+    },
+    {
+      "source": "/meridian/",
+      "destination": "/meridian/index.html",
+      "type": 301
+    },
+    {
+      "source": "/monograph",
+      "destination": "/monograph/index.html",
+      "type": 301
+    },
+    {
+      "source": "/monograph/",
+      "destination": "/monograph/index.html",
+      "type": 301
+    },
+    {
+      "source": "/sunday",
+      "destination": "/sunday/index.html",
+      "type": 301
+    },
+    {
+      "source": "/sunday/",
+      "destination": "/sunday/index.html",
+      "type": 301
+    },
+    {
+      "source": "/tearsheet",
+      "destination": "/tearsheet/index.html",
+      "type": 301
+    },
+    {
+      "source": "/tearsheet/",
+      "destination": "/tearsheet/index.html",
+      "type": 301
+    },
+    {
+      "source": "/the-registry",
+      "destination": "/the-registry/index.html",
+      "type": 301
+    },
+    {
+      "source": "/the-registry/",
+      "destination": "/the-registry/index.html",
+      "type": 301
+    },
+    {
+      "source": "/werkbank",
+      "destination": "/werkbank/index.html",
+      "type": 301
+    },
+    {
+      "source": "/werkbank/",
+      "destination": "/werkbank/index.html",
+      "type": 301
+    }
+  ]
+}

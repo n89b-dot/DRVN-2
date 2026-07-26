@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market — DRVN · BILLET</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="billet.css">
+</head>
+<body>
+
+<nav class="nav" aria-label="Primary">
+  <div class="wrap">
+    <a href="index.html" class="wordmark"><span class="bolt" aria-hidden="true"></span>DRVN</a>
+    <div class="nav-links">
+      <a href="market.html" class="nav-link active" aria-current="page">Market</a>
+      <a href="sell.html" class="nav-link">Sell</a>
+      <a href="#" class="nav-link">Sign in</a>
+    </div>
+  </div>
+</nav>
+
+<header class="market-head">
+  <div class="wrap">
+    <span class="etch-label">The market</span>
+    <h1>Every part, off a real build</h1>
+    <p>Search, filter by system, or flip the switch to see only parts verified to fit your car.</p>
+
+    <div class="market-tools">
+      <input id="market-search" class="slot" type="search" placeholder="Search parts, e.g. “manifold”" aria-label="Search parts">
+      <select id="market-sort" class="slot" aria-label="Sort listings">
+        <option value="featured">Sort: Featured</option>
+        <option value="price-asc">Price: low → high</option>
+        <option value="price-desc">Price: high → low</option>
+      </select>
+      <select id="market-price" class="slot" aria-label="Price range">
+        <option value="any">Price: any</option>
+        <option value="u250">Under £250</option>
+        <option value="250-1000">£250 – £1,000</option>
+        <option value="o1000">Over £1,000</option>
+      </select>
+      <div class="fit-switch">
+        <span class="lbl" id="fit-lbl">Fits my car — 987.2 Cayman</span>
+        <button id="fit-switch" class="switch" role="switch" aria-checked="false" aria-labelledby="fit-lbl"></button>
+      </div>
+    </div>
+
+    <div class="chips" role="group" aria-label="Filter by category">
+      <button class="chip" data-filter="all" aria-pressed="true">All</button>
+      <button class="chip" data-filter="performance" aria-pressed="false">Performance</button>
+      <button class="chip" data-filter="engine" aria-pressed="false">Engine</button>
+      <button class="chip" data-filter="exterior" aria-pressed="false">Exterior</button>
+      <button class="chip" data-filter="interior" aria-pressed="false">Interior</button>
+      <button class="chip" data-filter="brakes" aria-pressed="false">Brakes &amp; Suspension</button>
+      <button class="chip" data-filter="wheels" aria-pressed="false">Wheels &amp; Tires</button>
+    </div>
+    <p id="market-count" class="market-count" role="status"></p>
+    <hr class="groove">
+  </div>
+</header>
+
+<main class="wrap" style="padding-top: 24px;">
+  <div id="market-grid" class="market-grid">
+
+    <a href="listing.html" class="block part-card" data-cat="engine" data-fit="verified" data-price="1850" data-order="1" data-title="Billet intake manifold 987.2 Cayman">
+      <div class="thumb"><img src="../assets/c12-hero-manifold.png" alt="Billet intake manifold"></div>
+      <div class="body">
+        <span class="tag tag-fit">✓ Fits your car</span>
+        <span class="title">Billet intake manifold — 987.2 Cayman</span>
+        <span class="cond">Used · excellent, one season</span>
+        <div class="meta"><span class="price">£1,850</span><span class="rating">★ 4.9 · 41</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="wheels" data-fit="seller" data-price="640" data-order="2" data-title="Machined centre-lock hub set">
+      <div class="thumb"><img src="../assets/c12-part-wheelcenter.png" alt="Machined wheel hub with anodized accents"></div>
+      <div class="body">
+        <span class="title">Machined centre-lock hub set (×4)</span>
+        <span class="cond">New · never mounted</span>
+        <div class="meta"><span class="price">£640</span><span class="rating">★ 4.9 · 41</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="brakes" data-fit="verified" data-price="980" data-order="3" data-title="Monoblock 4-pot caliper pair front">
+      <div class="thumb"><img src="../assets/c12-part-caliper.png" alt="Billet monoblock caliper"></div>
+      <div class="body">
+        <span class="tag tag-fit">✓ Fits your car</span>
+        <span class="title">Monoblock 4-pot caliper pair, front</span>
+        <span class="cond">Used · resealed, fresh pads</span>
+        <div class="meta"><span class="price">£980</span><span class="rating">★ 4.8 · 112</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="performance" data-fit="seller" data-price="420" data-order="4" data-title="OEM take-off exhaust GT4 spec">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">OEM take-off exhaust, GT4 spec</span>
+        <span class="cond">Used · 9,200 miles</span>
+        <div class="meta"><span class="price">£420</span><span class="rating">★ 5.0 · 17</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="brakes" data-fit="seller" data-price="310" data-order="5" data-title="KW coilover top mounts camber plates">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">Camber plates + top mounts, KW V3</span>
+        <span class="cond">Used · good, hardware included</span>
+        <div class="meta"><span class="price">£310</span><span class="rating">★ 4.7 · 63</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="interior" data-fit="seller" data-price="1450" data-order="6" data-title="Recaro Pole Position bucket seat pair">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">Recaro Pole Position buckets, pair</span>
+        <span class="cond">Used · light bolster wear</span>
+        <div class="meta"><span class="price">£1,450</span><span class="rating">★ 4.9 · 28</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="exterior" data-fit="seller" data-price="890" data-order="7" data-title="Carbon ducktail spoiler 987">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">Carbon ducktail spoiler — 987 fit</span>
+        <span class="cond">New · gloss finish, unpainted</span>
+        <div class="meta"><span class="price">£890</span><span class="rating">★ 4.6 · 9</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="engine" data-fit="seller" data-price="225" data-order="8" data-title="Billet oil filler cap and dipstick set">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">Billet oil cap + dipstick handle set</span>
+        <span class="cond">New · anodized blue</span>
+        <div class="meta"><span class="price">£225</span><span class="rating">★ 4.8 · 54</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="wheels" data-fit="seller" data-price="1980" data-order="9" data-title="Forged 18in wheel set square">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">Forged 18″ wheel set, square setup</span>
+        <span class="cond">Used · refinished, true</span>
+        <div class="meta"><span class="price">£1,980</span><span class="rating">★ 4.9 · 76</span></div>
+      </div>
+    </a>
+
+    <a href="listing.html" class="block part-card" data-cat="performance" data-fit="seller" data-price="140" data-order="10" data-title="Short shift kit machined">
+      <div class="thumb"></div>
+      <div class="body">
+        <span class="title">Machined short-shift kit, 6-speed</span>
+        <span class="cond">New · install hardware included</span>
+        <div class="meta"><span class="price">£140</span><span class="rating">★ 4.7 · 201</span></div>
+      </div>
+    </a>
+
+    <div id="no-results" class="no-results" style="display:none;">
+      <span class="etch-label">Nothing on the bench</span>
+      <p style="margin-top: 8px;">No parts match those filters. Loosen one and try again.</p>
+    </div>
+  </div>
+</main>
+
+<footer class="footer on-slate">
+  <div class="wrap">
+    <hr class="groove inverse">
+    <div class="footer-grid" style="margin-top: 28px;">
+      <div>
+        <span class="wordmark" style="color: var(--al-brushed); text-shadow: var(--etch-on-slate);">DRVN</span>
+        <p class="mono" style="margin-top: 10px;">machined from billet · rev 12</p>
+      </div>
+      <div class="footer-links">
+        <a href="market.html">Market</a>
+        <a href="sell.html">Sell a part</a>
+        <a href="listing.html">Featured listing</a>
+        <a href="design.html">Style guide</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div id="toast" class="block toast" role="status"><span class="bolt" aria-hidden="true"></span><span class="toast-msg"></span></div>
+<script src="billet.js"></script>
+</body>
+</html>

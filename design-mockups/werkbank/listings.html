@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Listings &amp; Offers · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item is-active" href="listings.html" aria-current="page">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-C — LISTINGS MANAGER · SHEET 3 OF 4</span>
+        <h1>Listings &amp; Offers</h1>
+      </div>
+      <div class="wb-tabs" role="tablist" aria-label="Filter listings">
+        <button class="wb-tab is-active" data-filter="all">All <span class="n">7</span></button>
+        <button class="wb-tab" data-filter="live">Live <span class="n">5</span></button>
+        <button class="wb-tab" data-filter="offer">Under offer <span class="n">2</span></button>
+        <button class="wb-tab" data-filter="sold">Sold <span class="n">12</span></button>
+      </div>
+    </header>
+
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 01 — ACTIVE LISTINGS · CLICK ROW FOR OFFER HISTORY</span>
+        <span class="microlabel">SORT — TOP OFFER ↓</span>
+      </div>
+      <div class="wb-table-wrap">
+        <table class="wb-table">
+          <thead>
+            <tr>
+              <th></th><th>Part</th><th>Source car</th><th>Views</th><th>Watch</th>
+              <th>Asking</th><th>Top offer</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+
+            <!-- ROW 1: brake kit, under offer, countdown -->
+            <tr class="wb-acc__row" data-status="offer">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td style="min-width:220px">
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"><img src="../assets/c4-part-brake.png" alt="AP Racing brake caliper and disc" loading="lazy" onerror="this.remove()"></div>
+                  <div>
+                    <strong>AP Racing CP9660 Front Kit</strong>
+                    <div class="microlabel">355MM · PADS 70% · REF L-118</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">E46 M3 · UNIT A</a></td>
+              <td class="num">412</td>
+              <td class="num">31</td>
+              <td class="num">£1,150</td>
+              <td class="num" style="color:var(--wb-accent)">£980</td>
+              <td>
+                <span class="wb-tag wb-tag--accent">UNDER OFFER</span>
+                <div class="microlabel microlabel--accent" style="margin-top:4px">OFFER EXPIRES <span data-countdown="04:12:33">04:12:33</span></div>
+              </td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 3 ENTRIES</span>
+                  <ul class="wb-ledger" style="margin-top:8px">
+                    <li><time>09 JUL 19:42</time> @kessler.m offered <span class="amt" style="color:var(--wb-accent)">£980</span></li>
+                    <li><time>06 JUL 14:10</time> @trackrat_e36 offered £850 — declined <span class="amt">£850</span></li>
+                    <li><time>02 JUL 08:55</time> Listed at asking <span class="amt">£1,150</span></li>
+                  </ul>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-118')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-118')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — CONFIRM IN OFFERS INBOX')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- ROW 2: coilovers, under offer -->
+            <tr class="wb-acc__row" data-status="offer">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"></div>
+                  <div>
+                    <strong>KW Clubsport 3-Way</strong>
+                    <div class="microlabel">E46 KIT · 14K KM · REF L-121</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">E46 M3 · UNIT A</a></td>
+              <td class="num">288</td>
+              <td class="num">19</td>
+              <td class="num">£1,700</td>
+              <td class="num" style="color:var(--wb-accent)">£1,450</td>
+              <td><span class="wb-tag wb-tag--accent">UNDER OFFER</span></td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 2 ENTRIES</span>
+                  <ul class="wb-ledger" style="margin-top:8px">
+                    <li><time>08 JUL 21:15</time> @ringtaxi_ben offered <span class="amt" style="color:var(--wb-accent)">£1,450</span></li>
+                    <li><time>30 JUN 10:02</time> Listed at asking <span class="amt">£1,700</span></li>
+                  </ul>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-121')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-121')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — L-121')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- ROW 3: gearbox, live -->
+            <tr class="wb-acc__row" data-status="live">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"><img src="../assets/c4-part-gearbox.png" alt="Sequential gearbox, catalog still life" loading="lazy" onerror="this.remove()"></div>
+                  <div>
+                    <strong>Getrag 420G 6-Speed (orig.)</strong>
+                    <div class="microlabel">74K KM · DRY STORED · REF L-119</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">E46 M3 · UNIT A</a></td>
+              <td class="num">203</td>
+              <td class="num">14</td>
+              <td class="num">£1,250</td>
+              <td class="num" style="color:var(--wb-ink-2)">—</td>
+              <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 0 ENTRIES</span>
+                  <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:8px">No offers yet. 14 watchers — 6 run an E46/E39 chassis. Consider a watcher nudge.</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-119')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-119')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — L-119')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- ROW 4: seats, live -->
+            <tr class="wb-acc__row" data-status="live">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"></div>
+                  <div>
+                    <strong>Recaro Pole Position ABE ×2</strong>
+                    <div class="microlabel">INC. SIDE MOUNTS · REF L-116</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">E46 M3 · UNIT A</a></td>
+              <td class="num">167</td>
+              <td class="num">9</td>
+              <td class="num">£620</td>
+              <td class="num" style="color:var(--wb-ink-2)">—</td>
+              <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 0 ENTRIES</span>
+                  <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:8px">Listed 24 JUN. Views trending up since garage feature on the E46 build page.</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-116')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-116')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — L-116')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- ROW 5: BBS wheels, live -->
+            <tr class="wb-acc__row" data-status="live">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"></div>
+                  <div>
+                    <strong>BBS RS 16×8 ET11 (set of 4)</strong>
+                    <div class="microlabel">FRESH LIPS · 4×100 · REF L-122</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">MK2 GTI · UNIT B</a></td>
+              <td class="num">351</td>
+              <td class="num">27</td>
+              <td class="num">£850</td>
+              <td class="num" style="color:var(--wb-accent)">£720</td>
+              <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 1 ENTRY</span>
+                  <ul class="wb-ledger" style="margin-top:8px">
+                    <li><time>09 JUL 12:20</time> @mk2.golfclub offered <span class="amt" style="color:var(--wb-accent)">£720</span></li>
+                  </ul>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-122')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-122')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — L-122')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- ROW 6: live -->
+            <tr class="wb-acc__row" data-status="live">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"></div>
+                  <div>
+                    <strong>Öhlins Road &amp; Track DFV (Mk2)</strong>
+                    <div class="microlabel">8K KM · BOXED · REF L-120</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">MK2 GTI · UNIT B</a></td>
+              <td class="num">201</td>
+              <td class="num">12</td>
+              <td class="num">£1,100</td>
+              <td class="num" style="color:var(--wb-ink-2)">—</td>
+              <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 0 ENTRIES</span>
+                  <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:8px">Hit 200 views today. Price is 8% above 90-day comps for this kit.</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-120')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-120')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — L-120')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- ROW 7: live -->
+            <tr class="wb-acc__row" data-status="live">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"></div>
+                  <div>
+                    <strong>CSL Airbox (carbon, replica)</strong>
+                    <div class="microlabel">KARBONIUS · REF L-123</div>
+                  </div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">E46 M3 · UNIT A</a></td>
+              <td class="num">96</td>
+              <td class="num">8</td>
+              <td class="num">£1,900</td>
+              <td class="num" style="color:var(--wb-ink-2)">—</td>
+              <td><span class="wb-tag wb-tag--ok">LIVE</span></td>
+            </tr>
+            <tr class="wb-acc__panel"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">OFFER HISTORY — 0 ENTRIES</span>
+                  <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:8px">Listed 05 JUL. High-value part — buyers usually ask for dyno proof; it's attached.</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-start">
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('EDIT LISTING — L-123')">Edit</button>
+                  <button class="wb-btn wb-btn--ghost wb-btn--sm" onclick="wbToast('LISTING PAUSED — L-123')">Pause</button>
+                  <button class="wb-btn wb-btn--danger-ghost wb-btn--sm" onclick="wbToast('END LISTING — L-123')">End</button>
+                </div>
+              </div></div>
+            </td></tr>
+
+            <!-- SOLD sample rows -->
+            <tr class="wb-acc__row" data-status="sold" style="display:none">
+              <td><span class="wb-acc__caret">▸</span></td>
+              <td>
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div class="wb-img wb-thumb"></div>
+                  <div><strong>Recaro Pole Position (single)</strong><div class="microlabel">SOLD 04 JUL · REF L-109</div></div>
+                </div>
+              </td>
+              <td><a class="ref-link" href="garage.html">E46 M3 · UNIT A</a></td>
+              <td class="num">334</td>
+              <td class="num">22</td>
+              <td class="num">£450</td>
+              <td class="num">£412</td>
+              <td><span class="wb-tag">SOLD</span></td>
+            </tr>
+            <tr class="wb-acc__panel" data-status-panel="sold" style="display:none"><td colspan="8">
+              <div class="wb-acc__inner"><div class="wb-acc__content">
+                <div>
+                  <span class="microlabel microlabel--ink">CLOSED — PAID OUT 08 JUL</span>
+                  <p style="font-size:12.5px;color:var(--wb-ink-2);margin-top:8px">Sold to @heljan_s for £412. Payout £391.40 after fee.</p>
+                </div>
+                <div><a class="ref-link" href="orders.html">VIEW ORDER →</a></div>
+              </div></div>
+            </td></tr>
+
+          </tbody>
+        </table>
+      </div>
+      <div class="wb-plate__body" style="border-top:1px solid var(--wb-hairline)">
+        <div class="wb-dim" data-dim><span class="wb-dim__line"></span><span class="wb-dim__label">7 active · £8,570 total asking · £3,150 in open offers</span></div>
+      </div>
+    </section>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="home.html">HOME — PUBLIC FACE</a>
+      <span class="microlabel">DRVN / WERKBANK — LISTINGS · SHEET 3 OF 4</span>
+      <a class="ref-link" href="orders.html">NEXT — ORDERS →</a>
+    </footer>
+  </main>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

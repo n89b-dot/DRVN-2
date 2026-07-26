@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DRVN — Atelier · Provenance for modified motorcars</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Figtree:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="atelier.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="nav__wordmark" href="index.html">DRVN <em>— Atelier</em></a>
+    <button class="nav__burger" aria-expanded="false" aria-controls="nav-links">Menu</button>
+    <div class="nav__links" id="nav-links">
+      <a class="nav__link nav__link--active" href="index.html">Home</a>
+      <a class="nav__link" href="dashboard.html">Dashboard</a>
+      <a class="nav__link" href="garage.html">Garage</a>
+      <a class="nav__link" href="listings.html">Listings</a>
+      <a class="nav__link" href="dashboard.html" style="color:var(--brass)">Sign in</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container hero__grid">
+    <div class="reveal">
+      <span class="label">Est. for the discerning builder · Ludlow to Modena</span>
+      <h1>Provenance is the finest <em>option</em> a part can have.</h1>
+      <p class="hero__sub">DRVN is a marketplace kept like a ledger. Every part sold here is entered against the motorcar it came off, the hands that removed it, and the build it once served — so a buyer never purchases a rumour.</p>
+      <a class="btn" href="dashboard.html">Enter the atelier</a>
+    </div>
+    <div class="frame frame--emphasis reveal">
+      <div class="frame__inner">
+        <div class="hero__img" style="background-image:url('../assets/c6-hero-aston.png')" role="img" aria-label="A dark green 1970s Aston Martin V8 photographed in an espresso-toned studio"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. I</span> The ledger principle</span>
+  </div>
+
+  <section class="principles">
+    <article class="principle reveal">
+      <span class="roman-lg">i.</span>
+      <h3>The source motorcar</h3>
+      <p>Each lot is bound to a documented car profile — chassis, specification, photographs, and the build journal in which the part appears. You see precisely what it came off, and why it was released.</p>
+    </article>
+    <article class="principle reveal">
+      <span class="roman-lg">ii.</span>
+      <h3>The credible seller</h3>
+      <p>Sellers are known by their garages, not their usernames. A seller's record — the cars they keep, the work they publish, the lots they have closed — travels with every listing they enter.</p>
+    </article>
+    <article class="principle reveal">
+      <span class="roman-lg">iii.</span>
+      <h3>The documented pairing</h3>
+      <p>Fitment is a matter of record here. Every part carries what it was paired with in service — the hubs, the arches, the linkage — so the question "will it fit" is answered before it is asked.</p>
+    </article>
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. II</span> Recently entered into the ledger</span>
+  </div>
+
+  <section class="ledger reveal">
+    <a class="ledger__row ledger__row--link" href="garage.html">
+      <span class="ledger__no">i.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-hero-aston.png')"></span>
+      <span>
+        <span class="ledger__title">"The Ludlow V8" — Aston Martin V8, 1977</span>
+        <span class="ledger__meta" style="display:block">E. Hargreaves · 5.3-litre carburettor conversion · 14 journal entries · 5 lots released</span>
+      </span>
+      <span class="ledger__price" style="font-size:15px;font-style:italic;color:var(--muted);font-weight:500">Registry car</span>
+    </a>
+    <a class="ledger__row ledger__row--link" href="garage.html">
+      <span class="ledger__no">ii.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-car-alfa.png')"></span>
+      <span>
+        <span class="ledger__title">Alfa Romeo Giulia Sprint GT, 1966</span>
+        <span class="ledger__meta" style="display:block">E. Hargreaves · Burgundy over tan · fast-road cams, period Campagnolo</span>
+      </span>
+      <span class="ledger__price" style="font-size:15px;font-style:italic;color:var(--muted);font-weight:500">Registry car</span>
+    </a>
+    <a class="ledger__row ledger__row--link" href="listings.html">
+      <span class="ledger__no">iii.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-part-wheel.png')"></span>
+      <span>
+        <span class="ledger__title">Chrome wire wheels, set of five — 15″</span>
+        <span class="ledger__meta" style="display:block">Released from the Ludlow V8 · provenance recorded · 24 watchers</span>
+      </span>
+      <span class="ledger__price">£850</span>
+    </a>
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. III</span> The standard of the house</span>
+  </div>
+</main>
+
+<section class="fullbleed reveal">
+  <div class="fullbleed__img" style="background-image:url('../assets/c6-detail-interior.png')" role="img" aria-label="Tan leather stitching and a wooden gear knob, photographed close"></div>
+  <div class="fullbleed__quote">
+    <p>"A part without its history is merely metal. With it, it is a chapter."</p>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span class="serif" style="font-size:17px">DRVN <em class="italic" style="color:var(--brass)">— Atelier</em></span>
+    <span>Set in Cormorant Garamond &amp; Figtree · Composed in espresso and brass</span>
+    <span><a href="dashboard.html">Enter the atelier</a> · <a href="garage.html">The motorcars</a> · <a href="listings.html">The lots</a></span>
+    <span>MMXXVI · Concept 06 of the DRVN exploration</span>
+  </div>
+</footer>
+
+<script src="atelier.js"></script>
+</body>
+</html>

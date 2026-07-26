@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRVN — Glance · Garrett GT2860R</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="glance.css">
+</head>
+<body>
+
+<div class="statusbar" aria-hidden="true"><span>9:41</span><span>DRVN LTE ▪▪▪▪</span></div>
+
+<nav class="island" aria-label="Primary">
+  <span class="island__brand">DR<em>V</em>N</span>
+  <div class="island__links">
+    <a class="island__link" href="index.html">Home</a>
+    <a class="island__link" href="market.html">Market</a>
+    <a class="island__link" href="listing.html" aria-current="page">Listing</a>
+    <a class="island__link" href="car.html">Car</a>
+    <a class="island__link" href="alerts.html">Alerts<span class="dot" aria-hidden="true"></span></a>
+  </div>
+</nav>
+
+<main class="page">
+  <div class="wrap">
+
+    <div class="enter" style="margin-bottom:18px">
+      <a class="mono" href="market.html" style="color:var(--text-dim)">← Market / Turbos &amp; boost</a>
+    </div>
+
+    <section class="bento" aria-label="Listing">
+
+      <!-- Part image tile -->
+      <div class="widget widget--img span-3 tall enter" style="min-height:420px">
+        <img src="../assets/c15-part-turbo.png" alt="Garrett GT2860R turbocharger floating in black void">
+        <div class="widget__scrim"></div>
+        <div class="widget__body">
+          <span class="chip chip--red-soft" id="listing-live-state"><i class="pulse"></i>OFFER PENDING</span>
+        </div>
+      </div>
+
+      <!-- Price + actions -->
+      <div class="widget widget--2 span-3 enter">
+        <span class="mono">Garrett GT2860R -5 · take-off</span>
+        <div class="numeral" style="margin-top:8px">£980</div>
+        <div class="mono" style="margin:10px 0 18px">or best offer · ships from Sheffield · £12 tracked</div>
+
+        <!-- live-activity capsule -->
+        <div class="capsule" style="background:var(--tile-3);align-self:flex-start;margin-bottom:20px">
+          <span class="chip chip--red"><i class="pulse"></i>LIVE!</span>
+          <div>
+            <div class="mono" style="color:var(--text)">4 watching · best offer £940</div>
+            <div class="mono">Offer window closes in <span data-countdown="8054" style="color:var(--red)">02:14:14</span></div>
+          </div>
+        </div>
+
+        <div class="widget__foot" style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn--primary" data-open-sheet="buy">[ BUY NOW ]</button>
+          <button class="btn" data-open-sheet="offer">[ MAKE OFFER ]</button>
+        </div>
+      </div>
+
+      <!-- Spec widget -->
+      <div class="widget span-3 enter">
+        <span class="mono" style="margin-bottom:8px">Spec</span>
+        <div class="kv mono"><span class="k">Part no.</span><span class="v">836026-5014S</span></div>
+        <div class="kv mono"><span class="k">Mileage on part</span><span class="v">~8,000 mi</span></div>
+        <div class="kv mono"><span class="k">Shaft play</span><span class="v">None — video on request</span></div>
+        <div class="kv mono"><span class="k">Fitment</span><span class="v">RB26DETT (pair config)</span></div>
+        <div class="kv mono"><span class="k">Includes</span><span class="v">Gaskets, oil lines, box</span></div>
+        <div class="kv mono"><span class="k">Reason for sale</span><span class="v">Upgraded to -7s</span></div>
+      </div>
+
+      <!-- Seller widget -->
+      <div class="widget widget--2 span-3 enter">
+        <div class="widget__head">
+          <span class="mono">Seller</span>
+          <span class="chip">★ 4.9 · 23 SALES</span>
+        </div>
+        <div style="font-weight:800;font-size:26px;letter-spacing:var(--track-tight);margin:10px 0 4px">Jordan Ma</div>
+        <div class="mono">@jm.r33 · Sheffield</div>
+        <div class="kv mono" style="margin-top:14px"><span class="k">Response time</span><span class="v">Usually within 2h</span></div>
+        <div class="kv mono"><span class="k">Ships within</span><span class="v">48h of payment</span></div>
+        <!-- source-car chip: supporting detail -->
+        <div class="widget__foot">
+          <a class="chip" href="car.html" style="text-decoration:none">OFF: 1995 R33 GT-R · VIEW CAR →</a>
+        </div>
+      </div>
+
+      <!-- Story / condition note -->
+      <div class="widget span-6 enter" style="min-height:0">
+        <span class="mono" style="margin-bottom:8px">From the seller</span>
+        <p style="max-width:640px;color:var(--text-dim)">Ran these on stock internals at 1.1 bar for two summers — pulled them for a -7 setup, not because anything's wrong. No smoke, no play, boost held clean to redline. First one to see it in person buys it, every time.</p>
+      </div>
+
+    </section>
+
+    <div class="dots" aria-hidden="true"><i></i><i></i><i class="on"></i></div>
+
+    <footer style="margin-top:70px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px" class="mono">
+      <span>DRVN · CONCEPT 15 · GLANCE</span>
+      <span>THE HOME FOR YOUR MODIFIED CAR</span>
+    </footer>
+
+  </div>
+</main>
+
+<!-- Confirm sheet, styled as a stacked notification -->
+<div class="sheet-veil" id="sheet-veil"></div>
+<div class="sheet" id="confirm-sheet" role="dialog" aria-modal="true" aria-label="Confirm purchase">
+
+  <div class="sheet__step is-active">
+    <span class="chip chip--red-soft"><i class="pulse"></i>STEP 1 OF 2</span>
+    <div class="sheet__row">
+      <div>
+        <div style="font-weight:700">Garrett GT2860R -5</div>
+        <span class="mono" data-mode-label>Buy now</span>
+      </div>
+      <div class="sheet__price">£980</div>
+    </div>
+    <div class="sheet__row" id="offer-row" style="display:none">
+      <label class="mono" for="offer-input">Your offer</label>
+      <input class="search" id="offer-input" type="text" value="£940" style="max-width:140px;text-align:right;padding:12px 18px">
+    </div>
+    <div class="kv mono"><span class="k">Shipping</span><span class="v">£12 tracked · 48h dispatch</span></div>
+    <div class="kv mono"><span class="k">Protection</span><span class="v">DRVN holds funds until delivery</span></div>
+    <button class="btn btn--primary" data-sheet="next">[ REVIEW ]</button>
+    <button class="btn btn--ghost" data-sheet="close">[ CANCEL ]</button>
+  </div>
+
+  <div class="sheet__step">
+    <span class="chip chip--red-soft"><i class="pulse"></i>STEP 2 OF 2 · CONFIRM</span>
+    <div class="sheet__row">
+      <div>
+        <div style="font-weight:700">Ship to</div>
+        <span class="mono">Prototype address · Sheffield S1</span>
+      </div>
+      <div class="sheet__price">£992</div>
+    </div>
+    <div class="kv mono"><span class="k">Payment</span><span class="v">Prototype — no charge</span></div>
+    <button class="btn btn--primary" data-sheet="done">[ CONFIRM ]</button>
+    <button class="btn btn--ghost" data-sheet="close">[ BACK OUT ]</button>
+  </div>
+
+  <div class="sheet__step">
+    <span class="chip chip--green">DONE</span>
+    <div class="sheet__row">
+      <div style="font-weight:800;font-size:24px;letter-spacing:var(--track-tight)" id="sheet-confirm-line">Order placed. Jordan has 48h to ship.</div>
+    </div>
+    <p class="mono">A live activity will track it on your home screen.</p>
+    <a class="btn btn--primary" href="alerts.html">[ GO TO ALERTS ]</a>
+    <button class="btn btn--ghost" data-sheet="close">[ CLOSE ]</button>
+  </div>
+
+</div>
+
+<script src="glance.js"></script>
+</body>
+</html>

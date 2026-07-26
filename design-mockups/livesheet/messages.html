@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Messages, attached to the thing they're about</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  /* page-scoped layout only — tokens, no literals */
+  @media (min-width: 981px) { .deck--flip { grid-template-columns: 0.92fr 1.35fr; } }
+  .thread { max-height: none; }
+  .qr { display: flex; gap: 6px; flex-wrap: wrap; }
+  .qr button { cursor: pointer; }
+  .qr button:hover { background: var(--live-tint); color: var(--live); }
+  .msg--new { animation: msgin var(--t-move) var(--spring); }
+  @keyframes msgin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .tlist a.order.is-open { background: var(--ghost); border-radius: 12px; }
+  .tlist a.order.is-open .order__name { color: var(--live); }
+  .tlist a.order.is-quiet { opacity: .58; }
+  @media (prefers-reduced-motion: reduce) { .msg--new { animation: none; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 07 — MESSAGES · 5 THREADS · 1 OFFER <span class="mono">CLOSING IN <span data-seconds="8280"></span></span></span>
+    <h1>Every thread hangs<br>off something <span class="live-word">live.</span></h1>
+    <p class="sub">There's no open inbox on DRVN. A conversation only exists because a listing or an order exists — so the part, the price and the clock sit pinned at the top of every thread.</p>
+  </div>
+
+  <section class="deck deck--two deck--flip">
+
+    <!-- ============ THREAD LIST ============ -->
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THREADS — ATTACHED TO A LISTING OR A JOB</span>
+        <span class="chip chip--live">2 NEW</span>
+      </div>
+      <div class="rowlist tlist" data-tlist>
+        <a class="order is-open" href="#thread" data-thread aria-current="true">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="Coilover pair with red springs" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name trunc">@peaks.gravel</div>
+            <div class="order__meta clamp2">KW V2 coilovers · "$620 is what I can do today. If you can do $650 I'll take the OEM springs too."</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--live" data-unread>2 NEW</span>
+            <span class="microlabel">4M</span>
+          </div>
+        </a>
+
+        <a class="order" href="orders.html" data-thread>
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">#1058</span></div>
+          <div>
+            <div class="order__name trunc">@kessler.m</div>
+            <div class="order__meta clamp2">Momo Corse wheel set · "Landed this morning. Centres are straight, lip mark is exactly as photographed. Cheers Dana."</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--ok">JOB #1058</span>
+            <span class="microlabel">2H</span>
+          </div>
+        </a>
+
+        <a class="order" href="buyer-orders.html" data-thread>
+          <div class="order__img"><img src="../assets/c4-part-brake.png" alt="Brake caliper and disc kit" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name trunc">@tarmac.rally</div>
+            <div class="order__meta clamp2">Brembo 4-pot front kit · "Boxing it tomorrow morning — I'll drop the tracking in here before noon."</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip" data-unread>1 NEW</span>
+            <span class="microlabel">YDAY</span>
+          </div>
+        </a>
+
+        <a class="order" href="listing.html" data-thread>
+          <div class="order__img"><img src="../assets/c16-part-seat.png" alt="Bucket seat with red stitching" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name trunc">@torino.classics</div>
+            <div class="order__meta clamp2">Sabelt bucket seat · "Still thinking on the $290. My rails are the wide pattern — will yours clear a Delta floor?"</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--spent">OFFER LAPSED</span>
+            <span class="microlabel">19 JUL</span>
+          </div>
+        </a>
+
+        <a class="order is-quiet" href="orders.html" data-thread>
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">#1052</span></div>
+          <div>
+            <div class="order__name trunc">@garage.iida</div>
+            <div class="order__meta clamp2">Cusco strut brace · closed when the order was confirmed delivered on 17 Jul.</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--spent">ARCHIVED</span>
+            <span class="microlabel">17 JUL</span>
+          </div>
+        </a>
+      </div>
+      <p class="spec-note"><b>No general inbox.</b> Threads open from a listing, an offer or a job card — and close themselves 14 days after the job is confirmed delivered. Archived threads stay readable; they just stop asking for you.</p>
+    </div>
+
+    <!-- ============ OPEN THREAD ============ -->
+    <div class="tile tile--deep rv" data-stagger="1" id="thread">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-chat-teardrop-text" aria-hidden="true"></i>&nbsp;THREAD — @PEAKS.GRAVEL · MILAN</span>
+        <span class="capsule"><span class="dot"></span> OFFER OPEN <span class="cd" data-seconds="8280"></span></span>
+      </div>
+
+      <!-- pinned context: the thread is always ABOUT something -->
+      <div class="rowlist">
+        <div class="order">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="Coilover pair with red springs" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">KW V2 coilovers — Delta HF fitment</div>
+            <div class="order__meta">Your ask <b>$680</b> · offer on the table <b style="color:var(--live)">$620</b> · off sheet C-0416</div>
+          </div>
+          <div class="order__actions">
+            <a class="btn btn--ghost" href="listing.html">View listing</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="thread" data-thread-body style="margin-top:14px">
+        <div class="msg">
+          <span class="msg__who">@peaks.gravel</span>
+          <p class="msg__body">Are the V2s still on the car, or off already? I'm chasing a set for a gravel Delta and I'd rather not wait on a rebuild.</p>
+          <span class="msg__meta">MON 21:14</span>
+        </div>
+
+        <div class="msg msg--me">
+          <span class="msg__who">You</span>
+          <p class="msg__body">Off since June — boxed on the bench. 41,000 km on them, one gravel season, the rest tarmac. Springs and top mounts go with them.</p>
+          <span class="msg__meta">MON 21:31 · READ</span>
+        </div>
+
+        <div class="msg">
+          <span class="msg__who">@peaks.gravel</span>
+          <p class="msg__body">The rear damper looks damp in your third photo. Is that fluid coming past the seal, or road spray?</p>
+          <span class="msg__meta">TUE 08:02</span>
+        </div>
+
+        <div class="msg msg--me">
+          <span class="msg__who">You</span>
+          <p class="msg__body">Spray. Wiped it down and shot it again this morning — dry, and no crust round the shaft. Same damper, same angle.</p>
+          <span class="msg__attach"><i class="ph ph-image" aria-hidden="true"></i> damper-seal-dry.jpg · 1.2 MB</span>
+          <span class="msg__meta">TUE 08:19 · READ</span>
+        </div>
+
+        <div class="msg msg--sys">
+          <span class="msg__who">DRVN</span>
+          <p class="msg__body">Offer of <b>$620</b> placed by @peaks.gravel — window closes in <span class="mono" style="color:var(--live)" data-seconds="8280"></span>. If you do nothing it lapses and the listing stays live at $680.</p>
+          <span class="msg__meta">TODAY 07:42 · SYSTEM</span>
+        </div>
+
+        <div class="msg">
+          <span class="msg__who">@peaks.gravel</span>
+          <p class="msg__body">$620 is what I can do today. If you can do $650 I'll take the OEM springs off you as well and we'll ship it in one box.</p>
+          <span class="msg__meta">TODAY 07:44</span>
+        </div>
+      </div>
+
+      <!-- composer -->
+      <form class="composer" data-composer>
+        <label class="microlabel" for="msgbox">REPLY — @PEAKS.GRAVEL</label>
+        <textarea class="ctl ctl--block" id="msgbox" data-msgbox rows="3" placeholder="Type your reply…"></textarea>
+        <div class="qr" data-qr>
+          <button class="chip" type="button" data-fill="Still available — nothing's changed on it.">Still available</button>
+          <button class="chip" type="button" data-fill="Can you do $650? That's the number that works for me.">Can you do $650?</button>
+          <button class="chip" type="button" data-fill="Posting tomorrow, so I'd need to know before 10:00.">Posting tomorrow</button>
+        </div>
+        <div class="composer__row">
+          <button class="btn btn--ghost" type="button" data-toast="ATTACH — PHOTO PICKER OPENED"><i class="ph ph-paperclip" aria-hidden="true"></i> Attach</button>
+          <button class="btn btn--live" type="submit">Send</button>
+          <span class="microlabel" style="margin-left:auto">SENT AS @DROSSI.INTEGRALE</span>
+        </div>
+      </form>
+
+      <div class="alert alert--live" style="margin-top:16px">
+        <i class="ph ph-shield-warning alert__ico" aria-hidden="true"></i>
+        <h4>Keep the money on the sheet</h4>
+        <p>Never pay or accept payment by bank transfer, gift card or friends-and-family. Off-platform payments have no inspection window, no dispute route and no refund. If someone asks you to move the deal to WhatsApp or email, that's worth reporting — <a class="jumplink" href="safety.html#report">how to report a listing</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — MESSAGES · A THREAD IS AN ANNOTATION ON A LISTING</span>
+    <a class="microlabel mono" href="safety.html">TRUST &amp; SAFETY →</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+/* ---------- page-local: composer, quick replies, thread selection ---------- */
+(function () {
+  "use strict";
+  var form = document.querySelector("[data-composer]");
+  var box = document.querySelector("[data-msgbox]");
+  var body = document.querySelector("[data-thread-body]");
+  if (!form || !box || !body) return;
+
+  function stamp() {
+    var d = new Date();
+    return "TODAY " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + " · SENDING";
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = box.value.trim();
+    if (!text) { box.focus(); if (window.lsToast) window.lsToast("NOTHING TO SEND YET"); return; }
+    var msg = document.createElement("div");
+    msg.className = "msg msg--me msg--new";
+    var who = document.createElement("span");
+    who.className = "msg__who"; who.textContent = "You";
+    var p = document.createElement("p");
+    p.className = "msg__body"; p.textContent = text;
+    var meta = document.createElement("span");
+    meta.className = "msg__meta"; meta.textContent = stamp();
+    msg.appendChild(who); msg.appendChild(p); msg.appendChild(meta);
+    body.appendChild(msg);
+    box.value = "";
+    msg.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (window.lsToast) window.lsToast("SENT TO @PEAKS.GRAVEL — ON THE KW COILOVERS THREAD");
+    setTimeout(function () { meta.textContent = meta.textContent.replace("SENDING", "DELIVERED"); }, 1200);
+  });
+
+  var qr = document.querySelector("[data-qr]");
+  if (qr) qr.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-fill]");
+    if (!b) return;
+    box.value = b.getAttribute("data-fill");
+    box.focus();
+  });
+
+  /* thread list: opening a thread clears its unread mark */
+  var list = document.querySelector("[data-tlist]");
+  if (list) list.addEventListener("click", function (e) {
+    var row = e.target.closest("[data-thread]");
+    if (!row) return;
+    var badge = row.querySelector("[data-unread]");
+    if (badge) {
+      badge.remove();
+      if (window.lsToast) window.lsToast("THREAD MARKED READ — " + row.querySelector(".order__name").textContent.toUpperCase());
+    }
+    if (row.getAttribute("href") === "#thread") {
+      list.querySelectorAll(".order").forEach(function (r) { r.classList.remove("is-open"); r.removeAttribute("aria-current"); });
+      row.classList.add("is-open");
+      row.setAttribute("aria-current", "true");
+    }
+  });
+})();
+</script>
+</body>
+</html>

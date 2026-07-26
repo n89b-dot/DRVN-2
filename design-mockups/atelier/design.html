@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ATELIER — The house style guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Figtree:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#1E1813; --panel:#292219; --inset:#171310; --img-fallback:#241E19;
+  --text:#EFE7DA; --muted:#A6988A;
+  --brass:#C9A96A; --brass-dim:#8C7350;
+  --rule:rgba(140,115,80,.32); --rule-strong:rgba(140,115,80,.55);
+  --tan:#B4835B;
+  --serif:"Cormorant Garamond",Georgia,serif; --sans:"Figtree","Helvetica Neue",sans-serif;
+  --ease:cubic-bezier(.25,1,.35,1); --dur:500ms; --radius:4px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased;padding-bottom:96px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 40px}
+h1,h2,h3,.serif{font-family:var(--serif);font-weight:500;line-height:1.12}
+.label{font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;color:var(--brass-dim)}
+.head{display:flex;align-items:center;gap:24px;margin:72px 0 32px}
+.head::before,.head::after{content:"";flex:1;height:1px;background:var(--rule)}
+.head .roman{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--brass);margin-right:10px}
+.masthead{padding:72px 0 12px;text-align:center}
+.masthead h1{font-size:clamp(38px,4.5vw,54px)}
+.masthead h1 em{font-style:italic;color:var(--brass)}
+.masthead p{color:var(--muted);margin-top:12px;font-size:14px}
+.grid{display:grid;gap:20px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.swatch{border:1px solid var(--rule-strong);border-radius:var(--radius);overflow:hidden}
+.swatch__chip{height:88px}
+.swatch__meta{padding:14px 16px;background:var(--panel);font-size:12px;color:var(--muted)}
+.swatch__meta strong{display:block;color:var(--text);font-weight:500;font-size:12.5px;letter-spacing:.06em}
+.swatch__meta code{color:var(--brass);font-family:inherit}
+.type-row{display:flex;align-items:baseline;gap:28px;padding:22px 4px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.type-row .label{min-width:150px}
+.spacebar{display:flex;align-items:center;gap:18px;padding:12px 4px;border-bottom:1px solid var(--rule)}
+.spacebar .bar{height:10px;background:var(--brass-dim);border-radius:2px}
+.spacebar span{font-size:12px;color:var(--muted)}
+.demo{border:1px solid var(--rule);border-radius:var(--radius);padding:34px;background:var(--panel);margin-bottom:20px}
+.demo .caption{margin-bottom:22px}
+.states{display:flex;gap:28px;flex-wrap:wrap;align-items:center}
+.btn{display:inline-block;font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;padding:15px 34px;border:1px solid var(--brass);color:var(--brass);background:transparent;border-radius:var(--radius);cursor:pointer;transition:all var(--dur) var(--ease);font-family:var(--sans)}
+.btn:hover,.btn.hov{background:var(--brass);color:var(--inset)}
+.btn-text{background:none;border:none;font-family:var(--sans);font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);padding:6px 2px;border-bottom:1px solid transparent;cursor:pointer;transition:all var(--dur) var(--ease)}
+.btn-text:hover,.btn-text.hov{color:var(--brass);border-bottom-color:var(--brass)}
+.ledger__row{display:flex;align-items:center;gap:28px;padding:26px 4px;border-bottom:1px solid var(--rule);transition:background var(--dur) var(--ease)}
+.ledger__row:first-child{border-top:1px solid var(--rule)}
+.ledger__row:hover,.ledger__row.hov{background:rgba(41,34,25,.55)}
+.ledger__row:hover .lt,.ledger__row.hov .lt{color:var(--brass)}
+.lno{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--brass-dim);min-width:40px}
+.lt{font-family:var(--serif);font-size:22px;transition:color var(--dur) var(--ease)}
+.lm{font-size:12.5px;color:var(--muted)}
+.lp{font-family:var(--serif);font-weight:600;font-size:24px;color:var(--brass);margin-left:auto;font-variant-numeric:tabular-nums}
+.thumb{width:84px;height:60px;flex:none;border:1px solid var(--rule-strong);border-radius:2px;background:var(--img-fallback)}
+.frame{border:1px solid var(--brass-dim);padding:7px;border-radius:var(--radius);background:var(--panel)}
+.frame--emphasis{border-color:var(--brass)}
+.frame__inner{border:1px solid var(--rule-strong);border-radius:2px;padding:28px;text-align:center;color:var(--muted);font-size:13px}
+.tag{display:inline-block;font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:.16em;color:var(--tan);border:1px solid rgba(180,131,91,.45);border-radius:2px;padding:4px 10px}
+.tag--brass{color:var(--brass);border-color:rgba(201,169,106,.5)}
+.tag--muted{color:var(--muted);border-color:var(--rule-strong)}
+.field label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.16em;color:var(--brass-dim);margin-bottom:9px;font-weight:500}
+.input{width:100%;background:var(--inset);border:1px solid var(--rule-strong);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14.5px;padding:13px 15px;transition:border-color var(--dur) var(--ease)}
+.input:focus{outline:none;border-color:var(--brass)}
+.input.focus{border-color:var(--brass)}
+.navdemo{display:flex;gap:32px;align-items:center}
+.nav__link{font-size:10.5px;text-transform:uppercase;letter-spacing:.16em;font-weight:500;color:var(--muted);padding:6px 0;border-bottom:1px solid transparent;text-decoration:none;transition:color var(--dur) var(--ease)}
+.nav__link:hover,.nav__link.hov{color:var(--brass)}
+.nav__link--active{color:var(--text);border-bottom-color:var(--brass)}
+.offer__bid{font-family:var(--serif);font-weight:600;font-size:26px;color:var(--brass);font-variant-numeric:tabular-nums}
+.offer__asking{font-size:12px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin-top:10px}
+code.tok{color:var(--brass);font-size:12px}
+.footer{margin-top:80px;border-top:1px solid var(--rule-strong);padding-top:28px;text-align:center;color:var(--muted);font-size:12px}
+.footer a{color:var(--brass);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="label">Concept 06 · The house style guide</span>
+    <h1>ATELIER, <em>as specified.</em></h1>
+    <p>Every token below matches <code class="tok">atelier.css</code> and <code class="tok">design.md</code> exactly.</p>
+  </header>
+
+  <div class="head"><span class="label"><span class="roman">No. I</span> The palette</span></div>
+  <div class="grid g3">
+    <div class="swatch"><div class="swatch__chip" style="background:#1E1813"></div><div class="swatch__meta"><strong>colors.bg</strong><code>#1E1813</code> — espresso page</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#292219"></div><div class="swatch__meta"><strong>colors.panel</strong><code>#292219</code> — raised paper</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#171310"></div><div class="swatch__meta"><strong>colors.inset</strong><code>#171310</code> — recessed wells</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#EFE7DA"></div><div class="swatch__meta"><strong>colors.text</strong><code>#EFE7DA</code> — warm parchment</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#A6988A"></div><div class="swatch__meta"><strong>colors.muted</strong><code>#A6988A</code> — secondary ink</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#C9A96A"></div><div class="swatch__meta"><strong>colors.accent</strong><code>#C9A96A</code> — brass, the accent</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#8C7350"></div><div class="swatch__meta"><strong>colors.accentDim</strong><code>#8C7350</code> — structural brass</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#B4835B"></div><div class="swatch__meta"><strong>colors.tan</strong><code>#B4835B</code> — saddle leather</div></div>
+    <div class="swatch"><div class="swatch__chip" style="background:#241E19"></div><div class="swatch__meta"><strong>colors.imgFallback</strong><code>#241E19</code> — empty image well</div></div>
+  </div>
+  <p class="note">Hairlines: <code class="tok">colors.rule</code> rgba(140,115,80,.32) · <code class="tok">colors.ruleStrong</code> rgba(140,115,80,.55). No pure black, no pure white, no cool hues.</p>
+
+  <div class="head"><span class="label"><span class="roman">No. II</span> The type scale</span></div>
+  <div class="type-row"><span class="label">typography.display</span><span class="serif" style="font-size:52px">Provenance, <em style="color:var(--brass)">recorded.</em></span></div>
+  <div class="type-row"><span class="label">typography.h1</span><span class="serif" style="font-size:40px">Good evening, Mr Hargreaves.</span></div>
+  <div class="type-row"><span class="label">typography.h2</span><span class="serif" style="font-size:22px">Chrome wire wheels, set of five — 15″</span></div>
+  <div class="type-row"><span class="label">typography.price</span><span class="serif" style="font-size:24px;font-weight:600;color:var(--brass);font-variant-numeric:tabular-nums">£6,840</span></div>
+  <div class="type-row"><span class="label">typography.body</span><span style="max-width:52ch">Figtree 400 at 15px/1.65 — the working voice of the ledger, warm parchment on espresso.</span></div>
+  <div class="type-row"><span class="label">typography.label</span><span class="label" style="color:var(--brass-dim)">Offers awaiting your consideration</span></div>
+
+  <div class="head"><span class="label"><span class="roman">No. III</span> Spacing &amp; shape</span></div>
+  <div class="spacebar"><div class="bar" style="width:22px"></div><span><code class="tok">containerPadMobile</code> 22px</span></div>
+  <div class="spacebar"><div class="bar" style="width:26px"></div><span><code class="tok">rowPad</code> 26px record padding</span></div>
+  <div class="spacebar"><div class="bar" style="width:40px"></div><span><code class="tok">containerPad</code> 40px</span></div>
+  <div class="spacebar"><div class="bar" style="width:72px"></div><span><code class="tok">sectionGap</code> 72px between sections</span></div>
+  <div class="spacebar"><div class="bar" style="width:76px"></div><span><code class="tok">navHeight</code> 76px</span></div>
+  <p class="note">Container max 1180px. Radius: 4px default and maximum; 2px inside frames and on tags. No pills.</p>
+
+  <div class="head"><span class="label"><span class="roman">No. IV</span> The components</span></div>
+
+  <div class="demo">
+    <div class="label caption">button-primary — rest / hover</div>
+    <div class="states"><button class="btn">Enter the atelier</button><button class="btn hov">Enter the atelier</button></div>
+  </div>
+
+  <div class="demo">
+    <div class="label caption">button-text — rest / hover / accept / decline-hover</div>
+    <div class="states">
+      <button class="btn-text">Counter at £820</button>
+      <button class="btn-text hov">Counter at £820</button>
+      <button class="btn-text" style="color:var(--brass)">Accept</button>
+      <button class="btn-text" style="color:var(--tan);border-bottom-color:var(--tan)">Decline</button>
+    </div>
+  </div>
+
+  <div class="demo" style="padding:34px 34px 8px">
+    <div class="label caption">ledger-row — rest / hover</div>
+    <div class="ledger__row">
+      <span class="lno">i.</span><span class="thumb"></span>
+      <span><span class="lt">Smiths chrome-bezel gauge set</span><span class="lm" style="display:block">Off "The Ludlow V8" · provenance recorded</span></span>
+      <span class="lp">£340</span>
+    </div>
+    <div class="ledger__row hov" style="border-bottom:none">
+      <span class="lno">ii.</span><span class="thumb"></span>
+      <span><span class="lt">Chrome wire wheels, set of five</span><span class="lm" style="display:block">Off "The Ludlow V8" · 24 watchers</span></span>
+      <span class="lp">£850</span>
+    </div>
+  </div>
+
+  <div class="demo">
+    <div class="label caption">framed-panel — standard / emphasis (one per page)</div>
+    <div class="grid g2">
+      <div class="frame"><div class="frame__inner">1px accentDim outer · 7px air · 1px ruleStrong inner</div></div>
+      <div class="frame frame--emphasis"><div class="frame__inner">Emphasis: full brass outer keyline — the certificate treatment</div></div>
+    </div>
+  </div>
+
+  <div class="demo">
+    <div class="label caption">tag — tan state / brass certified / muted neutral</div>
+    <div class="states"><span class="tag">Under offer</span><span class="tag tag--brass">Provenance recorded</span><span class="tag tag--muted">Open</span></div>
+  </div>
+
+  <div class="demo">
+    <div class="label caption">input — rest / focus</div>
+    <div class="grid g2">
+      <div class="field"><label>Name of the part</label><input class="input" placeholder="e.g. Weber jetting kit, spare" /></div>
+      <div class="field"><label>Asking price (£)</label><input class="input focus" value="1,200" /></div>
+    </div>
+  </div>
+
+  <div class="demo">
+    <div class="label caption">nav-item — rest / hover / active</div>
+    <div class="navdemo">
+      <a class="nav__link" href="#">Home</a>
+      <a class="nav__link hov" href="#">Garage</a>
+      <a class="nav__link nav__link--active" href="#">Dashboard</a>
+    </div>
+  </div>
+
+  <div class="demo">
+    <div class="label caption">offer-record — bid against asking, with actions</div>
+    <div style="display:flex;align-items:center;gap:28px;flex-wrap:wrap">
+      <span class="thumb"></span>
+      <span style="flex:1;min-width:200px"><span class="lt">Chrome wire wheels, set of five</span><span class="lm" style="display:block">Offer from R. Beaumont · received Tuesday, 8:42 pm</span></span>
+      <span style="text-align:right"><span class="offer__bid">£780</span><span class="offer__asking" style="display:block">against £850 asking</span></span>
+    </div>
+    <div class="states" style="margin-top:16px">
+      <button class="btn-text" style="color:var(--brass)">Accept</button>
+      <button class="btn-text">Counter at £820</button>
+      <button class="btn-text">Decline</button>
+    </div>
+  </div>
+
+  <div class="head"><span class="label"><span class="roman">No. V</span> Motion</span></div>
+  <p class="note" style="font-size:13.5px;max-width:68ch">Slow, velvet: 400–600ms on <code class="tok">cubic-bezier(.25,1,.35,1)</code>. Records reveal with a fade and a 6px rise; section rules draw in; hover states warm from parchment to brass rather than moving. No bounce, no snap, nothing under 400ms.</p>
+
+  <footer class="footer">
+    <span class="serif" style="font-size:16px">DRVN <em style="font-style:italic;color:var(--brass)">— Atelier</em></span>
+    &nbsp;·&nbsp; <a href="dashboard.html">Return to the ledger</a> &nbsp;·&nbsp; MMXXVI
+  </footer>
+
+</div>
+</body>
+</html>

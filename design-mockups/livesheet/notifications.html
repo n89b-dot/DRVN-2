@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Notifications, in-app and by email</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  /* page-scoped only — tokens, no literals */
+  .jumprow .microlabel { flex: 0 1 auto; min-width: 0; }
+  .ndot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--live); margin-right: 8px; vertical-align: 1px; flex: none;
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  .is-read .ndot { display: none; }
+  .is-read .order__name { color: var(--dim); }
+  .nrow { cursor: pointer; }
+  .mailgrid { align-items: start; }
+  [data-markall] { white-space: nowrap; }
+  @media (max-width: 640px) { [data-markall] { padding: 9px 13px; font-size: 11px; } }
+  .cadbtn { grid-row: 1; grid-column: 3; align-self: center; justify-self: end; }
+  @media (max-width: 720px) { .cadbtn { grid-row: 2; grid-column: 2; } }
+  @media (prefers-reduced-motion: reduce) { .ndot { animation: none; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 08 — THE BELL · <span class="mono"><span data-unread-count>4</span></span> UNREAD · QUIET HOURS 22:00–07:00</span>
+    <h1>What the bell knows,<br>and what it <span class="live-word">sends.</span></h1>
+    <p class="sub">Two places the sheet speaks: in the app, where you can act on the line itself, and by email, where it has to say the whole thing in plain words because there's nothing to click into yet.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#inapp">In-app</a>
+    <a class="jumplink" href="#email">Email</a>
+    <a class="jumplink" href="#prefs">Preferences</a>
+  </div>
+
+  <!-- ============ IN-APP ============ -->
+  <section class="deck" id="inapp" style="margin-top:14px;padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-bell" aria-hidden="true"></i>&nbsp;NOTIFICATION CENTRE — NEWEST FIRST</span>
+        <button class="btn btn--ghost" type="button" data-markall>Mark all read</button>
+      </div>
+
+      <div class="rowlist" data-notifs>
+
+        <div class="order nrow" data-order data-price="$620" data-amount="620" data-unread>
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="Coilover pair" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name"><span class="ndot" aria-hidden="true"></span>Offer received — $620 on the KW V2 coilovers</div>
+            <div class="order__meta">@peaks.gravel · $60 under your ask · lapses <span class="cd" data-seconds="8280"></span></div>
+          </div>
+          <div class="order__actions">
+            <button class="btn btn--live" data-act="accept">Accept $620</button>
+            <button class="btn btn--ghost" data-act="counter">Counter</button>
+          </div>
+        </div>
+
+        <div class="order nrow" data-unread>
+          <div class="order__img"><img src="../assets/c16-part-seat.png" alt="Bucket seat" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name"><span class="ndot" aria-hidden="true"></span>Your counter of $265 is with @torino.classics</div>
+            <div class="order__meta">Sabelt bucket seat · they have <span class="cd" data-seconds="79200"></span> to answer before it lapses</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--live">AWAITING</span><span class="microlabel">14M</span></div>
+        </div>
+
+        <div class="order nrow" data-unread>
+          <div class="order__img"><img src="../assets/c4-part-brake.png" alt="Brake kit" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name"><span class="ndot" aria-hidden="true"></span>Price drop — Brembo 4-pot front kit, $940 → $865</div>
+            <div class="order__meta">@tarmac.rally dropped it 8%. You've watched this part since 11 Jul.</div>
+          </div>
+          <div class="order__actions"><a class="btn btn--ghost" href="listing.html">View part</a></div>
+        </div>
+
+        <div class="order nrow" data-unread>
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">C-1180</span></div>
+          <div>
+            <div class="order__name"><span class="ndot" aria-hidden="true"></span>@kessler.m added a line to a sheet you follow</div>
+            <div class="order__meta">Evo "Kanzler" C-1180 · Bilstein B6 dampers marked FITTED · the OEM set is now released for sale</div>
+          </div>
+          <div class="order__actions"><a class="btn btn--ghost" href="car.html">Open sheet</a></div>
+        </div>
+
+        <div class="order nrow">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">#1058</span></div>
+          <div>
+            <div class="order__name">Delivered — Momo Corse wheel set reached @kessler.m</div>
+            <div class="order__meta">Signed for 09:14 · inspection window closes Thu 24 Jul, 09:14</div>
+          </div>
+          <div class="order__actions">
+            <button class="btn btn--ghost" type="button" data-toast="REVIEW SHEET OPENED — RATING @KESSLER.M">Leave review</button>
+          </div>
+        </div>
+
+        <div class="order nrow">
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-hand-coins" aria-hidden="true" style="color:var(--dim)"></i></div>
+          <div>
+            <div class="order__name">Payout cleared — $289.96 to ····2201</div>
+            <div class="order__meta">Job #1058 · sale $310.00 less fees · arrived 1 business day after the window closed</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">CLEARED</span><span class="microlabel">YDAY</span></div>
+        </div>
+
+        <div class="order nrow">
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-question" aria-hidden="true" style="color:var(--dim)"></i></div>
+          <div>
+            <div class="order__name">Question on your listing — Sabelt bucket seat</div>
+            <div class="order__meta">@garage.iida: "Are the side mounts the narrow rail pattern, or wide?"</div>
+          </div>
+          <div class="order__actions"><a class="btn btn--ghost" href="messages.html">Reply</a></div>
+        </div>
+
+        <div class="order nrow">
+          <div class="order__img" style="display:grid;place-items:center"><i class="ph ph-magnifying-glass" aria-hidden="true" style="color:var(--dim)"></i></div>
+          <div>
+            <div class="order__name">Saved search matched — "dogleg gearbox"</div>
+            <div class="order__meta">1 new listing · Integrale-fitment dogleg, $1,450, listed 06:20 by @torino.classics</div>
+          </div>
+          <div class="order__actions"><a class="btn btn--ghost" href="market.html">See match</a></div>
+        </div>
+
+      </div>
+      <p class="spec-note"><b>Rule:</b> a notification that can be answered carries the answer with it — offers accept and counter on the row, exactly as they do on the workbench. Everything else carries one link and no more. Rows never disappear when read; the dot goes out, the ink goes grey, the history stays.</p>
+    </div>
+  </section>
+
+  <!-- CAUGHT UP -->
+  <section class="deck deck--two" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">WHEN THE BELL IS QUIET</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> NOTHING LIVE</span>
+      </div>
+      <div class="undrawn">
+        <div class="undrawn__mark"><i class="ph ph-bell-slash" aria-hidden="true"></i></div>
+        <h3>You're caught up</h3>
+        <p>Nothing needs an answer. The sheet keeps counting in the background — offers, watchers, payouts — and rings only when something is yours to decide.</p>
+        <div style="margin-top:6px"><a class="btn btn--ghost" href="index.html">Back to your sheet</a></div>
+      </div>
+    </div>
+
+    <div class="tile rv" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">WHAT RINGS, AND WHAT DOESN'T</span>
+        <span class="microlabel">POLICY</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Always rings</span>
+        <span class="bline__val">Money and clocks</span>
+        <span class="bline__note">Offers, counters, disputes, payouts, delivery windows — anything with a deadline attached.</span>
+        <span class="chip chip--live">LIVE</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Batched</span>
+        <span class="bline__val">Watchers and views</span>
+        <span class="bline__note">Rolled into one line a day. A watcher is not an event worth interrupting you for.</span>
+        <span class="chip">DAILY</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Never sent</span>
+        <span class="bline__val">Nudges and streaks</span>
+        <span class="bline__note">No "come back", no "you haven't listed in a while". The sheet doesn't beg.</span>
+        <span class="chip chip--spent">OFF</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Held till 07:00</span>
+        <span class="bline__val">Quiet hours</span>
+        <span class="bline__note">22:00–07:00 local. A closing offer still rings — a price drop waits for morning.</span>
+        <span class="chip chip--ok">ON</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EMAIL ============ -->
+  <div class="jumprow rv" id="email">
+    <span class="microlabel">TRANSACTIONAL EMAIL — WHAT LANDS IN THE INBOX</span>
+    <a class="jumplink" href="settings.html#signals">Turn these off</a>
+  </div>
+
+  <section class="deck deck--three mailgrid" style="margin-top:14px;padding-bottom:14px">
+
+    <article class="mail rv">
+      <div class="mail__bar">
+        <span class="microlabel">DRVN &lt;SHEET@DRVN.CC&gt; → DANA ROSSI</span>
+        <span class="mail__subj">Someone offered $620 on your KW coilovers</span>
+      </div>
+      <div class="mail__body">
+        <p>Dana —</p>
+        <p>@peaks.gravel has offered <b>$620</b> for the KW V2 coilovers off the Integrale. Your ask is $680.</p>
+        <p>The offer holds for 48 hours. It closes <b>Wednesday 23 July, 09:42</b> (UTC+1) — about 2 hours 18 minutes from when this was sent. You can accept it, counter it, or let it lapse; if it lapses the listing stays live at $680 and nothing else changes.</p>
+        <a class="btn btn--live mail__cta" href="index.html">Answer the offer</a>
+        <p style="color:var(--dim);font-size:12.5px">Buyer: @peaks.gravel · joined 2025 · 6 purchases · no disputes.</p>
+      </div>
+      <div class="mail__foot">
+        YOU GOT THIS BECAUSE YOU HAVE A LIVE LISTING WITH AN OPEN OFFER.<br>
+        OFFER EMAILS CAN'T BE TURNED OFF WHILE A LISTING IS LIVE — THEY CARRY A DEADLINE.<br>
+        <a class="jumplink" href="settings.html#signals">MANAGE SIGNALS</a> · <a class="jumplink" href="settings.html#signals">UNSUBSCRIBE FROM EVERYTHING ELSE</a>
+      </div>
+    </article>
+
+    <article class="mail rv" data-stagger="1">
+      <div class="mail__bar">
+        <span class="microlabel">DRVN &lt;SHEET@DRVN.CC&gt; → DANA ROSSI</span>
+        <span class="mail__subj">Your part arrived — you have 48 hours to inspect</span>
+      </div>
+      <div class="mail__body">
+        <p>Dana —</p>
+        <p>The Brembo 4-pot front kit from @tarmac.rally was signed for at <b>14:06 today</b>. Your inspection window closes <b>Thursday 24 July, 14:06</b>.</p>
+        <p>Unbox it, check it against the listing, and if it's what you paid for, do nothing — the seller is paid automatically when the window closes. If it isn't, open a dispute before then and the $865 stays held while we look at it.</p>
+        <a class="btn mail__cta" href="safety.html#dispute">Confirm or open a dispute</a>
+        <p style="color:var(--dim);font-size:12.5px">Photograph anything that looks wrong before you fit it. Fitted parts are much harder to dispute.</p>
+      </div>
+      <div class="mail__foot">
+        YOU GOT THIS BECAUSE A PART YOU BOUGHT WAS MARKED DELIVERED.<br>
+        DELIVERY AND INSPECTION EMAILS ARE PART OF BUYER PROTECTION AND STAY ON.<br>
+        <a class="jumplink" href="settings.html#signals">MANAGE SIGNALS</a>
+      </div>
+    </article>
+
+    <article class="mail rv" data-stagger="2">
+      <div class="mail__bar">
+        <span class="microlabel">DRVN &lt;SHEET@DRVN.CC&gt; → DANA ROSSI</span>
+        <span class="mail__subj">You got paid — $289.96 is on its way</span>
+      </div>
+      <div class="mail__body">
+        <p>Dana —</p>
+        <p>Job #1058 is closed. @kessler.m confirmed the Momo Corse wheel set and the inspection window has passed, so your payout has been released.</p>
+        <p>Sale $310.00 · platform fee 5% −$15.50 · card processing −$4.54 · <b>payout $289.96</b>. It's clearing to the account ending 2201 and should land within 1–2 business days.</p>
+        <a class="btn mail__cta" href="orders.html">See the job card</a>
+        <p style="color:var(--dim);font-size:12.5px">That's 7 parts and $2,140 off sheet C-0416 since June 2026.</p>
+      </div>
+      <div class="mail__foot">
+        YOU GOT THIS BECAUSE A PAYOUT WAS RELEASED TO YOU.<br>
+        PAYOUT RECEIPTS ARE FINANCIAL RECORDS AND CAN'T BE SWITCHED OFF.<br>
+        <a class="jumplink" href="legal.html#fees">FEE SCHEDULE</a> · <a class="jumplink" href="settings.html#payments">PAYOUT ACCOUNT</a>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ PREFERENCES ============ -->
+  <section class="deck" id="prefs" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>&nbsp;PREFERENCES — THE MATRIX LIVES IN SETTINGS</span>
+        <span class="chip">SIGNALS</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Per-signal control</span>
+        <span class="bline__val">Settings → Signals</span>
+        <span class="bline__note">Every signal has three switches — in-app, email, push — set one at a time. It isn't duplicated here on purpose: one matrix, one place.</span>
+        <a class="chip chip--live" href="settings.html#signals">OPEN</a>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Email cadence</span>
+        <span class="bline__val" data-cadence>Instant</span>
+        <span class="bline__note" data-cadence-note>Deadline signals send the moment they happen. Everything else can be rolled into one 08:00 digest instead.</span>
+        <button class="btn btn--ghost cadbtn" type="button" data-cadence-toggle>Switch to daily digest</button>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Can't be turned off</span>
+        <span class="bline__val">4 signals</span>
+        <span class="bline__note">Offer closing, delivery + inspection window, dispute updates, payout receipts. They carry deadlines or money, so they're not preferences.</span>
+        <span class="chip">FIXED</span>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn" href="settings.html#signals">Open signal settings</a>
+        <a class="btn btn--ghost" href="safety.html">Report a message</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — THE BELL RINGS FOR DEADLINES, NOT FOR ATTENTION</span>
+    <a class="microlabel mono" href="messages.html">← MESSAGES</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+/* ---------- page-local: read state + email cadence ---------- */
+(function () {
+  "use strict";
+  var list = document.querySelector("[data-notifs]");
+  var counter = document.querySelector("[data-unread-count]");
+  if (!list) return;
+
+  function recount() {
+    var n = list.querySelectorAll(".order[data-unread]").length;
+    if (counter) counter.textContent = n;
+    return n;
+  }
+  recount();
+
+  function markRead(row) {
+    if (!row.hasAttribute("data-unread")) return false;
+    row.removeAttribute("data-unread");
+    row.classList.add("is-read");
+    recount();
+    return true;
+  }
+
+  list.addEventListener("click", function (e) {
+    if (e.target.closest("[data-act]")) return;   /* offer actions handle themselves */
+    var row = e.target.closest(".order");
+    if (!row) return;
+    if (markRead(row) && window.lsToast) window.lsToast("MARKED READ");
+  });
+
+  var all = document.querySelector("[data-markall]");
+  if (all) all.addEventListener("click", function () {
+    var n = 0;
+    list.querySelectorAll(".order[data-unread]").forEach(function (r) { if (markRead(r)) n++; });
+    if (window.lsToast) window.lsToast(n ? "MARKED " + n + " READ — BELL IS QUIET" : "ALREADY CAUGHT UP");
+  });
+
+  /* email cadence toggle */
+  var cbtn = document.querySelector("[data-cadence-toggle]");
+  if (cbtn) {
+    var val = document.querySelector("[data-cadence]");
+    var note = document.querySelector("[data-cadence-note]");
+    var daily = false;
+    cbtn.addEventListener("click", function () {
+      daily = !daily;
+      val.textContent = daily ? "Daily digest · 08:00" : "Instant";
+      note.textContent = daily
+        ? "Watchers, price drops and saved-search matches are held and sent as one email at 08:00. Deadline signals still send instantly."
+        : "Deadline signals send the moment they happen. Everything else can be rolled into one 08:00 digest instead.";
+      cbtn.textContent = daily ? "Switch to instant" : "Switch to daily digest";
+      if (window.lsToast) window.lsToast(daily ? "EMAIL CADENCE — DAILY DIGEST AT 08:00" : "EMAIL CADENCE — INSTANT");
+    });
+  }
+})();
+</script>
+</body>
+</html>

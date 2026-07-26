@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Manage the Integrale — sheet C-0416</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link is-active" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">CAR SHEET C-0416 — OWNER'S DESK · <a class="mono" href="car.html">VIEW PUBLIC SHEET →</a></span>
+    <h1>Manage the <span class="live-word">Integrale.</span></h1>
+    <p class="sub">Your side of the drawing. Release parts straight off the build lines — the listing inherits the sheet's history the moment you file it.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+      <button class="btn btn--live" type="button" data-release>Release a part</button>
+      <a class="btn btn--ghost" href="dashboard.html">The workbench</a>
+      <a class="btn btn--ghost" href="car.html">Public sheet</a>
+    </div>
+  </div>
+
+  <!-- HERO — the still, annotated for the owner -->
+  <section class="hero-media rv" data-hero>
+    <img src="../assets/c16-hero-car.png" alt="Red Lancia Delta HF Integrale in a light studio" onerror="this.remove()">
+    <div class="callout" style="left:5%; top:10%" data-anchor="26,62">
+      <span class="microlabel--live">LISTED</span>
+      KW V2 COILOVERS · $680 · BEST $620
+    </div>
+    <div class="callout" style="right:4%; top:38%" data-anchor="60,46">
+      RECARO SEAT · FITTED JUN 26
+    </div>
+    <div class="callout" style="left:8%; bottom:8%" data-anchor="42,80">
+      <span class="microlabel--live">NOW</span>
+      <span data-tick="34">34</span> WATCHING · <span data-tick="212">212</span> VIEWS THIS WEEK
+    </div>
+  </section>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS DESK</span>
+    <a class="jumplink" href="#build">The build — release from here</a>
+    <a class="jumplink" href="#docs">Documents · 5</a>
+    <a class="jumplink" href="#second">Second sheet</a>
+  </div>
+
+  <!-- numbers -->
+  <section class="deck deck--three" style="margin-top:14px;padding-bottom:14px">
+    <div class="tile rv">
+      <span class="microlabel">Listed off this sheet</span>
+      <div class="num-giant" data-count="2">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">Both under offer</span>
+        <span class="val">$970 asking</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel">Sold off this sheet</span>
+      <div class="num-giant" data-count="7">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">$2,140 lifetime</span></div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel">Time to first offer</span>
+      <div class="num-giant">2.1<span style="font-size:0.4em;color:var(--dim)"> DAYS</span></div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span><span class="microlabel">Average across your releases</span></div>
+    </div>
+  </section>
+
+  <!-- THE BUILD — owner mode: every line can release -->
+  <section class="deck" id="build" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">THE BUILD — SHEET REV 12 · OWNER MODE</span>
+        <span class="microlabel">[ RELEASE ] LISTS A LINE WITH ITS HISTORY ATTACHED</span>
+      </div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">ENGINE &amp; DRIVELINE</span><span class="microlabel">246 BHP · 1.1 BAR</span></div>
+      <div class="bline bline--own"><span class="bline__label">Turbo</span><span class="bline__val">Garrett T3 hybrid</span><span class="bline__note">Balanced &amp; flowed · receipts on sheet</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Garrett T3 hybrid turbo" data-cond="Good — used" data-price="540">Release</button></div>
+      <div class="bline bline--own"><span class="bline__label">Engine management</span><span class="bline__val">Mapped ECU — 246 bhp file</span><span class="bline__note">Dyno sheet attached</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Mapped ECU — 246 bhp file" data-cond="Excellent — as new" data-price="310">Release</button></div>
+      <div class="bline bline--own"><span class="bline__label">Intercooler</span><span class="bline__val">Alloy front-mount, 60 mm core</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Alloy front-mount intercooler — 60 mm core" data-cond="Good — used" data-price="220">Release</button></div>
+      <div class="bline bline--own"><span class="bline__label">Injectors</span><span class="bline__val">440 cc — flow-matched set</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="440 cc injectors — flow-matched set" data-cond="Good — used" data-price="160">Release</button></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">CHASSIS &amp; SUSPENSION</span></div>
+      <div class="bline bline--own"><span class="bline__label">Coilovers</span><span class="bline__val">KW Variant 2 — gravel springs</span><span class="bline__note">Coming off for the Bilstein setup</span><a class="chip chip--live" href="listing.html">LISTED $680</a></div>
+      <div class="bline bline--own"><span class="bline__label">Next suspension</span><span class="bline__val">Bilstein B8 + H&amp;R — alpine spec</span><span class="chip">PLANNED</span></div>
+      <div class="bline bline--own"><span class="bline__label">Anti-roll</span><span class="bline__val">Whiteline rear ARB, 22 mm</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Whiteline rear ARB — 22 mm" data-cond="Good — used" data-price="120">Release</button></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">WHEELS &amp; BRAKES</span></div>
+      <div class="bline bline--own"><span class="bline__label">Wheels</span><span class="bline__val">Speedline Montecarlo 16×7</span><span class="bline__note">Refinished white · correct ET</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Speedline Montecarlo 16×7 ×4" data-cond="Excellent — as new" data-price="820">Release</button></div>
+      <div class="bline bline--own"><span class="bline__label">Brakes</span><span class="bline__val">Brembo 4-pot front, braided lines</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Brembo 4-pot front kit + braided lines" data-cond="Good — used" data-price="480">Release</button></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">INTERIOR</span></div>
+      <div class="bline bline--own"><span class="bline__label">Driver seat</span><span class="bline__val">Recaro Pole Position</span><span class="bline__note">Replaced the Sabelt below</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Recaro Pole Position — driver side" data-cond="Excellent — as new" data-price="450">Release</button></div>
+      <div class="bline bline--own"><span class="bline__label">Previous seat</span><span class="bline__val">Sabelt bucket — driver side</span><a class="chip chip--live" href="listing.html">LISTED $290</a></div>
+      <div class="bline bline--own"><span class="bline__label">Wheel</span><span class="bline__val">Momo Prototipo 350 + quick-release</span><span class="chip chip--ok">FITTED</span><button class="relbtn" type="button" data-release data-part="Momo Prototipo 350 + quick-release" data-cond="Good — used" data-price="260">Release</button></div>
+
+      <div class="bsec"><span class="microlabel microlabel--live">BODY &amp; MAINTENANCE</span></div>
+      <div class="bline bline--own"><span class="bline__label">Cambelt</span><span class="bline__val">Belt, tensioners, water pump</span><span class="bline__note">84,200 km · receipts on sheet</span><span class="chip chip--ok">JUL 2026</span></div>
+    </div>
+  </section>
+
+  <!-- DOCUMENTS -->
+  <section class="deck deck--two" id="docs" style="padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-files"></i>&nbsp;DOCUMENTS — RIDE WITH EVERY RELEASE</span>
+        <span class="microlabel">5 ON FILE</span>
+      </div>
+      <ul class="feed">
+        <li><time>JUL 08</time> Cambelt + tensioners — invoice, 84,200 km <a class="amt mono" href="#" data-toast="PDF VIEWER — NOT IN THIS PROTOTYPE">VIEW ↗</a></li>
+        <li><time>MAY 26</time> Dyno sheet — 246 bhp / 1.1 bar <a class="amt mono" href="#" data-toast="PDF VIEWER — NOT IN THIS PROTOTYPE">VIEW ↗</a></li>
+        <li><time>APR 26</time> Service log — oil, plugs, diff fluid <a class="amt mono" href="#" data-toast="PDF VIEWER — NOT IN THIS PROTOTYPE">VIEW ↗</a></li>
+        <li><time>FEB 26</time> Powerflex bush kit — invoice <a class="amt mono" href="#" data-toast="PDF VIEWER — NOT IN THIS PROTOTYPE">VIEW ↗</a></li>
+        <li><time>NOV 25</time> Corner-weight sheet — 1,278 kg wet <a class="amt mono" href="#" data-toast="REQUEST FILED — SCAN LANDS ON THE SHEET">REQUEST</a></li>
+      </ul>
+      <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">Attached automatically</span>
+        <span class="val">Every release carries the lines it touched</span>
+      </div>
+    </div>
+
+    <!-- SECOND SHEET -->
+    <div class="tile rv" data-stagger="1" id="second">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">ALSO ON YOUR SHEET</span>
+        <span class="chip">EMPTY BAY</span>
+      </div>
+      <p style="font-size:13.5px;color:var(--dim);max-width:48ch">Nothing else drawn yet. A second sheet gets its own build lines, its own watchers, and its own releases — and drives a second FITS switch on the market.</p>
+      <div style="margin-top:16px">
+        <button class="btn btn--ghost" type="button" data-toast="SECOND SHEET — OPENS FROM SETTINGS · GARAGE">Open a second sheet</button>
+      </div>
+      <div class="livedim" style="margin-top:16px"><span class="livedim__tick"></span>
+        <span class="microlabel">Keepers with two sheets</span>
+        <span class="val">Sell 1.8× more parts on average</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — OWNER'S DESK C-0416 · RELEASES INHERIT THE DRAWING</span>
+    <a class="microlabel mono" href="car.html">VIEW PUBLIC SHEET →</a>
+  </footer>
+</main>
+
+<!-- RELEASE-A-PART SHEET — one instance, prefilled from the clicked line -->
+<div class="sheetwrap" id="releaseSheet" aria-modal="true" role="dialog" aria-label="Release a part">
+  <div class="sheet">
+    <form>
+      <div data-step1>
+        <div class="tile__head"><span class="microlabel microlabel--ink">RELEASE A PART — SHEET C-0416</span><button class="microlabel mono" type="button" data-close-release>ESC ✕</button></div>
+        <div class="bline bline--ctl" style="border-top:0">
+          <span class="bline__label">Part</span>
+          <input class="ctl" id="relName" type="text" placeholder="e.g. Whiteline rear ARB — 22 mm" required style="max-width:none">
+        </div>
+        <div class="bline bline--ctl">
+          <span class="bline__label">Condition</span>
+          <select class="ctl" id="relCond">
+            <option>Excellent — as new</option>
+            <option>Good — used</option>
+            <option>Fair — needs refresh</option>
+            <option>For rebuild / spares</option>
+          </select>
+        </div>
+        <div class="bline bline--ctl">
+          <span class="bline__label">Asking ($)</span>
+          <input class="ctl" id="relPrice" type="number" min="0" step="10" placeholder="0">
+        </div>
+        <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+          <span class="microlabel">Attached from the sheet</span>
+          <span class="val">Fitted dates · receipts · what it ran with</span>
+        </div>
+        <div class="sheet__actions">
+          <button class="btn btn--live" type="submit">Raise the draft</button>
+          <button class="btn btn--ghost" type="button" data-close-release>Cancel</button>
+        </div>
+      </div>
+      <div data-step2 style="display:none">
+        <span class="stamp">DRAFT RAISED — L-0693</span>
+        <p style="font-size:14px;margin:8px 0 2px" data-rel-summary>Part — draft raised</p>
+        <p style="font-size:13px;color:var(--dim)">The line stays on the build marked DRAFT RAISED. Review and publish from the workbench.</p>
+        <div class="sheet__actions">
+          <a class="btn" href="dashboard.html">To the workbench</a>
+          <button class="btn btn--ghost" type="button" data-close-release>Back to the sheet</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="livesheet.js"></script>
+</body>
+</html>

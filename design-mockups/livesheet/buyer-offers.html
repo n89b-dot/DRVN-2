@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Offers you've made</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 06 — BUYING · ONE SELLER IS WAITING ON <span class="mono">YOU</span></span>
+    <h1>Offers you've made.<br>Three are still <span class="live-word">breathing.</span></h1>
+    <p class="sub">Every offer you've put on someone else's sheet, with the clock that governs it. @kessler.m came back at $1,050 overnight — that one needs an answer before the window shuts.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#live">Live · 3</a>
+    <a class="jumplink" href="#countered">Countered · 1</a>
+    <a class="jumplink" href="#won">Won · 2</a>
+    <a class="jumplink" href="#lapsed">Lapsed · 2</a>
+  </div>
+
+  <!-- KPI STRIP -->
+  <section class="deck deck--kpi" style="margin-top:14px;padding-bottom:14px">
+    <div class="tile rv" data-stagger="0">
+      <span class="microlabel"><i class="ph ph-gavel"></i>&nbsp;Offers live</span>
+      <div class="num-giant" data-count="3">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">$1,705 committed if all land</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel microlabel--live"><i class="ph ph-hourglass-medium"></i>&nbsp;Awaiting you</span>
+      <div class="num-giant" style="color:var(--live)" data-count="1">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">Counter expires in</span>
+        <span class="val" data-seconds="20460"></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel"><i class="ph ph-seal-check"></i>&nbsp;Won this month</span>
+      <div class="num-giant" data-count="2">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">$945 across 2 sellers</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="3">
+      <span class="microlabel"><i class="ph ph-trend-down"></i>&nbsp;Avg. discount won</span>
+      <div class="num-giant">11<span style="font-size:0.5em">%</span></div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">Off ask · 7 offers, lifetime</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ETIQUETTE -->
+  <section class="deck" style="padding-bottom:14px">
+    <div class="alert rv">
+      <i class="ph ph-info alert__ico" aria-hidden="true"></i>
+      <h4>How offer windows work here</h4>
+      <p>An offer holds for 48 hours. The seller can accept, counter once, or let it lapse — a counter restarts the clock on your side, and it only runs once. Withdrawing is free until the moment they accept. Sellers see how many offers you've honoured, so a lapsed offer costs you nothing but a withdrawn <em>accepted</em> one does.</p>
+    </div>
+  </section>
+
+  <!-- LIVE -->
+  <section class="deck" id="live" style="padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-broadcast"></i>&nbsp;LIVE — WITH THE SELLER</span>
+        <span class="capsule"><span class="dot"></span> OLDEST LAPSES IN <span class="cd" data-seconds="9240"></span></span>
+      </div>
+      <div class="rowlist" data-offers>
+
+        <div class="order" data-offer data-name="Öhlins DFV coilover kit">
+          <div class="order__img"><img src="../assets/c16-part-coilovers.png" alt="Öhlins coilover kit" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Öhlins DFV coilover kit — 993 fitment</div>
+            <div class="order__meta" data-meta>@luftkuehl · <span data-verb>you offered</span> <b>$980</b> vs $1,150 ask · seller has <span class="cd" data-seconds="9240"></span></div>
+          </div>
+          <div class="order__actions" data-actions>
+            <button class="btn btn--live" type="button" data-o="raise" data-cur="980">Raise offer</button>
+            <button class="btn btn--ghost" type="button" data-o="withdraw">Withdraw</button>
+          </div>
+        </div>
+
+        <div class="order" data-offer data-name="BBS RS 16in barrel set">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">BBS</span></div>
+          <div>
+            <div class="order__name">BBS RS 16″ barrels ×4 — refinished</div>
+            <div class="order__meta" data-meta>@torino.classics · <span data-verb>you offered</span> <b>$540</b> vs $600 ask · seller has <span class="cd" data-seconds="53400"></span></div>
+          </div>
+          <div class="order__actions" data-actions>
+            <button class="btn btn--live" type="button" data-o="raise" data-cur="540">Raise offer</button>
+            <button class="btn btn--ghost" type="button" data-o="withdraw">Withdraw</button>
+          </div>
+        </div>
+
+        <div class="order" data-offer data-name="Momo Prototipo steering wheel">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">MOMO</span></div>
+          <div>
+            <div class="order__name">Momo Prototipo 350mm — black leather</div>
+            <div class="order__meta" data-meta>@garage.iida · <span data-verb>you offered</span> <b>$185</b> vs $210 ask · seller has <span class="cd" data-seconds="122400"></span></div>
+          </div>
+          <div class="order__actions" data-actions>
+            <button class="btn btn--live" type="button" data-o="raise" data-cur="185">Raise offer</button>
+            <button class="btn btn--ghost" type="button" data-o="withdraw">Withdraw</button>
+          </div>
+        </div>
+
+      </div>
+      <p class="kv" style="margin-top:14px;color:var(--dim)">Raising an offer replaces the old one — the window does not restart.</p>
+    </div>
+  </section>
+
+  <!-- COUNTERED -->
+  <section class="deck" id="countered" style="padding-bottom:14px">
+    <div class="tile rv" id="counterTile">
+      <div class="tile__head">
+        <span class="microlabel microlabel--live"><i class="ph ph-arrows-left-right"></i>&nbsp;COUNTERED — YOUR MOVE</span>
+        <span class="chip chip--live" data-cstate>THEIR COUNTER STANDS</span>
+      </div>
+
+      <div class="rowlist">
+        <div class="order">
+          <div class="order__img"><img src="../assets/c4-part-seat.png" alt="Recaro Pole Position seat" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Recaro Pole Position ABE — pair</div>
+            <div class="order__meta">@kessler.m · off the Evo IX sheet C-0512 · asking $1,190 · shipping from München</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bsec">
+        <span class="microlabel microlabel--ink">THE NEGOTIATION</span>
+        <span class="microlabel">3 MOVES · 1 LEFT</span>
+      </div>
+
+      <div class="bline">
+        <span class="bline__label">You offered · Mon 21:40</span>
+        <span class="bline__val">$980</span>
+        <span class="bline__note">18% under ask — you cited the bolster wear in photo 4.</span>
+        <span class="chip">SENT</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">They countered · Tue 08:12</span>
+        <span class="bline__val" style="color:var(--live)">$1,050</span>
+        <span class="bline__note">"Rails and ABE paperwork included. $1,050 is my floor."</span>
+        <span class="chip chip--live">THEIRS</span>
+      </div>
+      <div class="bline" data-moveline>
+        <span class="bline__label">Your move · closes in</span>
+        <span class="bline__val mono" data-seconds="20460">05:41:00</span>
+        <span class="bline__note">No answer and the counter lapses — the seat goes back on the open market.</span>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px" data-cactions>
+        <button class="btn btn--live" type="button" data-c="accept">Accept $1,050</button>
+        <button class="btn btn--ghost" type="button" data-c="counter">Counter again</button>
+        <button class="btn btn--ghost" type="button" data-c="walk">Walk away</button>
+      </div>
+      <p class="kv" style="margin-top:12px;color:var(--dim)">Accepting opens a job card on their sheet and a payment line on yours.</p>
+    </div>
+  </section>
+
+  <!-- WON -->
+  <section class="deck" id="won" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-seal-check"></i>&nbsp;WON — ACCEPTED BY THE SELLER</span>
+        <span class="microlabel">JULY · $945</span>
+      </div>
+      <div class="rowlist">
+        <div class="order">
+          <div class="order__img"><img src="../assets/c4-part-brake.png" alt="AP Racing brake kit" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">AP Racing CP9660 front kit</div>
+            <div class="order__meta">@tarmac.rally accepted <b>$1,150</b> · Jul 16 · paid, packed, in transit</div>
+          </div>
+          <div class="order__actions"><a class="btn btn--ghost" href="buyer-orders.html">Track it</a></div>
+        </div>
+        <div class="order">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">HEL</span></div>
+          <div>
+            <div class="order__name">HEL braided lines + Motul RBF660</div>
+            <div class="order__meta">@tarmac.rally accepted <b>$145</b> · Jul 21 · <span class="cd" data-seconds="37800"></span> to pay before it releases</div>
+          </div>
+          <div class="order__actions"><a class="btn btn--live" href="buyer-orders.html">Pay now</a></div>
+        </div>
+        <div class="order">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">16″</span></div>
+          <div>
+            <div class="order__name">Speedline Corse 16″ ×4</div>
+            <div class="order__meta">@torino.classics accepted <b>$800</b> · Jul 9 · delivered, reviewed</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">PAID $800</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LAPSED -->
+  <section class="deck" id="lapsed">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel">LAPSED — THE WINDOW CLOSED</span>
+        <span class="capsule capsule--quiet"><span class="dot"></span> NOTHING LIVE HERE</span>
+      </div>
+      <div class="rowlist" data-lapsed>
+        <div class="order" data-relist>
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">DOG</span></div>
+          <div>
+            <div class="order__name">Dogleg gearbox — Getrag 265, rebuilt</div>
+            <div class="order__meta">@luftkuehl · you offered $2,100 vs $2,600 ask · lapsed Jul 12, no answer</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--spent">LAPSED</span>
+            <button class="btn btn--ghost" type="button" data-again>Offer again</button>
+          </div>
+        </div>
+        <div class="order" data-relist>
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">OMP</span></div>
+          <div>
+            <div class="order__name">OMP roll cage — bolt-in, Evo VIII/IX</div>
+            <div class="order__meta">@tarmac.rally · you offered $430 vs $520 ask · you withdrew Jul 8</div>
+          </div>
+          <div class="order__actions">
+            <span class="chip chip--spent">WITHDRAWN</span>
+            <button class="btn btn--ghost" type="button" data-again>Offer again</button>
+          </div>
+        </div>
+      </div>
+      <div class="livedim livedim--blank" style="margin-top:14px"><span class="livedim__tick"></span>
+        <span class="microlabel">Both parts are still listed</span>
+        <span class="val">Sellers here answer 8 of 10 offers within a day</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 06 · THE CLOCK IS THE CONTRACT</span>
+    <a class="microlabel mono" href="watchlist.html">WATCHLIST →</a>
+    <a class="microlabel mono" href="buyer-orders.html">WHAT YOU'RE BUYING →</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+(function () {
+  "use strict";
+  function money(n) { return "$" + Number(n).toLocaleString("en-US"); }
+
+  /* ---------- LIVE offers: raise / withdraw ---------- */
+  var live = document.querySelector("[data-offers]");
+  if (live) {
+    live.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-o]"); if (!b) return;
+      var row = b.closest("[data-offer]");
+      var kind = b.getAttribute("data-o");
+      var actions = row.querySelector("[data-actions]");
+      var meta = row.querySelector("[data-meta]");
+
+      if (kind === "withdraw") {
+        row.classList.add("is-gone");
+        setTimeout(function () {
+          row.remove();
+          if (!live.querySelector("[data-offer]")) {
+            live.innerHTML =
+              '<div class="undrawn" style="border:0;background:transparent;padding:18px 0">' +
+              '<div class="undrawn__mark"><i class="ph ph-gavel" aria-hidden="true"></i></div>' +
+              '<h3>No live offers</h3>' +
+              '<p>Nothing of yours is sitting on anyone else’s sheet right now. The market is where you start one.</p>' +
+              '<div style="margin-top:4px"><a class="btn btn--ghost" href="market.html">Browse the market</a></div></div>';
+          }
+        }, 420);
+        window.lsToast("OFFER WITHDRAWN — " + row.getAttribute("data-name").toUpperCase());
+
+      } else if (kind === "raise") {
+        var cur = parseInt(b.getAttribute("data-cur"), 10);
+        actions.innerHTML =
+          '<label class="microlabel" style="align-self:center">NEW&nbsp;$</label>' +
+          '<input class="ctl mono" data-raise-input type="text" inputmode="numeric" ' +
+          'aria-label="New offer amount" placeholder="' + (cur + 60) + '" style="width:96px;padding:9px 12px">' +
+          '<button class="btn btn--live" type="button" data-o="send" data-cur="' + cur + '">Send</button>' +
+          '<button class="btn btn--ghost" type="button" data-o="cancel" data-cur="' + cur + '">Cancel</button>';
+        actions.querySelector("input").focus();
+
+      } else if (kind === "send") {
+        var input = actions.querySelector("[data-raise-input]");
+        var v = parseInt(String(input.value).replace(/[^0-9]/g, ""), 10);
+        var was = parseInt(b.getAttribute("data-cur"), 10);
+        if (!v || v <= was) { window.lsToast("RAISE MUST BEAT YOUR OWN " + money(was)); input.focus(); return; }
+        meta.querySelector("b").textContent = money(v);
+        meta.querySelector("[data-verb]").textContent = "you raised to";
+        actions.innerHTML = '<span class="chip chip--live">RAISED ' + money(v) + '</span>';
+        window.lsToast("OFFER RAISED TO " + money(v) + " — SELLER NOTIFIED");
+
+      } else if (kind === "cancel") {
+        var c = parseInt(b.getAttribute("data-cur"), 10);
+        actions.innerHTML =
+          '<button class="btn btn--live" type="button" data-o="raise" data-cur="' + c + '">Raise offer</button>' +
+          '<button class="btn btn--ghost" type="button" data-o="withdraw">Withdraw</button>';
+      }
+    });
+  }
+
+  /* ---------- COUNTERED: accept / counter again / walk ---------- */
+  var ct = document.getElementById("counterTile");
+  if (ct) {
+    var cact = ct.querySelector("[data-cactions]");
+    var cstate = ct.querySelector("[data-cstate]");
+    var moveline = ct.querySelector("[data-moveline]");
+    cact.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-c]"); if (!b) return;
+      var kind = b.getAttribute("data-c");
+
+      if (kind === "accept") {
+        cstate.className = "chip chip--ok";
+        cstate.textContent = "ACCEPTED $1,050";
+        moveline.querySelector(".bline__label").textContent = "You accepted · just now";
+        moveline.querySelector(".bline__val").textContent = "$1,050";
+        moveline.querySelector(".bline__val").removeAttribute("data-seconds");
+        moveline.querySelector(".bline__note").textContent =
+          "Job card raised on @kessler.m's sheet. Pay within 24 h and the seat is yours.";
+        cact.innerHTML = '<a class="btn btn--live" href="buyer-orders.html">Pay $1,050 now</a>' +
+                         '<a class="btn btn--ghost" href="messages.html">Message @kessler.m</a>';
+        window.lsToast("DEAL STRUCK AT $1,050 — PAYMENT LINE OPEN FOR 24 H");
+
+      } else if (kind === "counter") {
+        cact.innerHTML =
+          '<label class="microlabel" style="align-self:center">YOUR&nbsp;COUNTER&nbsp;$</label>' +
+          '<input class="ctl mono" data-cinput type="text" inputmode="numeric" aria-label="Your counter amount" placeholder="1015" style="width:110px;padding:9px 12px">' +
+          '<button class="btn btn--live" type="button" data-c="csend">Send counter</button>' +
+          '<button class="btn btn--ghost" type="button" data-c="ccancel">Back</button>';
+        cact.querySelector("input").focus();
+
+      } else if (kind === "csend") {
+        var input = cact.querySelector("[data-cinput]");
+        var v = parseInt(String(input.value).replace(/[^0-9]/g, ""), 10);
+        if (!v) { window.lsToast("ENTER AN AMOUNT FIRST"); input.focus(); return; }
+        if (v > 1050) { window.lsToast("THAT'S ABOVE THEIR COUNTER — JUST ACCEPT $1,050"); input.focus(); return; }
+        cstate.className = "chip chip--live";
+        cstate.textContent = "YOUR COUNTER SENT";
+        moveline.querySelector(".bline__label").textContent = "You countered · just now";
+        moveline.querySelector(".bline__val").textContent = money(v);
+        moveline.querySelector(".bline__val").removeAttribute("data-seconds");
+        moveline.querySelector(".bline__note").textContent =
+          "Final move used. @kessler.m has 48 h to take it or the thread closes.";
+        cact.innerHTML = '<span class="chip chip--live">WAITING ON @KESSLER.M</span>';
+        window.lsToast("COUNTER SENT AT " + money(v) + " — LAST MOVE ON THIS THREAD");
+
+      } else if (kind === "ccancel") {
+        cact.innerHTML =
+          '<button class="btn btn--live" type="button" data-c="accept">Accept $1,050</button>' +
+          '<button class="btn btn--ghost" type="button" data-c="counter">Counter again</button>' +
+          '<button class="btn btn--ghost" type="button" data-c="walk">Walk away</button>';
+
+      } else if (kind === "walk") {
+        cstate.className = "chip chip--spent";
+        cstate.textContent = "WALKED AWAY";
+        ct.querySelectorAll(".bline .chip").forEach(function (c) { c.className = "chip chip--spent"; });
+        moveline.querySelector(".bline__label").textContent = "You walked · just now";
+        moveline.querySelector(".bline__val").textContent = "—";
+        moveline.querySelector(".bline__val").removeAttribute("data-seconds");
+        moveline.querySelector(".bline__val").style.color = "var(--dim)";
+        moveline.querySelector(".bline__note").textContent =
+          "Thread closed. The seat returns to the open market — you can still watch it.";
+        cact.innerHTML = '<a class="btn btn--ghost" href="watchlist.html">Watch it instead</a>' +
+                         '<a class="btn btn--ghost" href="market.html">Find similar</a>';
+        window.lsToast("WALKED AWAY — NOTHING OWED, NOTHING HELD");
+      }
+    });
+  }
+
+  /* ---------- LAPSED: offer again ---------- */
+  var lap = document.querySelector("[data-lapsed]");
+  if (lap) {
+    lap.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-again]"); if (!b) return;
+      var row = b.closest(".order");
+      var name = row.querySelector(".order__name").textContent;
+      row.querySelector(".order__actions").innerHTML = '<span class="chip chip--live">OFFER REOPENED</span>';
+      row.querySelector(".order__meta").innerHTML =
+        row.querySelector(".order__meta").textContent.split("·").slice(0, 2).join("·") +
+        ' · new 48 h window opens now';
+      window.lsToast("NEW OFFER DRAFTED — " + name.split("—")[0].trim().toUpperCase());
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · What you're buying</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="pagehead rv">
+    <span class="microlabel">SHEET 07 — BUYING · ORDER #2214 · SCANNED 41 MIN AGO IN KÖLN</span>
+    <h1>What you're buying.<br>One kit is <span class="live-word">moving.</span></h1>
+    <p class="sub">The AP Racing kit left München on Tuesday and cleared the Köln hub this morning. Everything below is the carrier's own feed — nothing here is a guess.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS ORDER</span>
+    <a class="jumplink" href="#pipeline">Pipeline</a>
+    <a class="jumplink" href="#tracking">Tracking</a>
+    <a class="jumplink" href="#item">The item</a>
+    <a class="jumplink" href="#seller">Seller</a>
+    <a class="jumplink" href="#inspect">Inspection window</a>
+    <a class="jumplink" href="#past">Past purchases · 4</a>
+  </div>
+
+  <!-- KPI -->
+  <section class="deck deck--kpi" style="margin-top:14px;padding-bottom:14px">
+    <div class="tile rv" data-stagger="0">
+      <span class="microlabel"><i class="ph ph-truck"></i>&nbsp;In transit</span>
+      <div class="num-giant" data-count="1">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">Arrives Thursday, in</span>
+        <span class="val" data-seconds="151200"></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="1">
+      <span class="microlabel"><i class="ph ph-credit-card"></i>&nbsp;To pay</span>
+      <div class="num-giant" style="color:var(--live)">$145</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim livedim--live"><span class="livedim__tick"></span>
+        <span class="microlabel">HEL lines · releases in</span>
+        <span class="val" data-seconds="37800"></span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="2">
+      <span class="microlabel"><i class="ph ph-package"></i>&nbsp;Orders, lifetime</span>
+      <div class="num-giant" data-count="11">0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">5 sellers · 0 claims opened</span>
+      </div>
+    </div>
+    <div class="tile rv" data-stagger="3">
+      <span class="microlabel"><i class="ph ph-receipt"></i>&nbsp;Total spent</span>
+      <div class="num-giant" data-count="4285" data-prefix="$">$0</div>
+      <div class="dimline-h" aria-hidden="true"></div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">Since Mar 2025 · $389 average</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section class="deck" id="pipeline" style="padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-path"></i>&nbsp;ORDER #2214 — AP RACING CP9660 FRONT KIT · $1,150</span>
+        <span class="chip chip--live" data-ostate>IN TRANSIT</span>
+      </div>
+      <div class="pipe" id="pipe2214">
+        <span class="pip is-on"></span><span class="pip is-on"></span><span class="pip is-on"></span><span class="pip"></span>
+        <span class="lbl">Paid · Packed · In transit · Delivered</span>
+      </div>
+      <div class="livedim livedim--live" style="margin-top:16px"><span class="livedim__tick"></span>
+        <span class="microlabel">Arrives Thursday 24 Jul, before 18:00 — in</span>
+        <span class="val" data-seconds="151200"></span>
+      </div>
+      <div class="livedim"><span class="livedim__tick"></span>
+        <span class="microlabel">Paid Jul 16 · Visa ····4417</span>
+        <span class="val">$1,150.00 · held in escrow until you confirm</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+        <button class="btn btn--live" type="button" data-confirm-delivery>Confirm delivery</button>
+        <a class="btn btn--ghost" href="messages.html">Message @tarmac.rally</a>
+      </div>
+      <p class="kv" style="margin-top:12px;color:var(--dim)">Confirming releases the seller's payout and starts your 48-hour inspection window.</p>
+    </div>
+  </section>
+
+  <!-- TRACKING -->
+  <section class="deck deck--two" id="tracking" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-map-pin-line"></i>&nbsp;TRACKING — STRAIGHT FROM THE CARRIER</span>
+        <span class="microlabel">DHL EXPRESS</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Carrier</span>
+        <span class="bline__val">DHL Express — insured to $2,000</span>
+        <span class="bline__note">Two boxes, 24 kg total. Signature required.</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Tracking no.</span>
+        <span class="bline__val mono">JD01 4499 8821 7730</span>
+        <span class="bline__note">Filed by @tarmac.rally on dispatch, Jul 22 09:04.</span>
+      </div>
+      <div class="bline" data-scanline>
+        <span class="bline__label">Last scan</span>
+        <span class="bline__val" style="color:var(--live)" data-scanplace>Köln hub — outbound sort</span>
+        <span class="bline__note" data-scannote>41 minutes ago · next scan expected at the Leeds depot tonight.</span>
+        <span class="chip chip--live">LIVE</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Delivering to</span>
+        <span class="bline__val">Dana Whitlock — Skipton, UK</span>
+        <span class="bline__note">Leave with neighbour at no. 14 if out.</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+        <button class="btn btn--ghost" type="button" data-refresh-scan>Refresh scans</button>
+        <button class="btn btn--ghost" type="button" data-toast="DELIVERY INSTRUCTIONS SENT TO DHL — LEAVE WITH NO. 14">Change instructions</button>
+      </div>
+    </div>
+
+    <div class="tile rv" id="item" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THE ITEM — OFF A REAL SHEET</span>
+        <a class="microlabel mono" href="listing.html">PART SHEET →</a>
+      </div>
+      <div class="rowlist">
+        <div class="order">
+          <div class="order__img"><img src="../assets/c4-part-brake.png" alt="AP Racing CP9660 brake kit" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">AP Racing CP9660 front kit — 362 mm</div>
+            <div class="order__meta">Bells, discs, calipers, pads · fitted Apr 2024 → removed Jun 2026 · 4 track days on the pads</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">PAID $1,150</span></div>
+        </div>
+        <a class="order" href="car.html">
+          <div class="order__img"><img src="../assets/c4-car-evo.png" alt="Mitsubishi Evo IX" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Mitsubishi Lancer Evo IX — "Tarmac"</div>
+            <div class="order__meta">Car sheet C-0512 · the kit's whole history rides with it →</div>
+          </div>
+        </a>
+      </div>
+      <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">Came off because</span>
+        <span class="val">Moved to a 380 mm Alcon kit for tarmac stages</span>
+      </div>
+      <p class="spec-note"><b>In the box:</b> 2 calipers, 2 bells + discs, 1 unused set of Ferodo DS2500, 4 braided lines, fitting kit. <b>Not included:</b> master cylinder.</p>
+    </div>
+  </section>
+
+  <!-- SELLER + INSPECTION -->
+  <section class="deck deck--two" id="seller" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink">THE SELLER</span>
+        <span class="chip chip--ok">4.9 ★ · 31 SALES</span>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="monogram monogram--sm">TR</div>
+        <div>
+          <div class="order__name">Aleks Nowak</div>
+          <div class="order__meta">@tarmac.rally · München · on the sheet since 2023</div>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--dim);margin-top:12px">Runs a stage-spec Evo IX and strips it honestly — every part he lists carries the receipt and the reason it came off. Dispatched this order 6 hours after payment.</p>
+      <div class="review">
+        <div class="review__head">
+          <span class="order__name" style="font-size:14px">@garage.iida</span>
+          <span class="microlabel">JUL 2</span>
+          <span class="review__stars">★★★★★</span>
+        </div>
+        <p>Packed like it mattered. The wear photos were, if anything, harsher than the parts.</p>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <a class="btn btn--ghost" href="messages.html">Message seller</a>
+        <a class="btn btn--ghost" href="car.html">Their sheet</a>
+      </div>
+    </div>
+
+    <div class="tile rv" id="inspect" data-stagger="1">
+      <div class="tile__head">
+        <span class="microlabel microlabel--live"><i class="ph ph-shield-check"></i>&nbsp;INSPECTION WINDOW</span>
+        <span class="chip" data-inspect-chip>OPENS ON DELIVERY</span>
+      </div>
+      <div class="alert alert--live" style="margin-top:4px">
+        <i class="ph ph-warning-circle alert__ico" aria-hidden="true"></i>
+        <h4>48 hours to inspect once it's delivered</h4>
+        <p>Open the boxes, check the kit against the listing photos, and confirm. If anything is wrong — wrong part, undisclosed damage, missing hardware — open a claim from here inside 48 hours and the escrowed $1,150 stays put until it's settled.</p>
+      </div>
+      <div class="livedim" style="margin-top:14px" data-inspect-dim><span class="livedim__tick"></span>
+        <span class="microlabel">Window starts</span>
+        <span class="val">The moment DHL marks it delivered</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+        <a class="btn btn--live" href="safety.html">Open a claim</a>
+        <a class="btn btn--ghost" href="safety.html">How claims work</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAST PURCHASES -->
+  <section class="deck" id="past">
+    <div class="tile tile--deep rv">
+      <div class="tile__head">
+        <span class="microlabel microlabel--ink"><i class="ph ph-archive"></i>&nbsp;PAST PURCHASES — CLOSED AND DELIVERED</span>
+        <span class="microlabel">$2,990 ACROSS 4 ORDERS</span>
+      </div>
+      <div class="rowlist" data-past>
+        <div class="order">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">16″</span></div>
+          <div>
+            <div class="order__name">Speedline Corse 16″ ×4 — @torino.classics</div>
+            <div class="order__meta">$800 · delivered Jul 12 · straight, one refinished lip as described</div>
+          </div>
+          <div class="order__actions">
+            <button class="btn btn--ghost" type="button" data-review>Leave review</button>
+          </div>
+        </div>
+        <div class="order">
+          <div class="order__img"><img src="../assets/c4-part-exhaust.png" alt="Stainless exhaust system" onerror="this.remove()"></div>
+          <div>
+            <div class="order__name">Supersprint race exhaust — @luftkuehl</div>
+            <div class="order__meta">$890 · delivered Jun 28 · no rattles, welds as photographed</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">REVIEWED ★</span></div>
+        </div>
+        <div class="order">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">ARB</span></div>
+          <div>
+            <div class="order__name">Whiteline ARB kit — @garage.iida</div>
+            <div class="order__meta">$150 · delivered Jun 9 · new in box, bushes included</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">REVIEWED ★</span></div>
+        </div>
+        <div class="order">
+          <div class="order__img" style="display:grid;place-items:center"><span class="mono" style="font-size:11px;color:var(--dim)">ECU</span></div>
+          <div>
+            <div class="order__name">Mapped ECU — 246 bhp file — @kessler.m</div>
+            <div class="order__meta">$1,150 · delivered May 30 · dyno sheet in the box, plugged straight in</div>
+          </div>
+          <div class="order__actions"><span class="chip chip--ok">REVIEWED ★</span></div>
+        </div>
+      </div>
+      <div class="livedim" style="margin-top:14px"><span class="livedim__tick"></span>
+        <span class="microlabel">Total spent through the sheet</span>
+        <span class="val">$4,285 · 11 orders · 0 claims opened</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — SHEET 07 · MONEY SITS IN ESCROW UNTIL YOU SAY OTHERWISE</span>
+    <a class="microlabel mono" href="buyer-offers.html">← YOUR OFFERS</a>
+    <a class="microlabel mono" href="watchlist.html">WATCHLIST →</a>
+  </footer>
+</main>
+
+<script src="livesheet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- carrier scan feed: each refresh advances the trail ---------- */
+  var scans = [
+    ["Leeds depot — inbound scan", "just now · out for delivery Thursday morning."],
+    ["Leeds depot — loaded to van 14", "just now · driver started the round at 07:12."],
+    ["Skipton — delivery attempted", "just now · signature taken at the door."]
+  ];
+  var si = 0;
+  var rbtn = document.querySelector("[data-refresh-scan]");
+  if (rbtn) {
+    rbtn.addEventListener("click", function () {
+      if (si >= scans.length) { window.lsToast("NO NEW SCANS — DHL LAST REPORTED AT SKIPTON"); return; }
+      var s = scans[si++];
+      document.querySelector("[data-scanplace]").textContent = s[0];
+      document.querySelector("[data-scannote]").textContent = s[1];
+      var line = document.querySelector("[data-scanline]");
+      line.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });
+      if (si === scans.length) {
+        var pipe = document.getElementById("pipe2214");
+        var next = pipe.querySelector(".pip:not(.is-on)");
+        if (next) next.classList.add("is-on");
+        window.lsToast("DELIVERED — 48 H INSPECTION WINDOW IS NOW OPEN");
+        openWindow();
+      } else {
+        window.lsToast("SCAN UPDATED — " + s[0].toUpperCase());
+      }
+    });
+  }
+
+  /* ---------- confirm delivery: closes the pipeline, opens inspection ---------- */
+  function openWindow() {
+    var chip = document.querySelector("[data-inspect-chip]");
+    if (chip && chip.className.indexOf("chip--live") === -1) {
+      chip.className = "chip chip--live";
+      chip.textContent = "OPEN — 48:00:00 LEFT";
+    }
+    var dim = document.querySelector("[data-inspect-dim]");
+    if (dim && !dim.classList.contains("livedim--live")) {
+      dim.classList.add("livedim--live");
+      dim.querySelector(".microlabel").textContent = "Window closes in";
+      var v = document.createElement("span");
+      v.className = "val";
+      v.setAttribute("data-seconds", "172800");
+      dim.querySelector(".val") ? dim.querySelector(".val").replaceWith(v) : dim.appendChild(v);
+      var s = 172800;
+      (function run() {
+        var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+        v.textContent = h + ":" + String(m).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
+        s--; setTimeout(run, 1000);
+      })();
+    }
+  }
+
+  var cbtn = document.querySelector("[data-confirm-delivery]");
+  if (cbtn) {
+    cbtn.addEventListener("click", function () {
+      var pipe = document.getElementById("pipe2214");
+      pipe.querySelectorAll(".pip").forEach(function (p) { p.classList.add("is-on"); });
+      var st = document.querySelector("[data-ostate]");
+      st.className = "chip chip--ok";
+      st.textContent = "DELIVERED · CONFIRMED";
+      cbtn.replaceWith(Object.assign(document.createElement("span"), {
+        className: "chip chip--ok", textContent: "PAYOUT RELEASED TO @TARMAC.RALLY"
+      }));
+      openWindow();
+      window.lsToast("DELIVERY CONFIRMED — $1,150 RELEASED, 48 H TO INSPECT");
+    });
+  }
+
+  /* ---------- past purchases: leave a review inline ---------- */
+  var past = document.querySelector("[data-past]");
+  if (past) {
+    past.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-review]"); if (!b) return;
+      var actions = b.closest(".order__actions");
+      actions.innerHTML =
+        '<label class="microlabel" style="align-self:center">STARS</label>' +
+        '<select class="ctl" data-stars aria-label="Star rating" style="width:88px;padding:9px 10px">' +
+        '<option value="5">★★★★★</option><option value="4">★★★★</option>' +
+        '<option value="3">★★★</option><option value="2">★★</option><option value="1">★</option></select>' +
+        '<button class="btn btn--live" type="button" data-post-review>Post</button>';
+      actions.querySelector("select").focus();
+    });
+    past.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-post-review]"); if (!b) return;
+      var actions = b.closest(".order__actions");
+      var n = parseInt(actions.querySelector("[data-stars]").value, 10);
+      actions.innerHTML = '<span class="chip chip--ok">REVIEWED ' + new Array(n + 1).join("★") + '</span>';
+      window.lsToast("REVIEW FILED — @TORINO.CLASSICS NOTIFIED");
+    });
+  }
+})();
+</script>
+</body>
+</html>

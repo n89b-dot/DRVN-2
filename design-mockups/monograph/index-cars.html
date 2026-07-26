@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DRVN · Monograph — The Collection Index</title>
+  <meta name="description" content="The collection index — every catalogued car, hung as a plate with its wall label. Filter by air-cooled, modern, or track.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="monograph.css">
+</head>
+<body>
+
+  <header class="bar" data-over-image="false">
+    <a class="bar__mark" href="index.html" aria-label="DRVN home">DRVN</a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index-cars.html" aria-current="page">Index</a>
+      <a class="bar__link" href="listing.html">Sell</a>
+      <a class="bar__link" href="car.html">Sign in</a>
+    </nav>
+  </header>
+
+  <main class="shell">
+
+    <!-- INDEX HEAD -->
+    <section class="pagehead wrap section--tight" aria-label="The collection">
+      <p class="label reveal">The DRVN Monograph · Vol. I</p>
+      <h1 class="display reveal" style="margin-top:1.4rem">The collection.</h1>
+      <p class="lead reveal" style="margin-top:1.4rem">
+        Every car admitted to the collection, hung as a plate and captioned plainly.
+        Enter a subject to read its monograph and the parts released from it.
+      </p>
+    </section>
+
+    <!-- FILTER ROW -->
+    <section class="wrap" aria-label="Filter">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:1rem;padding-block:var(--stack-s);border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)">
+        <nav class="filters" data-filter-group aria-label="Filter the collection">
+          <button class="filter" type="button" data-filter="all" aria-pressed="true">All</button>
+          <button class="filter" type="button" data-filter="air-cooled" aria-pressed="false">Air-cooled</button>
+          <button class="filter" type="button" data-filter="modern" aria-pressed="false">Modern</button>
+          <button class="filter" type="button" data-filter="track" aria-pressed="false">Track</button>
+        </nav>
+        <span class="label">Six subjects catalogued</span>
+      </div>
+    </section>
+
+    <!-- GALLERY GRID -->
+    <section class="section wrap" aria-label="Catalogued cars">
+      <div class="gallery">
+
+        <a class="gallery__item reveal" href="car.html" data-cat="air-cooled">
+          <figure class="plate frame-43">
+            <img class="plate__img" src="../assets/c9-hero-car.png"
+                 alt="1992 Porsche 911 964 Graphite">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 01 · Air-cooled</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">1992 · Porsche 911 964 · “Graphite”</span>
+            <span class="wall__price">@holm.collection</span>
+          </div>
+        </a>
+
+        <a class="gallery__item reveal" href="car.html" data-cat="modern track">
+          <figure class="plate frame-43">
+            <img class="plate__img" src="../assets/c9-car-2.png"
+                 alt="1990 BMW E30 M3 Alpine">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 02 · Modern · Track</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">1990 · BMW E30 M3 · “Alpine”</span>
+            <span class="wall__price">@holm.collection</span>
+          </div>
+        </a>
+
+        <a class="gallery__item reveal" href="car.html" data-cat="modern">
+          <figure class="plate frame-43">
+            <img class="plate__img" src="../assets/c9-detail.png"
+                 alt="A modern coupe, detail study">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 04 · Modern</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">2004 · Honda NSX · “Sebring”</span>
+            <span class="wall__price">@krause.works</span>
+          </div>
+        </a>
+
+        <a class="gallery__item reveal" href="car.html" data-cat="air-cooled track">
+          <figure class="plate frame-43">
+            <img class="plate__img" src="../assets/c9-part-wheel.png"
+                 alt="An air-cooled track subject">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 05 · Air-cooled · Track</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">1973 · Porsche 911 RS · “Carrera”</span>
+            <span class="wall__price">@vast.garage</span>
+          </div>
+        </a>
+
+        <a class="gallery__item reveal" href="car.html" data-cat="modern">
+          <figure class="plate frame-43">
+            <img class="plate__img" src="../assets/c9-part-engine.png"
+                 alt="A modern turbo build, engine study">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 06 · Modern</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">2009 · Nissan GT-R · “Slate”</span>
+            <span class="wall__price">@meridian.build</span>
+          </div>
+        </a>
+
+        <a class="gallery__item reveal" href="car.html" data-cat="track modern">
+          <figure class="plate frame-43">
+            <img class="plate__img" src="../assets/c9-car-2.png"
+                 alt="A track-prepared saloon">
+          </figure>
+          <div class="wall reveal-cap">
+            <span class="label">Plate 07 · Track · Modern</span>
+          </div>
+          <div class="wall" style="margin-top:0.35rem">
+            <span class="wall__title">1995 · BMW E36 M3 · “Estoril”</span>
+            <span class="wall__price">@holm.collection</span>
+          </div>
+        </a>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="colophon wrap" aria-label="Colophon">
+    <div class="colophon__grid">
+      <div>
+        <div class="colophon__mark">DRVN</div>
+        <p class="prose" style="margin-top:1.4rem;max-width:36ch">
+          Six subjects, one standard. Enter any plate to read its monograph and the
+          parts it has released.
+        </p>
+      </div>
+      <div class="colophon__col">
+        <p class="label" style="margin-bottom:1rem">Collection</p>
+        <a class="tlink" href="car.html">Featured subject</a>
+        <a class="tlink" href="listing.html">Catalogued parts</a>
+        <a class="tlink" href="index.html">Home</a>
+      </div>
+      <div class="colophon__col">
+        <p class="label" style="margin-bottom:1rem">Reference</p>
+        <a class="tlink" href="design.html">Design system</a>
+        <a class="tlink" href="BRIEF.md">Brief</a>
+        <a class="tlink" href="../index.html">All concepts</a>
+      </div>
+    </div>
+    <div class="colophon__base">
+      <span class="label">Vol. I · Curated by @holm.collection · Copenhagen</span>
+      <span class="label">Monograph — Concept 09 for DRVN</span>
+    </div>
+  </footer>
+
+  <script src="monograph.js"></script>
+</body>
+</html>

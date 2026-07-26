@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard · DRVN — Atelier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Figtree:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="atelier.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="nav__wordmark" href="index.html">DRVN <em>— Atelier</em></a>
+    <button class="nav__burger" aria-expanded="false" aria-controls="nav-links">Menu</button>
+    <div class="nav__links" id="nav-links">
+      <a class="nav__link" href="index.html">Home</a>
+      <a class="nav__link nav__link--active" href="dashboard.html">Dashboard</a>
+      <a class="nav__link" href="garage.html">Garage</a>
+      <a class="nav__link" href="listings.html">Listings</a>
+      <div class="nav__user">
+        <span class="nav__avatar">EH</span>
+        <span class="nav__user-meta">
+          <span class="nav__user-name">E. HARGREAVES</span><br />
+          <span class="nav__user-sub">Atelier No. 12</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <header class="greeting reveal">
+    <span class="label">The daily ledger · Friday the 11th of July</span>
+    <h1>Good evening, <em>Mr Hargreaves.</em></h1>
+    <p class="greeting__date">Two offers await your consideration. The wire wheels continue to draw an audience.</p>
+  </header>
+
+  <section class="summary reveal" aria-label="Ledger summary">
+    <div class="summary__item">
+      <span class="label">Active lots</span>
+      <div class="summary__value">5</div>
+      <div class="summary__note">Three open, two under offer</div>
+    </div>
+    <div class="summary__item">
+      <span class="label">Offers on the table</span>
+      <div class="summary__value">2</div>
+      <div class="summary__note">Oldest arrived Tuesday evening</div>
+    </div>
+    <div class="summary__item">
+      <span class="label">Quarter takings</span>
+      <div class="summary__value">£6,840</div>
+      <div class="summary__note">Across nine closed lots</div>
+    </div>
+    <div class="summary__item">
+      <span class="label">Watchers</span>
+      <div class="summary__value">61</div>
+      <div class="summary__note">Up eleven since last week</div>
+    </div>
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. I</span> Offers awaiting your consideration</span>
+  </div>
+
+  <section class="ledger" aria-label="Offers">
+
+    <article class="offer reveal" data-offer>
+      <div class="offer__top">
+        <span class="thumb" style="background-image:url('../assets/c6-part-wheel.png')"></span>
+        <div class="offer__body">
+          <div class="offer__title">Chrome wire wheels, set of five — 15″</div>
+          <div class="offer__meta">Offer from R. Beaumont (@beaumont.garage) · off the Ludlow V8 · received Tuesday, 8:42 pm</div>
+        </div>
+        <div class="offer__figures">
+          <div class="offer__bid">£780</div>
+          <div class="offer__asking">against £850 asking</div>
+        </div>
+      </div>
+      <div class="offer__actions" data-offer-status>
+        <button class="btn-text btn-text--accept" data-action="accept">Accept</button>
+        <button class="btn-text" data-action="counter" data-counter="£820">Counter at £820</button>
+        <button class="btn-text btn-text--decline" data-action="decline">Decline</button>
+      </div>
+      <div class="confirm">
+        <div class="confirm__panel">
+          <div class="confirm__inner">
+            <div class="confirm__text">
+              <div class="serif">Accept £780 for the wire wheels?</div>
+              <p>The sale will be entered into the ledger and Mr Beaumont notified. Payment is held in escrow until collection is confirmed.</p>
+            </div>
+            <button class="btn" data-action="confirm-accept">Enter the sale</button>
+            <button class="btn-text" data-action="cancel-accept">Not yet</button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="offer reveal" data-offer>
+      <div class="offer__top">
+        <span class="thumb" style="background-image:url('../assets/c6-part-gauges.png')"></span>
+        <div class="offer__body">
+          <div class="offer__title">Smiths chrome-bezel gauge set, six pieces</div>
+          <div class="offer__meta">Offer from H. Okafor (@okafor.classics) · off the Ludlow V8 · received Thursday, 11:03 am</div>
+        </div>
+        <div class="offer__figures">
+          <div class="offer__bid">£310</div>
+          <div class="offer__asking">against £340 asking</div>
+        </div>
+      </div>
+      <div class="offer__actions" data-offer-status>
+        <button class="btn-text btn-text--accept" data-action="accept">Accept</button>
+        <button class="btn-text" data-action="counter" data-counter="£325">Counter at £325</button>
+        <button class="btn-text btn-text--decline" data-action="decline">Decline</button>
+      </div>
+      <div class="confirm">
+        <div class="confirm__panel">
+          <div class="confirm__inner">
+            <div class="confirm__text">
+              <div class="serif">Accept £310 for the gauge set?</div>
+              <p>The sale will be entered into the ledger and Mr Okafor notified. Payment is held in escrow until dispatch is confirmed.</p>
+            </div>
+            <button class="btn" data-action="confirm-accept">Enter the sale</button>
+            <button class="btn-text" data-action="cancel-accept">Not yet</button>
+          </div>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. II</span> The motorcars</span>
+  </div>
+
+  <section class="ledger" aria-label="Your motorcars">
+    <a class="ledger__row ledger__row--link reveal" href="garage.html">
+      <span class="ledger__no">i.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-hero-aston.png')"></span>
+      <span>
+        <span class="ledger__title">"The Ludlow V8" — Aston Martin V8, 1977</span>
+        <span class="ledger__meta" style="display:block">11 modifications recorded · 5 lots released · 14 journal entries</span>
+      </span>
+      <span class="tag tag--brass">Ledger current</span>
+      <span class="ledger__price" style="font-size:15px;font-style:italic;color:var(--muted)">View record →</span>
+    </a>
+    <a class="ledger__row ledger__row--link reveal" href="garage.html">
+      <span class="ledger__no">ii.</span>
+      <span class="thumb" style="background-image:url('../assets/c6-car-alfa.png')"></span>
+      <span>
+        <span class="ledger__title">Alfa Romeo Giulia Sprint GT, 1966</span>
+        <span class="ledger__meta" style="display:block">7 modifications recorded · 2 lots released · retrim in progress</span>
+      </span>
+      <span class="tag">In the workshop</span>
+      <span class="ledger__price" style="font-size:15px;font-style:italic;color:var(--muted)">View record →</span>
+    </a>
+  </section>
+
+  <div class="section-head rule-draw reveal">
+    <span class="label"><span class="roman">No. III</span> Recent entries</span>
+  </div>
+
+  <section class="reveal" aria-label="Recent entries" style="border-top:1px solid var(--rule)">
+    <div class="entries__row">
+      <span class="entries__date">10 Jul · 6:15 pm</span>
+      <span class="entries__text"><strong>Watcher joined</strong> — the wire wheels lot now has 24 watchers.</span>
+    </div>
+    <div class="entries__row">
+      <span class="entries__date">10 Jul · 11:03 am</span>
+      <span class="entries__text"><strong>Offer received</strong> — £310 on the Smiths gauge set from @okafor.classics.</span>
+    </div>
+    <div class="entries__row">
+      <span class="entries__date">08 Jul · 8:42 pm</span>
+      <span class="entries__text"><strong>Offer received</strong> — £780 on the wire wheels from @beaumont.garage.</span>
+    </div>
+    <div class="entries__row">
+      <span class="entries__date">06 Jul · 2:20 pm</span>
+      <span class="entries__text"><strong>Journal published</strong> — "Carburettors, at last" added to the Ludlow V8 record.</span>
+    </div>
+    <div class="entries__row">
+      <span class="entries__date">03 Jul · 9:56 am</span>
+      <span class="entries__text"><strong>Lot closed</strong> — original steel wheels sold to @tandy.restorations for £220.</span>
+    </div>
+  </section>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__inner">
+    <span class="serif" style="font-size:17px">DRVN <em class="italic" style="color:var(--brass)">— Atelier</em></span>
+    <span>The ledger is balanced nightly at midnight, Ludlow time.</span>
+    <span><a href="design.html">The house style guide</a></span>
+    <span>MMXXVI</span>
+  </div>
+</footer>
+
+<script src="atelier.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# MERIDIAN — Concept 08 Brief
+
+**Thesis:** *The cockpit for your build's second life.* When you sell the parts behind a build, you are decommissioning components from a machine you instrumented, tuned, and logged. MERIDIAN treats that act with the gravity of a flagship car's HMI: the seller's dashboard is an instrument cluster, provenance is telemetry, and every listing carries its source car's readout. Gunmetal glass panels, 270° gauge sweeps, thin elegant numerals, champagne-silver accents — the feeling of a start-up animation in a £100k cabin, translated to software.
+
+## Reference lineage (honest)
+
+- **Modern flagship automotive HMI** — Porsche's PCM cluster and Taycan curved display (thin numerals, dark glass, restrained metallic accent), Audi Virtual Cockpit (the 270° gauge as data container), Polestar's typographic austerity (one weight family, wide micro-labels, no decoration).
+- **Aircraft EFIS / glass cockpits** — the discipline of label + value + unit at fixed hierarchy, status expressed as small color-coded dots and needles, never as decoration.
+- **High-end car configurators** (Porsche, Singer's commission pages) — full-bleed vehicle photography under dark gradients with thin type floated over it; the car as the hero, the UI as its instrumentation.
+- **What it is not:** no skeuomorphic chrome bezels, no carbon-fiber textures, no "gamer HUD" neon. The glass is architectural, not sci-fi.
+
+## Why cockpit telemetry serves DRVN's trust mission
+
+DRVN's core problem is that used-parts markets run on faith. MERIDIAN's answer is to render provenance *as telemetry* — the same epistemic posture as a dyno sheet. A gauge does not persuade; it reads. So the source car appears as a spec readout (VR38DETT · 640 bhp · 41,208 mi at removal), the seller's record reads like a service log, and the pairing history ("ran alongside ID1300 injectors under a Stage 4.25 map") answers fitment before it's asked. Instruments imply calibration; calibration implies accountability. The visual language *is* the trust argument.
+
+## Iteration log
+
+- **Pass 1 — flaws:** Live-browser check caught the ghost buttons (Counter / Decline / Amend / Pause) rendering as light-grey filled pills — the base `.btn` class never reset the user-agent button background, so `rgb(239,239,239)` leaked through on every variant that didn't set its own fill. Fixed by adding `background: transparent; color: inherit;` to the `.btn` base. Also verified the toast was reading its message into the status-dot span instead of the label span (`querySelector("span")` matched the dot first); changed to `span:last-of-type`.
+- **Pass 2 — elevation:** The gauge cluster read correctly but statically. Elevated it three ways: numerals now count up in sync with the arc sweep (cubic ease-out, tabular numerals so digits don't jitter); the revenue gauge performs a visible *re-sweep* — collapse to zero, then sweep to the new total — when an offer is accepted, which turns a CRUD action into the concept's signature moment; and gauges got a per-card 160ms stagger so the cluster "boots" left to right like an ignition sequence rather than snapping on together.
+- **Pass 3 — coherence:** Swept all four pages for token drift. Confirmed petrol-ice (`#7FB4C9`) appears only as secondary data lines (telemetry chart's second series, watcher sparklines) and never as UI chrome; the amber offer-pressure needle and `tag--offer` share one hue; every micro-label uses the same 11px/.22em spec including inside SVG chart axes. One correction made: listing-row asking/offer sub-labels had drifted to 9px inline overrides — acceptable as a deliberate density step, so it was kept but noted in `design.md` as the single sanctioned exception. No other changes; the token discipline held because every color and radius routes through CSS custom properties.
+
+## What a design system for this thesis looks like
+
+**Tokens.** Namespaced `--m-*` custom properties in `meridian.css` are the single source of truth: canvas (`--m-canvas`, `--m-canvas-deep`), glass surface trio (`--m-glass`, `--m-glass-strong`, `--m-glass-solid` fallback), border pair (rest/bright), text trio (primary/secondary/tertiary), accent family (champagne + dim + faint alpha steps), the strictly-scoped `--m-ice`, status hues, two radii + pill, one easing curve (`--m-ease`), two durations (interaction 600ms, gauge 900ms).
+
+**Naming.** Components use a flat `block__element--modifier` scheme prefixed by role, not appearance: `.gauge-card`, `.offer-row`, `.mod-row`, `.listing__detail`, `.seg__trim`. Appearance lives only in modifiers (`.tag--sale`, `.gauge-arc--amber`) so a retheme never touches markup.
+
+**Component inventory.** Glass panel (+ hover, + tilt), arc gauge (SVG primitive + JS sweep API `sweepGauge(svg, value, dur)`), micro-label, trim line, keyline/fill/ghost buttons, nav tab with trim underline, segmented control with sliding trim, tag (live/offer/sold/sale), offer row, listing row (collapsed/expanded), vehicle card, spec readout cell, log row, activity row, sparkline, line chart, modal, toast, form input.
+
+**Governance.** Three rules keep MERIDIAN coherent as it grows: (1) champagne is *earned* — it marks money, active state, and needle positions, never headings or body copy; (2) petrol-ice may only ever be a data series; (3) no new easing curves or durations without deprecating an old one — motion vocabulary stays at two words. New components must be composed from glass panel + micro-label + trim line before new primitives are proposed.
+
+## The design system in Google's design.md standard
+
+`design.md` in this folder follows Google's open **design.md** format: machine-readable YAML frontmatter (version, name, description, then `colors`, `typography`, `rounded`, `spacing`, and `components` whose values reference tokens like `"{colors.accent}"`) followed by human-readable prose sections. A coding agent consumes it by parsing the frontmatter as the canonical token dictionary — so when asked to "add a cancel button," it resolves `components.button-keyline` → `{colors.accent}` → `#D8C79A` and emits correct CSS without ever seeing a mockup — while the prose sections (Overview, Do's and Don'ts) constrain judgment calls the tokens can't encode, like where champagne is permitted. Because the values in `design.md` are transcribed from `meridian.css` verbatim, the file doubles as a diff target: any styling PR that disagrees with the frontmatter is by definition off-system.
+
+## Style-emulation prompt
+
+> Design a dark, instrument-cluster interface in the manner of a flagship car's HMI. Canvas is obsidian `#0E1013` with a barely-there cool vertical gradient; all surfaces are glass panels — `rgba(255,255,255,0.05)` fills, 1px `rgba(255,255,255,0.09)` borders, 14px corners, backdrop-blur with solid `#16191E` fallback, and a 1px specular inset highlight along each panel's top edge. Type is Outfit only: 300-weight oversized numerals (speedometer feel, tabular figures), 14px/400 body, and 11px uppercase micro-labels tracked at .22em in muted silver `#8B929E` on primary text `#E8EAEE`. The sole warm accent is champagne `#D8C79A`, reserved for prices, active states, and gauge needles; petrol-ice `#7FB4C9` appears exclusively as a secondary data series; status is tiny `#58C27D` dots. Signature devices: 270° SVG arc gauges that sweep on load via stroke-dashoffset over 900ms `cubic-bezier(.3,.7,.2,1)`, thin horizontal trim lines with a short champagne tick, and a boot sequence where the page fades from black and elements ignite in a 110ms stagger. Motion is exclusively smooth automotive glides on that one easing — no bounce, no steps, no monospace, no neon, no pure black.

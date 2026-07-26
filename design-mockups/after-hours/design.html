@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>After Hours — Design System</title>
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --surface:#0A0D13; --surface-2:#0B0E14; --shadow-teal:#0E1720;
+    --on-surface:#F5EFE6; --on-surface-dim:#8A93A6; --accent:#FF7A1F;
+    --on-accent:#0A0D13; --hairline:#161C26;
+    --sodium-dim:rgba(255,122,31,0.55); --sodium-faint:rgba(255,122,31,0.14);
+    --display:"Clash Display","Arial Narrow",sans-serif; --body:"Satoshi","Helvetica Neue",sans-serif;
+    --ease:cubic-bezier(.16,1,.3,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--surface);color:var(--on-surface);font-family:var(--body);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .haze{position:fixed;inset:-20%;z-index:0;pointer-events:none;background:radial-gradient(60% 45% at 18% 14%,rgba(255,122,31,0.08),transparent 70%),radial-gradient(50% 40% at 84% 78%,rgba(14,23,32,0.9),transparent 70%);filter:blur(48px);animation:drift 34s ease-in-out infinite alternate}
+  @keyframes drift{0%{transform:translate3d(-2%,-1%,0) scale(1)}100%{transform:translate3d(2%,2%,0) scale(1.06)}}
+  .wrap{position:relative;z-index:2;max-width:1120px;margin:0 auto;padding:0 clamp(20px,5vw,56px)}
+  a{color:var(--accent)}
+  .label{font-family:var(--body);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .kicker{font-family:var(--body);font-size:11px;font-weight:500;letter-spacing:.34em;text-transform:uppercase;color:var(--accent);display:inline-flex;align-items:center;gap:14px}
+  .kicker::before{content:"";width:34px;height:1px;background:var(--accent);box-shadow:0 0 8px var(--sodium-dim)}
+
+  /* top slate bar */
+  .topbar{display:flex;justify-content:space-between;padding:22px 0;font-family:var(--body);font-size:10px;font-weight:500;letter-spacing:.3em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .topbar .hot{color:var(--accent);text-shadow:0 0 12px var(--sodium-dim)}
+
+  header{padding:60px 0 72px;position:relative}
+  h1{font-family:var(--display);font-weight:600;font-size:clamp(48px,10vw,120px);line-height:.92;letter-spacing:-.015em;text-transform:uppercase;margin:22px 0 26px}
+  h1 .hollow{-webkit-text-stroke:1.2px rgba(245,239,230,.6);color:transparent}
+  h1 .hot{color:var(--accent);text-shadow:0 0 32px rgba(255,122,31,.55),0 0 90px rgba(255,122,31,.3)}
+  .lede{max-width:56ch;color:var(--on-surface-dim);font-size:16px}
+  .lede b{color:var(--on-surface)}
+  .mnote{margin-top:20px;font-size:13px;color:var(--on-surface-dim)}
+
+  section{padding:64px 0;border-top:1px solid var(--hairline);position:relative}
+  .slate-tl{position:absolute;top:24px;left:0;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .slate-tl .hot{color:var(--accent)}
+  .sec-head{display:flex;align-items:baseline;gap:18px;margin:14px 0 34px}
+  .sec-head h2{font-family:var(--display);font-weight:500;font-size:clamp(26px,3.4vw,44px);line-height:1;text-transform:uppercase}
+  .sec-num{font-family:var(--display);font-weight:400;font-size:clamp(20px,2.4vw,30px);color:var(--accent)}
+
+  /* colors */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+  .sw{border:1px solid var(--hairline);border-radius:4px;overflow:hidden;background:var(--surface-2)}
+  .sw__chip{height:92px;display:flex;align-items:flex-end;padding:12px;position:relative}
+  .sw__chip.glow::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 40px rgba(255,122,31,.5)}
+  .sw__chip span{font-size:11px;position:relative;z-index:2}
+  .sw__meta{padding:12px 14px 16px}
+  .sw__name{font-size:11px;letter-spacing:.08em;color:var(--on-surface)}
+  .sw__hex{font-size:11px;color:var(--on-surface-dim);margin-top:3px}
+
+  .spec{padding:22px 0;border-top:1px solid var(--hairline)}
+  .spec:first-child{border-top:none}
+  .spec__meta{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
+  .spec__meta span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim)}
+
+  .scale-row{display:flex;align-items:center;gap:18px;padding:8px 0}
+  .scale-row .tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim);min-width:150px}
+  .scale-row .bar{height:20px;background:var(--accent);box-shadow:0 0 20px var(--sodium-dim)}
+  .radrow{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}
+  .radbox{width:120px}
+  .radbox .box{height:84px;background:var(--shadow-teal);border:1px solid rgba(255,122,31,.3)}
+
+  .comp-grid{display:grid;grid-template-columns:1fr;gap:20px}
+  .comp{border:1px solid var(--hairline);border-radius:4px;background:linear-gradient(165deg,rgba(14,23,32,.6),rgba(10,13,19,.85))}
+  .comp__label{padding:12px 20px;border-bottom:1px solid var(--hairline);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .comp__body{padding:32px 24px;display:flex;flex-wrap:wrap;gap:22px;align-items:center}
+
+  .btn{display:inline-flex;align-items:center;gap:12px;font-family:var(--body);font-weight:500;font-size:14px;letter-spacing:.2em;text-transform:uppercase;padding:18px 36px;border-radius:2px;border:1px solid var(--accent);color:var(--warm,#F5EFE6);background:transparent;cursor:pointer;position:relative;overflow:hidden;transition:color .5s ease,box-shadow .6s var(--ease),transform .5s var(--ease)}
+  .btn::before{content:"";position:absolute;inset:0;background:var(--accent);transform:translateY(101%);transition:transform .5s var(--ease);z-index:-1}
+  .btn:hover,.btn.is-hover{color:var(--on-accent);box-shadow:0 0 44px rgba(255,122,31,.7),0 0 140px rgba(255,122,31,.3);transform:translateY(-2px)}
+  .btn:hover::before,.btn.is-hover::before{transform:translateY(0)}
+  .btn--solid{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .btn--solid::before{background:var(--on-surface)}
+  .btn--outline{color:var(--on-surface)}
+  .state-tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim)}
+
+  .chip{display:inline-flex;align-items:center;gap:10px;font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--on-surface);padding:9px 16px;border:1px solid rgba(255,122,31,.35);border-radius:90px;background:rgba(10,13,19,.55)}
+  .chip .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .chip--dim{border-color:var(--hairline);color:var(--on-surface-dim)}
+  .chip--dim .dot{background:var(--on-surface-dim);box-shadow:none}
+  .price{font-family:var(--display);font-weight:600;font-size:44px;color:var(--on-surface)}
+  .price em{font-style:normal;color:var(--accent);text-shadow:0 0 24px var(--sodium-dim)}
+
+  .scenecard{background:linear-gradient(165deg,rgba(14,23,32,.9),rgba(10,13,19,.95));border:1px solid var(--hairline);border-radius:4px;padding:28px;max-width:340px}
+  .scenecard .credit{display:flex;justify-content:space-between;padding:10px 0;border-top:1px solid var(--hairline);font-size:12px}
+  .scenecard .credit:first-of-type{border-top:none}
+  .scenecard .credit .k{color:var(--on-surface-dim);letter-spacing:.14em;text-transform:uppercase;font-size:10px}
+
+  .navlink{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-dim);position:relative;padding-bottom:6px;cursor:pointer}
+  .navlink::after{content:"";position:absolute;left:0;bottom:0;width:100%;height:1px;background:var(--accent);box-shadow:0 0 10px var(--sodium-dim);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ease)}
+  .navlink:hover{color:var(--on-surface)}
+  .navlink:hover::after{transform:scaleX(1)}
+
+  .dd{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .dd__col{border:1px solid var(--hairline);border-radius:4px;padding:28px 24px;background:var(--surface-2)}
+  .dd__col h3{font-family:var(--display);font-weight:500;font-size:22px;text-transform:uppercase;margin-bottom:16px}
+  .dd--do h3{color:var(--accent)}
+  .dd__col ul{list-style:none}
+  .dd__col li{padding:9px 0 9px 24px;position:relative;font-size:14px;color:var(--on-surface-dim);border-top:1px solid var(--hairline)}
+  .dd__col li:first-child{border-top:none}
+  .dd--do li::before{content:"→";position:absolute;left:0;color:var(--accent)}
+  .dd--dont li::before{content:"×";position:absolute;left:0;color:var(--on-surface-dim)}
+
+  footer{padding:40px 0 72px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px;font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--on-surface-dim)}
+  @media(max-width:640px){.dd{grid-template-columns:1fr}h1{font-size:clamp(40px,13vw,72px)}}
+</style>
+</head>
+<body>
+<div class="haze"></div>
+<div class="wrap">
+  <div class="topbar"><span>SC DS <span class="hot">/</span> INT. STYLE GUIDE — NIGHT</span><span id="clk">01:47 AM <span class="hot">●</span> REC</span></div>
+
+  <header>
+    <span class="kicker">DRVN Presents — 深夜市場</span>
+    <h1>The night,<br><span class="hollow">in</span> <span class="hot">tokens.</span></h1>
+    <p class="lede">The human-readable mirror of <b>design.md</b> — every color, type level, and component rendered live in After Hours' own language. The <b>.md</b> is the source of truth a coding agent implements from; this reel is what a person watches.</p>
+    <p class="mnote">Source: <a href="design.md">design.md</a> · Brief: <a href="BRIEF.md">BRIEF.md</a> · Prototype: <a href="index.html">after-hours/index.html</a></p>
+  </header>
+
+  <section>
+    <span class="slate-tl">SC 01 <span class="hot">/</span> COLOR</span>
+    <div class="sec-head"><span class="sec-num">01</span><h2>Colors</h2></div>
+    <div class="swatches" id="swatches"></div>
+    <p style="margin-top:22px;color:var(--on-surface-dim);font-size:14px;max-width:60ch">Sodium is <em style="color:var(--accent);font-style:normal">light, not paint</em> — glow, edge, and text, plus a single filled CTA. Never a large flat fill.</p>
+  </section>
+
+  <section>
+    <span class="slate-tl">SC 02 <span class="hot">/</span> TYPE</span>
+    <div class="sec-head"><span class="sec-num">02</span><h2>Typography</h2></div>
+    <div class="spec"><div style="font-family:var(--display);font-weight:600;font-size:clamp(44px,9vw,110px);line-height:.92;text-transform:uppercase">THE <span style="-webkit-text-stroke:1.2px rgba(245,239,230,.6);color:transparent">NIGHT,</span> <span style="color:var(--accent);text-shadow:0 0 32px rgba(255,122,31,.5)">SOLD.</span></div><div class="spec__meta"><span>display-giant</span><span>Clash Display</span><span>600</span><span>mixed weight + outline</span></div></div>
+    <div class="spec"><div style="font-family:var(--display);font-weight:500;font-size:clamp(24px,3.4vw,44px);text-transform:uppercase">Tonight's lot</div><div class="spec__meta"><span>h2</span><span>Clash Display</span><span>500</span></div></div>
+    <div class="spec"><div class="kicker">Off Midnight Rotor — チタン</div><div class="spec__meta"><span>kicker</span><span>Satoshi</span><span>0.34em</span></div></div>
+    <div class="spec"><div style="font-size:16px;max-width:58ch;color:var(--on-surface)">Body is Satoshi — the calm reading voice under the cinema: build stories, honest wear notes, and the credits that carry a part's provenance.</div><div class="spec__meta"><span>body</span><span>Satoshi</span><span>400</span><span>1.6</span></div></div>
+    <div class="spec"><div style="font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--on-surface-dim)">SC 04 / LISTED 01:52 AM ●</div><div class="spec__meta"><span>slate</span><span>Satoshi</span><span>0.3em</span></div></div>
+    <div class="spec"><div class="price">£890</div><div class="spec__meta"><span>price</span><span>Clash Display</span><span>600</span></div></div>
+  </section>
+
+  <section>
+    <span class="slate-tl">SC 03 <span class="hot">/</span> SPACING</span>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Spacing</h2></div>
+    <div id="spacing"></div>
+  </section>
+
+  <section>
+    <span class="slate-tl">SC 04 <span class="hot">/</span> SHAPE</span>
+    <div class="sec-head"><span class="sec-num">04</span><h2>Shapes</h2></div>
+    <div class="radrow">
+      <div class="radbox"><div class="box" style="border-radius:2px"></div><div class="label" style="margin-top:10px">sm · 2px</div></div>
+      <div class="radbox"><div class="box" style="border-radius:4px"></div><div class="label" style="margin-top:10px">card · 4px</div></div>
+      <div class="radbox"><div class="box" style="border-radius:90px;height:44px"></div><div class="label" style="margin-top:10px">pill · 90px</div></div>
+      <div class="radbox"><div class="box" style="border-radius:50%;width:84px"></div><div class="label" style="margin-top:10px">circle · 50%</div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="slate-tl">SC 05 <span class="hot">/</span> DEPTH</span>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Elevation &amp; Depth</h2></div>
+    <p style="color:var(--on-surface-dim);font-size:14px;max-width:62ch;margin-bottom:28px">Depth is glow and haze, never shadow. A blurred sodium aura is an element's elevation; a teal-to-night floor deepens each scene.</p>
+    <div style="position:relative;height:200px;border:1px solid var(--hairline);border-radius:4px;background:linear-gradient(165deg,var(--shadow-teal),var(--surface));display:grid;place-items:center;overflow:hidden">
+      <div style="position:absolute;width:280px;height:280px;background:radial-gradient(circle,rgba(255,122,31,.42),transparent 62%);filter:blur(20px)"></div>
+      <span style="position:relative;font-family:var(--display);font-weight:600;font-size:34px;text-transform:uppercase;text-shadow:0 0 30px var(--sodium-dim)">Sodium aura = elevation</span>
+    </div>
+  </section>
+
+  <section>
+    <span class="slate-tl">SC 06 <span class="hot">/</span> COMPONENTS</span>
+    <div class="sec-head"><span class="sec-num">06</span><h2>Components</h2></div>
+    <div class="comp-grid">
+      <div class="comp"><div class="comp__label">button-sodium · default / bloom hover · button-outline</div><div class="comp__body">
+        <button class="btn btn--solid">Buy it before sunrise</button>
+        <button class="btn btn--solid is-hover">Buy it before sunrise</button><span class="state-tag">bloom hover</span>
+        <button class="btn btn--outline">Enter the meet →</button>
+      </div></div>
+      <div class="comp"><div class="comp__label">chip-spec · chip-dim</div><div class="comp__body">
+        <span class="chip"><span class="dot"></span>13B-REW Twin Rotor</span>
+        <span class="chip"><span class="dot"></span>389 bhp / 1,240 kg</span>
+        <span class="chip chip--dim"><span class="dot"></span>KW V3</span>
+      </div></div>
+      <div class="comp"><div class="comp__label">nav-link · underline sweep · price</div><div class="comp__body">
+        <span class="navlink">The Meet</span><span class="navlink">Builds</span><span class="navlink">Parts</span>
+        <span style="flex:1"></span>
+        <span class="price">£<em>890</em></span>
+      </div></div>
+      <div class="comp"><div class="comp__label">scene-card — provenance as credits</div><div class="comp__body">
+        <div class="scenecard">
+          <span class="kicker" style="font-size:10px">The four answers</span>
+          <div style="margin-top:16px">
+            <div class="credit"><span class="k">Source car</span><span>RX-7 FD — Midnight Rotor</span></div>
+            <div class="credit"><span class="k">Seller</span><span>@haze.fd · 4.8★</span></div>
+            <div class="credit"><span class="k">Fitment</span><span style="color:var(--on-surface-dim)">Seller notes — verify</span></div>
+            <div class="credit"><span class="k">Ran with</span><span>KW V3 · 17″ TE37</span></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="slate-tl">SC 07 <span class="hot">/</span> RULES</span>
+    <div class="sec-head"><span class="sec-num">07</span><h2>Do's &amp; Don'ts</h2></div>
+    <div class="dd">
+      <div class="dd__col dd--do"><h3>Do</h3><ul>
+        <li>Treat sodium as light — glow, edge, text, one filled CTA per view.</li>
+        <li>Cinematic statements in Clash Display; calm reading &amp; slates in Satoshi.</li>
+        <li>Give every scene a film-slate in its corners.</li>
+        <li>Build depth from glow, haze, and a teal shadow floor.</li>
+      </ul></div>
+      <div class="dd__col dd--dont"><h3>Don't</h3><ul>
+        <li>Use sodium as a large flat fill beyond one CTA.</li>
+        <li>Lighten the night base past #0E1720 for content surfaces.</li>
+        <li>Round rectangular surfaces past 4px (pills &amp; circles excepted).</li>
+        <li>Make motion quick or linear — scenes ease long at cubic-bezier(.16,1,.3,1).</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <footer><span>深夜 — After Hours · a DRVN design concept</span><span>Mirror of design.md</span></footer>
+</div>
+
+<script>
+  const colors=[
+    ["surface","#0A0D13","on-surface",0],["surface-2","#0B0E14","on-surface",0],
+    ["shadow-teal","#0E1720","on-surface",0],["on-surface","#F5EFE6","surface",0],
+    ["on-surface-dim","#8A93A6","surface",0],["accent","#FF7A1F","on-accent",1],
+    ["on-accent","#0A0D13","accent",0],["hairline","#161C26","on-surface",0]
+  ];
+  const V={"surface":"#0A0D13","on-surface":"#F5EFE6","on-accent":"#0A0D13","accent":"#FF7A1F"};
+  document.getElementById("swatches").innerHTML=colors.map(([n,hex,on,glow])=>`
+    <div class="sw"><div class="sw__chip${glow?' glow':''}" style="background:${hex}"><span style="color:${V[on]||'#F5EFE6'}">${on}</span></div>
+    <div class="sw__meta"><div class="sw__name">${n}</div><div class="sw__hex">${hex}</div></div></div>`).join("");
+  const sp=[["xs",8],["sm",12],["md",18],["lg",28],["xl",44],["xxl",96]];
+  document.getElementById("spacing").innerHTML=sp.map(([n,px])=>`<div class="scale-row"><span class="tag">${n} · ${px}px</span><div class="bar" style="width:${px}px"></div></div>`).join("");
+</script>
+</body>
+</html>

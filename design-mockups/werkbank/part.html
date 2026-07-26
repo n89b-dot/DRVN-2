@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WERKBANK — Part Record · AP Racing CP9660 · DRVN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="werkbank.css">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<script>try{if(localStorage.getItem("wb-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+</head>
+<body>
+<div class="wb-app">
+
+  <aside class="wb-rail">
+    <div class="wb-rail__brand">
+      <div class="wb-rail__logo">DRVN<b>/</b><span>WERKBANK</span></div>
+      <div class="wb-rail__sub">Rev 04</div>
+    </div>
+    <nav class="wb-rail__nav" aria-label="Primary">
+      <a class="wb-rail__item" href="index.html">
+        <i class="ph ph-squares-four" aria-hidden="true"></i>
+        <span class="label">Dashboard</span><span class="wb-rail__idx">01</span>
+      </a>
+      <a class="wb-rail__item" href="explore.html">
+        <i class="ph ph-compass" aria-hidden="true"></i>
+        <span class="label">Explore</span><span class="wb-rail__idx">02</span>
+      </a>
+      <a class="wb-rail__item is-active" href="market.html">
+        <i class="ph ph-tag" aria-hidden="true"></i>
+        <span class="label">Marketplace</span><span class="wb-rail__idx">03</span>
+      </a>
+      <a class="wb-rail__item" href="garage.html">
+        <i class="ph ph-garage" aria-hidden="true"></i>
+        <span class="label">Garage</span><span class="wb-rail__idx">04</span>
+      </a>
+      <a class="wb-rail__item" href="listings.html">
+        <i class="ph ph-list-dashes" aria-hidden="true"></i>
+        <span class="label">Listings</span><span class="wb-rail__idx">05</span>
+      </a>
+      <a class="wb-rail__item" href="orders.html">
+        <i class="ph ph-package" aria-hidden="true"></i>
+        <span class="label">Orders</span><span class="wb-rail__idx">06</span>
+      </a>
+      <a class="wb-rail__item" href="settings.html">
+        <i class="ph ph-gear-six" aria-hidden="true"></i>
+        <span class="label">Settings</span><span class="wb-rail__idx">07</span>
+      </a>
+    </nav>
+    <button class="wb-rail__theme" id="wbTheme" type="button" aria-pressed="false" title="Switch lighting">
+      <span class="microlabel">Shift</span>
+      <span class="wb-rail__theme-val mono" data-theme-val>DAY</span>
+    </button>
+    <a class="wb-rail__user" href="profile.html" title="Keeper record — @werk7">
+      <div class="wb-rail__avatar">LV</div>
+      <div>
+        <div class="wb-rail__username">L. VOGEL</div>
+        <div class="wb-rail__workshop">Workshop 7 · @werk7</div>
+      </div>
+    </a>
+  </aside>
+
+  <main class="wb-main">
+
+    <header class="wb-pagehead">
+      <div>
+        <span class="microlabel">REF 04-J — PART RECORD · LOT L-118 · BUYER SHEET</span>
+        <h1>AP Racing CP9660 Front Kit — 355 mm</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="wb-tag wb-tag--ok">PROVENANCE CERTIFIED</span>
+        <button class="wb-btn wb-btn--ghost" type="button" onclick="wbToast('LOT ADDED TO WATCH LIST — L-118')">Watch lot</button>
+      </div>
+    </header>
+
+    <!-- HERO: PHOTO PLATE + PURCHASE PANEL -->
+    <section class="wb-parthero wb-section">
+
+      <!-- LEFT: PHOTO PLATE -->
+      <div class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 01 — LOT PHOTOGRAPHY</span>
+          <span class="microlabel">3 ANGLES ON FILE</span>
+        </div>
+        <div class="wb-partphoto">
+          <div class="wb-img"><img id="partMainImg" src="../assets/c4-part-brake.png" alt="AP Racing CP9660 caliper and 355 mm disc, catalogue still life" onerror="this.remove()"></div>
+          <span class="wb-partphoto__ref" id="photoRef">PHOTO A — CALIPER &amp; DISC · 28 JUN 26</span>
+        </div>
+        <div class="wb-thumbs" role="group" aria-label="Photo angles">
+          <button type="button" class="is-active" data-thumb="../assets/c4-part-brake.png" data-alt="AP Racing CP9660 caliper and 355 mm disc, catalogue still life" data-ref="PHOTO A — CALIPER &amp; DISC · 28 JUN 26" aria-label="Photo A — caliper and disc">
+            <img src="../assets/c4-part-brake.png" alt="" onerror="this.remove()">
+          </button>
+          <button type="button" data-thumb="../assets/c4-part-gearbox.png" data-alt="Bracket and line hardware laid out for inspection" data-ref="PHOTO B — BRACKETS &amp; LINES · 28 JUN 26" aria-label="Photo B — brackets and lines">
+            <img src="../assets/c4-part-gearbox.png" alt="" onerror="this.remove()">
+          </button>
+          <button type="button" data-thumb="../assets/c4-part-exhaust.png" data-alt="Disc face detail showing slot condition" data-ref="PHOTO C — DISC FACE DETAIL · 28 JUN 26" aria-label="Photo C — disc face detail">
+            <img src="../assets/c4-part-exhaust.png" alt="" onerror="this.remove()">
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: TITLE + PURCHASE PANEL -->
+      <div class="wb-stack">
+        <div class="wb-plate">
+          <div class="wb-plate__body">
+            <span class="microlabel">LOT L-118 · PART NO. CP9660-2S4 · LISTED 02 JUL 26</span>
+            <h2 style="font-size:16px;font-weight:600;margin:8px 0 4px">AP Racing CP9660 Front Kit — 355 mm slotted</h2>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px">
+              <span class="wb-tag">GOOD — TRACK USED · MEASURED 31.6 MM</span>
+              <span class="wb-tag wb-tag--ok">FIT:VERIFIED · E46 M3</span>
+            </div>
+            <div class="wb-buyprice">£1,150</div>
+            <div style="display:flex;gap:16px;margin:8px 0 16px" class="microlabel">
+              <span>WATCHERS 31</span><span>VIEWS 412</span><span>QTY 1 — SINGLE LOT</span>
+            </div>
+            <div class="wb-buyrow">
+              <button class="wb-btn wb-btn--accent" type="button" data-modal-open="buySheet">Buy now — £1,150</button>
+              <button class="wb-btn wb-btn--ghost" type="button" data-modal-open="offerSheet">Make an offer</button>
+            </div>
+            <div style="margin-top:16px">
+              <div class="wb-deliv">
+                <div><strong>Delivery</strong><div class="mono">DHL EXPRESS — INSURED · EST. 2 DAYS</div></div>
+                <span class="num mono">£18</span>
+              </div>
+              <div class="wb-deliv">
+                <div><strong>Returns</strong><div class="mono">48 H INSPECTION WINDOW — PROVENANCE GUARANTEED OR REFUND</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATE 02 — PROVENANCE CERTIFICATE -->
+        <div class="wb-plate">
+          <div class="wb-plate__head">
+            <span class="microlabel microlabel--ink">PLATE 02 — PROVENANCE CERTIFICATE</span>
+            <span class="microlabel">THE FOUR ANSWERS</span>
+          </div>
+          <div class="wb-plate__body wb-plate__body--flush">
+            <div class="wb-doc">
+              <i class="ph ph-garage" aria-hidden="true"></i>
+              <div>
+                <div class="wb-doc__name">Source car — <a class="ref-link" href="car.html">BMW E46 M3 · REGISTRY DRVN-0417</a></div>
+                <div class="wb-doc__meta">FITTED 05/2023 → REMOVED 06/2026 · FULL RECORD OPEN</div>
+              </div>
+            </div>
+            <div class="wb-doc">
+              <i class="ph ph-user" aria-hidden="true"></i>
+              <div>
+                <div class="wb-doc__name">Keeper — <a class="ref-link" href="profile.html">L. Vogel · @werk7</a></div>
+                <div class="wb-doc__meta">4.9★ · 31 SALES · 0 DISPUTES · MEMBER SINCE 2024</div>
+              </div>
+            </div>
+            <div class="wb-doc">
+              <i class="ph ph-crosshair" aria-hidden="true"></i>
+              <div>
+                <div class="wb-doc__name">Fitment</div>
+                <div class="wb-doc__meta"><span class="wb-tag wb-tag--ok">PLATFORM-VERIFIED · E46 M3 CHASSIS</span> <span style="color:var(--wb-ink-2)">SELLER-STATED: "E9X WITH W. BRACKET"</span></div>
+              </div>
+            </div>
+            <div class="wb-doc">
+              <i class="ph ph-trend-up" aria-hidden="true"></i>
+              <div>
+                <div class="wb-doc__name">Ran with — on the source car</div>
+                <div class="wb-doc__meta">KW CLUBSPORT 3-WAY · APEX ARC-8 18×9.5 · CSL-MAP S54</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="wb-grid-2 wb-section">
+
+      <!-- PLATE 03 — SPECIFICATION -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 03 — SPECIFICATION</span>
+          <span class="microlabel">AS MEASURED 28 JUN 26</span>
+        </div>
+        <div class="wb-table-wrap">
+          <table class="wb-table">
+            <tbody>
+              <tr><td><strong>Disc</strong></td><td class="num">355 × 32 mm · slotted · iron</td></tr>
+              <tr><td><strong>Caliper</strong></td><td class="num">CP9660 · 6-piston · left + right</td></tr>
+              <tr><td><strong>Pads</strong></td><td class="num">Ferodo DS2500 · ~70% remaining</td></tr>
+              <tr><td><strong>Hours on kit</strong></td><td class="num">~6,400 km · 11 track days logged</td></tr>
+              <tr><td><strong>Included</strong></td><td class="num">Braided lines · E46 M3 brackets · fitting bolts</td></tr>
+              <tr><td><strong>Boxed weight</strong></td><td class="num">24 kg · double-boxed on dispatch</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PLATE 04 — CONDITION REPORT -->
+      <section class="wb-plate">
+        <div class="wb-plate__head">
+          <span class="microlabel microlabel--ink">PLATE 04 — CONDITION REPORT</span>
+          <span class="microlabel">3 INSPECTIONS ON FILE</span>
+        </div>
+        <div class="wb-plate__body">
+          <ul class="wb-ledger" style="margin:0 -16px">
+            <li><time>28 JUN 26</time> Removal inspection — discs measured 31.6 mm both sides, no cracks past slot ends</li>
+            <li><time>14 MAR 26</time> Season prep — pistons exercised, seals dry, pads at 70%, fluid flushed (RBF 660)</li>
+            <li><time>09 OCT 25</time> Post-Nordschleife check — even wear, no judder, one stone chip on left caliper paint</li>
+          </ul>
+          <div style="margin-top:20px">
+            <span class="microlabel">DISC THICKNESS — MEASURED VS MINIMUM</span>
+            <div class="wb-gauge" aria-label="Measured disc thickness 31.6 mm against minimum 30.0 mm">
+              <span class="wb-gauge__track"></span>
+              <span class="wb-gauge__min" style="left:20%"></span>
+              <span class="wb-gauge__minlabel" style="left:20%">MIN 30.0 MM</span>
+              <span class="wb-gauge__meas" style="left:72%"></span>
+              <span class="wb-gauge__measlabel" style="left:72%">MEASURED 31.6 MM</span>
+            </div>
+            <div class="wb-dim wb-dim--accent" data-dim style="margin-top:12px"><span class="wb-dim__line"></span><span class="wb-dim__label">1.6 mm above minimum — serviceable for full pad life</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Q&A -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 05 — QUESTIONS TO THE KEEPER</span>
+        <span class="microlabel">2 ANSWERED · MEDIAN REPLY 3 H</span>
+      </div>
+      <div class="wb-plate__body wb-plate__body--flush">
+        <div class="wb-qa">
+          <div class="wb-qa__q">Do the brackets fit an E92 M3 without machining?</div>
+          <div class="wb-qa__meta">@kessler.m · 07 JUL 26</div>
+          <div class="wb-qa__a">The included brackets are E46 M3 specific. E9X needs the W. bracket set — that
+          claim is seller-stated, not platform-verified, so check your hub face offset before buying for an E92.</div>
+          <div class="wb-qa__meta" style="padding-left:16px">@werk7 · KEEPER · 07 JUL 26</div>
+        </div>
+        <div class="wb-qa">
+          <div class="wb-qa__q">Any judder or DTV after the track use?</div>
+          <div class="wb-qa__meta">@trackrat_e36 · 04 JUL 26</div>
+          <div class="wb-qa__a">None — the 09 OCT 25 inspection after the Nordschleife weekend is on file above.
+          Discs were bedded on DS2500 from new and never mixed compounds.</div>
+          <div class="wb-qa__meta" style="padding-left:16px">@werk7 · KEEPER · 04 JUL 26</div>
+        </div>
+        <form style="display:flex;gap:8px;padding:16px" onsubmit="event.preventDefault();wbToast('QUESTION FILED — THE KEEPER WILL BE NOTIFIED');this.reset();">
+          <input class="wb-input" type="text" placeholder="Ask about this lot…" aria-label="Ask about this lot" required>
+          <button class="wb-btn wb-btn--ghost" type="submit" style="flex:none">Ask</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- FROM THE SAME CAR -->
+    <section class="wb-plate wb-section">
+      <div class="wb-plate__head">
+        <span class="microlabel microlabel--ink">PLATE 06 — FROM THE SAME CAR · DRVN-0417</span>
+        <a class="ref-link" href="market.html">ALL LOTS IN THE MARKETPLACE →</a>
+      </div>
+      <div class="wb-plate__body">
+        <div class="wb-partcards" style="grid-template-columns:repeat(2,1fr)">
+          <a class="wb-plate wb-partcard" href="listings.html">
+            <div class="wb-img"><img src="../assets/c4-part-gearbox.png" alt="Getrag 420G gearbox, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+            <div class="wb-partcard__body">
+              <div class="wb-partcard__name">Getrag 420G 6-Speed (orig.)</div>
+              <div class="wb-partcard__price">£1,250</div>
+              <div class="wb-partcard__tags"><span class="wb-tag wb-tag--ok">LIVE</span><span class="wb-tag">GOOD · 74K KM</span></div>
+              <span class="microlabel">SAME PROVENANCE FILE · REMOVED 01/25</span>
+            </div>
+          </a>
+          <a class="wb-plate wb-partcard" href="market.html">
+            <div class="wb-img"><img src="../assets/c4-part-seat.png" alt="Recaro Pole Position bucket seat, catalogue still life" loading="lazy" onerror="this.remove()"></div>
+            <div class="wb-partcard__body">
+              <div class="wb-partcard__name">Recaro Pole Position ABE ×2</div>
+              <div class="wb-partcard__price">£620</div>
+              <div class="wb-partcard__tags"><span class="wb-tag wb-tag--ok">LIVE</span><span class="wb-tag">EXCELLENT · INC. MOUNTS</span></div>
+              <span class="microlabel">SAME PROVENANCE FILE · REMOVED 05/26</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="wb-foot">
+      <a class="ref-link" href="market.html">← BACK TO MARKETPLACE</a>
+      <span class="microlabel">DRVN / WERKBANK — PART RECORD · REF 04-J · LOT L-118</span>
+      <a class="ref-link" href="car.html">SOURCE CAR — DRVN-0417 →</a>
+    </footer>
+  </main>
+</div>
+
+<!-- OFFER SHEET -->
+<div class="wb-scrim" id="offerSheet" role="dialog" aria-modal="true" aria-labelledby="offerTitle">
+  <div class="wb-sheet">
+    <div class="wb-sheet__head">
+      <span class="microlabel microlabel--ink" id="offerTitle">MAKE AN OFFER — LOT L-118</span>
+      <button class="wb-sheet__close" data-modal-close aria-label="Close">ESC ×</button>
+    </div>
+    <form id="offerForm">
+      <div class="wb-sheet__body">
+        <div class="wb-orderline" style="border-bottom:1px solid var(--wb-hairline)">
+          <span>AP Racing CP9660 Front Kit — asking</span><span class="num">£1,150</span>
+        </div>
+        <div class="wb-field">
+          <label class="microlabel" for="offerAmount">Your offer — GBP</label>
+          <input class="wb-input" id="offerAmount" type="number" min="0" step="10" placeholder="e.g. 1050" autocomplete="off">
+        </div>
+        <span class="microlabel" id="offerHint">KEEPER'S FLOOR IS £900 — OFFERS BELOW AUTO-DECLINE</span>
+      </div>
+      <div class="wb-sheet__foot">
+        <button class="wb-btn wb-btn--ghost" type="button" data-modal-close>Cancel</button>
+        <button class="wb-btn wb-btn--accent" type="submit">File offer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- PURCHASE SHEET — 3 STEPS -->
+<div class="wb-scrim wb-scrim--full" id="buySheet" role="dialog" aria-modal="true" aria-labelledby="buyTitle">
+  <div class="wb-sheet wb-sheet--wide">
+    <div class="wb-sheet__head">
+      <span class="microlabel microlabel--ink" id="buyTitle">PURCHASE — LOT L-118</span>
+      <div class="wb-ticks" aria-hidden="true">
+        <span class="wb-ticks__n is-current">1</span><span data-tick-label>SUMMARY</span>
+        <span class="wb-ticks__sep"></span>
+        <span class="wb-ticks__n">2</span><span data-tick-label>DELIVERY</span>
+        <span class="wb-ticks__sep"></span>
+        <span class="wb-ticks__n">3</span><span data-tick-label>FILED</span>
+      </div>
+      <button class="wb-sheet__close" data-modal-close aria-label="Close">ESC ×</button>
+    </div>
+    <div class="wb-sheet__body">
+
+      <!-- STEP 1 — ORDER SUMMARY -->
+      <div class="wb-step-panel is-active" data-step="1">
+        <span class="microlabel microlabel--ink">STEP 1 — ORDER SUMMARY</span>
+        <div>
+          <div class="wb-orderline"><span>AP Racing CP9660 Front Kit — 355 mm</span><span class="num">£1,150.00</span></div>
+          <div class="wb-orderline"><span>Delivery — DHL Express, insured</span><span class="num">£18.00</span></div>
+          <div class="wb-orderline"><span>Platform buyer fee</span><span class="num">£0.00</span></div>
+          <div class="wb-orderline wb-orderline--total"><span>Total</span><span class="num">£1,168.00</span></div>
+        </div>
+        <div class="wb-dim is-drawn"><span class="wb-dim__line"></span><span class="wb-dim__label">Provenance: off E46 M3 · DRVN-0417 · certificate travels with the part</span></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px">
+          <button class="wb-btn wb-btn--ghost" type="button" data-modal-close>Cancel</button>
+          <button class="wb-btn wb-btn--accent" type="button" data-step-next>Continue — delivery &amp; payment</button>
+        </div>
+      </div>
+
+      <!-- STEP 2 — DELIVERY & PAYMENT -->
+      <div class="wb-step-panel" data-step="2">
+        <span class="microlabel microlabel--ink">STEP 2 — DELIVERY &amp; PAYMENT</span>
+        <div>
+          <span class="microlabel">Deliver to</span>
+          <div class="wb-addr" style="margin-top:6px">M. KESSLER<br>AGNESSTRASSE 14 · 80798 MÜNCHEN · DE<br>+49 89 •• •• 41</div>
+        </div>
+        <div class="wb-deliv" style="border-top:1px solid var(--wb-hairline)">
+          <div><strong>Payment method</strong><div class="mono">VISA ****4402 · EXP 09/28</div></div>
+          <button class="wb-btn wb-btn--ghost wb-btn--sm" type="button" onclick="wbToast('PAYMENT METHODS — NOT IN THIS PROTOTYPE')">Change</button>
+        </div>
+        <span class="microlabel">BY FILING THIS ORDER YOU ACCEPT THE 48 H INSPECTION TERMS · FUNDS HELD IN ESCROW UNTIL DELIVERY CONFIRM</span>
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <button class="wb-btn wb-btn--ghost" type="button" data-step-back>← Back</button>
+          <button class="wb-btn wb-btn--accent" type="button" data-step-next>Pay £1,168 — file order</button>
+        </div>
+      </div>
+
+      <!-- STEP 3 — CONFIRMATION -->
+      <div class="wb-step-panel" data-step="3">
+        <div style="text-align:center;padding:8px 0 4px">
+          <span class="wb-stamp">Order filed — job card #1048</span>
+        </div>
+        <p style="font-size:13px;line-height:1.55;text-align:center;color:var(--wb-ink-2)">
+          £1,168.00 held in escrow. The keeper has 48 h to dispatch — DHL Express, insured, est. 2 days.
+        </p>
+        <div class="wb-pipe" style="padding:4px 8px 8px">
+          <div class="wb-pipe__step is-done"><span class="wb-pipe__node"></span><div class="wb-pipe__label">Offer</div><div class="wb-pipe__meta">BUY NOW</div></div>
+          <div class="wb-pipe__step is-done"><span class="wb-pipe__node"></span><div class="wb-pipe__label">Paid</div><div class="wb-pipe__meta">ESCROW</div></div>
+          <div class="wb-pipe__step is-current"><span class="wb-pipe__node"></span><div class="wb-pipe__label">Dispatch</div><div class="wb-pipe__meta">DUE 48 H</div></div>
+          <div class="wb-pipe__step"><span class="wb-pipe__node"></span><div class="wb-pipe__label">Delivered</div><div class="wb-pipe__meta">—</div></div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+          <a class="wb-btn" href="orders.html">View order</a>
+          <a class="wb-btn wb-btn--ghost" href="market.html">Continue surveying</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="werkbank.js"></script>
+</body>
+</html>

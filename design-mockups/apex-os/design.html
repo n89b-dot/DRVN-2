@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX/OS — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --surface:#0A0B0D; --surface-panel:#111316; --surface-panel-2:#0E1013;
+    --hairline:#23262B; --on-surface:#E8EAED; --on-surface-dim:#6B7178;
+    --accent:#D8FF3E; --on-accent:#0A0B0D; --alarm:#FF3B30;
+    --mono:"JetBrains Mono",ui-monospace,monospace; --disp:"Space Grotesk",var(--mono);
+    --step:steps(3,end); --fast:90ms;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;border-radius:0!important}
+  body{
+    background:var(--surface); color:var(--on-surface); font-family:var(--mono);
+    font-size:13px; line-height:1.5; font-variant-numeric:tabular-nums;
+    -webkit-font-smoothing:antialiased;
+    background-image:linear-gradient(var(--hairline) 1px,transparent 1px),linear-gradient(90deg,var(--hairline) 1px,transparent 1px);
+    background-size:44px 44px; background-position:center;
+  }
+  body::before{content:"";position:fixed;inset:0;background:var(--surface);opacity:.86;z-index:-1}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,40px)}
+  a{color:var(--accent)}
+  .label{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .acid{color:var(--accent)} .dim{color:var(--on-surface-dim)} .red{color:var(--alarm)}
+
+  /* command bar */
+  .bar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--hairline);padding:14px 0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .bar b{color:var(--on-surface);font-weight:500}
+  .dot{display:inline-block;width:6px;height:6px;background:var(--accent);margin-right:8px;vertical-align:middle;animation:blink 1.4s steps(2,start) infinite}
+  @keyframes blink{50%{opacity:.15}}
+
+  header{padding:44px 0 40px;border-bottom:1px solid var(--hairline)}
+  .syscode{font-size:10px;letter-spacing:.2em;color:var(--on-surface-dim);text-transform:uppercase;margin-bottom:14px}
+  h1{font-family:var(--disp);font-weight:700;font-size:clamp(34px,5.4vw,64px);line-height:1;letter-spacing:-.03em;text-transform:uppercase}
+  h1 .mark{color:var(--accent)}
+  .lede{max-width:60ch;color:var(--on-surface-dim);margin-top:18px;font-size:13px;line-height:1.6}
+  .lede b{color:var(--on-surface)}
+
+  section{padding:40px 0;border-bottom:1px solid var(--hairline)}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:26px}
+  .sec-head .code{font-size:11px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase}
+  .sec-head h2{font-family:var(--disp);font-weight:500;font-size:20px;letter-spacing:.02em;text-transform:uppercase}
+
+  /* colors */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:1px;background:var(--hairline);border:1px solid var(--hairline)}
+  .sw{background:var(--surface);position:relative}
+  .sw .tick{position:absolute;top:5px;left:5px;width:7px;height:7px;border-left:1px solid var(--hairline);border-top:1px solid var(--hairline)}
+  .sw__chip{height:88px;display:flex;align-items:flex-end;padding:10px}
+  .sw__chip span{font-size:11px}
+  .sw__meta{padding:12px 14px 16px}
+  .sw__name{font-size:11px;color:var(--on-surface);letter-spacing:.08em}
+  .sw__hex{font-size:11px;color:var(--on-surface-dim);margin-top:3px}
+
+  /* type */
+  .spec{padding:20px 0;border-top:1px solid var(--hairline)}
+  .spec:first-child{border-top:none}
+  .spec__meta{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px}
+  .spec__meta span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim)}
+
+  .scale-row{display:flex;align-items:center;gap:16px;padding:7px 0}
+  .scale-row .tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim);min-width:120px}
+  .scale-row .bar{background:var(--accent);height:16px}
+
+  .comp{border:1px solid var(--hairline);margin-bottom:1px;background:var(--surface-panel-2);position:relative}
+  .comp .tick{position:absolute;width:8px;height:8px}
+  .comp .tl{top:5px;left:5px;border-left:1px solid var(--on-surface-dim);border-top:1px solid var(--on-surface-dim)}
+  .comp .br{bottom:5px;right:5px;border-right:1px solid var(--on-surface-dim);border-bottom:1px solid var(--on-surface-dim)}
+  .comp__label{padding:10px 16px;border-bottom:1px solid var(--hairline);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-dim)}
+  .comp__body{padding:24px 20px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;background:var(--surface)}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;padding:14px 26px;border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);font-weight:700;cursor:pointer;transition:background var(--fast) var(--step),color var(--fast) var(--step)}
+  .btn:hover,.btn.is-hover{background:transparent;color:var(--accent)}
+  .btn--ghost{background:transparent;color:var(--on-surface-dim);border-color:var(--hairline);font-weight:400}
+  .btn--ghost:hover,.btn--ghost.is-hover{border-color:var(--on-surface);color:var(--on-surface)}
+  .state-tag{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim)}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.16em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--hairline);color:var(--on-surface-dim)}
+  .chip::before{content:"";width:5px;height:5px;background:currentColor}
+  .chip--verified{color:var(--accent);border-color:var(--accent)}
+  .chip--claimed{color:var(--on-surface-dim)}
+  .chip--sold{color:var(--alarm);border-color:var(--alarm)}
+  .price{font-family:var(--disp);font-weight:700;font-size:16px;color:var(--accent)}
+
+  .statcell{background:var(--surface-panel);border:1px solid var(--hairline);padding:20px;min-width:200px}
+  .statcell .num{font-family:var(--disp);font-weight:700;font-size:44px;line-height:1;letter-spacing:-.03em;color:var(--accent)}
+  .statcell .cap{margin-top:8px}
+
+  .lrow{width:100%;display:grid;grid-template-columns:64px 2fr 1fr auto;gap:0;border:1px solid var(--hairline);transition:background var(--fast) var(--step)}
+  .lrow:hover{background:var(--surface-panel)}
+  .lrow>div{padding:12px 14px;border-right:1px solid var(--hairline)}
+  .lrow>div:last-child{border-right:none}
+  .lrow .nm{font-family:var(--disp);font-weight:500;font-size:14px}
+  .imgcell{background:var(--surface-panel-2);display:grid;place-items:center;font-size:8px;letter-spacing:.18em;color:var(--hairline);border-right:1px solid var(--hairline)}
+
+  .tickerstrip{border:1px solid var(--hairline);background:var(--surface-panel-2);padding:8px 14px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--on-surface-dim);overflow:hidden;white-space:nowrap}
+  .tickerstrip .acid{margin:0 4px}
+
+  .radbox{display:inline-block;width:120px}
+  .radbox .box{height:80px;background:var(--surface-panel);border:1px solid var(--hairline)}
+
+  .dd{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--hairline);border:1px solid var(--hairline)}
+  .dd__col{background:var(--surface);padding:24px 20px}
+  .dd__col h3{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:14px}
+  .dd__col ul{list-style:none}
+  .dd__col li{padding:8px 0 8px 22px;position:relative;font-size:12.5px;line-height:1.5;color:var(--on-surface-dim);border-top:1px solid var(--hairline)}
+  .dd__col li:first-child{border-top:none}
+  .dd--do li::before{content:"+";position:absolute;left:0;color:var(--accent)}
+  .dd--dont li::before{content:"×";position:absolute;left:0;color:var(--alarm)}
+
+  footer{padding:20px 0;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--on-surface-dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  @media(max-width:640px){.dd{grid-template-columns:1fr}.lrow{grid-template-columns:48px 1fr}.lrow .lr-hide{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar"><span><span class="dot"></span>APEX/OS — DRVN</span><span>DESIGN SYSTEM · <b id="clk">00:00:00</b> · REGION UK-SE</span></div>
+
+  <header>
+    <div class="syscode">SYS/DS — DESIGN SYSTEM · MIRROR OF design.md</div>
+    <h1>TOKENS, <span class="mark">INSTRUMENTED</span></h1>
+    <p class="lede">The human-readable mirror of <b>design.md</b> — every color, type level, and component rendered live in APEX/OS's own language. The <b>.md</b> is the source of truth a coding agent implements from; this deck is what an operator reads. Source: <a href="design.md">design.md</a> · Brief: <a href="BRIEF.md">BRIEF.md</a> · Prototype: <a href="index.html">apex-os/index.html</a></p>
+  </header>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/01</span><h2>Colors</h2></div>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/02</span><h2>Typography</h2></div>
+    <div class="spec"><div style="font-family:var(--disp);font-weight:700;font-size:clamp(34px,5vw,58px);line-height:1;letter-spacing:-.03em;color:var(--accent)">412<span style="font-size:.4em;color:var(--on-surface-dim);margin-left:8px">WHP</span></div><div class="spec__meta"><span>display-xl</span><span>Space Grotesk</span><span>700</span><span>tabular</span></div></div>
+    <div class="spec"><div style="font-family:var(--disp);font-weight:700;font-size:clamp(28px,3.4vw,44px);letter-spacing:-.02em">YOUR BUILD, INSTRUMENTED</div><div class="spec__meta"><span>display</span><span>Space Grotesk</span><span>700</span></div></div>
+    <div class="spec"><div style="font-family:var(--disp);font-weight:500;font-size:16px;letter-spacing:.02em;text-transform:uppercase">Market — Live Listings</div><div class="spec__meta"><span>h2</span><span>Space Grotesk</span><span>500</span></div></div>
+    <div class="spec"><div style="font-family:var(--mono);font-size:14px;font-weight:500">GARRETT G30-770 · 6,400 KM · £1,150</div><div class="spec__meta"><span>data-strong</span><span>JetBrains Mono</span><span>500</span></div></div>
+    <div class="spec"><div style="font-family:var(--mono);font-size:13px;color:var(--on-surface-dim)">P/N 880694-5006S — bench-inspected — 41 track hours logged</div><div class="spec__meta"><span>data</span><span>JetBrains Mono</span><span>400</span></div></div>
+    <div class="spec"><div class="label">SYS/04 — LISTING APX-2214 — SOURCE: UNIT 07</div><div class="spec__meta"><span>label</span><span>JetBrains Mono</span><span>0.18em / uppercase</span></div></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/03</span><h2>Spacing</h2></div>
+    <div id="spacing"></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/04</span><h2>Shapes</h2></div>
+    <div class="radbox"><div class="box"></div><div class="label" style="margin-top:10px">none · 0px</div></div>
+    <p style="margin-top:22px;color:var(--on-surface-dim);font-size:12.5px;max-width:60ch">Zero radius is a law, not a default. Corners are square on every cell, chip, button, and image frame — a radius above zero reads as a consumer app and breaks the instrument.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/05</span><h2>Elevation &amp; Depth</h2></div>
+    <p style="color:var(--on-surface-dim);font-size:12.5px;max-width:62ch;margin-bottom:24px">No shadows, no gradients. A cell reads as raised because it is outlined by a hairline and filled one step lighter than the deck. Emphasis is acid and motion, never lift.</p>
+    <div style="display:flex;gap:18px;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px;background:var(--surface);border:1px solid var(--hairline);padding:18px"><div class="label">surface — deck</div></div>
+      <div style="flex:1;min-width:180px;background:var(--surface-panel-2);border:1px solid var(--hairline);padding:18px"><div class="label">panel-2 — inset</div></div>
+      <div style="flex:1;min-width:180px;background:var(--surface-panel);border:1px solid var(--hairline);padding:18px"><div class="label">panel — raised cell</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/06</span><h2>Components</h2></div>
+
+    <div class="comp"><span class="tick tl"></span><span class="tick br"></span><div class="comp__label">stat-cell</div><div class="comp__body">
+      <div class="statcell"><div class="num" data-count="27">0</div><div class="cap label">Parts tracked · +3 wk</div></div>
+      <div class="statcell"><div class="num" style="font-size:32px">£14,720</div><div class="cap label">Spend logged</div></div>
+    </div></div>
+
+    <div class="comp"><span class="tick tl"></span><span class="tick br"></span><div class="comp__label">listing-row · default / hover</div><div class="comp__body" style="display:block">
+      <div class="lrow"><div class="imgcell">TURBO</div><div><div class="nm">GARRETT G30-770 TURBOCHARGER</div><div class="label" style="margin-top:4px">P/N 880694-5006S &nbsp;<span class="chip chip--verified">FIT:VERIFIED</span></div></div><div class="lr-hide"><div class="label">UNIT 07</div><div style="margin-top:3px">EVO IX / K.TANAKA</div></div><div><div class="price">£1,150</div></div></div>
+    </div></div>
+
+    <div class="comp"><span class="tick tl"></span><span class="tick br"></span><div class="comp__label">fit chips — platform truth vs seller claim vs terminal state</div><div class="comp__body">
+      <span class="chip chip--verified">FIT:VERIFIED</span>
+      <span class="chip chip--claimed">FIT:CLAIMED — GC8/GD</span>
+      <span class="chip chip--sold">SOLD</span>
+    </div></div>
+
+    <div class="comp"><span class="tick tl"></span><span class="tick br"></span><div class="comp__label">button-acid · default / hover · button-ghost</div><div class="comp__body">
+      <button class="btn">BUY NOW</button>
+      <button class="btn is-hover">BUY NOW</button><span class="state-tag">hover</span>
+      <button class="btn btn--ghost">MAKE OFFER</button>
+    </div></div>
+
+    <div class="comp"><span class="tick tl"></span><span class="tick br"></span><div class="comp__label">ticker</div><div class="comp__body" style="display:block">
+      <div class="tickerstrip">14:32:07 <span class="acid">▸</span> GC8 COILOVERS LISTED — £680 &nbsp;&nbsp; 14:31:44 <span class="acid">▸</span> G30-770 TURBO +4 WATCHERS &nbsp;&nbsp; 14:29:12 <span class="acid">▸</span> FD RX-7 SEQ. TWINS SOLD — £2,340</div>
+    </div></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="code">SYS/07</span><h2>Do's and Don'ts</h2></div>
+    <div class="dd">
+      <div class="dd__col dd--do"><h3>Do</h3><ul>
+        <li>One accent (acid) for status, prices, actions; red for one terminal state per screen.</li>
+        <li>Measured values in JetBrains Mono, tabular; headlines/KPIs in Space Grotesk.</li>
+        <li>Build every module as a bordered cell with corner ticks.</li>
+        <li>Encode fitment as verified (platform) vs claimed (seller) — never blur.</li>
+      </ul></div>
+      <div class="dd__col dd--dont"><h3>Don't</h3><ul>
+        <li>Use any border-radius above 0px.</li>
+        <li>Add drop shadows, glows, or decorative gradients.</li>
+        <li>Introduce a second accent, or use red for anything but SOLD.</li>
+        <li>Animate with soft 300ms eases — transitions are stepped, ≤120ms.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <footer><span>APEX/OS — A DRVN INSTRUMENT © 2026</span><span>MIRROR OF design.md · BUILD 3.1.408</span></footer>
+</div>
+
+<script>
+  const colors=[
+    ["surface","#0A0B0D","on-surface"],["surface-panel","#111316","on-surface"],
+    ["surface-panel-2","#0E1013","on-surface"],["hairline","#23262B","on-surface"],
+    ["on-surface","#E8EAED","surface"],["on-surface-dim","#6B7178","surface"],
+    ["accent","#D8FF3E","on-accent"],["on-accent","#0A0B0D","accent"],["alarm","#FF3B30","on-surface"]
+  ];
+  const V={"surface":"#0A0B0D","on-surface":"#E8EAED","on-accent":"#0A0B0D","accent":"#D8FF3E"};
+  document.getElementById("swatches").innerHTML=colors.map(([n,hex,on])=>`
+    <div class="sw"><span class="tick"></span><div class="sw__chip" style="background:${hex}"><span style="color:${V[on]||'#E8EAED'}">${on}</span></div>
+    <div class="sw__meta"><div class="sw__name">${n}</div><div class="sw__hex">${hex}</div></div></div>`).join("");
+  const sp=[["xs",6],["sm",8],["md",14],["lg",20],["xl",26],["xxl",40]];
+  document.getElementById("spacing").innerHTML=sp.map(([n,px])=>`<div class="scale-row"><span class="tag">${n} · ${px}px</span><div class="bar" style="width:${px}px"></div></div>`).join("");
+  // live clock
+  function two(n){return String(n).padStart(2,"0")}
+  setInterval(()=>{const d=new Date();document.getElementById("clk").textContent=two(d.getHours())+":"+two(d.getMinutes())+":"+two(d.getSeconds())},1000);
+  // count-up
+  document.querySelectorAll("[data-count]").forEach(el=>{const t=+el.dataset.count;let c=0;const iv=setInterval(()=>{c+=Math.ceil(t/24);if(c>=t){c=t;clearInterval(iv)}el.textContent=c},40)});
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bronze forged wheels — DRVN</title>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="counter.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+    <div class="nav-links">
+      <a class="nav-link" href="market.html">Market</a>
+      <a class="nav-link" href="deal.html">My deals<span class="nav-badge">2</span></a>
+      <a class="nav-link" href="listing.html" aria-current="page">Sell</a>
+    </div>
+    <div class="nav-spacer"></div>
+    <button class="avatar mine-av" type="button" aria-label="Your profile — Jonah Barr">JB</button>
+  </div>
+</nav>
+
+<main class="wrap listing-grid">
+
+  <section aria-label="Photos">
+    <div class="gallery-main" id="galleryMain">
+      <img src="../assets/c13-part-wheels.png" alt="Bronze forged wheels, full set" data-fallback="Wheels — full set">
+    </div>
+    <div class="gallery-thumbs">
+      <button class="gthumb" type="button" aria-current="true" data-src="../assets/c13-part-wheels.png" data-alt="Bronze forged wheels, full set">
+        <img src="../assets/c13-part-wheels.png" alt="Thumbnail: full set" data-fallback="Set">
+      </button>
+      <button class="gthumb" type="button" aria-current="false" data-src="../assets/c13-part-coilovers.png" data-alt="Detail: barrel and hardware">
+        <img src="../assets/c13-part-coilovers.png" alt="Thumbnail: hardware detail" data-fallback="Detail">
+      </button>
+      <button class="gthumb" type="button" aria-current="false" data-src="../assets/c13-part-seats.png" data-alt="Detail: face finish">
+        <img src="../assets/c13-part-seats.png" alt="Thumbnail: finish detail" data-fallback="Finish">
+      </button>
+      <button class="gthumb" type="button" aria-current="false" data-src="../assets/c13-car.png" data-alt="Fitted on the seller's E46">
+        <img src="../assets/c13-car.png" alt="Thumbnail: fitted on car" data-fallback="On car">
+      </button>
+    </div>
+
+    <dl class="spec-rows" aria-label="Specifications">
+      <div class="spec-row"><dt>Size</dt><dd>18×9.5 ET35, square set of 4</dd></div>
+      <div class="spec-row"><dt>Bolt pattern</dt><dd>5×120</dd></div>
+      <div class="spec-row"><dt>Tires</dt><dd>Included — 245/40 R18, ~6mm tread</dd></div>
+      <div class="spec-row"><dt>Condition</dt><dd>Excellent, one light mark (photo 3)</dd></div>
+      <div class="spec-row"><dt>Weight</dt><dd>8.9 kg each, forged monoblock</dd></div>
+    </dl>
+    <p class="provenance">These <strong>came off my E46 track car</strong> — ran them two seasons, never kerbed, balanced in March.</p>
+
+    <div aria-label="Questions and answers">
+      <div class="qa-item">
+        <p class="qa-q">Q: Any buckles or repairs? Planning to run them on track.</p>
+        <p class="qa-a"><strong>Priya:</strong> None — checked on a balancer last month, all four run true. Happy to video it.</p>
+      </div>
+      <div class="qa-item">
+        <p class="qa-q">Q: Would you split the set?</p>
+        <p class="qa-a"><strong>Priya:</strong> Prefer to sell as four, but make me an offer and we'll talk.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Listing details">
+    <h1 class="listing-title">Bronze forged wheels — 18×9.5 ET35, square set</h1>
+    <p class="listing-sub">Wheels &amp; tires · Sheffield · listed 3 days ago · 14 watching</p>
+
+    <div class="price-line">
+      <span class="big-price">£1,250</span>
+      <span class="obo-big">or best offer</span>
+    </div>
+    <p class="recent-hint">Recent similar sets on DRVN have agreed between £1,100 and £1,200.</p>
+
+    <div class="card seller-card">
+      <span class="mini-av av-theirs" style="width:44px;height:44px;font-size:14px;">PS</span>
+      <div class="seller-info">
+        <p class="seller-name">Priya S. <span class="rating">★ 4.8</span></p>
+        <p class="seller-meta">26 sales · responds in ~20 min · dealing since 2023</p>
+      </div>
+      <a class="btn btn-quiet btn-sm" href="#offer">Ask a question</a>
+    </div>
+
+    <div class="card composer-block" id="offer">
+      <h3>Start a deal</h3>
+      <p class="composer-hint">Listed at £1,250 · recent similar sales £1,100–1,200. Name your number — Priya takes offers.</p>
+      <form id="listingOfferForm" novalidate>
+        <div class="composer-row">
+          <label class="amount-field" aria-label="Your offer in pounds">
+            <span class="cur">£</span>
+            <input type="number" id="listingOfferAmount" inputmode="numeric" placeholder="1,050" min="0" step="10">
+          </label>
+          <textarea class="note-field" id="listingOfferNote" rows="2" placeholder="Add a note — collection, timing, a bit of charm…"></textarea>
+        </div>
+        <div class="composer-actions">
+          <button class="btn btn-primary" type="submit">Send offer</button>
+          <button class="btn btn-ghost" type="button" id="buyNowBtn">Buy now £1,250</button>
+          <p class="composer-error" id="listingOfferError" role="alert"></p>
+        </div>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<div class="sheet-backdrop" id="buySheet" role="dialog" aria-modal="true" aria-label="Confirm purchase">
+  <div class="card sheet">
+    <h3>Buy now for £1,250?</h3>
+    <p>Bronze forged wheels, square set with tires, from Priya S. Payment is held by DRVN until the wheels arrive as described.</p>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" type="button" id="buyCancel">Not yet</button>
+      <button class="btn btn-primary" type="button" id="buyConfirm">Confirm — £1,250</button>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <small>© 2026 DRVN — the home for your modified car.</small>
+    <div class="footer-links">
+      <a href="market.html">Market</a>
+      <a href="deal.html">My deals</a>
+      <a href="design.html">Style guide</a>
+    </div>
+  </div>
+</footer>
+
+<script src="counter.js"></script>
+</body>
+</html>

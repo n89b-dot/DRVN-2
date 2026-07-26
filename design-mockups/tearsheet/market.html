@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Parts Market</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tearsheet.css">
+</head>
+<body>
+
+<nav class="topnav" aria-label="Main">
+  <div class="topnav__inner">
+    <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+    <ul class="topnav__links">
+      <li><a href="market.html" aria-current="page">Market</a></li>
+      <li><a href="car.html">Builds</a></li>
+      <li><a href="market.html">Sell</a></li>
+    </ul>
+    <button class="nav-search" aria-label="Search the market" onclick="document.getElementById('search-input').focus()">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.6"/></svg>
+    </button>
+  </div>
+</nav>
+
+<main class="frame">
+
+  <header class="sect-head" style="margin-top:20px">
+    <p class="kicker">Parts Market</p>
+    <h1 class="headline headline--sect">Every Part, Every Build</h1>
+  </header>
+
+  <div class="market-tools">
+    <form class="searchbar" id="market-search" role="search">
+      <input id="search-input" type="search" placeholder="Search parts, brands, platforms — “TD06”, “Meister”, “EK9”…" aria-label="Search parts">
+      <button type="submit">Search</button>
+    </form>
+    <div class="tabs" role="tablist" aria-label="Category filter">
+      <button class="tab is-active" role="tab" aria-selected="true" data-cat="all">All Parts</button>
+      <button class="tab" role="tab" aria-selected="false" data-cat="engine">Engine &amp; Turbo</button>
+      <button class="tab" role="tab" aria-selected="false" data-cat="wheels">Wheels</button>
+      <button class="tab" role="tab" aria-selected="false" data-cat="suspension">Suspension</button>
+      <button class="tab" role="tab" aria-selected="false" data-cat="interior">Interior</button>
+      <button class="tab" role="tab" aria-selected="false" data-cat="electronics">Electronics</button>
+    </div>
+  </div>
+
+  <div class="market-meta">
+    <span id="result-count">12 listings</span>
+    <div class="market-meta__right">
+      <button class="chip" id="chip-under500" aria-pressed="false">Under £500</button>
+      <label for="sort" style="letter-spacing:0.06em; text-transform:uppercase; font-size:10px">Sort</label>
+      <select class="sortsel" id="sort" aria-label="Sort listings">
+        <option>Just listed</option>
+        <option>Price: low → high</option>
+        <option>Price: high → low</option>
+        <option>Most watched</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid" id="market-grid">
+
+    <article class="card" data-cat="engine" data-price="980">
+      <span class="card__fits"><span class="flash" tabindex="0" data-tip="Platform-verified: DRVN matched this to the S14 in your garage from the seller's fitment data.">Fits Your Car</span></span>
+      <a class="card__link" href="listing.html">
+        <span class="photo"><img src="../assets/c14-part-turbo.png" alt="TD06 turbo and cast manifold, flash on white"></span>
+        <span class="card__body">
+          <span class="headline headline--card card__title">TD06-20G Turbo + Manifold · SR20DET</span>
+          <span class="card__meta">Cond. B+ · @sato.s14works · 4.9★</span>
+          <span class="card__foot"><span class="price price--md">£980</span><span class="card__watch">41 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card" data-cat="wheels" data-price="2150">
+      <a class="card__link" href="listing.html">
+        <span class="photo"><img src="../assets/c14-part-wheels2.png" alt="Deep-dish three-piece wheel, flash on white"></span>
+        <span class="card__body">
+          <span class="headline headline--card card__title">Work Meister S1 3P · 17×9.5 -19 · Set of 4</span>
+          <span class="card__meta">Cond. A · @ek9.jules · 5.0★</span>
+          <span class="card__foot"><span class="price price--md">£2,150</span><span class="card__watch">67 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="electronics" data-price="640">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Electronics · ECU</span>
+          <span class="headline headline--card card__title">Link G4X Plug-In ECU · SR20 Loom Ready</span>
+          <span class="card__meta">Cond. A · base map incl. · @boostlab.ldn · 4.8★</span>
+          <span class="card__foot"><span class="price price--md">£640</span><span class="card__watch">29 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="suspension" data-price="390">
+      <span class="card__fits"><span class="flash flash--ghost" tabindex="0" data-tip="Seller-stated fitment: EK chassis. Not yet platform-verified — check before buying.">Fits Your Car</span></span>
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Suspension · Coilovers</span>
+          <span class="headline headline--card card__title">Tein Flex Z Coilovers · EK Civic · 32k km</span>
+          <span class="card__meta">Cond. B+ · fresh top mounts · @ek9.jules · 5.0★</span>
+          <span class="card__foot"><span class="price price--md">£390</span><span class="card__watch">18 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="interior" data-price="430">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Interior · Seats</span>
+          <span class="headline headline--card card__title">Bride Zeta III · FIA 2019 · Low Max Rail</span>
+          <span class="card__meta">Cond. B · light bolster wear · @track.rat.gt · 4.7★</span>
+          <span class="card__foot"><span class="price price--md">£430</span><span class="card__watch">22 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="engine" data-price="520">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Exhaust · Cat-Back</span>
+          <span class="headline headline--card card__title">HKS Hi-Power Cat-Back · JZA80 Supra</span>
+          <span class="card__meta">Cond. B · no dents · @supra.dan.uk · 4.9★</span>
+          <span class="card__foot"><span class="price price--md">£520</span><span class="card__watch">15 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="engine" data-price="265">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Engine · Cooling</span>
+          <span class="headline headline--card card__title">Koyo 53mm Alloy Radiator · S-Chassis</span>
+          <span class="card__meta">Cond. A · pressure tested · @sato.s14works · 4.9★</span>
+          <span class="card__foot"><span class="price price--md">£265</span><span class="card__watch">11 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="wheels" data-price="480">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Wheels · Steel/OEM</span>
+          <span class="headline headline--card card__title">OEM EK9 Championship Whites · 15×6</span>
+          <span class="card__meta">Cond. B+ · refurbished · @ek9.jules · 5.0★</span>
+          <span class="card__foot"><span class="price price--md">£480</span><span class="card__watch">34 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="electronics" data-price="185">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Electronics · Gauges</span>
+          <span class="headline headline--card card__title">Defi Advance BF Boost + Control Unit</span>
+          <span class="card__meta">Cond. B · full loom · @boostlab.ldn · 4.8★</span>
+          <span class="card__foot"><span class="price price--md">£185</span><span class="card__watch">9 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="suspension" data-price="240">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Suspension · Arms</span>
+          <span class="headline headline--card card__title">Hardrace Rear Camber Arms · S14/S15</span>
+          <span class="card__meta">Cond. A · never tracked · @sato.s14works · 4.9★</span>
+          <span class="card__foot"><span class="price price--md">£240</span><span class="card__watch">7 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="interior" data-price="120">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Interior · Steering</span>
+          <span class="headline headline--card card__title">Nardi Deep Corn 350 · Suede · Boss Incl.</span>
+          <span class="card__meta">Cond. B+ · @track.rat.gt · 4.7★</span>
+          <span class="card__foot"><span class="price price--md">£120</span><span class="card__watch">26 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+    <article class="card card--text" data-cat="engine" data-price="95">
+      <a class="card__link" href="listing.html">
+        <span class="card__body">
+          <span class="card__cat">Engine · Intake</span>
+          <span class="headline headline--card card__title">Apexi Power Intake · SR20DET · New Filter</span>
+          <span class="card__meta">Cond. B · @sato.s14works · 4.9★</span>
+          <span class="card__foot"><span class="price price--md">£95</span><span class="card__watch">13 watching</span></span>
+        </span>
+      </a>
+    </article>
+
+  </div>
+  <p class="empty-note is-hidden" id="empty-note">No listings match. Clear a filter or widen the search — 3,400 parts are live this week.</p>
+
+</main>
+
+<footer class="colophon">
+  <div class="colophon__grid">
+    <div>
+      <a class="wordmark" href="index.html">DRVN<span>.</span></a>
+      <p class="colophon__tag">The home for your modified car. Show off your build, buy or sell the parts behind it.</p>
+    </div>
+    <div>
+      <h4>Market</h4>
+      <ul>
+        <li><a href="market.html">Browse parts</a></li>
+        <li><a href="listing.html">Featured listing</a></li>
+        <li><a href="market.html">Sell a part</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Builds</h4>
+      <ul>
+        <li><a href="car.html">Featured build</a></li>
+        <li><a href="car.html">More builds</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Reference</h4>
+      <ul>
+        <li><a href="design.html">Style guide</a></li>
+        <li><a href="index.html">Front of book</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="colophon__bottom">
+    <div class="colophon__bottom-inner">
+      <span>DRVN Concept 14 — Tearsheet</span>
+      <span>Set in Archivo Narrow &amp; Inter · One red, printed heavy</span>
+    </div>
+  </div>
+</footer>
+
+<script src="tearsheet.js"></script>
+</body>
+</html>

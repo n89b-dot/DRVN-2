@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRVN — Livesheet · Settings — your sheet, configured</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="livesheet.css">
+<script>try{if(localStorage.getItem("ls-theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+</head>
+<body class="has-savebar">
+
+<header class="bar">
+  <div class="bar__inner">
+    <a class="bar__logo" href="index.html">DRVN<em>.</em> <span class="microlabel">LIVESHEET · REV 16</span></a>
+    <nav class="bar__nav" aria-label="Primary">
+      <a class="bar__link" href="index.html">Sheet</a>
+      <a class="bar__link" href="dashboard.html">Dashboard</a>
+      <a class="bar__link" href="explore.html">Explore</a>
+      <a class="bar__link" href="market.html">Market</a>
+      <a class="bar__link" href="car.html">Garage</a>
+      <a class="bar__link" href="buyer-orders.html">Buying</a>
+      <a class="bar__link" href="messages.html">Messages<span class="dot" aria-hidden="true"></span></a>
+      <a class="bar__link" href="notifications.html" aria-label="Notifications" title="Notifications"><i class="ph ph-bell" aria-hidden="true"></i></a>
+      <a class="bar__link is-active" href="settings.html" aria-label="Settings" title="Settings"><i class="ph ph-gear-six" aria-hidden="true"></i></a>
+      <button class="bar__theme" data-theme-toggle type="button" title="Switch lighting"><span class="sw"></span>SHEET&nbsp;<b data-theme-val>DAY</b></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" data-config>
+
+  <div class="pagehead rv">
+    <span class="microlabel">CONFIGURATION SHEET — REV 16 · FILED JUN 21</span>
+    <h1>Your sheet, configured.</h1>
+    <p class="sub">Everything the sheet assumes about you, ruled onto one page. Nothing files until you save.</p>
+  </div>
+
+  <div class="jumprow rv">
+    <span class="microlabel">ON THIS SHEET</span>
+    <a class="jumplink" href="#keeper">Keeper</a>
+    <a class="jumplink" href="#garage">Garage &amp; fitment</a>
+    <a class="jumplink" href="#signals">Signals</a>
+    <a class="jumplink" href="#payments">Payments</a>
+    <a class="jumplink" href="#appearance">Appearance</a>
+    <a class="jumplink" href="#danger">Closing</a>
+  </div>
+
+  <!-- KEEPER -->
+  <section class="deck" id="keeper" style="margin-top:14px;padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">KEEPER DETAILS — SHOWN ON YOUR PUBLIC SHEET</span>
+        <a class="microlabel mono" href="profile.html">VIEW KEEPER SHEET →</a>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Mark</span>
+        <span class="bline__val" style="display:flex;align-items:center;gap:12px"><span class="monogram monogram--sm">DR</span></span>
+        <button class="btn btn--ghost" type="button" style="padding:9px 14px" data-toast="MARK UPLOAD — NOT IN THIS PROTOTYPE">Replace</button>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Keeper name</span>
+        <input class="ctl" type="text" value="Dana Rossi" autocomplete="name" aria-label="Keeper name">
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Handle</span>
+        <input class="ctl" type="text" value="@drossi.integrale" aria-label="Handle">
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Location</span>
+        <input class="ctl" type="text" value="Bristol, UK — ex Turin" aria-label="Location">
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Sheet note</span>
+        <textarea class="ctl" aria-label="Sheet note">One car, drawn honestly. Everything that goes on or comes off the Integrale is entered the day it happens; every flaw is photographed before it's listed.</textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- GARAGE & FITMENT -->
+  <section class="deck" id="garage" style="padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">GARAGE &amp; FITMENT — DEFAULT SHEET DRIVES THE MARKET'S FITS SWITCH</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Default fitment</span>
+        <label class="bline__val" for="fitA" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px">
+          <input class="sq" type="radio" id="fitA" name="defaultFit" checked>
+          Lancia Delta HF Integrale — sheet C-0416
+        </label>
+        <span class="chip chip--live">FITS: DELTA HF</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Second bay</span>
+        <label class="bline__val" for="fitB" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:15.5px;color:var(--dim)">
+          <input class="sq" type="radio" id="fitB" name="defaultFit" disabled>
+          Empty — open a second sheet to add fitment
+        </label>
+        <a class="chip" href="garage.html">OPEN A SHEET</a>
+      </div>
+      <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">What this does</span>
+        <span class="val">The market's FITS: DELTA HF switch filters against this sheet</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SIGNALS -->
+  <section class="deck" id="signals" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink"><i class="ph ph-bell-ringing"></i>&nbsp;SIGNALS — WHAT THE SHEET SHOUTS ABOUT</span>
+        <span class="microlabel">IN-APP · EMAIL</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">New offer</span>
+        <span class="bline__val" style="font-size:14px">A buyer files an offer on a listing</span>
+        <span class="bline__checks">
+          <label><input class="sq" type="checkbox" checked aria-label="New offer — in-app"><span class="microlabel">APP</span></label>
+          <label><input class="sq" type="checkbox" checked aria-label="New offer — email"><span class="microlabel">EMAIL</span></label>
+        </span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Offer lapsing</span>
+        <span class="bline__val" style="font-size:14px">An open offer has under 6 h on its window</span>
+        <span class="bline__checks">
+          <label><input class="sq" type="checkbox" checked aria-label="Offer lapsing — in-app"><span class="microlabel">APP</span></label>
+          <label><input class="sq" type="checkbox" checked aria-label="Offer lapsing — email"><span class="microlabel">EMAIL</span></label>
+        </span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Part sold</span>
+        <span class="bline__val" style="font-size:14px">A job card is raised against a listing</span>
+        <span class="bline__checks">
+          <label><input class="sq" type="checkbox" checked aria-label="Part sold — in-app"><span class="microlabel">APP</span></label>
+          <label><input class="sq" type="checkbox" checked aria-label="Part sold — email"><span class="microlabel">EMAIL</span></label>
+        </span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">New follower</span>
+        <span class="bline__val" style="font-size:14px">Someone follows your keeper sheet</span>
+        <span class="bline__checks">
+          <label><input class="sq" type="checkbox" checked aria-label="New follower — in-app"><span class="microlabel">APP</span></label>
+          <label><input class="sq" type="checkbox" aria-label="New follower — email"><span class="microlabel">EMAIL</span></label>
+        </span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Fitment match</span>
+        <span class="bline__val" style="font-size:14px">A watcher's sheet fits one of your parts</span>
+        <span class="bline__checks">
+          <label><input class="sq" type="checkbox" checked aria-label="Fitment match — in-app"><span class="microlabel">APP</span></label>
+          <label><input class="sq" type="checkbox" aria-label="Fitment match — email"><span class="microlabel">EMAIL</span></label>
+        </span>
+      </div>
+      <p class="kv" style="margin-top:12px;color:var(--dim)">In-app signals always land in the feed regardless — the sheet keeps its own record.</p>
+    </div>
+  </section>
+
+  <!-- PAYMENTS -->
+  <section class="deck" id="payments" style="padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink"><i class="ph ph-hand-coins"></i>&nbsp;PAYMENTS — USD · SETTLED WEEKLY</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Payout method</span>
+        <span class="bline__val">Bank transfer · Monzo ····2201</span>
+        <button class="btn btn--ghost" type="button" style="padding:9px 14px" data-toast="PAYOUT AMENDMENT — NOT IN THIS PROTOTYPE">Amend</button>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Platform fee</span>
+        <span class="bline__val">5.0%</span>
+        <span class="bline__note">Applied at settlement, per sale</span>
+      </div>
+      <div class="bline">
+        <span class="bline__label">Processing</span>
+        <span class="bline__val">1.4% + 20¢</span>
+        <span class="bline__note">Card processing, passed through at cost</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Payout cadence</span>
+        <select class="ctl" aria-label="Payout cadence">
+          <option>Weekly — every Friday</option>
+          <option>Instant — 1% expedite fee</option>
+        </select>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Tax standing</span>
+        <select class="ctl" aria-label="Tax standing">
+          <option>Private seller — no VAT invoicing</option>
+          <option>Business — issue VAT invoices</option>
+        </select>
+      </div>
+      <div class="livedim livedim--live" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">Worked example — job #1058</span>
+        <span class="val">$310 sale → $289.96 payout after fees</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- APPEARANCE & VISIBILITY -->
+  <section class="deck" id="appearance" style="padding-bottom:14px">
+    <div class="tile rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--ink">APPEARANCE &amp; VISIBILITY — APPLIES ACROSS EVERY SHEET</span>
+      </div>
+      <div class="bline bline--ctl" data-nodirty>
+        <span class="bline__label">Sheet lighting</span>
+        <select class="ctl" data-theme-select aria-label="Sheet lighting">
+          <option value="light">Day — drafting paper</option>
+          <option value="dark">Night — the office after hours</option>
+        </select>
+        <span class="chip">SYNCS WITH THE BAR TOGGLE</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Units</span>
+        <select class="ctl" aria-label="Units">
+          <option>Metric — mm / km / kg</option>
+          <option>Imperial — in / mi / lb</option>
+        </select>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Show location</span>
+        <label class="bline__val" for="visLoc" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:14px">
+          <input class="sq" type="checkbox" id="visLoc" checked>
+          Bristol, UK on the public keeper sheet
+        </label>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Show sales record</span>
+        <label class="bline__val" for="visSales" style="display:flex;align-items:center;gap:12px;cursor:pointer;font-size:14px">
+          <input class="sq" type="checkbox" id="visSales" checked>
+          23 sales · 4.9★ shown to buyers
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- DANGER -->
+  <section class="deck" id="danger" style="padding-bottom:14px">
+    <div class="tile tile--deep rv">
+      <div class="tile__head" style="margin-bottom:0">
+        <span class="microlabel microlabel--live">CLOSING THE SHEET — IRREVERSIBLE AFTER 14 DAYS</span>
+      </div>
+      <div class="bline bline--ctl">
+        <span class="bline__label">Close the sheet</span>
+        <span class="bline__val" style="font-size:14px">Retires 5 live listings, declines 2 open offers, archives sheet C-0416. Provenance stays with parts already sold.</span>
+        <button class="btn btn--ghost" type="button" data-open-sheet data-nodirty style="padding:9px 14px">Close the sheet</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAVE BAR -->
+  <div class="savebar rv">
+    <span class="microlabel microlabel--live" data-pending>CHANGES PENDING — NOT YET FILED</span>
+    <button class="btn btn--live" type="button" data-save>Save the sheet</button>
+  </div>
+
+  <footer class="foot">
+    <span class="microlabel">DRVN / LIVESHEET — CONFIGURATION · NOTHING FILES UNTIL YOU SAVE</span>
+    <a class="microlabel mono" href="index.html">← BACK TO YOUR SHEET</a>
+  </footer>
+</main>
+
+<!-- CLOSE-THE-SHEET CONFIRM -->
+<div class="sheetwrap" data-sheet aria-modal="true" role="dialog" aria-label="Close the sheet">
+  <div class="sheet">
+    <div data-step1>
+      <div class="tile__head"><span class="microlabel microlabel--live">CONFIRM — CLOSE THE SHEET</span><button class="microlabel mono" data-close-sheet>ESC ✕</button></div>
+      <div class="sheet__row"><span>Live listings retired</span><b>5</b></div>
+      <div class="sheet__row"><span>Open offers declined</span><b>2</b></div>
+      <div class="sheet__row"><span>Car sheet C-0416</span><b>ARCHIVED</b></div>
+      <div class="livedim" style="margin-top:12px"><span class="livedim__tick"></span>
+        <span class="microlabel">Nothing files until you confirm</span>
+        <span class="val">Cancel is always safe · 14-day cooling period after</span>
+      </div>
+      <div class="sheet__actions">
+        <button class="btn" data-close-sheet>Cancel — keep the sheet</button>
+        <button class="btn btn--ghost" data-confirm-sheet>Begin closure</button>
+      </div>
+    </div>
+    <div data-step2 style="display:none">
+      <span class="stamp">CLOSURE FILED — COOLING 14 DAYS</span>
+      <p style="font-size:14px;margin:8px 0 4px">The sheet pauses now and deletes on Aug 3. Sign back in any time before then to reverse it — one tap.</p>
+      <div class="sheet__actions">
+        <button class="btn btn--live" data-close-sheet>Reverse — keep my sheet</button>
+        <a class="btn btn--ghost" href="index.html">Back to the sheet</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="livesheet.js"></script>
+</body>
+</html>
