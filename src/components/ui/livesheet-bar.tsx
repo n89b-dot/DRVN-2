@@ -132,7 +132,14 @@ export function LivesheetBar({
                 <Link
                   key={route.href}
                   href={route.href}
-                  className={cx("bar__link", "bar__link--ico", isActive(route.href) && "is-active")}
+                  className={cx(
+                    "bar__link",
+                    "bar__link--ico",
+                    // Settings folds into the index on phones — it's a
+                    // destination you visit, not furniture you reach for.
+                    route.href === "/settings" && "bar__link--roomy",
+                    isActive(route.href) && "is-active",
+                  )}
                   aria-label={route.label}
                   title={route.label}
                 >
@@ -170,7 +177,7 @@ export function LivesheetBar({
               <i />
               <i />
             </span>
-            {open ? "Close" : "Index"}
+            <span className="indexbtn__label">{open ? "Close" : "Index"}</span>
           </button>
         </div>
       </header>

@@ -2554,7 +2554,38 @@ video {
   }
 }
 
+/* Phones: the bar is one row and stays one row. The furniture the user
+   reaches for (bell, saved, lighting) keeps its place; settings folds into
+   the index, where it's already a register. */
 @media (max-width: 640px) {
+  .bar__inner {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .bar__logo {
+    flex: none;
+    white-space: nowrap;
+  }
+  .bar__logo .microlabel {
+    display: none;
+  }
+  .bar__nav {
+    flex-wrap: nowrap;
+    gap: 0;
+    margin-left: auto;
+  }
+  .bar__link--ico {
+    width: 34px;
+    height: 34px;
+  }
+  .bar__link--roomy {
+    display: none;
+  }
+  .indexbtn {
+    flex: none;
+    padding: 8px 12px;
+  }
+
   .indexrow__label {
     font-size: 19px;
   }
@@ -2608,6 +2639,16 @@ video {
 }
 
 @media (max-width: 420px) {
+  /* Narrow phones: the folded rules alone say "index". */
+  .indexbtn__label {
+    display: none;
+  }
+  .indexbtn {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    place-items: center;
+  }
   .deck--kpi {
     grid-template-columns: 1fr;
   }
