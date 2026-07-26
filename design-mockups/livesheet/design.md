@@ -251,6 +251,34 @@ components:
       ctl: { class: ".bline--ctl", note: "control sits in the value column, align-items center" }
       own: { class: ".bline--own", grid: "190px 1fr auto auto", adds: ".relbtn in column 4" }
     responsive: { "≤720px": "1fr auto; label spans both, value 16.5px, chip moves to row 2" }
+  ledger:
+    class: ".ledger"
+    added: "Pass 11 — the seller's listings register"
+    description: >
+      A ruled data table for the one surface that genuinely is tabular: many
+      short columns a seller scans *down* (views, watchers, asking, top offer)
+      rather than reads across. Everywhere else the ruled row is still the
+      answer — this is not a general-purpose grid, and a two-column list must
+      never use it.
+    base:
+      width: "100%"
+      border-collapse: "collapse"
+      th: "{typography.scale.label} 11px, text-align left, padding 0 10px 9px 0, border-bottom 1px {colors.rule-mid}, nowrap"
+      td: "padding 13px 10px 13px 0, border-top 1px {colors.rule-soft}, vertical-align top"
+      first-row: { border-top: "0" }
+    slots:
+      num:    { class: ".ledger__num", font: "{typography.families.mono} 13px", numeric: "tabular-nums", align: "right" }
+      sort:   { class: ".ledger__sort", note: "column-header link; .is-on takes {colors.ink} and a ↓" }
+      toggle: { class: ".ledger__toggle", note: "a ▸ drafting tick that rotates 90° on .is-on and takes {colors.live}" }
+      detail: { class: ".ledger__detail", note: "the disclosed row; border-top 0 so it reads as part of the row above" }
+    states:
+      open: { class: ".is-open on the tr", background: "{colors.tile-2}", note: "the open row lifts by tone, never by shadow" }
+    responsive:
+      "≤860px": >
+        The table stops being scannable and becomes a maze, so it reverts to the
+        system's default: every cell becomes a block, the thead is hidden, and
+        each .ledger__num prints its column name from data-label as a microlabel
+        prefix. Same figures, ruled-row geometry.
   chip:
     class: ".chip"
     base:
