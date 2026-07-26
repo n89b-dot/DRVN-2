@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { NarrowColumn, SectionLabel } from "@/components/ui";
+
 import { createClient } from "@/lib/supabase/server";
 
 import { CarDetailsForm } from "./car-details-form";
@@ -40,25 +40,30 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
   ]);
 
   return (
-    <NarrowColumn>
-      <SectionLabel>Garage</SectionLabel>
-      <div className="mt-3 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-text-primary">{car.name}</h1>
-        <Link
-          href={`/cars/${car.slug}`}
-          className="rounded-pill border border-border px-4 py-2 text-sm text-text-secondary transition hover:text-text-primary"
-        >
-          View public page
-        </Link>
-      </div>
+    <div className="wrap">
+      <header className="pagehead">
+        <span className="microlabel">
+          <Link href="/garage" className="hover:text-live">
+            The garage
+          </Link>{" "}
+          / owner&apos;s desk ·{" "}
+          <Link href={`/cars/${car.slug}`} className="hover:text-live">
+            view public sheet →
+          </Link>
+        </span>
+        <h1>Manage the {car.name}.</h1>
+        <p className="sub">
+          Your side of the drawing. Everything here writes straight onto the public sheet.
+        </p>
+      </header>
 
-      <div className="mt-8 flex flex-col gap-10">
+      <div className="deck">
         <CarDetailsForm car={car} />
         <GalleryManager carId={car.id} userId={user.id} images={images ?? []} />
         <ModsEditor carId={car.id} initialMods={mods ?? []} />
         <ActivityComposer carId={car.id} posts={posts ?? []} />
         <DangerZone carId={car.id} carName={car.name} />
       </div>
-    </NarrowColumn>
+    </div>
   );
 }

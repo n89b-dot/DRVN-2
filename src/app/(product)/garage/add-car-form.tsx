@@ -4,55 +4,44 @@ import { useActionState, useState } from "react";
 
 import { createCar, type ActionState } from "./actions";
 
-const inputClass =
-  "h-11 rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent";
-
 export function AddCarForm() {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<ActionState, FormData>(createCar, {});
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90"
-      >
-        Add a car
+      <button type="button" onClick={() => setOpen(true)} className="btn btn--live">
+        Open a sheet
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-5"
-          onClick={(e) => e.target === e.currentTarget && setOpen(false)}
-        >
-          <div className="w-full max-w-[400px] rounded-card border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-text-primary">Add a car</h2>
-            <p className="mt-1 text-sm text-text-muted">
-              Just the basics — you can fill in the rest after.
+        <div className="sheetwrap is-open" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
+          <div className="sheet text-left">
+            <span className="microlabel microlabel--ink">Open a sheet</span>
+            <p className="field__hint mt-1">
+              Just the basics — the sheet fills itself as you go.
             </p>
-            <form action={action} className="mt-5 flex flex-col gap-3">
-              <input name="name" required placeholder='Name (e.g. "Neil&apos;s Audi S4")' className={inputClass} />
-              <div className="grid gap-3 min-[420px]:grid-cols-3">
-                <input name="year" placeholder="Year" inputMode="numeric" className={inputClass} />
-                <input name="make" placeholder="Make" className={inputClass} />
-                <input name="model" placeholder="Model" className={inputClass} />
+            <form action={action} className="mt-4">
+              <div className="field">
+                <span className="microlabel">Name</span>
+                <input name="name" required placeholder='e.g. "Neil&apos;s Audi S4"' className="ctl max-w-none" />
               </div>
-              {state.error && <p className="text-sm text-red-400">{state.error}</p>}
-              <div className="mt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-pill px-4 py-2 text-sm text-text-secondary hover:text-text-primary"
-                >
-                  Cancel
+              <div className="field field--row !grid-cols-3">
+                <input name="year" placeholder="Year" inputMode="numeric" className="ctl" />
+                <input name="make" placeholder="Make" className="ctl" />
+                <input name="model" placeholder="Model" className="ctl" />
+              </div>
+              {state.error && (
+                <p className="field__err" style={{ display: "flex" }}>
+                  {state.error}
+                </p>
+              )}
+              <div className="sheet__actions">
+                <button type="submit" disabled={pending} className="btn btn--live flex-1">
+                  {pending ? "Opening…" : "Open the sheet"}
                 </button>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="rounded-pill bg-accent px-5 py-2 text-sm font-semibold text-white transition hover:bg-accent/90"
-                >
-                  {pending ? "Adding…" : "Add car"}
+                <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
+                  Cancel
                 </button>
               </div>
             </form>

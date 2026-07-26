@@ -1,13 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import {
-  HorizontalGallery,
   KeyValueTable,
-  LinkedTitle,
-  SectionLabel,
-  TabNav,
   VehicleGallery,
   type GalleryImage,
 } from "@/components/ui";
@@ -15,6 +12,10 @@ import {
 type ModGroup = { label: string; items: { brand: string | null; product: string | null; raw: string | null }[] };
 type ActivityItem = { id: string; date: string; title: string; intro: string | null; gallery: GalleryImage[] };
 
+/**
+ * The public car sheet body — one continuous ruled page with a jumprow
+ * (Livesheet's tab replacement), never pill tabs.
+ */
 export function CarTabs({
   about,
   gallery,
@@ -32,90 +33,140 @@ export function CarTabs({
   carName: string;
   slug: string;
 }) {
-  const [tab, setTab] = useState("About");
   const [lightbox, setLightbox] = useState<number | null>(null);
+
+  const hasBuild = modGroups.length > 0 || wheelRows.length > 0;
 
   return (
     <div>
-      <TabNav tabs={["About", "Activity"]} active={tab} onChange={setTab} />
+      <div className="jumprow">
+        <span className="microlabel">On this sheet</span>
+        {about && (
+          <a className="jumplink" href="#about">
+            About
+          </a>
+        )}
+        {hasBuild && (
+          <a className="jumplink" href="#build">
+            The build
+          </a>
+        )}
+        {gallery.length > 0 && (
+          <a className="jumplink" href="#gallery">
+            Gallery
+          </a>
+        )}
+        <a className="jumplink" href="#activity">
+          Activity
+        </a>
+      </div>
 
-      {tab === "About" ? (
-        <div className="mt-8 grid gap-12">
-          {about && <p className="text-sm leading-7 text-text-secondary">{about}</p>}
+      {about && (
+        <section id="about" className="mt-8">
+          <p className="max-w-[62ch] text-[15px] leading-7">{about}</p>
+        </section>
+      )}
 
-          {gallery.length > 0 && (
-            <section>
-              <SectionLabel>Gallery</SectionLabel>
-              <div className="mt-5">
-                <VehicleGallery images={gallery} onSelect={(i) => setLightbox(i)} />
+      {hasBuild && (
+        <section id="build" className="mt-10">
+          <div className="bsec">
+            <span className="microlabel microlabel--ink">The build</span>
+            <span className="microlabel">
+              {modGroups.reduce((n, g) => n + g.items.length, 0) + wheelRows.length} entries
+            </span>
+          </div>
+          {modGroups.map((group) => (
+            <div key={group.label}>
+              <div className="bsec">
+                <span className="microlabel microlabel--live">{group.label}</span>
               </div>
-            </section>
-          )}
-
-          {modGroups.length > 0 && (
-            <section>
-              <SectionLabel>Modifications</SectionLabel>
-              <div className="mt-5 grid gap-5">
-                {modGroups.map((group) => (
-                  <div key={group.label}>
-                    <p className="text-sm font-medium text-text-primary">{group.label}</p>
-                    <ul className="mt-2 grid gap-1.5">
-                      {group.items.map((mod, i) => (
-                        <li key={i} className="text-sm leading-6 text-text-secondary">
-                          {mod.brand && <span className="font-medium text-text-primary">{mod.brand} </span>}
-                          {mod.product ?? mod.raw}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {wheelRows.length > 0 && (
-            <section>
-              <SectionLabel>Wheels &amp; Tires</SectionLabel>
-              <div className="mt-5">
-                <KeyValueTable rows={wheelRows} />
-              </div>
-            </section>
-          )}
-
-          {!about && gallery.length === 0 && modGroups.length === 0 && wheelRows.length === 0 && (
-            <p className="text-sm text-text-muted">Nothing here yet.</p>
-          )}
-        </div>
-      ) : (
-        <div className="mt-8 grid gap-8">
-          {activity.map((post) => (
-            <div key={post.id} className="grid grid-cols-[52px_1fr] gap-4">
-              <span className="pt-0.5 text-right text-xs text-text-muted">{post.date}</span>
-              <div>
-                <LinkedTitle href={`/cars/${slug}/activity/${post.id}`} label={post.title} />
-                {post.intro && <p className="mt-1 text-sm leading-6 text-text-secondary">{post.intro}</p>}
-                {post.gallery.length > 0 && (
-                  <div className="mt-3">
-                    <HorizontalGallery images={post.gallery.map((g) => g.url)} alt={post.title} />
-                  </div>
-                )}
-              </div>
+              {group.items.map((mod, i) => (
+                <div key={i} className="bline">
+                  <span className="bline__label">{mod.brand ?? "Component"}</span>
+                  <span className="bline__val">{mod.product ?? mod.raw}</span>
+                  <span className="chip chip--ok">Fitted</span>
+                </div>
+              ))}
             </div>
           ))}
-          {activity.length === 0 && <p className="text-sm text-text-muted">No build updates yet.</p>}
+          {wheelRows.length > 0 && (
+            <div>
+              <div className="bsec">
+                <span className="microlabel microlabel--live">Wheels &amp; Tires</span>
+              </div>
+              <KeyValueTable rows={wheelRows} />
+            </div>
+          )}
+        </section>
+      )}
+
+      {gallery.length > 0 && (
+        <section id="gallery" className="mt-10">
+          <div className="bsec">
+            <span className="microlabel microlabel--ink">Gallery</span>
+            <span className="microlabel">{gallery.length} frames</span>
+          </div>
+          <div className="mt-2">
+            <VehicleGallery images={gallery} onSelect={(i) => setLightbox(i)} />
+          </div>
+        </section>
+      )}
+
+      <section id="activity" className="mt-10">
+        <div className="bsec">
+          <span className="microlabel microlabel--ink">Activity — what this sheet saw</span>
+        </div>
+        {activity.length > 0 ? (
+          <ul className="feed">
+            {activity.map((post) => (
+              <li key={post.id}>
+                <time>{post.date}</time>
+                <span className="min-w-0">
+                  <Link
+                    href={`/cars/${slug}/activity/${post.id}`}
+                    className="order__name block transition-colors hover:text-live"
+                  >
+                    {post.title}
+                  </Link>
+                  {post.intro && <span className="order__meta block">{post.intro}</span>}
+                  {post.gallery.length > 0 && (
+                    <span className="thumbs !mt-2">
+                      {post.gallery.slice(0, 4).map((g, i) => (
+                        <span key={i} className="thumb">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={g.url} alt={g.alt ?? post.title} />
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+            No entries — the section headings stay, the sheet never fakes a line.
+          </p>
+        )}
+      </section>
+
+      {!about && gallery.length === 0 && !hasBuild && activity.length === 0 && (
+        <div className="undrawn mt-8">
+          <span className="undrawn__mark" aria-hidden="true">
+            ✎
+          </span>
+          <h3>A sheet with no build yet</h3>
+          <p>The keeper hasn&apos;t logged entries. What gets fitted — and released — lands here.</p>
         </div>
       )}
 
       {lightbox !== null && gallery[lightbox] && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-6"
-          onClick={() => setLightbox(null)}
-        >
+        <div className="sheetwrap is-open !items-center" onClick={() => setLightbox(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={gallery[lightbox].url}
             alt={gallery[lightbox].alt ?? carName}
-            className="max-h-[85vh] max-w-full rounded-card object-contain"
+            className="max-h-[85vh] max-w-full rounded-r object-contain"
           />
         </div>
       )}

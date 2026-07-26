@@ -102,23 +102,26 @@ export default async function ActivityDetailPage({
     <NarrowColumn>
       <Link
         href={`/cars/${slug}`}
-        className="flex items-center gap-1.5 text-sm font-medium text-text-muted transition hover:text-text-secondary"
+        className="jumplink inline-flex items-center gap-1.5"
       >
         <Icon name="back" className="h-4 w-4" /> {car.name}
       </Link>
 
-      <header className="mt-6 flex items-center gap-3">
-        <Avatar size="h-10 w-10" initials={initials} />
-        <h1 className="text-xl font-semibold tracking-[-0.01em] text-text-primary">{post.title}</h1>
+      <header className="pagehead !pt-6">
+        <span className="microlabel">Build entry — filed on the sheet</span>
+        <div className="mt-2 flex items-center gap-3">
+          <Avatar size="h-11 w-11 text-sm" initials={initials} />
+          <h1 className="!mt-0 !text-[clamp(22px,3vw,32px)]">{post.title}</h1>
+        </div>
       </header>
-      {post.intro && <p className="mt-4 text-sm leading-7 text-text-secondary">{post.intro}</p>}
+      {post.intro && <p className="max-w-[62ch] text-[15px] leading-7">{post.intro}</p>}
 
       {gallery.length > 0 && (
         <div className="mt-6 grid grid-cols-[1fr_0.7fr] gap-3">
           <Media
             src={gallery[0].url}
             alt={gallery[0].alt ?? post.title}
-            className="h-56 rounded-2xl border border-white/10"
+            className="h-56 rounded-r"
           />
           {gallery.length > 1 && (
             <div className="grid gap-3">
@@ -127,7 +130,7 @@ export default async function ActivityDetailPage({
                   key={i}
                   src={img.url}
                   alt={img.alt ?? post.title}
-                  className="h-[106px] rounded-2xl border border-white/10"
+                  className="h-[106px] rounded-ctl"
                 />
               ))}
             </div>
@@ -140,11 +143,11 @@ export default async function ActivityDetailPage({
           {blocks.map((block, index) => {
             if (block.type === "text") {
               return block.style === "heading" ? (
-                <h2 key={index} className="text-base font-semibold text-text-primary">
+                <h2 key={index} className="text-base font-[650]">
                   {block.text}
                 </h2>
               ) : (
-                <p key={index} className="whitespace-pre-line text-sm leading-7 text-text-secondary">
+                <p key={index} className="max-w-[62ch] whitespace-pre-line text-[15px] leading-7">
                   {block.text}
                 </p>
               );
@@ -157,7 +160,7 @@ export default async function ActivityDetailPage({
                       key={i}
                       src={url}
                       alt={`${post.title} photo ${i + 1}`}
-                      className={`${block.urls.length > 1 ? "h-44" : "h-64"} w-full rounded-2xl border border-white/10`}
+                      className={`${block.urls.length > 1 ? "h-44" : "h-64"} w-full rounded-ctl`}
                     />
                   ))}
                 </div>
@@ -170,7 +173,7 @@ export default async function ActivityDetailPage({
                 title="Embedded video"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-                className="aspect-video w-full rounded-2xl border border-white/10"
+                className="aspect-video w-full rounded-r"
               />
             );
           })}

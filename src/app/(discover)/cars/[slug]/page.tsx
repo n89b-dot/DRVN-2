@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { MetadataTags, NarrowColumn, ProfileHeader } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot, Media, MetadataTags } from "@/components/ui";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
 import { createClient } from "@/lib/supabase/server";
 
@@ -113,16 +114,29 @@ export default async function CarPage({ params }: { params: Promise<{ slug: stri
     .join(" · ");
 
   return (
-    <NarrowColumn>
-      <ProfileHeader
-        avatarSquare
-        avatarUrl={car.cover_image_url}
-        initials={car.name.slice(0, 2).toUpperCase()}
-        name={car.name}
-        handle={carMeta}
-        action={
-          user?.id !== car.owner_id ? (
-            <div className="flex gap-2">
+    <div className="wrap">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">
+          Car sheet — public · <span className="microlabel--live">drawn live</span>
+          {user?.id === car.owner_id && (
+            <>
+              {" · "}
+              <Link href={`/garage/${car.id}/edit`} className="hover:text-live">
+                manage this sheet →
+              </Link>
+            </>
+          )}
+        </span>
+        <h1>{car.name}</h1>
+        {carMeta && <p className="kv mt-2 text-dim">{carMeta}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {owner && (
+            <Link href={`/u/${owner.username}`} className="jumplink">
+              Keeper — {ownerName}
+            </Link>
+          )}
+          {user?.id !== car.owner_id && (
+            <span className="flex gap-2">
               <FollowButton
                 targetType="car"
                 targetId={car.id}
@@ -137,37 +151,37 @@ export default async function CarPage({ params }: { params: Promise<{ slug: stri
                 initialSaved={isSaved}
                 isLoggedIn={Boolean(user)}
               />
-            </div>
-          ) : undefined
-        }
-      />
+            </span>
+          )}
+        </div>
+      </Rv>
 
-      {owner && (
-        <Link
-          href={`/u/${owner.username}`}
-          className="mt-3 inline-block text-sm text-text-muted transition hover:text-text-secondary"
-        >
-          {ownerName} ↗
-        </Link>
+      {car.cover_image_url && (
+        <Rv className="hero-media mb-6">
+          <Media src={car.cover_image_url} alt={car.name} className="h-full w-full" />
+        </Rv>
       )}
 
       {car.tags.length > 0 && (
-        <div className="mt-5">
+        <div className="mb-6">
           <MetadataTags tags={car.tags} />
         </div>
       )}
 
-      <div className="mt-8">
-        <CarTabs
-          about={car.about}
-          gallery={gallery}
-          modGroups={modGroups}
-          wheelRows={wheelRows}
-          activity={activity}
-          carName={car.name}
-          slug={car.slug}
-        />
-      </div>
-    </NarrowColumn>
+      <CarTabs
+        about={car.about}
+        gallery={gallery}
+        modGroups={modGroups}
+        wheelRows={wheelRows}
+        activity={activity}
+        carName={car.name}
+        slug={car.slug}
+      />
+
+      <Foot
+        left="DRVN / Livesheet — car sheet"
+        right={<Link href="/marketplace">The market →</Link>}
+      />
+    </div>
   );
 }

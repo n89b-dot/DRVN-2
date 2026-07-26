@@ -56,14 +56,14 @@ export function GalleryManager({
   }
 
   return (
-    <section className="rounded-card border border-border bg-surface p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-text-primary">Gallery</h2>
+    <section className="tile">
+      <div className="tile__head">
+        <span className="microlabel microlabel--ink">Photos — first frame is the cover</span>
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="rounded-pill border border-border px-4 py-2 text-sm text-text-secondary transition hover:text-text-primary"
+          className="btn btn--ghost"
         >
           {uploading ? "Uploading…" : "Upload photos"}
         </button>
@@ -76,21 +76,25 @@ export function GalleryManager({
           onChange={(e) => handleFiles(e.target.files)}
         />
       </div>
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="field__err mt-3" style={{ display: "flex" }}>
+          {error}
+        </p>
+      )}
       {images.length > 0 ? (
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="thumbs">
           {images.map((image) => (
-            <div key={image.id} className="group relative">
-              <Media src={image.url} alt={image.alt ?? "Car photo"} className="h-24 w-full rounded-tile" />
+            <div key={image.id} className="thumb group">
+              <Media src={image.url} alt={image.alt ?? "Car photo"} className="h-full w-full" />
               <form
                 action={(fd) => startTransition(() => deleteCarImage(fd))}
-                className="absolute right-1.5 top-1.5 opacity-0 transition group-hover:opacity-100"
+                className="absolute right-1 top-1 opacity-0 transition group-hover:opacity-100"
               >
                 <input type="hidden" name="image_id" value={image.id} />
                 <input type="hidden" name="car_id" value={carId} />
                 <button
                   type="submit"
-                  className="rounded-full bg-black/70 px-2 py-0.5 text-xs text-white"
+                  className="thumb__x"
                   aria-label="Delete photo"
                 >
                   ✕
@@ -100,7 +104,7 @@ export function GalleryManager({
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-text-muted">No photos yet. The first upload becomes the cover.</p>
+        <p className="field__hint mt-4">No photos yet — the first upload becomes the cover.</p>
       )}
     </section>
   );

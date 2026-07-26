@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { Media, NarrowColumn, SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot, Media } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 
 import { AddCarForm } from "./add-car-form";
@@ -19,60 +20,75 @@ export default async function GaragePage() {
     .eq("owner_id", user!.id)
     .order("created_at", { ascending: true });
 
+  const garage = cars ?? [];
+
   return (
-    <NarrowColumn>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <SectionLabel>Garage</SectionLabel>
-          <h1 className="mt-3 text-2xl font-bold text-text-primary">Your cars</h1>
+    <div className="wrap">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">The garage — owner&apos;s desk</span>
+        <h1>
+          Your side of the <span className="live-word">drawing.</span>
+        </h1>
+        <p className="sub">
+          Every car is a sheet. Release parts straight off its build lines — a listing inherits
+          the sheet&apos;s history the moment you file it.
+        </p>
+        <div className="mt-4">
+          <AddCarForm />
         </div>
-        <AddCarForm />
-      </div>
+      </Rv>
 
-      <div className="mt-8 flex flex-col gap-3">
-        {(cars ?? []).map((car) => (
-          <div
-            key={car.id}
-            className="flex flex-wrap items-center gap-4 rounded-card border border-border bg-surface p-4"
-          >
-            <Media
-              src={car.cover_image_url ?? undefined}
-              alt={car.name}
-              className="h-16 w-24 shrink-0 rounded-tile"
-            />
-            <div className="min-w-[140px] flex-1">
-              <p className="truncate font-semibold text-text-primary">{car.name}</p>
-              <p className="mt-0.5 text-sm text-text-muted">
-                {[car.year, car.make, car.model].filter(Boolean).join(" ") || "No details yet"}
-                {!car.is_public && " · Private"}
-              </p>
+      <section className="deck">
+        {garage.length > 0 ? (
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Cars on the sheet</span>
+              <span className="chip">{garage.length}</span>
             </div>
-            <div className="flex shrink-0 gap-2 text-sm">
-              <Link
-                href={`/garage/${car.id}/edit`}
-                className="rounded-pill border border-border px-4 py-2 text-text-secondary transition hover:text-text-primary"
-              >
-                Manage
-              </Link>
-              <Link
-                href={`/cars/${car.slug}`}
-                className="rounded-pill border border-border px-4 py-2 text-text-secondary transition hover:text-text-primary"
-              >
-                View
-              </Link>
+            <div className="rowlist">
+              {garage.map((car) => (
+                <div key={car.id} className="order">
+                  <span className="order__img">
+                    <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
+                  </span>
+                  <span>
+                    <span className="order__name block">{car.name}</span>
+                    <span className="order__meta block">
+                      {[car.year, car.make, car.model].filter(Boolean).join(" ") || "No details yet"}
+                    </span>
+                  </span>
+                  <span className="order__actions">
+                    {!car.is_public && <span className="chip">Private</span>}
+                    <Link href={`/garage/${car.id}/edit`} className="btn btn--ghost">
+                      Manage
+                    </Link>
+                    <Link href={`/cars/${car.slug}`} className="btn btn--ghost">
+                      Public sheet
+                    </Link>
+                  </span>
+                </div>
+              ))}
             </div>
-          </div>
-        ))}
-
-        {(cars ?? []).length === 0 && (
-          <div className="rounded-card border border-dashed border-border p-10 text-center">
-            <p className="text-sm text-text-secondary">No cars yet.</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Add your first car to start documenting the build.
+          </Rv>
+        ) : (
+          <Rv className="undrawn undrawn--hero">
+            <span className="undrawn__mark" aria-hidden="true">
+              +
+            </span>
+            <h3>Your car goes here</h3>
+            <p>
+              Add the car you&apos;re building. Photos, spec, and every part that comes off it hang
+              from this one sheet.
             </p>
-          </div>
+            <AddCarForm />
+          </Rv>
         )}
-      </div>
-    </NarrowColumn>
+      </section>
+
+      <Foot
+        left="DRVN / Livesheet — owner's desk · releases inherit the drawing"
+        right={<Link href="/home">← Your sheet</Link>}
+      />
+    </div>
   );
 }

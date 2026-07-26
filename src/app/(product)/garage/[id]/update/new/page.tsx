@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { SectionLabel } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 
 import { UpdateComposer } from "./update-composer";
@@ -25,16 +24,15 @@ export default async function NewUpdatePage({ params }: { params: Promise<{ id: 
   if (!car) notFound();
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-5 py-10 md:py-14">
-      <Link
-        href={`/garage/${car.id}/edit`}
-        className="text-sm text-text-muted transition hover:text-text-secondary"
-      >
-        ← {car.name}
-      </Link>
-      <div className="mt-6">
-        <SectionLabel>New build update</SectionLabel>
-      </div>
+    <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
+      <header className="pagehead">
+        <span className="microlabel">
+          <Link href={`/garage/${car.id}/edit`} className="hover:text-live">
+            ← {car.name}
+          </Link>{" "}
+          · new build entry — nothing is public until you file it
+        </span>
+      </header>
       <UpdateComposer carId={car.id} userId={user.id} />
     </div>
   );

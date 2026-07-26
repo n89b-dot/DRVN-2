@@ -31,14 +31,12 @@ function InsertBlock({ onInsert }: { onInsert: (type: "text" | "images" | "embed
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`mx-auto block rounded-pill border border-border px-3 py-1 text-xs transition ${
-          open ? "text-text-primary" : "text-text-muted opacity-40 hover:opacity-100"
-        }`}
+        className={`relbtn mx-auto block ${open ? "!text-ink" : "opacity-40 hover:opacity-100"}`}
       >
         + Insert block
       </button>
       {open && (
-        <div className="absolute left-1/2 z-20 mt-1.5 w-64 -translate-x-1/2 rounded-2xl border border-border bg-raised p-1.5 shadow-xl">
+        <div className="tile absolute left-1/2 z-20 mt-1.5 w-64 -translate-x-1/2 !p-1.5" style={{ boxShadow: "0 1px 0 var(--dimline)" }}>
           {BLOCK_MENU.map((option) => (
             <button
               key={option.type}
@@ -47,10 +45,10 @@ function InsertBlock({ onInsert }: { onInsert: (type: "text" | "images" | "embed
                 onInsert(option.type);
                 setOpen(false);
               }}
-              className="block w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/5"
+              className="block w-full rounded-ctl px-3 py-2 text-left transition hover:bg-paper-deep"
             >
-              <span className="block text-sm text-text-primary">{option.label}</span>
-              <span className="block text-xs text-text-muted">{option.hint}</span>
+              <span className="block text-sm font-semibold">{option.label}</span>
+              <span className="block font-mono text-xs text-dim">{option.hint}</span>
             </button>
           ))}
         </div>
@@ -59,8 +57,7 @@ function InsertBlock({ onInsert }: { onInsert: (type: "text" | "images" | "embed
   );
 }
 
-const inputClass =
-  "w-full rounded-input border border-border bg-app px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent";
+const inputClass = "ctl max-w-none";
 
 export function UpdateComposer({ carId, userId }: { carId: string; userId: string }) {
   const [title, setTitle] = useState("");
@@ -148,22 +145,22 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Title your update"
-        className="w-full bg-transparent text-2xl font-bold text-text-primary outline-none placeholder:text-text-muted/50"
+        className="w-full bg-transparent text-[clamp(24px,3vw,34px)] font-[650] tracking-[-0.02em] outline-none placeholder:text-dim/50"
       />
 
       <div className="mt-6">
         {blocks.map((block, index) => (
           <div key={block.key}>
             <InsertBlock onInsert={(type) => insertAt(index, type)} />
-            <div className="group relative rounded-2xl border border-transparent p-2 transition hover:border-border">
+            <div className="group relative rounded-r border border-transparent p-2 transition hover:border-[color:var(--rule-mid)]">
               {/* Block controls */}
-              <div className="absolute -top-3 right-3 z-10 hidden gap-1 rounded-pill border border-border bg-raised px-1.5 py-0.5 text-xs text-text-muted group-hover:flex">
-                <button type="button" onClick={() => move(block.key, -1)} className="px-1 hover:text-text-primary" aria-label="Move up">↑</button>
-                <button type="button" onClick={() => move(block.key, 1)} className="px-1 hover:text-text-primary" aria-label="Move down">↓</button>
+              <div className="absolute -top-3 right-3 z-10 hidden gap-1 rounded-chip bg-paper-deep px-1.5 py-0.5 font-mono text-xs text-dim group-hover:flex">
+                <button type="button" onClick={() => move(block.key, -1)} className="px-1 hover:text-ink" aria-label="Move up">↑</button>
+                <button type="button" onClick={() => move(block.key, 1)} className="px-1 hover:text-ink" aria-label="Move down">↓</button>
                 <button
                   type="button"
                   onClick={() => setBlocks((all) => all.filter((b) => b.key !== block.key))}
-                  className="px-1 hover:text-red-400"
+                  className="px-1 hover:text-live"
                   aria-label="Delete block"
                 >
                   ✕
@@ -179,7 +176,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                         b.type === "text" ? { ...b, style: e.target.value as "normal" | "heading" } : b
                       )
                     }
-                    className="mb-2 rounded-input border border-border bg-app px-2 py-1 text-xs text-text-secondary outline-none"
+                    className="ctl mb-2 w-auto !py-1 font-mono text-xs"
                   >
                     <option value="normal">Normal</option>
                     <option value="heading">Heading</option>
@@ -191,10 +188,10 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                     }
                     rows={block.style === "heading" ? 1 : 4}
                     placeholder={block.style === "heading" ? "Heading…" : "Write something…"}
-                    className={`w-full resize-y bg-transparent outline-none placeholder:text-text-muted/50 ${
+                    className={`w-full resize-y bg-transparent outline-none placeholder:text-dim/50 ${
                       block.style === "heading"
-                        ? "text-lg font-semibold text-text-primary"
-                        : "text-sm leading-7 text-text-secondary"
+                        ? "text-lg font-[650]"
+                        : "text-[15px] leading-7"
                     }`}
                   />
                 </div>
@@ -206,7 +203,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                     <div className={`grid gap-3 ${block.urls.length > 1 ? "grid-cols-2" : ""}`}>
                       {block.urls.map((url, i) => (
                         <div key={i} className="relative">
-                          <Media src={url} alt={`Photo ${i + 1}`} className="h-44 w-full rounded-2xl border border-white/10" />
+                          <Media src={url} alt={`Photo ${i + 1}`} className="h-44 w-full rounded-ctl" />
                           <button
                             type="button"
                             onClick={() =>
@@ -214,7 +211,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                                 b.type === "images" ? { ...b, urls: b.urls.filter((_, j) => j !== i) } : b
                               )
                             }
-                            className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-xs text-white"
+                            className="thumb__x !static !h-auto !w-auto absolute right-2 top-2"
                             aria-label="Remove photo"
                           >
                             ✕
@@ -227,7 +224,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                     type="button"
                     onClick={() => fileRefs.current.get(block.key)?.click()}
                     disabled={uploadingKey === block.key}
-                    className={`${block.urls.length ? "mt-3" : ""} grid h-24 w-full place-items-center rounded-2xl border border-dashed border-border text-sm text-text-muted transition hover:text-text-secondary`}
+                    className={`drop ${block.urls.length ? "mt-3" : ""} h-24 w-full !p-0`}
                   >
                     {uploadingKey === block.key ? "Uploading…" : "+ Add image"}
                   </button>
@@ -258,7 +255,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                     className={inputClass}
                   />
                   {block.url && !block.videoId && (
-                    <p className="mt-2 text-xs text-red-400">That doesn&apos;t look like a YouTube link.</p>
+                    <p className="field__err mt-2" style={{ display: "flex" }}>That doesn&apos;t look like a YouTube link.</p>
                   )}
                   {block.videoId && (
                     <iframe
@@ -266,7 +263,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                       title="YouTube preview"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
-                      className="mt-3 aspect-video w-full rounded-2xl border border-white/10"
+                      className="mt-3 aspect-video w-full rounded-r"
                     />
                   )}
                 </div>
@@ -278,16 +275,16 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
       </div>
 
       {(state.error || uploadError) && (
-        <p className="mt-3 text-sm text-red-400">{state.error ?? uploadError}</p>
+        <p className="field__err mt-3" style={{ display: "flex" }}>{state.error ?? uploadError}</p>
       )}
 
-      <div className="mt-8 flex items-center justify-end gap-3 border-t border-border pt-5">
+      <div className="mt-8 flex items-center justify-end gap-3 border-t border-[color:var(--rule-mid)] pt-5">
         <button
           type="submit"
           disabled={pending || !title.trim()}
-          className="rounded-pill bg-accent px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:opacity-50"
+          className="btn btn--live"
         >
-          {pending ? "Publishing…" : "Publish update"}
+          {pending ? "Filing…" : "File the entry"}
         </button>
       </div>
     </form>

@@ -58,8 +58,7 @@ function parsePaste(text: string): Row[] {
   return rows;
 }
 
-const inputClass =
-  "h-9 w-full rounded-input border border-border bg-app px-2.5 text-sm text-text-primary outline-none focus:border-accent";
+const inputClass = "ctl !py-2";
 
 export function ModsEditor({ carId, initialMods }: { carId: string; initialMods: ModItem[] }) {
   const [rows, setRows] = useState<Row[]>(
@@ -96,13 +95,13 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   }
 
   return (
-    <section className="rounded-card border border-border bg-surface p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-text-primary">Modifications</h2>
+    <section className="tile">
+      <div className="tile__head">
+        <span className="microlabel microlabel--ink">The build — seed the lines</span>
         <button
           type="button"
           onClick={() => setShowPaste((s) => !s)}
-          className="rounded-pill border border-border px-4 py-2 text-sm text-text-secondary transition hover:text-text-primary"
+          className="btn btn--ghost"
         >
           Paste a list
         </button>
@@ -115,7 +114,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
             onChange={(e) => setPaste(e.target.value)}
             rows={6}
             placeholder={"Paste your mod list, e.g.\n\nPerformance:\n034 High-flow downpipe\nCTS turbo inlet\n\nSuspension:\nKW V3 coilovers"}
-            className="w-full resize-y rounded-input border border-border bg-app px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+            className="ctl"
           />
           <div className="mt-2 flex justify-end">
             <button
@@ -126,7 +125,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 setShowPaste(false);
               }}
               disabled={!paste.trim()}
-              className="rounded-pill bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent/90"
+              className="btn"
             >
               Parse into items
             </button>
@@ -136,15 +135,13 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
 
       {rows.length > 0 && (
         <div className="mt-4 flex flex-col gap-2">
-          <p className="text-xs text-text-muted">
-            Confirm or edit the parsed items before saving.
-          </p>
+          <p className="field__hint">Confirm or edit the parsed lines before saving.</p>
           {rows.map((row) => (
             <div key={row.key} className="flex flex-wrap items-center gap-2">
               <select
                 value={row.group_label}
                 onChange={(e) => updateRow(row.key, { group_label: e.target.value })}
-                className="h-9 w-[130px] shrink-0 rounded-input border border-border bg-app px-2 text-sm text-text-secondary outline-none focus:border-accent"
+                className="ctl !py-2 w-[130px] shrink-0"
               >
                 {MOD_GROUPS.map((g) => (
                   <option key={g}>{g}</option>
@@ -160,12 +157,12 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 value={row.product}
                 onChange={(e) => updateRow(row.key, { product: e.target.value })}
                 placeholder="Product"
-                className="h-9 min-w-[150px] flex-1 rounded-input border border-border bg-app px-2.5 text-sm text-text-primary outline-none focus:border-accent"
+                className="ctl !py-2 max-w-none min-w-[150px] flex-1"
               />
               <button
                 type="button"
                 onClick={() => setRows((r) => r.filter((x) => x.key !== row.key))}
-                className="shrink-0 px-1 text-text-muted transition hover:text-red-400"
+                className="shrink-0 px-1 text-dim transition hover:text-live"
                 aria-label="Remove mod"
               >
                 ✕
@@ -184,23 +181,21 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
               { key: crypto.randomUUID(), group_label: "Other", brand: "", product: "", raw_text: "" },
             ])
           }
-          className="text-sm text-accent hover:underline"
+          className="jumplink"
         >
-          + Add item manually
+          + Add a line manually
         </button>
         <div className="flex items-center gap-3">
           {status && (
-            <span className={`text-sm ${status === "Saved." ? "text-success" : "text-red-400"}`}>
-              {status}
-            </span>
+            <span className={`chip ${status === "Saved." ? "chip--ok" : "chip--live"}`}>{status}</span>
           )}
           <button
             type="button"
             onClick={save}
             disabled={pending}
-            className="rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90"
+            className="btn btn--live"
           >
-            {pending ? "Saving…" : "Save mods"}
+            {pending ? "Saving…" : "Save the build"}
           </button>
         </div>
       </div>

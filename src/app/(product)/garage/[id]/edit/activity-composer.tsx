@@ -15,11 +15,11 @@ export function ActivityComposer({
   const [state, action, pending] = useActionState<ActionState, FormData>(createActivityPost, {});
 
   return (
-    <section className="rounded-card border border-border bg-surface p-6">
-      <h2 className="text-base font-semibold text-text-primary">Build updates</h2>
-      <p className="mt-1 text-sm text-text-muted">
-        Post an update — it appears on the car&apos;s Activity tab.
-      </p>
+    <section className="tile">
+      <div className="tile__head">
+        <span className="microlabel microlabel--ink">Build entries</span>
+      </div>
+      <p className="field__hint">Post an entry — it lands in the sheet&apos;s activity the moment you file it.</p>
 
       <form action={action} className="mt-4 flex flex-col gap-3">
         <input type="hidden" name="car_id" value={carId} />
@@ -27,44 +27,48 @@ export function ActivityComposer({
           name="title"
           required
           placeholder="Title (e.g. Downpipe + tune installed)"
-          className="h-11 rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+          className="ctl max-w-none"
         />
         <textarea
           name="body"
           rows={4}
           placeholder="What happened?"
-          className="resize-y rounded-input border border-border bg-app px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+          className="ctl"
         />
         <input
           name="video_url"
           type="url"
           placeholder="Video URL (optional — YouTube etc.)"
-          className="h-11 rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+          className="ctl max-w-none"
         />
-        {state.error && <p className="text-sm text-red-400">{state.error}</p>}
+        {state.error && (
+          <p className="field__err" style={{ display: "flex" }}>
+            {state.error}
+          </p>
+        )}
         <div className="flex items-center justify-between">
           <Link
             href={`/garage/${carId}/update/new`}
-            className="text-sm text-accent hover:underline"
+            className="jumplink"
           >
             Open the full editor — photos, text blocks & YouTube →
           </Link>
           <button
             type="submit"
             disabled={pending}
-            className="rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90"
+            className="btn btn--live"
           >
-            {pending ? "Posting…" : "Post update"}
+            {pending ? "Filing…" : "File the entry"}
           </button>
         </div>
       </form>
 
       {posts.length > 0 && (
-        <ul className="mt-5 flex flex-col gap-2 border-t border-border pt-4">
+        <ul className="feed mt-5 border-t border-[color:var(--rule-soft)] pt-2">
           {posts.map((post) => (
-            <li key={post.id} className="flex items-center justify-between text-sm">
-              <span className="text-text-secondary">{post.title}</span>
-              <span className="text-text-muted">
+            <li key={post.id}>
+              <span className="min-w-0 flex-1 truncate">{post.title}</span>
+              <span className="amt">
                 {post.published_at ? new Date(post.published_at).toLocaleDateString() : "Draft"}
               </span>
             </li>

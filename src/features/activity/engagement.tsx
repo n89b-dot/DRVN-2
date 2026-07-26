@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState, useTransition } from "react";
 
-import { Avatar } from "@/components/ui";
 
 import { addComment, toggleReaction, type CommentState } from "./actions";
 import { ACTIVITY_EMOJIS } from "./constants";
@@ -58,25 +57,21 @@ export function ActivityEngagement({
   }
 
   return (
-    <div className="mt-10 border-t border-white/10 pt-6">
+    <div className="mt-10 border-t border-[color:var(--rule-mid)] pt-6">
       {comments.length > 0 && (
         <div className="mb-6 grid gap-4">
           {comments.map((comment) => (
-            <div key={comment.id} className="flex items-start gap-3">
-              <Avatar size="h-8 w-8" initials={comment.initials} />
-              <div className="min-w-0">
-                <p className="text-sm">
-                  <span className="font-semibold text-text-primary">{comment.authorName}</span>{" "}
-                  <span className="text-xs text-text-muted">{comment.date}</span>
-                </p>
-                <p className="mt-0.5 text-sm leading-6 text-text-secondary">{comment.body}</p>
-              </div>
+            <div key={comment.id} className="msg !py-2">
+              <span className="msg__who">
+                {comment.authorName} <span className="normal-case tracking-normal">· {comment.date}</span>
+              </span>
+              <p className="msg__body">{comment.body}</p>
             </div>
           ))}
         </div>
       )}
 
-      <p className="text-sm text-text-muted">Send {authorName} a reply about this page</p>
+      <p className="microlabel">Reply to {authorName} — lands on their sheet</p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <form
@@ -88,15 +83,10 @@ export function ActivityEngagement({
             action(fd);
             formRef.current?.reset();
           }}
-          className="flex min-w-[200px] flex-1 items-center rounded-full bg-raised px-4 py-1.5"
+          className="search min-w-[200px] flex-1 !py-2"
         >
-          <input
-            name="body"
-            required
-            placeholder="Reply directly…"
-            className="h-8 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-          />
-          <button type="submit" disabled={pending} className="text-text-muted/60" aria-label="Send reply">
+          <input name="body" required placeholder="Reply directly…" />
+          <button type="submit" disabled={pending} className="font-mono text-dim" aria-label="Send reply">
             ↵
           </button>
         </form>
@@ -108,20 +98,22 @@ export function ActivityEngagement({
               key={emoji}
               type="button"
               onClick={() => onReact(emoji)}
-              className={`grid h-10 min-w-10 place-items-center gap-1 rounded-full px-2 text-base transition ${
-                r.reacted ? "bg-accent/25 ring-1 ring-accent" : "bg-raised hover:bg-raised/70"
-              }`}
+              className={`chip !gap-1 !py-2 text-base ${r.reacted ? "chip--live" : ""}`}
             >
               <span className="flex items-center gap-1">
                 {emoji}
-                {r.count > 0 && <span className="text-xs text-text-secondary">{r.count}</span>}
+                {r.count > 0 && <span className="font-mono text-xs">{r.count}</span>}
               </span>
             </button>
           );
         })}
       </div>
 
-      {state.error && <p className="mt-2 text-sm text-red-400">{state.error}</p>}
+      {state.error && (
+        <p className="field__err mt-2" style={{ display: "flex" }}>
+          {state.error}
+        </p>
+      )}
     </div>
   );
 }

@@ -6,13 +6,10 @@ import type { Car } from "@/lib/database.types";
 
 import { updateCar, type ActionState } from "../../actions";
 
-const inputClass =
-  "h-11 w-full rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent";
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">{label}</span>
+    <label className="field !mb-0">
+      <span className="microlabel">{label}</span>
       {children}
     </label>
   );
@@ -22,34 +19,36 @@ export function CarDetailsForm({ car }: { car: Car }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateCar, {});
 
   return (
-    <section className="rounded-card border border-border bg-surface p-6">
-      <h2 className="text-base font-semibold text-text-primary">Details</h2>
-      <form action={action} className="mt-5 flex flex-col gap-4">
+    <section className="tile">
+      <div className="tile__head">
+        <span className="microlabel microlabel--ink">Identify — shown on the public sheet</span>
+      </div>
+      <form action={action} className="flex flex-col gap-4">
         <input type="hidden" name="id" value={car.id} />
         <Field label="Name">
-          <input name="name" defaultValue={car.name} required className={inputClass} />
+          <input name="name" defaultValue={car.name} required className="ctl max-w-none" />
         </Field>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Year">
-            <input name="year" defaultValue={car.year ?? ""} inputMode="numeric" className={inputClass} />
+            <input name="year" defaultValue={car.year ?? ""} inputMode="numeric" className="ctl" />
           </Field>
           <Field label="Make">
-            <input name="make" defaultValue={car.make ?? ""} className={inputClass} />
+            <input name="make" defaultValue={car.make ?? ""} className="ctl" />
           </Field>
           <Field label="Model">
-            <input name="model" defaultValue={car.model ?? ""} className={inputClass} />
+            <input name="model" defaultValue={car.model ?? ""} className="ctl" />
           </Field>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Color">
-            <input name="color" defaultValue={car.color ?? ""} className={inputClass} />
+            <input name="color" defaultValue={car.color ?? ""} className="ctl" />
           </Field>
-          <Field label="Tags (comma-separated)">
+          <Field label="Tags — comma separated">
             <input
               name="tags"
               defaultValue={car.tags.join(", ")}
               placeholder="Bagged, FBO, Show car"
-              className={inputClass}
+              className="ctl max-w-none"
             />
           </Field>
         </div>
@@ -58,22 +57,22 @@ export function CarDetailsForm({ car }: { car: Car }) {
             name="about"
             defaultValue={car.about ?? ""}
             rows={4}
-            className="w-full resize-y rounded-input border border-border bg-app px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
+            className="ctl"
             placeholder="What's the story with this car?"
           />
         </Field>
-        <label className="flex items-center gap-2 text-sm text-text-secondary">
-          <input type="checkbox" name="is_public" defaultChecked={car.is_public} className="accent-[#3B71FE]" />
-          Public — anyone can view this car&apos;s page
+        <label className="flex items-center gap-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+          <input type="checkbox" name="is_public" defaultChecked={car.is_public} className="sq" />
+          Public sheet — anyone can read it
         </label>
-        {state.error && <p className="text-sm text-red-400">{state.error}</p>}
+        {state.error && (
+          <p className="field__err" style={{ display: "flex" }}>
+            {state.error}
+          </p>
+        )}
         <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90"
-          >
-            {pending ? "Saving…" : "Save details"}
+          <button type="submit" disabled={pending} className="btn btn--live">
+            {pending ? "Filing…" : "Save the sheet"}
           </button>
         </div>
       </form>
