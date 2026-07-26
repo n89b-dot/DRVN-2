@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { ListingCard, Media, SectionLabel } from "@/components/ui";
+import { LiveDim, Rv } from "@/components/livesheet";
+import { Foot, ListingCard, Media } from "@/components/ui";
 import { FeedList } from "@/components/ui/feed-list";
 import { fetchFeed } from "@/lib/feed";
 import { recommendListings } from "@/lib/recommendations";
@@ -9,6 +10,13 @@ import { createClient } from "@/lib/supabase/server";
 import { PostUpdatePrompt } from "./post-update-prompt";
 
 export const metadata = { title: "Home - DRVN" };
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Morning";
+  if (h < 18) return "Afternoon";
+  return "Evening";
+}
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -30,103 +38,141 @@ export default async function HomePage() {
   const recommended = await recommendListings(user!.id, 4);
 
   const firstName = profile?.display_name?.split(" ")[0];
+  const garage = cars ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[640px] px-5 py-10 md:py-14">
-      {/* Dashboard header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <SectionLabel>Home</SectionLabel>
-          <h1 className="mt-2 text-2xl font-bold text-text-primary">
-            {firstName ? `Welcome back, ${firstName}.` : "Welcome back."}
-          </h1>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Link
-            href="/sell"
-            className="rounded-pill bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90"
-          >
-            Sell
+    <div className="wrap">
+      {/* Page head — the sheet reports what it saw */}
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">Your sheet — today</span>
+        <h1>
+          {greeting()}
+          {firstName ? `, ${firstName}` : ""}.
+          <br />
+          Your sheet is <span className="live-word">live.</span>
+        </h1>
+        <p className="sub">
+          The garage, your watchlist and the latest from the scene — ruled onto one page,
+          updating as it happens.
+        </p>
+        <div className="jumprow">
+          <span className="microlabel">On this sheet</span>
+          <Link className="jumplink" href="/saved">
+            Saved · {savedCount ?? 0}
           </Link>
-          <Link
-            href="/garage"
-            className="rounded-pill border border-border px-5 py-2.5 text-sm text-text-secondary transition hover:text-text-primary"
-          >
-            Add a car
+          <Link className="jumplink" href="/orders">
+            Orders
+          </Link>
+          <Link className="jumplink" href="/notifications">
+            Notifications
+          </Link>
+          <Link className="jumplink" href="/marketplace">
+            The market →
           </Link>
         </div>
-      </div>
+      </Rv>
 
-      {/* Garage strip */}
-      {(cars ?? []).length > 0 && (
-        <div className="mt-6 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-          {(cars ?? []).map((car) => (
-            <Link key={car.id} href={`/cars/${car.slug}`} className="w-36 shrink-0">
-              <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-20 w-36 rounded-tile" />
-              <p className="mt-1.5 truncate text-xs font-semibold text-text-secondary">{car.name}</p>
-            </Link>
-          ))}
-        </div>
-      )}
+      {/* The garage + composer */}
+      <section className="deck deck--two">
+        <Rv className="tile" stagger={0}>
+          <div className="tile__head">
+            <span className="microlabel microlabel--ink">The garage</span>
+            <span className="chip">{garage.length ? `${garage.length} on the sheet` : "Empty bay"}</span>
+          </div>
+          {garage.length > 0 ? (
+            <div className="rowlist">
+              {garage.map((car) => (
+                <Link key={car.id} href={`/cars/${car.slug}`} className="order">
+                  <span className="order__img">
+                    <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
+                  </span>
+                  <span>
+                    <span className="order__name block">{car.name}</span>
+                    <span className="order__meta block">full sheet →</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="undrawn">
+              <span className="undrawn__mark" aria-hidden="true">
+                +
+              </span>
+              <h3>Your car goes here</h3>
+              <p>
+                Add the car you&apos;re building. Photos, spec, and every part that comes off it
+                hang from this one sheet.
+              </p>
+              <Link href="/garage" className="btn btn--live">
+                Open your first sheet
+              </Link>
+            </div>
+          )}
+          {garage.length > 0 && (
+            <div className="mt-3">
+              <Link href="/garage" className="jumplink">
+                Manage the garage
+              </Link>
+            </div>
+          )}
+        </Rv>
 
-      {/* Highlights */}
-      <div className="mt-4 flex flex-wrap gap-2 text-sm">
-        <Link
-          href="/saved"
-          className="rounded-pill border border-border px-4 py-1.5 text-text-muted transition hover:text-text-secondary"
-        >
-          {savedCount ?? 0} saved
-        </Link>
-        <Link
-          href="/notifications"
-          className="rounded-pill border border-border px-4 py-1.5 text-text-muted transition hover:text-text-secondary"
-        >
-          Notifications
-        </Link>
-        <Link
-          href="/orders"
-          className="rounded-pill border border-border px-4 py-1.5 text-text-muted transition hover:text-text-secondary"
-        >
-          Orders
-        </Link>
-        <Link
-          href="/marketplace"
-          className="rounded-pill border border-border px-4 py-1.5 text-text-muted transition hover:text-text-secondary"
-        >
-          Marketplace →
-        </Link>
-      </div>
-
-      {/* Post an update — composer entry */}
-      <PostUpdatePrompt
-        cars={(cars ?? []).map((c) => ({ id: c.id, name: c.name }))}
-        initials={(profile?.display_name ?? "?")
-          .split(" ")
-          .map((w: string) => w[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase()}
-      />
+        <Rv className="tile tile--deep" stagger={1}>
+          <div className="tile__head">
+            <span className="microlabel microlabel--ink">Draw a new line</span>
+          </div>
+          <PostUpdatePrompt
+            cars={garage.map((c) => ({ id: c.id, name: c.name }))}
+            initials={(profile?.display_name ?? "?")
+              .split(" ")
+              .map((w: string) => w[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()}
+          />
+          <LiveDim
+            label="Saved parts"
+            value={savedCount ? `${savedCount} watched` : "—"}
+            blank={!savedCount}
+          />
+          <LiveDim
+            label="Cars on the sheet"
+            value={garage.length ? String(garage.length) : "—"}
+            blank={garage.length === 0}
+          />
+        </Rv>
+      </section>
 
       {/* Recommendations */}
       {recommended.length > 0 && (
-        <div className="mt-10">
-          <SectionLabel>Recommended for your garage</SectionLabel>
-          <div className="mt-3 grid grid-cols-2 gap-4">
-            {recommended.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
-        </div>
+        <section className="deck">
+          <Rv>
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Recommended for your garage</span>
+              <Link href="/marketplace" className="microlabel mono">
+                Open the market →
+              </Link>
+            </div>
+            <div className="mkt">
+              {recommended.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))}
+            </div>
+          </Rv>
+        </section>
       )}
 
       {/* Feed */}
-      <div className="mt-10">
-        <SectionLabel>Latest from the scene</SectionLabel>
-        <div className="mt-3">
+      <section className="deck">
+        <Rv className="tile">
+          <div className="tile__head">
+            <span className="microlabel microlabel--ink">The feed — latest from the scene</span>
+          </div>
           <FeedList items={items} />
-        </div>
-      </div>
+        </Rv>
+      </section>
+
+      <Foot left="DRVN / Livesheet — your sheet" right={<Link href="/marketplace">The market →</Link>} />
     </div>
   );
 }

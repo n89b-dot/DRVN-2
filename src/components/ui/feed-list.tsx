@@ -5,84 +5,83 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 
 import { Media } from "./primitives";
 
-function TypeLabel({ children, tone }: { children: string; tone: "blue" | "green" | "neutral" }) {
-  const tones = {
-    blue: "bg-accent/15 text-accent",
-    green: "bg-success/15 text-success",
-    neutral: "bg-raised text-text-muted",
-  };
-  return (
-    <span className={`rounded-pill px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${tones[tone]}`}>
-      {children}
-    </span>
-  );
+function KindChip({ children, tone }: { children: string; tone: "live" | "ok" | "neutral" }) {
+  const cls = tone === "live" ? "chip chip--live" : tone === "ok" ? "chip chip--ok" : "chip";
+  return <span className={cls}>{children}</span>;
 }
 
-/** Strong content-type labels so cars / updates / parts never blur (PRD §8.2). */
+/** Strong content-type labels so cars / updates / parts never blur (PRD §8.2).
+ *  Rendered as Livesheet ruled rows — label · value · status on one rule. */
 export function FeedList({ items }: { items: FeedItem[] }) {
   if (!items.length) {
-    return <p className="text-sm text-text-muted">Nothing here yet — check back soon.</p>;
+    return (
+      <div className="undrawn">
+        <span className="undrawn__mark" aria-hidden="true">
+          ✎
+        </span>
+        <h3>The ink is dry</h3>
+        <p>Views, watchers, offers and sales all land in this feed the moment sheets go live.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="rowlist">
       {items.map((item) => {
         if (item.kind === "update") {
           return (
             <Link
               key={`update-${item.id}`}
               href={`/cars/${item.carSlug}/activity/${item.id}`}
-              className="rounded-card border border-border bg-surface p-5 transition hover:border-text-muted"
+              className="order"
             >
-              <div className="flex items-center gap-2">
-                <TypeLabel tone="blue">Build update</TypeLabel>
-                <span className="text-xs text-text-muted">
+              <span>
+                <span className="order__name block">{item.title}</span>
+                <span className="order__meta block">
                   {item.carName}
                   {item.ownerName ? ` · ${item.ownerName}` : ""}
+                  {item.intro ? ` — ${item.intro}` : ""}
                 </span>
-              </div>
-              <p className="mt-2.5 font-semibold text-text-primary">{item.title}</p>
-              {item.intro && (
-                <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{item.intro}</p>
-              )}
+              </span>
+              <span className="order__actions">
+                <KindChip tone="neutral">Build entry</KindChip>
+              </span>
             </Link>
           );
         }
 
         if (item.kind === "car") {
           return (
-            <Link
-              key={`car-${item.id}`}
-              href={`/cars/${item.slug}`}
-              className="flex items-center gap-4 rounded-card border border-border bg-surface p-4 transition hover:border-text-muted"
-            >
-              <Media src={item.cover_url ?? undefined} alt={item.name} className="h-16 w-24 shrink-0 rounded-tile" />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <TypeLabel tone="neutral">Car</TypeLabel>
-                  {item.ownerName && <span className="text-xs text-text-muted">{item.ownerName}</span>}
-                </div>
-                <p className="mt-1.5 truncate font-semibold text-text-primary">{item.name}</p>
-                {item.meta && <p className="mt-0.5 text-sm text-text-muted">{item.meta}</p>}
-              </div>
+            <Link key={`car-${item.id}`} href={`/cars/${item.slug}`} className="order">
+              <span className="order__img">
+                <Media src={item.cover_url ?? undefined} alt={item.name} className="h-full w-full" />
+              </span>
+              <span>
+                <span className="order__name block">{item.name}</span>
+                <span className="order__meta block">
+                  {item.ownerName ?? "car sheet"}
+                  {item.meta ? ` · ${item.meta}` : ""}
+                </span>
+              </span>
+              <span className="order__actions">
+                <KindChip tone="neutral">Car sheet</KindChip>
+              </span>
             </Link>
           );
         }
 
         return (
-          <Link
-            key={`part-${item.id}`}
-            href={`/listings/${item.id}`}
-            className="flex items-center gap-4 rounded-card border border-border bg-surface p-4 transition hover:border-text-muted"
-          >
-            <Media src={item.cover_url ?? undefined} alt={item.title} className="h-16 w-24 shrink-0 rounded-tile" />
-            <div className="min-w-0">
-              <TypeLabel tone="green">Part for sale</TypeLabel>
-              <p className="mt-1.5 truncate font-semibold text-text-primary">{item.title}</p>
-              <p className="mt-0.5 text-sm font-semibold text-text-secondary">
-                {formatPrice(item.price_cents)}
-              </p>
-            </div>
+          <Link key={`part-${item.id}`} href={`/listings/${item.id}`} className="order">
+            <span className="order__img">
+              <Media src={item.cover_url ?? undefined} alt={item.title} className="h-full w-full" />
+            </span>
+            <span>
+              <span className="order__name block">{item.title}</span>
+              <span className="order__meta block">{formatPrice(item.price_cents)}</span>
+            </span>
+            <span className="order__actions">
+              <KindChip tone="live">For sale</KindChip>
+            </span>
           </Link>
         );
       })}
