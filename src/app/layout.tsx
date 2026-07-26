@@ -1,38 +1,42 @@
 import type { Metadata } from "next";
-import { DM_Sans, Inter, Poppins } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const inter = Inter({
-  variable: "--font-inter",
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
-});
-
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "DRVN - Car Profiles and Build-Aware Marketplace",
+  title: "DRVN — The parts market where every listing comes off a drawing",
   description:
-    "A frontend-only DRVN product mockup for car profiles, build documentation, and marketplace discovery.",
+    "DRVN is a marketplace for parts pulled off modified cars. Every car is a live sheet — list a part and it goes to market annotated with what it came off, when it was fitted, and who's watching it right now.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Server-rendered theme: the cookie is authoritative so the correct
+  // data-theme is on <html> in the initial HTML — no DAY flash on navigation.
+  const cookieStore = await cookies();
+  const theme = cookieStore.get("ls-theme")?.value === "night" ? "dark" : undefined;
+
   return (
     <html
       lang="en"
-      className={`${dmSans.variable} ${inter.variable} ${poppins.variable} h-full antialiased`}
+      data-theme={theme}
+      data-scroll-behavior="smooth"
+      className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">{children}</body>
     </html>
