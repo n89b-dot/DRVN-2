@@ -7,20 +7,23 @@ import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { Icon, type IconName } from "./icons";
 
-type BarRoute = { href: string; label: string; note: string; icon: IconName };
+type BarRoute = { href: string; label: string; note: string };
+type IconRoute = BarRoute & { icon: IconName };
 
 // The register. Text links sit in the desktop bar; every entry appears in the
-// index (the compact menu) with its mark and its note.
+// index (the compact menu) with its note.
 export const BAR_ROUTES: BarRoute[] = [
-  { href: "/home", label: "Sheet", note: "What your sheet saw today", icon: "home" },
-  { href: "/explore", label: "Explore", note: "Other people's sheets", icon: "compass" },
-  { href: "/marketplace", label: "Market", note: "Parts off live sheets", icon: "market" },
-  { href: "/garage", label: "Garage", note: "Your side of the drawing", icon: "garage" },
-  { href: "/orders", label: "Orders", note: "Work orders, offers and payouts", icon: "sell" },
-  { href: "/profile", label: "Profile", note: "Your keeper sheet", icon: "user" },
+  { href: "/home", label: "Sheet", note: "What your sheet saw today" },
+  { href: "/explore", label: "Explore", note: "Other people's sheets" },
+  { href: "/marketplace", label: "Market", note: "Parts off live sheets" },
+  { href: "/garage", label: "Garage", note: "Your side of the drawing" },
+  { href: "/orders", label: "Orders", note: "Work orders, offers and payouts" },
+  { href: "/profile", label: "Profile", note: "Your keeper sheet" },
 ];
 
-const UTILITY_ROUTES: BarRoute[] = [
+// These three are icon-only in the desktop bar, but read as labelled
+// registers in the index like everything else.
+const UTILITY_ROUTES: IconRoute[] = [
   { href: "/notifications", label: "Notifications", note: "What the bell knows", icon: "bell" },
   { href: "/saved", label: "Saved", note: "Everything you're watching", icon: "bookmark" },
   { href: "/settings", label: "Settings", note: "Your sheet, configured", icon: "settings" },
@@ -175,9 +178,6 @@ export function LivesheetBar({ initialNight = false }: { initialNight?: boolean 
                     tabIndex={open ? undefined : -1}
                   >
                     <span className="indexrow__n">{String(i + 1).padStart(2, "0")}</span>
-                    <span className="indexrow__ico" aria-hidden="true">
-                      <Icon name={route.icon} className="h-[19px] w-[19px]" />
-                    </span>
                     <span className="indexrow__label">{route.label}</span>
                     <span className="indexrow__note">{route.note}</span>
                     {here && <span className="indexrow__end chip chip--live">Here</span>}
