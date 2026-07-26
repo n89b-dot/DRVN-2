@@ -250,22 +250,308 @@ Also: the landing page renders `drvn-data.ts` seed content as live "Sheets being
 
 ---
 
-## 9. Revised roadmap
+## 9. Remediation plan
 
-| Phase | Contents | Effort |
-|---|---|---|
-| **0 — Credentials** | Rotate the service-role key **and** the DB password; move both to the deploy platform's secret store | 1h |
-| **1 — Make the data layer safe** | One migration `0006`: `WITH CHECK` on profiles/cars/listings/activity/offers UPDATE policies; drop the client `orders` INSERT policy (checkout runs service-role, so nothing needs it) — this kills the fake-review chain outright; constrain `reviews.reviewee_id`; fix the `orders` FK so deletion is possible. Plus: `source_car_id` ownership check, fail-closed middleware, the `//` redirect fix, bucket MIME/size limits, rate limiting | ~1 week |
-| **2 — Make checkout honest** | Move the purchase path into a single Postgres function with a conditional sold-guard — this resolves the race, atomicity, partial-checkout and idempotency findings together, since they're all facets of one missing transaction boundary. Add a payments table + provider refs. Surface per-item results. Fix currency | ~1 week |
-| **3 — Close the journeys** | Order lifecycle (`/orders/[id]`, fulfilment columns, mark-shipped/received, post-sale messaging); listing edit; activity edit/delete; account basics + password reset; onboarding enforcement; seller profile = listings + reviews; cart in nav; logged-out shell | ~2 weeks |
-| **4 — Ship the shell** | Fix the landing page's mobile nav (**first** — it's one file); loading/error/not-found boundaries using the skeleton CSS already written; `generateMetadata` + OG + sitemap + robots on the six dynamic routes; image optimization + security headers; delete the dead routes/CSS/components; the five red-discipline edits; dialog semantics for the three sheets; Terms/Privacy; Sentry | ~1.5 weeks |
-| **5 — Car sheet + Werkbank ports** | `SheetTabs` + Activity tab + "release a part from this car" (§6); then the recommended Werkbank ports by value: listings console, order pipeline + dispatch, payout plate, offers inbox, toasts | ~2 weeks |
-| **6 — Real payments** | Stripe Connect: schema, intents + Elements, webhook finalization, `reserved` listing state, seller onboarding, refunds/disputes — plus the commerce test suite alongside | 2–3 weeks |
-| **7 — Launch surface** | Marketing home on real data; counter-offer (or cut the copy); notification coverage + unread state; accessibility pass; marketplace pagination/sort/search; golden-path E2E tests | ~1 week |
+### 9.0 How to read this
 
-**Total: 8–12 weeks** to public launch. Phases 1–2 are small in code and large in consequence — they're where the actual risk lives. Phase 3 is the biggest *new* body of work and the reason the estimate grew.
+Eight phases, ordered so that each one is safe to stop at. Effort is in **dev-days for one person working with AI assistance** — 1d ≈ a focused day, not an 8-hour estimate for a team. Every task carries a *Done when* line so completion is testable rather than felt.
 
-Still true from v1 and still unaddressed: **zero tests, zero error tracking, no CI, missing indexes on every hot path** (`orders.buyer_id/seller_id`, `reviews.reviewee_id` — queried on every listing view, `listings.created_at` — the default marketplace sort), and **no Terms, Privacy, or cookie disclosure**.
+Two ordering rules drove the sequence:
+
+1. **Nothing ships before the data layer is trustworthy.** The database — not the server actions — is the real security boundary, because anyone with the anon key can query PostgREST directly. R1 is small in code and the largest single risk reduction in the plan.
+2. **Fix the transaction boundary before building on top of it.** Four separate commerce findings (race, atomicity, partial checkout, idempotency) are facets of one missing transaction. Fixing them together in R2 is cheaper than fixing them individually, and R3/R6 both sit on that foundation.
+
+Phase totals: **R0** 0.25d · **R1** 4d · **R2** 4d · **R3** 10d · **R4** 8d · **R5** 8d · **R6** 13d · **R7** 5d, plus ~3d of continuous work → **~55 dev-days (8–12 calendar weeks)**.
+
+---
+
+### R0 — Contain the credential exposure · 0.25d · do today
+
+**R0.1 Rotate both secrets.** Rotate the service-role key and the Postgres password in the Supabase dashboard. The key's `iat` proves it survived the v1 audit unrotated, and a DB superuser password has since joined it in the same file.
+*Files:* Supabase dashboard, `.env.local`
+*Done when:* the old key returns 401 against the REST API, and neither value exists anywhere outside the deploy platform's secret store and your local `.env.local`.
+
+**R0.2 Fail fast on missing env.** `src/lib/supabase/admin.ts` builds a client from `undefined!` and fails confusingly at query time — mid-checkout — rather than at boot.
+*Files:* `src/lib/supabase/admin.ts`, new `src/lib/env.ts`
+*Done when:* the app throws a named error at startup listing any missing required variable.
+
+---
+
+### R1 — Make the data layer trustworthy · 4d
+
+Almost all of this is one migration. Assume an attacker holds the anon key and a valid user JWT, and test with raw REST calls, not through the UI.
+
+**R1.1 Migration `0006` — lock down UPDATE policies.** Add `WITH CHECK` to every owner-update policy so ownership columns are immutable: `profiles` (pin `profile_type`, control `username` through an action), `cars.owner_id`, `listings.seller_id`, `activity_posts`, and `offers` (pin `amount_cents`, `buyer_id`, and forbid reopening a closed offer). ~6 lines each.
+*Fixes:* profile_type self-escalation to `shop`; ownership reassignment of listings/cars/posts; buyers rewriting their own offer amounts or reopening declined offers.
+*Done when:* for each table, a raw REST `PATCH` attempting to change the ownership/role/amount column is rejected, and a legitimate edit through the UI still succeeds.
+
+**R1.2 Migration `0006` — kill the forged-order chain.** Drop the client `orders` INSERT policy entirely (checkout runs through the service-role client, so no client ever needs it) and add the missing UPDATE/DELETE policies. Constrain `reviews.reviewee_id` to the counterparty of a real order, block self-review, and add author UPDATE/DELETE policies so reviews are moderatable.
+*Fixes:* the single worst finding — forging `paid` orders naming any victim as seller, then posting unlimited fake reviews on them, with no way for the victim to remove them.
+*Done when:* a raw `POST /orders` is rejected; a review insert referencing a fabricated order is rejected; a self-review is rejected; a legitimate post-purchase review still works.
+
+**R1.3 Migration `0006` — fix comment/reaction visibility.** Replace `using (true)` on `activity_comments` and `activity_reactions` with policies that inherit the parent post's visibility (`published_at is not null and car.is_public`), and add the parent-post visibility check to `addComment`/`toggleReaction`.
+*Fixes:* anyone can read and write comments on unpublished or private-car posts.
+*Done when:* commenting on an unpublished post fails from both the API and the action, and its existing comments are not readable.
+
+**R1.4 Migration `0006` — enable erasure.** Give `orders.buyer_id`/`seller_id` an explicit `on delete` behaviour (recommend `set null` plus a denormalized counterparty label snapshot, so order history survives account deletion). Add `on delete` to `order_items.listing_id` reasoning explicitly about whether sold listings may ever be hard-deleted.
+*Fixes:* account deletion would fail on a foreign-key violation for any user who has ever transacted — a GDPR/CCPA erasure blocker.
+*Done when:* deleting a test user who has both bought and sold succeeds, and their orders remain readable by the counterparty.
+
+**R1.5 Ownership check on `source_car_id`.** `sell/actions.ts` inserts the form value with no verification. Copy the pattern already in `createRichActivityPost`.
+*Fixes:* any seller attaching any car as their part's source — provenance forgery against the exact trust layer the product is built on.
+*Done when:* submitting another user's car UUID is rejected server-side.
+
+**R1.6 Validate stored URLs.** Scheme-check every client-supplied URL before insert: `addCarImage`, the `sell` `image_urls` array, activity image URLs. The adjacent `video_url` guard is the model.
+*Fixes:* off-site hotlinking, tracking beacons, and `data:` payloads rendered on public pages.
+*Done when:* a non-`https://` URL, and an `https` URL outside the Supabase storage host, are both rejected.
+
+**R1.7 Fail closed in the proxy.** `src/lib/supabase/proxy.ts` returns `next()` with no gating when env is missing/malformed or Supabase errors. In production, redirect product routes to `/login` and log an error instead.
+*Done when:* with env vars removed, requesting `/garage` in a production build redirects rather than rendering.
+
+**R1.8 Close the open redirect.** `next.startsWith("/") && !next.startsWith("//")` and reject values containing `:`.
+*Done when:* `/login?next=//evil.com` lands on `/home`.
+
+**R1.9 Storage limits.** Set `allowed_mime_types` and `file_size_limit` on `avatars`, `car-images`, `activity-images`, `listing-images`. Client-side checks are advisory only.
+*Done when:* uploading an `.html` file or a 50MB image via the storage API fails.
+
+**R1.10 Rate limiting.** Supabase auth rate limits on signup, plus per-user cooldowns on `makeOffer`, `askQuestion`, `addComment`, and `toggleReaction`.
+*Done when:* a scripted 100-request burst against each is throttled.
+
+**R1.11 Input bounds.** Max lengths on every free-text column and its action (`title`, `description`, `body`, `compatibility_notes`, comments, offer messages, review bodies); cap offer amounts below `int4` overflow; bound `activity_reactions.emoji`; validate Q&A `parent_id` belongs to the same listing.
+*Fixes:* raw Postgres errors surfaced to users, storage abuse, cross-listing thread corruption.
+*Done when:* each field rejects over-length input with a readable message, and a 10-digit offer is refused rather than erroring.
+
+**R1.12 Cookie and revalidation hygiene.** Make the cart cookie `httpOnly` + `secure`; replace client-supplied `revalidatePath` arguments with a server-side allow-list.
+*Done when:* the cart cookie is unreadable from `document.cookie`, and passing an arbitrary path to a social action revalidates nothing.
+
+---
+
+### R2 — Make checkout atomic and honest · 4d
+
+**R2.1 Move the purchase path into one Postgres function.** A single `rpc` running in one transaction: verify listing availability with a conditional update (`... where id = any($1) and status = 'active'`, checking affected rows **before** charging), insert the order and its items, and return a per-item result set. Call it from `purchaseListings` and the accept branch of `respondToOffer`.
+*Fixes together:* the double-purchase race (two buyers both getting `paid` orders for one part); non-atomic five-call sequences that can leave paid orders with zero items or sold listings with open offers; the discarded `order_items` insert error; and the missing idempotency (the conditional update *is* the idempotency guard).
+*Done when:* two concurrent buy-now requests for the same listing produce exactly one paid order and one clear rejection, verified by a test that fires both in parallel.
+
+**R2.2 Add a `payments` table and provider references.** Persist `payment.reference` against the order, with provider, status, amount, and currency.
+*Fixes:* the payment reference is currently thrown away, making reconciliation, refunds, and webhooks impossible later.
+*Done when:* every paid order has a joinable payment row, and a payment can be looked up by provider reference.
+
+**R2.3 Surface partial checkout truthfully.** Return per-item outcomes; tell the buyer exactly what was and wasn't bought; clear only purchased IDs from the cart cookie; never report failure after a seller has been charged.
+*Fixes:* items silently vanishing, the whole cart being cleared regardless, and "Payment failed" shown when half the cart actually succeeded.
+*Done when:* checking out a cart whose second item just sold shows a specific message naming it, leaves it out of the order, and leaves the cart holding nothing already purchased.
+
+**R2.4 Fix currency handling.** Thread `listing.currency` through order math; refuse mixed-currency baskets per seller; stop hard-coding `"USD"` in two places.
+*Done when:* a non-USD listing produces an order in its own currency, and a mixed basket is refused with a clear message.
+
+**R2.5 Stop swallowing failures.** `respondToOffer`, `sendOfferMessage`, `setListingStatus`, `removeFromCart`, and the save/follow toggles all currently return `void` or discard `{ error }`. Give every mutation a typed result and a rendered outcome. Guard the sold→active flip (a listing with a paid order must not return to sale).
+*Done when:* every mutation path shows either success or a specific error, and no server action discards an error result.
+
+**R2.6 Timestamps and transitions.** Add `updated_at` triggers and status-transition timestamps on `orders`, `offers`, `listings`.
+*Done when:* every status change is timestamped without application code setting it.
+
+**R2.7 First tests — the money path.** Install Vitest and cover: the concurrent-purchase guard, fee math, cart dedupe/cap, multi-seller partial failure, and offer-accept authorization.
+*Fixes:* zero tests on the one surface where a logic slip is a privilege escalation, since it runs on the service-role client.
+*Done when:* `npm test` runs in CI and fails if the sold-guard regresses.
+
+---
+
+### R3 — Close the journeys · 10d
+
+The biggest new body of work, and the reason the estimate grew. Nothing here is a nicety: this is the difference between taking money and running a marketplace.
+
+**R3.1 Order lifecycle schema.** Add `shipped_at`, `delivered_at`, `tracking_number`, `carrier`, a shipping address (snapshotted onto the order, not read live from the profile), an `orders` UPDATE policy, and the `disputed` status. 1d.
+*Done when:* an order can legally move `paid → shipped → delivered → completed` at the database level, and both parties can read but only the right party can write each transition.
+
+**R3.2 `/orders/[id]` — order detail.** Items, prices, fee/payout, shipping address, counterparty, a status timeline (using the `.pipe` component already specced in the design system), and the actions appropriate to each side. 2d.
+*Fixes:* the deepest dead end in the product — after paying, a buyer currently has no page to go to.
+*Done when:* both buyer and seller can open an order, see its full state, and act on it.
+
+**R3.3 Fulfilment actions.** Seller "Mark dispatched" with tracking (required); buyer "Mark received"; automatic `completed` transition. Gate reviews on `delivered`/`completed` rather than `paid`. 1d.
+*Fixes:* `shipped` and `completed` are currently unreachable strings in the schema, and buyers can review before receiving anything.
+*Done when:* a full lifecycle can be driven end to end from the UI by two test accounts, and a review cannot be left before delivery.
+
+**R3.4 Post-sale messaging.** `messages` already carries `listing_id`; thread on the order, not the offer, so cart and buy-now purchases have a channel. Unfreeze declined-offer threads. Add the missing `messages.read_at` UPDATE policy. 1.5d.
+*Fixes:* no way to contact a seller after buying; conversations vanishing the moment an offer is declined; `read_at` being permanently unwritable.
+*Done when:* a buy-now purchaser can message their seller and vice versa, and a declined offer's history stays readable and continuable.
+
+**R3.5 `/listings/[id]/edit`.** Edit title, price, description, category, condition, location, compatibility notes, and add/remove photos. Expose archive and delete. Snapshot price history so price-drop notifications become possible later. 1.5d.
+*Fixes:* listings are immutable after publishing — a mistyped price can only be fixed by marking sold and re-listing.
+*Done when:* a seller can correct any field of a live listing, and the change is reflected on the public page.
+
+**R3.6 Activity post edit/delete.** `updateActivityPost` and `deleteActivityPost`, an edit route, owner controls on the public post page, and image add/remove on an existing post. Also fix `saveModItems`, which deletes and re-inserts every row and would destroy `linked_listing_id`. 1.5d.
+*Fixes:* your flagged gap — posts are create-only, so a typo in a title is permanent.
+*Done when:* an owner can edit and delete their own post and manage its images, and mod edits preserve listing links.
+
+**R3.7 Account basics.** Change email, change password, forgot/reset password (`/login/forgot`, `/login/reset`), and delete account with a confirm step that defaults to cancel. 1.5d.
+*Fixes:* no password reset at all — a locked-out user is locked out permanently — and no erasure path.
+*Done when:* a user can reset a forgotten password by email and delete their account, with data removed or anonymized per R1.4.
+
+**R3.8 Fix onboarding enforcement.** `login()` redirects to `/home` unconditionally, so email/password users never see onboarding and keep `username = NULL` forever, making every profile link render `/u/null`. Gate on username like the OAuth callback already does. 0.25d.
+*Done when:* a fresh email/password signup cannot reach `/home` without a username.
+
+**R3.9 Seller profile = shopfront.** Extend `loadProfileView` to return listings, rating, review list, and follower count; add Listings and Reviews tabs. 1d.
+*Fixes:* a buyer clicking the seller from a listing lands on a page that cannot answer "what else are they selling?" or "are they credible?" — the two questions the trust layer exists to answer. Reviews are currently written and displayed nowhere but a single average number.
+*Done when:* a seller's public profile shows their live listings and their reviews with text.
+
+**R3.10 Checkout step.** Shipping address collection, per-seller breakdown (make the one-order-per-seller split visible *before* paying), quantity control, and an explicit review step. Add buyer confirmation before an accepted offer charges them. 1.5d
+*Fixes:* no address is ever collected for physical goods; a mixed cart silently becomes N orders; accepting an offer charges the buyer instantly with no confirmation.
+*Done when:* a buyer sees exactly what they're paying, to whom, and where it ships, before money moves.
+
+**R3.11 Navigation and logged-out shell.** Cart in the nav with an item badge; `/sell` in the persistent nav; hide gated links from logged-out visitors and add Log in / Sign up; add a login CTA to Q&A; add the auth redirect on `/` so logged-in users skip the pitch. 0.75d.
+*Fixes:* `/cart` has exactly one inbound link app-wide; logged-out visitors get seven links that all bounce to `/login` and no way to sign in.
+*Done when:* a logged-out visitor can navigate the public app and sign in from anywhere, and a logged-in user never sees the marketing page.
+
+---
+
+### R4 — Ship the shell · 8d
+
+**R4.1 Fix the landing page's mobile nav — do this first.** `src/app/page.tsx` hand-rolls its own bar whose links are `display:none` at ≤980px with no index button. Replace with a public variant of `LivesheetBar`. 0.25d.
+*Fixes:* on every phone and tablet, the marketing page has no visible navigation at all. One file; highest impact per line in the whole plan.
+*Done when:* at 375px, Explore / Market / Sign in are reachable from `/`.
+
+**R4.2 Lifecycle boundaries.** `loading.tsx` (using the `.ghostrow`/`.gbar`/`.gbox` skeletons already written and unused), `error.tsx`, `not-found.tsx` per route group, and `global-error.tsx`. Wrap the tail queries on `/listings/[id]` and `/orders` in `Suspense`. 1.5d.
+*Fixes:* zero boundaries across 22 routes; every navigation blocks with no feedback and every error hits Next's unstyled default page.
+*Done when:* every route group has all three files, and a thrown error renders branded.
+
+**R4.3 Stop hiding query failures.** Keep `error` from every server-page destructure and render an error state. Build the `.toast` component (specced in the design system, never implemented) and wire it to mutation outcomes from R2.5. 1d.
+*Fixes:* a failed query is currently indistinguishable from an empty state, and successful actions confirm nothing.
+*Done when:* a forced query failure shows an error tile, not "nothing here yet."
+
+**R4.4 SEO pass.** `metadataBase` + `openGraph`/`twitter` on the root; `generateMetadata` on all six dynamic public routes; a dynamic OG image route for listings and cars; `sitemap.ts`; `robots.ts` disallowing the mockup and concept routes. 1.5d.
+*Fixes:* the PRD names SEO an acquisition channel and it is currently zero — every car and listing share unfurls as the site-wide tagline.
+*Done when:* a listing URL previews with its own title, description, and image, and `/sitemap.xml` lists live entities.
+
+**R4.5 Image pipeline and headers.** Remove `unoptimized`, add Supabase `remotePatterns`, route the three raw `<img>` sites through `Media`, and add security headers (CSP, HSTS, X-Frame-Options) in `next.config.ts` — currently empty. 0.75d.
+*Done when:* marketplace images serve resized/AVIF, and headers show up in a response.
+
+**R4.6 Delete the dead weight.** Remove `/mockup`, `/home-alt`, `/home-brutalist`, `/home-anthropic`, ~420 lines of pre-Livesheet concept CSS, `components/drvn/ui.tsx`, `ui/sidebar.tsx`, `(product)/placeholder.tsx`, `ui/button.tsx`, `CountUp.tsx`, `Reveal.tsx`, and the Settings links to internal pages. Either re-port `/design-system` to Livesheet or delete it — it currently documents the deleted dark system and renders a red pill for a component the system bans. ~5,700 LOC out. 1d.
+*Done when:* the production build contains no route the product doesn't use, and `git grep` finds no importers of the removed files.
+
+**R4.7 Accessibility pass.** One `<Sheet>` primitive with `role="dialog"`, `aria-modal`, Esc, focus trap, and focus restore — applied to the gallery lightbox, offer sheet, and add-car sheet, and closing the trap/restore gap in the nav index. `role="alert"` + `aria-invalid` + `aria-describedby` on form errors, and change `.field__err` to render on presence instead of needing an inline `display` hack at nine sites. Announce async state on save/follow/processing. Fix heading order (`h1 → h3/h4` skips) and the two unlabelled glyphs. 1.5d.
+*Done when:* every modal traps focus and closes on Esc, and a submitted invalid form announces its error.
+
+**R4.8 Responsive cleanup.** Drop `!grid-cols-3` in `add-car-form`; replace bare `grid-cols-2` in `sell-form` with `.field--row`; add a 2-column step to `.mkt`/`.deck--two` for the 641–980px band (currently 3 → 1 with nothing between); add `max-w-none` to the three uncapped `.ctl` textareas. 0.5d.
+*Done when:* every form and grid is usable at 375px and at 800px.
+
+**R4.9 Red discipline.** Five one-line edits so signal red means "happening now" rather than identity or selection: build-section headings, notification-group headings, sell-form step numerals, the nav "Here" chip, and `TabNav`'s active tab. Also remove the hardcoded `chip--ok "Fitted"` stamped on every mod row regardless of state. 0.25d.
+*Done when:* no static label renders in `--live`.
+
+**R4.10 Observability and CI.** Sentry (or equivalent) with server-action instrumentation; structured logging on the commerce path; GitHub Actions running typecheck + lint + build + tests on push. 0.75d.
+*Fixes:* a failed `order_items` insert currently leaves no trace anywhere.
+*Done when:* a deliberately thrown server-action error appears in the dashboard with request context, and CI blocks a failing push.
+
+**R4.11 Database performance.** Indexes on `orders.buyer_id`, `orders.seller_id`, `order_items.order_id`, `reviews.reviewee_id` (queried on **every** listing view), `reviews.order_id`, `listings.created_at` (the default marketplace sort), `listings.source_car_id`, `activity_posts.author_id`/`published_at`, `messages.recipient_id`, and `saves`/`follows` on `(target_type, target_id)`. Replace the seller-rating query that fetches every review row with an aggregate. Bound the unbounded `/orders` queries. 0.75d.
+*Done when:* `EXPLAIN` shows index scans on the listing-detail and orders queries.
+
+**R4.12 Legal and policy pages.** Terms of Service, Privacy Policy (OAuth providers require one), cookie disclosure, fee schedule, prohibited items, and a dispute/refund policy. Storage cleanup on car deletion — images currently orphan forever. 1d.
+*Done when:* all pages are reachable from the footer and referenced at signup, and deleting a car removes its stored images.
+
+---
+
+### R5 — Car sheet, activity tab, and Werkbank ports · 8d
+
+Full spec in §6 and §7.
+
+**R5.1 `SheetTabs` component.** Real `role="tablist"` semantics, roving `tabIndex`, arrow/Home/End keys, `hidden` panels, URL-backed `?view=` state synced with `history.replaceState`, legacy hash mapping. Styled with the existing `.filters`/`.fbtn` control at the 6px radius step. 1d.
+*Done when:* a car's activity is deep-linkable, keyboard-navigable, and present in the server HTML.
+
+**R5.2 Car sheet tabs.** Rewire `car-tabs.tsx` onto `SheetTabs` with four panels (Build / For sale / Activity / Gallery); add `generateMetadata` with a canonical URL. Migrate `ProfileBody` onto the same component, absorbing R3.9's Listings and Reviews tabs. 1.5d.
+
+**R5.3 "Release a part from this car."** `/sell?car=&mod=` pre-fill with an ownership-checked mod fetch; persist `mod_items.linked_listing_id` (currently dead in code despite the PRD calling it "the connective tissue between a build and the marketplace"); `[ RELEASE ]` per build line using the unused `.bline--own`/`.relbtn` CSS; garage per-car action. 2d.
+*Done when:* an owner can list a part directly off a build line, and the resulting listing shows on that line.
+
+**R5.4 "For sale from this car" panel + KPIs.** Query listings by `source_car_id` (the car page currently never queries listings at all); active live, sold desaturated; listed/sold KPI pair. 1d.
+
+**R5.5 Werkbank ports, highest value first.** Listings management console (absorbing R3.5's edit route and per-listing offer history); order pipeline + dispatch form (absorbing R3.3); payout breakdown plate; offers inbox on the dashboard; same-car cross-sell on part pages; thumbnail-swap gallery; filter counts; price sort; offer floor; default garage car for fitment. 2.5d.
+
+---
+
+### R6 — Real payments · 13d
+
+The `PaymentProvider` interface is a naming placeholder, not a working boundary: it assumes a synchronous inline charge. The checkout pages and actions **will** change.
+
+**R6.1 Confirm the processor.** Stripe Connect is assumed throughout; confirm before building. 0.25d.
+**R6.2 Schema and Connect model.** `profiles.stripe_account_id`, payout/transfer tracking, expanded order states (`requires_action`, `payment_failed`, `disputed`), and a **`reserved` listing state with expiry** — mandatory once confirmation takes minutes rather than milliseconds, or R2.1's race window reopens for the whole 3DS duration. 2d.
+**R6.3 Decide the multi-seller strategy.** N payment intents per checkout, or separate charges and transfers (which needs an order-group concept the schema lacks). Decide before writing code. 0.5d.
+**R6.4 Flow rewrite.** Create-intent server action → client confirmation UI (Elements, 3DS/SCA) → **webhook route with signature verification as the single place** that marks orders paid and listings sold. 4d.
+**R6.5 Seller onboarding.** Connect onboarding/KYC, payout schedule, and the Settings billing section wired to real balances. 2.5d.
+**R6.6 Refunds and disputes.** `refund()`, `getStatus()`, and dispute hooks on the interface; buyer-facing cancel/refund request; seller and admin handling. 2.5d.
+**R6.7 Idempotency keys** on every provider call. 0.25d.
+*Phase done when:* a real card charge moves real money to a connected test seller, the webhook is the only thing that marks it paid, a refund works end to end, and a 3DS challenge resolves correctly.
+
+---
+
+### R7 — Launch surface · 5d
+
+**R7.1 Counter-offer — or cut the copy.** Two live surfaces promise "accept, counter once, or let it lapse" and the design system specs a Counter button, but `respondToOffer` accepts only accept/decline and the `offers` table has no counter fields or seller-side insert path. Either build it (needs `counter_amount_cents`, `last_actor_id`, a seller insert policy) or remove the promise today. 1.5d if built.
+**R7.2 Offer expiry and withdraw.** `expires_at` plus a scheduled expiry job; wire the unused `withdrawn` status to a UI action. The copy already promises a countdown that doesn't exist. 0.75d.
+**R7.3 Notification coverage.** Move from four read-time-derived events to a real `notifications` table covering offers, sales, questions, comments, reactions, reviews, and order status; add unread state, read-marking, and a bell badge; fix links that point at `/profile` instead of the actor and at `/cars/` when a car is missing; make the `offers_sales` preference actually control something. 1.5d.
+*Fixes:* sellers are never told a question was asked, so Q&A will go unanswered in practice.
+**R7.4 Marketing home on real data.** Replace `drvn-data.ts` seed content currently presented as live "Sheets being drawn," or label it honestly as the stat band already does. 0.5d.
+**R7.5 Marketplace completeness.** Pagination or cursor (currently a hard 48 with no offset, and the fit filter applied *after* the limit so filtered pages can be wrongly empty), sort control, location filter, and search across description/brand/compatibility rather than title only. Add `pg_trgm` or FTS to replace the unindexable `ilike`. 1d.
+**R7.6 `/saved` fixes.** Wire save-a-seller (the section can never populate today because `SaveButton` is never rendered for profiles), surface actual follows, add unsave. 0.5d.
+**R7.7 Golden-path E2E.** Playwright over signup → add car → list part → buy → fulfil → review. 1d.
+
+---
+
+### Continuous · ~3d spread across phases
+
+**C.1 Docs in step.** Update `CHANGELOG.md` per change; refresh PRD §6 and §9, which still describe the deleted sidebar and the pre-Livesheet tokens; keep `docs/livesheet-inventory.md` accurate as components land.
+**C.2 Generate `database.types.ts`** from the schema instead of hand-maintaining it — it will drift on the next migration.
+**C.3 Test as you go.** Every R3–R7 task gets at least a smoke test; commerce paths get real cases.
+
+---
+
+### 9.1 Coverage account
+
+Every finding in §1–§8 maps to a task above. The ones **deliberately not** in the launch plan, with reasons:
+
+| Deferred item | Reason |
+|---|---|
+| AI mod parsing | Heuristic parser works and the UX won't change when AI lands. Post-launch. |
+| Fitment engine (authoritative) | The make/model hint is honest as a hint. Needs a real fitment dataset — a separate project. Fix only the narrow bugs: it never appears on listing detail, and it requires `source_car_id` to be set. |
+| Recommendations P2/P3 | P1 works; build-goal input doesn't exist yet. |
+| Shop/business profiles | `profile_type` column only. No launch dependency once R1.1 stops users self-granting it. |
+| General DM inbox | R3.4's order-scoped messaging covers the real need. Revisit on demand. |
+| Documents/provenance vault | §7 — would make documentation the headline, against the product thesis. |
+| Verification badges, condition gauges, sparklines, watch counts, on-time %, disputes-count stats | §7 — no backing data; shipping them means inventing numbers. |
+| Price-drop notifications | Needs the price history R3.5 starts capturing. Post-launch, then cheap. |
+| Follower lists, comment threading, comment edit | Low value pre-audience. Comment *delete* is in R4.7's sweep (its RLS policy already exists, unused). |
+| Live-dimension callouts, countdowns, KPI decks | §8 — decide in R5: wire the car-sheet callouts and one real countdown, or cut ~44 unused classes so the system stops describing what the product doesn't do. |
+| Car cover-image chooser, image reordering, alt text | Real gaps, no launch dependency. Post-launch polish. |
+| `.rv` opacity-until-hydration | Content is invisible with JS off. Worth fixing in R4.7 if cheap; otherwise accepted risk. |
+| The 40 `!important` sites | Symptom, not defect. Clean opportunistically. |
+
+### 9.2 Decisions needed from you
+
+These change what gets built, and three of them block their phase:
+
+1. **Counter-offer: build or cut?** (blocks R7.1) — the copy promises it in two places today.
+2. **Drafts on `/sell`: build or cut?** — `/sell` says "Nothing reaches the market until you publish it" and publishes immediately. Cutting the sentence is 5 minutes; building drafts is half a day.
+3. **Payment processor: confirm Stripe Connect?** (blocks R6)
+4. **Multi-seller checkout: N intents or separate charges and transfers?** (blocks R6.4)
+5. **Shipping: flat rate, seller-set, or buyer-arranged?** (blocks R3.10 — no shipping cost is modelled anywhere)
+6. **Account deletion: anonymize or restrict?** (shapes R1.4)
+7. **Which Werkbank ports, and in what order?** (shapes R5.5 — my ranking is in §7)
+8. **`/design-system`: re-port or delete?** (R4.6)
+
+### 9.3 Launch gate
+
+Do not go public until all of these are true:
+
+- [ ] Both credentials rotated; no secret outside the deploy platform's store (R0)
+- [ ] Raw-REST attempts to forge an order, self-escalate to `shop`, or reassign ownership all fail (R1)
+- [ ] Concurrent purchase of one listing yields exactly one paid order, proven by test (R2.1)
+- [ ] Every paid order has a payment record with a provider reference (R2.2)
+- [ ] A buyer can see order status, track shipment, contact the seller, and request a refund (R3.2–R3.4, R6.6)
+- [ ] A seller can edit a live listing and mark it dispatched (R3.5, R3.3)
+- [ ] A user can reset a forgotten password and delete their account (R3.7)
+- [ ] No route can render without loading and error boundaries (R4.2)
+- [ ] Terms, Privacy, cookie disclosure, and fee schedule are live (R4.12)
+- [ ] Error tracking receives a test exception; CI blocks a failing build (R4.10)
+- [ ] Real money reaches a connected seller account, finalized by webhook (R6)
+- [ ] Golden-path E2E passes (R7.7)
+- [ ] No UI copy promises a feature that doesn't exist (R7.1, R7.2, R4.6)
 
 ---
 
@@ -275,4 +561,4 @@ The Livesheet port was a real upgrade and the product now looks like itself. But
 
 The genuinely new finding is that **DRVN can take someone's money and then has nothing to say to them.** No order page, no tracking, no seller contact, no cancellation. For a marketplace, the post-purchase experience isn't a phase-two nicety — it's most of what "trustworthy" means in practice, and it's the one stretch of the journey that doesn't exist in either the UI or the schema. Building it is the difference between a demo that transacts and a marketplace people come back to.
 
-Everything above has a file and line behind it.
+Everything above has a file and line behind it, and §9 turns all of it into ordered, testable work. The plan is sequenced so you can stop after any phase and be in a defensible state: after **R2** the app is safe to expose to invited users on stub payments; after **R4** it's a credible public beta; after **R6** it's a marketplace.

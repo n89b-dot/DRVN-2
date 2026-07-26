@@ -15,7 +15,10 @@ export type IconName =
   | "sell"
   | "comment"
   | "repost"
-  | "smile";
+  | "smile"
+  | "sun"
+  | "moon"
+  | "rail";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -34,10 +37,26 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
         <path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" />
       </>
     ),
+    // A cog — the old glyph was a circle with eight rays, which reads as a
+    // brightness control, not settings.
     settings: (
       <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" />
+        <circle cx="12" cy="12" r="3.1" />
+        <path d="M12 2.6h0a1.9 1.9 0 0 1 1.9 1.9v.36a1.6 1.6 0 0 0 .97 1.46 1.6 1.6 0 0 0 1.75-.32l.25-.25a1.9 1.9 0 1 1 2.7 2.7l-.26.25a1.6 1.6 0 0 0-.32 1.75v0a1.6 1.6 0 0 0 1.46.97h.36a1.9 1.9 0 0 1 0 3.8h-.36a1.6 1.6 0 0 0-1.46.97 1.6 1.6 0 0 0 .32 1.75l.25.25a1.9 1.9 0 1 1-2.7 2.7l-.24-.26a1.6 1.6 0 0 0-1.75-.32 1.6 1.6 0 0 0-.97 1.46v.36a1.9 1.9 0 0 1-3.8 0v-.36a1.6 1.6 0 0 0-1.02-1.46 1.6 1.6 0 0 0-1.75.32l-.25.25a1.9 1.9 0 1 1-2.7-2.7l.26-.25a1.6 1.6 0 0 0 .32-1.75 1.6 1.6 0 0 0-1.46-.97H4.5a1.9 1.9 0 0 1 0-3.8h.36a1.6 1.6 0 0 0 1.46-1.02 1.6 1.6 0 0 0-.32-1.75l-.25-.25a1.9 1.9 0 1 1 2.7-2.7l.25.26a1.6 1.6 0 0 0 1.75.32h.08a1.6 1.6 0 0 0 .97-1.46V4.5A1.9 1.9 0 0 1 12 2.6Z" />
+      </>
+    ),
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" />
+      </>
+    ),
+    moon: <path d="M20.5 13.4A8.5 8.5 0 1 1 10.6 3.5a6.7 6.7 0 0 0 9.9 9.9Z" />,
+    // The margin column of a drawing — the register rail.
+    rail: (
+      <>
+        <rect x="3" y="4.5" width="18" height="15" rx="2" />
+        <path d="M9 4.5v15" />
       </>
     ),
     bell: <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 21h4" />,
