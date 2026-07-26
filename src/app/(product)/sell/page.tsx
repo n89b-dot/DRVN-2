@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,63 +26,66 @@ export default async function SellPage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-5 py-10 md:py-14">
-      <SectionLabel>Sell</SectionLabel>
-      <h1 className="mt-3 text-2xl font-bold text-text-primary">List a part</h1>
-      <p className="mt-2 text-sm text-text-muted">
-        One form, under three minutes. Photos sell parts — add good ones.
-      </p>
+    <div className="mx-auto w-full max-w-[860px] px-5 pb-10">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">Part sheet — draft · not yet public</span>
+        <h1>
+          Draw a new <span className="live-word">line.</span>
+        </h1>
+        <p className="sub">
+          Fill the sheet and the listing draws itself. Nothing reaches the market until you
+          publish it.
+        </p>
+      </Rv>
 
-      <div className="mt-8">
-        <SellForm cars={cars ?? []} userId={user!.id} />
-      </div>
+      <SellForm cars={cars ?? []} userId={user!.id} />
 
       {(myListings ?? []).length > 0 && (
-        <div className="mt-12">
-          <SectionLabel>Your listings</SectionLabel>
-          <div className="mt-3 flex flex-col gap-2">
-            {(myListings ?? []).map((listing) => (
-              <div
-                key={listing.id}
-                className="flex items-center justify-between gap-3 rounded-card border border-border bg-surface px-4 py-3"
-              >
-                <Link
-                  href={`/listings/${listing.id}`}
-                  className="min-w-0 flex-1 truncate text-sm text-text-primary transition hover:text-accent"
-                >
-                  {listing.title}
-                </Link>
-                <span className="text-sm font-semibold text-text-primary">
-                  {formatPrice(listing.price_cents)}
-                </span>
-                <span
-                  className={`rounded-pill px-2.5 py-0.5 text-[11px] font-semibold ${
-                    listing.status === "active"
-                      ? "bg-success/15 text-success"
-                      : "bg-raised text-text-muted"
-                  }`}
-                >
-                  {listing.status}
-                </span>
-                <form action={setListingStatus}>
-                  <input type="hidden" name="id" value={listing.id} />
-                  <input
-                    type="hidden"
-                    name="status"
-                    value={listing.status === "active" ? "sold" : "active"}
-                  />
-                  <button
-                    type="submit"
-                    className="text-xs text-text-muted transition hover:text-text-primary"
-                  >
-                    {listing.status === "active" ? "Mark sold" : "Relist"}
-                  </button>
-                </form>
-              </div>
-            ))}
+        <section className="deck mt-10">
+          <div className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Your lines on the market</span>
+              <span className="chip">{(myListings ?? []).length}</span>
+            </div>
+            <div className="rowlist">
+              {(myListings ?? []).map((listing) => (
+                <div key={listing.id} className="order">
+                  <span className="min-w-0">
+                    <Link
+                      href={`/listings/${listing.id}`}
+                      className="order__name block truncate transition-colors hover:text-live"
+                    >
+                      {listing.title}
+                    </Link>
+                    <span className="order__meta block">{formatPrice(listing.price_cents)}</span>
+                  </span>
+                  <span className="order__actions">
+                    <span className={`chip ${listing.status === "active" ? "chip--live" : "chip--spent"}`}>
+                      {listing.status === "active" ? "Live" : listing.status}
+                    </span>
+                    <form action={setListingStatus}>
+                      <input type="hidden" name="id" value={listing.id} />
+                      <input
+                        type="hidden"
+                        name="status"
+                        value={listing.status === "active" ? "sold" : "active"}
+                      />
+                      <button type="submit" className="relbtn !static">
+                        {listing.status === "active" ? "Mark sold" : "Relist"}
+                      </button>
+                    </form>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       )}
+
+      <Foot
+        left="DRVN / Livesheet — nothing public until you publish"
+        right={<Link href="/marketplace">← Back to the market</Link>}
+      />
     </div>
   );
 }
