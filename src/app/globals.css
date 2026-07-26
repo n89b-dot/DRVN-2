@@ -362,6 +362,207 @@ video {
     background: var(--live);
   }
 
+  /* ---------- THE INDEX — mobile/compact navigation ----------
+     A second sheet unrolls over the page: numbered registers on ruled rows.
+     The trigger is a stack of drafting rules that folds into a cross-out. */
+  .indexbtn {
+    display: none; /* promoted at ≤980px */
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: var(--r-ctl);
+    color: var(--ink);
+    background: var(--paper-deep);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .indexbtn:hover {
+    background: var(--ghost-hover);
+  }
+  .indexbtn.is-open {
+    background: var(--ink);
+    color: var(--on-ink);
+  }
+  .indexbtn__rules {
+    position: relative;
+    width: 16px;
+    height: 12px;
+    flex: none;
+  }
+  .indexbtn__rules i {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: currentColor;
+    transition:
+      transform var(--t-move) var(--spring),
+      opacity var(--t-fast) ease;
+  }
+  .indexbtn__rules i:nth-child(1) {
+    top: 0;
+  }
+  .indexbtn__rules i:nth-child(2) {
+    top: 5px;
+  }
+  .indexbtn__rules i:nth-child(3) {
+    top: 10px;
+  }
+  /* the rules fold into a cross — a line struck through the drawing */
+  .indexbtn.is-open .indexbtn__rules i:nth-child(1) {
+    transform: translateY(5px) rotate(45deg);
+  }
+  .indexbtn.is-open .indexbtn__rules i:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  .indexbtn.is-open .indexbtn__rules i:nth-child(3) {
+    transform: translateY(-5px) rotate(-45deg);
+  }
+
+  .indexwrap {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .indexwrap.is-open {
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .indexsheet {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 78px 0 calc(40px + env(safe-area-inset-bottom, 0px));
+    background-color: var(--paper);
+    background-image:
+      repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 40px),
+      repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 40px);
+    /* the sheet unrolls downward */
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path var(--t-move) var(--spring);
+  }
+  .indexwrap.is-open .indexsheet {
+    clip-path: inset(0 0 0 0);
+  }
+
+  .index__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .index__rows {
+    display: block;
+    margin-top: 4px;
+  }
+
+  .indexrow {
+    display: grid;
+    grid-template-columns: 28px 22px minmax(0, 1fr) auto;
+    gap: 2px 13px;
+    align-items: baseline;
+    padding: 15px 2px;
+    border-top: 1px solid var(--rule-soft);
+    position: relative;
+    /* staggered draw-in, index passed as --i */
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  .indexwrap.is-open .indexrow {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--t-move) ease calc(var(--i, 0) * 45ms),
+      transform var(--t-move) var(--spring) calc(var(--i, 0) * 45ms);
+  }
+  .indexrow__n {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  /* the register's mark — sits in the margin beside the number */
+  .indexrow__ico {
+    display: grid;
+    place-items: center;
+    color: var(--dim);
+    align-self: center;
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow__label {
+    font-size: 21px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow__note {
+    grid-column: 3;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+  .indexrow__end {
+    grid-row: 1;
+    grid-column: 4;
+    align-self: center;
+  }
+  .indexrow:hover .indexrow__label,
+  .indexrow:focus-visible .indexrow__label {
+    color: var(--live);
+  }
+  .indexrow:hover .indexrow__ico,
+  .indexrow:focus-visible .indexrow__ico {
+    color: var(--ink);
+  }
+  /* the register you're on carries a live tick in the margin */
+  .indexrow.is-here .indexrow__n,
+  .indexrow.is-here .indexrow__ico {
+    color: var(--live);
+  }
+  .indexrow.is-here::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    width: 6px;
+    height: 1px;
+    background: var(--live);
+  }
+
+  .index__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule-mid);
+    /* the lighting switch lives here once the bar has gone compact */
+    /* (see the ≤980px rule that hides .bar__theme in the bar itself) */
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  .indexwrap.is-open .index__foot {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--t-move) ease 420ms,
+      transform var(--t-move) var(--spring) 420ms;
+  }
+
   .cat-ico {
     width: 40px;
     height: 40px;
@@ -2122,30 +2323,27 @@ video {
   }
 }
 
-@media (max-width: 640px) {
-  .bar__inner {
-    flex-wrap: wrap;
-    row-gap: 8px;
-    padding-bottom: 10px;
-  }
-  .bar__nav {
-    width: 100%;
-    margin-left: 0;
-    min-width: 0;
-    max-width: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .bar__nav::-webkit-scrollbar {
+/* Compact bar: below 1080px the full register (6 links + 3 icons + the
+   lighting switch) wraps the bar onto a second row, so it moves into the
+   index instead. Measured, not guessed — 1080px is the last width that fits. */
+@media (max-width: 1080px) {
+  .bar__nav .bar__link,
+  .bar__nav .bar__theme {
     display: none;
   }
-  .bar__link,
-  .bar__theme {
-    flex: none;
-    padding: 7px 12px;
+  /* …but the lighting switch is still reachable, inside the index */
+  .index__foot .bar__theme {
+    display: inline-flex;
+  }
+  .indexbtn {
+    display: inline-flex;
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .indexrow__label {
+    font-size: 19px;
   }
   .deck--kpi {
     grid-template-columns: 1fr 1fr;
@@ -2226,6 +2424,23 @@ video {
   .is-loading .gbar,
   .is-loading .gbox {
     animation: none;
+  }
+  /* the index arrives drawn, not drawing */
+  .indexsheet,
+  .indexwrap.is-open .indexsheet {
+    clip-path: none;
+    transition: none;
+  }
+  .indexrow,
+  .indexwrap.is-open .indexrow,
+  .index__foot,
+  .indexwrap.is-open .index__foot {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .indexbtn__rules i {
+    transition: none;
   }
 }
 
