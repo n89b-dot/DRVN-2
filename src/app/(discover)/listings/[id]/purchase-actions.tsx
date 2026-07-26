@@ -106,7 +106,7 @@ export function PurchaseActions({
                 <textarea name="message" rows={2} placeholder="Anything the keeper should know" className="ctl" />
               </div>
               {offerState.error && (
-                <p className="field__err" style={{ display: "flex" }}>
+                <p role="alert" aria-live="polite" className="field__err">
                   {offerState.error}
                 </p>
               )}

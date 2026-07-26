@@ -47,7 +47,7 @@ export function SignupForm() {
           />
           <span className="field__hint">8+ characters. Length is what really counts.</span>
           {state.error && (
-            <span className="field__err" style={{ display: "flex" }}>
+            <span role="alert" aria-live="polite" className="field__err">
               {state.error}
             </span>
           )}

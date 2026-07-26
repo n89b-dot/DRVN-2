@@ -77,7 +77,7 @@ export function GalleryManager({
         />
       </div>
       {error && (
-        <p className="field__err mt-3" style={{ display: "flex" }}>
+        <p role="alert" aria-live="polite" className="field__err mt-3">
           {error}
         </p>
       )}

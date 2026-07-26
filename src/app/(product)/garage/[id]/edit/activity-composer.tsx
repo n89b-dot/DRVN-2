@@ -42,7 +42,7 @@ export function ActivityComposer({
           className="ctl max-w-none"
         />
         {state.error && (
-          <p className="field__err" style={{ display: "flex" }}>
+          <p role="alert" aria-live="polite" className="field__err">
             {state.error}
           </p>
         )}

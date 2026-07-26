@@ -73,6 +73,15 @@ export type ActivityImage = {
   created_at: string;
 };
 
+export type ListingStatus =
+  | "draft"
+  | "active"
+  /** Held by an in-flight checkout; released by `release_expired_reservations`. */
+  | "reserved"
+  | "paused"
+  | "sold"
+  | "archived";
+
 export type Listing = {
   id: string;
   seller_id: string;
@@ -83,10 +92,17 @@ export type Listing = {
   subcategory: string | null;
   condition: "new" | "like_new" | "used" | "for_parts" | null;
   price_cents: number;
+  /** Seller-set flat shipping, charged on top of the asking price. */
+  shipping_cents: number;
+  allows_collection: boolean;
+  /** Offers below this are refused before the seller sees them. */
+  offer_floor_cents: number | null;
   currency: string;
   location: string | null;
   compatibility_notes: string | null;
-  status: "draft" | "active" | "sold" | "archived";
+  status: ListingStatus;
+  sold_at: string | null;
+  reserved_until: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -145,15 +161,47 @@ export type Follow = {
   created_at: string;
 };
 
+export type OrderStatus =
+  | "pending"
+  | "requires_action"
+  | "payment_failed"
+  | "paid"
+  | "shipped"
+  | "delivered"
+  | "completed"
+  | "cancelled"
+  | "refunded"
+  | "disputed";
+
 export type Order = {
   id: string;
-  buyer_id: string;
-  seller_id: string;
-  status: "pending" | "paid" | "shipped" | "completed" | "cancelled" | "refunded";
+  // Nullable since 0007: deleting an account anonymises its orders rather than
+  // cascading them away, so the counterparty keeps their history.
+  buyer_id: string | null;
+  seller_id: string | null;
+  buyer_label: string | null;
+  seller_label: string | null;
+  status: OrderStatus;
   subtotal_cents: number;
+  shipping_cents: number;
   platform_fee_cents: number;
   total_cents: number;
   currency: string;
+  ship_name: string | null;
+  ship_line1: string | null;
+  ship_line2: string | null;
+  ship_city: string | null;
+  ship_postcode: string | null;
+  ship_country: string | null;
+  ship_phone: string | null;
+  is_collection: boolean;
+  carrier: string | null;
+  tracking_number: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -161,17 +209,41 @@ export type Order = {
 export type OrderItem = {
   id: string;
   order_id: string;
-  listing_id: string;
+  listing_id: string | null;
+  title: string | null;
   price_cents: number;
+  shipping_cents: number;
   quantity: number;
 };
+
+export type Payment = {
+  id: string;
+  order_id: string;
+  provider: string;
+  provider_reference: string | null;
+  status: "pending" | "requires_action" | "succeeded" | "failed" | "refunded" | "partially_refunded";
+  amount_cents: number;
+  refunded_cents: number;
+  currency: string;
+  idempotency_key: string | null;
+  failure_reason: string | null;
+  raw: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OfferStatus = "open" | "countered" | "accepted" | "declined" | "withdrawn" | "expired";
 
 export type Offer = {
   id: string;
   listing_id: string;
   buyer_id: string;
   amount_cents: number;
-  status: "open" | "accepted" | "declined" | "withdrawn" | "expired";
+  counter_amount_cents: number | null;
+  countered_at: string | null;
+  expires_at: string | null;
+  responded_at: string | null;
+  status: OfferStatus;
   created_at: string;
   updated_at: string;
 };
@@ -199,11 +271,41 @@ export type Message = {
   id: string;
   listing_id: string;
   offer_id: string | null;
+  /** Post-sale threads hang off the order, so buy-now purchases have a channel. */
+  order_id: string | null;
   sender_id: string;
   recipient_id: string;
   body: string;
   read_at: string | null;
   created_at: string;
+};
+
+export type Notification = {
+  id: string;
+  user_id: string;
+  kind: string;
+  section: "engagement" | "marketplace";
+  title: string;
+  body: string | null;
+  href: string | null;
+  actor_id: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+/** Shape returned by the `purchase_begin` RPC. */
+export type PurchaseBeginResult = {
+  orders: {
+    order_id: string;
+    seller_id: string;
+    currency: string;
+    subtotal_cents: number;
+    shipping_cents: number;
+    platform_fee_cents: number;
+    total_cents: number;
+    listing_ids: string[];
+  }[];
+  skipped: { listing_id: string; reason: string }[];
 };
 
 export type Database = {
@@ -222,14 +324,58 @@ export type Database = {
       saves: Table<Save, "user_id" | "target_type" | "target_id">;
       follows: Table<Follow, "follower_id" | "target_type" | "target_id">;
       orders: Table<Order, "buyer_id" | "seller_id">;
-      order_items: Table<OrderItem, "order_id" | "listing_id" | "price_cents">;
+      order_items: Table<OrderItem, "order_id" | "price_cents">;
+      payments: Table<Payment, "order_id" | "amount_cents">;
       offers: Table<Offer, "listing_id" | "buyer_id" | "amount_cents">;
       reviews: Table<Review, "order_id" | "reviewer_id" | "reviewee_id" | "rating">;
       listing_questions: Table<ListingQuestion, "listing_id" | "author_id" | "body">;
       messages: Table<Message, "listing_id" | "sender_id" | "recipient_id" | "body">;
+      notifications: Table<Notification, "user_id" | "kind" | "section" | "title">;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      /** Claims listings and creates pending orders in one transaction (0007). */
+      purchase_begin: {
+        Args: {
+          p_buyer_id: string;
+          p_listing_ids: string[];
+          p_idempotency_key?: string | null;
+          p_reservation_window?: string;
+        };
+        Returns: PurchaseBeginResult;
+      };
+      /** Settles a claimed order — the future webhook entry point (0007). */
+      purchase_finalize: {
+        Args: {
+          p_order_id: string;
+          p_success: boolean;
+          p_provider?: string;
+          p_reference?: string | null;
+          p_failure_reason?: string | null;
+        };
+        Returns: undefined;
+      };
+      offer_accept_begin: {
+        Args: {
+          p_offer_id: string;
+          p_seller_id: string;
+          p_reservation_window?: string;
+        };
+        Returns: string | null;
+      };
+      release_expired_reservations: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+      consume_rate_limit: {
+        Args: { p_key: string; p_limit: number; p_window: string };
+        Returns: boolean;
+      };
+      search_listing_ids: {
+        Args: { p_query: string };
+        Returns: string[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

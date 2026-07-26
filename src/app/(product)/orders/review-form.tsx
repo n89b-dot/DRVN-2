@@ -33,7 +33,7 @@ export function ReviewForm({ orderId, revieweeName }: { orderId: string; reviewe
         {pending ? "…" : "Leave review"}
       </button>
       {state.error && (
-        <p className="field__err w-full" style={{ display: "flex" }}>
+        <p role="alert" aria-live="polite" className="field__err w-full">
           {state.error}
         </p>
       )}

@@ -1,129 +1,138 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
-import { respondToOffer, sendOfferMessage } from "@/features/commerce/actions";
-import { ReviewForm } from "./review-form";
+import { OfferRow, type OfferView } from "./offer-row";
+import { OrderPipeline } from "./order-pipeline";
 
 export const metadata = { title: "Orders - DRVN" };
 
-function StatusChip({ status }: { status: string }) {
-  const cls =
-    status === "paid" || status === "completed" || status === "accepted"
-      ? "chip chip--ok"
-      : status === "pending" || status === "open"
-        ? "chip chip--live"
-        : "chip chip--spent";
-  return <span className={cls}>{status}</span>;
-}
+/** Bounded: these queries used to fetch every order, offer and message ever. */
+const PAGE_SIZE = 25;
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ placed?: string }>;
+  searchParams: Promise<{ placed?: string; skipped?: string }>;
 }) {
-  const { placed } = await searchParams;
+  const { placed, skipped } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const [{ data: orders }, { data: myListings }] = await Promise.all([
+  const [{ data: orders, error: ordersError }, { data: myListings }] = await Promise.all([
     supabase
       .from("orders")
       .select("*")
-      .or(`buyer_id.eq.${user!.id},seller_id.eq.${user!.id}`)
-      .order("created_at", { ascending: false }),
-    supabase.from("listings").select("id, title").eq("seller_id", user!.id),
+      .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE),
+    supabase.from("listings").select("id, title").eq("seller_id", user.id).limit(200),
   ]);
+
+  if (ordersError) console.error("[orders] failed to load orders", ordersError);
 
   const orderIds = (orders ?? []).map((o) => o.id);
   const myListingIds = (myListings ?? []).map((l) => l.id);
 
-  const [{ data: items }, { data: incomingOffers }, { data: myOffers }, { data: myReviews }] =
-    await Promise.all([
-      orderIds.length
-        ? supabase.from("order_items").select("*").in("order_id", orderIds)
-        : Promise.resolve({ data: [] }),
-      myListingIds.length
-        ? supabase
-            .from("offers")
-            .select("*")
-            .in("listing_id", myListingIds)
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from("offers")
-        .select("*")
-        .eq("buyer_id", user!.id)
-        .order("created_at", { ascending: false }),
-      orderIds.length
-        ? supabase.from("reviews").select("order_id, reviewer_id").in("order_id", orderIds)
-        : Promise.resolve({ data: [] }),
-    ]);
+  const [{ data: items }, { data: incomingOffers }, { data: myOffers }] = await Promise.all([
+    orderIds.length
+      ? supabase.from("order_items").select("*").in("order_id", orderIds)
+      : Promise.resolve({ data: [] }),
+    myListingIds.length
+      ? supabase
+          .from("offers")
+          .select("*")
+          .in("listing_id", myListingIds)
+          .order("created_at", { ascending: false })
+          .limit(PAGE_SIZE)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("offers")
+      .select("*")
+      .eq("buyer_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE),
+  ]);
 
-  // Names for counterparties + listing titles for offers/items.
+  const allOffers = [...(incomingOffers ?? []), ...(myOffers ?? [])];
+  const allOfferIds = allOffers.map((o) => o.id);
+  const offerListingIds = [...new Set(allOffers.map((o) => o.listing_id))];
   const counterpartyIds = [
     ...new Set([
       ...(orders ?? []).flatMap((o) => [o.buyer_id, o.seller_id]),
       ...(incomingOffers ?? []).map((o) => o.buyer_id),
     ]),
-  ].filter((x) => x !== user!.id);
-  const itemListingIds = [
-    ...new Set([
-      ...(items ?? []).map((i) => i.listing_id),
-      ...(myOffers ?? []).map((o) => o.listing_id),
-    ]),
-  ];
-  const allOfferIds = [...(incomingOffers ?? []), ...(myOffers ?? [])].map((o) => o.id);
+  ].filter((x): x is string => Boolean(x) && x !== user.id);
 
   const [{ data: people }, { data: offerListings }, { data: offerMessages }] = await Promise.all([
     counterpartyIds.length
       ? supabase.from("profiles").select("id, display_name, username").in("id", counterpartyIds)
       : Promise.resolve({ data: [] }),
-    itemListingIds.length
-      ? supabase.from("listings").select("id, title").in("id", itemListingIds)
+    offerListingIds.length
+      ? supabase.from("listings").select("id, title").in("id", offerListingIds)
       : Promise.resolve({ data: [] }),
     allOfferIds.length
       ? supabase
           .from("messages")
-          .select("*")
+          .select("id, offer_id, sender_id, body")
           .in("offer_id", allOfferIds)
           .order("created_at")
       : Promise.resolve({ data: [] }),
   ]);
 
-  const name = (pid: string) => {
-    if (pid === user!.id) return "You";
+  const name = (pid: string | null, fallback?: string | null) => {
+    if (!pid) return fallback ?? "DRVN member";
+    if (pid === user.id) return "You";
     const p = (people ?? []).find((x) => x.id === pid);
-    return p?.display_name ?? (p?.username ? `@${p.username}` : "User");
+    return p?.display_name ?? (p?.username ? `@${p.username}` : fallback ?? "DRVN member");
   };
-  const listingTitle = (lid: string) =>
+  const listingTitle = (lid: string | null) =>
     (offerListings ?? []).find((l) => l.id === lid)?.title ??
     (myListings ?? []).find((l) => l.id === lid)?.title ??
     "Listing";
-  const messagesFor = (offerId: string) =>
-    (offerMessages ?? []).filter((m) => m.offer_id === offerId);
-  const reviewedByMe = new Set(
-    (myReviews ?? []).filter((r) => r.reviewer_id === user!.id).map((r) => r.order_id)
-  );
 
-  const purchases = (orders ?? []).filter((o) => o.buyer_id === user!.id);
-  const sales = (orders ?? []).filter((o) => o.seller_id === user!.id);
-  const openIncoming = (incomingOffers ?? []).filter((o) => o.status === "open").length;
+  const toOfferView = (offer: (typeof allOffers)[number]): OfferView => ({
+    id: offer.id,
+    listing_id: offer.listing_id,
+    listing_title: listingTitle(offer.listing_id),
+    buyer_id: offer.buyer_id,
+    buyer_name: name(offer.buyer_id),
+    amount_cents: offer.amount_cents,
+    counter_amount_cents: offer.counter_amount_cents,
+    status: offer.status,
+    expires_at: offer.expires_at,
+    messages: (offerMessages ?? [])
+      .filter((m) => m.offer_id === offer.id)
+      .map((m) => ({
+        id: m.id,
+        sender_id: m.sender_id,
+        sender_name: name(m.sender_id),
+        body: m.body,
+      })),
+  });
 
-  const OrderRow = ({ order, role }: { order: NonNullable<typeof orders>[number]; role: "buyer" | "seller" }) => (
-    <div className="jobrow">
+  const purchases = (orders ?? []).filter((o) => o.buyer_id === user.id);
+  const sales = (orders ?? []).filter((o) => o.seller_id === user.id);
+  const needsAnswer = (incomingOffers ?? []).filter((o) => o.status === "open").length;
+  const needsDispatch = sales.filter((o) => o.status === "paid").length;
+
+  const OrderRow = ({
+    order,
+    role,
+  }: {
+    order: NonNullable<typeof orders>[number];
+    role: "buyer" | "seller";
+  }) => (
+    <Link href={`/orders/${order.id}`} className="jobrow block transition-colors hover:bg-[color:var(--paper-deep)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
-          <StatusChip status={order.status} />
-          <span className="font-mono text-xs text-dim">
-            {new Date(order.created_at).toLocaleDateString()}
-          </span>
-        </span>
+        <OrderPipeline status={order.status} />
         <span className="kv font-medium">{formatPrice(order.total_cents)}</span>
       </div>
       <ul className="mt-2">
@@ -131,95 +140,23 @@ export default async function OrdersPage({
           .filter((i) => i.order_id === order.id)
           .map((i) => (
             <li key={i.id} className="flex justify-between gap-3 py-0.5">
-              <Link
-                href={`/listings/${i.listing_id}`}
-                className="order__name min-w-0 truncate !text-[14.5px] transition-colors hover:text-live"
-              >
-                {listingTitle(i.listing_id)}
-              </Link>
+              <span className="order__name min-w-0 truncate !text-[14.5px]">
+                {i.title ?? listingTitle(i.listing_id)}
+              </span>
               <span className="kv shrink-0 text-dim">{formatPrice(i.price_cents)}</span>
             </li>
           ))}
       </ul>
       <p className="order__meta mt-1">
         {role === "buyer"
-          ? `Seller — ${name(order.seller_id)} · money sits in the stub until delivery`
-          : `Buyer — ${name(order.buyer_id)} · fee ${formatPrice(order.platform_fee_cents)} · payout ${formatPrice(order.total_cents - order.platform_fee_cents)}`}
+          ? `Seller — ${name(order.seller_id, order.seller_label)}`
+          : `Buyer — ${name(order.buyer_id, order.buyer_label)} · payout ${formatPrice(
+              order.total_cents - order.platform_fee_cents
+            )}`}
+        {" · "}
+        {new Date(order.created_at).toLocaleDateString()}
       </p>
-      {["paid", "shipped", "completed"].includes(order.status) && !reviewedByMe.has(order.id) && (
-        <div className="mt-3 border-t border-[color:var(--rule-soft)] pt-3">
-          <ReviewForm
-            orderId={order.id}
-            revieweeName={role === "buyer" ? name(order.seller_id) : name(order.buyer_id)}
-          />
-        </div>
-      )}
-    </div>
-  );
-
-  const OfferRow = ({
-    offer,
-    incoming,
-  }: {
-    offer: NonNullable<typeof myOffers>[number];
-    incoming: boolean;
-  }) => (
-    <div className="jobrow">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
-          <StatusChip status={offer.status} />
-          <Link
-            href={`/listings/${offer.listing_id}`}
-            className="order__name min-w-0 truncate transition-colors hover:text-live"
-          >
-            {listingTitle(offer.listing_id)}
-          </Link>
-        </span>
-        <span className="kv shrink-0 font-medium">{formatPrice(offer.amount_cents)}</span>
-      </div>
-      {incoming && <p className="order__meta mt-0.5">@{name(offer.buyer_id)} makes the offer</p>}
-
-      {messagesFor(offer.id).length > 0 && (
-        <div className="thread mt-3 border-t border-[color:var(--rule-soft)] pt-2">
-          {messagesFor(offer.id).map((m) => (
-            <div key={m.id} className={`msg !py-1.5 ${m.sender_id === user!.id ? "msg--me" : ""}`}>
-              <span className="msg__who">{name(m.sender_id)}</span>
-              <p className="msg__body !text-[14px]">{m.body}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {offer.status === "open" && (
-        <div className="mt-3 flex flex-col gap-2 border-t border-[color:var(--rule-soft)] pt-3">
-          <form action={sendOfferMessage} className="composer__row">
-            <input type="hidden" name="offer_id" value={offer.id} />
-            <input name="body" required placeholder="Message…" className="ctl max-w-none flex-1 !py-2" />
-            <button type="submit" className="btn btn--ghost !py-2.5">
-              Send
-            </button>
-          </form>
-          {incoming && (
-            <div className="flex flex-wrap gap-2">
-              <form action={respondToOffer}>
-                <input type="hidden" name="offer_id" value={offer.id} />
-                <input type="hidden" name="decision" value="accepted" />
-                <button type="submit" className="btn btn--live">
-                  Accept {formatPrice(offer.amount_cents)}
-                </button>
-              </form>
-              <form action={respondToOffer}>
-                <input type="hidden" name="offer_id" value={offer.id} />
-                <input type="hidden" name="decision" value="declined" />
-                <button type="submit" className="btn btn--ghost">
-                  Pass
-                </button>
-              </form>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    </Link>
   );
 
   return (
@@ -227,12 +164,18 @@ export default async function OrdersPage({
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           Orders &amp; offers
-          {openIncoming > 0 && (
+          {needsAnswer > 0 && (
             <>
               {" · "}
               <span className="microlabel--live">
-                {openIncoming} offer{openIncoming === 1 ? "" : "s"} need an answer
+                {needsAnswer} offer{needsAnswer === 1 ? "" : "s"} need an answer
               </span>
+            </>
+          )}
+          {needsDispatch > 0 && (
+            <>
+              {" · "}
+              <span className="microlabel--live">{needsDispatch} to dispatch</span>
             </>
           )}
         </span>
@@ -240,8 +183,8 @@ export default async function OrdersPage({
           Work orders on the <span className="live-word">sheet.</span>
         </h1>
         <p className="sub">
-          Offers arrive as work orders — accept, counter in the thread, or pass. Money sits with
-          the stub provider until the part is confirmed.
+          Offers arrive as work orders — accept, counter, or pass. Open an order to track dispatch,
+          message the other party, or confirm it arrived.
         </p>
       </Rv>
 
@@ -251,7 +194,11 @@ export default async function OrdersPage({
             ✓
           </span>
           <h4>Order placed</h4>
-          <p>Payment was processed by the stub provider — no real charge.</p>
+          <p>
+            {skipped
+              ? `Some lines couldn't be included: ${skipped}.`
+              : "Open it to follow dispatch and delivery."}
+          </p>
         </div>
       )}
 
@@ -261,11 +208,11 @@ export default async function OrdersPage({
             <Rv className="tile">
               <div className="tile__head">
                 <span className="microlabel microlabel--ink">Offers on your listings</span>
-                {openIncoming > 0 && <span className="chip chip--live">{openIncoming} open</span>}
+                {needsAnswer > 0 && <span className="chip chip--live">{needsAnswer} open</span>}
               </div>
               <div className="rowlist">
                 {(incomingOffers ?? []).map((o) => (
-                  <OfferRow key={o.id} offer={o} incoming />
+                  <OfferRow key={o.id} offer={toOfferView(o)} incoming currentUserId={user.id} />
                 ))}
               </div>
             </Rv>
@@ -278,7 +225,12 @@ export default async function OrdersPage({
               </div>
               <div className="rowlist">
                 {(myOffers ?? []).map((o) => (
-                  <OfferRow key={o.id} offer={o} incoming={false} />
+                  <OfferRow
+                    key={o.id}
+                    offer={toOfferView(o)}
+                    incoming={false}
+                    currentUserId={user.id}
+                  />
                 ))}
               </div>
             </Rv>
@@ -292,7 +244,7 @@ export default async function OrdersPage({
               <h3>No offers in motion</h3>
               <p>
                 When an offer lands it arrives here as a work order — buyer, amount against your
-                ask, and a window that counts down.
+                ask, and a window that lapses in 72 hours.
               </p>
               <Link href="/marketplace" className="btn btn--ghost">
                 Browse the market
@@ -315,7 +267,7 @@ export default async function OrdersPage({
               </div>
             ) : (
               <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
-                No purchases yet — first payout lands here
+                No purchases yet
               </p>
             )}
           </Rv>
@@ -342,7 +294,7 @@ export default async function OrdersPage({
 
       <Foot
         left="DRVN / Livesheet — the clock is the contract"
-        right={<Link href="/cart">Your cart →</Link>}
+        right={<Link href="/sell">List a part →</Link>}
       />
     </div>
   );

@@ -177,7 +177,7 @@ export function SellForm({
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
         {uploadError && (
-          <p className="field__err" style={{ display: "flex" }}>
+          <p role="alert" aria-live="polite" className="field__err">
             {uploadError}
           </p>
         )}
@@ -228,7 +228,7 @@ export function SellForm({
       </Section>
 
       {state.error && (
-        <p className="field__err" style={{ display: "flex" }}>
+        <p role="alert" aria-live="polite" className="field__err">
           {state.error}
         </p>
       )}

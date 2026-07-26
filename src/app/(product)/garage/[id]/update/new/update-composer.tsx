@@ -255,7 +255,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
                     className={inputClass}
                   />
                   {block.url && !block.videoId && (
-                    <p className="field__err mt-2" style={{ display: "flex" }}>That doesn&apos;t look like a YouTube link.</p>
+                    <p role="alert" aria-live="polite" className="field__err mt-2">That doesn&apos;t look like a YouTube link.</p>
                   )}
                   {block.videoId && (
                     <iframe
@@ -275,7 +275,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
       </div>
 
       {(state.error || uploadError) && (
-        <p className="field__err mt-3" style={{ display: "flex" }}>{state.error ?? uploadError}</p>
+        <p role="alert" aria-live="polite" className="field__err mt-3">{state.error ?? uploadError}</p>
       )}
 
       <div className="mt-8 flex items-center justify-end gap-3 border-t border-[color:var(--rule-mid)] pt-5">

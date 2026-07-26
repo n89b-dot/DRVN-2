@@ -31,7 +31,7 @@ export function OnboardingForm({ email }: { email: string }) {
             under it.
           </span>
           {state.error && (
-            <span className="field__err" style={{ display: "flex" }}>
+            <span role="alert" aria-live="polite" className="field__err">
               {state.error}
             </span>
           )}

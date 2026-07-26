@@ -76,7 +76,7 @@ export function ProfileEditor({
                 <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl max-w-none" />
               </div>
               {state.error && (
-                <p className="field__err" style={{ display: "flex" }}>
+                <p role="alert" aria-live="polite" className="field__err">
                   {state.error}
                 </p>
               )}

@@ -53,7 +53,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           />
           <span className="field__hint">Case matters. Nothing else does.</span>
           {state.error && (
-            <span className="field__err" style={{ display: "flex" }}>
+            <span role="alert" aria-live="polite" className="field__err">
               {state.error}
             </span>
           )}

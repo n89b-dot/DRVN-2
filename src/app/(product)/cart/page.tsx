@@ -1,13 +1,16 @@
+import { randomUUID } from "node:crypto";
+
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { Foot, Media } from "@/components/ui";
 import { getCartIds } from "@/lib/cart";
 import { formatPrice, platformFeeCents } from "@/lib/payments/fee";
+import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
-import { checkoutCart, removeFromCart } from "@/features/commerce/actions";
-import { CheckoutButton } from "./checkout-button";
+import { removeFromCart } from "@/features/commerce/actions";
+import { CheckoutForm } from "./checkout-form";
 
 export const metadata = { title: "Cart - DRVN" };
 
@@ -15,16 +18,36 @@ export default async function CartPage() {
   const ids = await getCartIds();
   const supabase = await createClient();
 
-  const { data: listings } = ids.length
+  const { data: listings, error } = ids.length
     ? await supabase
         .from("listings")
-        .select("id, title, price_cents, status, seller_id")
+        .select(
+          "id, title, price_cents, shipping_cents, allows_collection, currency, status, seller_id"
+        )
         .in("id", ids)
-    : { data: [] };
+    : { data: [], error: null };
+
+  if (error) {
+    console.error("[cart] failed to load listings", error);
+  }
 
   const active = (listings ?? []).filter((l) => l.status === "active");
-  const subtotal = active.reduce((sum, l) => sum + l.price_cents, 0);
-  const fee = platformFeeCents(subtotal);
+
+  // Sellers are separate orders, so show the split *before* paying rather than
+  // surprising the buyer with N orders afterwards.
+  const sellerIds = [...new Set(active.map((l) => l.seller_id))];
+  const { data: sellers } = sellerIds.length
+    ? await supabase.from("profiles").select("id, display_name, username").in("id", sellerIds)
+    : { data: [] };
+  const sellerName = (id: string) => {
+    const seller = sellers?.find((s) => s.id === id);
+    return seller?.display_name ?? (seller?.username ? `@${seller.username}` : "Seller");
+  };
+
+  const goods = active.reduce((sum, l) => sum + l.price_cents, 0);
+  const shipping = active.reduce((sum, l) => sum + (l.shipping_cents ?? 0), 0);
+  const fee = platformFeeCents(goods);
+  const total = goods + shipping;
 
   const listingIds = active.map((l) => l.id);
   const { data: images } = listingIds.length
@@ -38,6 +61,10 @@ export default async function CartPage() {
   for (const img of images ?? []) {
     if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
   }
+
+  // Anything in the cookie that is no longer buyable — say so instead of
+  // quietly dropping it at checkout.
+  const unavailable = (listings ?? []).filter((l) => l.status !== "active");
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
@@ -61,65 +88,109 @@ export default async function CartPage() {
         </Rv>
       ) : (
         <section className="deck">
-          <Rv className="tile">
-            <div className="rowlist">
-              {active.map((listing) => (
-                <div key={listing.id} className="order">
-                  <span className="order__img">
-                    <Media
-                      src={cover.get(listing.id) ?? undefined}
-                      alt={listing.title}
-                      className="h-full w-full"
-                    />
-                  </span>
-                  <span className="min-w-0">
-                    <Link
-                      href={`/listings/${listing.id}`}
-                      className="order__name block truncate transition-colors hover:text-live"
-                    >
-                      {listing.title}
-                    </Link>
-                    <span className="order__meta block">{formatPrice(listing.price_cents)}</span>
-                  </span>
-                  <span className="order__actions">
-                    <form action={removeFromCart}>
-                      <input type="hidden" name="listing_id" value={listing.id} />
-                      <button type="submit" className="relbtn !static">
-                        Remove
-                      </button>
-                    </form>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </Rv>
+          {unavailable.length > 0 && (
+            <Rv className="alert">
+              <h4>Some lines are no longer available</h4>
+              <p>
+                {unavailable.map((l) => l.title).join(", ")} — sold or withdrawn since you added
+                {unavailable.length === 1 ? " it" : " them"}. Not included below.
+              </p>
+            </Rv>
+          )}
 
-          <Rv className="tile tile--deep" stagger={1}>
+          {sellerIds.map((sellerId, index) => {
+            const lines = active.filter((l) => l.seller_id === sellerId);
+            const sellerGoods = lines.reduce((sum, l) => sum + l.price_cents, 0);
+            const sellerShipping = lines.reduce((sum, l) => sum + (l.shipping_cents ?? 0), 0);
+
+            return (
+              <Rv key={sellerId} className="tile" stagger={index}>
+                <span className="microlabel microlabel--ink">
+                  From {sellerName(sellerId)} · one order
+                </span>
+                <div className="rowlist mt-2">
+                  {lines.map((listing) => (
+                    <div key={listing.id} className="order">
+                      <span className="order__img">
+                        <Media
+                          src={cover.get(listing.id) ?? undefined}
+                          alt={listing.title}
+                          className="h-full w-full"
+                        />
+                      </span>
+                      <span className="min-w-0">
+                        <Link
+                          href={`/listings/${listing.id}`}
+                          className="order__name block truncate transition-colors hover:text-live"
+                        >
+                          {listing.title}
+                        </Link>
+                        <span className="order__meta block">
+                          {formatPrice(listing.price_cents)}
+                          {listing.shipping_cents > 0
+                            ? ` + ${formatPrice(listing.shipping_cents)} shipping`
+                            : " · free shipping"}
+                        </span>
+                      </span>
+                      <span className="order__actions">
+                        <form action={removeFromCart}>
+                          <input type="hidden" name="listing_id" value={listing.id} />
+                          <button type="submit" className="relbtn !static">
+                            Remove
+                          </button>
+                        </form>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="spec-note">
+                  Subtotal {formatPrice(sellerGoods)}
+                  {sellerShipping > 0 ? ` · shipping ${formatPrice(sellerShipping)}` : ""}
+                </p>
+              </Rv>
+            );
+          })}
+
+          <Rv className="tile tile--deep" stagger={sellerIds.length}>
             <span className="microlabel microlabel--ink">The math on the sheet</span>
             <div className="mt-2">
               <div className="sheet__row">
-                <span>Subtotal</span>
-                <b>{formatPrice(subtotal)}</b>
+                <span>Parts</span>
+                <b>{formatPrice(goods)}</b>
+              </div>
+              <div className="sheet__row">
+                <span>Shipping</span>
+                <b>{shipping > 0 ? formatPrice(shipping) : "Free"}</b>
               </div>
               <div className="sheet__row sheet__total">
                 <span>You pay</span>
-                <b>{formatPrice(subtotal)}</b>
+                <b>{formatPrice(total)}</b>
               </div>
             </div>
             <p className="spec-note">
-              You pay the listed price — DRVN&apos;s 10% fee ({formatPrice(fee)}) is deducted from
-              the seller&apos;s payout. <b>Payments are stubbed in this build</b> — no real charge
-              is made.
+              DRVN&apos;s 10% fee ({formatPrice(fee)}) comes out of the seller&apos;s payout, not
+              your total. Shipping passes through untouched.
+              {sellerIds.length > 1 && (
+                <>
+                  {" "}
+                  This basket covers {sellerIds.length} sellers, so it becomes{" "}
+                  {sellerIds.length} separate orders.
+                </>
+              )}
             </p>
-            <div className="mt-4">
-              <CheckoutButton action={checkoutCart} />
-            </div>
+
+            <CheckoutForm
+              idempotencyKey={randomUUID()}
+              allowsCollection={active.every((l) => l.allows_collection)}
+              total={formatPrice(total)}
+              paymentsAreLive={paymentsAreLive()}
+            />
           </Rv>
         </section>
       )}
 
       <Foot
-        left="DRVN / Livesheet — money sits in the stub until you say otherwise"
+        left="DRVN / Livesheet — nothing is charged until you confirm"
         right={<Link href="/orders">Your orders →</Link>}
       />
     </div>

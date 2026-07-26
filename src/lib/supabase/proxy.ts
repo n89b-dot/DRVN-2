@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { hasSupabaseConfig, isProduction } from "@/lib/env";
+
 const PRODUCT_PREFIXES = [
   "/home",
   "/garage",
@@ -15,15 +17,45 @@ const PRODUCT_PREFIXES = [
 
 const AUTH_PAGES = ["/login", "/signup"];
 
+function isProductPath(pathname: string) {
+  return PRODUCT_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
+/**
+ * Fail closed. If we cannot establish who the caller is, a product route must
+ * not render — previously this path returned the request unchanged, so a
+ * misconfigured or unreachable Supabase left every authed route ungated.
+ * Public routes still pass through: they show nothing a visitor shouldn't see.
+ */
+function denyProductRoutes(request: NextRequest, response: NextResponse, reason: string) {
+  const { pathname } = request.nextUrl;
+  if (!isProductPath(pathname)) return response;
+
+  console.error(`[proxy] refusing ${pathname}: ${reason}`);
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  url.searchParams.set("next", pathname);
+  url.searchParams.set("error", "session-unavailable");
+  return NextResponse.redirect(url);
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey || !supabaseUrl.startsWith("http")) {
+  if (!hasSupabaseConfig()) {
+    // Local dev without env vars should stay browsable; a deployed environment
+    // missing its credentials is a misconfiguration, not a mode of operation.
+    if (isProduction) {
+      return denyProductRoutes(request, supabaseResponse, "Supabase env vars are missing");
+    }
     return supabaseResponse;
   }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
@@ -45,14 +77,12 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
   } catch (error) {
-    console.warn("Unable to reach Supabase while refreshing session", error);
-    return supabaseResponse;
+    console.error("[proxy] unable to reach Supabase while refreshing session", error);
+    return denyProductRoutes(request, supabaseResponse, "Supabase was unreachable");
   }
 
   const { pathname } = request.nextUrl;
-  const isProductRoute = PRODUCT_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-  );
+  const isProductRoute = isProductPath(pathname);
   const isAuthPage = AUTH_PAGES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );

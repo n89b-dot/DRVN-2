@@ -1,28 +1,48 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
 
-export type AuthState = { error?: string };
+export type AuthState = { error?: string; ok?: string };
+
+/**
+ * Where a signed-in user belongs. Onboarding writes `username`, so a null
+ * username means onboarding never completed — which used to be reachable by
+ * signing up with email/password and then logging in through /login, leaving
+ * the account permanently without a username and every /u/ link broken.
+ */
+async function destinationForUser(userId: string, requested?: unknown): Promise<string> {
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", userId)
+    .single();
+
+  if (!profile?.username) return "/onboarding";
+  return safeRedirectPath(requested, "/home");
+}
 
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/home");
+  const next = formData.get("next");
 
   if (!email || !password) {
     return { error: "Email and password are required." };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     return { error: error.message };
   }
 
-  redirect(next.startsWith("/") ? next : "/home");
+  redirect(await destinationForUser(data.user.id, next));
 }
 
 export async function signup(_prev: AuthState, formData: FormData): Promise<AuthState> {
@@ -72,6 +92,9 @@ export async function completeOnboarding(
   if (!displayName) {
     return { error: "Display name is required." };
   }
+  if (displayName.length > 80) {
+    return { error: "Display name must be 80 characters or fewer." };
+  }
 
   const supabase = await createClient();
   const {
@@ -93,6 +116,51 @@ export async function completeOnboarding(
     }
     return { error: error.message };
   }
+
+  redirect("/home");
+}
+
+// ---------- Password reset ----------
+
+/**
+ * Always reports success. Telling an anonymous caller whether an address is
+ * registered would turn this into an account-enumeration oracle.
+ */
+export async function requestPasswordReset(
+  _prev: AuthState,
+  formData: FormData
+): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim();
+  if (!email) return { error: "Enter the email address on your account." };
+
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin") ?? "";
+
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/login/reset`,
+  });
+
+  return { ok: "If that address has an account, a reset link is on its way." };
+}
+
+/** Runs with the recovery session established by the emailed link. */
+export async function updatePassword(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "Those passwords don't match." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "This reset link has expired. Request a new one." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
 
   redirect("/home");
 }

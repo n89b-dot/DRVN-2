@@ -84,7 +84,7 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
         </div>
       ))}
       {state.error && (
-        <p className="field__err mt-3" style={{ display: "flex" }}>
+        <p role="alert" aria-live="polite" className="field__err mt-3">
           {state.error}
         </p>
       )}
@@ -193,7 +193,7 @@ export function SettingsPanel({
               <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl" />
             </CtlLine>
             {state.error && (
-              <p className="field__err mt-3" style={{ display: "flex" }}>
+              <p role="alert" aria-live="polite" className="field__err mt-3">
                 {state.error}
               </p>
             )}

@@ -66,7 +66,7 @@ export function CarDetailsForm({ car }: { car: Car }) {
           Public sheet — anyone can read it
         </label>
         {state.error && (
-          <p className="field__err" style={{ display: "flex" }}>
+          <p role="alert" aria-live="polite" className="field__err">
             {state.error}
           </p>
         )}

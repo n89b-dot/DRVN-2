@@ -110,7 +110,7 @@ export function ActivityEngagement({
       </div>
 
       {state.error && (
-        <p className="field__err mt-2" style={{ display: "flex" }}>
+        <p role="alert" aria-live="polite" className="field__err mt-2">
           {state.error}
         </p>
       )}
