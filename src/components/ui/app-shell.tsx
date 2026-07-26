@@ -75,11 +75,15 @@ export function AppShell({
   signedIn,
   initialNight,
   initialRailOpen,
+  cartCount = 0,
+  unreadCount = 0,
   children,
 }: {
   signedIn: boolean;
   initialNight: boolean;
   initialRailOpen: boolean;
+  cartCount?: number;
+  unreadCount?: number;
   children: ReactNode;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
@@ -98,7 +102,12 @@ export function AppShell({
     >
       {signedIn && <AppRail open={railOpen} onToggle={toggleRail} />}
       <div className="shell__body">
-        <LivesheetBar initialNight={initialNight} signedIn={signedIn} />
+        <LivesheetBar
+          initialNight={initialNight}
+          signedIn={signedIn}
+          cartCount={cartCount}
+          unreadCount={unreadCount}
+        />
         <main className="min-w-0">{children}</main>
       </div>
     </div>

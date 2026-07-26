@@ -18,7 +18,8 @@ export type IconName =
   | "smile"
   | "sun"
   | "moon"
-  | "rail";
+  | "rail"
+  | "cart";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -53,6 +54,13 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
     ),
     moon: <path d="M20.5 13.4A8.5 8.5 0 1 1 10.6 3.5a6.7 6.7 0 0 0 9.9 9.9Z" />,
     // The margin column of a drawing — the register rail.
+    cart: (
+      <>
+        <path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.2a1 1 0 0 0 1-.77L20 7H6" />
+        <circle cx="9.5" cy="19" r="1.4" />
+        <circle cx="17" cy="19" r="1.4" />
+      </>
+    ),
     rail: (
       <>
         <rect x="3" y="4.5" width="18" height="15" rx="2" />

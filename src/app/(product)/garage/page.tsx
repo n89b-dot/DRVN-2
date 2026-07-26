@@ -59,6 +59,14 @@ export default async function GaragePage() {
                   </span>
                   <span className="order__actions">
                     {!car.is_public && <span className="chip">Private</span>}
+                    {/* The page's own copy promises releasing parts straight off
+                        a build line; until now there was no way to do it. */}
+                    <Link href={`/sell?car=${car.id}`} className="btn btn--live">
+                      Release a part
+                    </Link>
+                    <Link href={`/garage/${car.id}/update/new`} className="btn btn--ghost">
+                      Add update
+                    </Link>
                     <Link href={`/garage/${car.id}/edit`} className="btn btn--ghost">
                       Manage
                     </Link>

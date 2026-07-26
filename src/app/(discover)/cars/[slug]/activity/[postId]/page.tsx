@@ -108,7 +108,22 @@ export default async function ActivityDetailPage({
       </Link>
 
       <header className="pagehead !pt-6">
-        <span className="microlabel">Build entry — filed on the sheet</span>
+        <span className="microlabel">
+          Build entry — filed on the sheet
+          {/* Owner controls: the public post page previously offered none, so a
+              filed entry could not be reached from where you were reading it. */}
+          {user?.id === car.owner_id && (
+            <>
+              {" · "}
+              <Link
+                href={`/garage/${car.id}/update/${post.id}/edit`}
+                className="hover:text-live"
+              >
+                edit this entry →
+              </Link>
+            </>
+          )}
+        </span>
         <div className="mt-2 flex items-center gap-3">
           <Avatar size="h-11 w-11 text-sm" initials={initials} />
           <h1 className="!mt-0 !text-[clamp(22px,3vw,32px)]">{post.title}</h1>

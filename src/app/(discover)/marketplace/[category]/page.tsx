@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, ListingCard } from "@/components/ui";
+import { Foot } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
+import { MarketplaceResults } from "../results";
 import { FilterBar } from "../filter-bar";
 
 export default async function CategoryPage({
@@ -26,7 +27,7 @@ export default async function CategoryPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const listings = await fetchListings(
+  const page = await fetchListings(
     supabase,
     { ...filters, category: category.slug, subcategory: filters.subcategory },
     user?.id
@@ -39,7 +40,7 @@ export default async function CategoryPage({
           <Link href="/marketplace" className="hover:text-live">
             Market
           </Link>{" "}
-          / {category.label} · {listings.length} showing
+          / {category.label} · {page.total} listed
         </span>
         <h1>{category.label}</h1>
       </Rv>
@@ -60,27 +61,11 @@ export default async function CategoryPage({
       </div>
 
       <section className="deck">
-        {listings.length > 0 ? (
-          <div className="mkt">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
-        ) : (
-          <div className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ⌕
-            </span>
-            <h3>Nothing in {category.label} right now</h3>
-            <p>
-              The moment a {category.label.toLowerCase()} line is released off a sheet it lands
-              here. Widen the filter, or check the whole market.
-            </p>
-            <Link href="/marketplace" className="btn btn--ghost">
-              Back to the market
-            </Link>
-          </div>
-        )}
+        <MarketplaceResults
+          page={page}
+          basePath={`/marketplace/${category.slug}`}
+          params={filters as Record<string, string | undefined>}
+        />
       </section>
 
       <Foot left={`DRVN / Livesheet — market / ${category.label.toLowerCase()}`} right={<Link href="/marketplace">← The market</Link>} />

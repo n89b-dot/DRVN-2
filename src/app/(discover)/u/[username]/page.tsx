@@ -45,19 +45,29 @@ export async function generateMetadata({
   };
 }
 
+const TAB_KEYS = ["about", "forsale", "reviews", "activity"];
+
 export default async function PublicProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { username } = await params;
+  const { view: viewParam } = await searchParams;
   const supabase = await createClient();
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("username", username)
-    .single();
+    .maybeSingle();
+
+  if (error) {
+    console.error("[profile] failed to load", { username, error });
+    throw new Error("Could not load this keeper sheet");
+  }
   if (!profile) notFound();
 
   const {
@@ -83,7 +93,17 @@ export default async function PublicProfilePage({
   return (
     <NarrowColumn>
       <div className="pagehead !pb-4">
-        <span className="microlabel">Keeper sheet — public</span>
+        <span className="microlabel">
+          Keeper sheet — public
+          {view.rating !== null && (
+            <>
+              {" · "}
+              {view.rating}★ from {view.reviewCount} review{view.reviewCount === 1 ? "" : "s"}
+            </>
+          )}
+          {view.salesCount > 0 && <> · {view.salesCount} sold</>}
+          {view.followerCount > 0 && <> · {view.followerCount} watching</>}
+        </span>
       </div>
       <ProfileHeader
         initials={initialsFrom(name)}
@@ -108,7 +128,12 @@ export default async function PublicProfilePage({
           ) : undefined
         }
       />
-      <ProfileBody bio={profile.bio} view={view} contactLinks={rest} />
+      <ProfileBody
+        bio={profile.bio}
+        view={view}
+        contactLinks={rest}
+        initialTab={viewParam && TAB_KEYS.includes(viewParam) ? viewParam : undefined}
+      />
     </NarrowColumn>
   );
 }

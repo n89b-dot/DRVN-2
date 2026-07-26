@@ -1,0 +1,141 @@
+"use client";
+
+import Link from "next/link";
+import { useActionState, useState } from "react";
+
+import {
+  deleteActivityPost,
+  updateActivityPost,
+  type ActionState,
+} from "../../../../actions";
+
+export function PostEditor({
+  carId,
+  postId,
+  title,
+  intro,
+  videoUrl,
+  plainText,
+  isRich,
+  publicHref,
+}: {
+  carId: string;
+  postId: string;
+  title: string;
+  intro: string;
+  videoUrl: string;
+  plainText: string;
+  /** True when the body holds image/multi-block content the simple editor won't touch. */
+  isRich: boolean;
+  publicHref: string | null;
+}) {
+  const [state, action, pending] = useActionState<ActionState, FormData>(updateActivityPost, {});
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  return (
+    <div className="deck">
+      <form action={action} className="tile flex flex-col gap-3">
+        <input type="hidden" name="post_id" value={postId} />
+
+        <label className="field !mb-0">
+          <span className="microlabel">Title</span>
+          <input
+            name="title"
+            required
+            maxLength={160}
+            defaultValue={title}
+            className="ctl max-w-none"
+          />
+        </label>
+
+        <label className="field !mb-0">
+          <span className="microlabel">Standfirst — optional</span>
+          <input name="intro" maxLength={2000} defaultValue={intro} className="ctl max-w-none" />
+        </label>
+
+        {isRich ? (
+          <p className="spec-note">
+            This entry was written in the full editor and holds photos and multiple blocks. Its
+            content is left untouched here — use the full editor to change it.
+          </p>
+        ) : (
+          <label className="field !mb-0">
+            <span className="microlabel">What happened</span>
+            <textarea name="body" rows={5} defaultValue={plainText} className="ctl !max-w-none" />
+          </label>
+        )}
+
+        <label className="field !mb-0">
+          <span className="microlabel">Video — optional</span>
+          <input
+            name="video_url"
+            type="url"
+            defaultValue={videoUrl}
+            placeholder="https://youtube.com/…"
+            className="ctl max-w-none"
+          />
+          <span className="field__hint">YouTube links only.</span>
+        </label>
+
+        {state.error && (
+          <p role="alert" aria-live="polite" className="field__err">
+            {state.error}
+          </p>
+        )}
+        {state.ok && (
+          <p role="status" aria-live="polite" className="chip chip--ok">
+            {state.ok}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {publicHref ? (
+            <Link href={publicHref} className="jumplink">
+              View the public entry →
+            </Link>
+          ) : (
+            <span />
+          )}
+          <button type="submit" disabled={pending} className="btn btn--live">
+            {pending ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </form>
+
+      <section className="tile">
+        <span className="microlabel microlabel--ink">Remove this entry</span>
+        <p className="spec-note">
+          Deleting takes it off the car sheet and the feed, along with its photos and any comments.
+        </p>
+        <div className="mt-3">
+          {confirmingDelete ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                className="btn btn--ghost"
+              >
+                Keep it
+              </button>
+              <form action={deleteActivityPost}>
+                <input type="hidden" name="post_id" value={postId} />
+                <input type="hidden" name="car_id" value={carId} />
+                <button type="submit" className="btn btn--live">
+                  Delete permanently
+                </button>
+              </form>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              className="relbtn !static"
+            >
+              Delete this entry
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}

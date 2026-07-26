@@ -23,6 +23,7 @@ export const BAR_ROUTES: BarRoute[] = [
 
 // Icon-only in the bar at every width — the furniture that stays to hand.
 const UTILITY_ROUTES: IconRoute[] = [
+  { href: "/cart", label: "Cart", note: "Lines waiting to be confirmed", icon: "cart" },
   { href: "/notifications", label: "Notifications", note: "What the bell knows", icon: "bell" },
   { href: "/saved", label: "Saved", note: "Everything you're watching", icon: "bookmark" },
   { href: "/settings", label: "Settings", note: "Your sheet, configured", icon: "settings" },
@@ -53,9 +54,14 @@ function ThemeToggle({ night, toggle }: { night: boolean; toggle: () => void }) 
 export function LivesheetBar({
   initialNight = false,
   signedIn = true,
+  cartCount = 0,
+  unreadCount = 0,
 }: {
   initialNight?: boolean;
   signedIn?: boolean;
+  /** Rendered as a badge so a filled cart is visible from anywhere. */
+  cartCount?: number;
+  unreadCount?: number;
 }) {
   const pathname = usePathname();
   const [night, setNight] = useState(initialNight);
@@ -128,24 +134,37 @@ export function LivesheetBar({
               ))}
 
             {signedIn &&
-              UTILITY_ROUTES.map((route) => (
-                <Link
-                  key={route.href}
-                  href={route.href}
-                  className={cx(
-                    "bar__link",
-                    "bar__link--ico",
-                    // Settings folds into the index on phones — it's a
-                    // destination you visit, not furniture you reach for.
-                    route.href === "/settings" && "bar__link--roomy",
-                    isActive(route.href) && "is-active",
-                  )}
-                  aria-label={route.label}
-                  title={route.label}
-                >
-                  <Icon name={route.icon} className="h-[17px] w-[17px]" />
-                </Link>
-              ))}
+              UTILITY_ROUTES.map((route) => {
+                const badge =
+                  route.href === "/cart"
+                    ? cartCount
+                    : route.href === "/notifications"
+                      ? unreadCount
+                      : 0;
+                return (
+                  <Link
+                    key={route.href}
+                    href={route.href}
+                    className={cx(
+                      "bar__link",
+                      "bar__link--ico",
+                      // Settings folds into the index on phones — it's a
+                      // destination you visit, not furniture you reach for.
+                      route.href === "/settings" && "bar__link--roomy",
+                      isActive(route.href) && "is-active",
+                    )}
+                    aria-label={badge > 0 ? `${route.label} (${badge})` : route.label}
+                    title={route.label}
+                  >
+                    <Icon name={route.icon} className="h-[17px] w-[17px]" />
+                    {badge > 0 && (
+                      <span className="barbadge" aria-hidden="true">
+                        {badge > 9 ? "9+" : badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
 
             <ThemeToggle night={night} toggle={toggleTheme} />
 

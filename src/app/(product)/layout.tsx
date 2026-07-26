@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
+import { loadShellCounts } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function ProductLayout({ children }: { children: ReactNode }) {
@@ -21,8 +22,16 @@ export default async function ProductLayout({ children }: { children: ReactNode 
   const night = jar.get("ls-theme")?.value === "night";
   const railOpen = jar.get("ls-rail")?.value !== "closed";
 
+  const { cartCount, unreadCount } = await loadShellCounts(supabase, user.id);
+
   return (
-    <AppShell signedIn initialNight={night} initialRailOpen={railOpen}>
+    <AppShell
+      signedIn
+      initialNight={night}
+      initialRailOpen={railOpen}
+      cartCount={cartCount}
+      unreadCount={unreadCount}
+    >
       {children}
     </AppShell>
   );

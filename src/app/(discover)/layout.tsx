@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
+import { loadShellCounts } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 // Public discovery surfaces (Explore, Marketplace, car and listing sheets) are
@@ -17,8 +18,16 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
   const night = jar.get("ls-theme")?.value === "night";
   const railOpen = jar.get("ls-rail")?.value !== "closed";
 
+  const { cartCount, unreadCount } = await loadShellCounts(supabase, user?.id ?? null);
+
   return (
-    <AppShell signedIn={Boolean(user)} initialNight={night} initialRailOpen={railOpen}>
+    <AppShell
+      signedIn={Boolean(user)}
+      initialNight={night}
+      initialRailOpen={railOpen}
+      cartCount={cartCount}
+      unreadCount={unreadCount}
+    >
       {children}
     </AppShell>
   );

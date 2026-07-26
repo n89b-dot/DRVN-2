@@ -327,6 +327,24 @@ video {
   .bar__cta {
     margin-left: 4px;
   }
+  /* Count badge on cart and notifications. A number in the signal colour is
+     legitimate here: it *is* something live — parts waiting, or news unread. */
+  .barbadge {
+    position: absolute;
+    top: 3px;
+    right: 2px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: var(--live);
+    color: var(--on-ink);
+    font-family: var(--mono);
+    font-size: 9.5px;
+    line-height: 15px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
   .bar__link .dot {
     position: absolute;
     top: 6px;

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 
 import {
   HorizontalGallery,
   LinkedTitle,
   SectionHeading,
-  TabNav,
+  SheetTabs,
   TimelineRow,
+  type SheetTab,
 } from "@/components/ui";
 import type { ProfileView } from "@/lib/profile-data";
 
@@ -28,7 +29,9 @@ function VehicleRows({ view }: { view: ProfileView }) {
         </TimelineRow>
       ))}
       {view.vehicles.length === 0 && (
-        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">No cars yet</p>
+        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+          No cars yet
+        </p>
       )}
     </div>
   );
@@ -49,77 +52,170 @@ function ActivityRows({ view }: { view: ProfileView }) {
         </TimelineRow>
       ))}
       {view.activity.length === 0 && (
-        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">No entries</p>
+        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+          No entries
+        </p>
       )}
+    </div>
+  );
+}
+
+/** The shopfront. A seller profile without this can't answer "what else have you got?". */
+function ListingRows({ view }: { view: ProfileView }) {
+  if (view.listings.length === 0) {
+    return (
+      <div className="undrawn mt-5">
+        <span className="undrawn__mark" aria-hidden="true">
+          ⌕
+        </span>
+        <h3>Nothing for sale right now</h3>
+        <p>Parts released from these cars will show up here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rowlist mt-4">
+      {view.listings.map((listing) => (
+        <Link key={listing.id} href={`/listings/${listing.id}`} className="order">
+          <span className="order__img">
+            {listing.cover ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={listing.cover} alt={listing.title} className="h-full w-full object-cover" />
+            ) : null}
+          </span>
+          <span className="min-w-0">
+            <span className="order__name block truncate">{listing.title}</span>
+            <span className="order__meta block">{listing.price}</span>
+          </span>
+          <span className="order__actions">
+            <span className={`chip ${listing.status === "active" ? "chip--live" : "chip--spent"}`}>
+              {listing.status === "active" ? "Live" : listing.status}
+            </span>
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** Reviews were written and displayed nowhere but a single average number. */
+function ReviewRows({ view }: { view: ProfileView }) {
+  if (view.reviews.length === 0) {
+    return (
+      <div className="undrawn mt-5">
+        <span className="undrawn__mark" aria-hidden="true">
+          ✎
+        </span>
+        <h3>No reviews yet</h3>
+        <p>Reviews appear once a trade is completed and the buyer confirms delivery.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      {view.reviews.map((review) => (
+        <article key={review.id} className="review">
+          <div className="review__head">
+            <span className="review__stars" aria-label={`${review.rating} out of 5`}>
+              {"★".repeat(review.rating)}
+              <span className="text-dim">{"★".repeat(5 - review.rating)}</span>
+            </span>
+            <span className="microlabel">
+              {review.reviewerUsername ? (
+                <Link href={`/u/${review.reviewerUsername}`} className="hover:text-live">
+                  {review.reviewerName}
+                </Link>
+              ) : (
+                review.reviewerName
+              )}{" "}
+              · {review.date}
+            </span>
+          </div>
+          {review.body && <p className="mt-1 max-w-[62ch] text-[15px] leading-7">{review.body}</p>}
+        </article>
+      ))}
     </div>
   );
 }
 
 /**
- * Profile page body per the Figma reference (346:5190): About | Activity tabs;
- * About = bio → Vehicles timeline (square thumbs, color line) → Activity
- * timeline (wide thumbs) → Contact label/value rows. Activity tab = full log.
+ * Profile body: About / For sale / Reviews / Activity.
+ *
+ * Now on SheetTabs, so tab state is real and URL-backed (`?view=`) — linking
+ * someone to a seller's listings or reviews is a thing people do, and the
+ * previous client-only state made it impossible.
  */
 export function ProfileBody({
   bio,
   view,
   contactLinks,
+  initialTab,
 }: {
   bio: string | null;
   view: ProfileView;
   contactLinks: ProfileLink[];
+  initialTab?: string;
 }) {
-  const [tab, setTab] = useState("About");
+  const aboutPanel = (
+    <div className="mt-8 grid gap-12">
+      {bio && <p className="max-w-[62ch] text-[15px] leading-7">{bio}</p>}
 
-  return (
-    <div>
-      <div className="mt-8">
-        <TabNav tabs={["About", "Activity"]} active={tab} onChange={setTab} />
-      </div>
+      <section>
+        <SectionHeading>Vehicles</SectionHeading>
+        <VehicleRows view={view} />
+      </section>
 
-      {tab === "About" ? (
-        <div className="mt-8 grid gap-12">
-          {bio && <p className="max-w-[62ch] text-[15px] leading-7">{bio}</p>}
-
-          <section>
-            <SectionHeading>Vehicles</SectionHeading>
-            <VehicleRows view={view} />
-          </section>
-
-          {view.activity.length > 0 && (
-            <section>
-              <SectionHeading>Activity</SectionHeading>
-              <ActivityRows view={view} />
-            </section>
-          )}
-
-          {contactLinks.length > 0 && (
-            <section>
-              <SectionHeading>Contact</SectionHeading>
-              <div className="mt-2">
-                {contactLinks.map((link) => (
-                  <div key={link.label} className="bline">
-                    <span className="bline__label">{link.label}</span>
-                    <a
-                      href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="bline__val !text-[15px] transition-colors hover:text-live"
-                    >
-                      {link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
-                    </a>
-                  </div>
-                ))}
+      {contactLinks.length > 0 && (
+        <section>
+          <SectionHeading>Contact</SectionHeading>
+          <div className="mt-2">
+            {contactLinks.map((link) => (
+              <div key={link.label} className="bline">
+                <span className="bline__label">{link.label}</span>
+                <a
+                  href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="bline__val !text-[15px] transition-colors hover:text-live"
+                >
+                  {link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
+                </a>
               </div>
-            </section>
-          )}
-        </div>
-      ) : (
-        <div className="mt-8">
-          <ActivityRows view={view} />
-        </div>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );
-}
 
+  const tabs: SheetTab[] = [
+    { key: "about", label: "About", panel: aboutPanel },
+    {
+      key: "forsale",
+      label: "For sale",
+      count: view.listings.filter((l) => l.status === "active").length || null,
+      live: true,
+      panel: <ListingRows view={view} />,
+    },
+    {
+      key: "reviews",
+      label: "Reviews",
+      count: view.reviewCount || null,
+      panel: <ReviewRows view={view} />,
+    },
+    {
+      key: "activity",
+      label: "Activity",
+      count: view.activity.length || null,
+      panel: <ActivityRows view={view} />,
+    },
+  ];
+
+  return (
+    <div className="mt-8">
+      <SheetTabs tabs={tabs} initialTab={initialTab} label="Keeper sections" />
+    </div>
+  );
+}

@@ -343,9 +343,13 @@ export async function updateActivityPost(
     return { error: "Video links must be YouTube URLs." };
   }
 
-  // The rich composer posts blocks; the quick editor posts plain text.
+  // Body is only touched when the form actually submits content. A details-only
+  // edit (title, intro, video) must not flatten a post's image and text blocks
+  // into a single paragraph.
   const blocksRaw = formData.get("blocks");
-  let body: unknown;
+  const bodyRaw = formData.get("body");
+  let body: unknown | undefined;
+
   if (typeof blocksRaw === "string" && blocksRaw) {
     const { normalizeBlocks } = await import("@/lib/activity-blocks");
     try {
@@ -354,8 +358,8 @@ export async function updateActivityPost(
       return { error: "Could not read the post content." };
     }
     if ((body as unknown[]).length === 0) return { error: "Add at least one block." };
-  } else {
-    const text = String(formData.get("body") ?? "").trim();
+  } else if (typeof bodyRaw === "string") {
+    const text = bodyRaw.trim();
     body = text ? [{ heading: null, text }] : [];
   }
 
@@ -364,27 +368,28 @@ export async function updateActivityPost(
     .update({
       title,
       intro: String(formData.get("intro") ?? "").trim() || null,
-      body: body as never,
       video_url: videoUrl || null,
+      ...(body === undefined ? {} : { body: body as never }),
     })
     .eq("id", postId);
   if (error) return { error: error.message };
 
-  // Keep activity_images in step so feed covers reflect the edit.
-  const imageUrls = Array.isArray(body)
-    ? keepValidImageUrls(
-        (body as { type?: string; urls?: string[] }[]).flatMap((b) =>
-          b.type === "images" ? (b.urls ?? []) : []
-        ),
-        24
-      )
-    : [];
+  // Keep activity_images in step so feed covers reflect the edit — but only when
+  // the body was actually replaced, or a details edit would wipe the gallery.
+  if (Array.isArray(body)) {
+    const imageUrls = keepValidImageUrls(
+      (body as { type?: string; urls?: string[] }[]).flatMap((b) =>
+        b.type === "images" ? (b.urls ?? []) : []
+      ),
+      24
+    );
 
-  await supabase.from("activity_images").delete().eq("post_id", postId);
-  if (imageUrls.length) {
-    await supabase
-      .from("activity_images")
-      .insert(imageUrls.map((url, index) => ({ post_id: postId, url, position: index })));
+    await supabase.from("activity_images").delete().eq("post_id", postId);
+    if (imageUrls.length) {
+      await supabase
+        .from("activity_images")
+        .insert(imageUrls.map((url, index) => ({ post_id: postId, url, position: index })));
+    }
   }
 
   revalidatePath(`/garage/${post.car_id}/edit`);

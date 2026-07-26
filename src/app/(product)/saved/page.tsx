@@ -1,26 +1,76 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Avatar, Foot, ListingCard, Media } from "@/components/ui";
+import { removeFollow, removeSave } from "@/features/social/actions";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Saved - DRVN" };
 
+type CarRowData = {
+  id: string;
+  slug: string;
+  name: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  cover_image_url: string | null;
+};
+
+function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+/**
+ * Saved and followed, correctly labelled.
+ *
+ * Two bugs fixed here. "Keepers you follow" read profile *saves*, but nothing in
+ * the app ever renders a save button for a profile — so that section could never
+ * populate, while actual follows appeared nowhere at all. And there was no way to
+ * unsave anything from this page.
+ */
 export default async function SavedPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  const { data: saves } = await supabase
-    .from("saves")
-    .select("target_type, target_id, created_at")
-    .eq("user_id", user!.id)
-    .order("created_at", { ascending: false });
+  const [{ data: saves, error: savesError }, { data: follows }] = await Promise.all([
+    supabase
+      .from("saves")
+      .select("target_type, target_id, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("follows")
+      .select("target_type, target_id, created_at")
+      .eq("follower_id", user.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  const listingIds = (saves ?? []).filter((s) => s.target_type === "listing").map((s) => s.target_id);
-  const carIds = (saves ?? []).filter((s) => s.target_type === "car").map((s) => s.target_id);
-  const profileIds = (saves ?? []).filter((s) => s.target_type === "profile").map((s) => s.target_id);
+  if (savesError) console.error("[saved] failed to load saves", savesError);
+
+  const listingIds = (saves ?? [])
+    .filter((s) => s.target_type === "listing")
+    .map((s) => s.target_id);
+  const savedCarIds = (saves ?? [])
+    .filter((s) => s.target_type === "car")
+    .map((s) => s.target_id);
+  const followedCarIds = (follows ?? [])
+    .filter((f) => f.target_type === "car")
+    .map((f) => f.target_id);
+  const followedProfileIds = (follows ?? [])
+    .filter((f) => f.target_type === "profile")
+    .map((f) => f.target_id);
+
+  const allCarIds = [...new Set([...savedCarIds, ...followedCarIds])];
 
   const [{ data: listings }, { data: cars }, { data: profiles }, { data: listingImages }] =
     await Promise.all([
@@ -30,11 +80,17 @@ export default async function SavedPage() {
             .select("id, title, price_cents, condition, location, status")
             .in("id", listingIds)
         : Promise.resolve({ data: [] }),
-      carIds.length
-        ? supabase.from("cars").select("id, slug, name, make, model, year, cover_image_url").in("id", carIds)
+      allCarIds.length
+        ? supabase
+            .from("cars")
+            .select("id, slug, name, make, model, year, cover_image_url")
+            .in("id", allCarIds)
         : Promise.resolve({ data: [] }),
-      profileIds.length
-        ? supabase.from("profiles").select("id, username, display_name").in("id", profileIds)
+      followedProfileIds.length
+        ? supabase
+            .from("profiles")
+            .select("id, username, display_name")
+            .in("id", followedProfileIds)
         : Promise.resolve({ data: [] }),
       listingIds.length
         ? supabase
@@ -50,13 +106,52 @@ export default async function SavedPage() {
     if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
   }
 
-  const isEmpty = !listingIds.length && !carIds.length && !profileIds.length;
+  const carById = new Map<string, CarRowData>((cars ?? []).map((c) => [c.id, c]));
+  const savedCars = savedCarIds
+    .map((id) => carById.get(id))
+    .filter((c): c is CarRowData => Boolean(c));
+  const followedCars = followedCarIds
+    .map((id) => carById.get(id))
+    .filter((c): c is CarRowData => Boolean(c));
+
+  const sheetCount = savedCars.length + followedCars.length;
+  const keeperCount = (profiles ?? []).length;
+  const isEmpty = !listingIds.length && !sheetCount && !keeperCount;
+
+  const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
+    <div className="order">
+      <Link href={`/cars/${car.slug}`} className="order__img">
+        <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
+      </Link>
+      <span className="min-w-0">
+        <Link
+          href={`/cars/${car.slug}`}
+          className="order__name block truncate transition-colors hover:text-live"
+        >
+          {car.name}
+        </Link>
+        <span className="order__meta block">
+          {[car.year, car.make, car.model].filter(Boolean).join(" ") || "car sheet"}
+        </span>
+      </span>
+      <span className="order__actions">
+        <form action={kind === "save" ? removeSave : removeFollow}>
+          <input type="hidden" name="target_type" value="car" />
+          <input type="hidden" name="target_id" value={car.id} />
+          <button type="submit" className="relbtn !static">
+            {kind === "save" ? "Unsave" : "Unfollow"}
+          </button>
+        </form>
+      </span>
+    </div>
+  );
 
   return (
     <div className="wrap">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Watching · {listingIds.length} parts · {carIds.length} sheets · {profileIds.length} keepers
+          Watching · {listingIds.length} part{listingIds.length === 1 ? "" : "s"} · {sheetCount}{" "}
+          sheet{sheetCount === 1 ? "" : "s"} · {keeperCount} keeper{keeperCount === 1 ? "" : "s"}
         </span>
         <h1>
           Everything you&apos;re
@@ -76,7 +171,10 @@ export default async function SavedPage() {
               ◎
             </span>
             <h3>Nothing on the watchlist</h3>
-            <p>Save parts, car sheets and keepers as you browse — they collect here and keep counting.</p>
+            <p>
+              Save parts and follow car sheets and keepers as you browse — they collect here and
+              keep counting.
+            </p>
             <Link href="/marketplace" className="btn btn--ghost">
               Browse the market
             </Link>
@@ -93,73 +191,96 @@ export default async function SavedPage() {
             </div>
             <div className="mkt">
               {(listings ?? []).map((l) => (
-                <ListingCard
-                  key={l.id}
-                  listing={{
-                    id: l.id,
-                    title: l.title,
-                    price_cents: l.price_cents,
-                    condition: l.condition,
-                    location: l.status === "active" ? l.location : `${l.status}`,
-                    cover_url: cover.get(l.id) ?? null,
-                  }}
-                />
+                <div key={l.id}>
+                  <ListingCard
+                    listing={{
+                      id: l.id,
+                      title: l.title,
+                      price_cents: l.price_cents,
+                      condition: l.condition,
+                      location: l.status === "active" ? l.location : `${l.status}`,
+                      cover_url: cover.get(l.id) ?? null,
+                    }}
+                  />
+                  <form action={removeSave} className="mt-2">
+                    <input type="hidden" name="target_type" value="listing" />
+                    <input type="hidden" name="target_id" value={l.id} />
+                    <button type="submit" className="relbtn !static">
+                      Unsave
+                    </button>
+                  </form>
+                </div>
               ))}
             </div>
           </div>
         </section>
       )}
 
-      {(cars ?? []).length > 0 && (
+      {savedCars.length > 0 && (
         <section className="deck">
           <Rv className="tile">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Sheets you follow</span>
-              <span className="chip">{(cars ?? []).length}</span>
+              <span className="microlabel microlabel--ink">Sheets you&apos;ve saved</span>
+              <span className="chip">{savedCars.length}</span>
             </div>
             <div className="rowlist">
-              {(cars ?? []).map((car) => (
-                <Link key={car.id} href={`/cars/${car.slug}`} className="order">
-                  <span className="order__img">
-                    <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
-                  </span>
-                  <span>
-                    <span className="order__name block">{car.name}</span>
-                    <span className="order__meta block">
-                      {[car.year, car.make, car.model].filter(Boolean).join(" ") || "car sheet"}
-                    </span>
-                  </span>
-                </Link>
+              {savedCars.map((car) => (
+                <CarRow key={car.id} car={car} kind="save" />
               ))}
             </div>
           </Rv>
         </section>
       )}
 
-      {(profiles ?? []).length > 0 && (
+      {followedCars.length > 0 && (
+        <section className="deck">
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Sheets you follow</span>
+              <span className="chip">{followedCars.length}</span>
+            </div>
+            <div className="rowlist">
+              {followedCars.map((car) => (
+                <CarRow key={car.id} car={car} kind="follow" />
+              ))}
+            </div>
+          </Rv>
+        </section>
+      )}
+
+      {keeperCount > 0 && (
         <section className="deck">
           <Rv className="tile tile--deep">
             <div className="tile__head">
               <span className="microlabel microlabel--ink">Keepers you follow</span>
-              <span className="chip">{(profiles ?? []).length}</span>
+              <span className="chip">{keeperCount}</span>
             </div>
             <div className="rowlist">
               {(profiles ?? []).map((p) => (
-                <Link key={p.id} href={`/u/${p.username}`} className="order">
+                <div key={p.id} className="order">
                   <Avatar
                     size="h-11 w-11 text-xs"
-                    initials={(p.display_name ?? p.username ?? "?")
-                      .split(" ")
-                      .map((w: string) => w[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()}
+                    initials={initialsOf(p.display_name ?? p.username ?? "?")}
                   />
-                  <span>
-                    <span className="order__name block">{p.display_name ?? `@${p.username}`}</span>
+                  <span className="min-w-0">
+                    <Link
+                      href={`/u/${p.username}`}
+                      className="order__name block truncate transition-colors hover:text-live"
+                    >
+                      {p.display_name ?? `@${p.username}`}
+                    </Link>
                     <span className="order__meta block">keeper sheet →</span>
                   </span>
-                </Link>
+                  <span className="order__actions">
+                    <form action={removeFollow}>
+                      <input type="hidden" name="target_type" value="profile" />
+                      <input type="hidden" name="target_id" value={p.id} />
+                      <button type="submit" className="relbtn !static">
+                        Unfollow
+                      </button>
+                    </form>
+                  </span>
+                </div>
               ))}
             </div>
           </Rv>

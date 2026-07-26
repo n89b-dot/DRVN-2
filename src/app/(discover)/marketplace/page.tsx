@@ -1,12 +1,13 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { CategoryIcon, Foot, ListingCard } from "@/components/ui";
+import { CategoryIcon, Foot } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
 import { FilterBar } from "./filter-bar";
+import { MarketplaceResults } from "./results";
 
 export const metadata = { title: "Marketplace - DRVN" };
 
@@ -21,14 +22,21 @@ export default async function MarketplacePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const listings = await fetchListings(supabase, filters, user?.id);
-  const hasQuery = Boolean(filters.q || filters.condition || filters.min || filters.max || filters.fit);
+  const page = await fetchListings(supabase, filters, user?.id);
+  const hasQuery = Boolean(
+    filters.q ||
+      filters.condition ||
+      filters.min ||
+      filters.max ||
+      filters.fit ||
+      filters.location
+  );
 
   return (
     <div className="wrap">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          The market · {listings.length} part{listings.length === 1 ? "" : "s"} showing
+          The market · {page.total} part{page.total === 1 ? "" : "s"} listed
         </span>
         <h1>
           Parts, straight off
@@ -65,34 +73,21 @@ export default async function MarketplacePage({
       </div>
 
       <section className="deck">
-        {listings.length > 0 ? (
-          <div className="mkt">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
-        ) : (
-          <Rv className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ⌕
-            </span>
-            <h3>{hasQuery ? `No lines match${filters.q ? ` "${filters.q}"` : " those filters"}` : "Nothing on the sheets right now"}</h3>
-            <p>
-              {hasQuery
-                ? "Nothing on the sheets right now. Widen the filters, or let us watch for it."
-                : "The moment a part is released off a build line it lands here — annotated by the sheet it left."}
-            </p>
-            {hasQuery ? (
-              <Link href="/marketplace" className="btn btn--ghost">
-                Clear filters
-              </Link>
-            ) : (
-              <Link href="/sell" className="btn btn--live">
-                List the first part
-              </Link>
-            )}
-          </Rv>
-        )}
+        <MarketplaceResults
+          page={page}
+          basePath="/marketplace"
+          params={filters as Record<string, string | undefined>}
+          emptyTitle={
+            hasQuery
+              ? `No lines match${filters.q ? ` "${filters.q}"` : " those filters"}`
+              : "Nothing on the sheets right now"
+          }
+          emptyBody={
+            hasQuery
+              ? "Widen the filters, or clear them and browse by category."
+              : "The moment a part is released off a build line it lands here — annotated by the sheet it left."
+          }
+        />
       </section>
 
       <Foot

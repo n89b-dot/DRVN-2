@@ -67,7 +67,14 @@ export function ActivityComposer({
         <ul className="feed mt-5 border-t border-[color:var(--rule-soft)] pt-2">
           {posts.map((post) => (
             <li key={post.id}>
-              <span className="min-w-0 flex-1 truncate">{post.title}</span>
+              {/* These were inert text spans — a filed entry had no route to an
+                  editor because there wasn't one. */}
+              <Link
+                href={`/garage/${carId}/update/${post.id}/edit`}
+                className="min-w-0 flex-1 truncate transition-colors hover:text-live"
+              >
+                {post.title}
+              </Link>
               <span className="amt">
                 {post.published_at ? new Date(post.published_at).toLocaleDateString() : "Draft"}
               </span>

@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, ListingCard } from "@/components/ui";
+import { Foot } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
+import { MarketplaceResults } from "../../results";
 import { FilterBar } from "../../filter-bar";
 
 export default async function SubcategoryPage({
@@ -27,7 +28,7 @@ export default async function SubcategoryPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const listings = await fetchListings(
+  const page = await fetchListings(
     supabase,
     { ...filters, category: category.slug, subcategory: subcategory.slug },
     user?.id
@@ -44,7 +45,7 @@ export default async function SubcategoryPage({
           <Link href={`/marketplace/${category.slug}`} className="hover:text-live">
             {category.label}
           </Link>{" "}
-          / {subcategory.label} · {listings.length} showing
+          / {subcategory.label} · {page.total} listed
         </span>
         <h1>{subcategory.label}</h1>
       </Rv>
@@ -58,24 +59,11 @@ export default async function SubcategoryPage({
       </div>
 
       <section className="deck">
-        {listings.length > 0 ? (
-          <div className="mkt">
-            {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
-            ))}
-          </div>
-        ) : (
-          <div className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ⌕
-            </span>
-            <h3>Nothing in {subcategory.label} right now</h3>
-            <p>Nothing on the sheets in this line yet. Check the wider category.</p>
-            <Link href={`/marketplace/${category.slug}`} className="btn btn--ghost">
-              All {category.label}
-            </Link>
-          </div>
-        )}
+        <MarketplaceResults
+          page={page}
+          basePath={`/marketplace/${category.slug}/${subcategory.slug}`}
+          params={filters as Record<string, string | undefined>}
+        />
       </section>
 
       <Foot
