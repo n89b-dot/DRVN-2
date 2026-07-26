@@ -38,22 +38,31 @@ export function PurchaseActions({
 
   return (
     <div className="mt-5 flex flex-col gap-2">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() =>
-          guard(() =>
-            startTransition(async () => {
-              const fd = new FormData();
-              fd.set("listing_id", listingId);
-              await buyNow(fd);
-            })
-          )
-        }
-        className="h-12 rounded-pill bg-accent text-sm font-semibold text-white transition hover:bg-accent/90"
-      >
-        {pending ? "Processing…" : "Buy now"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            guard(() =>
+              startTransition(async () => {
+                const fd = new FormData();
+                fd.set("listing_id", listingId);
+                await buyNow(fd);
+              })
+            )
+          }
+          className="btn btn--live flex-1"
+        >
+          {pending ? "Processing…" : "Buy now"}
+        </button>
+        <button
+          type="button"
+          onClick={() => guard(() => setOfferOpen(true))}
+          className="btn btn--ghost flex-1"
+        >
+          Make an offer
+        </button>
+      </div>
       <button
         type="button"
         onClick={() =>
@@ -65,62 +74,49 @@ export function PurchaseActions({
             })
           )
         }
-        className="h-12 rounded-pill border border-border text-sm font-semibold text-text-secondary transition hover:text-text-primary"
+        className="btn btn--ghost"
       >
         Add to cart
       </button>
-      <button
-        type="button"
-        onClick={() => guard(() => setOfferOpen(true))}
-        className="h-12 rounded-pill border border-border text-sm font-semibold text-text-secondary transition hover:text-text-primary"
-      >
-        Make an offer
-      </button>
-      <p className="text-center text-xs text-text-muted">
-        Payments are stubbed — no real charge is made yet.
+      <p className="spec-note">
+        <b>Payments are stubbed</b> — no real charge is made yet.
       </p>
 
       {offerOpen && (
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-5"
+          className="sheetwrap is-open"
           onClick={(e) => e.target === e.currentTarget && setOfferOpen(false)}
         >
-          <div className="w-full max-w-[380px] rounded-card border border-border bg-surface p-6">
-            <h2 className="text-lg font-semibold text-text-primary">Make an offer</h2>
+          <div className="sheet">
+            <span className="microlabel microlabel--ink">Make an offer</span>
             <form action={offerAction} className="mt-4 flex flex-col gap-3">
               <input type="hidden" name="listing_id" value={listingId} />
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-text-muted">$</span>
-                <input
-                  name="amount"
-                  required
-                  inputMode="decimal"
-                  placeholder="Your offer"
-                  className="h-12 w-full rounded-input border border-border bg-app pl-7 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-                />
+              <div className="field">
+                <span className="microlabel">Your offer</span>
+                <div className="ctl__prefix">
+                  <span>$</span>
+                  <input name="amount" required inputMode="decimal" placeholder="0" className="ctl" />
+                </div>
+                <span className="field__hint">
+                  The keeper can accept, counter once, or let it lapse.
+                </span>
               </div>
-              <textarea
-                name="message"
-                rows={2}
-                placeholder="Message to the seller (optional)"
-                className="w-full resize-y rounded-input border border-border bg-app px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-              />
-              {offerState.error && <p className="text-sm text-red-400">{offerState.error}</p>}
-              {offerState.ok && <p className="text-sm text-success">{offerState.ok}</p>}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOfferOpen(false)}
-                  className="rounded-pill px-4 py-2 text-sm text-text-secondary hover:text-text-primary"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  disabled={offerPending}
-                  className="rounded-pill bg-accent px-5 py-2 text-sm font-semibold text-white transition hover:bg-accent/90"
-                >
+              <div className="field">
+                <span className="microlabel">Message — optional</span>
+                <textarea name="message" rows={2} placeholder="Anything the keeper should know" className="ctl" />
+              </div>
+              {offerState.error && (
+                <p className="field__err" style={{ display: "flex" }}>
+                  {offerState.error}
+                </p>
+              )}
+              {offerState.ok && <p className="field__ok" style={{ display: "block" }}>{offerState.ok}</p>}
+              <div className="sheet__actions">
+                <button type="submit" disabled={offerPending} className="btn btn--live flex-1">
                   {offerPending ? "Sending…" : "Send offer"}
+                </button>
+                <button type="button" onClick={() => setOfferOpen(false)} className="btn btn--ghost">
+                  Close
                 </button>
               </div>
             </form>

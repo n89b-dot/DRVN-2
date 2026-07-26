@@ -13,6 +13,7 @@ export type QAItem = {
   isSeller: boolean;
 };
 
+/** Q&A as message annotations on the sheet — 2px spines, never chat bubbles. */
 export function QASection({
   listingId,
   items,
@@ -30,37 +31,31 @@ export function QASection({
   const repliesFor = (id: string) => items.filter((i) => i.parent_id === id);
 
   return (
-    <div className="mt-8">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-muted">
-        Questions & answers
-      </p>
+    <div className="mt-10">
+      <div className="tile__head">
+        <span className="microlabel microlabel--ink">Asked on the sheet</span>
+        {topLevel.length > 0 && <span className="chip">{topLevel.length}</span>}
+      </div>
 
-      <div className="mt-3 flex flex-col gap-3">
+      <div className="thread">
         {topLevel.map((q) => (
-          <div key={q.id} className="rounded-card border border-border bg-surface p-4">
-            <p className="text-xs text-text-muted">{q.authorName}</p>
-            <p className="mt-1 text-sm text-text-secondary">{q.body}</p>
+          <div key={q.id}>
+            <div className="msg">
+              <span className="msg__who">{q.authorName}</span>
+              <p className="msg__body">{q.body}</p>
+            </div>
             {repliesFor(q.id).map((r) => (
-              <div key={r.id} className="mt-3 border-l-2 border-accent/40 pl-3">
-                <p className="text-xs text-accent">{r.authorName} (seller)</p>
-                <p className="mt-0.5 text-sm text-text-secondary">{r.body}</p>
+              <div key={r.id} className="msg msg--me ml-4">
+                <span className="msg__who">{r.authorName} — seller</span>
+                <p className="msg__body">{r.body}</p>
               </div>
             ))}
             {isSeller && repliesFor(q.id).length === 0 && (
-              <form action={action} className="mt-3 flex gap-2">
+              <form action={action} className="composer__row ml-4 py-2">
                 <input type="hidden" name="listing_id" value={listingId} />
                 <input type="hidden" name="parent_id" value={q.id} />
-                <input
-                  name="body"
-                  required
-                  placeholder="Reply as seller…"
-                  className="h-10 flex-1 rounded-input border border-border bg-app px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-                />
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="rounded-pill bg-accent px-4 text-sm font-semibold text-white"
-                >
+                <input name="body" required placeholder="Reply as the keeper…" className="ctl flex-1" />
+                <button type="submit" disabled={pending} className="btn">
                   Reply
                 </button>
               </form>
@@ -68,29 +63,28 @@ export function QASection({
           </div>
         ))}
         {topLevel.length === 0 && (
-          <p className="text-sm text-text-muted">No questions yet.</p>
+          <p className="py-2 font-mono text-[12.5px] text-dim">
+            No questions yet — the sheet answers what it can.
+          </p>
         )}
       </div>
 
       {isLoggedIn && !isSeller && (
-        <form action={action} className="mt-4 flex gap-2">
-          <input type="hidden" name="listing_id" value={listingId} />
-          <input
-            name="body"
-            required
-            placeholder="Ask the seller a question…"
-            className="h-11 flex-1 rounded-input border border-border bg-surface px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent"
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-pill bg-accent px-5 text-sm font-semibold text-white"
-          >
-            Ask
-          </button>
+        <form action={action} className="composer">
+          <div className="composer__row">
+            <input type="hidden" name="listing_id" value={listingId} />
+            <input name="body" required placeholder="Ask the keeper a question…" className="ctl max-w-none flex-1" />
+            <button type="submit" disabled={pending} className="btn">
+              Ask
+            </button>
+          </div>
         </form>
       )}
-      {state.error && <p className="mt-2 text-sm text-red-400">{state.error}</p>}
+      {state.error && (
+        <p className="field__err mt-2" style={{ display: "flex" }}>
+          {state.error}
+        </p>
+      )}
     </div>
   );
 }

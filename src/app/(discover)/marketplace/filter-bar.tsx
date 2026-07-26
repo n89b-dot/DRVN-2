@@ -1,11 +1,9 @@
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
 
-const inputClass =
-  "h-11 rounded-input border border-border bg-surface px-3 text-sm text-text-primary outline-none placeholder:text-text-muted focus:border-accent";
-
 /**
  * GET-form filter bar — server-rendered, no client JS needed.
  * Submits back to the current path with query params.
+ * Livesheet: search plate + mono controls on the sheet, no boxes-in-boxes.
  */
 export function FilterBar({
   action,
@@ -17,53 +15,40 @@ export function FilterBar({
   showFitToggle: boolean;
 }) {
   return (
-    <form action={action} method="get" className="rounded-card border border-border bg-surface p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          name="q"
-          defaultValue={filters.q ?? ""}
-          placeholder="Search parts…"
-          className={`${inputClass} min-w-[200px] flex-1 bg-app`}
-        />
-        <select name="condition" defaultValue={filters.condition ?? ""} className={`${inputClass} bg-app`}>
-          <option value="">Any condition</option>
-          {CONDITIONS.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <input
-          name="min"
-          defaultValue={filters.min ?? ""}
-          placeholder="Min $"
-          inputMode="decimal"
-          className={`${inputClass} w-24 bg-app`}
-        />
-        <input
-          name="max"
-          defaultValue={filters.max ?? ""}
-          placeholder="Max $"
-          inputMode="decimal"
-          className={`${inputClass} w-24 bg-app`}
-        />
-        <button
-          type="submit"
-          className="h-11 rounded-pill bg-accent px-6 text-sm font-semibold text-white transition hover:bg-accent/90"
-        >
-          Search
-        </button>
-      </div>
+    <form action={action} method="get" className="flex flex-wrap items-center gap-2">
+      <label className="search flex-1 basis-[220px]">
+        <span aria-hidden="true">⌕</span>
+        <input name="q" defaultValue={filters.q ?? ""} placeholder="Search the sheets — 'coilovers', 'ECU', a car…" />
+      </label>
+      <select name="condition" defaultValue={filters.condition ?? ""} className="ctl w-auto">
+        <option value="">Any condition</option>
+        {CONDITIONS.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      <input
+        name="min"
+        defaultValue={filters.min ?? ""}
+        placeholder="Min $"
+        inputMode="decimal"
+        className="ctl w-24"
+      />
+      <input
+        name="max"
+        defaultValue={filters.max ?? ""}
+        placeholder="Max $"
+        inputMode="decimal"
+        className="ctl w-24"
+      />
+      <button type="submit" className="btn">
+        Search
+      </button>
       {showFitToggle && (
-        <label className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
-          <input
-            type="checkbox"
-            name="fit"
-            value="1"
-            defaultChecked={filters.fit === "1"}
-            className="accent-[#3B71FE]"
-          />
-          Only show parts that fit cars in my garage
+        <label className="flex basis-full items-center gap-2 pt-1 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+          <input type="checkbox" name="fit" value="1" defaultChecked={filters.fit === "1"} className="sq" />
+          Fits your garage only
         </label>
       )}
     </form>

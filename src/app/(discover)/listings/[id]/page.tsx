@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Avatar, ListingCard, Media, SectionLabel } from "@/components/ui";
+import { Rv } from "@/components/livesheet";
+import { Foot, ListingCard, Media } from "@/components/ui";
 import { SaveButton } from "@/features/social/buttons";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
@@ -107,56 +108,80 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     if (!moreCover.has(img.listing_id)) moreCover.set(img.listing_id, img.url);
   }
 
-  return (
-    <div className="mx-auto w-full max-w-[1100px] px-5 py-10 md:py-14">
-      <Link
-        href={category ? `/marketplace/${category.slug}` : "/marketplace"}
-        className="text-sm text-text-muted transition hover:text-text-secondary"
-      >
-        ← {category?.label ?? "Marketplace"}
-      </Link>
+  const gallery = images ?? [];
 
-      <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_360px]">
-        {/* Left: gallery + description */}
-        <div>
-          {(images ?? []).length > 0 ? (
-            <div className="grid grid-cols-2 gap-2">
-              {(images ?? []).map((image, index) => (
-                <Media
-                  key={image.id}
-                  src={image.url}
-                  alt={image.alt ?? listing.title}
-                  className={`${index === 0 ? "col-span-2 h-80" : "h-40"} w-full rounded-card`}
-                />
-              ))}
-            </div>
+  return (
+    <div className="wrap">
+      <Rv as="header" className="pagehead">
+        <span className="microlabel">
+          <Link href="/marketplace" className="hover:text-live">
+            Market
+          </Link>
+          {category && (
+            <>
+              {" / "}
+              <Link href={`/marketplace/${category.slug}`} className="hover:text-live">
+                {category.label}
+              </Link>
+            </>
+          )}
+          {" · part sheet"}
+        </span>
+        <h1>{listing.title}</h1>
+      </Rv>
+
+      <div className="deck deck--two">
+        {/* Left: media + measured facts + Q&A */}
+        <div className="min-w-0">
+          {gallery.length > 0 ? (
+            <>
+              <Rv className="hero-media">
+                <Media src={gallery[0].url} alt={gallery[0].alt ?? listing.title} className="h-full w-full" />
+              </Rv>
+              {gallery.length > 1 && (
+                <div className="thumbs">
+                  {gallery.slice(1).map((image) => (
+                    <span key={image.id} className="thumb">
+                      <Media src={image.url} alt={image.alt ?? listing.title} className="h-full w-full" />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
-            <Media alt={listing.title} className="h-80 w-full rounded-card" />
+            <div className="undrawn undrawn--hero">
+              <span className="undrawn__mark" aria-hidden="true">
+                ✎
+              </span>
+              <h3>No photo on the sheet</h3>
+              <p>The listing is real — the keeper hasn&apos;t photographed it yet. Ask below.</p>
+            </div>
           )}
 
           {listing.status !== "active" && (
-            <p className="mt-4 inline-block rounded-pill bg-raised px-4 py-1.5 text-sm font-semibold text-text-muted">
-              This listing is {listing.status}.
+            <p className="mt-4">
+              <span className="chip chip--spent">This listing is {listing.status}</span>
             </p>
           )}
 
           {listing.description && (
             <div className="mt-8">
-              <SectionLabel>Description</SectionLabel>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-text-secondary">
+              <span className="microlabel microlabel--ink">On the sheet</span>
+              <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed">
                 {listing.description}
               </p>
             </div>
           )}
 
           {listing.compatibility_notes && (
-            <div className="mt-8 rounded-card border border-border bg-surface p-5">
-              <SectionLabel>Compatibility — notes from the seller</SectionLabel>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-text-secondary">
-                {listing.compatibility_notes}
-              </p>
-              <p className="mt-3 text-xs text-text-muted">
-                Seller-provided notes, not verified by DRVN. Always confirm fitment for your car.
+            <div className="alert mt-8">
+              <span className="alert__ico" aria-hidden="true">
+                ⚠
+              </span>
+              <h4>Fitment — the keeper&apos;s words</h4>
+              <p className="whitespace-pre-line">{listing.compatibility_notes}</p>
+              <p className="spec-note col-span-full mt-2">
+                <b>Seller-stated.</b> Not verified by DRVN — always confirm fitment for your car.
               </p>
             </div>
           )}
@@ -169,14 +194,12 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           />
         </div>
 
-        {/* Right: purchase card */}
+        {/* Right: asking plate + off-this-car */}
         <div className="flex flex-col gap-4 self-start">
-          <div className="rounded-card border border-border bg-surface p-6">
-            <h1 className="text-lg font-bold text-text-primary">{listing.title}</h1>
-            <p className="mt-3 text-3xl font-bold text-text-primary">
-              {formatPrice(listing.price_cents)}
-            </p>
-            <p className="mt-1 text-sm text-text-muted">
+          <Rv className="tile" stagger={1}>
+            <span className="microlabel">Asking</span>
+            <p className="num-giant mt-1">{formatPrice(listing.price_cents)}</p>
+            <p className="kv mt-2 text-dim">
               {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(" · ")}
             </p>
 
@@ -187,7 +210,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               isActive={listing.status === "active"}
             />
             {user?.id !== listing.seller_id && (
-              <div className="mt-3 flex justify-center">
+              <div className="mt-3">
                 <SaveButton
                   targetType="listing"
                   targetId={listing.id}
@@ -199,65 +222,68 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             )}
 
             {seller && (
-              <Link
-                href={`/u/${seller.username}`}
-                className="mt-5 flex items-center gap-3 border-t border-border pt-5 transition hover:opacity-80"
-              >
-                <Avatar size="h-10 w-10" initials={sellerInitials} />
-                <span>
-                  <span className="block text-sm font-semibold text-text-primary">
-                    {seller.display_name ?? `@${seller.username}`}
-                  </span>
-                  <span className="block text-xs text-text-muted">
+              <Link href={`/u/${seller.username}`} className="mt-5 flex items-center gap-3 border-t border-[color:var(--rule-soft)] pt-5">
+                <span className="monogram monogram--sm">{sellerInitials}</span>
+                <span className="min-w-0">
+                  <span className="order__name block">{seller.display_name ?? `@${seller.username}`}</span>
+                  <span className="order__meta block">
                     {avgRating
-                      ? `★ ${avgRating} · ${(reviews ?? []).length} review${(reviews ?? []).length === 1 ? "" : "s"}`
-                      : seller.location ?? "Seller on DRVN"}
+                      ? `${avgRating} ★ · ${(reviews ?? []).length} review${(reviews ?? []).length === 1 ? "" : "s"}`
+                      : (seller.location ?? "Keeper on DRVN")}
                   </span>
                 </span>
               </Link>
             )}
-          </div>
+          </Rv>
 
           {sourceCar?.is_public && (
-            <Link
-              href={`/cars/${sourceCar.slug}`}
-              className="flex items-center justify-between rounded-card border border-border bg-surface px-5 py-4 transition hover:border-text-muted"
-            >
-              <span className="text-sm text-text-secondary">
-                Came off <span className="font-semibold text-text-primary">{sourceCar.name}</span>
-              </span>
-              <span className="text-text-muted">→</span>
-            </Link>
+            <Rv className="tile tile--deep" stagger={2}>
+              <div className="tile__head">
+                <span className="microlabel microlabel--ink">Off this car</span>
+                <span className="chip chip--live">Sheet is live</span>
+              </div>
+              <Link href={`/cars/${sourceCar.slug}`} className="order !bg-transparent !p-0">
+                <span>
+                  <span className="order__name block">{sourceCar.name}</span>
+                  <span className="order__meta block">the part&apos;s whole history rides with it →</span>
+                </span>
+              </Link>
+            </Rv>
           )}
         </div>
       </div>
 
-      <SimilarInCategory
-        category={listing.category}
-        excludeId={listing.id}
-        supabase={supabase}
-      />
+      <SimilarInCategory category={listing.category} excludeId={listing.id} supabase={supabase} />
 
       {(moreFromSeller ?? []).length > 0 && (
-        <div className="mt-14">
-          <SectionLabel>More from this seller</SectionLabel>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(moreFromSeller ?? []).map((item) => (
-              <ListingCard
-                key={item.id}
-                listing={{
-                  id: item.id,
-                  title: item.title,
-                  price_cents: item.price_cents,
-                  condition: item.condition,
-                  location: item.location,
-                  cover_url: moreCover.get(item.id) ?? null,
-                }}
-              />
-            ))}
+        <section className="deck">
+          <div>
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">More from this keeper</span>
+            </div>
+            <div className="mkt">
+              {(moreFromSeller ?? []).map((item) => (
+                <ListingCard
+                  key={item.id}
+                  listing={{
+                    id: item.id,
+                    title: item.title,
+                    price_cents: item.price_cents,
+                    condition: item.condition,
+                    location: item.location,
+                    cover_url: moreCover.get(item.id) ?? null,
+                  }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       )}
+
+      <Foot
+        left="DRVN / Livesheet — part sheet"
+        right={<Link href="/marketplace">← Back to the market</Link>}
+      />
     </div>
   );
 }
@@ -294,23 +320,27 @@ async function SimilarInCategory({
   }
 
   return (
-    <div className="mt-14">
-      <SectionLabel>Similar in this category</SectionLabel>
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {similar.map((item) => (
-          <ListingCard
-            key={item.id}
-            listing={{
-              id: item.id,
-              title: item.title,
-              price_cents: item.price_cents,
-              condition: item.condition,
-              location: item.location,
-              cover_url: cover.get(item.id) ?? null,
-            }}
-          />
-        ))}
+    <section className="deck">
+      <div>
+        <div className="tile__head">
+          <span className="microlabel microlabel--ink">Similar in this category</span>
+        </div>
+        <div className="mkt">
+          {similar.map((item) => (
+            <ListingCard
+              key={item.id}
+              listing={{
+                id: item.id,
+                title: item.title,
+                price_cents: item.price_cents,
+                condition: item.condition,
+                location: item.location,
+                cover_url: cover.get(item.id) ?? null,
+              }}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

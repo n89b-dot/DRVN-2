@@ -12,13 +12,9 @@ import {
   type SaveTargetType,
 } from "./actions";
 
-function pillClass(active: boolean) {
-  return cx(
-    "rounded-pill border px-4 py-1.5 text-sm transition",
-    active
-      ? "border-accent bg-accent/10 text-accent"
-      : "border-border text-text-secondary hover:text-text-primary"
-  );
+function toggleClass(active: boolean) {
+  // Livesheet: a fired toggle reads as a live state, rest state is a ghost.
+  return cx("btn", active ? "btn--live" : "btn--ghost");
 }
 
 export function SaveButton({
@@ -50,7 +46,7 @@ export function SaveButton({
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={pending} className={pillClass(saved)}>
+    <button type="button" onClick={onClick} disabled={pending} className={toggleClass(saved)}>
       {saved ? "Saved" : "Save"}
     </button>
   );
@@ -87,7 +83,7 @@ export function FollowButton({
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={pending} className={pillClass(following)}>
+    <button type="button" onClick={onClick} disabled={pending} className={toggleClass(following)}>
       {following ? labels[1] : labels[0]}
     </button>
   );
