@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { Rv } from "@/components/livesheet";
+import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, Media } from "@/components/ui";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
@@ -193,27 +193,48 @@ export default async function OrderDetailPage({
 
         <div className="grid gap-4">
           <Rv className="tile tile--deep">
-            <span className="microlabel microlabel--ink">The money</span>
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">
+                {isSeller ? "Payout breakdown" : "The money"}
+              </span>
+              <span className="microlabel">{order.currency}</span>
+            </div>
+            {/* Werkbank C3 — the seller's side is arithmetic they can check
+                line by line, so every step is its own ruled row rather than a
+                total with the working hidden. There is deliberately no
+                "processing" line: DRVN charges 10% and nothing else, and
+                inventing a fee the product doesn't take would be fiction. */}
             <div className="mt-2">
               <div className="sheet__row">
-                <span>Parts</span>
+                <span>{isSeller ? "Sale price" : "Parts"}</span>
                 <b>{formatPrice(order.subtotal_cents)}</b>
               </div>
               <div className="sheet__row">
-                <span>Shipping</span>
+                <span>Shipping{isSeller ? " — passed on" : ""}</span>
                 <b>{order.shipping_cents > 0 ? formatPrice(order.shipping_cents) : "Free"}</b>
               </div>
               {isSeller && (
                 <div className="sheet__row">
-                  <span>DRVN fee (10%)</span>
+                  <span>DRVN fee — 10%</span>
                   <b>−{formatPrice(order.platform_fee_cents)}</b>
                 </div>
               )}
               <div className="sheet__row sheet__total">
-                <span>{isSeller ? "Your payout" : "You paid"}</span>
+                <span>{isSeller ? "Payout to you" : "You paid"}</span>
                 <b>{formatPrice(isSeller ? payout : order.total_cents)}</b>
               </div>
             </div>
+            {isSeller && (
+              <LiveDim
+                label="Payout releases"
+                value={
+                  order.delivered_at
+                    ? "Delivery confirmed — clearing"
+                    : "On delivery confirm"
+                }
+                live={Boolean(order.delivered_at)}
+              />
+            )}
             {payment && (
               <p className="spec-note">
                 Payment {payment.status.replace(/_/g, " ")} via {payment.provider}

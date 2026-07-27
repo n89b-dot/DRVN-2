@@ -8,6 +8,7 @@ import { recommendListings } from "@/lib/recommendations";
 import { createClient } from "@/lib/supabase/server";
 
 import { PostUpdatePrompt } from "./post-update-prompt";
+import { SellerKpis } from "./seller-kpis";
 
 export const metadata = { title: "Home - DRVN" };
 
@@ -71,6 +72,9 @@ export default async function HomePage() {
           </Link>
         </div>
       </Rv>
+
+      {/* The seller's desk — only for people who have listed something */}
+      <SellerKpis supabase={supabase} userId={user!.id} />
 
       {/* The garage + composer */}
       <section className="deck deck--two">
