@@ -2,11 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "// drvn2-dev": [
+        "No command: this attaches to the always-on dev server owned by the",
+        "launchd agent cc.drvn2.dev (~/Library/LaunchAgents/cc.drvn2.dev.plist),",
+        "which runs ~/bin/drvn2-dev.sh. Next 16 permits one dev server per",
+        "project directory, so spawning a second one here would just fail.",
+        "Manage it with: launchctl kickstart -k gui/$UID/cc.drvn2.dev"
+      ],
       "name": "drvn2-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3005,
-      "autoPort": true
+      "url": "http://localhost:3005",
+      "port": 3005
     },
     {
       "name": "design-mockups",
