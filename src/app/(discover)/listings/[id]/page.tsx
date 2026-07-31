@@ -45,7 +45,7 @@ export async function generateMetadata({
   const sold = listing.status === "sold";
   const description =
     listing.description?.slice(0, 155) ??
-    `${conditionLabel(listing.condition)} · ${price} · off a real build on DRVN.`;
+    `${conditionLabel(listing.condition)} · ${price} · a used part off a real modified car, on DRVN.`;
 
   return {
     title: `${listing.title} — ${price}${sold ? " (sold)" : ""} - DRVN`,
@@ -184,7 +184,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
-            Market
+            Marketplace
           </Link>
           {category && (
             <>
@@ -194,7 +194,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               </Link>
             </>
           )}
-          {" · part sheet"}
           {listing.part_number && ` · part no. ${listing.part_number}`}
         </span>
         <h1>{listing.title}</h1>
@@ -223,8 +222,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               <span className="undrawn__mark" aria-hidden="true">
                 ✎
               </span>
-              <h3>No photo on the sheet</h3>
-              <p>The listing is real — the keeper hasn&apos;t photographed it yet. Ask below.</p>
+              <h3>No photos yet</h3>
+              <p>The seller hasn&apos;t photographed this part yet. Ask them below.</p>
             </div>
           )}
 
@@ -236,7 +235,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
           {listing.description && (
             <div className="mt-8">
-              <span className="microlabel microlabel--ink">On the sheet</span>
+              <span className="microlabel microlabel--ink">Description</span>
               <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed">
                 {listing.description}
               </p>
@@ -248,7 +247,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               <span className="alert__ico" aria-hidden="true">
                 ⚠
               </span>
-              <h4>Fitment — the keeper&apos;s words</h4>
+              <h4>Fitment — the seller&apos;s notes</h4>
               <p className="whitespace-pre-line">{listing.compatibility_notes}</p>
               <p className="spec-note col-span-full mt-2">
                 <b>Seller-stated.</b> Not verified by DRVN — always confirm fitment for your car.
@@ -269,9 +268,27 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <Rv className="tile" stagger={1}>
             <span className="microlabel">Asking</span>
             <p className="num-giant mt-1">{formatPrice(listing.price_cents)}</p>
+            {/* Shipping was charged at checkout but never shown here, so a
+                buyer met the real total only after committing. */}
+            <p className="kv mt-1">
+              {listing.shipping_cents > 0 ? (
+                <>
+                  + {formatPrice(listing.shipping_cents)} shipping ·{" "}
+                  <b>{formatPrice(listing.price_cents + listing.shipping_cents)} total</b>
+                </>
+              ) : (
+                "Shipping included"
+              )}
+              {listing.allows_collection && " · collection available"}
+            </p>
             <p className="kv mt-2 text-dim">
               {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(" · ")}
             </p>
+            {listing.offer_floor_cents !== null && listing.status === "active" && (
+              <p className="spec-note mt-2">
+                Offers accepted from {formatPrice(listing.offer_floor_cents)}.
+              </p>
+            )}
             {/* What the sheet has seen of this part — watchers are live, views
                 are cumulative, so only the watcher line carries the live dot. */}
             <LiveDim
@@ -310,7 +327,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                   <span className="order__meta block">
                     {avgRating
                       ? `${avgRating} ★ · ${(reviews ?? []).length} review${(reviews ?? []).length === 1 ? "" : "s"}`
-                      : (seller.location ?? "Keeper on DRVN")}
+                      : (seller.location ?? "Seller on DRVN")}
                   </span>
                 </span>
               </Link>
@@ -320,13 +337,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           {sourceCar?.is_public && (
             <Rv className="tile tile--deep" stagger={2}>
               <div className="tile__head">
-                <span className="microlabel microlabel--ink">Off this car</span>
-                <span className="chip chip--live">Sheet is live</span>
+                <span className="microlabel microlabel--ink">Came off this car</span>
+                <span className="chip chip--ok">Build page</span>
               </div>
               <Link href={`/cars/${sourceCar.slug}`} className="order !bg-transparent !p-0">
                 <span>
                   <span className="order__name block">{sourceCar.name}</span>
-                  <span className="order__meta block">the part&apos;s whole history rides with it →</span>
+                  <span className="order__meta block">See the full build — mods, photos, history →</span>
                 </span>
               </Link>
             </Rv>
@@ -340,7 +357,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <section className="deck">
           <div>
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">More from this keeper</span>
+              <span className="microlabel microlabel--ink">More from this seller</span>
             </div>
             <div className="mkt">
               {(moreFromSeller ?? []).map((item) => (
@@ -362,8 +379,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       )}
 
       <Foot
-        left="DRVN / Livesheet — part sheet"
-        right={<Link href="/marketplace">← Back to the market</Link>}
+        left="DRVN — used parts from modified cars"
+        right={<Link href="/marketplace">← Back to the marketplace</Link>}
       />
     </div>
   );

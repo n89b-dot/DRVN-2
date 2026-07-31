@@ -300,19 +300,21 @@ export async function checkoutCart(
   redirect(`/orders?${params.toString()}`);
 }
 
+/**
+ * "Buy now" puts the part in the cart and sends the buyer to checkout.
+ *
+ * It used to charge immediately, which created a paid order with every
+ * ship_* column null — the seller was owed a part they had no address to send
+ * it to. Physical goods cannot be bought in one click unless a delivery
+ * address is already on file, and DRVN has no saved-address concept yet.
+ */
 export async function buyNow(formData: FormData): Promise<void> {
-  const { user } = await requireUser();
+  await requireUser();
   const id = String(formData.get("listing_id") ?? "");
   if (!id) redirect("/marketplace");
 
-  const outcome = await purchaseListings(user.id, [id], { idempotencyKey: randomUUID() });
-
-  if (!outcome.purchased.length) {
-    redirect(
-      `/listings/${id}?error=${encodeURIComponent(outcome.error ?? "That part is no longer available.")}`
-    );
-  }
-  redirect(`/orders/${outcome.orderIds[0]}?placed=1`);
+  await setCartIds([...(await getCartIds()), id]);
+  redirect("/cart?buynow=1");
 }
 
 // ---------- Offers ----------
@@ -489,37 +491,39 @@ export async function respondToOffer(
     return { error: "That part was claimed by someone else first." };
   }
 
-  const { data: order } = await admin
-    .from("orders")
-    .select("total_cents, currency, buyer_id")
-    .eq("id", orderId)
-    .single();
-
-  const provider = getPaymentProvider();
-  const payment = await provider.createPayment({
-    orderId,
-    buyerId: order?.buyer_id ?? offer.buyer_id,
-    sellerId: user.id,
-    totalCents: order?.total_cents ?? offer.amount_cents,
-    currency: order?.currency ?? "USD",
-    idempotencyKey: `offer:${offerId}`,
-  });
-
-  await admin.rpc("purchase_finalize", {
-    p_order_id: orderId,
-    p_success: payment.status === "succeeded",
-    p_provider: provider.name,
-    p_reference: payment.status === "succeeded" ? payment.reference : null,
-    p_failure_reason: payment.status === "failed" ? payment.reason : null,
-  });
+  // Deliberately no charge here. Accepting reserves the part and opens an
+  // order the buyer completes with a delivery address — charging on the
+  // seller's click billed someone who had never seen a checkout, consented to
+  // an amount, or said where to send it. The reservation gives them 24 hours;
+  // the sweeper releases it after that.
+  await notifyOfferAccepted(admin, orderId);
 
   revalidatePath("/orders");
   revalidatePath(`/listings/${listing.id}`);
+  return { ok: "Offer accepted — the buyer has 24 hours to complete checkout." };
+}
 
-  if (payment.status !== "succeeded") {
-    return { error: "The buyer's payment didn't go through. The part is back on sale." };
-  }
-  return { ok: "Offer accepted — the part is sold." };
+/** Tells the buyer their offer landed and there is a checkout waiting. */
+async function notifyOfferAccepted(
+  admin: ReturnType<typeof createAdminClient>,
+  orderId: string
+) {
+  const { data: order } = await admin
+    .from("orders")
+    .select("buyer_id, seller_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order?.buyer_id) return;
+
+  await admin.from("notifications").insert({
+    user_id: order.buyer_id,
+    kind: "offer_accepted",
+    section: "marketplace",
+    title: "Your offer was accepted",
+    body: "Complete checkout within 24 hours to secure the part.",
+    href: `/orders/${orderId}/checkout`,
+    actor_id: order.seller_id,
+  });
 }
 
 /** Buyer withdraws their own live offer. */
@@ -581,23 +585,75 @@ export async function acceptCounter(
     return { error: "That part was claimed by someone else first." };
   }
 
+  // As with accepting an offer: reserve now, charge at checkout, where the
+  // buyer supplies a delivery address and confirms the amount.
+  revalidatePath("/orders");
+  redirect(`/orders/${orderId}/checkout`);
+}
+
+/**
+ * Completes an order that is already reserved — the path an accepted offer
+ * takes. The listing is held; what is missing is a delivery address, the
+ * buyer's confirmation of the amount, and the charge itself.
+ *
+ * Deliberately mirrors checkoutCart rather than sharing its body: that one
+ * claims listings from a cart, this one settles a claim that already exists.
+ */
+export async function completeReservedOrder(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+  const admin = createAdminClient();
+
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "Missing order." };
+
+  const { shipping, error: shippingError } = readShipping(formData);
+  if (shippingError) return { error: shippingError };
+
   const { data: order } = await admin
     .from("orders")
-    .select("total_cents, currency")
+    .select("id, buyer_id, seller_id, status, total_cents, currency")
     .eq("id", orderId)
-    .single();
+    .maybeSingle();
+
+  if (!order) return { error: "Order not found." };
+  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
+  if (order.status !== "pending") {
+    return {
+      error:
+        order.status === "cancelled"
+          ? "This offer lapsed and the part went back on sale."
+          : "This order has already been settled.",
+    };
+  }
+
+  await admin
+    .from("orders")
+    .update({
+      ship_name: shipping!.name,
+      ship_line1: shipping!.line1,
+      ship_line2: shipping!.line2,
+      ship_city: shipping!.city,
+      ship_postcode: shipping!.postcode,
+      ship_country: shipping!.country,
+      ship_phone: shipping!.phone,
+      is_collection: shipping!.isCollection,
+    })
+    .eq("id", orderId);
 
   const provider = getPaymentProvider();
   const payment = await provider.createPayment({
     orderId,
     buyerId: user.id,
-    sellerId: listing.seller_id,
-    totalCents: order?.total_cents ?? offer.counter_amount_cents,
-    currency: order?.currency ?? "USD",
-    idempotencyKey: `counter:${offerId}`,
+    sellerId: order.seller_id ?? "",
+    totalCents: order.total_cents,
+    currency: order.currency,
+    idempotencyKey: `order:${orderId}`,
   });
 
-  await admin.rpc("purchase_finalize", {
+  const { data: result } = await admin.rpc("purchase_finalize", {
     p_order_id: orderId,
     p_success: payment.status === "succeeded",
     p_provider: provider.name,
@@ -606,8 +662,15 @@ export async function acceptCounter(
   });
 
   revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+
   if (payment.status !== "succeeded") {
-    return { error: "Payment didn't go through." };
+    return { error: `Payment failed: ${payment.status === "failed" ? payment.reason : "unknown"}` };
+  }
+  // purchase_finalize refuses anything already settled, so a replayed submit
+  // reports the truth rather than pretending to charge twice.
+  if (result && typeof result === "object" && "applied" in result && result.applied === false) {
+    redirect(`/orders/${orderId}`);
   }
   redirect(`/orders/${orderId}?placed=1`);
 }

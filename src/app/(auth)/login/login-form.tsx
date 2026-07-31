@@ -13,10 +13,10 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
     <div>
       <span className="microlabel">Sign in</span>
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[650] leading-[1.05] tracking-[-0.02em]">
-        Open your <span className="text-live">sheet.</span>
+        Welcome <span className="text-live">back.</span>
       </h1>
       <p className="mt-3 text-[15px] text-dim">
-        One sign-in holds your garage, your listings and the money.
+        Your garage, your listings, your orders — one sign-in.
       </p>
 
       {message === "check-email" && (
@@ -43,7 +43,14 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           />
         </div>
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
-          <span className="microlabel">Password</span>
+          <span className="microlabel flex items-baseline justify-between gap-3">
+            Password
+            {/* The only route into account recovery — the reset actions existed
+                with nothing linking to them. */}
+            <Link href="/login/forgot" className="jumplink">
+              Forgot?
+            </Link>
+          </span>
           <input
             name="password"
             type="password"
@@ -59,18 +66,18 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           )}
         </div>
         <button type="submit" disabled={pending} className="btn btn--live w-full">
-          {pending ? "Opening…" : "Open your sheet"}
+          {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
       <div className="authswap">
         <Link href="/signup" className="jumplink">
-          No sheet yet?
+          New here? Create an account
         </Link>
       </div>
 
       <div className="mt-6">
-        <span className="microlabel">Or carry an account you already have</span>
+        <span className="microlabel">Or use an account you already have</span>
         <div className="mt-3">
           <OAuthButton />
         </div>

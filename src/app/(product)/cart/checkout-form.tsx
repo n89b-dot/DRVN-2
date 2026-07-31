@@ -17,19 +17,27 @@ export function CheckoutForm({
   allowsCollection,
   total,
   paymentsAreLive,
+  action = checkoutCart,
+  orderId,
+  submitLabel,
 }: {
   idempotencyKey: string;
   allowsCollection: boolean;
   total: string;
   paymentsAreLive: boolean;
+  /** Defaults to cart checkout; a reserved order passes its own completion action. */
+  action?: (prev: CommerceState, formData: FormData) => Promise<CommerceState>;
+  orderId?: string;
+  submitLabel?: string;
 }) {
-  const [state, formAction, pending] = useActionState<CommerceState, FormData>(checkoutCart, {});
+  const [state, formAction, pending] = useActionState<CommerceState, FormData>(action, {});
   const [collection, setCollection] = useState(false);
   const errorId = useId();
 
   return (
     <form action={formAction} className="mt-4 grid gap-4">
       <input type="hidden" name="idempotency_key" value={idempotencyKey} />
+      {orderId && <input type="hidden" name="order_id" value={orderId} />}
 
       {allowsCollection && (
         <label className="flex items-center gap-2 text-[13px]">
@@ -119,7 +127,7 @@ export function CheckoutForm({
       )}
 
       <button type="submit" disabled={pending} className="btn btn--live w-full">
-        {pending ? "Placing order…" : `Confirm and pay ${total}`}
+        {pending ? "Placing order…" : (submitLabel ?? `Confirm and pay ${total}`)}
       </button>
 
       {/* aria-live so a screen reader hears the failure, not just sighted users. */}

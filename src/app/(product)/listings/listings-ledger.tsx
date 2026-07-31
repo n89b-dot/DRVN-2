@@ -5,8 +5,11 @@ import { Fragment, useState } from "react";
 
 import { Countdown } from "@/components/livesheet";
 import { Media } from "@/components/ui";
+import type { ListingStatus } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 import { formatPrice } from "@/lib/payments/fee";
+
+import { ListingStatusActions } from "./status-actions";
 
 export type LedgerOffer = {
   id: string;
@@ -23,7 +26,7 @@ export type LedgerRow = {
   title: string;
   partNumber: string | null;
   cover: string | null;
-  status: string;
+  status: ListingStatus;
   priceCents: number;
   views: number;
   watchers: number;
@@ -67,7 +70,7 @@ function OfferHistory({ row }: { row: LedgerRow }) {
   if (!row.offers.length) {
     return (
       <p className="py-1 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
-        No offers filed against this line yet
+        No offers on this listing yet
       </p>
     );
   }
@@ -93,7 +96,7 @@ function OfferHistory({ row }: { row: LedgerRow }) {
               </span>
             </div>
             <p className="order__meta mt-0.5">
-              Filed {new Date(offer.created_at).toLocaleDateString()}
+              Made {new Date(offer.created_at).toLocaleDateString()}
               {offer.expires_at && live && (
                 <>
                   {" · lapses in "}
@@ -106,7 +109,7 @@ function OfferHistory({ row }: { row: LedgerRow }) {
       })}
       <div className="pt-3">
         <Link href="/orders" className="jumplink">
-          Answer offers on the orders sheet →
+          Answer offers in Orders →
         </Link>
       </div>
     </div>
@@ -184,6 +187,7 @@ export function ListingsLedger({ rows }: { rows: LedgerRow[] }) {
                         <Link href={`/listings/${row.id}/edit`} className="relbtn !static">
                           Edit
                         </Link>
+                        <ListingStatusActions id={row.id} status={row.status} />
                         {row.unansweredQuestions > 0 && (
                           <Link href={`/listings/${row.id}#qa`} className="chip chip--live">
                             {row.unansweredQuestions} question
@@ -201,7 +205,7 @@ export function ListingsLedger({ rows }: { rows: LedgerRow[] }) {
                       {row.sourceCar.name}
                     </Link>
                   ) : (
-                    <span className="order__meta">No car sheet</span>
+                    <span className="order__meta">Not linked to a car</span>
                   )}
                 </td>
 

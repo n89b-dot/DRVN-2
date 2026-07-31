@@ -357,7 +357,8 @@ export type Database = {
           p_reference?: string | null;
           p_failure_reason?: string | null;
         };
-        Returns: undefined;
+        /** { applied, reason?, status? } — `applied:false` means already settled. */
+        Returns: { applied: boolean; reason?: string; status?: string };
       };
       offer_accept_begin: {
         Args: {
@@ -369,7 +370,7 @@ export type Database = {
       };
       release_expired_reservations: {
         Args: Record<string, never>;
-        Returns: number;
+        Returns: { listings_released: number; orders_cancelled: number };
       };
       consume_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window: string };
