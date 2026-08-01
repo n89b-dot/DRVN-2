@@ -61,7 +61,7 @@ export default async function PublicProfilePage({
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, created_at, updated_at")
     .eq("username", username)
     .maybeSingle();
 

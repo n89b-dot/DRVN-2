@@ -18,7 +18,7 @@ export default async function ProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user!.id).single();
+  const { data: profile } = await supabase.from("profiles").select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, created_at, updated_at").eq("id", user!.id).single();
 
   const view = await loadProfileView(supabase, user!.id, { publicOnly: false });
   const { website, rest } = splitLinks(profile?.links);
