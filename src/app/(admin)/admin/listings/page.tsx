@@ -75,6 +75,10 @@ export default async function AdminListingsPage({
       </div>
 
       {rows.length ? (
+        <>
+        <p className="order__meta mb-2">
+          {rows.length} listing{rows.length === 1 ? "" : "s"}
+        </p>
         <table className="ledger">
           <thead>
             <tr>
@@ -103,11 +107,11 @@ export default async function AdminListingsPage({
                     <span className="order__meta mt-0.5 block text-live">“{l.removed_reason}”</span>
                   )}
                 </td>
-                <td>{l.seller?.username ?? l.seller?.displayName ?? "—"}</td>
+                <td data-label="Seller">{l.seller?.username ?? l.seller?.displayName ?? "—"}</td>
                 <td className="ledger__num" data-label="Asking">
                   {formatPrice(l.price_cents)}
                 </td>
-                <td>
+                <td data-label="Status">
                   <span className={cx("chip", l.status === "removed" ? "chip--live" : l.status === "active" ? "chip--ok" : "chip--spent")}>
                     {l.status}
                   </span>
@@ -144,6 +148,7 @@ export default async function AdminListingsPage({
             ))}
           </tbody>
         </table>
+        </>
       ) : (
         <div className="tile">
           <span className="microlabel">Results</span>

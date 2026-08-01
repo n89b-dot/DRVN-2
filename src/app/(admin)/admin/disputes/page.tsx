@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import { SheetTabs } from "@/components/ui";
 import { getDisputeQueue, DISPUTE_SLA_DAYS, type DisputeQueueRow } from "@/lib/admin/queries";
+import type { DisputeCategory } from "@/lib/database.types";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx } from "@/lib/format";
 
@@ -16,17 +17,31 @@ const CATEGORY_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-function DisputeTable({ rows, empty }: { rows: DisputeQueueRow[]; empty: string }) {
+function DisputeTable({
+  rows,
+  total,
+  empty,
+}: {
+  rows: DisputeQueueRow[];
+  total: number;
+  empty: string;
+}) {
   if (!rows.length) {
     return (
       <div className="tile mt-4">
         <span className="microlabel">Queue</span>
-        <p className="order__meta">{empty}</p>
+        <p className="order__meta">
+          {total > 0 ? `Nothing matches — ${total} in the queue without filters.` : empty}
+        </p>
       </div>
     );
   }
   return (
-    <table className="ledger mt-4">
+    <>
+      <p className="order__meta mt-3">
+        Showing {rows.length} of {total}
+      </p>
+      <table className="ledger mt-2">
       <thead>
         <tr>
           <th scope="col">Order</th>
@@ -57,20 +72,20 @@ function DisputeTable({ rows, empty }: { rows: DisputeQueueRow[]; empty: string 
             <td>
               <span className="chip chip--spent">{CATEGORY_LABEL[r.category ?? "other"]}</span>
               {r.reason && (
-                <span className="order__meta mt-1 block max-w-[28ch] truncate" title={r.reason}>
+                <span className="order__meta mt-1 block max-w-[44ch] truncate" title={r.reason}>
                   “{r.reason}”
                 </span>
               )}
             </td>
-            <td>{r.buyer?.username ?? r.buyer?.displayName ?? "—"}</td>
-            <td>{r.seller?.username ?? r.seller?.displayName ?? "—"}</td>
+            <td data-label="Buyer">{r.buyer?.username ?? r.buyer?.displayName ?? "—"}</td>
+            <td data-label="Seller">{r.seller?.username ?? r.seller?.displayName ?? "—"}</td>
             <td className="ledger__num" data-label="Value">
               {formatPrice(r.totalCents)}
             </td>
             <td className={cx("ledger__num", r.overSla && "text-live")} data-label="Age">
               {r.ageDays}d
             </td>
-            <td>
+            <td data-label="State">
               {r.overSla ? (
                 <span className="chip chip--live">Over SLA</span>
               ) : r.refundOfferCents ? (
@@ -85,6 +100,7 @@ function DisputeTable({ rows, empty }: { rows: DisputeQueueRow[]; empty: string 
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 
@@ -96,13 +112,24 @@ function DisputeTable({ rows, empty }: { rows: DisputeQueueRow[]; empty: string 
 export default async function AdminDisputesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; category?: string }>;
 }) {
-  const { view } = await searchParams;
+  const { view, q, category } = await searchParams;
+  const activeCategory = Object.keys(CATEGORY_LABEL).includes(category ?? "")
+    ? (category as DisputeCategory)
+    : undefined;
+  const filters = { query: q, category: activeCategory };
   const [open, resolved] = await Promise.all([
-    getDisputeQueue("open"),
-    getDisputeQueue("resolved"),
+    getDisputeQueue("open", filters),
+    getDisputeQueue("resolved", filters),
   ]);
+
+  const linkFor = (cat?: string) =>
+    `/admin/disputes?${new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(cat ? { category: cat } : {}),
+      ...(view === "resolved" ? { view } : {}),
+    })}`;
 
   return (
     <>
@@ -114,6 +141,36 @@ export default async function AdminDisputesPage({
         </p>
       </Rv>
 
+      <form method="get" className="search mb-2" role="search">
+        <label htmlFor="admin-dispute-q" className="sr-only">
+          Search disputes
+        </label>
+        <input
+          id="admin-dispute-q"
+          type="search"
+          name="q"
+          defaultValue={q ?? ""}
+          placeholder="Order id, part, buyer or seller"
+          className="ctl"
+        />
+        {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
+        {view === "resolved" && <input type="hidden" name="view" value="resolved" />}
+        <button type="submit" className="btn">
+          Search
+        </button>
+      </form>
+
+      <div className="filters mb-4" aria-label="Filter by category">
+        <Link href={linkFor()} className={cx("fbtn", !activeCategory && "is-on")}>
+          All
+        </Link>
+        {Object.entries(CATEGORY_LABEL).map(([key, label]) => (
+          <Link key={key} href={linkFor(key)} className={cx("fbtn", activeCategory === key && "is-on")}>
+            {label}
+          </Link>
+        ))}
+      </div>
+
       <SheetTabs
         label="Dispute queues"
         // resolveTab lives in a client module and can't be called here (Next 16).
@@ -122,15 +179,25 @@ export default async function AdminDisputesPage({
           {
             key: "open",
             label: "Open",
-            count: open.length,
-            live: open.some((r) => r.overSla),
-            panel: <DisputeTable rows={open} empty="No open disputes. The queue is clear." />,
+            count: open.rows.length,
+            live: open.rows.some((r) => r.overSla),
+            panel: (
+              <DisputeTable
+                rows={open.rows}
+                total={open.total}
+                empty="No open disputes. The queue is clear."
+              />
+            ),
           },
           {
             key: "resolved",
             label: "Resolved",
             panel: (
-              <DisputeTable rows={resolved} empty="Nothing resolved yet — history lands here." />
+              <DisputeTable
+                rows={resolved.rows}
+                total={resolved.total}
+                empty="Nothing resolved yet — history lands here."
+              />
             ),
           },
         ]}

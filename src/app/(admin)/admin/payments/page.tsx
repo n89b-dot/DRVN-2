@@ -32,8 +32,13 @@ const INTENT_LABEL: Record<string, string> = {
  * sold before onboarding), and the webhook event stream. Every open row here
  * is a real amount in the wrong place.
  */
-export default async function AdminPaymentsPage() {
-  const ops = await getPaymentsOps();
+export default async function AdminPaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  const ops = await getPaymentsOps({ query: q });
   const openRecoveries = ops.recoveries.filter((r) => r.status === "open");
   const closedRecoveries = ops.recoveries.filter((r) => r.status !== "open");
 
@@ -46,6 +51,23 @@ export default async function AdminPaymentsPage() {
           the order sheet — never the Stripe dashboard, which the database can&apos;t see.
         </p>
       </Rv>
+
+      <form method="get" className="search mb-6" role="search">
+        <label htmlFor="payments-q" className="sr-only">
+          Search payments ops
+        </label>
+        <input
+          id="payments-q"
+          type="search"
+          name="q"
+          defaultValue={q ?? ""}
+          placeholder="Order id, part title, or seller"
+          className="ctl"
+        />
+        <button type="submit" className="btn">
+          Search
+        </button>
+      </form>
 
       <section aria-label="Recovery cases" className="mb-8">
         <span className="microlabel">Recovery cases ({openRecoveries.length} open)</span>
@@ -160,11 +182,11 @@ export default async function AdminPaymentsPage() {
                     </Link>
                     <span className="order__meta">{i.order_id.slice(0, 8)}</span>
                   </td>
-                  <td>{i.seller?.username ?? "—"}</td>
+                  <td data-label="Seller">{i.seller?.username ?? "—"}</td>
                   <td className="ledger__num" data-label="Net owed">
                     {formatPrice(i.amount_cents)}
                   </td>
-                  <td>
+                  <td data-label="State">
                     <span
                       className={cx(
                         "chip",
@@ -175,7 +197,7 @@ export default async function AdminPaymentsPage() {
                     </span>
                     {i.last_error && <span className="order__meta mt-0.5 block">{i.last_error}</span>}
                   </td>
-                  <td className="order__meta">
+                  <td className="order__meta" data-label="Available">
                     {i.available_at ? new Date(i.available_at).toLocaleDateString() : "on delivery"}
                   </td>
                 </tr>

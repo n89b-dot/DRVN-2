@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { searchOrders } from "@/lib/admin/queries";
+import { ORDERS_PAGE_SIZE, searchOrders } from "@/lib/admin/queries";
 import type { OrderStatus } from "@/lib/database.types";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx } from "@/lib/format";
@@ -27,11 +27,19 @@ const STATUSES: OrderStatus[] = [
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
-  const { q, status } = await searchParams;
+  const { q, status, page: pageParam } = await searchParams;
   const activeStatus = STATUSES.includes(status as OrderStatus) ? (status as OrderStatus) : undefined;
-  const rows = await searchOrders({ query: q, status: activeStatus });
+  const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
+  const { rows, hasMore } = await searchOrders({ query: q, status: activeStatus, page });
+
+  const pageLink = (target: number) =>
+    `/admin/orders?${new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(activeStatus ? { status: activeStatus } : {}),
+      ...(target > 0 ? { page: String(target) } : {}),
+    })}`;
 
   return (
     <>
@@ -76,6 +84,11 @@ export default async function AdminOrdersPage({
       </div>
 
       {rows.length ? (
+        <>
+        <p className="order__meta mb-2">
+          Showing {page * ORDERS_PAGE_SIZE + 1}–{page * ORDERS_PAGE_SIZE + rows.length} · newest
+          first
+        </p>
         <table className="ledger">
           <thead>
             <tr>
@@ -100,27 +113,44 @@ export default async function AdminOrdersPage({
                     {r.id.slice(0, 8)} · {new Date(r.createdAt).toLocaleDateString()}
                   </span>
                 </td>
-                <td>{r.buyer?.username ?? "—"}</td>
-                <td>{r.seller?.username ?? "—"}</td>
+                <td data-label="Buyer">{r.buyer?.username ?? "—"}</td>
+                <td data-label="Seller">{r.seller?.username ?? "—"}</td>
                 <td className="ledger__num" data-label="Total">
                   {formatPrice(r.totalCents)}
                 </td>
-                <td>
+                <td data-label="Money">
                   {r.refundedCents > 0 ? (
-                    <span className="chip chip--live">refunded {formatPrice(r.refundedCents)}</span>
+                    <span className="chip chip--live">Refunded {formatPrice(r.refundedCents)}</span>
                   ) : r.transferred ? (
-                    <span className="chip chip--ok">paid out</span>
+                    <span className="chip chip--ok">Paid out</span>
                   ) : (
-                    <span className="chip chip--spent">held</span>
+                    <span className="chip chip--spent">Held</span>
                   )}
                 </td>
-                <td>
+                <td data-label="Status">
                   <span className="chip chip--spent">{r.status}</span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {(page > 0 || hasMore) && (
+          <div className="mt-4 flex items-center justify-between">
+            {page > 0 ? (
+              <Link href={pageLink(page - 1)} className="jumplink">
+                ← Newer
+              </Link>
+            ) : (
+              <span />
+            )}
+            {hasMore && (
+              <Link href={pageLink(page + 1)} className="jumplink">
+                Older →
+              </Link>
+            )}
+          </div>
+        )}
+        </>
       ) : (
         <div className="tile">
           <span className="microlabel">Results</span>

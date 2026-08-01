@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { getAdminContext } from "@/lib/admin/guard";
+import { getNavCounts } from "@/lib/admin/queries";
 
 import { AdminNav } from "./admin/_components/admin-nav";
 
@@ -33,6 +34,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const ctx = await getAdminContext();
   if (!ctx) notFound();
 
+  const counts = await getNavCounts();
+
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-rule-soft">
@@ -41,7 +44,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <span className="font-display text-[19px] font-semibold tracking-tight">DRVN</span>
             <span className="microlabel !mb-0">Console</span>
           </div>
-          <AdminNav />
+          <AdminNav counts={counts} />
         </div>
       </header>
       <main className="wrap py-8">{children}</main>

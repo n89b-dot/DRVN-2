@@ -15,6 +15,15 @@ import { ActionDialog } from "../../_components/action-dialog";
 
 export const dynamic = "force-dynamic";
 
+const INTENT_STATE: Record<string, string> = {
+  holding: "held — clearing window",
+  ready: "due — next worker pass",
+  processing: "transferring now",
+  blocked_unpayable: "stuck — seller not payable",
+  failed: "transfer failed — see Payments",
+  cancelled: "no transfer — cancelled",
+};
+
 const STATUS_CHIP: Record<string, string> = {
   disputed: "chip--live",
   refunded: "chip--spent",
@@ -65,18 +74,20 @@ export default async function AdminOrderPage({
       </Rv>
 
       {disputed && (
-        <div className="callout mb-6">
-          <span className="microlabel microlabel--live">
-            Dispute · {order.dispute_category ?? "other"} · opened {days(order.disputed_at)}
+        <div className="alert alert--live mb-6" role="status">
+          <span className="alert__ico" aria-hidden="true">
+            ●
           </span>
-          <p className="mt-1 text-[14.5px]">
+          <h4>
+            Dispute — {(order.dispute_category ?? "other").replaceAll("_", " ")} · opened{" "}
+            {days(order.disputed_at)}
+          </h4>
+          <p>
             {order.dispute_reason ?? "No reason text given."}
+            {order.refund_offer_cents
+              ? ` The seller has offered ${formatPrice(order.refund_offer_cents)} — awaiting the buyer.`
+              : ""}
           </p>
-          {order.refund_offer_cents && (
-            <p className="order__meta mt-1">
-              Seller has offered {formatPrice(order.refund_offer_cents)} — awaiting the buyer.
-            </p>
-          )}
         </div>
       )}
 
@@ -93,7 +104,7 @@ export default async function AdminOrderPage({
                 value: order.transfer_reference
                   ? `${formatPrice(order.total_cents - order.platform_fee_cents)} · ${days(order.transferred_at)}`
                   : transferIntent
-                    ? `held (${transferIntent.status})`
+                    ? (INTENT_STATE[transferIntent.status] ?? transferIntent.status)
                     : "not yet",
               },
               { label: "Platform fee", value: formatPrice(order.platform_fee_cents) },
@@ -121,7 +132,11 @@ export default async function AdminOrderPage({
                     : `Refunds the buyer. No transfer has been made yet, so nothing needs reclaiming. ${formatPrice(refundable)} remains refundable.`
                 }
                 fields={[
-                  { kind: "amount", label: "Amount (£)", hint: "Blank = refund everything left." },
+                  {
+                    kind: "amount",
+                    label: `Amount (${order.currency})`,
+                    hint: "Blank = refund everything left.",
+                  },
                   { kind: "reason" },
                 ]}
                 submitLabel="Refund"

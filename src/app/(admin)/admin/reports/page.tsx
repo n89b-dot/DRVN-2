@@ -4,6 +4,8 @@ import { Rv } from "@/components/livesheet";
 import { SheetTabs } from "@/components/ui";
 import { adminResolveReport } from "@/lib/admin/actions";
 import { getReports, type AdminReportRow } from "@/lib/admin/queries";
+import type { ReportReason } from "@/lib/database.types";
+import { cx } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
 
@@ -95,10 +97,22 @@ function ReportList({ rows, open }: { rows: AdminReportRow[]; open: boolean }) {
 export default async function AdminReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; reason?: string }>;
 }) {
-  const { view } = await searchParams;
-  const [open, closed] = await Promise.all([getReports("open"), getReports("closed")]);
+  const { view, reason } = await searchParams;
+  const activeReason = Object.keys(REASON_LABEL).includes(reason ?? "")
+    ? (reason as ReportReason)
+    : undefined;
+  const [open, closed] = await Promise.all([
+    getReports("open", { reason: activeReason }),
+    getReports("closed", { reason: activeReason }),
+  ]);
+
+  const linkFor = (r?: string) =>
+    `/admin/reports?${new URLSearchParams({
+      ...(r ? { reason: r } : {}),
+      ...(view === "resolved" ? { view } : {}),
+    })}`;
 
   return (
     <>
@@ -109,6 +123,17 @@ export default async function AdminReportsPage({
           standing.
         </p>
       </Rv>
+
+      <div className="filters mb-4" aria-label="Filter by reason">
+        <Link href={linkFor()} className={cx("fbtn", !activeReason && "is-on")}>
+          All
+        </Link>
+        {Object.entries(REASON_LABEL).map(([key, label]) => (
+          <Link key={key} href={linkFor(key)} className={cx("fbtn", activeReason === key && "is-on")}>
+            {label}
+          </Link>
+        ))}
+      </div>
 
       <SheetTabs
         label="Report queues"

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
-import { searchUsers } from "@/lib/admin/queries";
+import { searchUsers, USER_STATE_FILTERS, type UserStateFilter } from "@/lib/admin/queries";
 import { cx } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
@@ -18,10 +18,13 @@ export const dynamic = "force-dynamic";
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; state?: string }>;
 }) {
-  const { q } = await searchParams;
-  const rows = await searchUsers(q);
+  const { q, state } = await searchParams;
+  const activeState = (USER_STATE_FILTERS.some((f) => f.key === state)
+    ? state
+    : "all") as UserStateFilter;
+  const rows = await searchUsers(q, activeState);
 
   return (
     <>
@@ -45,12 +48,32 @@ export default async function AdminUsersPage({
           placeholder="Username or display name"
           className="ctl"
         />
+        {activeState !== "all" && <input type="hidden" name="state" value={activeState} />}
         <button type="submit" className="btn">
           Search
         </button>
       </form>
 
+      <div className="filters mb-4" aria-label="Filter by state">
+        {USER_STATE_FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={`/admin/users?${new URLSearchParams({
+              ...(q ? { q } : {}),
+              ...(f.key !== "all" ? { state: f.key } : {}),
+            })}`}
+            className={cx("fbtn", activeState === f.key && "is-on")}
+          >
+            {f.label}
+          </Link>
+        ))}
+      </div>
+
       {rows.length ? (
+        <>
+        <p className="order__meta mb-2">
+          {rows.length} user{rows.length === 1 ? "" : "s"}
+        </p>
         <table className="ledger">
           <thead>
             <tr>
@@ -98,16 +121,16 @@ export default async function AdminUsersPage({
                 <td className={cx("ledger__num", u.disputeCount > 0 && "text-live")} data-label="Disputes">
                   {u.disputeCount || "—"}
                 </td>
-                <td>
+                <td data-label="Payouts">
                   <span className={cx("chip", u.payoutsEnabled ? "chip--ok" : "chip--spent")}>
-                    {u.payoutsEnabled ? "enabled" : "not set up"}
+                    {u.payoutsEnabled ? "Enabled" : "Not set up"}
                   </span>
                 </td>
-                <td>
+                <td data-label="State">
                   {u.suspendedAt ? (
-                    <span className="chip chip--live">suspended</span>
+                    <span className="chip chip--live">Suspended</span>
                   ) : (
-                    <span className="chip chip--ok">active</span>
+                    <span className="chip chip--ok">Active</span>
                   )}
                 </td>
                 <td>
@@ -142,10 +165,11 @@ export default async function AdminUsersPage({
             ))}
           </tbody>
         </table>
+        </>
       ) : (
         <div className="tile">
           <span className="microlabel">Results</span>
-          <p className="order__meta">No users match.</p>
+          <p className="order__meta">No users match that search and filter.</p>
         </div>
       )}
     </>

@@ -139,7 +139,16 @@ export type DisputeQueueRow = {
   transferred: boolean;
 };
 
-export async function getDisputeQueue(scope: "open" | "resolved"): Promise<DisputeQueueRow[]> {
+export type DisputeQueueResult = {
+  rows: DisputeQueueRow[];
+  /** Before search/category filtering — "N open · M shown". */
+  total: number;
+};
+
+export async function getDisputeQueue(
+  scope: "open" | "resolved",
+  opts: { query?: string; category?: DisputeCategory } = {}
+): Promise<DisputeQueueResult> {
   const a = admin();
   const base = a
     .from("orders")
@@ -157,7 +166,7 @@ export async function getDisputeQueue(scope: "open" | "resolved"): Promise<Dispu
   const parties = await partiesFor(a, rows.flatMap((o) => [o.buyer_id, o.seller_id]));
   const titles = await titlesFor(a, rows.map((o) => o.id));
 
-  return rows.map((o) => {
+  const mapped = rows.map((o) => {
     const ageDays = o.disputed_at
       ? Math.floor((Date.now() - new Date(o.disputed_at).getTime()) / 86_400_000)
       : 0;
@@ -177,6 +186,24 @@ export async function getDisputeQueue(scope: "open" | "resolved"): Promise<Dispu
       transferred: Boolean(o.transfer_reference),
     };
   });
+
+  // Search + category narrow the view; `total` keeps the true queue size on
+  // screen ("N open · M shown") so a filter can never hide the backlog.
+  const q = opts.query?.trim().toLowerCase();
+  const filtered = mapped.filter((r) => {
+    if (opts.category && r.category !== opts.category) return false;
+    if (!q) return true;
+    return (
+      r.orderId.toLowerCase().startsWith(q) ||
+      r.title.toLowerCase().includes(q) ||
+      (r.buyer?.username ?? "").toLowerCase().includes(q) ||
+      (r.buyer?.displayName ?? "").toLowerCase().includes(q) ||
+      (r.seller?.username ?? "").toLowerCase().includes(q) ||
+      (r.seller?.displayName ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  return { rows: filtered, total: mapped.length };
 }
 
 async function titlesFor(a: Admin, orderIds: string[]): Promise<Map<string, string>> {
@@ -317,16 +344,27 @@ export type AdminOrderRow = {
   transferred: boolean;
 };
 
+export const ORDERS_PAGE_SIZE = 50;
+
+export type AdminOrdersResult = {
+  rows: AdminOrderRow[];
+  page: number;
+  hasMore: boolean;
+};
+
 export async function searchOrders(opts: {
   query?: string;
   status?: OrderStatus;
-}): Promise<AdminOrderRow[]> {
+  page?: number;
+}): Promise<AdminOrdersResult> {
   const a = admin();
+  const page = Math.max(0, opts.page ?? 0);
   let builder = a
     .from("orders")
     .select("id, status, created_at, total_cents, refunded_cents, currency, buyer_id, seller_id, transfer_reference")
     .order("created_at", { ascending: false })
-    .limit(100);
+    // One extra row = a cheap hasMore signal without a second count query.
+    .range(page * ORDERS_PAGE_SIZE, page * ORDERS_PAGE_SIZE + ORDERS_PAGE_SIZE);
   if (opts.status) builder = builder.eq("status", opts.status);
 
   const query = opts.query?.trim();
@@ -352,7 +390,7 @@ export async function searchOrders(opts: {
         .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
         .limit(20);
       const ids = (users ?? []).map((u) => u.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], page, hasMore: false };
       builder = builder.or(
         `buyer_id.in.(${ids.join(",")}),seller_id.in.(${ids.join(",")})`
       );
@@ -360,22 +398,28 @@ export async function searchOrders(opts: {
   }
 
   const { data: orders } = await builder;
-  const rows = orders ?? [];
+  const fetched = orders ?? [];
+  const hasMore = fetched.length > ORDERS_PAGE_SIZE;
+  const rows = fetched.slice(0, ORDERS_PAGE_SIZE);
   const parties = await partiesFor(a, rows.flatMap((o) => [o.buyer_id, o.seller_id]));
   const titles = await titlesFor(a, rows.map((o) => o.id));
 
-  return rows.map((o) => ({
-    id: o.id,
-    status: o.status,
-    createdAt: o.created_at,
-    totalCents: o.total_cents,
-    refundedCents: o.refunded_cents,
-    currency: o.currency,
-    title: titles.get(o.id) ?? "Order",
-    buyer: o.buyer_id ? (parties.get(o.buyer_id) ?? null) : null,
-    seller: o.seller_id ? (parties.get(o.seller_id) ?? null) : null,
-    transferred: Boolean(o.transfer_reference),
-  }));
+  return {
+    page,
+    hasMore,
+    rows: rows.map((o) => ({
+      id: o.id,
+      status: o.status,
+      createdAt: o.created_at,
+      totalCents: o.total_cents,
+      refundedCents: o.refunded_cents,
+      currency: o.currency,
+      title: titles.get(o.id) ?? "Order",
+      buyer: o.buyer_id ? (parties.get(o.buyer_id) ?? null) : null,
+      seller: o.seller_id ? (parties.get(o.seller_id) ?? null) : null,
+      transferred: Boolean(o.transfer_reference),
+    })),
+  };
 }
 
 // ---------- Listings ----------
@@ -421,16 +465,30 @@ export type AdminUserRow = {
   isAdmin: boolean;
 };
 
-export async function searchUsers(query?: string): Promise<AdminUserRow[]> {
+export type UserStateFilter = "all" | "suspended" | "sellers" | "no_payouts" | "admins";
+
+export const USER_STATE_FILTERS: { key: UserStateFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "suspended", label: "Suspended" },
+  { key: "sellers", label: "Sellers" },
+  { key: "no_payouts", label: "Sellers w/o payouts" },
+  { key: "admins", label: "Admins" },
+];
+
+export async function searchUsers(
+  query?: string,
+  state: UserStateFilter = "all"
+): Promise<AdminUserRow[]> {
   const a = admin();
   let builder = a
     .from("profiles")
     .select("id, username, display_name, profile_type, created_at, suspended_at, suspended_reason, payouts_enabled")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(state === "all" ? 50 : 200);
   if (query?.trim()) {
     builder = builder.or(`username.ilike.%${query.trim()}%,display_name.ilike.%${query.trim()}%`);
   }
+  if (state === "suspended") builder = builder.not("suspended_at", "is", null);
   const { data: profiles } = await builder;
   const rows = profiles ?? [];
   if (!rows.length) return [];
@@ -447,7 +505,7 @@ export async function searchUsers(query?: string): Promise<AdminUserRow[]> {
     (list ?? []).filter((x) => x === id).length;
   const adminSet = new Set((admins.data ?? []).map((r) => r.user_id));
 
-  return rows.map((p) => ({
+  const mapped = rows.map((p) => ({
     id: p.id,
     username: p.username,
     displayName: p.display_name,
@@ -463,6 +521,19 @@ export async function searchUsers(query?: string): Promise<AdminUserRow[]> {
       count(disputes.data?.map((o) => o.buyer_id), p.id),
     isAdmin: adminSet.has(p.id),
   }));
+
+  // The derived states (sold/listed anything, console membership) can only be
+  // filtered after the counts exist.
+  switch (state) {
+    case "sellers":
+      return mapped.filter((u) => u.listingCount > 0 || u.saleCount > 0);
+    case "no_payouts":
+      return mapped.filter((u) => (u.listingCount > 0 || u.saleCount > 0) && !u.payoutsEnabled);
+    case "admins":
+      return mapped.filter((u) => u.isAdmin);
+    default:
+      return mapped;
+  }
 }
 
 // ---------- Reports ----------
@@ -472,7 +543,10 @@ export type AdminReportRow = Report & {
   subjectLabel: string;
 };
 
-export async function getReports(scope: "open" | "closed"): Promise<AdminReportRow[]> {
+export async function getReports(
+  scope: "open" | "closed",
+  opts: { reason?: Report["reason"] } = {}
+): Promise<AdminReportRow[]> {
   const a = admin();
   const { data: reports } = await a
     .from("reports")
@@ -485,7 +559,7 @@ export async function getReports(scope: "open" | "closed"): Promise<AdminReportR
         : { data: (res.data ?? []).filter((r) => r.status !== "open") }
     );
 
-  const rows = reports ?? [];
+  const rows = (reports ?? []).filter((r) => !opts.reason || r.reason === opts.reason);
   const parties = await partiesFor(a, rows.map((r) => r.reporter_id));
 
   const listingIds = rows.filter((r) => r.subject_type === "listing").map((r) => r.subject_id);
@@ -516,7 +590,7 @@ export type PaymentsOps = {
   recentEvents: { id: string; type: string; receivedAt: string; processedAt: string | null }[];
 };
 
-export async function getPaymentsOps(): Promise<PaymentsOps> {
+export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
   const a = admin();
   const [recoveries, intents, events] = await Promise.all([
     a
@@ -541,16 +615,36 @@ export async function getPaymentsOps(): Promise<PaymentsOps> {
   ]);
   const parties = await partiesFor(a, intentRows.map((i) => i.seller_id));
 
-  return {
-    recoveries: recoveryRows.map((r) => ({
+  const q = opts.query?.trim().toLowerCase();
+  const filteredRecoveries = recoveryRows
+    .map((r) => ({
       ...r,
       orderTitle: r.order_id ? (titles.get(r.order_id) ?? "Order") : "—",
-    })),
-    stuckIntents: intentRows.map((i) => ({
+    }))
+    .filter(
+      (r) =>
+        !q ||
+        (r.order_id ?? "").toLowerCase().startsWith(q) ||
+        r.orderTitle.toLowerCase().includes(q) ||
+        (r.detail ?? "").toLowerCase().includes(q)
+    );
+  const filteredIntents = intentRows
+    .map((i) => ({
       ...i,
       seller: i.seller_id ? (parties.get(i.seller_id) ?? null) : null,
       orderTitle: titles.get(i.order_id) ?? "Order",
-    })),
+    }))
+    .filter(
+      (i) =>
+        !q ||
+        i.order_id.toLowerCase().startsWith(q) ||
+        i.orderTitle.toLowerCase().includes(q) ||
+        (i.seller?.username ?? "").toLowerCase().includes(q)
+    );
+
+  return {
+    recoveries: filteredRecoveries,
+    stuckIntents: filteredIntents,
     recentEvents: (events.data ?? []).map((e) => ({
       id: e.id,
       type: e.type,
@@ -564,17 +658,66 @@ export async function getPaymentsOps(): Promise<PaymentsOps> {
 
 export type AuditRow = AdminAuditLogEntry & { actor: PartyRef | null };
 
-export async function getAuditLog(opts: { action?: string; actorId?: string } = {}): Promise<AuditRow[]> {
+export const AUDIT_PAGE_SIZE = 50;
+
+export type AuditLogResult = { rows: AuditRow[]; page: number; hasMore: boolean };
+
+export async function getAuditLog(
+  opts: {
+    action?: string;
+    /** Actor by username/display name — resolved to ids here. */
+    actorQuery?: string;
+    subjectType?: AdminAuditLogEntry["subject_type"];
+    page?: number;
+  } = {}
+): Promise<AuditLogResult> {
   const a = admin();
+  const page = Math.max(0, opts.page ?? 0);
   let builder = a
     .from("admin_audit_log")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(page * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE + AUDIT_PAGE_SIZE);
   if (opts.action) builder = builder.ilike("action", `${opts.action}%`);
-  if (opts.actorId) builder = builder.eq("actor_id", opts.actorId);
+  if (opts.subjectType) builder = builder.eq("subject_type", opts.subjectType);
+  if (opts.actorQuery?.trim()) {
+    const q = opts.actorQuery.trim();
+    const { data: actors } = await a
+      .from("profiles")
+      .select("id")
+      .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+      .limit(20);
+    const ids = (actors ?? []).map((u) => u.id);
+    if (!ids.length) return { rows: [], page, hasMore: false };
+    builder = builder.in("actor_id", ids);
+  }
   const { data } = await builder;
-  const rows = data ?? [];
+  const fetched = data ?? [];
+  const hasMore = fetched.length > AUDIT_PAGE_SIZE;
+  const rows = fetched.slice(0, AUDIT_PAGE_SIZE);
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
-  return rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null }));
+  return { rows: rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null })), page, hasMore };
+}
+
+// ---------- Nav counts ----------
+
+export type NavCounts = { disputes: number; reports: number; money: number };
+
+/** Live queue badges for the console nav — the backlog visible from anywhere. */
+export async function getNavCounts(): Promise<NavCounts> {
+  const a = admin();
+  const [disputes, reports, recoveries, stuck] = await Promise.all([
+    a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
+    a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
+    a.from("payment_recoveries").select("id", { count: "exact", head: true }).eq("status", "open"),
+    a
+      .from("transfer_intents")
+      .select("order_id", { count: "exact", head: true })
+      .in("status", ["blocked_unpayable", "failed"]),
+  ]);
+  return {
+    disputes: disputes.count ?? 0,
+    reports: reports.count ?? 0,
+    money: (recoveries.count ?? 0) + (stuck.count ?? 0),
+  };
 }
