@@ -438,17 +438,20 @@ export async function updateActivityPost(
   return { ok: "Update saved." };
 }
 
-export async function deleteActivityPost(formData: FormData): Promise<void> {
+export async function deleteActivityPost(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const { supabase, user } = await requireUser();
   const postId = String(formData.get("post_id") ?? "");
-  if (!postId) return;
+  if (!postId) return { error: "Missing entry." };
 
   const { data: post } = await supabase
     .from("activity_posts")
     .select("id, car_id, author_id")
     .eq("id", postId)
     .maybeSingle();
-  if (!post || post.author_id !== user.id) return;
+  if (!post || post.author_id !== user.id) return { error: "Entry not found." };
 
   const { data: car } = await supabase
     .from("cars")
@@ -456,7 +459,8 @@ export async function deleteActivityPost(formData: FormData): Promise<void> {
     .eq("id", post.car_id)
     .maybeSingle();
 
-  await supabase.from("activity_posts").delete().eq("id", postId);
+  const { error } = await supabase.from("activity_posts").delete().eq("id", postId);
+  if (error) return { error: error.message };
 
   revalidatePath(`/garage/${post.car_id}/edit`);
   if (car) revalidatePath(`/cars/${car.slug}`);

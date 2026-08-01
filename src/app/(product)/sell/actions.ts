@@ -255,12 +255,29 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
 
 const SETTABLE_STATUSES: ListingStatus[] = ["draft", "active", "paused", "sold", "archived"];
 
-export async function setListingStatus(formData: FormData): Promise<void> {
+/**
+ * Typed outcome for the status/delete/unlink actions (Rev E item 8). These
+ * used to return void with bare-return guards, so a blocked Publish — the
+ * primary seller conversion step — did nothing with nothing said. Now every
+ * refusal says why, and the onboarding gate carries a flag the UI turns into
+ * a link to Settings → Payments.
+ */
+export type ListingActionState = {
+  error?: string;
+  ok?: string;
+  /** The refusal is the payout-onboarding gate — link the seller there. */
+  needsOnboarding?: boolean;
+} | null;
+
+export async function setListingStatus(
+  _prev: ListingActionState,
+  formData: FormData
+): Promise<ListingActionState> {
   const { supabase, user } = await requireUser();
 
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as ListingStatus;
-  if (!id || !SETTABLE_STATUSES.includes(status)) return;
+  if (!id || !SETTABLE_STATUSES.includes(status)) return { error: "Missing listing or status." };
 
   const { data: existing } = await supabase
     .from("listings")
@@ -268,7 +285,7 @@ export async function setListingStatus(formData: FormData): Promise<void> {
     .eq("id", id)
     .eq("seller_id", user.id)
     .maybeSingle();
-  if (!existing) return;
+  if (!existing) return { error: "Listing not found." };
 
   // A part that has actually sold must not be flipped back on sale — that used
   // to be possible and would re-sell something already paid for.
@@ -280,28 +297,65 @@ export async function setListingStatus(formData: FormData): Promise<void> {
       .in("orders.status", ["paid", "shipped", "delivered", "completed"])
       .limit(1)
       .maybeSingle();
-    if (paidItem) return;
+    if (paidItem) {
+      return { error: "This part actually sold — create a new listing to sell another." };
+    }
   }
-  if (existing.status === "reserved") return;
+  if (existing.status === "reserved") {
+    return { error: "A checkout is holding this listing — it frees itself in a few minutes." };
+  }
+  if (existing.status === "removed") {
+    return { error: "This listing was removed by moderation — check your notifications." };
+  }
 
   // Same gate as createListing: going live requires a payable seller.
-  if (status === "active" && !(await sellerCanPublish(user.id))) return;
+  if (status === "active" && !(await sellerCanPublish(user.id))) {
+    return {
+      error: "Publishing needs payouts set up first, so a sale has somewhere to send your money.",
+      needsOnboarding: true,
+    };
+  }
 
-  await supabase.from("listings").update({ status }).eq("id", id).eq("seller_id", user.id);
+  const { error } = await supabase
+    .from("listings")
+    .update({ status })
+    .eq("id", id)
+    .eq("seller_id", user.id);
+  if (error) return { error: error.message };
 
   revalidatePath("/sell");
+  revalidatePath("/listings");
   revalidatePath(`/listings/${id}`);
   revalidatePath("/marketplace");
+  return {
+    ok:
+      status === "active"
+        ? "Live — it's on the market."
+        : status === "paused"
+          ? "Paused and hidden from the market."
+          : `Moved to ${status}.`,
+  };
 }
 
-export async function deleteListing(formData: FormData): Promise<void> {
+export async function deleteListing(
+  _prev: ListingActionState,
+  formData: FormData
+): Promise<ListingActionState> {
   const { supabase, user } = await requireUser();
   const id = String(formData.get("id") ?? "");
-  if (!id) return;
+  if (!id) return { error: "Missing listing." };
 
   // Order history references listings; 0007 made that FK ON DELETE SET NULL with
   // a title snapshot, so removing a sold listing no longer breaks receipts.
-  await supabase.from("listings").delete().eq("id", id).eq("seller_id", user.id);
+  const { error } = await supabase.from("listings").delete().eq("id", id).eq("seller_id", user.id);
+  if (error) {
+    // The 0012 delete guard refuses reserved/sold rows with a 42501.
+    return {
+      error: error.code === "42501"
+        ? "A reserved or sold listing can't be deleted — the order history points at it."
+        : error.message,
+    };
+  }
 
   revalidatePath("/sell");
   revalidatePath("/marketplace");
@@ -316,19 +370,19 @@ export async function deleteListing(formData: FormData): Promise<void> {
  * user owns), and checked here too for a clean error rather than a silent
  * no-op.
  */
-export async function unlinkModListing(formData: FormData): Promise<void> {
+export async function unlinkModListing(formData: FormData): Promise<ListingActionState> {
   const { supabase, user } = await requireUser();
 
   const modItemId = String(formData.get("mod_item_id") ?? "");
   const carId = String(formData.get("car_id") ?? "");
-  if (!modItemId || !carId) return;
+  if (!modItemId || !carId) return { error: "Missing build line." };
 
   const { data: car } = await supabase
     .from("cars")
     .select("id, slug, owner_id")
     .eq("id", carId)
     .maybeSingle();
-  if (!car || car.owner_id !== user.id) return;
+  if (!car || car.owner_id !== user.id) return { error: "That car isn't in your garage." };
 
   const { data: mod } = await supabase
     .from("mod_items")
@@ -337,15 +391,17 @@ export async function unlinkModListing(formData: FormData): Promise<void> {
     .eq("car_id", carId)
     .maybeSingle();
 
-  await supabase
+  const { error } = await supabase
     .from("mod_items")
     .update({ linked_listing_id: null })
     .eq("id", modItemId)
     .eq("car_id", carId);
+  if (error) return { error: error.message };
 
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
   if (mod?.linked_listing_id) revalidatePath(`/listings/${mod.linked_listing_id}`);
+  return { ok: "Link removed." };
 }
 
 function safeParseJson(value: FormDataEntryValue | null): unknown {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-08-01 — Seller activation and craft (Rev E items 8–11)
+
+**Publishing says why it failed.** `setListingStatus`, `deleteListing`, `unlinkModListing` and `deleteActivityPost` now return typed results instead of void-with-bare-return guards — a seller without payout onboarding who clicks **Publish** sees the reason inline with a "Set up payouts →" link to Settings → Payments, instead of a page that revalidates and says nothing. Their callers (`ListingStatusActions`, the delete confirms, the mods editor) surface every outcome.
+
+**Onboarding surfaced where sellers are.** The payout ledger and the home KPI deck both show a set-up-payouts callout when payments are live and the seller isn't payable — worded by whether money is already waiting on it.
+
+**The four hand-rolled modals** (offer, edit profile, add car, payment methods) migrated onto the shared `Dialog` primitive: dialog role, Escape, focus trap, scroll lock and focus restore, none of which they had.
+
+**Field labels associated.** The offer amount input — which screen readers announced as "edit text, blank" — plus the sell form (10 fields), login, onboarding, profile editor and add-car form now use real `<label htmlFor>` associations; the remaining `microlabel` spans are headings or already sit inside wrapping labels.
+
 ## 2026-08-01 — Money correctness: transfers on delivery, reversals everywhere (Rev E items 1–7)
 
 **The clearing window is now real (`0020_transfer_scheduling.sql`).** Transfers no longer fire inside `payment_intent.succeeded` — the webhook records a `transfer_intents` row; buyer-confirmed delivery stamps `available_at = delivered_at + 7 days` (the exact window the ledger has always displayed); pg_cron's `drvn-transfer-worker` marks due intents ready in pure SQL — only while the order is in a deliverable end state, so a dispute freezes the money by construction — and the worker (`src/lib/payments/transfer-worker.ts`, reached via `/api/jobs/transfers` behind `CRON_SECRET`, or the console's Payments → "Run worker now") turns them into Stripe transfers. The Stripe idempotency key stays `transfer:{order_id}`, the same key the legacy path used, so nothing historic can duplicate. Backfill created intents for every captured-but-untransferred order: sellers who sold before onboarding are now `blocked_unpayable` rows the console can see and the worker retries forever (attempts don't increment on the wait state), unblocked eagerly when `account.updated` reports them payable. Stub-era orders were cancelled on record.

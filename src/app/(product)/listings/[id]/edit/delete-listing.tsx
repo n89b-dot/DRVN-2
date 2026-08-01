@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 
 import { deleteListing } from "../../../sell/actions";
 
 /** Two-step, and the safe choice is the default — deletion is irreversible. */
 export function DeleteListing({ listingId }: { listingId: string }) {
   const [confirming, setConfirming] = useState(false);
+  const [state, formAction, pending] = useActionState(deleteListing, null);
 
   if (!confirming) {
     return (
@@ -23,13 +24,18 @@ export function DeleteListing({ listingId }: { listingId: string }) {
         <button type="button" onClick={() => setConfirming(false)} className="btn btn--ghost">
           Keep it
         </button>
-        <form action={deleteListing}>
+        <form action={formAction}>
           <input type="hidden" name="id" value={listingId} />
-          <button type="submit" className="btn btn--live">
-            Delete permanently
+          <button type="submit" className="btn btn--live" disabled={pending}>
+            {pending ? "Deleting…" : "Delete permanently"}
           </button>
         </form>
       </div>
+      {state?.error && (
+        <p role="alert" aria-live="polite" className="field__err">
+          {state.error}
+        </p>
+      )}
     </div>
   );
 }

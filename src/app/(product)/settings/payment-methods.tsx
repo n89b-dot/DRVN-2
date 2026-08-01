@@ -11,7 +11,7 @@ import {
 } from "@/features/commerce/payment-methods";
 import type { CommerceState } from "@/features/commerce/actions";
 import type { SavedCard } from "@/lib/payments/customers";
-import { Toast } from "@/components/ui";
+import { Dialog, Toast } from "@/components/ui";
 
 /**
  * P22 — saved cards in Settings. Reference pass: Preply (concise section),
@@ -95,13 +95,16 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
       {removeState.ok && <Toast key={cards.length} message="Card removed" />}
       {savedToast && <Toast message="Card saved ✓" onDone={() => setSavedToast(false)} />}
 
-      {adding && setupSecret && (
-        <div
-          className="sheetwrap is-open"
-          onClick={(e) => e.target === e.currentTarget && setAdding(false)}
-        >
-          <div className="sheet">
-            <span className="microlabel microlabel--ink">Add a card</span>
+      {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll
+          lock — the hand-rolled sheetwrap had none of the four. */}
+      <Dialog
+        open={Boolean(adding && setupSecret)}
+        onClose={() => setAdding(false)}
+        label="Add a card"
+      >
+        <div className="sheet">
+          <span className="microlabel microlabel--ink">Add a card</span>
+          {setupSecret && (
             <AddCardForm
               clientSecret={setupSecret}
               onSaved={() => {
@@ -112,9 +115,9 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
               }}
               onClose={() => setAdding(false)}
             />
-          </div>
+          )}
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

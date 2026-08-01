@@ -3,7 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Countdown, LiveDim, Rv } from "@/components/livesheet";
 import type { Database } from "@/lib/database.types";
+import { getConnectStatus } from "@/lib/payments/connect";
 import { formatPrice } from "@/lib/payments/fee";
+import { paymentsAreLive } from "@/lib/payments/provider";
 
 const DAYS = 30;
 
@@ -168,8 +170,29 @@ export async function SellerKpis({
 
   const underOffer = openOffers.length;
 
+  // Payout onboarding surfaced where the seller already is (Rev E item 9) —
+  // not only buried in Settings → Payments. Shown the moment it blocks
+  // anything: publishing, or money that has nowhere to land.
+  const needsOnboarding = paymentsAreLive() && !(await getConnectStatus(userId)).payoutsEnabled;
+
   return (
     <section className="deck deck--kpi">
+      {needsOnboarding && (
+        <div className="alert alert--live col-span-full">
+          <span className="alert__ico" aria-hidden="true">
+            ●
+          </span>
+          <h4>Payouts aren&apos;t set up yet</h4>
+          <p>
+            {salesTotal > 0
+              ? "You have takings that can't reach you until this is done. "
+              : "Publishing needs somewhere to send the money when a part sells. "}
+            <Link href="/settings#payments" className="jumplink !inline-flex">
+              Finish payout setup →
+            </Link>
+          </p>
+        </div>
+      )}
       <Rv className="tile" stagger={0}>
         <span className="microlabel">Active listings</span>
         <p className="num-giant mt-1">{activeIds.length}</p>

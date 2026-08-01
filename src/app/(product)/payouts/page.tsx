@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
+import { getConnectStatus } from "@/lib/payments/connect";
 import { formatPrice } from "@/lib/payments/fee";
 import { CLEARING_HOLD_DAYS, getSellerLedger, type LedgerState } from "@/lib/payments/ledger";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -58,6 +59,10 @@ export default async function PayoutsPage({
 
   const ledger = await getSellerLedger(supabase, user.id);
   const live = paymentsAreLive();
+  const connect = await getConnectStatus(user.id);
+  const hasEarnings =
+    ledger.heldCents + ledger.clearingCents + ledger.availableCents + ledger.paidOutCents > 0 ||
+    ledger.lines.length > 0;
 
   const totalPages = Math.max(1, Math.ceil(ledger.lines.length / PAGE_SIZE));
   const current = Math.min(page, totalPages);
@@ -79,6 +84,27 @@ export default async function PayoutsPage({
           available. {!live && "Payments are in test mode, so nothing here has moved any money."}
         </p>
       </Rv>
+
+      {live && !connect.payoutsEnabled && (
+        <div className="alert alert--live mb-6">
+          <span className="alert__ico" aria-hidden="true">
+            ●
+          </span>
+          <h4>
+            {hasEarnings
+              ? "Your money is waiting on payout setup"
+              : "Set up payouts before you publish"}
+          </h4>
+          <p>
+            {hasEarnings
+              ? "Sales have cleared but can't reach you until your payout account is finished — the transfer runs automatically once it is. "
+              : "Publishing a listing needs somewhere to send the money when it sells. It takes a few minutes. "}
+            <Link href="/settings#payments" className="jumplink !inline-flex">
+              Finish payout setup →
+            </Link>
+          </p>
+        </div>
+      )}
 
       {!live && (
         <div className="alert alert--live mb-6">

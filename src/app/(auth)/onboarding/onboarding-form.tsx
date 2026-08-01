@@ -17,8 +17,11 @@ export function OnboardingForm({ email }: { email: string }) {
 
       <form action={action} className="mt-6">
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
-          <span className="microlabel">Handle</span>
+          <label htmlFor="onb-username" className="microlabel">
+            Handle
+          </label>
           <input
+            id="onb-username"
             name="username"
             required
             placeholder="drossi.integrale"
@@ -37,8 +40,10 @@ export function OnboardingForm({ email }: { email: string }) {
           )}
         </div>
         <div className="field">
-          <span className="microlabel">Display name</span>
-          <input name="display_name" required placeholder="Dana Rossi" autoComplete="name" className="ctl max-w-none" />
+          <label htmlFor="onb-display-name" className="microlabel">
+            Display name
+          </label>
+          <input id="onb-display-name" name="display_name" required placeholder="Dana Rossi" autoComplete="name" className="ctl max-w-none" />
         </div>
         <button type="submit" disabled={pending} className="btn btn--live w-full">
           {pending ? "Saving…" : "Let's go"}

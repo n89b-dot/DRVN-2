@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useId, useState, useTransition } from "react";
 
 import {
   addToCart,
@@ -9,7 +9,7 @@ import {
   makeOffer,
   type CommerceState,
 } from "@/features/commerce/actions";
-import { Toast } from "@/components/ui";
+import { Dialog, Toast } from "@/components/ui";
 
 export function PurchaseActions({
   listingId,
@@ -23,6 +23,7 @@ export function PurchaseActions({
   isActive: boolean;
 }) {
   const router = useRouter();
+  const idBase = useId();
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerState, offerAction, offerPending] = useActionState<CommerceState, FormData>(makeOffer, {});
   const [pending, startTransition] = useTransition();
@@ -100,48 +101,63 @@ export function PurchaseActions({
         <b>Test mode</b> — payments run on Stripe&apos;s test rails; no real money moves.
       </p>
 
-      {offerOpen && (
-        <div
-          className="sheetwrap is-open"
-          onClick={(e) => e.target === e.currentTarget && setOfferOpen(false)}
-        >
-          <div className="sheet">
-            <span className="microlabel microlabel--ink">Make an offer</span>
-            <form action={offerAction} className="mt-4 flex flex-col gap-3">
-              <input type="hidden" name="listing_id" value={listingId} />
-              <div className="field">
-                <span className="microlabel">Your offer</span>
-                <div className="ctl__prefix">
-                  <span>$</span>
-                  <input name="amount" required inputMode="decimal" placeholder="0" className="ctl" />
-                </div>
-                <span className="field__hint">
-                  The seller can accept, counter once, or let it lapse. Offers expire after 72
-                  hours.
-                </span>
+      {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll
+          lock. The amount input is a real <label> now — screen readers used
+          to announce it as "edit text, blank". */}
+      <Dialog open={offerOpen} onClose={() => setOfferOpen(false)} label="Make an offer">
+        <div className="sheet">
+          <span className="microlabel microlabel--ink">Make an offer</span>
+          <form action={offerAction} className="mt-4 flex flex-col gap-3">
+            <input type="hidden" name="listing_id" value={listingId} />
+            <div className="field">
+              <label htmlFor={`${idBase}-amount`} className="microlabel">
+                Your offer
+              </label>
+              <div className="ctl__prefix">
+                <span aria-hidden="true">$</span>
+                <input
+                  id={`${idBase}-amount`}
+                  name="amount"
+                  required
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="ctl"
+                />
               </div>
-              <div className="field">
-                <span className="microlabel">Message — optional</span>
-                <textarea name="message" rows={2} placeholder="Anything the seller should know" className="ctl" />
-              </div>
-              {offerState.error && (
-                <p role="alert" aria-live="polite" className="field__err">
-                  {offerState.error}
-                </p>
-              )}
-              {offerState.ok && <p className="field__ok" style={{ display: "block" }}>{offerState.ok}</p>}
-              <div className="sheet__actions">
-                <button type="submit" disabled={offerPending} className="btn btn--live flex-1">
-                  {offerPending ? "Sending…" : "Send offer"}
-                </button>
-                <button type="button" onClick={() => setOfferOpen(false)} className="btn btn--ghost">
-                  Close
-                </button>
-              </div>
-            </form>
-          </div>
+              <span className="field__hint">
+                The seller can accept, counter once, or let it lapse. Offers expire after 72
+                hours.
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor={`${idBase}-message`} className="microlabel">
+                Message — optional
+              </label>
+              <textarea
+                id={`${idBase}-message`}
+                name="message"
+                rows={2}
+                placeholder="Anything the seller should know"
+                className="ctl"
+              />
+            </div>
+            {offerState.error && (
+              <p role="alert" aria-live="polite" className="field__err">
+                {offerState.error}
+              </p>
+            )}
+            {offerState.ok && <p className="field__ok" style={{ display: "block" }}>{offerState.ok}</p>}
+            <div className="sheet__actions">
+              <button type="submit" disabled={offerPending} className="btn btn--live flex-1">
+                {offerPending ? "Sending…" : "Send offer"}
+              </button>
+              <button type="button" onClick={() => setOfferOpen(false)} className="btn btn--ghost">
+                Close
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

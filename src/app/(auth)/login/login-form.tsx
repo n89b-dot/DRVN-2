@@ -32,8 +32,11 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
       <form action={action} className="mt-6">
         <input type="hidden" name="next" value={next ?? "/home"} />
         <div className="field">
-          <span className="microlabel">Email</span>
+          <label htmlFor="login-email" className="microlabel">
+            Email
+          </label>
           <input
+            id="login-email"
             name="email"
             type="email"
             required
@@ -44,7 +47,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
         </div>
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
           <span className="microlabel flex items-baseline justify-between gap-3">
-            Password
+            <label htmlFor="login-password">Password</label>
             {/* The only route into account recovery — the reset actions existed
                 with nothing linking to them. */}
             <Link href="/login/forgot" className="jumplink">
@@ -52,6 +55,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
             </Link>
           </span>
           <input
+            id="login-password"
             name="password"
             type="password"
             required

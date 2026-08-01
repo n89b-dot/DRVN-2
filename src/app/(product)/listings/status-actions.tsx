@@ -1,15 +1,18 @@
+"use client";
+
+import Link from "next/link";
+import { useActionState } from "react";
+
 import { setListingStatus } from "@/app/(product)/sell/actions";
 import type { ListingStatus } from "@/lib/database.types";
 
 /**
  * Publish / pause / archive controls for a listing row.
  *
- * `setListingStatus` was written, tested-looking, and imported nowhere — which
- * meant a saved draft could never be published, and pausing or archiving were
- * unreachable states. This is the missing caller.
- *
- * Server-rendered forms rather than a client component: each is a single POST
- * with no local state, and this renders once per row in the ledger.
+ * Now a client component so the outcome is SAID (Rev E item 8): the old
+ * server-rendered forms called a void action, and a seller without payout
+ * onboarding could click Publish and watch nothing happen. A refusal renders
+ * inline, and the onboarding gate links straight to Settings → Payments.
  */
 export function ListingStatusActions({
   id,
@@ -18,10 +21,12 @@ export function ListingStatusActions({
   id: string;
   status: ListingStatus;
 }) {
+  const [state, formAction, pending] = useActionState(setListingStatus, null);
+
   // Reserved means a checkout is holding it — the seller must not intervene.
   // Sold is terminal; relisting means creating a new listing so order history
-  // keeps pointing at what was actually bought.
-  if (status === "reserved" || status === "sold") return null;
+  // keeps pointing at what was actually bought. Removed is moderation's.
+  if (status === "reserved" || status === "sold" || status === "removed") return null;
 
   const actions: { label: string; next: ListingStatus; hint: string }[] = [];
 
@@ -42,14 +47,32 @@ export function ListingStatusActions({
   return (
     <>
       {actions.map((action) => (
-        <form key={action.next + action.label} action={setListingStatus} className="contents">
+        <form key={action.next + action.label} action={formAction} className="contents">
           <input type="hidden" name="id" value={id} />
           <input type="hidden" name="status" value={action.next} />
-          <button type="submit" className="relbtn !static" title={action.hint}>
+          <button type="submit" className="relbtn !static" title={action.hint} disabled={pending}>
             {action.label}
           </button>
         </form>
       ))}
+      {state?.error && (
+        <span role="alert" aria-live="polite" className="field__err basis-full">
+          {state.error}
+          {state.needsOnboarding && (
+            <>
+              {" "}
+              <Link href="/settings#payments" className="jumplink">
+                Set up payouts →
+              </Link>
+            </>
+          )}
+        </span>
+      )}
+      {state?.ok && (
+        <span role="status" aria-live="polite" className="chip chip--ok basis-full">
+          {state.ok}
+        </span>
+      )}
     </>
   );
 }

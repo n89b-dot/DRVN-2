@@ -37,6 +37,10 @@ export function PostEditor({
   publicHref: string | null;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateActivityPost, {});
+  const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(
+    deleteActivityPost,
+    {}
+  );
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
@@ -126,11 +130,11 @@ export function PostEditor({
               >
                 Keep it
               </button>
-              <form action={deleteActivityPost}>
+              <form action={deleteAction}>
                 <input type="hidden" name="post_id" value={postId} />
                 <input type="hidden" name="car_id" value={carId} />
-                <button type="submit" className="btn btn--live">
-                  Delete permanently
+                <button type="submit" className="btn btn--live" disabled={deletePending}>
+                  {deletePending ? "Deleting…" : "Delete permanently"}
                 </button>
               </form>
             </div>
@@ -142,6 +146,11 @@ export function PostEditor({
             >
               Delete this entry
             </button>
+          )}
+          {deleteState?.error && (
+            <p role="alert" aria-live="polite" className="field__err mt-2">
+              {deleteState.error}
+            </p>
           )}
         </div>
       </section>

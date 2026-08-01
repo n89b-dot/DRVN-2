@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useId, useRef, useState } from "react";
 
-import { Avatar, Media } from "@/components/ui";
+import { Avatar, Dialog, Media } from "@/components/ui";
 import { initialsFrom } from "@/components/profile/helpers";
 import { createClient } from "@/lib/supabase/client";
 
@@ -66,6 +66,8 @@ export function ProfileEditor({
   }
 
   const linkValue = (label: string) => profile.links.find((l) => l.label === label)?.url ?? "";
+  const idBase = useId();
+  const fid = (name: string) => `${idBase}-${name}`;
 
   return (
     <>
@@ -73,9 +75,10 @@ export function ProfileEditor({
         Edit profile
       </button>
 
-      {open && (
-        <div className="sheetwrap is-open" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-          <div className="sheet max-h-[85vh] overflow-y-auto text-left">
+      {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll
+          lock — the hand-rolled sheetwrap had none of the four. */}
+      <Dialog open={open} onClose={() => setOpen(false)} label="Profile details">
+        <div className="sheet max-h-[85vh] overflow-y-auto text-left">
             <span className="microlabel microlabel--ink">Profile details</span>
             <form
               action={(fd) => {
@@ -116,12 +119,13 @@ export function ProfileEditor({
                 )}
               </div>
               <div className="field">
-                <span className="microlabel">Display name</span>
-                <input name="display_name" defaultValue={profile.display_name} required className="ctl max-w-none" />
+                <label htmlFor={fid("display_name")} className="microlabel">Display name</label>
+                <input id={fid("display_name")} name="display_name" defaultValue={profile.display_name} required className="ctl max-w-none" />
               </div>
               <div className="field">
-                <span className="microlabel">Headline</span>
+                <label htmlFor={fid("headline")} className="microlabel">Headline</label>
                 <input
+                  id={fid("headline")}
                   name="headline"
                   defaultValue={profile.headline}
                   placeholder="e.g. B9 S4 owner, slowly going single-turbo"
@@ -129,24 +133,24 @@ export function ProfileEditor({
                 />
               </div>
               <div className="field">
-                <span className="microlabel">Location</span>
-                <input name="location" defaultValue={profile.location} className="ctl max-w-none" />
+                <label htmlFor={fid("location")} className="microlabel">Location</label>
+                <input id={fid("location")} name="location" defaultValue={profile.location} className="ctl max-w-none" />
               </div>
               <div className="field">
-                <span className="microlabel">Bio</span>
-                <textarea name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
+                <label htmlFor={fid("bio")} className="microlabel">Bio</label>
+                <textarea id={fid("bio")} name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
               </div>
               <div className="field">
-                <span className="microlabel">Website</span>
-                <input name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="ctl max-w-none" />
+                <label htmlFor={fid("link_website")} className="microlabel">Website</label>
+                <input id={fid("link_website")} name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="ctl max-w-none" />
               </div>
               <div className="field">
-                <span className="microlabel">Instagram</span>
-                <input name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="ctl max-w-none" />
+                <label htmlFor={fid("link_instagram")} className="microlabel">Instagram</label>
+                <input id={fid("link_instagram")} name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="ctl max-w-none" />
               </div>
               <div className="field">
-                <span className="microlabel">YouTube</span>
-                <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl max-w-none" />
+                <label htmlFor={fid("link_youtube")} className="microlabel">YouTube</label>
+                <input id={fid("link_youtube")} name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl max-w-none" />
               </div>
               {state.error && (
                 <p role="alert" aria-live="polite" className="field__err">
@@ -163,9 +167,8 @@ export function ProfileEditor({
                 </button>
               </div>
             </form>
-          </div>
         </div>
-      )}
+      </Dialog>
     </>
   );
 }

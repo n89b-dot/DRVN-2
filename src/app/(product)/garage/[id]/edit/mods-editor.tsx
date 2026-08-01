@@ -95,8 +95,14 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     formData.set("mod_item_id", row.id);
     formData.set("car_id", carId);
     startTransition(async () => {
-      await unlinkModListing(formData);
-      updateRow(row.key, { linked_listing_id: null });
+      const result = await unlinkModListing(formData);
+      if (result?.error) {
+        // Surface the refusal in the editor's existing status line instead of
+        // clearing the link locally while the server kept it.
+        setStatus(result.error);
+      } else {
+        updateRow(row.key, { linked_listing_id: null });
+      }
       setUnlinkingKey(null);
     });
   }

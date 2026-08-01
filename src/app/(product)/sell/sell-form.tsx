@@ -172,8 +172,8 @@ export function SellForm({
 
       <Section step={1} title="The part — what you're releasing">
         <div className="field !mb-0">
-          <span className="microlabel">Title</span>
-          <input
+          <label htmlFor="sell-title" className="microlabel">Title</label>
+          <input id="sell-title"
             name="title"
             required
             maxLength={140}
@@ -189,8 +189,8 @@ export function SellForm({
             grid-cols-2 kept these side by side at 375px. */}
         <div className="field--row">
           <label className="field !mb-0">
-            <span className="microlabel">Category</span>
-            <select
+            <label htmlFor="sell-category" className="microlabel">Category</label>
+            <select id="sell-category"
               name="category"
               required
               value={category}
@@ -216,8 +216,8 @@ export function SellForm({
               )}
           </label>
           <label className="field !mb-0">
-            <span className="microlabel">Subcategory — optional</span>
-            <select
+            <label htmlFor="sell-subcategory" className="microlabel">Subcategory — optional</label>
+            <select id="sell-subcategory"
               name="subcategory"
               defaultValue={listing?.subcategory ?? prefill?.subcategory ?? ""}
               className="ctl max-w-none"
@@ -234,8 +234,8 @@ export function SellForm({
         </div>
         <div className="field--row">
           <label className="field !mb-0">
-            <span className="microlabel">Condition</span>
-            <select
+            <label htmlFor="sell-condition" className="microlabel">Condition</label>
+            <select id="sell-condition"
               name="condition"
               defaultValue={listing?.condition ?? "used"}
               className="ctl max-w-none"
@@ -248,8 +248,8 @@ export function SellForm({
             </select>
           </label>
           <label className="field !mb-0">
-            <span className="microlabel">Part number — optional</span>
-            <input
+            <label htmlFor="sell-part_number" className="microlabel">Part number — optional</label>
+            <input id="sell-part_number"
               name="part_number"
               maxLength={120}
               defaultValue={listing?.part_number ?? prefill?.partNumber ?? ""}
@@ -262,8 +262,8 @@ export function SellForm({
           </label>
         </div>
         <label className="field !mb-0">
-          <span className="microlabel">Description</span>
-          <textarea
+          <label htmlFor="sell-description" className="microlabel">Description</label>
+          <textarea id="sell-description"
             name="description"
             rows={4}
             maxLength={8000}
@@ -400,10 +400,10 @@ export function SellForm({
       <Section step={5} title="Price, shipping & location">
         <div className="field--row">
           <label className="field !mb-0">
-            <span className="microlabel">Asking price</span>
+            <label htmlFor="sell-price" className="microlabel">Asking price</label>
             <div className="ctl__prefix">
               <span>$</span>
-              <input
+              <input id="sell-price"
                 name="price"
                 required
                 inputMode="decimal"
@@ -414,10 +414,10 @@ export function SellForm({
             </div>
           </label>
           <label className="field !mb-0">
-            <span className="microlabel">Shipping — flat rate</span>
+            <label htmlFor="sell-shipping" className="microlabel">Shipping — flat rate</label>
             <div className="ctl__prefix">
               <span>$</span>
-              <input
+              <input id="sell-shipping"
                 name="shipping"
                 inputMode="decimal"
                 defaultValue={money(listing?.shipping_cents ?? 0)}
@@ -430,10 +430,10 @@ export function SellForm({
         </div>
         <div className="field--row">
           <label className="field !mb-0">
-            <span className="microlabel">Lowest offer you&apos;d read — optional</span>
+            <label htmlFor="sell-offer_floor" className="microlabel">Lowest offer you&apos;d read — optional</label>
             <div className="ctl__prefix">
               <span>$</span>
-              <input
+              <input id="sell-offer_floor"
                 name="offer_floor"
                 inputMode="decimal"
                 defaultValue={money(listing?.offer_floor_cents)}
@@ -444,8 +444,8 @@ export function SellForm({
             <span className="field__hint">Offers below this are declined automatically.</span>
           </label>
           <label className="field !mb-0">
-            <span className="microlabel">Location</span>
-            <input
+            <label htmlFor="sell-location" className="microlabel">Location</label>
+            <input id="sell-location"
               name="location"
               defaultValue={listing?.location ?? ""}
               placeholder="City, state"
