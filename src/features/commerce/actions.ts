@@ -14,6 +14,7 @@ import { DISPUTE_CATEGORIES } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { DisputeCategory, PurchaseBeginResult } from "@/lib/database.types";
+import { reportError } from "@/lib/monitoring";
 
 export type CommerceState = {
   error?: string;
@@ -115,7 +116,7 @@ async function purchaseListings(
   });
 
   if (error) {
-    console.error("[commerce] purchase_begin failed", { buyerId, error });
+    reportError("[commerce] purchase_begin failed", { buyerId, error });
     return { ...empty, error: "We couldn't start that purchase. Nothing was charged." };
   }
 
@@ -187,7 +188,7 @@ async function purchaseListings(
         p_reference: payment.reference,
       });
       if (finalizeError) {
-        console.error("[commerce] purchase_finalize failed after payment", {
+        reportError("[commerce] purchase_finalize failed after payment", {
           orderId: order.order_id,
           finalizeError,
         });
@@ -438,7 +439,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
       body: message,
     });
     if (messageError) {
-      console.error("[commerce] offer message failed", { offerId: offer.id, messageError });
+      reportError("[commerce] offer message failed", { offerId: offer.id, messageError });
     }
   }
 
@@ -544,7 +545,7 @@ export async function respondToOffer(
   });
 
   if (acceptError) {
-    console.error("[commerce] offer_accept_begin failed", { offerId, acceptError });
+    reportError("[commerce] offer_accept_begin failed", { offerId, acceptError });
     return { error: "We couldn't accept that offer. Nothing was charged." };
   }
   if (!orderId) {
@@ -1056,7 +1057,7 @@ async function postOrderSystemMessage(
     body,
   });
   if (error) {
-    console.error("[commerce] dispute system message failed", { orderId, error });
+    reportError("[commerce] dispute system message failed", { orderId, error });
   }
 }
 

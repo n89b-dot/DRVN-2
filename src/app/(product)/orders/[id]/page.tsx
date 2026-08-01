@@ -16,6 +16,7 @@ import {
   ReportProblemForm,
 } from "./disputes";
 import { CancelOrder, DispatchForm } from "./fulfilment";
+import { reportError } from "@/lib/monitoring";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -47,7 +48,7 @@ export default async function OrderDetailPage({
     .maybeSingle();
 
   if (error) {
-    console.error("[orders] failed to load order", { id, error });
+    reportError("[orders] failed to load order", { id, error });
     throw new Error("Could not load this order");
   }
   if (!order) notFound();

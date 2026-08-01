@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { hasSupabaseConfig, isProduction, publicKey } from "@/lib/env";
+import { reportError } from "@/lib/monitoring";
 
 const PRODUCT_PREFIXES = [
   "/home",
@@ -33,7 +34,7 @@ function denyProductRoutes(request: NextRequest, response: NextResponse, reason:
   const { pathname } = request.nextUrl;
   if (!isProductPath(pathname)) return response;
 
-  console.error(`[proxy] refusing ${pathname}: ${reason}`);
+  reportError(`[proxy] refusing ${pathname}: ${reason}`);
   const url = request.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
@@ -84,7 +85,7 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getClaims();
     user = data?.claims ?? null;
   } catch (error) {
-    console.error("[proxy] unable to verify session", error);
+    reportError("[proxy] unable to verify session", error);
     return denyProductRoutes(request, supabaseResponse, "Supabase was unreachable");
   }
 

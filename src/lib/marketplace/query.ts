@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { ListingCardData } from "@/components/ui";
 import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
+import { reportError } from "@/lib/monitoring";
 
 export type ListingSort = "newest" | "price_asc" | "price_desc";
 
@@ -51,7 +52,7 @@ export async function fetchWatchCounts(
     .in("target_id", listingIds);
 
   if (error) {
-    console.error("[marketplace] watch counts failed", error);
+    reportError("[marketplace] watch counts failed", error);
     return counts;
   }
   for (const row of data ?? []) {
@@ -169,7 +170,7 @@ export async function fetchListings(
   const { data: listings, count, error } = await query.range(from, from + PAGE_SIZE - 1);
 
   if (error) {
-    console.error("[marketplace] listing query failed", error);
+    reportError("[marketplace] listing query failed", error);
     return { results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
   }
   if (!listings?.length) {

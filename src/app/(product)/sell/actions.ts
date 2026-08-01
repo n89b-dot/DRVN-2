@@ -9,6 +9,7 @@ import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import type { ListingStatus } from "@/lib/database.types";
+import { reportError } from "@/lib/monitoring";
 
 export type SellState = { error?: string; ok?: string };
 
@@ -139,7 +140,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
       }))
     );
     if (imageError) {
-      console.error("[sell] listing images failed", { listingId: listing.id, imageError });
+      reportError("[sell] listing images failed", { listingId: listing.id, imageError });
       imagesFailed = true;
     }
   }

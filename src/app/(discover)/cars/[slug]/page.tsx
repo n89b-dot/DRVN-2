@@ -9,6 +9,7 @@ import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
 
 import { CarTabs, type ForSaleItem, type ModLine } from "./car-tabs";
+import { reportError } from "@/lib/monitoring";
 
 const TAB_KEYS = ["build", "forsale", "activity", "gallery"];
 
@@ -91,7 +92,7 @@ export default async function CarPage({
     .maybeSingle();
 
   if (carError) {
-    console.error("[cars] failed to load car", { slug, carError });
+    reportError("[cars] failed to load car", { slug, carError });
     throw new Error("Could not load this build");
   }
   if (!car) notFound();

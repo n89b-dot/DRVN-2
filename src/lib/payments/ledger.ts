@@ -19,6 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OrderStatus } from "@/lib/database.types";
 
 import { platformFeeCents } from "./provider";
+import { reportError } from "@/lib/monitoring";
 
 /** Orders whose payment has actually captured — the only ones with money to ledger. */
 const CAPTURED_STATUSES: OrderStatus[] = ["paid", "shipped", "delivered", "completed", "disputed"];
@@ -111,7 +112,7 @@ export async function getSellerLedger(
     .order("created_at", { ascending: false })
     .limit(FETCH_CAP);
 
-  if (error) console.error("[payouts] failed to load orders", error);
+  if (error) reportError("[payouts] failed to load orders", error);
 
   const captured = orders ?? [];
   const orderIds = captured.map((o) => o.id);

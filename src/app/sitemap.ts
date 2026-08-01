@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 import { siteUrl } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * SEO is named as an acquisition channel in the PRD, and there was no sitemap at
@@ -89,7 +90,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ];
   } catch (error) {
     // A sitemap that 500s is worse than a small one.
-    console.error("[sitemap] failed to load entities", error);
+    reportError("[sitemap] failed to load entities", error);
     return [...staticEntries, ...categoryEntries];
   }
 }

@@ -6,6 +6,7 @@ import { createOnboardingLink, getOrCreateConnectAccount } from "@/lib/payments/
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { siteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Settings → Payments → "Set up payouts". Creates the seller's Express
@@ -29,7 +30,7 @@ export async function startConnectOnboarding(): Promise<{ error?: string }> {
     url = await createOnboardingLink(accountId, siteUrl());
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Stripe request failed";
-    console.error("[connect] onboarding link failed", { userId: user.id, reason });
+    reportError("[connect] onboarding link failed", { userId: user.id, reason });
     return { error: "Couldn't start payout setup. Try again in a moment." };
   }
 

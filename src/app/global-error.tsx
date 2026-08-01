@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 /**
  * Last resort: an error in the root layout itself, where the app's own CSS and
  * shell may not have loaded. Deliberately self-contained.
@@ -11,6 +13,20 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Server-relayed Sentry capture — the DSN never ships to the browser.
+    void fetch("/api/monitoring", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        digest: error.digest,
+        path: window.location.pathname,
+      }),
+    }).catch(() => {});
+  }, [error]);
+
   return (
     <html lang="en">
       <body

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { cartCount } from "@/lib/cart";
 import type { Database } from "@/lib/database.types";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * The two numbers the app shell shows as badges.
@@ -27,7 +28,7 @@ export async function loadShellCounts(
 
   if (error) {
     // A badge is not worth failing a page render over.
-    console.error("[shell] unread count failed", error);
+    reportError("[shell] unread count failed", error);
     return { cartCount: cart, unreadCount: 0 };
   }
 

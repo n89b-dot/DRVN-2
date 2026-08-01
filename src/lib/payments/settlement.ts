@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 
 import { stripeClient } from "./stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Webhook settlement logic (Rev D R1) — everything the Stripe webhook does
@@ -57,7 +58,7 @@ export async function transferForOrder(
   if (order.status !== "paid") return; // finalize failed or refused — no money to move
 
   if (!order.seller_id) {
-    console.error("[stripe:webhook] settled order has no seller to pay", { orderId });
+    reportError("[stripe:webhook] settled order has no seller to pay", { orderId });
     return;
   }
 
@@ -68,7 +69,7 @@ export async function transferForOrder(
     .maybeSingle();
   if (!seller?.stripe_account_id || !seller.payouts_enabled) {
     // Possible pre-gate listings. Loud, not fatal: funds hold on the platform.
-    console.error("[stripe:webhook] seller not payable — transfer skipped", {
+    reportError("[stripe:webhook] seller not payable — transfer skipped", {
       orderId,
       sellerId: order.seller_id,
     });
@@ -102,10 +103,10 @@ export async function transferForOrder(
       .is("transfer_reference", null);
     if (error) {
       // The transfer happened; the idempotency key protects the retry.
-      console.error("[stripe:webhook] transfer made but not recorded", { orderId, error });
+      reportError("[stripe:webhook] transfer made but not recorded", { orderId, error });
     }
   } catch (error) {
-    console.error("[stripe:webhook] transfer failed", { orderId, error });
+    reportError("[stripe:webhook] transfer failed", { orderId, error });
   }
 }
 
@@ -117,7 +118,7 @@ export async function settleIntent(
 ): Promise<boolean> {
   const orderIds = await ordersForIntent(admin, intent.id, intent.metadata.order_id);
   if (!orderIds.length) {
-    console.error("[stripe:webhook] intent maps to no orders", { intent: intent.id });
+    reportError("[stripe:webhook] intent maps to no orders", { intent: intent.id });
     return true; // nothing to retry
   }
 
@@ -133,7 +134,7 @@ export async function settleIntent(
       p_failure_reason: failureReason,
     });
     if (error) {
-      console.error("[stripe:webhook] purchase_finalize failed", { orderId, error });
+      reportError("[stripe:webhook] purchase_finalize failed", { orderId, error });
       allApplied = false;
       continue;
     }
@@ -186,7 +187,7 @@ export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Pr
     .select("id, order_id, amount_cents, refunded_cents, status")
     .eq("provider_reference", intentId);
   if (!payments?.length) {
-    console.error("[stripe:webhook] refund on unknown intent", { intentId, charge: charge.id });
+    reportError("[stripe:webhook] refund on unknown intent", { intentId, charge: charge.id });
     return;
   }
 
@@ -212,7 +213,7 @@ export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Pr
   if (match) {
     await refundOrder(match.order_id, match.id, match.amount_cents);
   } else {
-    console.error("[stripe:webhook] partial refund needs manual attribution", {
+    reportError("[stripe:webhook] partial refund needs manual attribution", {
       intentId,
       charge: charge.id,
       amountRefunded: charge.amount_refunded,
@@ -243,7 +244,7 @@ export async function applyDisputeEvent(
     .select("order_id")
     .eq("provider_reference", intentId);
   if (!payments?.length) {
-    console.error("[stripe:webhook] dispute on unknown intent", { intentId, dispute: dispute.id });
+    reportError("[stripe:webhook] dispute on unknown intent", { intentId, dispute: dispute.id });
     return;
   }
   const orderIds = payments.map((p) => p.order_id);
@@ -319,6 +320,6 @@ export async function applyAccountUpdate(admin: Admin, account: Stripe.Account) 
     .update({ payouts_enabled: account.payouts_enabled === true })
     .eq("stripe_account_id", account.id);
   if (error) {
-    console.error("[stripe:webhook] failed to sync payouts_enabled", { account: account.id, error });
+    reportError("[stripe:webhook] failed to sync payouts_enabled", { account: account.id, error });
   }
 }

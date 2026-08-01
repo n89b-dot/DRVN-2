@@ -7,6 +7,7 @@ import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
 import { loadProfileView } from "@/lib/profile-data";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 export async function generateMetadata({
   params,
@@ -65,7 +66,7 @@ export default async function PublicProfilePage({
     .maybeSingle();
 
   if (error) {
-    console.error("[profile] failed to load", { username, error });
+    reportError("[profile] failed to load", { username, error });
     throw new Error("Could not load this profile");
   }
   if (!profile) notFound();

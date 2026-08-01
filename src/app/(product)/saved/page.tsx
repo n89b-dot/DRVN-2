@@ -5,6 +5,7 @@ import { Rv } from "@/components/livesheet";
 import { Avatar, Foot, ListingCard, Media } from "@/components/ui";
 import { removeFollow, removeSave } from "@/features/social/actions";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Saved - DRVN" };
 
@@ -55,7 +56,7 @@ export default async function SavedPage() {
       .order("created_at", { ascending: false }),
   ]);
 
-  if (savesError) console.error("[saved] failed to load saves", savesError);
+  if (savesError) reportError("[saved] failed to load saves", savesError);
 
   const listingIds = (saves ?? [])
     .filter((s) => s.target_type === "listing")

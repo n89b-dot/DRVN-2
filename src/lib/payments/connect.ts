@@ -1,5 +1,6 @@
 import { stripeClient } from "./stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Stripe Connect linkage (Rev D R1). Mirrors customers.ts: the profile holds
@@ -86,7 +87,7 @@ export async function syncConnectAccount(accountId: string): Promise<ConnectStat
     .update({ payouts_enabled: payoutsEnabled })
     .eq("stripe_account_id", accountId);
   if (error) {
-    console.error("[connect] failed to store payouts_enabled", { accountId, error });
+    reportError("[connect] failed to store payouts_enabled", { accountId, error });
   }
 
   return { accountId, payoutsEnabled, requirementsDue };

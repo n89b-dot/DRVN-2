@@ -7,6 +7,7 @@ import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { createClient } from "@/lib/supabase/server";
 
 import { ListingsLedger, type LedgerOffer, type LedgerRow } from "./listings-ledger";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Your listings - DRVN" };
 
@@ -101,7 +102,7 @@ export default async function SellerListingsPage({
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (error) console.error("[listings] failed to load", error);
+  if (error) reportError("[listings] failed to load", error);
 
   const all = listings ?? [];
   const listingIds = all.map((l) => l.id);

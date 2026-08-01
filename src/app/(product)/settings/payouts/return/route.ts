@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getConnectAccountId, syncConnectAccount } from "@/lib/payments/connect";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Where Stripe sends the seller back after (or mid-way through) Connect
@@ -22,7 +23,7 @@ export async function GET() {
       await syncConnectAccount(accountId);
     } catch (error) {
       // Settings will still show the stored state; the webhook catches up.
-      console.error("[connect] return-sync failed", { accountId, error });
+      reportError("[connect] return-sync failed", { accountId, error });
     }
   }
 

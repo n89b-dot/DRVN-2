@@ -7,6 +7,7 @@ import { mapModCategoryToListing } from "@/lib/mods/category-map";
 import { createClient } from "@/lib/supabase/server";
 
 import { SellForm } from "./sell-form";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Sell a part - DRVN" };
 
@@ -30,7 +31,7 @@ export default async function SellPage({
     .eq("owner_id", user.id)
     .order("created_at");
 
-  if (error) console.error("[sell] failed to load cars", error);
+  if (error) reportError("[sell] failed to load cars", error);
 
   // Only honour the pre-fill if this really is the seller's own car.
   const sourceCar = carParam ? cars?.find((c) => c.id === carParam) : undefined;

@@ -12,6 +12,17 @@ export default function GroupError({
 }) {
   useEffect(() => {
     console.error("[route-error]", error);
+    // Server-relayed Sentry capture — the DSN never ships to the browser.
+    void fetch("/api/monitoring", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        digest: error.digest,
+        path: window.location.pathname,
+      }),
+    }).catch(() => {});
   }, [error]);
 
   return (

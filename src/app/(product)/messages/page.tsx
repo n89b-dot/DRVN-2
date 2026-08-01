@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import { Avatar, Foot, Media, NarrowColumn } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Messages - DRVN" };
 
@@ -55,7 +56,7 @@ export default async function MessagesPage() {
     .limit(MESSAGE_SCAN_LIMIT);
 
   if (error) {
-    console.error("[messages] failed to load", error);
+    reportError("[messages] failed to load", error);
     throw new Error("Could not load your messages");
   }
 

@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { OfferRow, type OfferView } from "./offer-row";
 import { OrderPipeline } from "./order-pipeline";
 import { ReceivedButton } from "./[id]/fulfilment";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Orders - DRVN" };
 
@@ -37,7 +38,7 @@ export default async function OrdersPage({
     supabase.from("listings").select("id, title").eq("seller_id", user.id).limit(200),
   ]);
 
-  if (ordersError) console.error("[orders] failed to load orders", ordersError);
+  if (ordersError) reportError("[orders] failed to load orders", ordersError);
 
   const orderIds = (orders ?? []).map((o) => o.id);
   const myListingIds = (myListings ?? []).map((l) => l.id);

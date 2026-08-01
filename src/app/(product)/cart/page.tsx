@@ -8,6 +8,7 @@ import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { removeFromCart } from "@/features/commerce/actions";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Cart - DRVN" };
 
@@ -25,7 +26,7 @@ export default async function CartPage() {
     : { data: [], error: null };
 
   if (error) {
-    console.error("[cart] failed to load listings", error);
+    reportError("[cart] failed to load listings", error);
   }
 
   const active = (listings ?? []).filter((l) => l.status === "active");

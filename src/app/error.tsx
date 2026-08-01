@@ -15,8 +15,18 @@ export default function RouteError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Replace with the error tracker's capture call when one is configured.
     console.error("[route-error]", error);
+    // Server-relayed Sentry capture — the DSN never ships to the browser.
+    void fetch("/api/monitoring", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        digest: error.digest,
+        path: window.location.pathname,
+      }),
+    }).catch(() => {});
   }, [error]);
 
   return (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 export type SaveTargetType = "listing" | "car" | "profile";
 export type FollowTargetType = "car" | "profile";
@@ -126,7 +127,7 @@ export async function removeSave(formData: FormData) {
     .eq("user_id", user.id)
     .eq("target_type", targetType)
     .eq("target_id", targetId);
-  if (error) console.error("[social] removeSave failed", error);
+  if (error) reportError("[social] removeSave failed", error);
 
   revalidatePath("/saved");
 }
@@ -148,7 +149,7 @@ export async function removeFollow(formData: FormData) {
     .eq("follower_id", user.id)
     .eq("target_type", targetType)
     .eq("target_id", targetId);
-  if (error) console.error("[social] removeFollow failed", error);
+  if (error) reportError("[social] removeFollow failed", error);
 
   revalidatePath("/saved");
 }

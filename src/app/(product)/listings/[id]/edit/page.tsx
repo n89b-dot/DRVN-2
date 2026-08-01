@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { SellForm } from "../../../sell/sell-form";
 import { DeleteListing } from "./delete-listing";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Edit listing - DRVN" };
 
@@ -33,7 +34,7 @@ export default async function EditListingPage({
     .maybeSingle();
 
   if (error) {
-    console.error("[listings/edit] failed to load listing", { id, error });
+    reportError("[listings/edit] failed to load listing", { id, error });
     throw new Error("Could not load this listing");
   }
   if (!listing || listing.seller_id !== user.id) notFound();

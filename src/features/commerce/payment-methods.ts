@@ -12,6 +12,7 @@ import { stripeClient, stripeSecretKey } from "@/lib/payments/stripe";
 import { createClient } from "@/lib/supabase/server";
 
 import type { CommerceState } from "./actions";
+import { reportError } from "@/lib/monitoring";
 
 /** Payment-method management (P22) + saved-card checkout (P21). All Stripe
  *  calls are server-side; the browser only ever sees client secrets. */
@@ -42,7 +43,7 @@ export async function createCardSetupIntent(): Promise<SetupState> {
     if (!intent.client_secret) return { error: "Couldn't start card setup." };
     return { clientSecret: intent.client_secret };
   } catch (error) {
-    console.error("[payments] setup intent failed", error);
+    reportError("[payments] setup intent failed", error);
     return { error: "Couldn't start card setup." };
   }
 }
@@ -59,7 +60,7 @@ export async function removeSavedCard(
     const removed = await detachSavedCard(user.id, pmId);
     if (!removed) return { error: "That card isn't on your account." };
   } catch (error) {
-    console.error("[payments] detach failed", error);
+    reportError("[payments] detach failed", error);
     return { error: "Couldn't remove the card. Try again." };
   }
   revalidatePath("/settings");
@@ -85,7 +86,7 @@ export async function saveCardOnIntent(formData: FormData): Promise<void> {
       setup_future_usage: "off_session",
     });
   } catch (error) {
-    console.error("[payments] saveCardOnIntent failed", error);
+    reportError("[payments] saveCardOnIntent failed", error);
   }
 }
 
@@ -140,7 +141,7 @@ export async function payWithSavedCard(
     return { error: "The card was declined. Try another." };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Payment failed";
-    console.error("[payments] saved-card confirm failed", { reference, reason });
+    reportError("[payments] saved-card confirm failed", { reference, reason });
     return { error: reason };
   }
 }

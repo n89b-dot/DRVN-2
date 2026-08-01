@@ -1,5 +1,6 @@
 import "server-only";
 
+import { captureMessage } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -42,14 +43,28 @@ export async function allowAction(rule: RateLimitRule, subject: string): Promise
     });
 
     if (error) {
-      console.error("[rate-limit] check failed, allowing", { action: rule.action, error });
+      failOpen(rule, error);
       return true;
     }
     return data !== false;
   } catch (error) {
-    console.error("[rate-limit] unavailable, allowing", { action: rule.action, error });
+    failOpen(rule, error);
     return true;
   }
+}
+
+/**
+ * The fail-open path is a deliberate availability trade — which is exactly
+ * why it must page someone when it happens: unthrottled abuse windows are
+ * only acceptable when they're known about. Tagged for a dedicated Sentry
+ * alert rule (R2).
+ */
+function failOpen(rule: RateLimitRule, error: unknown): void {
+  console.error("[rate-limit] check failed, allowing", { action: rule.action, error });
+  void captureMessage("rate limiter failed open", "warning", {
+    tags: { alert: "rate-limiter-fail-open", action: rule.action },
+    extra: { error: error instanceof Error ? error.message : String(error) },
+  });
 }
 
 export function rateLimitMessage(rule: RateLimitRule): string {

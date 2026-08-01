@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 
 import type { PaymentProvider, PaymentRequest, PaymentResult, RefundResult } from "./provider";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Stripe, via PaymentIntents.
@@ -62,7 +63,7 @@ export class StripePaymentProvider implements PaymentProvider {
       return { status: "requires_action", reference: intent.id, clientSecret: intent.client_secret };
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Stripe request failed";
-      console.error("[stripe] createPayment failed", { orderId: request.orderId, reason });
+      reportError("[stripe] createPayment failed", { orderId: request.orderId, reason });
       return { status: "failed", reason };
     }
   }
@@ -85,7 +86,7 @@ export class StripePaymentProvider implements PaymentProvider {
       };
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Stripe refund failed";
-      console.error("[stripe] refund failed", { reference, reason });
+      reportError("[stripe] refund failed", { reference, reason });
       return { status: "failed", reason };
     }
   }

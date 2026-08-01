@@ -9,6 +9,7 @@ import {
 } from "@/lib/payments/settlement";
 import { stripeClient } from "@/lib/payments/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Stripe webhook — the source of truth for async payments.
@@ -24,7 +25,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) {
-    console.error("[stripe:webhook] STRIPE_WEBHOOK_SECRET is not configured");
+    reportError("[stripe:webhook] STRIPE_WEBHOOK_SECRET is not configured");
     return new Response("webhook not configured", { status: 500 });
   }
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   try {
     event = stripeClient().webhooks.constructEvent(payload, signature, secret);
   } catch (error) {
-    console.error("[stripe:webhook] signature verification failed", error);
+    reportError("[stripe:webhook] signature verification failed", error);
     return new Response("invalid signature", { status: 400 });
   }
 
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     // Unexpected failure: let Stripe redeliver rather than losing the event.
-    console.error("[stripe:webhook] handler failed", { type: event.type, error });
+    reportError("[stripe:webhook] handler failed", { type: event.type, error });
     return new Response("handler failed", { status: 500 });
   }
 }

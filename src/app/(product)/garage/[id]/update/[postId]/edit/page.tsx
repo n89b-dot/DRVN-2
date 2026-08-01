@@ -7,6 +7,7 @@ import { normalizeBlocks } from "@/lib/activity-blocks";
 import { createClient } from "@/lib/supabase/server";
 
 import { PostEditor } from "./post-editor";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Edit update - DRVN" };
 
@@ -34,7 +35,7 @@ export default async function EditActivityPostPage({
     .maybeSingle();
 
   if (error) {
-    console.error("[activity/edit] failed to load post", { postId, error });
+    reportError("[activity/edit] failed to load post", { postId, error });
     throw new Error("Could not load this update");
   }
   if (!post || post.author_id !== user.id || post.car_id !== carId) notFound();

@@ -10,6 +10,7 @@ import { Foot, Media } from "@/components/ui";
 import { completeReservedOrder } from "@/features/commerce/actions";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
+import { reportError } from "@/lib/monitoring";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -44,7 +45,7 @@ export default async function CompleteOrderPage({
     .maybeSingle();
 
   if (error) {
-    console.error("[checkout] failed to load order", { id, error });
+    reportError("[checkout] failed to load order", { id, error });
     throw new Error("Could not load this order");
   }
   if (!order) notFound();

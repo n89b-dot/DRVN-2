@@ -7,6 +7,7 @@ import { prefEnabled, prefKeyForKind } from "@/lib/notification-prefs";
 import { createClient } from "@/lib/supabase/server";
 
 import { MarkAllRead } from "./mark-all-read";
+import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Notifications - DRVN" };
 
@@ -109,7 +110,7 @@ export default async function NotificationsPage() {
   ]);
 
   if (error) {
-    console.error("[notifications] failed to load", error);
+    reportError("[notifications] failed to load", error);
     throw new Error("Could not load your notifications");
   }
 
