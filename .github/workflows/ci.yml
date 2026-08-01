@@ -68,16 +68,16 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f supabase/tests/ci_shim.sql
+          psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -q -f supabase/tests/ci_shim.sql
           for f in supabase/migrations/*.sql; do
             echo "== applying $f"
-            psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
+            psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
           done
 
       - name: Purchase & dispute guard (9 assertions)
         env:
           PGPASSWORD: postgres
         run: |
-          out=$(psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/purchase_guard.sql 2>&1)
+          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/purchase_guard.sql 2>&1)
           echo "$out"
           echo "$out" | grep -q -- "--- all purchase-guard checks passed ---"
