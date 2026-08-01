@@ -68,6 +68,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f supabase/tests/ci_shim.sql
           for f in supabase/migrations/*.sql; do
             echo "== applying $f"
             psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
