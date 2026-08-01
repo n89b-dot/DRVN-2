@@ -38,7 +38,7 @@ export default async function CategoryPage({
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
-            Market
+            Marketplace
           </Link>{" "}
           / {category.label} · {page.total} listed
         </span>
@@ -68,7 +68,7 @@ export default async function CategoryPage({
         />
       </section>
 
-      <Foot left={`DRVN / Livesheet — market / ${category.label.toLowerCase()}`} right={<Link href="/marketplace">← The market</Link>} />
+      <Foot left={`DRVN — marketplace / ${category.label.toLowerCase()}`} right={<Link href="/marketplace">← All parts</Link>} />
     </div>
   );
 }

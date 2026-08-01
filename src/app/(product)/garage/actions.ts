@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { slugify } from "@/lib/format";
-import { isAllowedVideoUrl, isOwnStorageUrl, keepValidImageUrls } from "@/lib/media-url";
+import type { ActivityBlock } from "@/lib/activity-blocks";
+import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
+import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
 
 export type ActionState = { error?: string; ok?: string };
@@ -16,6 +18,21 @@ async function requireUser() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   return { supabase, user };
+}
+
+/**
+ * Drops any image URL that isn't our own storage (and any images block that
+ * ends up empty as a result) before a block set is persisted as a post body.
+ * Uploads happen client-side, so the URLs arriving here are user-controlled.
+ */
+function sanitizeActivityBlocks(blocks: ActivityBlock[], userId: string): ActivityBlock[] {
+  return blocks
+    .map((block) =>
+      block.type === "images"
+        ? { ...block, urls: keepValidImageUrls(block.urls, 12, userId) }
+        : block
+    )
+    .filter((block) => block.type !== "images" || block.urls.length > 0);
 }
 
 export async function createCar(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -96,6 +113,10 @@ export type ModItemInput = {
   product: string | null;
   /** Carried onto the listing when this line is released for sale. */
   part_number?: string | null;
+  /** Heuristic-parser output; free text, no DB enum (see src/lib/mods/parse.ts). */
+  category?: string | null;
+  /** Heuristic-parser confidence 0–1, or null for hand-entered/legacy rows. */
+  confidence?: number | null;
   raw_text: string;
   position: number;
 };
@@ -133,6 +154,15 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
       brand: item.brand,
       product: item.product,
       part_number: item.part_number ?? null,
+      // Client-supplied; the columns have no DB constraint, so gate here:
+      // unknown categories become null, confidence is clamped to [0, 1].
+      category: MOD_CATEGORIES.includes(item.category as ModCategory)
+        ? (item.category as ModCategory)
+        : null,
+      confidence:
+        typeof item.confidence === "number" && Number.isFinite(item.confidence)
+          ? Math.min(1, Math.max(0, item.confidence))
+          : null,
       raw_text: item.raw_text,
       position: index,
     };
@@ -150,9 +180,9 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
 }
 
 export async function addCarImage(carId: string, url: string): Promise<ActionState> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
-  if (!isOwnStorageUrl(url)) {
+  if (!isOwnedStorageUrl(url, user.id)) {
     return { error: "That image couldn't be verified. Try uploading it again." };
   }
 
@@ -219,10 +249,10 @@ export async function deleteCarImage(formData: FormData) {
 
 /** Lets the owner choose the cover instead of being stuck with the first upload. */
 export async function setCoverImage(formData: FormData): Promise<void> {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const carId = String(formData.get("car_id") ?? "");
   const url = String(formData.get("url") ?? "");
-  if (!carId || !isOwnStorageUrl(url)) return;
+  if (!carId || !isOwnedStorageUrl(url, user.id)) return;
 
   await supabase.from("cars").update({ cover_image_url: url }).eq("id", carId);
   revalidatePath(`/garage/${carId}/edit`);
@@ -283,11 +313,15 @@ export async function createRichActivityPost(
     .single();
   if (!car || car.owner_id !== user.id) return { error: "Car not found." };
 
-  // Blocks arrive as JSON from the composer; re-validate via normalizeBlocks.
+  // Blocks arrive as JSON from the composer; re-validate via normalizeBlocks,
+  // then drop any image URL that isn't our own storage.
   const { normalizeBlocks } = await import("@/lib/activity-blocks");
   let blocks;
   try {
-    blocks = normalizeBlocks(JSON.parse(String(formData.get("blocks") ?? "[]")));
+    blocks = sanitizeActivityBlocks(
+      normalizeBlocks(JSON.parse(String(formData.get("blocks") ?? "[]"))),
+      user.id
+    );
   } catch {
     return { error: "Could not read the post content." };
   }
@@ -356,7 +390,7 @@ export async function updateActivityPost(
   if (typeof blocksRaw === "string" && blocksRaw) {
     const { normalizeBlocks } = await import("@/lib/activity-blocks");
     try {
-      body = normalizeBlocks(JSON.parse(blocksRaw));
+      body = sanitizeActivityBlocks(normalizeBlocks(JSON.parse(blocksRaw)), user.id);
     } catch {
       return { error: "Could not read the post content." };
     }
@@ -384,7 +418,8 @@ export async function updateActivityPost(
       (body as { type?: string; urls?: string[] }[]).flatMap((b) =>
         b.type === "images" ? (b.urls ?? []) : []
       ),
-      24
+      24,
+      user.id
     );
 
     await supabase.from("activity_images").delete().eq("post_id", postId);
@@ -468,7 +503,7 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
   // Avatar upload happens client-side into the `avatars` bucket; only the URL
   // arrives here. An empty value leaves the existing avatar alone.
   const avatarUrl = String(formData.get("avatar_url") ?? "").trim();
-  if (avatarUrl && !isOwnStorageUrl(avatarUrl)) {
+  if (avatarUrl && !isOwnedStorageUrl(avatarUrl, user.id)) {
     return { error: "That image couldn't be verified. Try uploading it again." };
   }
 

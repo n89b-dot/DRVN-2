@@ -30,7 +30,7 @@ export default async function NewUpdatePage({ params }: { params: Promise<{ id: 
           <Link href={`/garage/${car.id}/edit`} className="hover:text-live">
             ← {car.name}
           </Link>{" "}
-          · new build entry — nothing is public until you file it
+          · new build update — nothing is public until you publish
         </span>
       </header>
       <UpdateComposer carId={car.id} userId={user.id} />

@@ -9,14 +9,14 @@ export default function ProductNotFound() {
         <span className="undrawn__mark" aria-hidden="true">
           ⌕
         </span>
-        <h3>Not on your sheet</h3>
+        <h3>Not yours to see</h3>
         <p>
-          This page doesn&apos;t exist, or it belongs to someone else — orders, listings and garage
-          pages are only visible to the people on them.
+          This page doesn&apos;t exist, or it belongs to someone else — orders, listings and
+          garage pages are only visible to the people on them.
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Link href="/home" className="btn btn--live">
-            Your sheet
+            Home
           </Link>
           <Link href="/orders" className="btn btn--ghost">
             Your orders

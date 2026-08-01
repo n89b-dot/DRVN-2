@@ -7,21 +7,21 @@ import { createClient } from "@/lib/supabase/server";
 import { money } from "@/lib/format";
 
 export const metadata = {
-  title: "DRVN — The parts market where every listing comes off a drawing",
+  title: "DRVN — Buy and sell parts off modified cars",
   description:
-    "Buy and sell parts off real modified cars. Every listing carries the sheet it came from — what car, when it was fitted, and who's selling it.",
+    "The marketplace for used and take-off parts from modified cars. Browse by category or car, see the build behind every listing, and sell the parts you pull off your own.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "DRVN — the parts market where every listing comes off a drawing",
+    title: "DRVN — buy and sell parts off modified cars",
     description:
-      "Buy and sell parts off real modified cars. Every listing carries the sheet it came from.",
+      "The marketplace for used and take-off parts from modified cars — with the build behind every listing.",
     url: "/",
     type: "website",
   },
 };
 
 /**
- * Public landing — the Livesheet pitch.
+ * Public landing — the marketplace pitch.
  *
  * Uses the real `LivesheetBar` (signed-out variant) rather than a hand-rolled
  * header: the bespoke one used `.bar__link`, which is `display:none` below
@@ -66,78 +66,79 @@ export default async function LandingPage() {
       <main className="wrap">
         <Rv as="section" className="pagehead">
           <span className="microlabel">
-            DRVN — the parts market where every listing comes off a drawing
+            DRVN — the marketplace for modified car parts
           </span>
           <h1>
-            The sheet is <span className="live-word">alive.</span>
+            Used parts, off real <span className="live-word">builds.</span>
           </h1>
           <p className="sub">
-            Every car on DRVN is a live drawing. List a part and it goes to market annotated —
-            what it came off, when it was fitted, who&apos;s watching it right now. Buyers see the
-            sheet, not a promise.
+            Somebody out there needs the parts sitting in your garage. DRVN is where used parts
+            from modified cars get bought and sold — and where you can see the exact car a part
+            came off before you hand over a cent.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/signup" className="btn btn--live">
-              Open your sheet
+            <Link href="/marketplace" className="btn btn--live">
+              Browse parts
             </Link>
-            <Link href="/marketplace" className="btn btn--ghost">
-              Browse the market
+            <Link href="/signup" className="btn btn--ghost">
+              Start selling
             </Link>
           </div>
         </Rv>
 
         {heroImage && (
           <Rv className="hero-media mb-10">
-            <Media src={heroImage} alt="A build on its sheet" className="h-full w-full" />
+            <Media src={heroImage} alt="A modified car on DRVN" className="h-full w-full" />
           </Rv>
         )}
 
-        {/* How the sheet works */}
+        {/* How it works — buyer, trust, seller */}
         <section className="deck deck--three">
           <Rv className="tile" stagger={0}>
             <div className="tile__head">
               <span className="microlabel">
-                <span className="mono">01</span> — Open a sheet
+                <span className="mono">01</span> — Find the part
               </span>
             </div>
             <p className="text-[15px] leading-relaxed">
-              Your car becomes a live drawing — the build, the receipts, the history, ruled onto
-              one page that updates itself.
+              Search by name, brand or part number — or flip one switch and only see parts that
+              fit the car you actually drive.
             </p>
           </Rv>
           <Rv className="tile" stagger={1}>
             <div className="tile__head">
               <span className="microlabel">
-                <span className="mono">02</span> — List parts off it
+                <span className="mono">02</span> — See the car it came off
               </span>
-              <span className="chip">From the sheet</span>
+              <span className="chip">Build pages</span>
             </div>
             <p className="text-[15px] leading-relaxed">
-              Release a component and the listing writes itself off the drawing — fitted dates,
-              mileage, what it ran with.
+              No more &quot;came off a clean car, trust me.&quot; Listings link to the car&apos;s
+              build page — the mod list, the photos, the owner — so you know what you&apos;re
+              buying into.
             </p>
           </Rv>
           <Rv className="tile" stagger={2}>
             <div className="tile__head">
               <span className="microlabel">
-                <span className="mono">03</span> — Sell while it&apos;s watched
+                <span className="mono">03</span> — Sell what you take off
               </span>
-              <span className="chip chip--live">Live</span>
+              <span className="chip">Free to list</span>
             </div>
             <p className="text-[15px] leading-relaxed">
-              Offers arrive as work orders on your sheet — accept, counter, or pass while the
-              watch-counts tick.
+              List a part in a few minutes, straight off your own build. Take offers, get paid,
+              ship it. 10% when it sells — nothing to list, nothing to browse.
             </p>
           </Rv>
         </section>
 
-        {/* Sheets being drawn */}
+        {/* Builds */}
         <section className="deck">
           <div>
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Sheets being drawn</span>
+              <span className="microlabel microlabel--ink">Builds on DRVN</span>
               <Link href="/explore" className="microlabel mono hover:text-live">
-                Survey all sheets →
+                Explore all builds →
               </Link>
             </div>
             <div className="mkt">
@@ -162,13 +163,13 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Parts off a live sheet */}
+        {/* Recently listed */}
         <section className="deck">
           <div>
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Parts off a live sheet</span>
+              <span className="microlabel microlabel--ink">Recently listed</span>
               <Link href="/marketplace" className="microlabel mono hover:text-live">
-                Open the market →
+                Browse the marketplace →
               </Link>
             </div>
             <div className="mkt">
@@ -179,7 +180,7 @@ export default async function LandingPage() {
                     <p className="mkt__price">{money.format(listing.price_cents / 100)}</p>
                     <span className="mkt__meta">
                       {listing.source_car_id && (
-                        <span className="chip chip--ok">Off a sheet</span>
+                        <span className="chip chip--ok">Off a build</span>
                       )}
                     </span>
                   </Link>
@@ -189,34 +190,38 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Ink band — the thesis, not fake stats */}
+        {/* The terms, stated plainly — real numbers only */}
         <section className="deck">
           <Rv className="band">
-            <span className="microlabel">The idea, measured</span>
+            <span className="microlabel">How it works, in numbers</span>
             <div className="band__stats">
-              <div>
-                <p className="num-giant">1</p>
-                <div className="bandrule" />
-                <span className="microlabel">Sheet per car — the spine everything hangs from</span>
-              </div>
               <div>
                 <p className="num-giant">{liveCount}</p>
                 <div className="bandrule" />
                 <span className="microlabel">
-                  Part{liveCount === 1 ? "" : "s"} on the market right now
+                  Part{liveCount === 1 ? "" : "s"} for sale right now
                 </span>
               </div>
               <div>
-                <p className="num-giant">48h</p>
+                <p className="num-giant">10%</p>
                 <div className="bandrule" />
-                <span className="microlabel">Offer windows — the clock is the contract</span>
+                <span className="microlabel">
+                  Seller fee when a part sells — free to list, free to browse
+                </span>
+              </div>
+              <div>
+                <p className="num-giant">72h</p>
+                <div className="bandrule" />
+                <span className="microlabel">
+                  Offer window — sellers accept, counter or pass
+                </span>
               </div>
             </div>
           </Rv>
         </section>
 
         <Foot
-          left="DRVN / Livesheet — a drawing that knows what's happening"
+          left="DRVN — used parts from modified cars"
           right={
             <>
               <Link href="/explore" className="hover:text-live">
@@ -224,7 +229,7 @@ export default async function LandingPage() {
               </Link>
               {" · "}
               <Link href="/marketplace" className="hover:text-live">
-                Market
+                Marketplace
               </Link>
               {" · "}
               <Link href="/login" className="hover:text-live">

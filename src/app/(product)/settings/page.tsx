@@ -1,3 +1,4 @@
+import { listSavedCards } from "@/lib/payments/customers";
 import { createClient } from "@/lib/supabase/server";
 
 import { logout } from "@/app/(auth)/actions";
@@ -21,10 +22,12 @@ export default async function SettingsPage() {
     .single();
 
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
+  const savedCards = await listSavedCards(user!.id).catch(() => []);
 
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 pb-10">
       <SettingsPanel
+        savedCards={savedCards}
         profile={{
           email: user?.email ?? "",
           username: profile?.username ?? "",

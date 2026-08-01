@@ -5,6 +5,8 @@ import Image from "next/image";
 
 import { cx } from "@/lib/format";
 
+import { Icon } from "./icons";
+
 export function NarrowColumn({ children }: { children: ReactNode }) {
   return <div className="wrap pb-6">{children}</div>;
 }
@@ -18,18 +20,37 @@ export function Media({
   src,
   alt,
   className = "",
+  fallbackClassName = "",
 }: {
   src?: string;
   alt: string;
   className?: string;
+  /** Extra classes for the no-photo plate only. Card covers pass
+   *  `plate-undrawn` so an unphotographed listing reads as a plate that
+   *  hasn't been drawn yet rather than a dead grey block. Thumbnails and
+   *  inline media leave it off and keep the plain fallback. */
+  fallbackClassName?: string;
 }) {
   if (!src) {
+    // The plate variants carry a drawn mark; the plain fallback stays empty so
+    // thumbnails and inline media don't sprout a badge at 44px.
+    const marked = fallbackClassName.includes("plate-undrawn");
     return (
       <span
-        className={`block bg-img-fallback ${className}`}
+        className={`block bg-img-fallback ${fallbackClassName} ${className}`}
         aria-label={alt}
         role="img"
-      />
+      >
+        {/* The same dashed badge every empty state uses (`.undrawn__mark`),
+            carrying the image icon rather than a text glyph — so a missing
+            photograph is spoken in the identical voice as a missing order or
+            a missing build entry. */}
+        {marked && (
+          <span className="undrawn__mark" aria-hidden="true">
+            <Icon name="image" />
+          </span>
+        )}
+      </span>
     );
   }
 
@@ -94,7 +115,7 @@ export function TabNav({
 }) {
   return (
     <div className="jumprow">
-      <span className="microlabel">On this sheet</span>
+      <span className="microlabel">On this page</span>
       {tabs.map((tab) => (
         <button
           key={tab}

@@ -3,12 +3,19 @@ import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, Media } from "@/components/ui";
+import { DISPUTE_CATEGORIES } from "@/features/commerce/disputes";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
 
 import { ReviewForm } from "../review-form";
 import { OrderPipeline, StatusChip } from "../order-pipeline";
-import { CancelOrder, DispatchForm, OrderThread, ReceivedButton } from "./fulfilment";
+import {
+  AcceptRefundButton,
+  CloseDisputeButton,
+  RefundOfferForm,
+  ReportProblemForm,
+} from "./disputes";
+import { CancelOrder, DispatchForm } from "./fulfilment";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -121,7 +128,7 @@ export default async function OrderDetailPage({
           <span className="live-word">{isBuyer ? "inbound." : "outbound."}</span>
         </h1>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <OrderPipeline status={order.status} />
+          <OrderPipeline status={order.status} progressStatus={order.pre_dispute_status} />
           <StatusChip status={order.status} />
         </div>
       </Rv>
@@ -135,7 +142,7 @@ export default async function OrderDetailPage({
           <p>
             {skipped
               ? `Some lines couldn't be included: ${skipped}. Everything else is confirmed below.`
-              : "The seller has been notified and will dispatch it."}
+              : "Your order went through — everything about it lives on this page."}
           </p>
         </div>
       )}
@@ -175,9 +182,18 @@ export default async function OrderDetailPage({
           </Rv>
 
           <Rv className="tile" stagger={1}>
-            <span className="microlabel microlabel--ink">Conversation</span>
-            <div className="mt-3">
-              <OrderThread orderId={id} currentUserId={user.id} messages={threadMessages} />
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0">
+                <span className="microlabel microlabel--ink block">Conversation</span>
+                <span className="order__meta block">
+                  {threadMessages.length > 0
+                    ? `${threadMessages.length} message${threadMessages.length === 1 ? "" : "s"} with ${counterpartyName}`
+                    : `Questions about this order go to ${counterpartyName}`}
+                </span>
+              </span>
+              <Link href={`/messages/${id}`} className="jumplink shrink-0">
+                {threadMessages.length > 0 ? "Open the conversation →" : `Message ${isBuyer ? "the seller" : "the buyer"} →`}
+              </Link>
             </div>
           </Rv>
 
@@ -195,7 +211,7 @@ export default async function OrderDetailPage({
           <Rv className="tile tile--deep">
             <div className="tile__head">
               <span className="microlabel microlabel--ink">
-                {isSeller ? "Payout breakdown" : "The money"}
+                {isSeller ? "Payout breakdown" : "Payment summary"}
               </span>
               <span className="microlabel">{order.currency}</span>
             </div>
@@ -237,8 +253,7 @@ export default async function OrderDetailPage({
             )}
             {payment && (
               <p className="spec-note">
-                Payment {payment.status.replace(/_/g, " ")} via {payment.provider}
-                {payment.provider_reference ? ` · ${payment.provider_reference}` : ""}
+                Payment {payment.status.replace(/_/g, " ")}
                 {payment.refunded_cents > 0
                   ? ` · ${formatPrice(payment.refunded_cents)} refunded`
                   : ""}
@@ -247,14 +262,20 @@ export default async function OrderDetailPage({
           </Rv>
 
           <Rv className="tile" stagger={1}>
-            <span className="microlabel microlabel--ink">
+            <span className="microlabel microlabel--ink block">
               {isBuyer ? "The seller" : "The buyer"}
             </span>
-            <p className="mt-2 font-medium">{counterpartyName}</p>
-            {counterparty?.username && (
-              <Link href={`/u/${counterparty.username}`} className="jumplink !mt-2 inline-flex">
-                View their sheet
-              </Link>
+            {counterparty?.username ? (
+              <p className="mt-2">
+                <Link
+                  href={`/u/${counterparty.username}`}
+                  className="font-medium transition-colors hover:text-live"
+                >
+                  {counterpartyName} →
+                </Link>
+              </p>
+            ) : (
+              <p className="mt-2 font-medium">{counterpartyName}</p>
             )}
           </Rv>
 
@@ -309,35 +330,81 @@ export default async function OrderDetailPage({
             </Rv>
           )}
 
-          {isBuyer && ["paid", "shipped"].includes(order.status) && (
-            <Rv className="tile" stagger={3}>
-              <span className="microlabel microlabel--ink">Arrived?</span>
-              <p className="spec-note">
-                Confirming receipt closes the order and unlocks reviews for both sides.
-              </p>
-              <div className="mt-3">
-                <ReceivedButton orderId={id} />
-              </div>
-            </Rv>
-          )}
-
-          {["pending", "paid"].includes(order.status) && (
+          {isSeller && ["pending", "paid"].includes(order.status) && (
             <Rv className="tile" stagger={4}>
-              <span className="microlabel microlabel--ink">Change of plan</span>
+              <span className="microlabel microlabel--ink">Can&apos;t fulfil this?</span>
               <p className="spec-note">
-                Cancellable until it&apos;s dispatched. After that, message{" "}
-                {isBuyer ? "the seller" : "the buyer"} first.
+                Cancelling refunds the buyer in full and puts the part back on sale. If the buyer
+                asked to cancel, this is where you do it.
               </p>
               <div className="mt-3">
                 <CancelOrder orderId={id} />
               </div>
             </Rv>
           )}
+
+          {isBuyer && ["shipped", "delivered", "completed"].includes(order.status) && (
+            <Rv className="tile" stagger={4}>
+              <span className="microlabel microlabel--ink">Something wrong?</span>
+              <p className="spec-note">
+                Item missing, damaged or not as described — open a dispute and the seller can
+                offer a refund.
+              </p>
+              <div className="mt-3">
+                <ReportProblemForm orderId={id} />
+              </div>
+            </Rv>
+          )}
+
+          {order.status === "disputed" && (
+            <Rv className="tile tile--deep" stagger={4}>
+              <div className="tile__head">
+                <span className="microlabel microlabel--ink">Dispute</span>
+                <span className="chip chip--spent">In dispute</span>
+              </div>
+              <p className="mt-2 text-[14.5px]">
+                {DISPUTE_CATEGORIES.find((c) => c.value === order.dispute_category)?.label ??
+                  "Reported a problem"}
+              </p>
+              {order.dispute_reason && (
+                <p className="spec-note">&quot;{order.dispute_reason}&quot;</p>
+              )}
+              <p className="spec-note">
+                Opened {order.disputed_at ? new Date(order.disputed_at).toLocaleDateString() : ""}
+                {isBuyer ? " by you" : ` by ${counterpartyName}`}
+              </p>
+
+              {order.refund_offer_cents ? (
+                <div className="mt-3 grid gap-2">
+                  <p className="spec-note">
+                    {isBuyer
+                      ? `The seller offered a refund of ${formatPrice(order.refund_offer_cents)}.`
+                      : `You offered a refund of ${formatPrice(order.refund_offer_cents)} — waiting on the buyer.`}
+                  </p>
+                  {isBuyer && (
+                    <AcceptRefundButton orderId={id} offerCents={order.refund_offer_cents} />
+                  )}
+                </div>
+              ) : (
+                isSeller && (
+                  <div className="mt-3">
+                    <RefundOfferForm orderId={id} totalCents={order.total_cents} />
+                  </div>
+                )
+              )}
+
+              {isBuyer && (
+                <div className="mt-3">
+                  <CloseDisputeButton orderId={id} />
+                </div>
+              )}
+            </Rv>
+          )}
         </div>
       </section>
 
       <Foot
-        left={`DRVN / Livesheet — order ${id.slice(0, 8).toUpperCase()}`}
+        left={`DRVN — order ${id.slice(0, 8).toUpperCase()}`}
         right={<Link href="/orders">All orders →</Link>}
       />
     </div>

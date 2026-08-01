@@ -9,6 +9,7 @@ import {
   makeOffer,
   type CommerceState,
 } from "@/features/commerce/actions";
+import { Toast } from "@/components/ui";
 
 export function PurchaseActions({
   listingId,
@@ -25,6 +26,7 @@ export function PurchaseActions({
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerState, offerAction, offerPending] = useActionState<CommerceState, FormData>(makeOffer, {});
   const [pending, startTransition] = useTransition();
+  const [cartState, setCartState] = useState<CommerceState | null>(null);
 
   if (isOwn || !isActive) return null;
 
@@ -63,23 +65,39 @@ export function PurchaseActions({
           Make an offer
         </button>
       </div>
-      <button
-        type="button"
-        onClick={() =>
-          guard(() =>
-            startTransition(async () => {
-              const fd = new FormData();
-              fd.set("listing_id", listingId);
-              await addToCart(fd);
-            })
-          )
-        }
-        className="btn btn--ghost"
-      >
-        Add to cart
-      </button>
+      {cartState?.ok ? (
+        <a href="/cart" className="btn btn--ghost">
+          In cart ✓ — view cart
+        </a>
+      ) : (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            guard(() =>
+              startTransition(async () => {
+                const fd = new FormData();
+                fd.set("listing_id", listingId);
+                const result = await addToCart(fd);
+                setCartState(result);
+                // Refresh the shell so the cart badge count updates in place.
+                if (result.ok) router.refresh();
+              })
+            )
+          }
+          className="btn btn--ghost"
+        >
+          Add to cart
+        </button>
+      )}
+      {cartState?.error && (
+        <p role="alert" aria-live="polite" className="field__err">
+          {cartState.error}
+        </p>
+      )}
+      {cartState?.ok && <Toast message="Added to cart ✓" />}
       <p className="spec-note">
-        <b>Payments are stubbed</b> — no real charge is made yet.
+        <b>Test mode</b> — payments run on Stripe&apos;s test rails; no real money moves.
       </p>
 
       {offerOpen && (
@@ -98,12 +116,13 @@ export function PurchaseActions({
                   <input name="amount" required inputMode="decimal" placeholder="0" className="ctl" />
                 </div>
                 <span className="field__hint">
-                  The keeper can accept, counter once, or let it lapse.
+                  The seller can accept, counter once, or let it lapse. Offers expire after 72
+                  hours.
                 </span>
               </div>
               <div className="field">
                 <span className="microlabel">Message — optional</span>
-                <textarea name="message" rows={2} placeholder="Anything the keeper should know" className="ctl" />
+                <textarea name="message" rows={2} placeholder="Anything the seller should know" className="ctl" />
               </div>
               {offerState.error && (
                 <p role="alert" aria-live="polite" className="field__err">

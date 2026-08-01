@@ -25,13 +25,13 @@ export default async function GaragePage() {
   return (
     <div className="wrap">
       <Rv as="header" className="pagehead">
-        <span className="microlabel">The garage — owner&apos;s desk</span>
+        <span className="microlabel">Garage — your cars</span>
         <h1>
-          Your side of the <span className="live-word">drawing.</span>
+          The cars you&apos;re <span className="live-word">building.</span>
         </h1>
         <p className="sub">
-          Every car is a sheet. Release parts straight off its build lines — a listing inherits
-          the sheet&apos;s history the moment you file it.
+          Each car gets its own build page. When you pull something off, list it straight from
+          the build — buyers see exactly where it came from.
         </p>
         <div className="mt-4">
           <AddCarForm />
@@ -42,7 +42,7 @@ export default async function GaragePage() {
         {garage.length > 0 ? (
           <Rv className="tile">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Cars on the sheet</span>
+              <span className="microlabel microlabel--ink">Your cars</span>
               <span className="chip">{garage.length}</span>
             </div>
             <div className="rowlist">
@@ -59,19 +59,19 @@ export default async function GaragePage() {
                   </span>
                   <span className="order__actions">
                     {!car.is_public && <span className="chip">Private</span>}
-                    {/* The page's own copy promises releasing parts straight off
-                        a build line; until now there was no way to do it. */}
+                    {/* The page's own copy promises listing parts straight off
+                        a build; until now there was no way to do it. */}
                     <Link href={`/sell?car=${car.id}`} className="btn btn--live">
-                      Release a part
+                      List a part
                     </Link>
                     <Link href={`/garage/${car.id}/update/new`} className="btn btn--ghost">
-                      Add update
+                      Post update
                     </Link>
                     <Link href={`/garage/${car.id}/edit`} className="btn btn--ghost">
                       Manage
                     </Link>
                     <Link href={`/cars/${car.slug}`} className="btn btn--ghost">
-                      Public sheet
+                      Build page
                     </Link>
                   </span>
                 </div>
@@ -85,8 +85,8 @@ export default async function GaragePage() {
             </span>
             <h3>Your car goes here</h3>
             <p>
-              Add the car you&apos;re building. Photos, spec, and every part that comes off it hang
-              from this one sheet.
+              Add the car you&apos;re building. Photos, the full mod list, and every part you sell
+              off it all live on one build page.
             </p>
             <AddCarForm />
           </Rv>
@@ -94,8 +94,8 @@ export default async function GaragePage() {
       </section>
 
       <Foot
-        left="DRVN / Livesheet — owner's desk · releases inherit the drawing"
-        right={<Link href="/home">← Your sheet</Link>}
+        left="DRVN — listings you create here carry the car with them"
+        right={<Link href="/home">← Home</Link>}
       />
     </div>
   );

@@ -69,7 +69,7 @@ function ListingRows({ view }: { view: ProfileView }) {
           ⌕
         </span>
         <h3>Nothing for sale right now</h3>
-        <p>Parts released from these cars will show up here.</p>
+        <p>Parts listed off these cars show up here.</p>
       </div>
     );
   }
@@ -108,7 +108,7 @@ function ReviewRows({ view }: { view: ProfileView }) {
           ✎
         </span>
         <h3>No reviews yet</h3>
-        <p>Reviews appear once a trade is completed and the buyer confirms delivery.</p>
+        <p>Reviews appear once a sale completes and the buyer confirms delivery.</p>
       </div>
     );
   }
@@ -163,7 +163,7 @@ export function ProfileBody({
       {bio && <p className="max-w-[62ch] text-[15px] leading-7">{bio}</p>}
 
       <section>
-        <SectionHeading>Vehicles</SectionHeading>
+        <SectionHeading>Cars &amp; builds</SectionHeading>
         <VehicleRows view={view} />
       </section>
 
@@ -215,7 +215,7 @@ export function ProfileBody({
 
   return (
     <div className="mt-8">
-      <SheetTabs tabs={tabs} initialTab={initialTab} label="Keeper sections" />
+      <SheetTabs tabs={tabs} initialTab={initialTab} label="Profile sections" />
     </div>
   );
 }

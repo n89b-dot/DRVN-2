@@ -73,12 +73,18 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
+  // getClaims() verifies the JWT locally against Supabase's cached JWKS
+  // (this project uses the new asymmetric signing keys), so the happy path
+  // costs no network round trip — unlike getUser(), which phoned the auth
+  // server on every single request and added 80–770ms before any page code
+  // ran. Token refresh still happens through the client's cookie handlers
+  // when the access token has expired.
   let user = null;
   try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    const { data } = await supabase.auth.getClaims();
+    user = data?.claims ?? null;
   } catch (error) {
-    console.error("[proxy] unable to reach Supabase while refreshing session", error);
+    console.error("[proxy] unable to verify session", error);
     return denyProductRoutes(request, supabaseResponse, "Supabase was unreachable");
   }
 

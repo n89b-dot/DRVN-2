@@ -46,14 +46,15 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
           <Link href="/garage" className="hover:text-live">
             The garage
           </Link>{" "}
-          / owner&apos;s desk ·{" "}
+          / manage ·{" "}
           <Link href={`/cars/${car.slug}`} className="hover:text-live">
-            view public sheet →
+            view build page →
           </Link>
         </span>
         <h1>Manage the {car.name}.</h1>
         <p className="sub">
-          Your side of the drawing. Everything here writes straight onto the public sheet.
+          Everything here shows on the car&apos;s public build page — and on any part you list off
+          it.
         </p>
       </header>
 

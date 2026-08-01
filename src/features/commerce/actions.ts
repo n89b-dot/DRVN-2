@@ -6,13 +6,22 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
+import { formatPrice } from "@/lib/payments/fee";
 import { getPaymentProvider } from "@/lib/payments/provider";
+import { getStripeCustomerId } from "@/lib/payments/customers";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
+import { DISPUTE_CATEGORIES } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { PurchaseBeginResult } from "@/lib/database.types";
+import type { DisputeCategory, PurchaseBeginResult } from "@/lib/database.types";
 
-export type CommerceState = { error?: string; ok?: string };
+export type CommerceState = {
+  error?: string;
+  ok?: string;
+  /** Set when the processor needs the buyer to confirm in the browser
+   *  (Stripe Payment Element). The form swaps to the confirmation step. */
+  payment?: { clientSecret: string; orderIds: string[] };
+};
 
 /** Outcome of a checkout, item by item, so nothing is dropped silently. */
 export type CheckoutOutcome = {
@@ -20,6 +29,9 @@ export type CheckoutOutcome = {
   orderIds: string[];
   purchased: { listingId: string; title: string }[];
   skipped: { listingId: string; title: string; reason: string }[];
+  /** Async processor: the buyer still has to confirm in the browser. Orders
+   *  stay pending and listings reserved until the webhook settles them. */
+  payment?: { clientSecret: string; orderIds: string[] };
 };
 
 async function requireUser() {
@@ -33,10 +45,10 @@ async function requireUser() {
 
 // ---------- Cart ----------
 
-export async function addToCart(formData: FormData) {
+export async function addToCart(formData: FormData): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
   const id = String(formData.get("listing_id") ?? "");
-  if (!id) redirect("/cart");
+  if (!id) return { error: "Missing listing." };
 
   // Previously any string was accepted into the cookie. Validate before it can
   // sit in the cart looking like a real line item.
@@ -47,14 +59,17 @@ export async function addToCart(formData: FormData) {
     .maybeSingle();
 
   if (!listing || listing.status !== "active") {
-    redirect(`/listings/${id}?error=${encodeURIComponent("That part is no longer available.")}`);
+    return { error: "That part is no longer available." };
   }
   if (listing.seller_id === user.id) {
-    redirect(`/listings/${id}?error=${encodeURIComponent("That's your own listing.")}`);
+    return { error: "That's your own listing." };
   }
 
-  await setCartIds([...(await getCartIds()), id]);
-  redirect("/cart");
+  const current = await getCartIds();
+  if (!current.includes(id)) await setCartIds([...current, id]);
+  // Stay on the page: the buyer gets an in-place confirmation and the cart
+  // badge updates; going to the cart is their choice, not a hijack.
+  return { ok: "Added to cart." };
 }
 
 export async function removeFromCart(formData: FormData) {
@@ -126,10 +141,10 @@ async function purchaseListings(
   const purchased: CheckoutOutcome["purchased"] = [];
   const failures: string[] = [];
 
-  for (const order of result.orders) {
-    // Attach the delivery details to the order before charging, so a paid order
-    // always knows where it is going.
-    if (options.shipping) {
+  // Attach the delivery details to every order before charging, so a paid
+  // order always knows where it is going.
+  if (options.shipping) {
+    for (const order of result.orders) {
       await admin
         .from("orders")
         .update({
@@ -144,19 +159,27 @@ async function purchaseListings(
         })
         .eq("id", order.order_id);
     }
+  }
 
-    const payment = await provider.createPayment({
-      orderId: order.order_id,
-      buyerId,
-      sellerId: order.seller_id,
-      totalCents: order.total_cents,
-      currency: order.currency,
-      idempotencyKey: options.idempotencyKey
-        ? `${options.idempotencyKey}:${order.order_id}`
-        : undefined,
-    });
+  // ONE payment per checkout, even for a multi-seller basket: the buyer
+  // confirms a single charge for the basket total, and the webhook settles
+  // every order against the same payment reference. (Splitting seller
+  // proceeds is internal bookkeeping until Connect lands.)
+  const allOrderIds = result.orders.map((o) => o.order_id);
+  const basketTotal = result.orders.reduce((sum, o) => sum + o.total_cents, 0);
+  const payment = await provider.createPayment({
+    orderId: allOrderIds.join(","),
+    buyerId,
+    sellerId: result.orders.length === 1 ? result.orders[0].seller_id : "multiple",
+    totalCents: basketTotal,
+    currency: result.orders[0].currency,
+    idempotencyKey: options.idempotencyKey,
+    customerId: await getStripeCustomerId(buyerId),
+  });
 
-    if (payment.status === "succeeded") {
+  if (payment.status === "succeeded") {
+    // Synchronous settle (stub provider): finalize every order inline.
+    for (const order of result.orders) {
       const { error: finalizeError } = await admin.rpc("purchase_finalize", {
         p_order_id: order.order_id,
         p_success: true,
@@ -173,15 +196,31 @@ async function purchaseListings(
       purchased.push(
         ...order.listing_ids.map((id) => ({ listingId: id, title: titleFor(id) }))
       );
-    } else {
-      const reason = payment.status === "failed" ? payment.reason : "needs confirmation";
+    }
+  } else if (payment.status === "requires_action") {
+    // Async settle (Stripe): orders stay pending and listings reserved; the
+    // reservation window is the buyer's time to confirm. Stamp the intent on
+    // the pending payment rows for reconciliation, then hand the client
+    // secret to the browser — the webhook finishes the job.
+    await admin
+      .from("payments")
+      .update({ provider: provider.name, provider_reference: payment.reference })
+      .in("order_id", allOrderIds);
+    return {
+      orderIds: allOrderIds,
+      purchased: [],
+      skipped,
+      payment: { clientSecret: payment.clientSecret, orderIds: allOrderIds },
+    };
+  } else {
+    const reason = payment.reason;
+    for (const order of result.orders) {
       await admin.rpc("purchase_finalize", {
         p_order_id: order.order_id,
         p_success: false,
         p_provider: provider.name,
         p_failure_reason: reason,
       });
-      failures.push(reason);
       skipped.push(
         ...order.listing_ids.map((id) => ({
           listingId: id,
@@ -190,6 +229,7 @@ async function purchaseListings(
         }))
       );
     }
+    failures.push(reason);
   }
 
   revalidatePath("/marketplace");
@@ -281,6 +321,13 @@ export async function checkoutCart(
   // regardless, losing items that were never purchased.
   if (outcome.purchased.length) {
     await removeCartIds(outcome.purchased.map((p) => p.listingId));
+  }
+
+  // Async processor: hand the client secret back so the form can swap to the
+  // Payment Element confirmation step. The cart stays intact until the money
+  // is actually confirmed (the return route clears it).
+  if (outcome.payment) {
+    return { payment: outcome.payment };
   }
 
   if (!outcome.purchased.length) {
@@ -421,12 +468,25 @@ export async function respondToOffer(
 
   const { data: offer } = await admin
     .from("offers")
-    .select("id, listing_id, buyer_id, amount_cents, status")
+    .select("id, listing_id, buyer_id, amount_cents, status, expires_at")
     .eq("id", offerId)
     .maybeSingle();
   if (!offer) return { error: "That offer no longer exists." };
   if (!["open", "countered"].includes(offer.status)) {
     return { error: "That offer has already been settled." };
+  }
+  // The sweeper expires lapsed offers on a schedule, not instantly — a seller
+  // can still land here between expiry and the next sweep. Accepting or
+  // countering at that point would honour a price the buyer never agreed to
+  // hold past 72 hours, so it's checked again here rather than trusted.
+  if (offer.expires_at && new Date(offer.expires_at) < new Date()) {
+    await admin
+      .from("offers")
+      .update({ status: "expired", responded_at: new Date().toISOString() })
+      .eq("id", offerId)
+      .in("status", ["open", "countered"]);
+    revalidatePath("/orders");
+    return { error: "This offer has expired." };
   }
 
   const { data: listing } = await admin
@@ -559,13 +619,26 @@ export async function acceptCounter(
 
   const { data: offer } = await admin
     .from("offers")
-    .select("id, listing_id, buyer_id, counter_amount_cents, status")
+    .select("id, listing_id, buyer_id, counter_amount_cents, status, expires_at")
     .eq("id", offerId)
     .maybeSingle();
 
   if (!offer || offer.buyer_id !== user.id) return { error: "That isn't your offer." };
   if (offer.status !== "countered" || !offer.counter_amount_cents) {
     return { error: "There's no counter to accept." };
+  }
+  // Same lapsed-before-the-sweep window as respondToOffer: the counter's
+  // clock is still the original offer's expires_at, so a buyer can't accept
+  // a counter that outlived its 72-hour window just because the sweeper
+  // hasn't run yet.
+  if (offer.expires_at && new Date(offer.expires_at) < new Date()) {
+    await admin
+      .from("offers")
+      .update({ status: "expired", responded_at: new Date().toISOString() })
+      .eq("id", offerId)
+      .in("status", ["open", "countered"]);
+    revalidatePath("/orders");
+    return { error: "This offer has expired." };
   }
 
   const { data: listing } = await admin
@@ -651,7 +724,17 @@ export async function completeReservedOrder(
     totalCents: order.total_cents,
     currency: order.currency,
     idempotencyKey: `order:${orderId}`,
+    customerId: await getStripeCustomerId(user.id),
   });
+
+  // Async processor: the buyer confirms in the browser; the webhook settles.
+  if (payment.status === "requires_action") {
+    await admin
+      .from("payments")
+      .update({ provider: provider.name, provider_reference: payment.reference })
+      .eq("order_id", orderId);
+    return { payment: { clientSecret: payment.clientSecret, orderIds: [orderId] } };
+  }
 
   const { data: result } = await admin.rpc("purchase_finalize", {
     p_order_id: orderId,
@@ -875,11 +958,14 @@ export async function requestCancellation(
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { error: "Order not found." };
-  if (![order.buyer_id, order.seller_id].includes(user.id)) {
-    return { error: "That isn't your order." };
+  // Seller-initiated only: a buyer who wants out messages the seller, who
+  // cancels from their side. Buyer-facing self-serve cancellation was removed
+  // deliberately — it undercuts committed sales and skips the conversation.
+  if (order.seller_id !== user.id) {
+    return { error: "Only the seller can cancel — message them from the order." };
   }
   if (!["pending", "paid"].includes(order.status)) {
-    return { error: "This order has already shipped — message the seller instead." };
+    return { error: "This order has already shipped." };
   }
 
   // Return the goods to sale and record the refund intent. With the stub
@@ -927,6 +1013,339 @@ export async function requestCancellation(
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Order cancelled." };
+}
+
+// ---------- Disputes & refunds ----------
+//
+// Pre-dispatch, requestCancellation above already refunds and cancels. This
+// covers what it explicitly does not: a problem discovered after dispatch.
+// Schema is migration 0014 (applied to the live database on 31 Jul 2026). `orders` gained
+// dispute_category/reason/disputed_at/disputed_by/dispute_resolved_at,
+// pre_dispute_status (what to restore on resolution) and
+// refund_offer_cents/refund_offered_at (the seller's outstanding offer,
+// awaiting the buyer's accept). `payments` already had refunded_cents and a
+// partially_refunded status (0007), so partial refunds are recorded there —
+// no further schema gap on that side.
+
+
+const DISPUTE_CATEGORY_LABEL = new Map(DISPUTE_CATEGORIES.map((c) => [c.value, c.label]));
+
+/** Posts a system-authored line into the order's thread, so the conversation
+ *  carries context for a dispute event without either party having to type
+ *  it themselves. Mirrors sendThreadMessage's participant/listing lookup. */
+async function postOrderSystemMessage(
+  admin: ReturnType<typeof createAdminClient>,
+  orderId: string,
+  senderId: string,
+  recipientId: string,
+  body: string
+) {
+  const { data: item } = await admin
+    .from("order_items")
+    .select("listing_id")
+    .eq("order_id", orderId)
+    .limit(1)
+    .maybeSingle();
+  if (!item?.listing_id) return;
+
+  const { error } = await admin.from("messages").insert({
+    listing_id: item.listing_id,
+    order_id: orderId,
+    sender_id: senderId,
+    recipient_id: recipientId,
+    body,
+  });
+  if (error) {
+    console.error("[commerce] dispute system message failed", { orderId, error });
+  }
+}
+
+/** Buyer reports a problem, after dispatch. Sets the order disputed, tells
+ *  the seller, and drops a system message into the thread for context. */
+export async function openDispute(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+
+  if (!(await allowAction(RATE_LIMITS.openDispute, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.openDispute) };
+  }
+
+  const admin = createAdminClient();
+  const orderId = String(formData.get("order_id") ?? "");
+  const category = String(formData.get("category") ?? "") as DisputeCategory;
+  const reason = String(formData.get("reason") ?? "").trim().slice(0, 1000);
+  if (!orderId) return { error: "Missing order." };
+  if (!DISPUTE_CATEGORY_LABEL.has(category)) return { error: "Pick what went wrong." };
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, buyer_id, seller_id, status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
+  // A dispute only makes sense once the seller has actually sent something —
+  // requestCancellation covers everything before dispatch.
+  if (!["shipped", "delivered", "completed"].includes(order.status)) {
+    return { error: "You can report a problem once the order has shipped." };
+  }
+  if (!order.seller_id) return { error: "The seller's account is no longer active." };
+
+  const now = new Date().toISOString();
+  const { data: opened, error } = await admin
+    .from("orders")
+    .update({
+      status: "disputed",
+      dispute_category: category,
+      dispute_reason: reason || null,
+      disputed_at: now,
+      disputed_by: user.id,
+      pre_dispute_status: order.status,
+    })
+    .eq("id", orderId)
+    .eq("status", order.status)
+    .select("id");
+  if (error) return { error: error.message };
+  // Zero rows: the order moved on between our read and this write.
+  if (!opened?.length) return { error: "This order changed state — reload and try again." };
+
+  await postOrderSystemMessage(
+    admin,
+    orderId,
+    user.id,
+    order.seller_id,
+    `Opened a dispute — ${DISPUTE_CATEGORY_LABEL.get(category)}.${reason ? ` "${reason}"` : ""}`
+  );
+
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: "Dispute opened — the seller has been notified." };
+}
+
+/** Seller offers a refund on a disputed order. Refunds are all-or-nothing —
+ *  the offer is always the full amount the buyer paid. Money doesn't move
+ *  yet; the buyer has to accept the offer first. */
+export async function offerRefund(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+  const admin = createAdminClient();
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "Missing order." };
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, buyer_id, seller_id, status, total_cents")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+  if (order.seller_id !== user.id) return { error: "That isn't your sale." };
+  if (order.status !== "disputed") return { error: "This order isn't in dispute." };
+  if (!order.buyer_id) return { error: "The buyer's account is no longer active." };
+
+  // Refunds are all-or-nothing: the offer is always everything the buyer
+  // paid. No amount input to validate, no partial-refund bookkeeping.
+  const { data: payment } = await admin
+    .from("payments")
+    .select("amount_cents, refunded_cents, status")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (payment && payment.refunded_cents > 0) {
+    return { error: "This order has already been refunded." };
+  }
+  const amount = payment?.amount_cents ?? order.total_cents;
+
+  const { data: offered, error } = await admin
+    .from("orders")
+    .update({ refund_offer_cents: amount, refund_offered_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("status", "disputed")
+    .select("id");
+  if (error) return { error: error.message };
+  // Zero rows means the dispute settled between our read and this write —
+  // report that instead of a phantom success.
+  if (!offered?.length) return { error: "This dispute has already been settled." };
+
+  await postOrderSystemMessage(
+    admin,
+    orderId,
+    user.id,
+    order.buyer_id,
+    `Offered a refund of ${formatPrice(amount)}.`
+  );
+  await admin.from("notifications").insert({
+    user_id: order.buyer_id,
+    kind: "refund_offered",
+    section: "marketplace",
+    title: "The seller offered a refund",
+    body: `${formatPrice(amount)} — review it on the order.`,
+    href: `/orders/${orderId}`,
+    actor_id: user.id,
+  });
+
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: "Refund offer sent to the buyer." };
+}
+
+/** Buyer accepts the seller's refund offer. Refunds are all-or-nothing, so
+ *  acceptance always refunds the full payment and settles the order as
+ *  `refunded`.
+ *
+ *  Concurrency: the provider refund is an irreversible external side effect,
+ *  so before calling it we atomically CLAIM the offer — nulling
+ *  `refund_offered_at` only where it is still set. PostgREST returns the
+ *  updated rows, so a concurrent second accept (double-click, retry, second
+ *  tab) matches zero rows and bails before any money moves. If the provider
+ *  then fails, the claim is restored so the buyer can try again. */
+export async function acceptRefund(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+  const admin = createAdminClient();
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "Missing order." };
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, buyer_id, seller_id, status, refund_offer_cents")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
+  if (order.status !== "disputed" || !order.refund_offer_cents) {
+    return { error: "There's no refund offer to accept." };
+  }
+
+  const { data: payment } = await admin
+    .from("payments")
+    .select("provider_reference, amount_cents, refunded_cents")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (!payment?.provider_reference) {
+    return { error: "No payment on file for this order." };
+  }
+  if (payment.refunded_cents > 0) {
+    return { error: "This order has already been refunded." };
+  }
+
+  // Atomic claim: only one request can null the still-set refund_offered_at.
+  const { data: claimed } = await admin
+    .from("orders")
+    .update({ refund_offered_at: null })
+    .eq("id", orderId)
+    .eq("status", "disputed")
+    .not("refund_offered_at", "is", null)
+    .select("refund_offer_cents");
+  const claimedAmount = claimed?.[0]?.refund_offer_cents;
+  if (!claimedAmount) {
+    return { error: "This refund is already being processed." };
+  }
+
+  const amount = payment.amount_cents;
+  const provider = getPaymentProvider();
+  let refunded = false;
+  try {
+    const refund = await provider.refund(payment.provider_reference, amount);
+    refunded = refund.status === "refunded";
+  } catch {
+    refunded = false;
+  }
+  if (!refunded) {
+    // Give the offer back so the buyer can retry.
+    await admin
+      .from("orders")
+      .update({ refund_offered_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .eq("status", "disputed");
+    return { error: "The refund could not be processed. Try again." };
+  }
+
+  await admin
+    .from("payments")
+    .update({ refunded_cents: amount, status: "refunded" })
+    .eq("order_id", orderId);
+
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("orders")
+    .update({
+      status: "refunded",
+      dispute_resolved_at: now,
+      refund_offer_cents: null,
+      cancelled_at: now,
+      cancel_reason: "refunded after dispute",
+    })
+    .eq("id", orderId)
+    .eq("status", "disputed");
+  if (error) return { error: error.message };
+
+  if (order.seller_id) {
+    await postOrderSystemMessage(
+      admin,
+      orderId,
+      user.id,
+      order.seller_id,
+      `Accepted the ${formatPrice(amount)} refund. Dispute closed.`
+    );
+  }
+
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: `Refund of ${formatPrice(amount)} confirmed.` };
+}
+
+/** Buyer closes their own dispute without a refund — "resolved, no action
+ *  needed". Settles the order back to where it was before the dispute. */
+export async function closeDispute(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+  const admin = createAdminClient();
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "Missing order." };
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, buyer_id, seller_id, status, pre_dispute_status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
+  if (order.status !== "disputed") return { error: "This order isn't in dispute." };
+
+  const { data: closed, error } = await admin
+    .from("orders")
+    .update({
+      status: order.pre_dispute_status ?? "delivered",
+      dispute_resolved_at: new Date().toISOString(),
+      refund_offer_cents: null,
+      refund_offered_at: null,
+    })
+    .eq("id", orderId)
+    .eq("status", "disputed")
+    .select("id");
+  if (error) return { error: error.message };
+  if (!closed?.length) return { error: "This dispute has already been settled." };
+
+  if (order.seller_id) {
+    await postOrderSystemMessage(
+      admin,
+      orderId,
+      user.id,
+      order.seller_id,
+      "Closed the dispute — resolved, no action needed."
+    );
+  }
+
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: "Dispute closed." };
 }
 
 // ---------- Reviews ----------

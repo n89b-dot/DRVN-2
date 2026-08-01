@@ -15,6 +15,8 @@ export type Profile = {
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  /** Stripe Customer pointer (migration 0015, applied 1 Aug 2026). */
+  stripe_customer_id: string | null;
   headline: string | null;
   bio: string | null;
   location: string | null;
@@ -206,9 +208,27 @@ export type Order = {
   completed_at: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  /** Set by migration 0014 (applied to the live database 31 Jul 2026). */
+  dispute_category: DisputeCategory | null;
+  dispute_reason: string | null;
+  disputed_at: string | null;
+  disputed_by: string | null;
+  dispute_resolved_at: string | null;
+  /** Status to restore on resolution — always shipped/delivered/completed. */
+  pre_dispute_status: OrderStatus | null;
+  /** The seller's outstanding refund offer, awaiting buyer acceptance. */
+  refund_offer_cents: number | null;
+  refund_offered_at: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export type DisputeCategory =
+  | "item_not_received"
+  | "item_not_as_described"
+  | "damaged_in_transit"
+  | "wrong_item"
+  | "other";
 
 export type OrderItem = {
   id: string;

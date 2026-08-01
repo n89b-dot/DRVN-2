@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { CheckoutForm } from "@/app/(product)/cart/checkout-form";
+import { CheckoutSteps } from "@/app/(product)/checkout/checkout-steps";
+import { listSavedCards } from "@/lib/payments/customers";
 import { Rv } from "@/components/livesheet";
 import { Foot, Media } from "@/components/ui";
 import { completeReservedOrder } from "@/features/commerce/actions";
 import { formatPrice } from "@/lib/payments/fee";
-import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -160,16 +160,14 @@ export default async function CompleteOrderPage({
             </div>
           </Rv>
 
-          <Rv className="tile" stagger={1}>
-            <span className="microlabel microlabel--ink">Where it goes</span>
-            <CheckoutForm
+          <Rv stagger={1}>
+            <CheckoutSteps
               idempotencyKey={randomUUID()}
               allowsCollection={allowsCollection}
               total={formatPrice(order.total_cents)}
-              paymentsAreLive={paymentsAreLive()}
+              savedCards={await listSavedCards(user.id).catch(() => [])}
               action={completeReservedOrder}
               orderId={id}
-              submitLabel={`Confirm and pay ${formatPrice(order.total_cents)}`}
             />
           </Rv>
         </div>

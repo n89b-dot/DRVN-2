@@ -70,7 +70,7 @@ export function OfferRow({
   const live = offer.status === "open" || offer.status === "countered";
 
   return (
-    <div className="jobrow">
+    <div id={`offer-${offer.id}`} className="jobrow">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <StatusChip status={offer.status} />

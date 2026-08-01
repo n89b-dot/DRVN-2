@@ -9,10 +9,10 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
 
   return (
     <section className="undrawn !place-items-start text-left">
-      <span className="microlabel microlabel--live">Closing the sheet — irreversible</span>
+      <span className="microlabel microlabel--live">Delete this car — irreversible</span>
       <p className="!m-0 max-w-[62ch]">
-        Removes the car, its photos, mods, and build updates. Provenance on parts already sold
-        stays with them. This cannot be undone.
+        Removes the car, its build page, photos, mods and updates. Parts you&apos;ve already sold
+        keep their record. This cannot be undone.
       </p>
       <form
         action={(fd) => {
@@ -23,7 +23,7 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
       >
         <input type="hidden" name="id" value={carId} />
         <button type="submit" disabled={pending} className="btn btn--ghost !text-live">
-          {pending ? "Deleting…" : "Close the sheet"}
+          {pending ? "Deleting…" : "Delete this car"}
         </button>
       </form>
     </section>

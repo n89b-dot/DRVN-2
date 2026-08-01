@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
+import { normalizeBlocks } from "@/lib/activity-blocks";
 import { createClient } from "@/lib/supabase/server";
 
 import { PostEditor } from "./post-editor";
@@ -44,20 +45,18 @@ export default async function EditActivityPostPage({
     .eq("id", carId)
     .maybeSingle();
 
-  // A post from the rich composer holds image and text blocks. The simple
-  // editor deliberately leaves the body alone in that case rather than
-  // flattening it — content edits belong in the full editor.
-  const blocks = Array.isArray(post.body) ? (post.body as { type?: string }[]) : [];
-  const isRich = blocks.some((b) => b?.type === "images" || blocks.length > 1);
-  const plainText = !isRich
-    ? ((post.body as { text?: string }[] | null)?.[0]?.text ?? "")
-    : "";
+  // A post from the rich composer holds image and/or multiple blocks. Those
+  // get the same block editor used to create them — text edited in place,
+  // photos added/removed/reordered — instead of the plain textarea below.
+  const blocks = normalizeBlocks(post.body);
+  const isRich = blocks.some((b) => b.type === "images" || b.type === "embed" || blocks.length > 1);
+  const plainText = !isRich ? (blocks[0]?.type === "text" ? blocks[0].text : "") : "";
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Editing an entry{car ? ` on ${car.name}` : ""} ·{" "}
+          Editing an update{car ? ` on ${car.name}` : ""} ·{" "}
           {post.published_at
             ? new Date(post.published_at).toLocaleDateString()
             : "unpublished"}
@@ -69,17 +68,19 @@ export default async function EditActivityPostPage({
 
       <PostEditor
         carId={carId}
+        userId={user.id}
         postId={post.id}
         title={post.title}
         intro={post.intro ?? ""}
         videoUrl={post.video_url ?? ""}
         plainText={plainText}
         isRich={isRich}
+        initialBlocks={blocks}
         publicHref={car ? `/cars/${car.slug}/activity/${post.id}` : null}
       />
 
       <Foot
-        left="DRVN / Livesheet — the sheet stays honest"
+        left="DRVN — edits show on the car's build page"
         right={<Link href={`/garage/${carId}/edit`}>← Back to the car</Link>}
       />
     </div>

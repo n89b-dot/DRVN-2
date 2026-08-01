@@ -25,10 +25,9 @@ export default function RouteError({
         <span className="alert__ico" aria-hidden="true">
           ⚠
         </span>
-        <h4>That sheet wouldn&apos;t draw</h4>
+        <h4>Something went wrong</h4>
         <p>
-          Something failed while loading this page. It&apos;s been logged — trying again often
-          works.
+          This page failed to load. It&apos;s been logged — trying again usually sorts it.
           {error.digest && (
             <>
               {" "}

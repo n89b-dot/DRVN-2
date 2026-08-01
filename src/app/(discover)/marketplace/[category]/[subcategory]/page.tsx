@@ -39,7 +39,7 @@ export default async function SubcategoryPage({
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
-            Market
+            Marketplace
           </Link>{" "}
           /{" "}
           <Link href={`/marketplace/${category.slug}`} className="hover:text-live">
@@ -67,7 +67,7 @@ export default async function SubcategoryPage({
       </section>
 
       <Foot
-        left={`DRVN / Livesheet — market / ${subcategory.label.toLowerCase()}`}
+        left={`DRVN — marketplace / ${subcategory.label.toLowerCase()}`}
         right={<Link href={`/marketplace/${category.slug}`}>← {category.label}</Link>}
       />
     </div>

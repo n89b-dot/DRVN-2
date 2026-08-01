@@ -17,7 +17,7 @@ export type ModLine = {
   brand: string | null;
   product: string | null;
   raw: string | null;
-  /** Set when this part has been released for sale off this car. */
+  /** Set when this part has been listed for sale off this car. */
   listing: { id: string; price: string; status: string } | null;
 };
 type ModGroup = { label: string; items: ModLine[] };
@@ -41,7 +41,7 @@ function money(value: string) {
 }
 
 /**
- * The public car sheet body.
+ * The public build page body.
  *
  * Now real tabs rather than scroll anchors: a car's activity is a place people
  * link to ("look at the build log on this one"), which anchors could not
@@ -101,20 +101,20 @@ export function CarTabs({
                   <span className="bline__label">{mod.brand ?? "Component"}</span>
                   <span className="bline__val">{mod.product ?? mod.raw}</span>
 
-                  {/* Only states we can actually stand behind — the old sheet
-                      stamped "Fitted" on every row regardless. */}
+                  {/* Only states we can actually stand behind — this row once
+                      stamped "Fitted" on every entry regardless. */}
                   {mod.listing ? (
                     <Link
                       href={`/listings/${mod.listing.id}`}
                       className={`chip ${mod.listing.status === "sold" ? "chip--spent" : "chip--live"}`}
                     >
-                      {mod.listing.status === "sold" ? "Sold" : `Listed ${money(mod.listing.price)}`}
+                      {mod.listing.status === "sold" ? "Sold" : `For sale ${money(mod.listing.price)}`}
                     </Link>
                   ) : isOwner ? (
-                    // "Release a part" — .bline--own and .relbtn shipped in the
+                    // "List this part" — .bline--own and .relbtn shipped in the
                     // stylesheet and had no call site until now.
                     <Link href={`/sell?car=${carId}&mod=${mod.id}`} className="relbtn">
-                      Release
+                      Sell it
                     </Link>
                   ) : null}
                 </div>
@@ -133,7 +133,7 @@ export function CarTabs({
       ) : (
         !about && (
           <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
-            No build entries yet — the sheet never fakes a line.
+            No mods listed yet for this car.
           </p>
         )
       )}
@@ -145,9 +145,9 @@ export function CarTabs({
       {forSale.length > 0 ? (
         <>
           <div className="bsec">
-            <span className="microlabel microlabel--ink">Released from this car</span>
+            <span className="microlabel microlabel--ink">Parts off this car</span>
             <span className="microlabel">
-              {forSale.filter((i) => i.status !== "sold").length} live · {soldFrom} sold
+              {forSale.filter((i) => i.status !== "sold").length} for sale · {soldFrom} sold
             </span>
           </div>
           <div className="rowlist mt-2">
@@ -173,7 +173,7 @@ export function CarTabs({
           </div>
           <div className="mt-4">
             <Link href="/marketplace" className="jumplink inline-flex">
-              See everything in the market
+              Browse the whole marketplace
             </Link>
           </div>
         </>
@@ -182,15 +182,15 @@ export function CarTabs({
           <span className="undrawn__mark" aria-hidden="true">
             ⌕
           </span>
-          <h3>Nothing released yet</h3>
+          <h3>Nothing for sale from this car</h3>
           <p>
             {isOwner
-              ? "When you pull a part off this car, release it from the build sheet and it appears here."
-              : "No parts from this car are on the market right now."}
+              ? "When you take a part off this car, list it from the build and it shows up here — with the car attached."
+              : "No parts from this car are for sale right now."}
           </p>
           {isOwner && (
             <Link href={`/sell?car=${carId}`} className="btn btn--live">
-              Release a part
+              List a part
             </Link>
           )}
         </div>
@@ -232,11 +232,11 @@ export function CarTabs({
           <span className="undrawn__mark" aria-hidden="true">
             ✎
           </span>
-          <h3>No entries yet</h3>
+          <h3>No updates yet</h3>
           <p>
             {isOwner
               ? "Post an update from your garage and the build log starts here."
-              : "The keeper hasn't logged anything on this car yet."}
+              : "The owner hasn't posted any updates for this car yet."}
           </p>
           {isOwner && (
             <Link href={`/garage/${carId}/update/new`} className="btn btn--ghost">
@@ -254,7 +254,7 @@ export function CarTabs({
         <VehicleGallery images={gallery} onSelect={(i) => setLightbox(i)} />
       ) : (
         <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
-          No frames on this sheet yet.
+          No photos of this car yet.
         </p>
       )}
     </div>
@@ -275,7 +275,7 @@ export function CarTabs({
 
   return (
     <div>
-      <SheetTabs tabs={tabs} initialTab={initialTab} label={`${carName} — sheet sections`} />
+      <SheetTabs tabs={tabs} initialTab={initialTab} label={`${carName} — build sections`} />
 
       <Dialog
         open={lightbox !== null}

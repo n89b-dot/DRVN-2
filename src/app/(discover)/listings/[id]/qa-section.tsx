@@ -13,7 +13,7 @@ export type QAItem = {
   isSeller: boolean;
 };
 
-/** Q&A as message annotations on the sheet — 2px spines, never chat bubbles. */
+/** Q&A as annotations — 2px spines, never chat bubbles. */
 export function QASection({
   listingId,
   items,
@@ -33,7 +33,7 @@ export function QASection({
   return (
     <div className="mt-10">
       <div className="tile__head">
-        <span className="microlabel microlabel--ink">Asked on the sheet</span>
+        <span className="microlabel microlabel--ink">Questions for the seller</span>
         {topLevel.length > 0 && <span className="chip">{topLevel.length}</span>}
       </div>
 
@@ -54,7 +54,7 @@ export function QASection({
               <form action={action} className="composer__row ml-4 py-2">
                 <input type="hidden" name="listing_id" value={listingId} />
                 <input type="hidden" name="parent_id" value={q.id} />
-                <input name="body" required placeholder="Reply as the keeper…" className="ctl flex-1" />
+                <input name="body" required placeholder="Reply as the seller…" className="ctl flex-1" />
                 <button type="submit" disabled={pending} className="btn">
                   Reply
                 </button>
@@ -64,7 +64,7 @@ export function QASection({
         ))}
         {topLevel.length === 0 && (
           <p className="py-2 font-mono text-[12.5px] text-dim">
-            No questions yet — the sheet answers what it can.
+            No questions yet — answers appear here for everyone.
           </p>
         )}
       </div>
@@ -73,7 +73,7 @@ export function QASection({
         <form action={action} className="composer">
           <div className="composer__row">
             <input type="hidden" name="listing_id" value={listingId} />
-            <input name="body" required placeholder="Ask the keeper a question…" className="ctl max-w-none flex-1" />
+            <input name="body" required placeholder="Ask the seller a question…" className="ctl max-w-none flex-1" />
             <button type="submit" disabled={pending} className="btn">
               Ask
             </button>

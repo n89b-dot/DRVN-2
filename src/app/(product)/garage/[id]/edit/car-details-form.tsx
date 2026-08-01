@@ -21,7 +21,7 @@ export function CarDetailsForm({ car }: { car: Car }) {
   return (
     <section className="tile">
       <div className="tile__head">
-        <span className="microlabel microlabel--ink">Identify — shown on the public sheet</span>
+        <span className="microlabel microlabel--ink">Details — shown on the build page</span>
       </div>
       <form action={action} className="flex flex-col gap-4">
         <input type="hidden" name="id" value={car.id} />
@@ -72,7 +72,7 @@ export function CarDetailsForm({ car }: { car: Car }) {
         )}
         <div className="flex justify-end">
           <button type="submit" disabled={pending} className="btn btn--live">
-            {pending ? "Filing…" : "Save the sheet"}
+            {pending ? "Saving…" : "Save changes"}
           </button>
         </div>
       </form>

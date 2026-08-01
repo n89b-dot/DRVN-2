@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { cx } from "@/lib/format";
 import { Icon, type IconName } from "./icons";
@@ -13,29 +13,32 @@ type IconRoute = BarRoute & { icon: IconName };
 // The register. On signed-in desktop these live in the rail; everywhere else
 // they live in the index (the compact menu).
 export const BAR_ROUTES: BarRoute[] = [
-  { href: "/home", label: "Sheet", note: "What your sheet saw today" },
-  { href: "/explore", label: "Explore", note: "Other people's sheets" },
-  { href: "/marketplace", label: "Market", note: "Parts off live sheets" },
-  { href: "/garage", label: "Garage", note: "Your side of the drawing" },
-  { href: "/orders", label: "Orders", note: "Work orders, offers and payouts" },
-  { href: "/profile", label: "Profile", note: "Your keeper sheet" },
+  { href: "/home", label: "Home", note: "What's moved since you looked" },
+  { href: "/explore", label: "Explore", note: "Builds from the community" },
+  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
+  { href: "/garage", label: "Garage", note: "Your cars and their builds" },
+  { href: "/listings", label: "Listings", note: "Views, watchers and offers on what you're selling" },
+  { href: "/orders", label: "Orders", note: "Offers, sales and purchases" },
+  { href: "/messages", label: "Messages", note: "Every order and offer thread, in one list" },
+  { href: "/profile", label: "Profile", note: "How buyers and sellers see you" },
+  { href: "/settings", label: "Settings", note: "Account, notifications and payments" },
 ];
 
 // Icon-only in the bar at every width — the furniture that stays to hand.
 const UTILITY_ROUTES: IconRoute[] = [
-  { href: "/cart", label: "Cart", note: "Lines waiting to be confirmed", icon: "cart" },
-  { href: "/notifications", label: "Notifications", note: "What the bell knows", icon: "bell" },
-  { href: "/saved", label: "Saved", note: "Everything you're watching", icon: "bookmark" },
-  { href: "/settings", label: "Settings", note: "Your sheet, configured", icon: "settings" },
+  { href: "/cart", label: "Cart", note: "Parts waiting for checkout", icon: "cart" },
+  { href: "/notifications", label: "Notifications", note: "Offers, sales and activity", icon: "bell" },
+  { href: "/saved", label: "Saved", note: "Parts, builds and sellers you follow", icon: "bookmark" },
+  { href: "/settings", label: "Settings", note: "Account, profile and payouts", icon: "settings" },
 ];
 
 // Signed-out visitors get the two public surfaces, not the whole register.
 const PUBLIC_ROUTES: BarRoute[] = [
-  { href: "/explore", label: "Explore", note: "Other people's sheets" },
-  { href: "/marketplace", label: "Market", note: "Parts off live sheets" },
+  { href: "/explore", label: "Explore", note: "Builds from the community" },
+  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
 ];
 
-/** Sheet lighting — an icon switch, not a labelled control. */
+/** Theme — an icon switch, not a labelled control. */
 function ThemeToggle({ night, toggle }: { night: boolean; toggle: () => void }) {
   return (
     <button
@@ -43,8 +46,8 @@ function ThemeToggle({ night, toggle }: { night: boolean; toggle: () => void }) 
       className="bar__link bar__link--ico"
       onClick={toggle}
       aria-pressed={night}
-      aria-label={night ? "Switch to day sheet" : "Switch to night sheet"}
-      title={night ? "Night sheet" : "Day sheet"}
+      aria-label={night ? "Switch to light theme" : "Switch to dark theme"}
+      title={night ? "Dark theme" : "Light theme"}
     >
       <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
     </button>
@@ -64,9 +67,27 @@ export function LivesheetBar({
   unreadCount?: number;
 }) {
   const pathname = usePathname();
-  const [night, setNight] = useState(initialNight);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // The root layout's inline script (src/app/layout.tsx) stamps data-theme on
+  // <html> from the cookie before first paint, independently of whatever
+  // `initialNight` this layout passed in (some layouts, like (legal), pass
+  // none at all so they can stay static). useSyncExternalStore reads the DOM
+  // truth after hydration (server snapshot = initialNight during SSR), and
+  // `bumpTheme` re-notifies subscribers when the toggle rewrites the DOM.
+  const themeListeners = useRef(new Set<() => void>());
+  const subscribeTheme = useCallback((cb: () => void) => {
+    const listeners = themeListeners.current;
+    listeners.add(cb);
+    return () => listeners.delete(cb);
+  }, []);
+  const night = useSyncExternalStore(
+    subscribeTheme,
+    () => document.documentElement.dataset.theme === "dark",
+    () => initialNight
+  );
+  const bumpTheme = () => themeListeners.current.forEach((cb) => cb());
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -78,7 +99,7 @@ export function LivesheetBar({
       delete document.documentElement.dataset.theme;
     }
     document.cookie = `ls-theme=${next}; path=/; max-age=31536000; SameSite=Lax`;
-    setNight(next === "night");
+    bumpTheme();
   };
 
   // Close the index on navigation — the sheet you asked for is now underneath
@@ -109,14 +130,14 @@ export function LivesheetBar({
   // The index carries whatever the current surface doesn't already show.
   const indexRoutes: BarRoute[] = signedIn
     ? [...BAR_ROUTES, ...UTILITY_ROUTES]
-    : [...PUBLIC_ROUTES, { href: "/login", label: "Sign in", note: "Open a sheet you already keep" }];
+    : [...PUBLIC_ROUTES, { href: "/login", label: "Sign in", note: "Back to your garage and listings" }];
 
   return (
     <>
       <header className="bar">
         <div className="bar__inner">
           <Link className="bar__logo" href={signedIn ? "/home" : "/"} aria-label="DRVN home">
-            DRVN<em>.</em> <span className="microlabel">Livesheet</span>
+            DRVN<em>.</em> <span className="microlabel">Parts marketplace</span>
           </Link>
 
           <nav className="bar__nav" aria-label="Primary">
@@ -177,7 +198,7 @@ export function LivesheetBar({
                   Sign in
                 </Link>
                 <Link href="/signup" className="btn btn--live bar__cta">
-                  Open your sheet
+                  Join DRVN
                 </Link>
               </>
             )}
@@ -206,8 +227,8 @@ export function LivesheetBar({
         <div className="indexsheet" ref={panelRef}>
           <div className="wrap">
             <div className="index__head">
-              <span className="microlabel">The index</span>
-              <span className="microlabel">{indexRoutes.length} registers</span>
+              <span className="microlabel">Menu</span>
+              <span className="microlabel">{indexRoutes.length} sections</span>
             </div>
             <div className="dimline-h" aria-hidden="true" />
 
@@ -241,10 +262,10 @@ export function LivesheetBar({
                 tabIndex={open ? undefined : -1}
               >
                 <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
-                Sheet <b>{night ? "Night" : "Day"}</b>
+                Theme <b>{night ? "Dark" : "Light"}</b>
               </button>
               <Link href={signedIn ? "/sell" : "/signup"} className="btn btn--live" tabIndex={open ? undefined : -1}>
-                {signedIn ? "List a part" : "Open your sheet"}
+                {signedIn ? "List a part" : "Join DRVN"}
               </Link>
             </div>
           </div>

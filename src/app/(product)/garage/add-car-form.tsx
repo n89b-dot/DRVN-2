@@ -11,15 +11,15 @@ export function AddCarForm() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="btn btn--live">
-        Open a sheet
+        Add a car
       </button>
 
       {open && (
         <div className="sheetwrap is-open" onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <div className="sheet text-left">
-            <span className="microlabel microlabel--ink">Open a sheet</span>
+            <span className="microlabel microlabel--ink">Add a car</span>
             <p className="field__hint mt-1">
-              Just the basics — the sheet fills itself as you go.
+              Just the basics for now — photos, mods and updates come next.
             </p>
             <form action={action} className="mt-4">
               <div className="field">
@@ -38,7 +38,7 @@ export function AddCarForm() {
               )}
               <div className="sheet__actions">
                 <button type="submit" disabled={pending} className="btn btn--live flex-1">
-                  {pending ? "Opening…" : "Open the sheet"}
+                  {pending ? "Adding…" : "Add the car"}
                 </button>
                 <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
                   Cancel

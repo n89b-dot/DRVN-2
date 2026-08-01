@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
@@ -29,6 +30,18 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
       unreadCount={unreadCount}
     >
       {children}
+      <footer className="wrap flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-[color:var(--rule-soft)] py-6">
+        <span className="microlabel">© {new Date().getFullYear()} DRVN</span>
+        <Link href="/terms" className="microlabel transition-colors hover:text-ink">
+          Terms
+        </Link>
+        <Link href="/privacy" className="microlabel transition-colors hover:text-ink">
+          Privacy
+        </Link>
+        <Link href="/fees" className="microlabel transition-colors hover:text-ink">
+          Fees
+        </Link>
+      </footer>
     </AppShell>
   );
 }

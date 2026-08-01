@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { OfferRow, type OfferView } from "./offer-row";
 import { OrderPipeline } from "./order-pipeline";
+import { ReceivedButton } from "./[id]/fulfilment";
 
 export const metadata = { title: "Orders - DRVN" };
 
@@ -145,7 +146,7 @@ export default async function OrdersPage({
   }) => (
     <Link href={`/orders/${order.id}`} className="jobrow block transition-colors hover:bg-[color:var(--paper-deep)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <OrderPipeline status={order.status} />
+        <OrderPipeline status={order.status} progressStatus={order.pre_dispute_status} />
         <span className="kv font-medium">{formatPrice(order.total_cents)}</span>
       </div>
       <ul className="mt-2">
@@ -193,11 +194,11 @@ export default async function OrdersPage({
           )}
         </span>
         <h1>
-          Work orders on the <span className="live-word">sheet.</span>
+          Offers in, orders <span className="live-word">out.</span>
         </h1>
         <p className="sub">
-          Offers arrive as work orders — accept, counter, or pass. Open an order to track dispatch,
-          message the other party, or confirm it arrived.
+          Answer offers, track what&apos;s shipping, and message the other side — everything still
+          in flight lives here.
         </p>
       </Rv>
 
@@ -209,7 +210,7 @@ export default async function OrdersPage({
           <h4>Order placed</h4>
           <p>
             {skipped
-              ? `Some lines couldn't be included: ${skipped}.`
+              ? `Some parts couldn't be included: ${skipped}.`
               : "Open it to follow dispatch and delivery."}
           </p>
         </div>
@@ -254,13 +255,13 @@ export default async function OrdersPage({
               <span className="undrawn__mark" aria-hidden="true">
                 ⏱
               </span>
-              <h3>No offers in motion</h3>
+              <h3>No offers yet</h3>
               <p>
-                When an offer lands it arrives here as a work order — buyer, amount against your
-                ask, and a window that lapses in 72 hours.
+                When someone offers on one of your listings it lands here — who it&apos;s from, how
+                it compares to your asking price, and 72 hours to answer.
               </p>
               <Link href="/marketplace" className="btn btn--ghost">
-                Browse the market
+                Browse the marketplace
               </Link>
             </Rv>
           )}
@@ -275,7 +276,15 @@ export default async function OrdersPage({
             {purchases.length > 0 ? (
               <div className="rowlist">
                 {purchases.map((o) => (
-                  <OrderRow key={o.id} order={o} role="buyer" />
+                  <div key={o.id}>
+                    <OrderRow order={o} role="buyer" />
+                    {o.status === "shipped" && (
+                      <div className="flex items-center justify-between gap-3 border-t border-[color:var(--rule-soft)] px-1 py-2">
+                        <span className="order__meta">Has this arrived?</span>
+                        <ReceivedButton orderId={o.id} />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -306,7 +315,7 @@ export default async function OrdersPage({
       </section>
 
       <Foot
-        left="DRVN / Livesheet — the clock is the contract"
+        left="DRVN — offers expire 72 hours after they're made"
         right={<Link href="/sell">List a part →</Link>}
       />
     </div>

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
 import type { ListingCardData } from "@/components/ui";
+import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
 
 export type ListingSort = "newest" | "price_asc" | "price_desc";
 
@@ -93,34 +94,23 @@ export async function fetchListings(
   // Resolve the viewer's garage first: the fitment filter needs to constrain the
   // query itself, not the page it returns.
   let fitSourceCarIds: string[] | null = null;
-  const garageByKey = new Map<string, string>();
+  let garageByKey = new Map<string, string>();
+  let garageCars: { name: string; make: string | null; model: string | null }[] = [];
 
   if (viewerId) {
-    const { data: garageCars } = await supabase
-      .from("cars")
-      .select("name, make, model")
-      .eq("owner_id", viewerId);
-
-    for (const car of garageCars ?? []) {
-      if (car.make && car.model) {
-        garageByKey.set(`${car.make.toLowerCase()}|${car.model.toLowerCase()}`, car.name);
-      }
-    }
+    const { data } = await supabase.from("cars").select("name, make, model").eq("owner_id", viewerId);
+    garageCars = data ?? [];
+    garageByKey = buildGarageFitmentIndex(garageCars);
 
     if (filters.fit === "1" && garageByKey.size) {
-      const makes = [...new Set((garageCars ?? []).map((c) => c.make).filter(Boolean))] as string[];
+      const makes = [...new Set(garageCars.map((c) => c.make).filter(Boolean))] as string[];
       const { data: matching } = await supabase
         .from("cars")
         .select("id, make, model")
         .in("make", makes);
 
       fitSourceCarIds = (matching ?? [])
-        .filter(
-          (c) =>
-            c.make &&
-            c.model &&
-            garageByKey.has(`${c.make.toLowerCase()}|${c.model.toLowerCase()}`)
-        )
+        .filter((c) => matchGarageFitment(garageByKey, c.make, c.model))
         .map((c) => c.id);
     }
   }
@@ -213,12 +203,8 @@ export async function fetchListings(
     const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
     for (const listing of listings) {
       const source = listing.source_car_id ? sourceById.get(listing.source_car_id) : null;
-      if (source?.make && source.model) {
-        const match = garageByKey.get(
-          `${source.make.toLowerCase()}|${source.model.toLowerCase()}`
-        );
-        if (match) fitByListing.set(listing.id, match);
-      }
+      const match = source ? matchGarageFitment(garageByKey, source.make, source.model) : null;
+      if (match) fitByListing.set(listing.id, match);
     }
   }
 

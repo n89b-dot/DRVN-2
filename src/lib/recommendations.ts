@@ -3,6 +3,8 @@ import "server-only";
 import type { ListingCardData } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const CANDIDATE_CAP = 50;
+
 /**
  * P1 rule-based recommendations (PRD §7.6 — no LLM):
  *  1. Platform match: active listings whose source car shares make+model with
@@ -11,6 +13,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *  3. Fallback: most-saved active listings.
  * Uses the admin client for aggregate save counts (RLS keeps individual saves
  * private to actors/target-owners; aggregates are anonymous).
+ *
+ * Each rule only pulls the rows it can score — matches, co-savers, and
+ * fallback candidates are filtered in the query itself (.eq/.in/.not/.limit)
+ * so the JS scoring pass below works over a bounded candidate set rather
+ * than a wide unfiltered scan.
  */
 export async function recommendListings(
   userId: string,
@@ -18,38 +25,57 @@ export async function recommendListings(
 ): Promise<ListingCardData[]> {
   const admin = createAdminClient();
   const picks = new Map<string, number>(); // listing_id → score
+  const reasons = new Map<string, string>(); // listing_id → why it was picked
 
   const [{ data: garage }, { data: mySaves }] = await Promise.all([
     admin.from("cars").select("make, model").eq("owner_id", userId),
-    admin.from("saves").select("target_type, target_id").eq("user_id", userId),
+    // Newest first: rule 2 slices this list to CANDIDATE_CAP, and a stable
+    // most-recent sample beats whatever order Postgres happens to return.
+    admin
+      .from("saves")
+      .select("target_type, target_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false }),
   ]);
 
-  // Rule 1 — platform match via source car metadata.
+  // Rule 1 — platform match via source car metadata. Resolve which source
+  // cars actually match the user's garage first (make+model is not a
+  // single indexable equality, so this is a superset-then-refine narrowing:
+  // fetch cars sharing a make or model with the garage, then keep exact
+  // pairs — a far smaller set than every car in the table), then query only
+  // the listings built on those cars.
   const platforms = (garage ?? []).filter((c) => c.make && c.model);
   if (platforms.length) {
-    const { data: candidateListings } = await admin
-      .from("listings")
-      .select("id, seller_id, source_car_id, status")
-      .eq("status", "active")
-      .not("source_car_id", "is", null)
-      .limit(200);
-    const sourceIds = [...new Set((candidateListings ?? []).map((l) => l.source_car_id!))];
-    const { data: sourceCars } = sourceIds.length
-      ? await admin.from("cars").select("id, make, model").in("id", sourceIds)
-      : { data: [] };
+    const makes = [...new Set(platforms.map((c) => c.make!))];
+    const models = [...new Set(platforms.map((c) => c.model!))];
     const platformKeys = new Set(
       platforms.map((c) => `${c.make!.toLowerCase()}|${c.model!.toLowerCase()}`)
     );
-    const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
-    for (const listing of candidateListings ?? []) {
-      if (listing.seller_id === userId) continue;
-      const source = sourceById.get(listing.source_car_id!);
-      if (
-        source?.make &&
-        source.model &&
-        platformKeys.has(`${source.make.toLowerCase()}|${source.model.toLowerCase()}`)
-      ) {
+    const { data: candidateCars } = await admin
+      .from("cars")
+      .select("id, make, model")
+      .in("make", makes)
+      .in("model", models);
+    const matchedCars = (candidateCars ?? []).filter(
+      (c) =>
+        c.make && c.model && platformKeys.has(`${c.make.toLowerCase()}|${c.model.toLowerCase()}`)
+    );
+    const matchedCarIds = matchedCars.map((c) => c.id);
+    const nameByCarId = new Map(matchedCars.map((c) => [c.id, `${c.make} ${c.model}`]));
+
+    if (matchedCarIds.length) {
+      const { data: platformListings } = await admin
+        .from("listings")
+        .select("id, source_car_id")
+        .eq("status", "active")
+        .neq("seller_id", userId)
+        .in("source_car_id", matchedCarIds)
+        .order("created_at", { ascending: false })
+        .limit(CANDIDATE_CAP);
+      for (const listing of platformListings ?? []) {
         picks.set(listing.id, (picks.get(listing.id) ?? 0) + 10);
+        const carName = nameByCarId.get(listing.source_car_id!);
+        if (carName && !reasons.has(listing.id)) reasons.set(listing.id, `Fits your ${carName}`);
       }
     }
   }
@@ -63,20 +89,25 @@ export async function recommendListings(
       .from("saves")
       .select("user_id")
       .eq("target_type", "listing")
-      .in("target_id", savedListingIds)
+      .in("target_id", savedListingIds.slice(0, CANDIDATE_CAP))
       .neq("user_id", userId)
-      .limit(100);
-    const neighborIds = [...new Set((coSavers ?? []).map((s) => s.user_id))];
+      .limit(CANDIDATE_CAP);
+    const neighborIds = [...new Set((coSavers ?? []).map((s) => s.user_id))].slice(
+      0,
+      CANDIDATE_CAP
+    );
     if (neighborIds.length) {
       const { data: neighborSaves } = await admin
         .from("saves")
         .select("target_id")
         .eq("target_type", "listing")
         .in("user_id", neighborIds)
-        .limit(300);
+        .not("target_id", "in", `(${savedListingIds.join(",")})`)
+        .limit(CANDIDATE_CAP);
       for (const save of neighborSaves ?? []) {
-        if (!savedListingIds.includes(save.target_id)) {
-          picks.set(save.target_id, (picks.get(save.target_id) ?? 0) + 3);
+        picks.set(save.target_id, (picks.get(save.target_id) ?? 0) + 3);
+        if (!reasons.has(save.target_id)) {
+          reasons.set(save.target_id, "Because you saved similar parts");
         }
       }
     }
@@ -88,9 +119,12 @@ export async function recommendListings(
       .from("saves")
       .select("target_id")
       .eq("target_type", "listing")
-      .limit(300);
+      .limit(CANDIDATE_CAP);
     for (const save of popular ?? []) {
       picks.set(save.target_id, (picks.get(save.target_id) ?? 0) + 1);
+      if (!reasons.has(save.target_id)) {
+        reasons.set(save.target_id, "Popular with the DRVN community");
+      }
     }
   }
 
@@ -127,6 +161,7 @@ export async function recommendListings(
       condition: listing.condition,
       location: listing.location,
       cover_url: cover.get(listing.id) ?? null,
+      reason: reasons.get(listing.id) ?? null,
     });
     if (results.length >= limit) break;
   }

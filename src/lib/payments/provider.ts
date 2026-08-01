@@ -39,6 +39,8 @@ export type PaymentRequest = {
   currency: string;
   /** Replay guard. Required so a double-submitted checkout cannot double-charge. */
   idempotencyKey?: string;
+  /** Existing Stripe customer, so saved cards can pay this intent. */
+  customerId?: string | null;
   lineItems?: { title: string; priceCents: number }[];
 };
 
@@ -82,7 +84,13 @@ class StubPaymentProvider implements PaymentProvider {
 }
 
 export function getPaymentProvider(): PaymentProvider {
-  // Later: return new StripeProvider() when STRIPE_SECRET_KEY is configured.
+  // Deliberately lazy-required so the stub path never loads the Stripe SDK,
+  // and so a missing key cleanly falls back to the stub in local dev.
+  if (process.env.STRIPE_SECRET_KEY) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- avoids a hard SDK dependency on the stub path
+    const { StripePaymentProvider } = require("./stripe") as typeof import("./stripe");
+    return new StripePaymentProvider();
+  }
   return new StubPaymentProvider();
 }
 

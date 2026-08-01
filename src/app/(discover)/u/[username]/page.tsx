@@ -22,13 +22,13 @@ export async function generateMetadata({
     .eq("username", username)
     .maybeSingle();
 
-  if (!profile) return { title: "Keeper not found - DRVN" };
+  if (!profile) return { title: "Profile not found - DRVN" };
 
   const name = profile.display_name ?? `@${profile.username}`;
   const description =
     profile.headline ??
     profile.bio?.slice(0, 155) ??
-    `${name} on DRVN — their cars, their build sheets, and the parts they have for sale.`;
+    `${name} on DRVN — their cars, their builds, and the parts they have for sale.`;
 
   return {
     title: `${name} (@${profile.username}) - DRVN`,
@@ -66,7 +66,7 @@ export default async function PublicProfilePage({
 
   if (error) {
     console.error("[profile] failed to load", { username, error });
-    throw new Error("Could not load this keeper sheet");
+    throw new Error("Could not load this profile");
   }
   if (!profile) notFound();
 
@@ -94,7 +94,7 @@ export default async function PublicProfilePage({
     <NarrowColumn>
       <div className="pagehead !pb-4">
         <span className="microlabel">
-          Keeper sheet — public
+          Seller profile
           {view.rating !== null && (
             <>
               {" · "}
@@ -102,7 +102,7 @@ export default async function PublicProfilePage({
             </>
           )}
           {view.salesCount > 0 && <> · {view.salesCount} sold</>}
-          {view.followerCount > 0 && <> · {view.followerCount} watching</>}
+          {view.followerCount > 0 && <> · {view.followerCount} follower{view.followerCount === 1 ? "" : "s"}</>}
         </span>
       </div>
       <ProfileHeader

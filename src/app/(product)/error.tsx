@@ -20,9 +20,9 @@ export default function GroupError({
         <span className="alert__ico" aria-hidden="true">
           ⚠
         </span>
-        <h4>That sheet wouldn&apos;t draw</h4>
+        <h4>Something went wrong</h4>
         <p>
-          Something failed while loading this page. It&apos;s been logged.
+          This page failed to load. It&apos;s been logged.
           {error.digest && (
             <>
               {" "}
@@ -36,7 +36,7 @@ export default function GroupError({
           Try again
         </button>
         <Link href="/marketplace" className="btn btn--ghost">
-          Back to the market
+          Back to the marketplace
         </Link>
       </div>
     </div>

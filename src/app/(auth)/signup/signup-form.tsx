@@ -11,9 +11,9 @@ export function SignupForm() {
 
   return (
     <div>
-      <span className="microlabel">Start a sheet — new keeper</span>
+      <span className="microlabel">Create an account</span>
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[650] leading-[1.05] tracking-[-0.02em]">
-        Start a <span className="text-live">sheet.</span>
+        Join <span className="text-live">DRVN.</span>
       </h1>
       <p className="mt-3 text-[15px] text-dim">
         Show your build. Sell your parts. Find what fits.
@@ -31,7 +31,7 @@ export function SignupForm() {
             className="ctl max-w-none"
           />
           <span className="field__hint">
-            Used for offers, job cards and payouts. Never shown on a public sheet.
+            Used for offers, orders and payouts. Never shown publicly.
           </span>
         </div>
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
@@ -53,18 +53,29 @@ export function SignupForm() {
           )}
         </div>
         <button type="submit" disabled={pending} className="btn btn--live w-full">
-          {pending ? "Starting…" : "Start a sheet"}
+          {pending ? "Creating…" : "Create account"}
         </button>
+        <p className="field__hint mt-3 text-center">
+          By creating an account you agree to the{" "}
+          <Link href="/terms" className="jumplink">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="jumplink">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </form>
 
       <div className="authswap">
         <Link href="/login" className="jumplink">
-          Already keep one? Sign in
+          Already have an account? Sign in
         </Link>
       </div>
 
       <div className="mt-6">
-        <span className="microlabel">Or carry an account you already have</span>
+        <span className="microlabel">Or use an account you already have</span>
         <div className="mt-3">
           <OAuthButton />
         </div>

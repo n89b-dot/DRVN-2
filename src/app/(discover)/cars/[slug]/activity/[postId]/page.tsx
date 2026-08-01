@@ -109,9 +109,9 @@ export default async function ActivityDetailPage({
 
       <header className="pagehead !pt-6">
         <span className="microlabel">
-          Build entry — filed on the sheet
+          Build update
           {/* Owner controls: the public post page previously offered none, so a
-              filed entry could not be reached from where you were reading it. */}
+              published update could not be edited from where you were reading it. */}
           {user?.id === car.owner_id && (
             <>
               {" · "}
@@ -119,7 +119,7 @@ export default async function ActivityDetailPage({
                 href={`/garage/${car.id}/update/${post.id}/edit`}
                 className="hover:text-live"
               >
-                edit this entry →
+                edit this update →
               </Link>
             </>
           )}

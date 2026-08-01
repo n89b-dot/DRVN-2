@@ -29,7 +29,7 @@ export default async function ProfilePage() {
     <NarrowColumn>
       <div className="pagehead !pb-4">
         <span className="microlabel">
-          Keeper sheet — yours ·{" "}
+          Your profile ·{" "}
           <Link href={`/u/${profile?.username}`} className="hover:text-live">
             view public →
           </Link>
@@ -48,11 +48,13 @@ export default async function ProfilePage() {
         website={website ? { label: website.url.replace(/^https?:\/\//, "").replace(/\/$/, ""), href: website.url } : undefined}
         action={
           <ProfileEditor
+            userId={user!.id}
             profile={{
               display_name: profile?.display_name ?? "",
               headline: profile?.headline ?? "",
               bio: profile?.bio ?? "",
               location: profile?.location ?? "",
+              avatar_url: profile?.avatar_url ?? null,
               links,
             }}
           />
@@ -61,7 +63,7 @@ export default async function ProfilePage() {
       <ProfileBody bio={profile?.bio ?? null} view={view} contactLinks={rest} />
 
       <p className="mt-10">
-        <span className="microlabel">Your public sheet — </span>
+        <span className="microlabel">Your public profile — </span>
         <Link href={`/u/${profile?.username}`} className="jumplink">
           drvn.app/u/{profile?.username}
         </Link>

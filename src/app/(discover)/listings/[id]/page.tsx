@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, ListingCard, Media } from "@/components/ui";
 import { SaveButton } from "@/features/social/buttons";
+import { fetchGarageFitment, matchGarageFitment } from "@/lib/marketplace/fitment";
 import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
@@ -77,46 +78,74 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const { data: listing } = await supabase.from("listings").select("*").eq("id", id).single();
   if (!listing) notFound();
 
-  const [{ data: seller }, { data: images }, { data: sourceCar }, { data: moreFromSeller }] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("username, display_name, location")
-        .eq("id", listing.seller_id)
-        .single(),
-      supabase.from("listing_images").select("*").eq("listing_id", id).order("position"),
-      listing.source_car_id
-        ? supabase
-            .from("cars")
-            .select("slug, name, is_public")
-            .eq("id", listing.source_car_id)
-            .single()
-        : Promise.resolve({ data: null }),
-      supabase
-        .from("listings")
-        .select("id, title, price_cents, condition, location")
-        .eq("seller_id", listing.seller_id)
-        .eq("status", "active")
-        .neq("id", id)
-        .limit(4),
-    ]);
+  // Everything in this group only needs listing.id / listing.seller_id /
+  // listing.source_car_id — all known the moment the listing row lands — so
+  // they have no data dependency on each other and can fire together.
+  const [
+    { data: seller },
+    { data: images },
+    { data: sourceCar },
+    { data: moreFromSeller },
+    {
+      data: { user },
+    },
+    { data: sourceModLine },
+    watchCounts,
+    { data: reviews },
+    { data: questions },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username, display_name, location")
+      .eq("id", listing.seller_id)
+      .single(),
+    supabase.from("listing_images").select("*").eq("listing_id", id).order("position"),
+    listing.source_car_id
+      ? supabase
+          .from("cars")
+          .select("slug, name, make, model, is_public")
+          .eq("id", listing.source_car_id)
+          .single()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("listings")
+      .select("id, title, price_cents, condition, location")
+      .eq("seller_id", listing.seller_id)
+      .eq("status", "active")
+      .neq("id", id)
+      .limit(4),
+    supabase.auth.getUser(),
+    // Provenance: the build line this listing was released off, if any —
+    // names the line rather than just linking to the whole car sheet.
+    listing.source_car_id
+      ? supabase
+          .from("mod_items")
+          .select("brand, product, raw_text")
+          .eq("linked_listing_id", id)
+          .eq("car_id", listing.source_car_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    fetchWatchCounts(supabase, [id]),
+    // Seller rating + Q&A
+    supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),
+    supabase
+      .from("listing_questions")
+      .select("id, parent_id, body, created_at, author_id")
+      .eq("listing_id", id)
+      .order("created_at"),
+  ]);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  let isSaved = false;
-  if (user) {
-    const { data: save } = await supabase
-      .from("saves")
-      .select("target_id")
-      .eq("user_id", user.id)
-      .eq("target_type", "listing")
-      .eq("target_id", id)
-      .maybeSingle();
-    isSaved = Boolean(save);
-  }
+  const modLineName = sourceModLine
+    ? [sourceModLine.brand, sourceModLine.product].filter(Boolean).join(" ") ||
+      sourceModLine.raw_text ||
+      null
+    : null;
 
-  const watchCount = (await fetchWatchCounts(supabase, [id])).get(id) ?? 0;
+  const watchCount = watchCounts.get(id) ?? 0;
+
+  const avgRating = (reviews ?? []).length
+    ? (reviews!.reduce((s, r) => s + r.rating, 0) / reviews!.length).toFixed(1)
+    : null;
 
   // Count the look, but never the seller's own — a seller refreshing their
   // listing must not inflate the number they price against. Fire-and-forget:
@@ -125,23 +154,52 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     void supabase.rpc("bump_listing_view", { p_listing: id });
   }
 
-  // Seller rating + Q&A
-  const [{ data: reviews }, { data: questions }] = await Promise.all([
-    supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),
-    supabase
-      .from("listing_questions")
-      .select("id, parent_id, body, created_at, author_id")
-      .eq("listing_id", id)
-      .order("created_at"),
-  ]);
-  const avgRating = (reviews ?? []).length
-    ? (reviews!.reduce((s, r) => s + r.rating, 0) / reviews!.length).toFixed(1)
-    : null;
-
   const qaAuthorIds = [...new Set((questions ?? []).map((q) => q.author_id))];
-  const { data: qaAuthors } = qaAuthorIds.length
-    ? await supabase.from("profiles").select("id, display_name, username").in("id", qaAuthorIds)
-    : { data: [] };
+  const moreIds = (moreFromSeller ?? []).map((l) => l.id);
+
+  // Second group: each of these depends only on results already in hand
+  // above (user, or ids derived from listing/questions/moreFromSeller), not
+  // on each other, so they can also run concurrently.
+  const [{ data: save }, garageFitment, { data: qaAuthors }, { data: moreImages }] =
+    await Promise.all([
+      user
+        ? supabase
+            .from("saves")
+            .select("target_id")
+            .eq("user_id", user.id)
+            .eq("target_type", "listing")
+            .eq("target_id", id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      user && listing.source_car_id
+        ? fetchGarageFitment(supabase, user.id)
+        : Promise.resolve({ cars: [], index: new Map<string, string>() }),
+      qaAuthorIds.length
+        ? supabase.from("profiles").select("id, display_name, username").in("id", qaAuthorIds)
+        : Promise.resolve({ data: [] }),
+      moreIds.length
+        ? supabase
+            .from("listing_images")
+            .select("listing_id, url, position")
+            .in("listing_id", moreIds)
+            .order("position")
+        : Promise.resolve({ data: [] }),
+    ]);
+  const isSaved = Boolean(save);
+
+  // "Fits your car" (PRD §7.1 — see src/lib/marketplace/fitment.ts for the
+  // shared rule): only computable when the listing has a source car with
+  // structured make+model, so this deliberately doesn't try to infer fitment
+  // from title/description text.
+  let fitMatch: string | null = null;
+  let viewerHasGarage = false;
+  if (user && listing.source_car_id) {
+    viewerHasGarage = garageFitment.cars.length > 0;
+    if (sourceCar) {
+      fitMatch = matchGarageFitment(garageFitment.index, sourceCar.make, sourceCar.model);
+    }
+  }
+
   const qaName = (aid: string) => {
     const a = (qaAuthors ?? []).find((x) => x.id === aid);
     return a?.display_name ?? (a?.username ? `@${a.username}` : "User");
@@ -164,14 +222,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     .toUpperCase();
 
   // Covers for "more from seller"
-  const moreIds = (moreFromSeller ?? []).map((l) => l.id);
-  const { data: moreImages } = moreIds.length
-    ? await supabase
-        .from("listing_images")
-        .select("listing_id, url, position")
-        .in("listing_id", moreIds)
-        .order("position")
-    : { data: [] };
   const moreCover = new Map<string, string>();
   for (const img of moreImages ?? []) {
     if (!moreCover.has(img.listing_id)) moreCover.set(img.listing_id, img.url);
@@ -334,15 +384,54 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             )}
           </Rv>
 
+          {/* Fitment: only computable against a structured source car —
+              gated on make+model actually existing, so "doesn't match" can
+              only ever mean a real comparison ran. A source car that is
+              private (RLS returns null) or missing its make/model gets no
+              tile rather than a false negative; the seller-notes block
+              above stays the honest fallback. */}
+          {listing.source_car_id && sourceCar?.make && sourceCar?.model && (
+            <Rv className="tile" stagger={2}>
+              <span className="microlabel microlabel--ink">Fitment</span>
+              {!user ? (
+                <p className="kv mt-2">
+                  <Link href={`/login?next=${encodeURIComponent("/garage")}`} className="jumplink">
+                    Add your car
+                  </Link>{" "}
+                  to check whether this fits.
+                </p>
+              ) : !viewerHasGarage ? (
+                <p className="kv mt-2">
+                  <Link href="/garage" className="jumplink">
+                    Add a car to your garage
+                  </Link>{" "}
+                  to check whether this fits.
+                </p>
+              ) : fitMatch ? (
+                <p className="mt-2">
+                  <span className="chip chip--ok">Fits your {fitMatch}</span>
+                </p>
+              ) : (
+                <p className="mt-2">
+                  <span className="chip">Doesn&apos;t match your garage</span>
+                </p>
+              )}
+            </Rv>
+          )}
+
           {sourceCar?.is_public && (
-            <Rv className="tile tile--deep" stagger={2}>
+            <Rv className="tile tile--deep" stagger={3}>
               <div className="tile__head">
-                <span className="microlabel microlabel--ink">Came off this car</span>
+                <span className="microlabel microlabel--ink">
+                  {modLineName ? `Came off ${sourceCar.name}` : "Came off this car"}
+                </span>
                 <span className="chip chip--ok">Build page</span>
               </div>
               <Link href={`/cars/${sourceCar.slug}`} className="order !bg-transparent !p-0">
                 <span>
-                  <span className="order__name block">{sourceCar.name}</span>
+                  <span className="order__name block">
+                    {modLineName ? `${sourceCar.name} — ${modLineName}` : sourceCar.name}
+                  </span>
                   <span className="order__meta block">See the full build — mods, photos, history →</span>
                 </span>
               </Link>

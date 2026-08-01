@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
@@ -10,7 +8,6 @@ import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { removeFromCart } from "@/features/commerce/actions";
-import { CheckoutForm } from "./checkout-form";
 
 export const metadata = { title: "Cart - DRVN" };
 
@@ -67,12 +64,12 @@ export default async function CartPage() {
   const unavailable = (listings ?? []).filter((l) => l.status !== "active");
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
+    <div className="mx-auto w-full max-w-[1060px] px-5 pb-10">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          The cart · {active.length} line{active.length === 1 ? "" : "s"}
+          Cart · {active.length} part{active.length === 1 ? "" : "s"}
         </span>
-        <h1>Before it leaves the sheet.</h1>
+        <h1>Check it over before you pay.</h1>
       </Rv>
 
       {active.length === 0 ? (
@@ -81,16 +78,17 @@ export default async function CartPage() {
             ⌕
           </span>
           <h3>Nothing in the cart</h3>
-          <p>Lines you add from the market collect here until you confirm them.</p>
+          <p>Parts you add from the marketplace collect here until you check out.</p>
           <Link href="/marketplace" className="btn btn--ghost">
-            Browse the market
+            Browse the marketplace
           </Link>
         </Rv>
       ) : (
-        <section className="deck">
+        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="deck">
           {unavailable.length > 0 && (
             <Rv className="alert">
-              <h4>Some lines are no longer available</h4>
+              <h4>Some parts are no longer available</h4>
               <p>
                 {unavailable.map((l) => l.title).join(", ")} — sold or withdrawn since you added
                 {unavailable.length === 1 ? " it" : " them"}. Not included below.
@@ -151,8 +149,11 @@ export default async function CartPage() {
             );
           })}
 
-          <Rv className="tile tile--deep" stagger={sellerIds.length}>
-            <span className="microlabel microlabel--ink">The math on the sheet</span>
+          </div>
+
+          <aside>
+          <Rv className="tile tile--deep lg:sticky lg:top-20" stagger={sellerIds.length}>
+            <span className="microlabel microlabel--ink">Order summary</span>
             <div className="mt-2">
               <div className="sheet__row">
                 <span>Parts</span>
@@ -179,18 +180,21 @@ export default async function CartPage() {
               )}
             </p>
 
-            <CheckoutForm
-              idempotencyKey={randomUUID()}
-              allowsCollection={active.every((l) => l.allows_collection)}
-              total={formatPrice(total)}
-              paymentsAreLive={paymentsAreLive()}
-            />
+            <Link href="/checkout" className="btn btn--live mt-4 w-full">
+              Proceed to checkout
+            </Link>
+            {!paymentsAreLive() && (
+              <p className="spec-note">
+                <b>Test mode</b> — payments run on Stripe&apos;s test rails; no real money moves.
+              </p>
+            )}
           </Rv>
+          </aside>
         </section>
       )}
 
       <Foot
-        left="DRVN / Livesheet — nothing is charged until you confirm"
+        left="DRVN — nothing is charged until you confirm"
         right={<Link href="/orders">Your orders →</Link>}
       />
     </div>

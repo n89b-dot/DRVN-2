@@ -26,3 +26,4 @@ export {
 } from "./primitives";
 export { Dialog } from "./dialog";
 export { SheetTabs, resolveTab, type SheetTab } from "./sheet-tabs";
+export { Toast } from "./toast";

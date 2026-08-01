@@ -391,3 +391,197 @@ These start as marketing visuals and can graduate into product UI.
 - Keep the 540px column a shared layout primitive (e.g. `<NarrowColumn>`), not a magic number
   copy-pasted per page.
 - Treat `MetadataTag` values and `ListEntryEditor` content as user data end-to-end; do not hardcode.
+
+---
+
+# Appendix — Iteration pass: Marketplace & Explore (26 Jul 2026)
+
+Three adversarial passes over `/marketplace` and `/explore`, walked at 375, 500,
+768, 1024 and 1280px. **Thesis held against:** *product* — "a marketplace for
+parts from modified cars", provenance a supporting differentiator and never the
+headline; *design* — Livesheet, "a drawing that knows what's happening": one
+live signal reserved for things that tick, mono for every number, tonal
+separation over strokes, no pills.
+
+## Pass 1 — The Inspector
+
+| # | Location | Defect | Severity |
+|---|---|---|---|
+| M1 | `marketplace/page.tsx:52` + `filter-bar.tsx` | Outer row never wrapped: the form wrapper carried `min-w-0 flex-1` with no basis, so at 375px it crushed to **166px** while "List a part" stayed pinned beside it. Inside, fixed widths (`w-32`, `w-24`, `basis-[220px]`) stacked six controls at six different widths — a ragged staircase with the CTA stranded in dead space beside it. | **breaks it** (375–640) / cheapens it (641–980) |
+| M2 | `filter-bar.tsx:32` | Placeholder "Search the sheets — 'coilovers', 'ECU', a car…" clipped mid-word at every width below ~1100px ("Search the sl" at 375). | cheapens it |
+| M3 | `globals.css` `.mkt` | Results grid went `repeat(3,1fr)` → `1fr` at ≤980px with no 2-column step, so a 900px viewport spent itself on one card per row. | cheapens it |
+| M4 | `.fbtn` | 9 filter + 3 sort chips at **33px** tall — under the 44px touch minimum, and these are the page's primary controls on a phone. | cheapens it |
+| M5 | `.ctl` | `max-width: 320px` clamped the select and location short of the full-width search field and button, leaving the stacked column a ragged right edge. | cheapens it |
+| M6 | `.bar__link--ico`, `.indexbtn` | At ≤640px the bar's icon buttons shrink to **34px** and the index trigger to 38px — both under the touch floor, on the controls most used one-handed. | cheapens it |
+
+**Fixed:** all six. The form wrapper now carries `basis-[940px]` — the filter
+row's own single-line width — so the CTA sits beside the form only when the form
+genuinely fits on one line and drops beneath it otherwise. Controls go full-bleed
+below `sm` with the price bounds grouped so they never split across a wrap. `.mkt`
+now steps 3 → 2 → 1. Chips and bar buttons meet 44px.
+
+**Checked and cleared:** no horizontal overflow at any width on either page; no
+clipped text besides M2; contrast 14/14 (marketplace) and 15/15 (explore) pairs
+pass AA, recomputed after every change; no broken images; Explore's masonry steps
+1 → 2 → 3 correctly and stacks cleanly at 375 — it needed no change.
+
+## Pass 2 — The Provocateur
+
+The largest surface on both pages is the card cover, and with no photograph it
+was a flat slab of `--img-fallback` — three of them dominating the market sheet
+and reading as broken rather than as absent.
+
+**Shipped:** `.plate-undrawn`. A photoless cover now takes the drafting-absence
+language the app already uses in 18 empty states (`.undrawn`), scaled down to sit
+inside a card: a dashed construction rule and a cross-haired mark. A listing
+without a photo is not an error and not an empty box — it is a plate nobody has
+drawn yet, and it now says so in the system's own voice. Applied to
+`ListingCard` and both `FeedCard` covers via a new `fallbackClassName` prop on
+`Media`, so thumbnails and inline media keep the plain fallback.
+
+**Deliberately not attempted:** a live "watching now" annotation on cards. The
+hero promises "who's watching it right now" and nothing on the page ticks, but
+the seed data has zero watchers — building it would have shipped an invisible
+feature. Likewise the source-car line on the market card (the strongest available
+elevation, and squarely on-thesis) needs a query change in `lib/marketplace/
+query.ts` and schema verification; that is product work, not an iteration pass.
+
+## Pass 3 — The Purist
+
+Swept both pages programmatically for palette, radius and font drift.
+
+- **Radii** — every rendered corner is 16 / 10 / 6px. No pills, no strays. Clean.
+- **Numbers** — every number on both pages resolves to IBM Plex Mono. Clean.
+- **Killed:** Pass 2's own plate used `box-shadow: inset 0 0 0 1px var(--dimline)`
+  — a *solid* ring in the drafting ink, which the token reserves for
+  dimension and leader lines, "never card borders". A solid rule in that colour
+  reads as a bordered plate, the one thing the tile language never does.
+  Converted to `1px dashed`, matching `.undrawn`, so it reads as an unfinished
+  drawing rather than a border.
+
+**Flagged, not fixed — needs your call:** the marketplace carries **two** live
+fills on one surface: the bar's "Open your sheet" and the page's "List a part".
+The thesis allows the accent for signals plus *the one primary CTA on a surface*.
+The page CTA has the better claim; the bar CTA is persistent signed-out chrome
+that appears on every public page, so demoting it is a system-wide decision and
+outside a two-page pass. Explore has no accent CTA and is clean.
+
+**Checked and allowed:** Explore's accent "Fresh entry" label — recency is a
+changing state, so it passes the "is it moving, changing, or about to expire"
+test. One `.live-word` per page in each h1, exactly as the system prescribes.
+
+## Environment note
+
+Turbopack's dev cache did not re-emit `globals.css` on change; edits only landed
+after `rm -rf .next` and a restart. Separately, rules added inside
+`@layer components` are tree-shaken out of the build — `.plate-undrawn` had to be
+declared unlayered, which also lets it outrank the `bg-img-fallback` utility on
+the same element. Worth knowing before debugging a "CSS not applying" report.
+
+## Caveat on the data
+
+The local database has three listings and no listing photos at all, so the
+undrawn plate is currently the *only* cover state visible. In production most
+listings will carry a photograph. Nothing here was restructured around that thin
+data — the grid, card and filter work all assume real covers.
+
+
+---
+
+## P20 — Cart page (route: /cart)
+
+Source: Etsy + lululemon + Faire via Mobbin (web, 1 Aug 2026). Convergent marketplace pattern: cart is a REVIEW surface only — no address form, no payment fields.
+Reference screen IDs: e70e4f9d (Etsy cart), 4fd7f773 (lululemon bag), 98ca8236 (Faire cart)
+
+What we lift:
+- Two-column: items list left (~2/3), order summary card right (~1/3)
+- Item rows grouped per seller (Etsy groups by shop, Faire by brand)
+- Item row: thumbnail, title, price, Remove — nothing else
+- Summary card: items total, shipping, order total, ONE primary CTA
+- Legal line under the CTA, not mid-page
+
+Exact values (copy, do not approximate):
+| Property        | Value                              | Notes                       |
+|-----------------|------------------------------------|-----------------------------|
+| Layout          | grid, 2fr / 1fr, gap 24px          | stacks < 900px              |
+| Summary CTA     | "Proceed to checkout" → /checkout  | link, btn--live, full width |
+| Address form    | ABSENT                             | moved to /checkout          |
+| Payment fields  | ABSENT                             | moved to /checkout          |
+| Seller grouping | microlabel header per seller       | Etsy/Faire convention       |
+| Item actions    | Remove only                        | no save-for-later (no such concept) |
+
+Where it lands: src/app/(product)/cart/page.tsx
+Deliberate divergences: no coupon code row (no coupons in product); no cross-sell rail (bloat).
+
+## P21 — Checkout page (route: /checkout)
+
+Source: lululemon (stepper + collapsing steps) + Etsy (secure-checkout chrome, review before pay) via Mobbin (web, 1 Aug 2026).
+Reference screen IDs: 7a884722, 433eb858 (lululemon shipping→payment), f11197a9 (Etsy review)
+
+What we lift:
+- Separate route from the cart, reduced chrome ("Secure checkout" label)
+- Step order: 1 Shipping → 2 Payment; a completed step collapses to a summary line with a Change link (lululemon)
+- Persistent order-summary rail right: item rows, subtotal, shipping, total
+- Payment step: saved cards listed first as radio rows (brand + •••• last4), "use a new card" opens the Payment Element; "save this card" checkbox on new cards
+- Primary CTA on payment step: "Pay {total}"
+
+Exact values:
+| Property         | Value                                   | Notes                          |
+|------------------|-----------------------------------------|--------------------------------|
+| Layout           | grid 2fr / 1fr, gap 24px, stacks <900px | same grid as cart              |
+| Stepper          | "1 Shipping · 2 Payment" microlabels    | current step ink, other dim    |
+| Collapsed step   | one-line summary + "Change" jumplink    | lululemon pattern              |
+| Saved card row   | radio · brand uppercase · •••• last4 · exp | Preply/KAYAK row shape      |
+| New card         | Stripe Payment Element                  | theme-matched                  |
+| Save checkbox    | "Save this card for next time"          | sets setup_future_usage        |
+| Reserved orders  | /orders/[id]/checkout reuses same components | offer-accept path         |
+
+Where it lands: src/app/(product)/checkout/page.tsx + checkout-steps.tsx (shared with orders/[id]/checkout)
+Deliberate divergences: 2 steps not 4 (no separate Contact/Review — email is the account, review lives in the summary rail; concision per product owner).
+
+## P22 — Payment methods in Settings (existing /settings page, new section)
+
+Source: Preply (concise single-card section) + KAYAK (row actions) + Link (wallet list) via Mobbin (web, 1 Aug 2026). Deliberately a SECTION, not a new page.
+Reference screen IDs: 1ab76ff5 (Preply), b868525c (KAYAK), 52703ccd (Link)
+
+What we lift:
+- Section heading "Payment methods" in the existing settings section list
+- Card row: brand uppercase · •••• last4 · expiry MM/YY · Remove action
+- "Add a card" affordance under the list; opens sheet with Payment Element (SetupIntent)
+- Reassurance line: card details held by Stripe, not DRVN
+
+Exact values:
+| Property    | Value                                  | Notes                     |
+|-------------|----------------------------------------|---------------------------|
+| Row shape   | brand · •••• 4242 · 04/28 · [Remove]   | tile rowlist idiom        |
+| Empty state | "No saved cards. Cards you save at checkout appear here." + Add a card | |
+| Add flow    | sheet → Payment Element (SetupIntent)  | existing .sheet idiom     |
+| Remove      | immediate detach + toast               | no confirm dialog (reversible: re-add) |
+
+Where it lands: src/app/(product)/settings/settings-panel.tsx (+ payment-methods.tsx) · backed by profiles.stripe_customer_id (migration 0015)
+Deliberate divergences: none.
+
+
+---
+
+## Iteration report — Settings page (1 Aug 2026)
+
+Thesis: the Livesheet — a drafting sheet; quiet mono labels, ink on paper, one signal red.
+Brief: page too cluttered; impossible to tell which section you're interacting with.
+References: Mobbin pass — Contra, Cloudflare, Perplexity, Juicebox (settings rails); walked live at desktop + mobile, signed in.
+
+### Pass 1 — Inspector
+- All 6 sections rendered in one endless scroll; jumplink labels (Account/Profile/Notifications/Payments/Reference) didn't match section titles, and #reference pointed at nothing → **restructured to a rail + one section at a time** (the convergent reference pattern). Hash-driven, so /settings#signals deep links still work. [breaks it]
+- Saved payment method invisible: a card saved via Stripe Link is a `link`-type payment method and the lister filtered `type: "card"` only → lister now returns card + link methods; both render properly at Settings and checkout. [breaks it]
+- Empty profile rendered "@" and "—" as values → "Not set". [cheapens it]
+- Mobile: rail scrollbar painted as a stray grey bar → hidden; notification rows collapsed into description-above-label jumble → rebuilt as label+hint left, toggle right. [cheapens it]
+- Deep-link hydration flashed the wrong active rail item for ~150ms (transition-colors) → transition removed; swap is instant. [nitpick]
+
+### Pass 2 — Provocateur
+- The rail read as a generic tab list next to the app's numbered sidebar → gave sections drafting-register indices (01–05), active index in signal red. One move, fully shipped; amplifies the existing numbering language rather than decorating.
+
+### Pass 3 — Purist
+- Checked: rail tokens (paper-deep active wash, mono uppercase, rounded-ctl) all in-system; red used only for the active index + live labels; "Danger zone" kept — clarity outranks voice here. Nothing off-voice found; Pass 2's addition survives because it borrows an existing pattern.
+
+### Close the loop
+Re-verified at desktop and 375px: section switching, deep link #signals, payment methods listing (Link wallet visible), notification toggles, empty states. Typecheck, lint, 24/24 tests, production build all pass. Also per product owner mid-pass: Settings added to the main navigation register (09), keeping the utility icon.

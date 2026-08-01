@@ -7,7 +7,7 @@ import { useState } from "react";
 type CarOption = { id: string; name: string };
 
 /**
- * Composer-entry prompt on the home sheet. Clicking routes to the block
+ * Composer-entry prompt on Home. Clicking routes to the block
  * editor — with one car it goes straight there, with several it expands an
  * inline car picker as ruled rows.
  */
@@ -39,7 +39,7 @@ export function PostUpdatePrompt({ cars, initials }: { cars: CarOption[]; initia
             <Link key={car.id} href={`/garage/${car.id}/update/new`} className="order">
               <span>
                 <span className="order__name block">Post about {car.name}</span>
-                <span className="order__meta block">opens the entry editor →</span>
+                <span className="order__meta block">opens the update editor →</span>
               </span>
             </Link>
           ))}

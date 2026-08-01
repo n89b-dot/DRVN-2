@@ -21,7 +21,12 @@ export function FeedCard({ item, variantHint = 0 }: { item: FeedItem; variantHin
     return (
       <Link href={`/listings/${item.id}`} className="tile block">
         <span className="tile__img block aspect-[3/2]">
-          <Media src={item.cover_url ?? undefined} alt={item.title} className="h-full w-full" />
+          <Media
+            src={item.cover_url ?? undefined}
+            alt={item.title}
+            className="h-full w-full"
+            fallbackClassName="plate-undrawn"
+          />
         </span>
         <p className="mkt__name clamp2">{item.title}</p>
         <p className="mkt__price">{formatPrice(item.price_cents)}</p>
@@ -37,13 +42,18 @@ export function FeedCard({ item, variantHint = 0 }: { item: FeedItem; variantHin
     return (
       <Link href={`/cars/${item.slug}`} className="tile block">
         <span className="tile__img block aspect-[4/3]">
-          <Media src={item.cover_url ?? undefined} alt={item.name} className="h-full w-full" />
+          <Media
+            src={item.cover_url ?? undefined}
+            alt={item.name}
+            className="h-full w-full"
+            fallbackClassName="plate-undrawn"
+          />
         </span>
         <p className="mkt__name">{item.name}</p>
         <AuthorLine name={item.ownerName} />
         {item.meta && <p className="order__meta mt-1">{item.meta}</p>}
         <span className="mkt__meta">
-          <span className="chip">Car sheet</span>
+          <span className="chip">Build</span>
         </span>
       </Link>
     );
@@ -55,7 +65,7 @@ export function FeedCard({ item, variantHint = 0 }: { item: FeedItem; variantHin
     // Fresh entry — annotation-style deep tile, no photo required.
     return (
       <Link href={href} className="tile tile--deep block">
-        <span className="microlabel microlabel--live">Fresh entry</span>
+        <span className="microlabel microlabel--live">New update</span>
         <p className="mkt__name clamp2 mt-2">&ldquo;{item.title}&rdquo;</p>
         {item.intro && <p className="order__meta clamp2 mt-1">{item.intro}</p>}
         <AuthorLine name={item.ownerName} />
@@ -96,8 +106,8 @@ export function MasonryFeed({ items }: { items: FeedItem[] }) {
         <span className="undrawn__mark" aria-hidden="true">
           ✎
         </span>
-        <h3>Nothing drawn yet</h3>
-        <p>The moment sheets open and parts list, they land here. Check back soon.</p>
+        <h3>Nothing here yet</h3>
+        <p>As people add their cars and list parts, it all shows up here. Check back soon.</p>
       </div>
     );
   }

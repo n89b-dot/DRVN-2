@@ -22,14 +22,17 @@ const host = supabaseHost();
  * `'unsafe-inline'` for scripts is required by Next's inlined bootstrap; a nonce
  * -based policy is the upgrade once there's a reason to tighten further.
  */
+// Stripe.js loads from js.stripe.com, talks to api.stripe.com and renders
+// its 3DS/payment frames from js.stripe.com + hooks.stripe.com — the
+// officially documented CSP allowances for the Payment Element.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   `img-src 'self' data: blob: https://${host ?? "*.supabase.co"}`,
-  `connect-src 'self' https://${host ?? "*.supabase.co"} wss://${host ?? "*.supabase.co"}`,
-  "frame-src https://www.youtube-nocookie.com",
+  `connect-src 'self' https://${host ?? "*.supabase.co"} wss://${host ?? "*.supabase.co"} https://api.stripe.com`,
+  "frame-src https://www.youtube-nocookie.com https://js.stripe.com https://hooks.stripe.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

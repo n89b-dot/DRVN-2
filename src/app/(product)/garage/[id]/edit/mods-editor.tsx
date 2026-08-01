@@ -4,17 +4,32 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import type { ModItem } from "@/lib/database.types";
+import {
+  isLowConfidence,
+  MOD_CATEGORIES,
+  MOD_GROUPS,
+  parsePasteText,
+  type ModCategory,
+} from "@/lib/mods/parse";
+
+import { unlinkModListing } from "@/app/(product)/sell/actions";
 
 import { saveModItems, type ModItemInput } from "../../actions";
 
-export const MOD_GROUPS = [
-  "Performance",
-  "Suspension",
-  "Exterior",
-  "Interior",
-  "Wheels & Tires",
-  "Other",
-] as const;
+export { MOD_GROUPS };
+
+const CATEGORY_LABELS: Record<ModCategory, string> = {
+  suspension: "Suspension",
+  exhaust: "Exhaust",
+  intake: "Intake",
+  turbo: "Turbo",
+  wheels: "Wheels",
+  brakes: "Brakes",
+  "ecu-tune": "ECU / Tune",
+  "aero-exterior": "Aero / Exterior",
+  interior: "Interior",
+  drivetrain: "Drivetrain",
+};
 
 type Row = {
   key: string;
@@ -25,44 +40,29 @@ type Row = {
   brand: string;
   product: string;
   part_number: string;
+  category: ModCategory | null;
+  /** null for hand-added / previously-saved rows with no parser opinion. */
+  confidence: number | null;
   raw_text: string;
+  /** Set once this line has been released for sale — drives the Unlink control. */
+  linked_listing_id: string | null;
 };
 
 /**
  * Heuristic paste parser (PRD §7.3 — the AI parse is the later upgrade path).
  * Lines that look like group headers ("Performance:", "EXTERIOR") set the
- * current group; other non-empty lines become items with brand = first word.
+ * current group; other non-empty lines become items with a brand (curated
+ * multi-word list, falling back to first-word), inferred category, extracted
+ * part number, and a confidence score the UI uses to flag rows worth a
+ * second look.
  */
 function parsePaste(text: string): Row[] {
-  const rows: Row[] = [];
-  let currentGroup = "Other";
-
-  for (const rawLine of text.split("\n")) {
-    // Strip list bullets ("-", "•", "1.", "2)") but not numeric brands like "034".
-    const line = rawLine.replace(/^\s*(?:[-•*]+|\d{1,2}[.)])\s+/, "").trim();
-    if (!line) continue;
-
-    const headerCandidate = line.replace(/[:\-–]+$/, "").trim();
-    const matchedGroup = MOD_GROUPS.find(
-      (g) => g.toLowerCase() === headerCandidate.toLowerCase()
-    );
-    if (matchedGroup && headerCandidate.length === line.replace(/[:\-–]+$/, "").trim().length && line.length < 30) {
-      currentGroup = matchedGroup;
-      continue;
-    }
-
-    const words = line.split(/\s+/);
-    rows.push({
-      key: crypto.randomUUID(),
-      id: null,
-      part_number: "",
-      group_label: currentGroup,
-      brand: words.length > 1 ? words[0] : "",
-      product: words.length > 1 ? words.slice(1).join(" ") : line,
-      raw_text: line,
-    });
-  }
-  return rows;
+  return parsePasteText(text).map((r) => ({
+    key: crypto.randomUUID(),
+    id: null,
+    linked_listing_id: null,
+    ...r,
+  }));
 }
 
 const inputClass = "ctl !py-2";
@@ -76,13 +76,30 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       brand: m.brand ?? "",
       product: m.product ?? "",
       part_number: m.part_number ?? "",
+      category: (m.category as ModCategory | null) ?? null,
+      confidence: m.confidence,
       raw_text: m.raw_text ?? "",
+      linked_listing_id: m.linked_listing_id,
     }))
   );
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(initialMods.length === 0);
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);
+
+  function unlink(row: Row) {
+    if (!row.id) return;
+    setUnlinkingKey(row.key);
+    const formData = new FormData();
+    formData.set("mod_item_id", row.id);
+    formData.set("car_id", carId);
+    startTransition(async () => {
+      await unlinkModListing(formData);
+      updateRow(row.key, { linked_listing_id: null });
+      setUnlinkingKey(null);
+    });
+  }
 
   function updateRow(key: string, patch: Partial<Row>) {
     setRows((r) => r.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -96,6 +113,8 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       brand: r.brand.trim() || null,
       product: r.product.trim() || null,
       part_number: r.part_number.trim() || null,
+      category: r.category,
+      confidence: r.confidence,
       raw_text: r.raw_text || `${r.brand} ${r.product}`.trim(),
       position: i,
     }));
@@ -176,16 +195,59 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 placeholder="Part no."
                 className={`${inputClass} w-[110px] shrink-0`}
               />
+              <select
+                value={row.category ?? ""}
+                onChange={(e) =>
+                  updateRow(row.key, { category: (e.target.value || null) as ModCategory | null })
+                }
+                className="ctl !py-2 w-[130px] shrink-0"
+              >
+                <option value="">Category</option>
+                {MOD_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+              {row.confidence !== null && isLowConfidence(row.confidence) && (
+                <span
+                  className="chip chip--live shrink-0"
+                  title="Low-confidence parse — check this line before saving"
+                >
+                  Check this
+                </span>
+              )}
               {/* Release is only offered on a filed line: the listing links back
                   to this row's id, so an unsaved row has nothing to attach to. */}
               {row.id ? (
-                <Link
-                  href={`/sell?car=${carId}&mod=${row.id}`}
-                  className="relbtn !static shrink-0"
-                  title="List this component for sale with its provenance attached"
-                >
-                  Release
-                </Link>
+                row.linked_listing_id ? (
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <Link
+                      href={`/listings/${row.linked_listing_id}`}
+                      className="chip chip--ok !static"
+                      title="See the listing this line released"
+                    >
+                      For sale
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => unlink(row)}
+                      disabled={pending && unlinkingKey === row.key}
+                      className="microlabel shrink-0 underline decoration-dotted transition hover:text-live disabled:opacity-50"
+                      title="Unlink this line from its listing — the listing itself stays as-is"
+                    >
+                      {pending && unlinkingKey === row.key ? "Unlinking…" : "Unlink"}
+                    </button>
+                  </span>
+                ) : (
+                  <Link
+                    href={`/sell?car=${carId}&mod=${row.id}`}
+                    className="relbtn !static shrink-0"
+                    title="List this component for sale with its provenance attached"
+                  >
+                    Release
+                  </Link>
+                )
               ) : (
                 <span className="microlabel shrink-0" title="Save the sheet before releasing">
                   Unfiled
@@ -217,7 +279,10 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 brand: "",
                 product: "",
                 part_number: "",
+                category: null,
+                confidence: null,
                 raw_text: "",
+                linked_listing_id: null,
               },
             ])
           }

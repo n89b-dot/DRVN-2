@@ -24,19 +24,25 @@ export function FilterBar({
     <form action={action} method="get" className="flex flex-wrap items-center gap-2">
       {filters.sort && <input type="hidden" name="sort" value={filters.sort} />}
 
-      <label className="search flex-1 basis-[220px]">
+      {/* Below `sm` the controls go full-bleed and stack in a single ruled
+          column; the price pair splits the row between them. Above it they
+          return to one inline band at their natural widths. Fixed widths at
+          every size left the row a ragged staircase on a phone. */}
+      <label className="search basis-full sm:flex-1 sm:basis-[220px]">
         <span aria-hidden="true">⌕</span>
+        {/* Short by design: the long form ("…— 'coilovers', 'ECU', a car") was
+            clipped mid-word at every width under 1100px. */}
         <input
           name="q"
           defaultValue={filters.q ?? ""}
-          placeholder="Search the sheets — 'coilovers', 'ECU', a car…"
+          placeholder="Search parts…"
           aria-label="Search parts"
         />
       </label>
       <select
         name="condition"
         defaultValue={filters.condition ?? ""}
-        className="ctl w-auto"
+        className="ctl w-full max-w-none sm:w-auto"
         aria-label="Condition"
       >
         <option value="">Any condition</option>
@@ -50,26 +56,31 @@ export function FilterBar({
         name="location"
         defaultValue={filters.location ?? ""}
         placeholder="Location"
-        className="ctl w-32"
+        className="ctl w-full max-w-none sm:w-32"
         aria-label="Location"
       />
-      <input
-        name="min"
-        defaultValue={filters.min ?? ""}
-        placeholder="Min $"
-        inputMode="decimal"
-        className="ctl w-24"
-        aria-label="Minimum price"
-      />
-      <input
-        name="max"
-        defaultValue={filters.max ?? ""}
-        placeholder="Max $"
-        inputMode="decimal"
-        className="ctl w-24"
-        aria-label="Maximum price"
-      />
-      <button type="submit" className="btn">
+      {/* The price bounds are one control in two halves, so they travel
+          together — left loose they split across a wrap and read as two
+          unrelated fields. */}
+      <span className="flex w-full gap-2 sm:w-auto">
+        <input
+          name="min"
+          defaultValue={filters.min ?? ""}
+          placeholder="Min $"
+          inputMode="decimal"
+          className="ctl min-w-0 max-w-none flex-1 sm:w-24 sm:flex-none"
+          aria-label="Minimum price"
+        />
+        <input
+          name="max"
+          defaultValue={filters.max ?? ""}
+          placeholder="Max $"
+          inputMode="decimal"
+          className="ctl min-w-0 max-w-none flex-1 sm:w-24 sm:flex-none"
+          aria-label="Maximum price"
+        />
+      </span>
+      <button type="submit" className="btn w-full sm:w-auto">
         Search
       </button>
       {showFitToggle && (

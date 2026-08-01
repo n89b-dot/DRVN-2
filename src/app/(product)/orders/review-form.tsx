@@ -7,7 +7,7 @@ import { submitReview, type CommerceState } from "@/features/commerce/actions";
 export function ReviewForm({ orderId, revieweeName }: { orderId: string; revieweeName: string }) {
   const [state, action, pending] = useActionState<CommerceState, FormData>(submitReview, {});
 
-  if (state.ok) return <span className="chip chip--ok">Review filed — thanks</span>;
+  if (state.ok) return <span className="chip chip--ok">Review posted — thanks</span>;
 
   return (
     <form action={action} className="flex flex-wrap items-center gap-2">

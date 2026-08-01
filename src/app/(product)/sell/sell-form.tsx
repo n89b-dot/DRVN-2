@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
+import { isLowConfidence } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/client";
 
 import { createListing, updateListing, type SellState } from "./actions";
@@ -36,6 +37,9 @@ function Section({
   );
 }
 
+/** A gallery photo, in save order — index 0 is always the cover. */
+export type GalleryImage = { url: string; alt: string | null };
+
 export type ListingDraft = {
   id: string;
   title: string;
@@ -52,7 +56,7 @@ export type ListingDraft = {
   compatibility_notes: string | null;
   source_car_id: string | null;
   status: string;
-  images: string[];
+  images: GalleryImage[];
 };
 
 export function SellForm({
@@ -70,8 +74,12 @@ export function SellForm({
     carId?: string;
     title?: string;
     category?: string;
+    subcategory?: string;
     modItemId?: string;
     partNumber?: string;
+    /** Parser confidence carried from the mod line, for the guess note below —
+     *  listings have no confidence column, so this never reaches the server. */
+    modConfidence?: number | null;
   };
 }) {
   const isEdit = Boolean(listing);
@@ -80,7 +88,7 @@ export function SellForm({
     {}
   );
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
-  const [imageUrls, setImageUrls] = useState<string[]>(listing?.images ?? []);
+  const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -116,7 +124,7 @@ export function SellForm({
         const {
           data: { publicUrl },
         } = supabase.storage.from("listing-images").getPublicUrl(path);
-        setImageUrls((u) => [...u, publicUrl]);
+        setImages((u) => [...u, { url: publicUrl, alt: null }]);
       }
     } finally {
       setUploading(false);
@@ -124,9 +132,39 @@ export function SellForm({
     }
   }
 
+  /** Reorder is a swap with a neighbour; moving index 0 changes the cover. */
+  function moveImage(index: number, direction: -1 | 1) {
+    setImages((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  /** Promotes a photo straight to index 0 — the cover slot. */
+  function makeCover(index: number) {
+    setImages((current) => {
+      if (index <= 0 || index >= current.length) return current;
+      const next = [...current];
+      const [chosen] = next.splice(index, 1);
+      next.unshift(chosen);
+      return next;
+    });
+  }
+
+  function removeImage(index: number) {
+    setImages((current) => current.filter((_, i) => i !== index));
+  }
+
+  function updateAlt(index: number, alt: string) {
+    setImages((current) => current.map((img, i) => (i === index ? { ...img, alt } : img)));
+  }
+
   return (
     <form action={action} className="deck !pb-0">
-      <input type="hidden" name="image_urls" value={JSON.stringify(imageUrls)} />
+      <input type="hidden" name="image_urls" value={JSON.stringify(images)} />
       {listing && <input type="hidden" name="id" value={listing.id} />}
       {prefill?.modItemId && (
         <input type="hidden" name="mod_item_id" value={prefill.modItemId} />
@@ -168,12 +206,20 @@ export function SellForm({
                 </option>
               ))}
             </select>
+            {!listing &&
+              prefill?.modConfidence !== undefined &&
+              prefill?.modConfidence !== null &&
+              isLowConfidence(prefill.modConfidence) && (
+                <span className="field__hint">
+                  Guessed from a low-confidence parse of the build line — check it.
+                </span>
+              )}
           </label>
           <label className="field !mb-0">
             <span className="microlabel">Subcategory — optional</span>
             <select
               name="subcategory"
-              defaultValue={listing?.subcategory ?? ""}
+              defaultValue={listing?.subcategory ?? prefill?.subcategory ?? ""}
               className="ctl max-w-none"
               disabled={!subcategories.length}
             >
@@ -231,29 +277,68 @@ export function SellForm({
       <Section
         step={2}
         title="Photos"
-        hint="Up to 12 — the first frame is the cover. Honest beats flattering."
+        hint="Up to 12 — the first frame is the cover. Reorder, set a cover, or add alt text below."
       >
         <div className="thumbs !mt-0">
-          {imageUrls.map((url, index) => (
-            <span key={url} className="thumb">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Photo ${index + 1}`} />
-              {index === 0 && <span className="thumb__tag">Cover</span>}
-              <button
-                type="button"
-                onClick={() => setImageUrls((u) => u.filter((x) => x !== url))}
-                className="thumb__x"
-                aria-label={`Remove photo ${index + 1}`}
-              >
-                ✕
-              </button>
-            </span>
+          {images.map((img, index) => (
+            <div key={img.url} className="flex flex-col gap-1.5">
+              <span className="thumb">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt={img.alt || `Photo ${index + 1}`} />
+                {index === 0 && <span className="thumb__tag">Cover</span>}
+                <button
+                  type="button"
+                  onClick={() => removeImage(index)}
+                  className="thumb__x"
+                  aria-label={`Remove photo ${index + 1}`}
+                >
+                  ✕
+                </button>
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => moveImage(index, -1)}
+                  disabled={index === 0}
+                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30"
+                  aria-label={`Move photo ${index + 1} earlier`}
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveImage(index, 1)}
+                  disabled={index === images.length - 1}
+                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30"
+                  aria-label={`Move photo ${index + 1} later`}
+                >
+                  →
+                </button>
+                {index !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => makeCover(index)}
+                    className="flex-1 truncate rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim transition hover:text-ink"
+                  >
+                    Set cover
+                  </button>
+                )}
+              </div>
+              <input
+                value={img.alt ?? ""}
+                onChange={(e) => updateAlt(index, e.target.value)}
+                placeholder="Alt text — optional"
+                maxLength={200}
+                className="ctl max-w-none !py-1 text-[12px]"
+                aria-label={`Alt text for photo ${index + 1}`}
+              />
+            </div>
           ))}
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="thumb thumb--ghost grid place-items-center font-mono text-xs uppercase tracking-[0.1em] text-dim"
+            className="thumb thumb--ghost grid place-items-center self-start font-mono text-xs uppercase tracking-[0.1em] text-dim"
           >
             {uploading ? "Uploading…" : "+ Add"}
           </button>

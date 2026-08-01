@@ -27,7 +27,7 @@ function formatDate(iso: string | null): string {
 }
 
 /**
- * Per-car metadata. Car sheets are the most-shared surface in the product and
+ * Per-car metadata. Build pages are the most-shared surface in the product and
  * previously inherited the site-wide title, so every link unfurled identically.
  * The canonical drops `?view=`, so tab variants don't split the SEO signal.
  */
@@ -51,7 +51,7 @@ export async function generateMetadata({
     .join(" ");
   const description =
     car.about?.slice(0, 155) ??
-    `${spec || car.name} on DRVN — the build, and the parts released from it.`;
+    `${spec || car.name} on DRVN — the full build, and the parts for sale off it.`;
 
   return {
     title: `${car.name}${spec ? ` — ${spec}` : ""} - DRVN`,
@@ -92,7 +92,7 @@ export default async function CarPage({
 
   if (carError) {
     console.error("[cars] failed to load car", { slug, carError });
-    throw new Error("Could not load this car sheet");
+    throw new Error("Could not load this build");
   }
   if (!car) notFound();
 
@@ -115,7 +115,7 @@ export default async function CarPage({
         .eq("car_id", car.id)
         .order("published_at", { ascending: false })
         .limit(50),
-      // The marketplace payload of this page. The car sheet never queried
+      // The marketplace payload of this page. The build page never queried
       // listings at all, so "what came off this car" — the product's own thesis
       // — was missing from the one page that should carry it.
       supabase
@@ -261,12 +261,12 @@ export default async function CarPage({
     <div className="wrap">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Car sheet — public · <span className="microlabel--live">drawn live</span>
+          Build page — public
           {user?.id === car.owner_id && (
             <>
               {" · "}
               <Link href={`/garage/${car.id}/edit`} className="hover:text-live">
-                manage this sheet →
+                manage this car →
               </Link>
             </>
           )}
@@ -276,7 +276,7 @@ export default async function CarPage({
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {owner && (
             <Link href={`/u/${owner.username}`} className="jumplink">
-              Keeper — {ownerName}
+              Built by {ownerName}
             </Link>
           )}
           {user?.id !== car.owner_id && (
@@ -328,8 +328,8 @@ export default async function CarPage({
       />
 
       <Foot
-        left="DRVN / Livesheet — car sheet"
-        right={<Link href="/marketplace">The market →</Link>}
+        left="DRVN — build page"
+        right={<Link href="/marketplace">Browse parts →</Link>}
       />
     </div>
   );

@@ -10,16 +10,16 @@ export default function NotFound() {
         <span className="undrawn__mark" aria-hidden="true">
           ⌕
         </span>
-        <h3>No sheet at this reference</h3>
+        <h3>Nothing here</h3>
         <p>
-          The page you asked for doesn&apos;t exist, or whoever drew it has taken it down.
+          That page doesn&apos;t exist, or whoever posted it has taken it down.
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <Link href="/marketplace" className="btn btn--live">
-            Browse the market
+            Browse parts
           </Link>
           <Link href="/explore" className="btn btn--ghost">
-            Explore sheets
+            Explore builds
           </Link>
         </div>
       </div>

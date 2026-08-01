@@ -19,8 +19,8 @@ export function FeedList({ items }: { items: FeedItem[] }) {
         <span className="undrawn__mark" aria-hidden="true">
           ✎
         </span>
-        <h3>The ink is dry</h3>
-        <p>Views, watchers, offers and sales all land in this feed the moment sheets go live.</p>
+        <h3>All quiet for now</h3>
+        <p>New builds, updates and listings from around DRVN show up here.</p>
       </div>
     );
   }
@@ -44,7 +44,7 @@ export function FeedList({ items }: { items: FeedItem[] }) {
                 </span>
               </span>
               <span className="order__actions">
-                <KindChip tone="neutral">Build entry</KindChip>
+                <KindChip tone="neutral">Update</KindChip>
               </span>
             </Link>
           );
@@ -59,12 +59,12 @@ export function FeedList({ items }: { items: FeedItem[] }) {
               <span>
                 <span className="order__name block">{item.name}</span>
                 <span className="order__meta block">
-                  {item.ownerName ?? "car sheet"}
+                  {item.ownerName ?? "build"}
                   {item.meta ? ` · ${item.meta}` : ""}
                 </span>
               </span>
               <span className="order__actions">
-                <KindChip tone="neutral">Car sheet</KindChip>
+                <KindChip tone="neutral">Build</KindChip>
               </span>
             </Link>
           );

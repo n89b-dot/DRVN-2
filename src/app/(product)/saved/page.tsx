@@ -30,7 +30,7 @@ function initialsOf(name: string) {
 /**
  * Saved and followed, correctly labelled.
  *
- * Two bugs fixed here. "Keepers you follow" read profile *saves*, but nothing in
+ * Two bugs fixed here. "Sellers you follow" read profile *saves*, but nothing in
  * the app ever renders a save button for a profile — so that section could never
  * populate, while actual follows appeared nowhere at all. And there was no way to
  * unsave anything from this page.
@@ -114,9 +114,9 @@ export default async function SavedPage() {
     .map((id) => carById.get(id))
     .filter((c): c is CarRowData => Boolean(c));
 
-  const sheetCount = savedCars.length + followedCars.length;
-  const keeperCount = (profiles ?? []).length;
-  const isEmpty = !listingIds.length && !sheetCount && !keeperCount;
+  const buildCount = savedCars.length + followedCars.length;
+  const sellerCount = (profiles ?? []).length;
+  const isEmpty = !listingIds.length && !buildCount && !sellerCount;
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
     <div className="order">
@@ -131,7 +131,7 @@ export default async function SavedPage() {
           {car.name}
         </Link>
         <span className="order__meta block">
-          {[car.year, car.make, car.model].filter(Boolean).join(" ") || "car sheet"}
+          {[car.year, car.make, car.model].filter(Boolean).join(" ") || "build page"}
         </span>
       </span>
       <span className="order__actions">
@@ -150,8 +150,8 @@ export default async function SavedPage() {
     <div className="wrap">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Watching · {listingIds.length} part{listingIds.length === 1 ? "" : "s"} · {sheetCount}{" "}
-          sheet{sheetCount === 1 ? "" : "s"} · {keeperCount} keeper{keeperCount === 1 ? "" : "s"}
+          Saved · {listingIds.length} part{listingIds.length === 1 ? "" : "s"} · {buildCount}{" "}
+          build{buildCount === 1 ? "" : "s"} · {sellerCount} seller{sellerCount === 1 ? "" : "s"}
         </span>
         <h1>
           Everything you&apos;re
@@ -159,8 +159,8 @@ export default async function SavedPage() {
           keeping an <span className="live-word">eye on.</span>
         </h1>
         <p className="sub">
-          Watched parts keep ticking whether you&apos;re looking or not. Spent listings stay on the
-          sheet — history is part of the drawing.
+          The parts you&apos;re watching, and the builds and sellers you follow. Sold listings stay
+          here so you can see what things actually went for.
         </p>
       </Rv>
 
@@ -170,13 +170,12 @@ export default async function SavedPage() {
             <span className="undrawn__mark" aria-hidden="true">
               ◎
             </span>
-            <h3>Nothing on the watchlist</h3>
+            <h3>Nothing saved yet</h3>
             <p>
-              Save parts and follow car sheets and keepers as you browse — they collect here and
-              keep counting.
+              Save parts and follow builds and sellers as you browse — they all collect here.
             </p>
             <Link href="/marketplace" className="btn btn--ghost">
-              Browse the market
+              Browse the marketplace
             </Link>
           </Rv>
         </section>
@@ -186,7 +185,7 @@ export default async function SavedPage() {
         <section className="deck">
           <div>
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Parts you&apos;re watching</span>
+              <span className="microlabel microlabel--ink">Saved parts</span>
               <span className="chip">{(listings ?? []).length}</span>
             </div>
             <div className="mkt">
@@ -220,7 +219,7 @@ export default async function SavedPage() {
         <section className="deck">
           <Rv className="tile">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Sheets you&apos;ve saved</span>
+              <span className="microlabel microlabel--ink">Builds you&apos;ve saved</span>
               <span className="chip">{savedCars.length}</span>
             </div>
             <div className="rowlist">
@@ -236,7 +235,7 @@ export default async function SavedPage() {
         <section className="deck">
           <Rv className="tile">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Sheets you follow</span>
+              <span className="microlabel microlabel--ink">Builds you follow</span>
               <span className="chip">{followedCars.length}</span>
             </div>
             <div className="rowlist">
@@ -248,12 +247,12 @@ export default async function SavedPage() {
         </section>
       )}
 
-      {keeperCount > 0 && (
+      {sellerCount > 0 && (
         <section className="deck">
           <Rv className="tile tile--deep">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Keepers you follow</span>
-              <span className="chip">{keeperCount}</span>
+              <span className="microlabel microlabel--ink">Sellers you follow</span>
+              <span className="chip">{sellerCount}</span>
             </div>
             <div className="rowlist">
               {(profiles ?? []).map((p) => (
@@ -269,7 +268,7 @@ export default async function SavedPage() {
                     >
                       {p.display_name ?? `@${p.username}`}
                     </Link>
-                    <span className="order__meta block">keeper sheet →</span>
+                    <span className="order__meta block">view profile →</span>
                   </span>
                   <span className="order__actions">
                     <form action={removeFollow}>
@@ -288,8 +287,8 @@ export default async function SavedPage() {
       )}
 
       <Foot
-        left="DRVN / Livesheet — the sheet keeps watching when you don't"
-        right={<Link href="/marketplace">← The market</Link>}
+        left="DRVN — saved parts, builds and sellers"
+        right={<Link href="/marketplace">← Marketplace</Link>}
       />
     </div>
   );

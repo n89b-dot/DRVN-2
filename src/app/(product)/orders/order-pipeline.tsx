@@ -19,7 +19,21 @@ const TERMINAL: Partial<Record<OrderStatus, string>> = {
   disputed: "In dispute",
 };
 
-export function OrderPipeline({ status }: { status: OrderStatus }) {
+export function OrderPipeline({
+  status,
+  progressStatus,
+}: {
+  status: OrderStatus;
+  /**
+   * The furthest ordinary stage the order actually reached before it was
+   * disputed or refunded — `orders.pre_dispute_status` (migration 0014, NOT
+   * applied). Without this, a disputed order that had already shipped and
+   * been delivered rendered as stuck at "Paid", because `disputed`/`refunded`
+   * only appear in the placed/paid stages below. A pre-dispatch refund has no
+   * such stage to fall back to, so it correctly still reads as stuck at paid.
+   */
+  progressStatus?: OrderStatus | null;
+}) {
   const terminal = TERMINAL[status];
 
   if (terminal && status !== "refunded" && status !== "disputed") {
@@ -31,8 +45,9 @@ export function OrderPipeline({ status }: { status: OrderStatus }) {
     );
   }
 
+  const effective = progressStatus ?? status;
   const currentIndex = STAGES.reduce(
-    (last, stage, index) => (stage.reached.includes(status) ? index : last),
+    (last, stage, index) => (stage.reached.includes(effective) ? index : last),
     -1
   );
 

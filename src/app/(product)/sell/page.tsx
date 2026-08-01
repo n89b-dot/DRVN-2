@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
+import { mapModCategoryToListing } from "@/lib/mods/category-map";
 import { createClient } from "@/lib/supabase/server";
 
 import { SellForm } from "./sell-form";
@@ -12,7 +13,7 @@ export const metadata = { title: "Sell a part - DRVN" };
 export default async function SellPage({
   searchParams,
 }: {
-  // `car` and `mod` arrive from "release a part" on a car sheet or the garage.
+  // `car` and `mod` arrive from "list a part" on a build page or the garage.
   searchParams: Promise<{ car?: string; mod?: string }>;
 }) {
   const { car: carParam, mod: modParam } = await searchParams;
@@ -39,8 +40,10 @@ export default async function SellPage({
         carId?: string;
         title?: string;
         category?: string;
+        subcategory?: string;
         modItemId?: string;
         partNumber?: string;
+        modConfidence?: number | null;
       }
     | undefined;
   if (sourceCar) {
@@ -49,21 +52,31 @@ export default async function SellPage({
     if (modParam) {
       const { data: mod } = await supabase
         .from("mod_items")
-        .select("id, brand, product, raw_text, category, part_number, car_id")
+        .select("id, brand, product, raw_text, category, confidence, part_number, car_id")
         .eq("id", modParam)
         .eq("car_id", sourceCar.id)
         .maybeSingle();
 
       if (mod) {
         const title = [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "";
+        // The build sheet's own category vocabulary isn't the storefront
+        // taxonomy (see src/lib/mods/category-map.ts) — translate it rather
+        // than handing the raw mod category to a <select> that doesn't have
+        // it as an option.
+        const { category, subcategory } = mapModCategoryToListing(mod.category);
         prefill = {
           carId: sourceCar.id,
           title: title.slice(0, 140),
-          category: mod.category ?? undefined,
+          category,
+          subcategory,
           modItemId: mod.id,
-          // The build line already knows the part number — carry it across so
-          // the seller isn't retyping what the sheet recorded.
+          // The mod entry already knows the part number — carry it across so
+          // the seller isn't retyping what the build already recorded.
           partNumber: mod.part_number ?? undefined,
+          // Listings have no confidence column (see database.types.ts) — this
+          // rides along only to tell the seller the category is a guess, it
+          // is never persisted.
+          modConfidence: mod.confidence,
         };
       }
     }
@@ -74,15 +87,15 @@ export default async function SellPage({
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           {prefill?.modItemId
-            ? `Releasing a part off ${sourceCar?.name}`
-            : "Part sheet — draft · not yet public"}
+            ? `Listing a part off your ${sourceCar?.name}`
+            : "New listing — draft, not public yet"}
         </span>
         <h1>
-          Draw a new <span className="live-word">line.</span>
+          List a <span className="live-word">part.</span>
         </h1>
         <p className="sub">
-          Fill the sheet and the listing draws itself. Save a draft to come back to it, or publish
-          straight to the market.
+          Takes a few minutes. Link it to a car in your garage so buyers can see the build it
+          came off — it&apos;s the difference between a listing and a shrug.
         </p>
       </Rv>
 
@@ -95,8 +108,8 @@ export default async function SellPage({
       </div>
 
       <Foot
-        left="DRVN / Livesheet — drafts stay private until you publish"
-        right={<Link href="/marketplace">← Back to the market</Link>}
+        left="DRVN — drafts stay private until you publish"
+        right={<Link href="/marketplace">← Back to the marketplace</Link>}
       />
     </div>
   );

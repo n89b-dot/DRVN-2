@@ -23,7 +23,7 @@ export default function TermsPage() {
     <>
       <Rv as="header" className="pagehead">
         <span className="microlabel">Terms of Service · updated {UPDATED}</span>
-        <h1>The rules of the sheet.</h1>
+        <h1>The ground rules.</h1>
         <p className="sub">
           DRVN is a marketplace for parts off modified cars. These terms cover what you can expect
           from us, and what we expect from you.

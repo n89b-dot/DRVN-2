@@ -9,7 +9,7 @@ export const metadata = { title: "Explore - DRVN" };
 
 const TABS: { key: FeedTab; label: string; loggedInOnly?: boolean }[] = [
   { key: "all", label: "All" },
-  { key: "cars", label: "Car sheets" },
+  { key: "cars", label: "Builds" },
   { key: "parts", label: "Parts", loggedInOnly: true },
 ];
 
@@ -31,12 +31,14 @@ export default async function ExplorePage({
   return (
     <div className="wrap">
       <Rv as="header" className="pagehead">
-        <span className="microlabel">Survey — other people&apos;s sheets</span>
+        <span className="microlabel">Explore</span>
         <h1>
-          Other people&apos;s sheets,
-          <br />
-          while the ink is <span className="live-word">wet.</span>
+          See what everyone&apos;s <span className="live-word">building.</span>
         </h1>
+        <p className="sub">
+          Fresh builds and updates from around DRVN — and every so often, a part you&apos;ve been
+          hunting for.
+        </p>
       </Rv>
 
       <div className="filters">
@@ -50,7 +52,7 @@ export default async function ExplorePage({
           </Link>
         ))}
         <Link href="/marketplace" className="fbtn">
-          Open the market →
+          Go to the marketplace →
         </Link>
       </div>
 
@@ -59,8 +61,8 @@ export default async function ExplorePage({
       </section>
 
       <Foot
-        left="DRVN / Livesheet — every tile is drawn from a live sheet"
-        right={<Link href="/marketplace">Open the market →</Link>}
+        left="DRVN — builds and parts from the community"
+        right={<Link href="/marketplace">Browse parts →</Link>}
       />
     </div>
   );

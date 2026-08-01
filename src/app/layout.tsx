@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
-import { cookies } from "next/headers";
 
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
+
+// Runs before first paint, in <head>, ahead of any CSS. Mirrors the cookie the
+// theme toggle writes (see LivesheetBar's toggleTheme in
+// src/components/ui/livesheet-bar.tsx) so there is no flash of the wrong
+// palette — without needing cookies() in this layout, which would opt every
+// route in the app out of static rendering even when the route awaits
+// nothing (terms, privacy, fees...).
+const THEME_INIT_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )ls-theme=([^;]*)/);if(m&&decodeURIComponent(m[1])==="night"){document.documentElement.dataset.theme="dark";}}catch(e){}})();`;
 
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -18,14 +25,14 @@ const plexMono = IBM_Plex_Mono({
 });
 
 const description =
-  "DRVN is a marketplace for parts pulled off modified cars. Every car is a live sheet — list a part and it goes to market annotated with what it came off, when it was fitted, and who's watching it right now.";
+  "DRVN is the marketplace for used and take-off parts from modified cars. Search by part, category or car, see the build each part came off, and sell the parts you pull off your own.";
 
 export const metadata: Metadata = {
   // Without metadataBase every relative OpenGraph/Twitter URL resolves against
   // nothing, so shared links unfurled without artwork.
   metadataBase: new URL(siteUrl()),
   title: {
-    default: "DRVN — The parts market where every listing comes off a drawing",
+    default: "DRVN — Buy and sell parts off modified cars",
     template: "%s",
   },
   description,
@@ -39,23 +46,27 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", description },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Server-rendered theme: the cookie is authoritative so the correct
-  // data-theme is on <html> in the initial HTML — no DAY flash on navigation.
-  const cookieStore = await cookies();
-  const theme = cookieStore.get("ls-theme")?.value === "night" ? "dark" : undefined;
-
+  // No server-side theme read here (see THEME_INIT_SCRIPT above) — the
+  // attribute is stamped client-side before paint instead, so this layout
+  // (and any route whose own tree doesn't need request data) can be static.
+  // suppressHydrationWarning: the inline script may set data-theme before
+  // React hydrates, which legitimately differs from the (theme-less) server
+  // markup.
   return (
     <html
       lang="en"
-      data-theme={theme}
       data-scroll-behavior="smooth"
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full">{children}</body>
     </html>
   );

@@ -25,39 +25,42 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: profile }, { data: cars }, { count: savedCount }, items] = await Promise.all([
-    supabase.from("profiles").select("display_name, username").eq("id", user!.id).single(),
-    supabase
-      .from("cars")
-      .select("id, slug, name, cover_image_url")
-      .eq("owner_id", user!.id)
-      .order("created_at")
-      .limit(6),
-    supabase.from("saves").select("target_id", { count: "exact", head: true }).eq("user_id", user!.id),
-    fetchFeed(supabase, "all", true),
-  ]);
-  const recommended = await recommendListings(user!.id, 4);
+  // All four only need user!.id, with no dependency on each other — including
+  // recommendListings, which hits its own admin client — so they run together.
+  const [{ data: profile }, { data: cars }, { count: savedCount }, items, recommended] =
+    await Promise.all([
+      supabase.from("profiles").select("display_name, username").eq("id", user!.id).single(),
+      supabase
+        .from("cars")
+        .select("id, slug, name, cover_image_url")
+        .eq("owner_id", user!.id)
+        .order("created_at")
+        .limit(6),
+      supabase.from("saves").select("target_id", { count: "exact", head: true }).eq("user_id", user!.id),
+      fetchFeed(supabase, "all", true),
+      recommendListings(user!.id, 4),
+    ]);
 
   const firstName = profile?.display_name?.split(" ")[0];
   const garage = cars ?? [];
 
   return (
     <div className="wrap">
-      {/* Page head — the sheet reports what it saw */}
+      {/* Page head — what's happened since you were last here */}
       <Rv as="header" className="pagehead">
-        <span className="microlabel">Your sheet — today</span>
+        <span className="microlabel">Home</span>
         <h1>
           {greeting()}
           {firstName ? `, ${firstName}` : ""}.
           <br />
-          Your sheet is <span className="live-word">live.</span>
+          The garage is <span className="live-word">open.</span>
         </h1>
         <p className="sub">
-          The garage, your watchlist and the latest from the scene — ruled onto one page,
-          updating as it happens.
+          Anything new on your listings lands here, along with the parts you&apos;re watching and
+          the latest from people whose builds you follow.
         </p>
         <div className="jumprow">
-          <span className="microlabel">On this sheet</span>
+          <span className="microlabel">Jump to</span>
           <Link className="jumplink" href="/saved">
             Saved · {savedCount ?? 0}
           </Link>
@@ -68,20 +71,22 @@ export default async function HomePage() {
             Notifications
           </Link>
           <Link className="jumplink" href="/marketplace">
-            The market →
+            Marketplace →
           </Link>
         </div>
       </Rv>
 
-      {/* The seller's desk — only for people who have listed something */}
+      {/* Seller stats — only for people who have listed something */}
       <SellerKpis supabase={supabase} userId={user!.id} />
 
       {/* The garage + composer */}
       <section className="deck deck--two">
         <Rv className="tile" stagger={0}>
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">The garage</span>
-            <span className="chip">{garage.length ? `${garage.length} on the sheet` : "Empty bay"}</span>
+            <span className="microlabel microlabel--ink">Your garage</span>
+            <span className="chip">
+              {garage.length ? `${garage.length} car${garage.length === 1 ? "" : "s"}` : "Empty"}
+            </span>
           </div>
           {garage.length > 0 ? (
             <div className="rowlist">
@@ -92,7 +97,7 @@ export default async function HomePage() {
                   </span>
                   <span>
                     <span className="order__name block">{car.name}</span>
-                    <span className="order__meta block">full sheet →</span>
+                    <span className="order__meta block">view build page →</span>
                   </span>
                 </Link>
               ))}
@@ -104,11 +109,11 @@ export default async function HomePage() {
               </span>
               <h3>Your car goes here</h3>
               <p>
-                Add the car you&apos;re building. Photos, spec, and every part that comes off it
-                hang from this one sheet.
+                Add the car you&apos;re building. Photos, the full mod list, and every part you
+                sell off it all live on one build page.
               </p>
               <Link href="/garage" className="btn btn--live">
-                Open your first sheet
+                Add your car
               </Link>
             </div>
           )}
@@ -123,7 +128,7 @@ export default async function HomePage() {
 
         <Rv className="tile tile--deep" stagger={1}>
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">Draw a new line</span>
+            <span className="microlabel microlabel--ink">Post an update</span>
           </div>
           <PostUpdatePrompt
             cars={garage.map((c) => ({ id: c.id, name: c.name }))}
@@ -140,7 +145,7 @@ export default async function HomePage() {
             blank={!savedCount}
           />
           <LiveDim
-            label="Cars on the sheet"
+            label="Cars in your garage"
             value={garage.length ? String(garage.length) : "—"}
             blank={garage.length === 0}
           />
@@ -152,9 +157,9 @@ export default async function HomePage() {
         <section className="deck">
           <Rv>
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Recommended for your garage</span>
+              <span className="microlabel microlabel--ink">Parts that fit your garage</span>
               <Link href="/marketplace" className="microlabel mono">
-                Open the market →
+                Browse the marketplace →
               </Link>
             </div>
             <div className="mkt">
@@ -170,13 +175,13 @@ export default async function HomePage() {
       <section className="deck">
         <Rv className="tile">
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">The feed — latest from the scene</span>
+            <span className="microlabel microlabel--ink">Latest from the community</span>
           </div>
           <FeedList items={items} />
         </Rv>
       </section>
 
-      <Foot left="DRVN / Livesheet — your sheet" right={<Link href="/marketplace">The market →</Link>} />
+      <Foot left="DRVN — home" right={<Link href="/marketplace">Browse parts →</Link>} />
     </div>
   );
 }

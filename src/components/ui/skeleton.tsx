@@ -21,7 +21,7 @@ export function SkeletonRows({ rows = 4 }: { rows?: number }) {
 
 /** Page-level placeholder: a heading block plus rows. */
 export function SkeletonPage({
-  label = "Drawing the sheet",
+  label = "Loading",
   rows = 5,
 }: {
   label?: string;

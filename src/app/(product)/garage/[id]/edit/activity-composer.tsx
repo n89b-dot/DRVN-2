@@ -17,9 +17,11 @@ export function ActivityComposer({
   return (
     <section className="tile">
       <div className="tile__head">
-        <span className="microlabel microlabel--ink">Build entries</span>
+        <span className="microlabel microlabel--ink">Build updates</span>
       </div>
-      <p className="field__hint">Post an entry — it lands in the sheet&apos;s activity the moment you file it.</p>
+      <p className="field__hint">
+        Post an update — it appears on the car&apos;s build page as soon as you publish it.
+      </p>
 
       <form action={action} className="mt-4 flex flex-col gap-3">
         <input type="hidden" name="car_id" value={carId} />
@@ -58,7 +60,7 @@ export function ActivityComposer({
             disabled={pending}
             className="btn btn--live"
           >
-            {pending ? "Filing…" : "File the entry"}
+            {pending ? "Publishing…" : "Publish update"}
           </button>
         </div>
       </form>

@@ -42,7 +42,7 @@ export default async function EditListingPage({
     supabase.from("cars").select("id, name").eq("owner_id", user.id).order("created_at"),
     supabase
       .from("listing_images")
-      .select("url, position")
+      .select("url, alt, position")
       .eq("listing_id", id)
       .order("position"),
   ]);
@@ -101,7 +101,7 @@ export default async function EditListingPage({
             compatibility_notes: listing.compatibility_notes,
             source_car_id: listing.source_car_id,
             status: listing.status,
-            images: (images ?? []).map((i) => i.url),
+            images: (images ?? []).map((i) => ({ url: i.url, alt: i.alt })),
           }}
         />
       )}

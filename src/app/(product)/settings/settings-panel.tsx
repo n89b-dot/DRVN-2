@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useCallback, useState, useSyncExternalStore } from "react";
 
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
+import type { SavedCard } from "@/lib/payments/customers";
 
 import { updateNotificationPrefs, updateProfile, type ActionState } from "../garage/actions";
 import { DeleteAccount } from "./delete-account";
+import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
 
 type ProfileLink = { label: string; url: string };
@@ -70,17 +72,22 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
             <span className="microlabel microlabel--live">{group}</span>
           </div>
           {NOTIFICATION_PREFS.filter((p) => p.group === group).map((pref) => (
-            <label key={pref.key} className="bline bline--ctl cursor-pointer">
-              <span className="bline__label">{pref.label}</span>
-              <span className="bline__note !col-start-2 !row-start-1">{pref.hint}</span>
-              <span className="bline__checks">
-                <input
-                  type="checkbox"
-                  name={`pref_${pref.key}`}
-                  defaultChecked={prefEnabled(prefs, pref.key)}
-                  className="sq"
-                />
+            <label
+              key={pref.key}
+              className="flex cursor-pointer items-center justify-between gap-4 border-b border-[color:var(--rule-soft)] py-3"
+            >
+              <span className="min-w-0">
+                <span className="block font-mono text-[12px] uppercase tracking-[0.08em]">
+                  {pref.label}
+                </span>
+                <span className="order__meta block">{pref.hint}</span>
               </span>
+              <input
+                type="checkbox"
+                name={`pref_${pref.key}`}
+                defaultChecked={prefEnabled(prefs, pref.key)}
+                className="sq shrink-0"
+              />
             </label>
           ))}
         </div>
@@ -91,9 +98,9 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
         </p>
       )}
       <div className="mt-4 flex items-center justify-end gap-3">
-        {saved && <span className="chip chip--ok">Signals saved</span>}
+        {saved && <span className="chip chip--ok">Preferences saved</span>}
         <button type="submit" disabled={pending} className="btn">
-          {pending ? "Filing…" : "Save signals"}
+          {pending ? "Saving…" : "Save preferences"}
         </button>
       </div>
     </form>
@@ -104,13 +111,45 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
  * The configuration sheet — one continuous ruled page with jumprow anchors
  * (Livesheet's tab replacement). Nothing files until you save.
  */
+
+const SETTINGS_SECTIONS = [
+  { id: "account", label: "Account" },
+  { id: "keeper", label: "Profile" },
+  { id: "signals", label: "Notifications" },
+  { id: "payments", label: "Payments" },
+  { id: "danger", label: "Danger zone" },
+] as const;
+type SectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
+
+function subscribeHash(cb: () => void) {
+  window.addEventListener("hashchange", cb);
+  return () => window.removeEventListener("hashchange", cb);
+}
+
 export function SettingsPanel({
   profile,
   logout,
+  savedCards,
 }: {
   profile: SettingsProfile;
   logout: () => Promise<void>;
+  savedCards: SavedCard[];
 }) {
+  // One section at a time (Mobbin pass: Contra / Cloudflare / Perplexity —
+  // a rail plus a single active panel is what makes settings navigable).
+  // The hash is the state, so /settings#signals deep links keep working.
+  const activeHash = useSyncExternalStore(
+    subscribeHash,
+    () => window.location.hash.slice(1),
+    () => ""
+  );
+  const active: SectionId = SETTINGS_SECTIONS.some((x) => x.id === activeHash)
+    ? (activeHash as SectionId)
+    : "account";
+  const show = useCallback((id: SectionId) => {
+    window.location.hash = id;
+  }, []);
+
   const [state, action, pending] = useActionState<ActionState, FormData>(updateProfile, {});
   const [saved, setSaved] = useState(false);
 
@@ -119,39 +158,53 @@ export function SettingsPanel({
   return (
     <div>
       <header className="pagehead">
-        <span className="microlabel">Configuration sheet</span>
-        <h1>Your sheet, configured.</h1>
+        <span className="microlabel">Settings</span>
+        <h1>Settings.</h1>
         <p className="sub">
-          Everything the sheet assumes about you, ruled onto one page. Nothing files until you
-          save.
+          Profile, notifications, payouts — change what you need and hit save. Nothing sticks
+          until you do.
         </p>
-        <div className="jumprow">
-          <span className="microlabel">On this sheet</span>
-          <a className="jumplink" href="#account">
-            Account
-          </a>
-          <a className="jumplink" href="#keeper">
-            Keeper
-          </a>
-          <a className="jumplink" href="#signals">
-            Signals
-          </a>
-          <a className="jumplink" href="#payments">
-            Payments
-          </a>
-          <a className="jumplink" href="#reference">
-            Reference
-          </a>
-        </div>
       </header>
 
-      <div className="deck">
+      <div className="grid items-start gap-6 md:grid-cols-[200px_1fr]">
+        <nav
+          aria-label="Settings sections"
+          className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:sticky md:top-20 md:flex-col"
+        >
+          {SETTINGS_SECTIONS.map((x, index) => (
+            <button
+              key={x.id}
+              type="button"
+              onClick={() => show(x.id)}
+              aria-current={active === x.id ? "true" : undefined}
+              className={`rounded-ctl px-3 py-2 text-left font-mono text-[12px] uppercase tracking-[0.08em] whitespace-nowrap ${
+                active === x.id
+                  ? "bg-[color:var(--paper-deep)] font-semibold text-ink"
+                  : "text-dim hover:text-ink"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`mr-2 ${active === x.id ? "text-live" : "opacity-50"}`}
+              >
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              {x.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="deck !mt-0">
+        {active === "account" && (
         <section id="account" className="tile">
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Account — your sign-in identity</span>
           </div>
-          <ReadOnlyLine label="Username" value={`@${profile.username}`} />
-          <ReadOnlyLine label="Display name" value={profile.display_name || "—"} />
+          <ReadOnlyLine
+            label="Username"
+            value={profile.username ? `@${profile.username}` : "Not set"}
+          />
+          <ReadOnlyLine label="Display name" value={profile.display_name || "Not set"} />
           <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
             <PasswordSection currentEmail={profile.email} />
           </div>
@@ -161,12 +214,14 @@ export function SettingsPanel({
             </button>
           </form>
         </section>
+        )}
 
+        {active === "keeper" && (
         <section id="keeper" className="tile">
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">Keeper details — shown on your public sheet</span>
+            <span className="microlabel microlabel--ink">Profile — shown publicly on your listings and builds</span>
             <Link href={`/u/${profile.username}`} className="microlabel mono hover:text-live">
-              View keeper sheet →
+              View public profile →
             </Link>
           </div>
           <form
@@ -175,16 +230,16 @@ export function SettingsPanel({
               action(fd);
             }}
           >
-            <CtlLine label="Keeper name">
+            <CtlLine label="Display name">
               <input name="display_name" defaultValue={profile.display_name} required className="ctl" />
             </CtlLine>
             <CtlLine label="Headline">
-              <input name="headline" defaultValue={profile.headline} placeholder="One car, drawn honestly" className="ctl" />
+              <input name="headline" defaultValue={profile.headline} placeholder="e.g. B9 S4 owner, slowly going single-turbo" className="ctl" />
             </CtlLine>
             <CtlLine label="Location">
               <input name="location" defaultValue={profile.location} className="ctl" />
             </CtlLine>
-            <CtlLine label="Sheet note">
+            <CtlLine label="Bio">
               <textarea name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
             </CtlLine>
             <CtlLine label="Website">
@@ -202,21 +257,25 @@ export function SettingsPanel({
               </p>
             )}
             <div className="mt-4 flex items-center justify-end gap-3">
-              {saved && !pending && !state.error && <span className="chip chip--ok">Sheet saved</span>}
+              {saved && !pending && !state.error && <span className="chip chip--ok">Profile saved</span>}
               <button type="submit" disabled={pending} className="btn btn--live">
-                {pending ? "Filing…" : "Save the sheet"}
+                {pending ? "Saving…" : "Save profile"}
               </button>
             </div>
           </form>
         </section>
+        )}
 
+        {active === "signals" && (
         <section id="signals" className="tile">
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">Signals — what the sheet shouts about</span>
+            <span className="microlabel microlabel--ink">Notifications — what reaches you</span>
           </div>
           <NotificationPrefsForm prefs={profile.notification_prefs} />
         </section>
+        )}
 
+        {active === "payments" && (
         <section id="payments" className="tile tile--deep">
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Payments &amp; fees</span>
@@ -252,20 +311,25 @@ export function SettingsPanel({
               Full fee schedule →
             </Link>
           </div>
+          <PaymentMethods cards={savedCards} />
         </section>
+        )}
 
+        {active === "danger" && (
         <section id="danger" className="tile">
           <div className="tile__head">
-            <span className="microlabel microlabel--ink">Close the workshop</span>
+            <span className="microlabel microlabel--ink">Delete your account</span>
           </div>
           <p className="field__hint max-w-[62ch]">
-            Deleting your account removes your sheets, listings and uploads. Orders you&apos;ve
-            traded stay on the other party&apos;s record, with your name replaced.
+            Deleting your account removes your cars, listings and uploads. Orders you&apos;ve
+            bought or sold stay on the other party&apos;s record, with your name replaced.
           </p>
           <div className="mt-4">
             <DeleteAccount />
           </div>
         </section>
+        )}
+        </div>
       </div>
     </div>
   );

@@ -3,30 +3,37 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
+import type { ActivityBlock } from "@/lib/activity-blocks";
+
 import {
   deleteActivityPost,
   updateActivityPost,
   type ActionState,
 } from "../../../../actions";
+import { ActivityBlockEditor } from "../../activity-block-editor";
 
 export function PostEditor({
   carId,
+  userId,
   postId,
   title,
   intro,
   videoUrl,
   plainText,
   isRich,
+  initialBlocks,
   publicHref,
 }: {
   carId: string;
+  userId: string;
   postId: string;
   title: string;
   intro: string;
   videoUrl: string;
   plainText: string;
-  /** True when the body holds image/multi-block content the simple editor won't touch. */
+  /** True when the body holds image/multi-block content — gets the full block editor. */
   isRich: boolean;
+  initialBlocks: ActivityBlock[];
   publicHref: string | null;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateActivityPost, {});
@@ -54,10 +61,12 @@ export function PostEditor({
         </label>
 
         {isRich ? (
-          <p className="spec-note">
-            This entry was written in the full editor and holds photos and multiple blocks. Its
-            content is left untouched here — use the full editor to change it.
-          </p>
+          <div className="field !mb-0">
+            <span className="microlabel">What happened</span>
+            <div className="mt-2">
+              <ActivityBlockEditor carId={carId} userId={userId} initialBlocks={initialBlocks} />
+            </div>
+          </div>
         ) : (
           <label className="field !mb-0">
             <span className="microlabel">What happened</span>

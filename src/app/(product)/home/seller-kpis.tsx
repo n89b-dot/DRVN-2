@@ -174,7 +174,7 @@ export async function SellerKpis({
         <span className="microlabel">Active listings</span>
         <p className="num-giant mt-1">{activeIds.length}</p>
         <LiveDim
-          label="On the market"
+          label="On the marketplace"
           value={`${activeIds.length} live · ${mine.length} total`}
         />
       </Rv>
@@ -216,6 +216,9 @@ export async function SellerKpis({
         ) : (
           <LiveDim label="First payout lands here" value="—" blank />
         )}
+        <Link href="/payouts" className="jumplink mt-2 inline-flex">
+          View ledger →
+        </Link>
       </Rv>
 
       <Rv className="tile" stagger={3}>
@@ -224,15 +227,15 @@ export async function SellerKpis({
           {fitmentMatches || "—"}
         </p>
         <LiveDim
-          label={fitmentMatches ? "Keepers whose cars fit your parts" : "No matching garages yet"}
-          value={fitmentMatches ? `${fitmentMatches} keeper${fitmentMatches === 1 ? "" : "s"}` : "—"}
+          label={fitmentMatches ? "Owners whose cars fit your parts" : "No matching garages yet"}
+          value={fitmentMatches ? `${fitmentMatches} owner${fitmentMatches === 1 ? "" : "s"}` : "—"}
           blank={!fitmentMatches}
         />
       </Rv>
 
       <div className="col-span-full -mt-1">
         <Link href="/listings" className="jumplink">
-          Open the listings ledger →
+          Manage your listings →
         </Link>
       </div>
     </section>

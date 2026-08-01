@@ -19,7 +19,8 @@ export type IconName =
   | "sun"
   | "moon"
   | "rail"
-  | "cart";
+  | "cart"
+  | "image";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -79,6 +80,15 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
       <>
         <circle cx="12" cy="12" r="9" />
         <path d="M9 10h.01M15 10h.01M8.5 14.5c1 1 2.2 1.5 3.5 1.5s2.5-.5 3.5-1.5" />
+      </>
+    ),
+    /* A plate with a horizon and a sun — the photograph that hasn't been
+       taken yet. Drawn on the same 24-grid and stroke weight as the rest. */
+    image: (
+      <>
+        <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+        <circle cx="8.75" cy="10" r="1.6" />
+        <path d="m3.5 16.5 4.6-4.1a2 2 0 0 1 2.7.05L15 16.5m-1.6-1.4 1.9-1.7a2 2 0 0 1 2.7.06l2.4 2.2" />
       </>
     ),
   };

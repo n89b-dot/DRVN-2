@@ -127,7 +127,7 @@ export default async function NotificationsPage() {
     <NarrowColumn>
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Signals
+          Notifications
           {unreadTotal > 0 && (
             <>
               {" · "}
@@ -136,11 +136,11 @@ export default async function NotificationsPage() {
           )}
         </span>
         <h1>
-          What the sheet <span className="live-word">noticed.</span>
+          While you were <span className="live-word">away.</span>
         </h1>
         <p className="sub">
-          Your sheet and the market, kept apart on purpose — so DRVN never feels like it&apos;s only
-          about offloading parts.
+          Activity on your builds in one list, marketplace business in the other — so an offer
+          never buries a comment on your car.
         </p>
         {unreadTotal > 0 && (
           <div className="mt-4">
@@ -151,20 +151,20 @@ export default async function NotificationsPage() {
 
       <div className="deck">
         <Section
-          label="Your sheet — people and posts"
+          label="Your builds — people and posts"
           rows={engagement}
           empty="Quiet — follows, saves, comments and reviews land here"
         />
         <Section
-          label="The market — offers, sales and questions"
+          label="Marketplace — offers, sales and questions"
           rows={marketplace}
           empty="Quiet — offers, sales, questions and dispatch updates land here"
         />
       </div>
 
       <Foot
-        left="DRVN / Livesheet — signals, split by kind"
-        right={<Link href="/settings#signals">Tune what shouts →</Link>}
+        left="DRVN — notifications"
+        right={<Link href="/settings#signals">Choose what notifies you →</Link>}
       />
     </NarrowColumn>
   );

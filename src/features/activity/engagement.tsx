@@ -71,7 +71,7 @@ export function ActivityEngagement({
         </div>
       )}
 
-      <p className="microlabel">Reply to {authorName} — lands on their sheet</p>
+      <p className="microlabel">Reply to {authorName} — posts publicly on this update</p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <form

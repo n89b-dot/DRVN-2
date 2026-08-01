@@ -9,9 +9,9 @@ export function OnboardingForm({ email }: { email: string }) {
 
   return (
     <div>
-      <span className="microlabel">Day one — nothing drawn yet</span>
+      <span className="microlabel">One last thing</span>
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[650] leading-[1.05] tracking-[-0.02em]">
-        Name the <span className="text-live">keeper.</span>
+        What should we <span className="text-live">call you?</span>
       </h1>
       <p className="kv mt-3 text-dim">Signed up as {email}</p>
 
@@ -27,8 +27,8 @@ export function OnboardingForm({ email }: { email: string }) {
             className="ctl max-w-none"
           />
           <span className="field__hint">
-            How the market knows you — letters, numbers, underscore. Permanent once a part sells
-            under it.
+            Your name on the marketplace — letters, numbers, underscores. It sticks once
+            you&apos;ve sold a part under it.
           </span>
           {state.error && (
             <span role="alert" aria-live="polite" className="field__err">
@@ -37,11 +37,11 @@ export function OnboardingForm({ email }: { email: string }) {
           )}
         </div>
         <div className="field">
-          <span className="microlabel">Keeper name</span>
+          <span className="microlabel">Display name</span>
           <input name="display_name" required placeholder="Dana Rossi" autoComplete="name" className="ctl max-w-none" />
         </div>
         <button type="submit" disabled={pending} className="btn btn--live w-full">
-          {pending ? "Filing…" : "Open the sheet"}
+          {pending ? "Saving…" : "Let's go"}
         </button>
       </form>
     </div>

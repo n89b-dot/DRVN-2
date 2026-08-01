@@ -10,13 +10,22 @@ import { ListingsLedger, type LedgerOffer, type LedgerRow } from "./listings-led
 
 export const metadata = { title: "Your listings - DRVN" };
 
-/** Werkbank's four registers: everything, live, under offer, closed. */
-type Register = "all" | "live" | "offer" | "sold";
+/**
+ * Werkbank's registers: everything, live, under offer, and each of the
+ * publish states a listing can sit in. Drafts and paused/archived listings
+ * used to have nowhere to be filtered into — they were only reachable by
+ * scrolling "All" — so each status gets its own chip.
+ */
+type Register = "all" | "live" | "offer" | "draft" | "paused" | "reserved" | "archived" | "sold";
 
 const REGISTERS: { key: Register; label: string }[] = [
   { key: "all", label: "All" },
   { key: "live", label: "Live" },
   { key: "offer", label: "Under offer" },
+  { key: "draft", label: "Draft" },
+  { key: "paused", label: "Paused" },
+  { key: "reserved", label: "Reserved" },
+  { key: "archived", label: "Archived" },
   { key: "sold", label: "Sold" },
 ];
 
@@ -30,6 +39,19 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 const LIVE_OFFER_STATES = ["open", "countered"];
+
+// Phrasing for the empty state's "Nothing ___" heading — kept distinct from
+// the chip label ("Under offer" reads oddly as "Nothing under offer" → "on offer").
+const EMPTY_REGISTER_PHRASE: Record<Register, string> = {
+  all: "listed yet",
+  live: "live",
+  offer: "under offer",
+  draft: "in draft",
+  paused: "paused",
+  reserved: "reserved",
+  archived: "archived",
+  sold: "sold",
+};
 
 function sortRows(rows: LedgerRow[], sort: SortKey): LedgerRow[] {
   const by = [...rows];
@@ -176,20 +198,20 @@ export default async function SellerListingsPage({
     };
   });
 
-  const inRegister = (row: LedgerRow) => {
-    if (register === "live") return row.status === "active" && row.topOfferCents === null;
-    if (register === "offer") return row.topOfferCents !== null;
-    if (register === "sold") return row.status === "sold";
-    return true;
+  // Shared with the tally below so a chip's count always matches what
+  // clicking it shows.
+  const matchesRegister = (row: LedgerRow, key: Register) => {
+    if (key === "all") return true;
+    if (key === "live") return row.status === "active" && row.topOfferCents === null;
+    if (key === "offer") return row.topOfferCents !== null;
+    return row.status === key;
   };
 
-  const visible = sortRows(rows.filter(inRegister), sort);
-  const tally = (key: Register) =>
-    key === "all" ? rows.length : rows.filter((r) => {
-      if (key === "live") return r.status === "active" && r.topOfferCents === null;
-      if (key === "offer") return r.topOfferCents !== null;
-      return r.status === "sold";
-    }).length;
+  const visible = sortRows(
+    rows.filter((row) => matchesRegister(row, register)),
+    sort
+  );
+  const tally = (key: Register) => rows.filter((row) => matchesRegister(row, key)).length;
 
   const href = (next: Partial<{ register: Register; sort: SortKey }>) => {
     const params = new URLSearchParams();
@@ -206,14 +228,18 @@ export default async function SellerListingsPage({
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           Listings &amp; offers · {tally("live")} live · {tally("offer")} under offer
+          {tally("draft") > 0 ? ` · ${tally("draft")} draft` : ""}
         </span>
         <h1>
-          Every line you&apos;ve <span className="live-word">drawn.</span>
+          Every part you&apos;ve <span className="live-word">listed.</span>
         </h1>
         <p className="sub">
-          What each part has been seen by, saved by and offered on — and the window you have to
-          answer.
+          Who&apos;s looking, who&apos;s watching, and the best offer on the table — with the
+          clock running on each one.
         </p>
+        <Link href="/payouts" className="jumplink mt-2 inline-flex">
+          View your payout ledger →
+        </Link>
       </Rv>
 
       {deleted && (
@@ -226,7 +252,7 @@ export default async function SellerListingsPage({
         </div>
       )}
 
-      <div className="filters" role="group" aria-label="Filter by register">
+      <div className="filters" role="group" aria-label="Filter listings by status">
         {REGISTERS.map((r) => (
           <Link
             key={r.key}
@@ -244,14 +270,14 @@ export default async function SellerListingsPage({
           <span className="undrawn__mark" aria-hidden="true">
             ✎
           </span>
-          <h3>{register === "all" ? "Nothing here yet" : `No lines in ${register === "offer" ? "under offer" : register}`}</h3>
+          <h3>{register === "all" ? "Nothing listed yet" : `Nothing ${EMPTY_REGISTER_PHRASE[register]}`}</h3>
           <p>
             {register === "all"
               ? "List your first part and it appears here with its views, watchers and offers."
-              : "Nothing sits in this register right now."}
+              : "No listings match this filter right now."}
           </p>
           <Link href={register === "all" ? "/sell" : "/listings"} className="btn btn--live">
-            {register === "all" ? "List a part" : "Show all lines"}
+            {register === "all" ? "List a part" : "Show all listings"}
           </Link>
         </Rv>
       ) : (
@@ -259,7 +285,7 @@ export default async function SellerListingsPage({
           <Rv className="tile">
             <div className="tile__head">
               <span className="microlabel microlabel--ink">
-                Active listings · click a row for offer history
+                Your listings · click a row for offer history
               </span>
               <span className="flex flex-wrap items-baseline gap-3">
                 <span className="microlabel">Sort</span>
@@ -282,7 +308,7 @@ export default async function SellerListingsPage({
       )}
 
       <Foot
-        left="DRVN / Livesheet — your side of the market"
+        left="DRVN — your listings"
         right={<Link href="/sell">List a part →</Link>}
       />
     </div>

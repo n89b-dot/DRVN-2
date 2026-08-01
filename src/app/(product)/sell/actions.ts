@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCategory } from "@/lib/marketplace/taxonomy";
-import { keepValidImageUrls } from "@/lib/media-url";
+import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import type { ListingStatus } from "@/lib/database.types";
@@ -116,13 +116,23 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
 
   if (error) return { error: error.message };
 
-  const urls = keepValidImageUrls(safeParseJson(formData.get("image_urls")));
-  if (urls.length) {
+  // Array order is the gallery order: index 0 is the cover, everything else
+  // is `position` — reorder and "set as cover" are both just moves within
+  // this list on the client, resolved here on save.
+  const images = keepValidGalleryImages(safeParseJson(formData.get("image_urls")), 12, user.id);
+  let imagesFailed = false;
+  if (images.length) {
     const { error: imageError } = await supabase.from("listing_images").insert(
-      urls.map((url, index) => ({ listing_id: listing.id, url, position: index }))
+      images.map((img, index) => ({
+        listing_id: listing.id,
+        url: img.url,
+        alt: img.alt,
+        position: index,
+      }))
     );
     if (imageError) {
       console.error("[sell] listing images failed", { listingId: listing.id, imageError });
+      imagesFailed = true;
     }
   }
 
@@ -140,6 +150,16 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   revalidatePath("/marketplace");
   revalidatePath("/sell");
   if (parsed.fields.source_car_id) revalidatePath(`/garage/${parsed.fields.source_car_id}/edit`);
+
+  // Photos failing to save must not look like a clean success — the listing
+  // exists either way, so keep it and send the seller to fix the gallery
+  // rather than redirecting them past a silent data loss.
+  if (imagesFailed) {
+    return {
+      error:
+        "Listing created, but the photos couldn't be saved. Open it from Listings and re-add them from Edit.",
+    };
+  }
 
   if (asDraft) redirect(`/listings/${listing.id}/edit?saved=draft`);
   redirect(`/listings/${listing.id}`);
@@ -172,15 +192,48 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   const { error } = await supabase.from("listings").update(parsed.fields).eq("id", id);
   if (error) return { error: error.message };
 
-  // Replace the gallery only when the form actually submitted one.
+  // Replace the gallery only when the form actually submitted one. Array
+  // order carries reorder + cover choices (index 0 is the cover) and alt
+  // text set in the editor, so a plain delete-and-reinsert on `position`
+  // is enough — no separate reorder/cover/alt actions needed.
   const imagesField = formData.get("image_urls");
   if (typeof imagesField === "string" && imagesField) {
-    const urls = keepValidImageUrls(safeParseJson(imagesField));
+    const images = keepValidGalleryImages(safeParseJson(imagesField), 12, user.id);
+
+    // Read the current gallery before touching anything, so a failed insert
+    // below can be undone rather than leaving the listing with no photos
+    // while still reporting success.
+    const { data: previousImages } = await supabase
+      .from("listing_images")
+      .select("url, alt, position")
+      .eq("listing_id", id)
+      .order("position");
+
     await supabase.from("listing_images").delete().eq("listing_id", id);
-    if (urls.length) {
-      await supabase
-        .from("listing_images")
-        .insert(urls.map((url, index) => ({ listing_id: id, url, position: index })));
+
+    if (images.length) {
+      const { error: imageError } = await supabase.from("listing_images").insert(
+        images.map((img, index) => ({
+          listing_id: id,
+          url: img.url,
+          alt: img.alt,
+          position: index,
+        }))
+      );
+
+      if (imageError) {
+        if (previousImages?.length) {
+          await supabase.from("listing_images").insert(
+            previousImages.map((img) => ({
+              listing_id: id,
+              url: img.url,
+              alt: img.alt,
+              position: img.position,
+            }))
+          );
+        }
+        return { error: "Photos couldn't be saved — try again." };
+      }
     }
   }
 
@@ -241,6 +294,46 @@ export async function deleteListing(formData: FormData): Promise<void> {
   revalidatePath("/sell");
   revalidatePath("/marketplace");
   redirect("/sell?deleted=1");
+}
+
+/**
+ * Undoes the "release a part" link between a build line and the listing it
+ * spawned. The car sheet was showing "For sale" against a line forever, with
+ * no way back — a listing pulled down or repurposed left a stale link behind.
+ * Ownership is enforced by RLS (the car update below only affects rows this
+ * user owns), and checked here too for a clean error rather than a silent
+ * no-op.
+ */
+export async function unlinkModListing(formData: FormData): Promise<void> {
+  const { supabase, user } = await requireUser();
+
+  const modItemId = String(formData.get("mod_item_id") ?? "");
+  const carId = String(formData.get("car_id") ?? "");
+  if (!modItemId || !carId) return;
+
+  const { data: car } = await supabase
+    .from("cars")
+    .select("id, slug, owner_id")
+    .eq("id", carId)
+    .maybeSingle();
+  if (!car || car.owner_id !== user.id) return;
+
+  const { data: mod } = await supabase
+    .from("mod_items")
+    .select("linked_listing_id")
+    .eq("id", modItemId)
+    .eq("car_id", carId)
+    .maybeSingle();
+
+  await supabase
+    .from("mod_items")
+    .update({ linked_listing_id: null })
+    .eq("id", modItemId)
+    .eq("car_id", carId);
+
+  revalidatePath(`/garage/${carId}/edit`);
+  revalidatePath(`/cars/${car.slug}`);
+  if (mod?.linked_listing_id) revalidatePath(`/listings/${mod.linked_listing_id}`);
 }
 
 function safeParseJson(value: FormDataEntryValue | null): unknown {

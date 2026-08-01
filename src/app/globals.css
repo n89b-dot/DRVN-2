@@ -515,7 +515,7 @@ video {
      A second sheet unrolls over the page: numbered registers on ruled rows.
      The trigger is a stack of drafting rules that folds into a cross-out. */
   .indexbtn {
-    display: none; /* promoted at ≤980px */
+    display: none; /* promoted at ≤1080px */
     align-items: center;
     gap: 10px;
     font-family: var(--mono);
@@ -2512,6 +2512,34 @@ video {
 }
 
 /* ---------- responsive ---------- */
+/* ---------- the undrawn plate ----------
+   The same drafting-absence language the empty states use, scaled to sit
+   inside a card cover. A listing without a photograph is not an error and
+   not an empty box — it is a plate nobody has drawn yet, and it should say
+   so in the system's own voice rather than show a dead grey slab.
+
+   Declared outside `@layer components` deliberately: it has to outrank the
+   `bg-img-fallback` utility on the same element, and rules added to the
+   components layer are tree-shaken out of the build. */
+.plate-undrawn {
+  display: grid;
+  place-items: center;
+  background: var(--ghost);
+  /* Dashed, not solid. `--dimline` is the drafting/leader-line ink and the
+     system reserves it for construction lines — never for a card border. A
+     solid inset ring in this colour reads as a bordered plate, which is the
+     one thing the tile language does not do; dashed reads as an unfinished
+     drawing, exactly as `.undrawn` already does for empty collections. */
+  border: 1px dashed var(--dimline);
+}
+/* The mark inside the plate is `.undrawn__mark` itself — the same dashed badge
+   the empty states use — so nothing bespoke is introduced here. It only needs
+   its icon sized to sit where the text glyphs do. */
+.plate-undrawn .undrawn__mark svg {
+  width: 20px;
+  height: 20px;
+}
+
 @media (max-width: 720px) {
   [data-hero] {
     display: flow-root;
@@ -2613,9 +2641,13 @@ video {
     grid-template-columns: repeat(2, 1fr);
   }
   .deck--two,
-  .deck--three,
-  .mkt {
+  .deck--three {
     grid-template-columns: 1fr;
+  }
+  /* The market grid steps 3 → 2 → 1. It used to drop straight to a single
+     column here, which spent a 900px viewport on one card per row. */
+  .mkt {
+    grid-template-columns: repeat(2, 1fr);
   }
   .hero-media {
     aspect-ratio: 4 / 3;
@@ -2725,6 +2757,17 @@ video {
    reaches for (bell, saved, lighting) keeps its place; settings folds into
    the index, where it's already a register. */
 @media (max-width: 640px) {
+  .mkt {
+    grid-template-columns: 1fr;
+  }
+  /* Filter and sort chips are the primary controls on the market sheet, and
+     on a phone they are thumbed, not clicked — 33px was under the 44px
+     minimum. Padding stays put so the type doesn't move; the box grows. */
+  .fbtn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
   .bar__inner {
     flex-wrap: nowrap;
     gap: 8px;
@@ -2742,15 +2785,29 @@ video {
     margin-left: auto;
   }
   .bar__link--ico {
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
   }
   .bar__link--roomy {
     display: none;
   }
+  /* From here down the bar is icon furniture — Settings has already folded
+     into the index, so the trigger sheds its label too and the folded rules
+     alone say "index". The accessible name still reads "Open/Close the
+     index", so nothing is lost to a screen reader. */
   .indexbtn {
     flex: none;
-    padding: 8px 12px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    /* the button is inline-flex, so centring needs both axes named —
+       place-items alone leaves justify-content at flex-start */
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+  .indexbtn__label {
+    display: none;
   }
 
   .indexrow__label {
@@ -2806,20 +2863,6 @@ video {
 }
 
 @media (max-width: 420px) {
-  /* Narrow phones: the folded rules alone say "index". */
-  .indexbtn__label {
-    display: none;
-  }
-  .indexbtn {
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    /* the button is inline-flex, so centring needs both axes named —
-       place-items alone leaves justify-content at flex-start */
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-  }
   .deck--kpi {
     grid-template-columns: 1fr;
   }

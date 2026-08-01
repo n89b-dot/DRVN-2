@@ -36,24 +36,30 @@ export default async function MarketplacePage({
     <div className="wrap">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          The market · {page.total} part{page.total === 1 ? "" : "s"} listed
+          Marketplace · {page.total} part{page.total === 1 ? "" : "s"} listed
         </span>
         <h1>
-          Parts, straight off
+          Find the part.
           <br />
-          the sheets they <span className="live-word">live</span> on.
+          See the car it <span className="live-word">came off.</span>
         </h1>
         <p className="sub">
-          Every listing comes off a drawing — what it came off, when it was fitted, and who&apos;s
-          watching it right now.
+          Every part here came off someone&apos;s build — open a listing and you can see exactly
+          which one. Search what you need, or browse by category.
         </p>
       </Rv>
 
+      {/* The basis is what makes this row wrap. With `flex-1` alone the form
+          shrank without limit — at 375px it crushed to 166px while "List a
+          part" stayed pinned beside it, stranded against a column of ragged
+          controls. 940px is the filter row's own single-line width, so the
+          button sits beside the form only when the form actually fits on one
+          line, and drops beneath it the moment it would have to wrap. */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-[940px]">
           <FilterBar action="/marketplace" filters={filters} showFitToggle={Boolean(user)} />
         </div>
-        <Link href="/sell" className="btn btn--live shrink-0">
+        <Link href="/sell" className="btn btn--live w-full shrink-0 sm:w-auto">
           List a part
         </Link>
       </div>
@@ -79,20 +85,20 @@ export default async function MarketplacePage({
           params={filters as Record<string, string | undefined>}
           emptyTitle={
             hasQuery
-              ? `No lines match${filters.q ? ` "${filters.q}"` : " those filters"}`
-              : "Nothing on the sheets right now"
+              ? `No parts match${filters.q ? ` "${filters.q}"` : " those filters"}`
+              : "Nothing listed right now"
           }
           emptyBody={
             hasQuery
               ? "Widen the filters, or clear them and browse by category."
-              : "The moment a part is released off a build line it lands here — annotated by the sheet it left."
+              : "Parts land here as owners pull them off their builds. Check back — or list the first one."
           }
         />
       </section>
 
       <Foot
-        left="DRVN / Livesheet — every listing is a live sheet, not a dead ad"
-        right={<Link href="/home">← Your sheet</Link>}
+        left="DRVN — every part came off a real car"
+        right={<Link href="/home">← Home</Link>}
       />
     </div>
   );

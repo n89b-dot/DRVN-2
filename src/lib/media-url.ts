@@ -37,10 +37,70 @@ export function isOwnStorageUrl(value: unknown): value is string {
   return parsed.host === host && parsed.pathname.includes("/storage/v1/object/");
 }
 
-/** Filters a client-supplied list down to URLs we're willing to persist. */
-export function keepValidImageUrls(values: unknown, max = 12): string[] {
+/**
+ * Buckets that use `users upload to own folder`-style RLS, where the first
+ * path segment after the bucket is `auth.uid()::text` (see the storage
+ * policies in supabase/migrations/0001_v3_schema.sql, unchanged by
+ * 0006_security_hardening.sql). Every bucket client uploads land in.
+ */
+const OWNED_STORAGE_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images"];
+
+/**
+ * True for a storage URL that is both ours (`isOwnStorageUrl`) AND whose
+ * object path's uploader folder matches `userId`. Host + path checks alone
+ * only prove a URL points at *some* object in our storage — anyone could copy
+ * another user's public avatar or photo URL and submit it as their own.
+ * Storage RLS keys the uploader folder to `auth.uid()`, so requiring that
+ * folder to equal the current user is what actually proves ownership.
+ */
+export function isOwnedStorageUrl(value: unknown, userId: string): value is string {
+  if (!isOwnStorageUrl(value) || !userId) return false;
+
+  const parsed = new URL(value);
+  const match = parsed.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/([^/]+)\//);
+  if (!match) return false;
+
+  const [, bucket, folder] = match;
+  return OWNED_STORAGE_BUCKETS.includes(bucket) && folder === userId;
+}
+
+/**
+ * Filters a client-supplied list down to URLs we're willing to persist. When
+ * `userId` is given, also requires each URL to be owned by that user — pass
+ * it at every call site that persists client-supplied URLs.
+ */
+export function keepValidImageUrls(values: unknown, max = 12, userId?: string): string[] {
   if (!Array.isArray(values)) return [];
-  return values.filter(isOwnStorageUrl).slice(0, max);
+  return values
+    .filter((v): v is string => (userId ? isOwnedStorageUrl(v, userId) : isOwnStorageUrl(v)))
+    .slice(0, max);
+}
+
+export type GalleryImageInput = { url: string; alt: string | null };
+
+/**
+ * Filters a client-supplied ordered gallery (url + alt pairs) down to entries
+ * we're willing to persist. Array order is preserved and becomes the
+ * `position` each row is saved with, so this also gates reorder/cover input.
+ */
+export function keepValidGalleryImages(
+  values: unknown,
+  max = 12,
+  userId?: string
+): GalleryImageInput[] {
+  if (!Array.isArray(values)) return [];
+  const out: GalleryImageInput[] = [];
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    const url = (value as Record<string, unknown>).url;
+    if (typeof url !== "string") continue;
+    if (userId ? !isOwnedStorageUrl(url, userId) : !isOwnStorageUrl(url)) continue;
+    const altRaw = (value as Record<string, unknown>).alt;
+    const alt = typeof altRaw === "string" ? altRaw.trim().slice(0, 200) || null : null;
+    out.push({ url, alt });
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 /** Embeddable video links — currently YouTube only, matching the renderer. */
