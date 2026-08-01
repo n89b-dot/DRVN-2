@@ -54,7 +54,7 @@ export function QASection({
               <form action={action} className="composer__row ml-4 py-2">
                 <input type="hidden" name="listing_id" value={listingId} />
                 <input type="hidden" name="parent_id" value={q.id} />
-                <input name="body" required placeholder="Reply as the seller…" className="ctl flex-1" />
+                <input name="body" required aria-label="Reply as the seller" placeholder="Reply as the seller…" className="ctl flex-1" />
                 <button type="submit" disabled={pending} className="btn">
                   Reply
                 </button>
@@ -73,7 +73,7 @@ export function QASection({
         <form action={action} className="composer">
           <div className="composer__row">
             <input type="hidden" name="listing_id" value={listingId} />
-            <input name="body" required placeholder="Ask the seller a question…" className="ctl max-w-none flex-1" />
+            <input name="body" required aria-label="Ask the seller a question" placeholder="Ask the seller a question…" className="ctl max-w-none flex-1" />
             <button type="submit" disabled={pending} className="btn">
               Ask
             </button>

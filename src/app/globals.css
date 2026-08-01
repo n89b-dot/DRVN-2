@@ -63,18 +63,21 @@
   --tile: #f8f6f0;
   --tile-2: #f1efe8;
   --ink: #20232a;
-  --dim: #6b6e78;
+  /* R3 contrast pass: dim/live/ok are used as text on paper and tile, so all
+     three must clear WCAG 4.5:1 there. Measured: dim 5.97, live 4.96, ok 5.5
+     against --paper (higher on --tile). Dark theme was already passing. */
+  --dim: #565963;
   --dimline: rgba(32, 35, 42, 0.28); /* dimension/leader lines only — never card borders */
   --grid-line: rgba(32, 35, 42, 0.03);
-  --live: #f03a20;
+  --live: #c02c14;
   --live-tint: rgba(240, 58, 32, 0.1);
-  --ok: #2e7d4f;
+  --ok: #256b42;
   --ok-tint: rgba(46, 125, 79, 0.1);
   --on-ink: #f8f6f0;
   --scrim: rgba(32, 35, 42, 0.45);
   --img-fallback: #e2dfd5;
   --ink-hover: #33363e;
-  --live-hover: #d22f17;
+  --live-hover: #a52410;
   --ghost-hover: #dbd8cd;
   --rule-soft: rgba(32, 35, 42, 0.07);
   --rule-mid: rgba(32, 35, 42, 0.09);
@@ -2910,4 +2913,25 @@ video {
   .indexbtn__rules i {
     transition: none;
   }
+}
+
+/* ---------- skip link (R3): visually hidden until focused ---------- */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--ink);
+  color: var(--on-ink);
+  border-radius: var(--r-ctl);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
 }

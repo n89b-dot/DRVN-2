@@ -100,6 +100,10 @@ export function AppShell({
       data-signed-in={signedIn ? "true" : "false"}
       data-rail={railOpen ? "open" : "closed"}
     >
+      {/* First tab stop: keyboard users skip the rail and bar entirely. */}
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
       {signedIn && <AppRail open={railOpen} onToggle={toggleRail} />}
       <div className="shell__body">
         <LivesheetBar
@@ -108,7 +112,7 @@ export function AppShell({
           cartCount={cartCount}
           unreadCount={unreadCount}
         />
-        <main className="min-w-0">{children}</main>
+        <main id="main" className="min-w-0">{children}</main>
       </div>
     </div>
   );
