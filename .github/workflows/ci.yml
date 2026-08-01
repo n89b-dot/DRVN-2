@@ -81,3 +81,11 @@ jobs:
           out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/purchase_guard.sql 2>&1)
           echo "$out"
           echo "$out" | grep -q -- "--- all purchase-guard checks passed ---"
+
+      - name: Admin guard (0018 invariants)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/admin_guard.sql 2>&1)
+          echo "$out"
+          echo "$out" | grep -q -- "--- all admin-guard checks passed ---"

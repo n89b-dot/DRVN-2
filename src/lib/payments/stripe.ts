@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 
-import type { PaymentProvider, PaymentRequest, PaymentResult, RefundResult } from "./provider";
+import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, RefundResult } from "./provider";
 import { reportError } from "@/lib/monitoring";
 
 /**
@@ -68,13 +68,22 @@ export class StripePaymentProvider implements PaymentProvider {
     }
   }
 
-  async refund(reference: string, amountCents?: number): Promise<RefundResult> {
+  async refund(
+    reference: string,
+    amountCents?: number,
+    options?: RefundOptions
+  ): Promise<RefundResult> {
     try {
       const refund = await stripe().refunds.create(
-        { payment_intent: reference, ...(amountCents ? { amount: amountCents } : {}) },
-        // One refund per intent under all-or-nothing: the intent id itself is
-        // a sufficient replay guard for a double-submitted accept.
-        { idempotencyKey: `refund:${reference}` }
+        {
+          payment_intent: reference,
+          ...(amountCents ? { amount: amountCents } : {}),
+          ...(options?.metadata ? { metadata: options.metadata } : {}),
+        },
+        // Per-order key from the caller. The old per-intent default remains
+        // only as a fallback for legacy call sites; one intent spans a
+        // multi-seller basket, so per-intent keys collide across orders.
+        { idempotencyKey: options?.idempotencyKey ?? `refund:${reference}` }
       );
       if (refund.status === "failed" || refund.status === "canceled") {
         return { status: "failed", reason: refund.failure_reason ?? refund.status };

@@ -27,6 +27,10 @@ export type Profile = {
   links: Json;
   notification_prefs: Json;
   profile_type: "user" | "shop";
+  /** Moderation suspension (migration 0018). Service-role-written; unreadable
+   *  by client roles — read via is_suspended() or the service client. */
+  suspended_at: string | null;
+  suspended_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -86,7 +90,9 @@ export type ListingStatus =
   | "reserved"
   | "paused"
   | "sold"
-  | "archived";
+  | "archived"
+  /** Admin takedown (migration 0018). Set and cleared by moderation only. */
+  | "removed";
 
 export type Listing = {
   id: string;
@@ -113,6 +119,9 @@ export type Listing = {
   view_count: number;
   sold_at: string | null;
   reserved_until: string | null;
+  /** Takedown bookkeeping (migration 0018). */
+  removed_at: string | null;
+  removed_reason: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -226,6 +235,11 @@ export type Order = {
   /** Stripe Transfer that moved this order's net to the seller (migration 0016). */
   transfer_reference: string | null;
   transferred_at: string | null;
+  /** Refunds recorded as explicit adjustments (migration 0019) — the checkout
+   *  figures above stay frozen; derived numbers subtract these. */
+  refunded_cents: number;
+  platform_fee_refunded_cents: number;
+  refunded_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -324,6 +338,103 @@ export type Notification = {
   created_at: string;
 };
 
+// ---------- Admin substrate (migration 0018) ----------
+
+export type AdminUser = {
+  user_id: string;
+  note: string | null;
+  created_at: string;
+};
+
+export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment";
+
+export type AdminAuditLogEntry = {
+  id: number;
+  actor_id: string;
+  action: string;
+  subject_type: AdminAuditSubjectType;
+  subject_id: string;
+  order_id: string | null;
+  reason: string;
+  metadata: Json;
+  created_at: string;
+};
+
+export type ReportReason =
+  | "prohibited_item"
+  | "counterfeit"
+  | "stolen_goods"
+  | "scam_or_fraud"
+  | "offensive_content"
+  | "wrong_category"
+  | "other";
+
+export type Report = {
+  id: string;
+  reporter_id: string | null;
+  subject_type: "listing" | "user";
+  subject_id: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: "open" | "actioned" | "dismissed";
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+  created_at: string;
+};
+
+// ---------- Money infrastructure (migration 0019) ----------
+
+export type WebhookEvent = {
+  id: string;
+  type: string;
+  received_at: string;
+  processed_at: string | null;
+};
+
+export type TransferIntentStatus =
+  | "holding"
+  | "ready"
+  | "processing"
+  | "transferred"
+  | "blocked_unpayable"
+  | "failed"
+  | "cancelled";
+
+export type TransferIntent = {
+  order_id: string;
+  seller_id: string | null;
+  amount_cents: number;
+  currency: string;
+  status: TransferIntentStatus;
+  available_at: string | null;
+  transfer_reference: string | null;
+  attempts: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentRecoveryKind =
+  | "reversal_failed"
+  | "refund_failed"
+  | "partial_refund_unattributed"
+  | "transfer_after_refund"
+  | "negative_balance";
+
+export type PaymentRecovery = {
+  id: string;
+  order_id: string | null;
+  kind: PaymentRecoveryKind;
+  amount_cents: number | null;
+  detail: string | null;
+  status: "open" | "recovered" | "written_off";
+  created_at: string;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+};
+
 /** Shape returned by the `purchase_begin` RPC. */
 export type PurchaseBeginResult = {
   orders: {
@@ -362,6 +473,12 @@ export type Database = {
       listing_questions: Table<ListingQuestion, "listing_id" | "author_id" | "body">;
       messages: Table<Message, "listing_id" | "sender_id" | "recipient_id" | "body">;
       notifications: Table<Notification, "user_id" | "kind" | "section" | "title">;
+      admin_users: Table<AdminUser, "user_id">;
+      admin_audit_log: Table<AdminAuditLogEntry, "actor_id" | "action" | "subject_type" | "subject_id" | "reason">;
+      reports: Table<Report, "subject_type" | "subject_id" | "reason">;
+      webhook_events: Table<WebhookEvent, "id" | "type">;
+      transfer_intents: Table<TransferIntent, "order_id" | "amount_cents" | "currency">;
+      payment_recoveries: Table<PaymentRecovery, "kind">;
     };
     Views: Record<string, never>;
     Functions: {
@@ -411,6 +528,11 @@ export type Database = {
       bump_listing_view: {
         Args: { p_listing: string };
         Returns: undefined;
+      };
+      /** True when auth.uid() is a row in admin_users (migration 0018). */
+      is_admin: {
+        Args: Record<string, never>;
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;

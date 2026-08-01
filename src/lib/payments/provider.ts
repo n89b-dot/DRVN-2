@@ -54,13 +54,25 @@ export type RefundResult =
   | { status: "refunded"; reference: string; amountCents: number }
   | { status: "failed"; reason: string };
 
+export type RefundOptions = {
+  /**
+   * Replay guard. REQUIRED to be per-order, not per-intent: one intent covers a
+   * multi-seller basket (N orders), so a per-intent key would make the second
+   * order's refund silently replay the first. lib/payments/refunds.ts derives
+   * this from the order id and cumulative refunded amount.
+   */
+  idempotencyKey?: string;
+  /** Attached to the processor's refund object — lets the webhook attribute it. */
+  metadata?: Record<string, string>;
+};
+
 export interface PaymentProvider {
   readonly name: string;
   /** True when money actually moves. Surfaces test-mode banners in the UI. */
   readonly isLive: boolean;
   createPayment(request: PaymentRequest): Promise<PaymentResult>;
   /** Full or partial refund. `amountCents` omitted means the whole payment. */
-  refund(reference: string, amountCents?: number): Promise<RefundResult>;
+  refund(reference: string, amountCents?: number, options?: RefundOptions): Promise<RefundResult>;
   /** Reconciliation: what does the processor think this payment's state is? */
   getStatus(reference: string): Promise<PaymentResult["status"]>;
 }

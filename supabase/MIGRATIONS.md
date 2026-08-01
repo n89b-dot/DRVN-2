@@ -7,10 +7,15 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0006–0016 applied
+## Status: 0006–0019 applied
 
 0006–0009 on 26 July 2026; 0010–0015 during the Rev C/D sessions; 0016 on
 31 July 2026. 0014–0016 columns verified live column-by-column on 31 July 2026.
+0017 on 1 August 2026 (Rev E session, exploit reproduced then re-verified
+blocked). 0018 on 1 August 2026 — applied twice (idempotency check) and
+verified live by impersonation: all 23 assertions in
+`supabase/tests/admin_guard.sql` pass, rolled back. 0019 on 1 August 2026,
+applied twice (idempotency check), self-checks pass.
 
 Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
 `supabase/tests/purchase_guard.sql` passes all nine assertions, and the
@@ -70,6 +75,9 @@ which drops every table in `public`.
 | 0014 | `0014_disputes.sql` | Dispute lifecycle columns on orders. |
 | 0015 | `0015_stripe_customers.sql` | `profiles.stripe_customer_id`. |
 | 0016 | `0016_connect_accounts.sql` | Connect: `stripe_account_id`, `payouts_enabled`; transfer tracking on orders. |
+| **0017** | `0017_lock_payment_columns.sql` | **Locks the payment columns on profiles** — column grants + trigger. Closes a live money-extraction path. |
+| **0018** | `0018_admin.sql` | Admin substrate: `admin_users`, `is_admin()`, append-only `admin_audit_log`, `reports`, listing `removed` status, profile suspension. |
+| **0019** | `0019_money_infra.sql` | Money infra: `webhook_events` dedup, `transfer_intents` (persist-before-Stripe + stuck-funds queue), `payment_recoveries`, refund-adjustment columns on orders. |
 
 0006–0009 are new. **The app expects them**: pages that read `shipping_cents`,
 `notifications`, or call `purchase_begin` will degrade to an empty state and log
