@@ -29,7 +29,6 @@ const UTILITY_ROUTES: IconRoute[] = [
   { href: "/cart", label: "Cart", note: "Parts waiting for checkout", icon: "cart" },
   { href: "/notifications", label: "Notifications", note: "Offers, sales and activity", icon: "bell" },
   { href: "/saved", label: "Saved", note: "Parts, builds and sellers you follow", icon: "bookmark" },
-  { href: "/settings", label: "Settings", note: "Account, profile and payouts", icon: "settings" },
 ];
 
 // Signed-out visitors get the two public surfaces, not the whole register.
@@ -169,9 +168,6 @@ export function LivesheetBar({
                     className={cx(
                       "bar__link",
                       "bar__link--ico",
-                      // Settings folds into the index on phones — it's a
-                      // destination you visit, not furniture you reach for.
-                      route.href === "/settings" && "bar__link--roomy",
                       isActive(route.href) && "is-active",
                     )}
                     aria-label={badge > 0 ? `${route.label} (${badge})` : route.label}

@@ -15,8 +15,9 @@ import type { PaymentProvider, PaymentRequest, PaymentResult, RefundResult } fro
  * `payment_method_types` is deliberately never passed: omitting it enables
  * dynamic payment methods, managed from the Stripe Dashboard.
  *
- * Scope note: charges land on the platform account. Seller payouts (Connect)
- * are a separate launch-gate task — the ledger models what's owed meanwhile.
+ * Scope note: charges land on the platform account (separate charges and
+ * transfers); on settlement the webhook transfers each order's net to the
+ * seller's connected account — see lib/payments/settlement.ts and connect.ts.
  */
 
 let client: Stripe | null = null;

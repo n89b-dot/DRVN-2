@@ -17,6 +17,10 @@ export type Profile = {
   avatar_url: string | null;
   /** Stripe Customer pointer (migration 0015, applied 1 Aug 2026). */
   stripe_customer_id: string | null;
+  /** Stripe Connect account pointer (migration 0016). */
+  stripe_account_id: string | null;
+  /** Synced from Stripe's account state; gates publishing when payments are real. */
+  payouts_enabled: boolean;
   headline: string | null;
   bio: string | null;
   location: string | null;
@@ -219,6 +223,9 @@ export type Order = {
   /** The seller's outstanding refund offer, awaiting buyer acceptance. */
   refund_offer_cents: number | null;
   refund_offered_at: string | null;
+  /** Stripe Transfer that moved this order's net to the seller (migration 0016). */
+  transfer_reference: string | null;
+  transferred_at: string | null;
   created_at: string;
   updated_at: string;
 };

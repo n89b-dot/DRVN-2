@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCategory } from "@/lib/marketplace/taxonomy";
+import { sellerCanPublish } from "@/lib/payments/connect";
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -103,6 +104,13 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   // The page promises "nothing reaches the market until you publish it", so
   // honour it: saving a draft is a real, separate outcome.
   const asDraft = formData.get("save_draft") !== null;
+
+  if (!asDraft && !(await sellerCanPublish(user.id))) {
+    return {
+      error:
+        "Publishing needs payouts set up first (Settings → Payments), so a sale has somewhere to send your money. You can still save this as a draft.",
+    };
+  }
 
   const { data: listing, error } = await supabase
     .from("listings")
@@ -274,6 +282,9 @@ export async function setListingStatus(formData: FormData): Promise<void> {
     if (paidItem) return;
   }
   if (existing.status === "reserved") return;
+
+  // Same gate as createListing: going live requires a payable seller.
+  if (status === "active" && !(await sellerCanPublish(user.id))) return;
 
   await supabase.from("listings").update({ status }).eq("id", id).eq("seller_id", user.id);
 

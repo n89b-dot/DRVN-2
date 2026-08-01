@@ -7,7 +7,10 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0006–0009 applied 26 July 2026
+## Status: 0006–0016 applied
+
+0006–0009 on 26 July 2026; 0010–0015 during the Rev C/D sessions; 0016 on
+31 July 2026. 0014–0016 columns verified live column-by-column on 31 July 2026.
 
 Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
 `supabase/tests/purchase_guard.sql` passes all five assertions, and the
@@ -60,6 +63,13 @@ which drops every table in `public`.
 | **0007** | `0007_commerce_lifecycle.sql` | Atomic purchase RPCs, payments table, order lifecycle, shipping. |
 | **0008** | `0008_indexes_and_search.sql` | Hot-path indexes and trigram search. |
 | **0009** | `0009_notifications.sql` | Notifications table and event triggers. |
+| 0010 | `0010_listing_part_number.sql` | `listings.part_number`. |
+| 0011 | `0011_listing_views.sql` | Listing view counts. |
+| 0012 | `0012_commerce_hardening.sql` | Purchase RPC hardening (1-cent exploit, guards). |
+| 0013 | `0013_scheduled_jobs.sql` | Scheduled cleanup jobs. |
+| 0014 | `0014_disputes.sql` | Dispute lifecycle columns on orders. |
+| 0015 | `0015_stripe_customers.sql` | `profiles.stripe_customer_id`. |
+| 0016 | `0016_connect_accounts.sql` | Connect: `stripe_account_id`, `payouts_enabled`; transfer tracking on orders. |
 
 0006–0009 are new. **The app expects them**: pages that read `shipping_cents`,
 `notifications`, or call `purchase_begin` will degrade to an empty state and log

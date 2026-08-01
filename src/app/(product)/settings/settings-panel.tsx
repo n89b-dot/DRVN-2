@@ -7,6 +7,7 @@ import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib
 import type { SavedCard } from "@/lib/payments/customers";
 
 import { updateNotificationPrefs, updateProfile, type ActionState } from "../garage/actions";
+import { startConnectOnboarding } from "./payouts-actions";
 import { DeleteAccount } from "./delete-account";
 import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
@@ -126,14 +127,68 @@ function subscribeHash(cb: () => void) {
   return () => window.removeEventListener("hashchange", cb);
 }
 
+export type ConnectSummary = {
+  stripeConfigured: boolean;
+  hasAccount: boolean;
+  payoutsEnabled: boolean;
+};
+
+/** Settings → Payments — Stripe Connect onboarding state and entry point. */
+function PayoutSetup({ connect }: { connect: ConnectSummary }) {
+  const [state, action, pending] = useActionState<{ error?: string }, FormData>(
+    async () => (await startConnectOnboarding()) ?? {},
+    {}
+  );
+
+  if (!connect.stripeConfigured) return null;
+
+  return (
+    <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
+      <div className="flex items-center justify-between gap-4">
+        <span className="microlabel microlabel--ink">Payouts</span>
+        {connect.payoutsEnabled ? (
+          <span className="chip chip--ok">Payouts enabled</span>
+        ) : connect.hasAccount ? (
+          <span className="chip">Setup incomplete</span>
+        ) : (
+          <span className="chip">Not set up</span>
+        )}
+      </div>
+      <p className="field__hint mt-2 max-w-[62ch]">
+        {connect.payoutsEnabled
+          ? "Your Stripe account can receive payouts. Sale proceeds transfer automatically when a buyer's payment settles."
+          : "Selling needs somewhere for the money to go. Stripe verifies your details and holds your bank account — DRVN never sees either. Until this is done, listings can't be published."}
+      </p>
+      <form action={action} className="mt-3">
+        <button type="submit" disabled={pending} className="btn btn--live">
+          {pending
+            ? "Opening Stripe…"
+            : connect.payoutsEnabled
+              ? "Update payout details"
+              : connect.hasAccount
+                ? "Finish payout setup"
+                : "Set up payouts"}
+        </button>
+      </form>
+      {state.error && (
+        <p role="alert" aria-live="polite" className="field__err mt-3">
+          {state.error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsPanel({
   profile,
   logout,
   savedCards,
+  connect,
 }: {
   profile: SettingsProfile;
   logout: () => Promise<void>;
   savedCards: SavedCard[];
+  connect: ConnectSummary;
 }) {
   // One section at a time (Mobbin pass: Contra / Cloudflare / Perplexity —
   // a rail plus a single active panel is what makes settings navigable).
@@ -311,6 +366,7 @@ export function SettingsPanel({
               Full fee schedule →
             </Link>
           </div>
+          <PayoutSetup connect={connect} />
           <PaymentMethods cards={savedCards} />
         </section>
         )}

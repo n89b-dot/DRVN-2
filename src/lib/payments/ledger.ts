@@ -7,13 +7,12 @@
  * never drift from what that page already shows a seller order-by-order.
  *
  * Honest scope note, matching `provider.ts`: with the stub provider nothing
- * is ever actually paid out. `available` here means "the holding window has
- * passed and this would be withdrawable if a real payout rail existed" — not
- * "money has moved." `paid_out` is modelled for the type to survive the
- * Stripe Connect swap, but nothing produces it today because there is no
- * payout record to promote a line into it. Callers must not imply otherwise;
- * see `paymentsAreLive()` and match the "test mode" phrasing used on
- * /fees and /terms.
+ * is ever actually paid out — `available` means "the holding window has
+ * passed and this would be withdrawable if a real payout rail existed."
+ * With Stripe, `paid_out` is real: a line whose order carries a
+ * `transfer_reference` (migration 0016) had its net transferred to the
+ * seller's connected account by the settlement webhook. Callers must not
+ * imply more than the provider supports; see `paymentsAreLive()`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -71,11 +70,17 @@ const FETCH_CAP = 500;
 function lineState(order: {
   status: OrderStatus;
   delivered_at: string | null;
+  transfer_reference: string | null;
 }, now: number): { state: LedgerState; availableAt: string | null } {
   // Disputed orders have money on hold pending resolution — never
   // "available," regardless of delivery timing.
   if (order.status === "disputed") {
     return { state: "held", availableAt: null };
+  }
+  // A recorded Stripe Transfer means the net actually reached the seller's
+  // connected account — the one real `paid_out` producer (migration 0016).
+  if (order.transfer_reference) {
+    return { state: "paid_out", availableAt: null };
   }
   if (!order.delivered_at) {
     return { state: "clearing", availableAt: null };
@@ -100,7 +105,7 @@ export async function getSellerLedger(
 
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, created_at, delivered_at")
+    .select("id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, created_at, delivered_at, transfer_reference")
     .eq("seller_id", sellerId)
     .in("status", CAPTURED_STATUSES)
     .order("created_at", { ascending: false })
@@ -164,12 +169,13 @@ export async function getSellerLedger(
   let heldCents = 0;
   let clearingCents = 0;
   let availableCents = 0;
-  const paidOutCents = 0; // Nothing is ever paid out by the stub provider.
+  let paidOutCents = 0;
 
   for (const line of lines) {
     if (line.state === "held") heldCents += line.netCents;
     else if (line.state === "clearing") clearingCents += line.netCents;
     else if (line.state === "available") availableCents += line.netCents;
+    else if (line.state === "paid_out") paidOutCents += line.netCents;
   }
 
   return {
