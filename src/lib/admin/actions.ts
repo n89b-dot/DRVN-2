@@ -1,8 +1,11 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "./audit";
+import { processDueTransfers } from "@/lib/payments/transfer-worker";
 import { getAdminContext } from "./guard";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -480,6 +483,44 @@ export async function adminResolveReport(
     return { ok: outcome === "actioned" ? "Report actioned." : "Report dismissed." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not resolve the report." };
+  }
+}
+
+// ---------- Transfer worker ----------
+
+/**
+ * Manual run of the transfer worker — the dev path (pg_net can't reach
+ * localhost) and the human retry for stuck funds. Same code the scheduled
+ * job invokes via /api/jobs/transfers.
+ */
+export async function adminRunTransferWorker(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+
+  const reason = field(formData, "reason");
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  try {
+    const summary = await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "payments.run_transfer_worker",
+        subjectType: "payment",
+        subjectId: randomUUID(),
+        reason,
+      },
+      () => processDueTransfers(ctx.admin)
+    );
+    revalidatePath("/admin", "layout");
+    return {
+      ok: `Worker ran: ${summary.transferred} transferred, ${summary.blocked} blocked, ${summary.failed} failed, ${summary.cancelled} cancelled, ${summary.requeued} requeued.`,
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Worker run failed." };
   }
 }
 

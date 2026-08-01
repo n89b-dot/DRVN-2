@@ -152,6 +152,8 @@ export async function refundOrder(
   let failureReason = "The refund could not be processed.";
   try {
     const result = await provider.refund(payment.provider_reference, amount, {
+      // initiated_by in the metadata below also tells the charge.refunded
+      // webhook this refund is already booked, so it must not re-book it.
       // Cumulative-deterministic: a retry of the same logical refund reuses
       // the key; the next distinct refund gets a new one.
       idempotencyKey: `refund:order:${orderId}:${after}`,
@@ -183,6 +185,60 @@ export async function refundOrder(
     return { ok: false, error: failureReason };
   }
 
+  const effects = await applyRefundEffects(admin, {
+    order,
+    paymentRow: payment,
+    amount,
+    before,
+    after,
+    reason,
+    resolveDispute: input.resolveDispute ?? false,
+  });
+
+  return {
+    ok: true,
+    refundedCents: amount,
+    reversedCents: effects.reversedCents,
+    feeRefundedCents: effects.feeRefundedCents,
+    fullyRefunded,
+    recoveryId: effects.recoveryId,
+  };
+}
+
+type RefundableOrder = {
+  id: string;
+  status: string;
+  total_cents: number;
+  platform_fee_cents: number;
+  refunded_cents: number;
+  currency: string;
+  transfer_reference: string | null;
+  pre_dispute_status: string | null;
+};
+
+/**
+ * Everything that must happen once a refund EXISTS at the processor —
+ * proportional transfer reversal, payment/order bookkeeping, fee
+ * reconciliation, transfer-intent cancellation, recovery on reversal failure.
+ * Shared by refundOrder (we created the refund) and recordExternalRefund
+ * (Stripe told us about one we didn't create).
+ */
+async function applyRefundEffects(
+  admin: Admin,
+  args: {
+    order: RefundableOrder;
+    paymentRow: { id: string; amount_cents: number; refunded_cents: number | null } | null;
+    amount: number;
+    before: number;
+    after: number;
+    reason: string;
+    resolveDispute: boolean;
+  }
+): Promise<{ reversedCents: number; feeRefundedCents: number; recoveryId?: string }> {
+  const { order, paymentRow, amount, before, after, reason } = args;
+  const orderId = order.id;
+  const fullyRefunded = after >= order.total_cents;
+
   // ---- Reverse the seller's transfer, proportionally ----
   let reversedCents = 0;
   let recoveryId: string | undefined;
@@ -199,6 +255,8 @@ export async function refundOrder(
             amount: reverseNow,
             metadata: { order_id: orderId, reason: reason.slice(0, 480) },
           },
+          // Deterministic on the cumulative target, so the app path and the
+          // webhook path can overlap without ever double-reversing.
           { idempotencyKey: `trfrev:${orderId}:${targetReversed}` }
         );
         reversedCents = reverseNow;
@@ -233,19 +291,21 @@ export async function refundOrder(
   const feeTarget = reversalShareCents(after, order.total_cents, order.platform_fee_cents);
   const now = new Date().toISOString();
 
-  await admin
-    .from("payments")
-    .update({
-      refunded_cents: (payment.refunded_cents ?? 0) + amount,
-      status:
-        (payment.refunded_cents ?? 0) + amount >= payment.amount_cents
-          ? "refunded"
-          : "partially_refunded",
-    })
-    .eq("id", payment.id);
+  if (paymentRow) {
+    await admin
+      .from("payments")
+      .update({
+        refunded_cents: (paymentRow.refunded_cents ?? 0) + amount,
+        status:
+          (paymentRow.refunded_cents ?? 0) + amount >= paymentRow.amount_cents
+            ? "refunded"
+            : "partially_refunded",
+      })
+      .eq("id", paymentRow.id);
+  }
 
   const disputeFields =
-    input.resolveDispute && order.status === "disputed"
+    args.resolveDispute && order.status === "disputed"
       ? {
           dispute_resolved_at: now,
           refund_offer_cents: null,
@@ -255,8 +315,8 @@ export async function refundOrder(
 
   const statusUpdate = fullyRefunded
     ? { status: "refunded" as const, cancelled_at: now, cancel_reason: reason.slice(0, 500) }
-    : input.resolveDispute && order.status === "disputed"
-      ? { status: (order.pre_dispute_status ?? "delivered") as NonNullable<typeof order.pre_dispute_status> }
+    : args.resolveDispute && order.status === "disputed"
+      ? { status: (order.pre_dispute_status ?? "delivered") as "shipped" | "delivered" | "completed" }
       : {};
 
   const { error: orderError } = await admin
@@ -282,11 +342,64 @@ export async function refundOrder(
   }
 
   return {
-    ok: true,
-    refundedCents: amount,
     reversedCents,
-    feeRefundedCents: feeTarget - reversalShareCents(before, order.total_cents, order.platform_fee_cents),
-    fullyRefunded,
+    feeRefundedCents:
+      feeTarget - reversalShareCents(before, order.total_cents, order.platform_fee_cents),
     recoveryId,
   };
+}
+
+/**
+ * Book a refund that already happened at Stripe — a dashboard refund, or a
+ * lost card dispute (chargeback): the buyer's money is already gone from the
+ * platform, so there is no provider.refund call to make, but everything else
+ * (reversal, fee reconciliation, order state, intent cancellation) must still
+ * run. Idempotent: the compare-and-swap on refunded_cents makes a replayed
+ * webhook a no-op, and a refund our own refundOrder already booked shows a
+ * zero delta and is skipped by the caller.
+ */
+export async function recordExternalRefund(
+  admin: Admin,
+  input: { orderId: string; amountCents: number; reason: string; resolveDispute?: boolean }
+): Promise<{ applied: boolean; recoveryId?: string }> {
+  const { orderId, amountCents, reason } = input;
+
+  const { data: order } = await admin
+    .from("orders")
+    .select(
+      "id, status, total_cents, platform_fee_cents, refunded_cents, platform_fee_refunded_cents, currency, transfer_reference, pre_dispute_status"
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { applied: false };
+
+  const before = order.refunded_cents;
+  const amount = Math.min(amountCents, order.total_cents - before);
+  if (amount <= 0) return { applied: false }; // already booked (replay, or our own refund)
+  const after = before + amount;
+
+  const { data: claimed } = await admin
+    .from("orders")
+    .update({ refunded_cents: after })
+    .eq("id", orderId)
+    .eq("refunded_cents", before)
+    .select("id");
+  if (!claimed?.length) return { applied: false }; // concurrent writer got there first
+
+  const { data: payment } = await admin
+    .from("payments")
+    .select("id, amount_cents, refunded_cents")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  const effects = await applyRefundEffects(admin, {
+    order,
+    paymentRow: payment ?? null,
+    amount,
+    before,
+    after,
+    reason,
+    resolveDispute: input.resolveDispute ?? true,
+  });
+  return { applied: true, recoveryId: effects.recoveryId };
 }

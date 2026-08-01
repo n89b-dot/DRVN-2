@@ -4,7 +4,9 @@ import {
   applyAccountUpdate,
   applyChargeRefund,
   applyDisputeEvent,
+  claimWebhookEvent,
   markRequiresAction,
+  markWebhookEventProcessed,
   settleIntent,
 } from "@/lib/payments/settlement";
 import { stripeClient } from "@/lib/payments/stripe";
@@ -45,6 +47,17 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
+  // event.id dedup (0019): a fully processed event acknowledges immediately;
+  // one whose first pass crashed is processed again (handlers are idempotent).
+  if (!(await claimWebhookEvent(admin, event))) {
+    return new Response("duplicate", { status: 200 });
+  }
+
+  const done = async (body: string, status: number) => {
+    if (status === 200) await markWebhookEventProcessed(admin, event.id);
+    return new Response(body, { status });
+  };
+
   try {
     switch (event.type) {
       case "payment_intent.succeeded":
@@ -58,31 +71,31 @@ export async function POST(request: Request) {
         // A 500 makes Stripe redeliver — correct when a finalize genuinely
         // failed, harmless when it later succeeds (the terminal-state guard
         // skips it).
-        return new Response(allApplied ? "ok" : "partial", { status: allApplied ? 200 : 500 });
+        return done(allApplied ? "ok" : "partial", allApplied ? 200 : 500);
       }
       case "payment_intent.requires_action": {
         await markRequiresAction(admin, event.data.object as Stripe.PaymentIntent);
-        return new Response("ok", { status: 200 });
+        return done("ok", 200);
       }
       case "charge.refunded": {
         await applyChargeRefund(admin, event.data.object as Stripe.Charge);
-        return new Response("ok", { status: 200 });
+        return done("ok", 200);
       }
       case "charge.dispute.created": {
         await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false);
-        return new Response("ok", { status: 200 });
+        return done("ok", 200);
       }
       case "charge.dispute.closed": {
         await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true);
-        return new Response("ok", { status: 200 });
+        return done("ok", 200);
       }
       case "account.updated": {
         await applyAccountUpdate(admin, event.data.object as Stripe.Account);
-        return new Response("ok", { status: 200 });
+        return done("ok", 200);
       }
       default:
         // Not ours to handle — acknowledge so Stripe stops redelivering.
-        return new Response("ignored", { status: 200 });
+        return done("ignored", 200);
     }
   } catch (error) {
     // Unexpected failure: let Stripe redeliver rather than losing the event.

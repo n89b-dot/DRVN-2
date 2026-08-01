@@ -409,9 +409,18 @@ export type TransferIntent = {
   status: TransferIntentStatus;
   available_at: string | null;
   transfer_reference: string | null;
+  /** The charge the transfer draws on (migration 0020). */
+  source_transaction: string | null;
   attempts: number;
   last_error: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+/** Scheduler configuration (migration 0020) — service-role only. */
+export type JobConfig = {
+  key: string;
+  value: string;
   updated_at: string;
 };
 
@@ -479,6 +488,7 @@ export type Database = {
       webhook_events: Table<WebhookEvent, "id" | "type">;
       transfer_intents: Table<TransferIntent, "order_id" | "amount_cents" | "currency">;
       payment_recoveries: Table<PaymentRecovery, "kind">;
+      job_config: Table<JobConfig, "key" | "value">;
     };
     Views: Record<string, never>;
     Functions: {

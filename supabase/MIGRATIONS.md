@@ -15,7 +15,26 @@ file twice.)
 blocked). 0018 on 1 August 2026 — applied twice (idempotency check) and
 verified live by impersonation: all 23 assertions in
 `supabase/tests/admin_guard.sql` pass, rolled back. 0019 on 1 August 2026,
-applied twice (idempotency check), self-checks pass.
+applied twice (idempotency check), self-checks pass. 0020 on 1 August 2026,
+applied twice, self-checks pass; the backfill created intents for every
+captured-but-untransferred order, and the worker's first pass (run from the
+admin console) cancelled the stub-era ones on record.
+
+### Production wiring for the transfer worker
+
+Set `CRON_SECRET` in the app environment, then point the scheduler at the
+deployed URL (service role / SQL editor):
+
+```sql
+insert into public.job_config (key, value) values
+  ('transfer_worker_url', 'https://<app-host>/api/jobs/transfers'),
+  ('transfer_worker_secret', '<CRON_SECRET value>')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+Until that's configured (e.g. in dev, where the cloud DB can't reach
+localhost), the cron still marks intents due every 10 minutes and the admin
+console's Payments → "Run worker now" is the processing path.
 
 Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
 `supabase/tests/purchase_guard.sql` passes all nine assertions, and the
@@ -78,6 +97,7 @@ which drops every table in `public`.
 | **0017** | `0017_lock_payment_columns.sql` | **Locks the payment columns on profiles** — column grants + trigger. Closes a live money-extraction path. |
 | **0018** | `0018_admin.sql` | Admin substrate: `admin_users`, `is_admin()`, append-only `admin_audit_log`, `reports`, listing `removed` status, profile suspension. |
 | **0019** | `0019_money_infra.sql` | Money infra: `webhook_events` dedup, `transfer_intents` (persist-before-Stripe + stuck-funds queue), `payment_recoveries`, refund-adjustment columns on orders. |
+| **0020** | `0020_transfer_scheduling.sql` | Transfers move on delivery + 7-day hold: `mark_due_transfer_intents()` + pg_cron `drvn-transfer-worker` (pg_net → `/api/jobs/transfers` when `job_config` is set), stuck-funds backfill. |
 
 0006–0009 are new. **The app expects them**: pages that read `shipping_cents`,
 `notifications`, or call `purchase_begin` will degrade to an empty state and log

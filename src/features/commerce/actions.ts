@@ -7,7 +7,9 @@ import { redirect } from "next/navigation";
 
 import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
 import { formatPrice } from "@/lib/payments/fee";
+import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
 import { getPaymentProvider } from "@/lib/payments/provider";
+import { refundOrder } from "@/lib/payments/refunds";
 import { getStripeCustomerId } from "@/lib/payments/customers";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { DISPUTE_CATEGORIES } from "./disputes";
@@ -937,6 +939,18 @@ export async function markReceived(
     .eq("id", orderId);
   if (error) return { error: error.message };
 
+  // Delivery starts the clearing window the ledger displays: the transfer
+  // intent becomes due at delivered_at + CLEARING_HOLD_DAYS, after which
+  // the scheduler moves the seller's money (0020).
+  await admin
+    .from("transfer_intents")
+    .update({
+      available_at: new Date(Date.now() + CLEARING_HOLD_DAYS * 86_400_000).toISOString(),
+    })
+    .eq("order_id", orderId)
+    .eq("status", "holding")
+    .is("available_at", null);
+
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Marked as received — you can leave a review now." };
@@ -984,32 +998,34 @@ export async function requestCancellation(
     await admin.from("listings").update({ status: "active", sold_at: null }).in("id", listingIds);
   }
 
-  const provider = getPaymentProvider();
   const { data: payment } = await admin
     .from("payments")
     .select("provider_reference, amount_cents")
     .eq("order_id", orderId)
     .maybeSingle();
 
-  if (payment?.provider_reference) {
-    const refund = await provider.refund(payment.provider_reference, payment.amount_cents);
-    if (refund.status === "refunded") {
-      await admin
-        .from("payments")
-        .update({ status: "refunded", refunded_cents: payment.amount_cents })
-        .eq("order_id", orderId);
-    }
+  if (order.status === "paid" && payment?.provider_reference) {
+    // Money moved, so this cancellation is a refund — through the one refund
+    // path, which also cancels the pending transfer intent (and reverses a
+    // transfer in the edge case one already exists). It stamps the order
+    // refunded/cancelled with this reason.
+    const outcome = await refundOrder(admin, {
+      orderId,
+      reason: reason || "cancelled by seller",
+      initiator: { kind: "seller_cancel", sellerId: user.id },
+    });
+    if (!outcome.ok) return { error: outcome.error };
+  } else {
+    const { error } = await admin
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancel_reason: reason || "cancelled by seller",
+      })
+      .eq("id", orderId);
+    if (error) return { error: error.message };
   }
-
-  const { error } = await admin
-    .from("orders")
-    .update({
-      status: order.status === "paid" ? "refunded" : "cancelled",
-      cancelled_at: new Date().toISOString(),
-      cancel_reason: reason || "cancelled by " + (user.id === order.buyer_id ? "buyer" : "seller"),
-    })
-    .eq("id", orderId);
-  if (error) return { error: error.message };
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
@@ -1247,43 +1263,25 @@ export async function acceptRefund(
     return { error: "This refund is already being processed." };
   }
 
+  // The one refund path (lib/payments/refunds.ts): per-order idempotency,
+  // transfer reversal if the seller was already paid, fee reconciliation,
+  // and a recovery case instead of a log line if the reversal fails.
   const amount = payment.amount_cents;
-  const provider = getPaymentProvider();
-  let refunded = false;
-  try {
-    const refund = await provider.refund(payment.provider_reference, amount);
-    refunded = refund.status === "refunded";
-  } catch {
-    refunded = false;
-  }
-  if (!refunded) {
+  const outcome = await refundOrder(admin, {
+    orderId,
+    reason: "Refund accepted by buyer after dispute",
+    initiator: { kind: "buyer_accept", buyerId: user.id },
+    resolveDispute: true,
+  });
+  if (!outcome.ok) {
     // Give the offer back so the buyer can retry.
     await admin
       .from("orders")
       .update({ refund_offered_at: new Date().toISOString() })
       .eq("id", orderId)
       .eq("status", "disputed");
-    return { error: "The refund could not be processed. Try again." };
+    return { error: outcome.error };
   }
-
-  await admin
-    .from("payments")
-    .update({ refunded_cents: amount, status: "refunded" })
-    .eq("order_id", orderId);
-
-  const now = new Date().toISOString();
-  const { error } = await admin
-    .from("orders")
-    .update({
-      status: "refunded",
-      dispute_resolved_at: now,
-      refund_offer_cents: null,
-      cancelled_at: now,
-      cancel_reason: "refunded after dispute",
-    })
-    .eq("id", orderId)
-    .eq("status", "disputed");
-  if (error) return { error: error.message };
 
   if (order.seller_id) {
     await postOrderSystemMessage(

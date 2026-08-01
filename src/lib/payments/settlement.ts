@@ -1,25 +1,27 @@
 import type Stripe from "stripe";
 
-import { stripeClient } from "./stripe";
+import { recordExternalRefund } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 
 /**
- * Webhook settlement logic (Rev D R1) — everything the Stripe webhook does
- * beyond signature verification lives here, out of the route file, so it can
- * be exercised directly.
+ * Webhook settlement logic (Rev D R1, reworked for Rev E) — everything the
+ * Stripe webhook does beyond signature verification lives here, out of the
+ * route file, so it can be exercised directly.
  *
  * Money movement model: separate charges and transfers. The buyer's single
- * PaymentIntent (one per basket, N orders) charges the platform account; on
- * `payment_intent.succeeded` each order's net proceeds — total minus the
- * stored platform fee — transfer to the seller's connected account, tied to
- * the charge via `source_transaction` so the transfer draws on that charge's
- * funds rather than the platform balance. `transfer:{order_id}` idempotency
- * plus a null-guarded write make redeliveries safe.
+ * PaymentIntent (one per basket, N orders) charges the platform account. On
+ * `payment_intent.succeeded` each order gets a transfer_intents row — the
+ * money does NOT move yet. It moves when delivery plus the clearing window
+ * have passed, via pg_cron + the transfer worker (0020,
+ * lib/payments/transfer-worker.ts). That makes the seven-day hold the ledger
+ * displays real, and it means most refunds happen before any transfer exists
+ * to reverse.
  *
- * Orders are found from the intent id via `payments.provider_reference`
- * (stamped at checkout), so refund and dispute events — which arrive on the
- * charge, without our metadata — resolve to orders the same way.
+ * Refund and dispute events resolve to orders via our refund metadata first
+ * (refunds.ts stamps order_id), payments.provider_reference second. External
+ * refunds and lost chargebacks book through recordExternalRefund, which
+ * reverses the seller's transfer proportionally and reconciles the fee.
  */
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -40,18 +42,21 @@ export async function ordersForIntent(admin: Admin, intentId: string, metadataOr
 }
 
 /**
- * Moves one settled order's net to its seller. No-ops (with a log) when the
- * seller has no payable account — the money stays on the platform and the
- * ledger keeps showing it as owed, which is the honest state.
+ * Records that this order's net is owed to its seller — a transfer_intents
+ * row, NOT a Stripe transfer. The transfer worker moves the money after
+ * delivery + the clearing window. Idempotent via the order_id primary key,
+ * so webhook redeliveries can't create a second intent, and the worker's
+ * `transfer:{order_id}` Stripe key means even a duplicated intent could
+ * never pay twice.
  */
-export async function transferForOrder(
+export async function createTransferIntent(
   admin: Admin,
   orderId: string,
   intent: Stripe.PaymentIntent
 ): Promise<void> {
   const { data: order } = await admin
     .from("orders")
-    .select("id, seller_id, status, total_cents, platform_fee_cents, currency, transfer_reference")
+    .select("id, seller_id, status, total_cents, platform_fee_cents, currency, transfer_reference, delivered_at")
     .eq("id", orderId)
     .maybeSingle();
   if (!order || order.transfer_reference) return;
@@ -62,51 +67,23 @@ export async function transferForOrder(
     return;
   }
 
-  const { data: seller } = await admin
-    .from("profiles")
-    .select("stripe_account_id, payouts_enabled")
-    .eq("id", order.seller_id)
-    .maybeSingle();
-  if (!seller?.stripe_account_id || !seller.payouts_enabled) {
-    // Possible pre-gate listings. Loud, not fatal: funds hold on the platform.
-    reportError("[stripe:webhook] seller not payable — transfer skipped", {
-      orderId,
-      sellerId: order.seller_id,
-    });
-    return;
-  }
-
   const netCents = order.total_cents - order.platform_fee_cents;
   if (netCents <= 0) return;
 
   const chargeId =
     typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge?.id;
 
-  try {
-    const transfer = await stripeClient().transfers.create(
-      {
-        amount: netCents,
-        currency: order.currency.toLowerCase(),
-        destination: seller.stripe_account_id,
-        transfer_group: intent.id,
-        ...(chargeId ? { source_transaction: chargeId } : {}),
-        metadata: { order_id: orderId },
-      },
-      // One transfer per order, ever — Stripe-side replay guard.
-      { idempotencyKey: `transfer:${orderId}` }
-    );
-
-    const { error } = await admin
-      .from("orders")
-      .update({ transfer_reference: transfer.id, transferred_at: new Date().toISOString() })
-      .eq("id", orderId)
-      .is("transfer_reference", null);
-    if (error) {
-      // The transfer happened; the idempotency key protects the retry.
-      reportError("[stripe:webhook] transfer made but not recorded", { orderId, error });
-    }
-  } catch (error) {
-    reportError("[stripe:webhook] transfer failed", { orderId, error });
+  const { error } = await admin.from("transfer_intents").insert({
+    order_id: orderId,
+    seller_id: order.seller_id,
+    amount_cents: netCents,
+    currency: order.currency,
+    status: "holding",
+    source_transaction: chargeId ?? null,
+  });
+  // 23505 = the intent already exists (redelivery) — exactly what we want.
+  if (error && error.code !== "23505") {
+    reportError("[stripe:webhook] failed to record transfer intent", { orderId, error });
   }
 }
 
@@ -138,7 +115,7 @@ export async function settleIntent(
       allApplied = false;
       continue;
     }
-    if (success) await transferForOrder(admin, orderId, intent);
+    if (success) await createTransferIntent(admin, orderId, intent);
   }
   return allApplied;
 }
@@ -172,10 +149,20 @@ export function attributePartialRefund(
 }
 
 /**
- * A refund issued anywhere — including the Stripe Dashboard — flips the
- * order(s) without anyone touching the app. Full refunds settle every order
- * on the intent; a partial refund settles the one order it exactly matches,
- * and anything ambiguous is logged for a human instead of guessed at.
+ * A refund issued anywhere — the app, or the Stripe Dashboard — arrives here.
+ * Attribution, most reliable first:
+ *
+ *   1. Refund objects carrying our `order_id` metadata (refunds.ts stamps
+ *      every app refund) book exactly, per order. App refunds are already
+ *      booked, so their delta is zero and recordExternalRefund no-ops.
+ *   2. `charge.refunded` (fully refunded) books every order on the intent.
+ *   3. A metadata-less partial falls back to attributePartialRefund's
+ *      exact-amount match.
+ *   4. Anything still ambiguous becomes an OPEN payment_recoveries case —
+ *      a queue a human works, not a log line (Rev E item 5).
+ *
+ * All booking goes through recordExternalRefund, which also reverses the
+ * seller's transfer proportionally and reconciles the platform fee.
  */
 export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Promise<void> {
   const intentId =
@@ -191,32 +178,80 @@ export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Pr
     return;
   }
 
-  const refundOrder = async (orderId: string, paymentId: string, refundedCents: number) => {
-    await admin
-      .from("payments")
-      .update({ status: "refunded", refunded_cents: refundedCents })
-      .eq("id", paymentId);
-    await admin
-      .from("orders")
-      .update({ status: "refunded" })
-      .eq("id", orderId)
-      .in("status", ["paid", "shipped", "delivered", "completed", "disputed"]);
-  };
+  // 1. Metadata-attributed refunds: cumulative target per order.
+  const targetByOrder = new Map<string, number>();
+  const orderIds = new Set(payments.map((p) => p.order_id));
+  let unattributedCents = 0;
+  for (const refund of charge.refunds?.data ?? []) {
+    if (refund.status && ["failed", "canceled"].includes(refund.status)) continue;
+    const orderId = refund.metadata?.order_id;
+    if (orderId && orderIds.has(orderId)) {
+      targetByOrder.set(orderId, (targetByOrder.get(orderId) ?? 0) + refund.amount);
+    } else {
+      unattributedCents += refund.amount;
+    }
+  }
 
+  for (const [orderId, target] of targetByOrder) {
+    const payment = payments.find((p) => p.order_id === orderId);
+    const alreadyBooked = payment?.refunded_cents ?? 0;
+    const delta = target - alreadyBooked;
+    if (delta > 0) {
+      await recordExternalRefund(admin, {
+        orderId,
+        amountCents: delta,
+        reason: `Stripe refund on ${charge.id}`,
+      });
+    }
+  }
+
+  // 2. Fully refunded — whatever the metadata says, every order ends refunded.
   if (charge.refunded) {
-    // Fully refunded — every order on this intent is refunded.
-    for (const p of payments) await refundOrder(p.order_id, p.id, p.amount_cents);
+    for (const p of payments) {
+      const remaining = p.amount_cents - (p.refunded_cents ?? 0);
+      if (remaining > 0) {
+        await recordExternalRefund(admin, {
+          orderId: p.order_id,
+          amountCents: remaining,
+          reason: `Charge ${charge.id} fully refunded at Stripe`,
+        });
+      }
+    }
     return;
   }
 
-  const match = attributePartialRefund(payments, charge.amount_refunded);
+  if (unattributedCents === 0) return;
+
+  // 3. Metadata-less partial (dashboard refund): exact-amount match, once.
+  const { data: fresh } = await admin
+    .from("payments")
+    .select("id, order_id, amount_cents, refunded_cents, status")
+    .eq("provider_reference", intentId);
+  const match = attributePartialRefund(fresh ?? [], charge.amount_refunded);
   if (match) {
-    await refundOrder(match.order_id, match.id, match.amount_cents);
-  } else {
+    await recordExternalRefund(admin, {
+      orderId: match.order_id,
+      amountCents: match.amount_cents,
+      reason: `Dashboard refund on ${charge.id}, attributed by exact amount`,
+    });
+    return;
+  }
+
+  // 4. Ambiguous — open a case; the order must not stay quietly `paid` while
+  // permitting a second full refund, which is what silence here used to mean.
+  const alreadyRecorded = (fresh ?? []).reduce((sum, p) => sum + (p.refunded_cents ?? 0), 0);
+  const outstanding = charge.amount_refunded - alreadyRecorded;
+  if (outstanding > 0) {
     reportError("[stripe:webhook] partial refund needs manual attribution", {
       intentId,
       charge: charge.id,
-      amountRefunded: charge.amount_refunded,
+      outstanding,
+    });
+    await admin.from("payment_recoveries").insert({
+      order_id: null,
+      kind: "partial_refund_unattributed",
+      amount_cents: outstanding,
+      detail: `Charge ${charge.id} (intent ${intentId}): ${outstanding} refunded at Stripe matches no single order. Attribute manually and book with a console refund.`,
     });
   }
 }
@@ -272,15 +307,24 @@ export async function applyDisputeEvent(
   }
 
   if (dispute.status === "lost") {
-    await admin
+    // The card network took the buyer's money back from the platform. Book it
+    // as an external refund per order — which also reverses each seller's
+    // transfer proportionally and reconciles the fee, instead of the platform
+    // silently absorbing the chargeback while the seller keeps the proceeds.
+    const { data: fullOrders } = await admin
       .from("orders")
-      .update({ status: "refunded", dispute_resolved_at: new Date().toISOString() })
-      .in("id", orderIds)
-      .eq("status", "disputed");
-    await admin
-      .from("payments")
-      .update({ status: "refunded" })
-      .eq("provider_reference", intentId);
+      .select("id, total_cents, refunded_cents")
+      .in("id", orderIds);
+    for (const order of fullOrders ?? []) {
+      const remaining = order.total_cents - order.refunded_cents;
+      if (remaining > 0) {
+        await recordExternalRefund(admin, {
+          orderId: order.id,
+          amountCents: remaining,
+          reason: `Card dispute lost (${dispute.id})`,
+        });
+      }
+    }
     return;
   }
 
@@ -315,11 +359,54 @@ export async function markRequiresAction(admin: Admin, intent: Stripe.PaymentInt
 
 /** `account.updated` — Stripe's word on whether the seller is payable. */
 export async function applyAccountUpdate(admin: Admin, account: Stripe.Account) {
-  const { error } = await admin
+  const payable = account.payouts_enabled === true;
+  const { data: sellers, error } = await admin
     .from("profiles")
-    .update({ payouts_enabled: account.payouts_enabled === true })
-    .eq("stripe_account_id", account.id);
+    .update({ payouts_enabled: payable })
+    .eq("stripe_account_id", account.id)
+    .select("id");
   if (error) {
     reportError("[stripe:webhook] failed to sync payouts_enabled", { account: account.id, error });
+    return;
   }
+
+  // A seller who just became payable unblocks their stuck funds eagerly —
+  // the worker's next run pays them out instead of waiting on a retry cycle.
+  if (payable && sellers?.length) {
+    await admin
+      .from("transfer_intents")
+      .update({ status: "ready", last_error: null })
+      .in("seller_id", sellers.map((s) => s.id))
+      .eq("status", "blocked_unpayable");
+  }
+}
+
+/**
+ * Webhook event dedup (Rev E item 6). Returns false when this event id has
+ * already been fully processed — the caller acknowledges and stops. An id
+ * that was received but never marked processed (a crash mid-handler) is
+ * processed again; every handler is idempotent, which is what makes that safe.
+ */
+export async function claimWebhookEvent(admin: Admin, event: Stripe.Event): Promise<boolean> {
+  const { error } = await admin
+    .from("webhook_events")
+    .insert({ id: event.id, type: event.type });
+  if (!error) return true;
+  if (error.code === "23505") {
+    const { data: existing } = await admin
+      .from("webhook_events")
+      .select("processed_at")
+      .eq("id", event.id)
+      .maybeSingle();
+    return !existing?.processed_at; // reprocess only if the first pass died
+  }
+  reportError("[stripe:webhook] event dedup insert failed", { event: event.id, error });
+  return true; // fail open: idempotent handlers beat dropped events
+}
+
+export async function markWebhookEventProcessed(admin: Admin, eventId: string): Promise<void> {
+  await admin
+    .from("webhook_events")
+    .update({ processed_at: new Date().toISOString() })
+    .eq("id", eventId);
 }

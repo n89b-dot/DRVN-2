@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-08-01 — Money correctness: transfers on delivery, reversals everywhere (Rev E items 1–7)
+
+**The clearing window is now real (`0020_transfer_scheduling.sql`).** Transfers no longer fire inside `payment_intent.succeeded` — the webhook records a `transfer_intents` row; buyer-confirmed delivery stamps `available_at = delivered_at + 7 days` (the exact window the ledger has always displayed); pg_cron's `drvn-transfer-worker` marks due intents ready in pure SQL — only while the order is in a deliverable end state, so a dispute freezes the money by construction — and the worker (`src/lib/payments/transfer-worker.ts`, reached via `/api/jobs/transfers` behind `CRON_SECRET`, or the console's Payments → "Run worker now") turns them into Stripe transfers. The Stripe idempotency key stays `transfer:{order_id}`, the same key the legacy path used, so nothing historic can duplicate. Backfill created intents for every captured-but-untransferred order: sellers who sold before onboarding are now `blocked_unpayable` rows the console can see and the worker retries forever (attempts don't increment on the wait state), unblocked eagerly when `account.updated` reports them payable. Stub-era orders were cancelled on record.
+
+**Every refund path reverses the seller's transfer.** Buyer-accepts and seller-cancellation migrated onto `refundOrder`; a lost card dispute books through the new `recordExternalRefund` (the chargeback already took the platform's money — the seller's share is now reclaimed proportionally instead of silently absorbed); dashboard refunds arriving on `charge.refunded` attribute via our refund metadata first, exact-amount fallback second, and anything ambiguous opens a `payment_recoveries` case instead of leaving the order quietly `paid` and double-refundable. Both share one effects core: proportional reversal (cumulative-deterministic keys, so overlapping paths can't double-reverse), fee reconciliation, intent cancellation, recovery on failure.
+
+**Webhook `event.id` dedup** — every event is claimed in `webhook_events` before handling; a fully processed id acknowledges immediately, a crashed first pass reprocesses (handlers are idempotent). **Alerting** — the settlement lines that used to be money-losing log statements now produce recovery cases or blocked intents that stand in an admin queue until a human closes them, alongside the existing Sentry forwarding.
+
 ## 2026-08-01 — Admin console: the intervention path (Rev E, Task 1)
 
 DRVN previously had no admin concept at all — no way to force a refund, resolve a stuck dispute, take down a listing, or suspend a seller. This adds the full back-office, gated and audited, in Livesheet's visual language.

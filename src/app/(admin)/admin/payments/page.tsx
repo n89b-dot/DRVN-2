@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { adminResolveRecovery } from "@/lib/admin/actions";
+import { adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
 import { getPaymentsOps } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx } from "@/lib/format";
@@ -125,7 +125,19 @@ export default async function AdminPaymentsPage() {
       </section>
 
       <section aria-label="Transfer pipeline" className="mb-8">
-        <span className="microlabel">Transfer pipeline ({ops.stuckIntents.length})</span>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <span className="microlabel !mb-0">Transfer pipeline ({ops.stuckIntents.length})</span>
+          <ActionDialog
+            action={adminRunTransferWorker}
+            title="Run transfer worker"
+            trigger="Run worker now"
+            triggerClassName="relbtn !static"
+            hidden={{}}
+            confirmNote="Processes every due, blocked or failed transfer immediately — the same pass the scheduler runs. Safe to repeat: one transfer per order, ever."
+            fields={[{ kind: "reason", placeholder: "e.g. seller finished onboarding, paying out stuck funds" }]}
+            submitLabel="Run worker"
+          />
+        </div>
         {ops.stuckIntents.length ? (
           <table className="ledger">
             <thead>
