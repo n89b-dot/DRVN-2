@@ -5,6 +5,7 @@ import { NarrowColumn, ProfileHeader } from "@/components/ui";
 import { ProfileBody } from "@/components/profile/profile-body";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
+import { ReportButton } from "@/features/moderation/report-button";
 import { loadProfileView } from "@/lib/profile-data";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
@@ -135,6 +136,16 @@ export default async function PublicProfilePage({
         contactLinks={rest}
         initialTab={viewParam && TAB_KEYS.includes(viewParam) ? viewParam : undefined}
       />
+      {user?.id !== profile.id && (
+        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+          <ReportButton
+            subjectType="user"
+            subjectId={profile.id}
+            subjectLabel={`@${profile.username}`}
+            isLoggedIn={Boolean(user)}
+          />
+        </div>
+      )}
     </NarrowColumn>
   );
 }

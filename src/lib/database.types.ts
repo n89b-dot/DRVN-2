@@ -227,6 +227,8 @@ export type Order = {
   disputed_at: string | null;
   disputed_by: string | null;
   dispute_resolved_at: string | null;
+  /** Day-4 SLA escalation stamp (migration 0021). */
+  dispute_escalated_at: string | null;
   /** Status to restore on resolution — always shipped/delivered/completed. */
   pre_dispute_status: OrderStatus | null;
   /** The seller's outstanding refund offer, awaiting buyer acceptance. */

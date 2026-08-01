@@ -89,3 +89,48 @@ jobs:
           out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/admin_guard.sql 2>&1)
           echo "$out"
           echo "$out" | grep -q -- "--- all admin-guard checks passed ---"
+
+  # The golden-path e2e suite (signup → list → buy → dispatch → receive) needs
+  # a real Supabase project — auth included — so it runs against a dedicated
+  # throwaway project configured via repository secrets. Without them the job
+  # skips loudly rather than failing, so forks and secretless runs stay green.
+  # Configure: E2E_SUPABASE_URL, E2E_SUPABASE_PUBLISHABLE_KEY,
+  # E2E_SUPABASE_SECRET_KEY (a project with migrations applied and email
+  # confirmation off).
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.E2E_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.E2E_SUPABASE_SECRET_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      E2E_BASE_URL: http://localhost:3000
+    steps:
+      - name: Check for e2e project secrets
+        id: gate
+        run: |
+          if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::E2E secrets not configured — golden-path suite skipped."
+          fi
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+
+      - if: steps.gate.outputs.run == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - if: steps.gate.outputs.run == 'true'
+        name: Golden path
+        run: npm run test:e2e

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-01 — Ops: dispute SLA, reporting, dependency security, runbook (Rev E items 12–15)
+
+**Dispute SLA (`0021_dispute_sla.sql`).** Nothing strands: at day 4 a daily pg_cron job (`escalate_stale_disputes()`) notifies both parties the case is flagged for support and stamps `dispute_escalated_at`; at day 10 of seller silence (no refund offer outstanding) the worker pass auto-refunds the buyer through the one refund path — reversal and fee reconciliation included — recorded as `dispute_sla` in the audit trail of the money. An admin or seller acting first naturally prevents both stages.
+
+**Reporting is real.** The prohibited-items policy now has its capability: a quiet "Report this listing/seller" on part sheets and public profiles opens an accessible dialog (labelled reason select, rate-limited, RLS-enforced reporter identity) feeding the console's moderation queue. Verified end-to-end: filed on a listing, appeared in `/admin/reports`, dismissed with a note, audit row written.
+
+**Dependencies.** Next 16.2.9 → 16.2.12, plus `overrides` pinning `sharp` ≥0.35 and `postcss` ≥8.5.18 (the libvips CVEs sat on the user-upload image path). `npm audit`: **0 vulnerabilities**, from 9. The e2e golden-path suite is now a CI job that runs against a dedicated Supabase project when `E2E_SUPABASE_*` secrets are configured, and skips loudly when they aren't.
+
+**Production runbook** ([docs/production-runbook.md](docs/production-runbook.md)): standing up the separate production project, applying and verifying the migration tree, baselining `supabase_migrations.schema_migrations` so the CLI is usable from day one, Stripe live-mode wiring, `job_config` for the scheduled worker, seeding the first admin (SQL-only, MFA), and a quarterly restore rehearsal with a log table — a backup that has never been restored is a hope, not a plan.
+
+**Still deferred, deliberately** (from Rev E's "later" tier): pre-purchase buyer↔seller messaging, category metadata/OG image/structured data, shop profiles, recommendations instrumentation, and the sub-£2 fee-model decision (Stripe's own processing fees remain unmodelled — a pricing decision for the founder, flagged on `/fees` before launch).
+
 ## 2026-08-01 — Seller activation and craft (Rev E items 8–11)
 
 **Publishing says why it failed.** `setListingStatus`, `deleteListing`, `unlinkModListing` and `deleteActivityPost` now return typed results instead of void-with-bare-return guards — a seller without payout onboarding who clicks **Publish** sees the reason inline with a "Set up payouts →" link to Settings → Payments, instead of a page that revalidates and says nothing. Their callers (`ListingStatusActions`, the delete confirms, the mods editor) surface every outcome.

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "./audit";
+import { processDisputeSla } from "@/lib/payments/dispute-sla";
 import { processDueTransfers } from "@/lib/payments/transfer-worker";
 import { getAdminContext } from "./guard";
 import { refundOrder } from "@/lib/payments/refunds";
@@ -513,11 +514,15 @@ export async function adminRunTransferWorker(
         subjectId: randomUUID(),
         reason,
       },
-      () => processDueTransfers(ctx.admin)
+      async () => {
+        const transfers = await processDueTransfers(ctx.admin);
+        const disputes = await processDisputeSla(ctx.admin);
+        return { ...transfers, ...disputes };
+      }
     );
     revalidatePath("/admin", "layout");
     return {
-      ok: `Worker ran: ${summary.transferred} transferred, ${summary.blocked} blocked, ${summary.failed} failed, ${summary.cancelled} cancelled, ${summary.requeued} requeued.`,
+      ok: `Worker ran: ${summary.transferred} transferred, ${summary.blocked} blocked, ${summary.failed} failed, ${summary.cancelled} cancelled, ${summary.requeued} requeued; ${summary.autoRefunded} dispute${summary.autoRefunded === 1 ? "" : "s"} auto-refunded.`,
     };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Worker run failed." };

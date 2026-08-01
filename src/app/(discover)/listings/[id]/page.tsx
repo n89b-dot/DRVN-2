@@ -10,6 +10,7 @@ import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
+import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
 import { QASection, type QAItem } from "./qa-section";
 
@@ -364,6 +365,16 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                   targetId={listing.id}
                   path={`/listings/${listing.id}`}
                   initialSaved={isSaved}
+                  isLoggedIn={Boolean(user)}
+                />
+              </div>
+            )}
+            {user?.id !== listing.seller_id && (
+              <div className="mt-3">
+                <ReportButton
+                  subjectType="listing"
+                  subjectId={listing.id}
+                  subjectLabel={listing.title}
                   isLoggedIn={Boolean(user)}
                 />
               </div>

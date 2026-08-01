@@ -30,6 +30,7 @@ export const RATE_LIMITS = {
   openDispute: { action: "dispute", limit: 5, windowSeconds: 60 * 60 },
   createListing: { action: "listing", limit: 20, windowSeconds: 60 * 60 },
   passwordReset: { action: "password-reset", limit: 5, windowSeconds: 60 * 30 },
+  fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** True when the caller is within the limit and the attempt may proceed. */
