@@ -130,8 +130,9 @@ export default function PrivacyPage() {
         <p>
           Depending on where you live you may have the right to access, correct, export or erase your
           data, to object to processing, and to complain to a data protection authority. You can
-          edit most of your data directly in <Link href="/settings">Settings</Link> and delete your
-          account there. For anything else, email{" "}
+          edit most of your data directly in <Link href="/settings">Settings</Link>, download a
+          full export from Settings → Danger zone → &ldquo;Download my data&rdquo;, and delete your
+          account there too. For anything else, email{" "}
           <a href="mailto:privacy@drvn.app">privacy@drvn.app</a>.
         </p>
 

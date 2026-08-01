@@ -374,6 +374,18 @@ export function SettingsPanel({
         {active === "danger" && (
         <section id="danger" className="tile">
           <div className="tile__head">
+            <span className="microlabel microlabel--ink">Your data</span>
+          </div>
+          <p className="field__hint max-w-[62ch]">
+            Download everything DRVN holds about you — profile, cars, listings, orders, offers,
+            messages you&apos;ve sent — as one JSON file.
+          </p>
+          <div className="mb-6 mt-3">
+            <a href="/api/account/export" download className="btn btn--ghost">
+              Download my data
+            </a>
+          </div>
+          <div className="tile__head">
             <span className="microlabel microlabel--ink">Delete your account</span>
           </div>
           <p className="field__hint max-w-[62ch]">
