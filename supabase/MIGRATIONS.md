@@ -13,7 +13,7 @@ file twice.)
 31 July 2026. 0014–0016 columns verified live column-by-column on 31 July 2026.
 
 Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
-`supabase/tests/purchase_guard.sql` passes all five assertions, and the
+`supabase/tests/purchase_guard.sql` passes all nine assertions, and the
 notification triggers raise into the correct sections. The commands below are
 the record of how, and what to do for the next environment.
 
@@ -89,10 +89,10 @@ an error until they're applied. That degradation is deliberate — nothing crash
 ## Verifying the purchase guard
 
 `supabase/tests/purchase_guard.sql` proves the property that matters: a listing
-can be sold exactly once. It creates throwaway fixtures, runs five assertions,
+can be sold exactly once. It creates throwaway fixtures, runs nine assertions,
 and **rolls everything back**, so it leaves no rows behind.
 
-Run it in the SQL Editor against a non-production project. Success prints five
+Run it in the SQL Editor against a non-production project. Success prints nine
 `PASS` notices; any failure raises an exception naming what broke.
 
 ## Rollback notes

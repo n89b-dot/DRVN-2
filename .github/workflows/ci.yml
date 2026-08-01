@@ -41,3 +41,42 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
           SUPABASE_SECRET_KEY: sb_secret_placeholder
           NEXT_PUBLIC_SITE_URL: https://example.com
+
+  # The commerce guarantees live in Postgres (conditional UPDATEs, terminal-
+  # state guards, dispute constraints, notification triggers) — Node tests
+  # cannot see them. This job rebuilds the schema from the migration files on
+  # Supabase's own Postgres image (auth/storage schemas and pg_cron included)
+  # and runs the nine-assertion guard in supabase/tests/purchase_guard.sql.
+  sql-guard:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: supabase/postgres:15.14.1.158
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply migrations 0001–0016
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "== applying $f"
+            psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Purchase & dispute guard (9 assertions)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          out=$(psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/purchase_guard.sql 2>&1)
+          echo "$out"
+          echo "$out" | grep -q -- "--- all purchase-guard checks passed ---"
