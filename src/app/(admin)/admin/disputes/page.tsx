@@ -2,10 +2,12 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { SheetTabs } from "@/components/ui";
-import { getDisputeQueue, DISPUTE_SLA_DAYS, type DisputeQueueRow } from "@/lib/admin/queries";
+import { getDisputeQueue, DISPUTE_SLA_DAYS, DISPUTES_PAGE_SIZE, type DisputeQueueRow } from "@/lib/admin/queries";
 import type { DisputeCategory } from "@/lib/database.types";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
-import { cx } from "@/lib/format";
+import { cx, isPersonStub, personLabel } from "@/lib/format";
+
+import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +23,16 @@ function DisputeTable({
   rows,
   total,
   empty,
+  page,
+  hasMore,
+  pagerHref,
 }: {
   rows: DisputeQueueRow[];
   total: number;
   empty: string;
+  page: number;
+  hasMore: boolean;
+  pagerHref: (page: number) => string;
 }) {
   if (!rows.length) {
     return (
@@ -39,7 +47,7 @@ function DisputeTable({
   return (
     <>
       <p className="order__meta mt-3">
-        Showing {rows.length} of {total}
+        Showing {page * DISPUTES_PAGE_SIZE + 1}–{page * DISPUTES_PAGE_SIZE + rows.length} of {total}
       </p>
       <table className="ledger mt-2">
       <thead>
@@ -67,18 +75,47 @@ function DisputeTable({
               >
                 {r.title}
               </Link>
-              <span className="order__meta">{r.orderId.slice(0, 8)}</span>
+              {/* Id-fallback titles already carry the prefix — repeating it says nothing. */}
+              {r.title !== `Order ${r.orderId.slice(0, 8)}` && (
+                <span className="order__meta">{r.orderId.slice(0, 8)}</span>
+              )}
             </td>
             <td>
-              <span className="chip chip--spent">{CATEGORY_LABEL[r.category ?? "other"]}</span>
+              <span className="status-plain">{CATEGORY_LABEL[r.category ?? "other"]}</span>
               {r.reason && (
                 <span className="order__meta mt-1 block max-w-[44ch] truncate" title={r.reason}>
                   “{r.reason}”
                 </span>
               )}
             </td>
-            <td data-label="Buyer">{r.buyer?.username ?? r.buyer?.displayName ?? "—"}</td>
-            <td data-label="Seller">{r.seller?.username ?? r.seller?.displayName ?? "—"}</td>
+            <td data-label="Buyer">
+              {r.buyer?.id ? (
+                <Link
+                  href={`/admin/users/${r.buyer.id}`}
+                  className={cx("hover:text-live", isPersonStub(r.buyer) && "person--stub")}
+                >
+                  {personLabel(r.buyer)}
+                </Link>
+              ) : (
+                <span className={cx(isPersonStub(r.buyer) && "person--stub")}>
+                  {personLabel(r.buyer)}
+                </span>
+              )}
+            </td>
+            <td data-label="Seller">
+              {r.seller?.id ? (
+                <Link
+                  href={`/admin/users/${r.seller.id}`}
+                  className={cx("hover:text-live", isPersonStub(r.seller) && "person--stub")}
+                >
+                  {personLabel(r.seller)}
+                </Link>
+              ) : (
+                <span className={cx(isPersonStub(r.seller) && "person--stub")}>
+                  {personLabel(r.seller)}
+                </span>
+              )}
+            </td>
             <td className="ledger__num" data-label="Value">
               {formatPrice(r.totalCents)}
             </td>
@@ -88,18 +125,21 @@ function DisputeTable({
             <td data-label="State">
               {r.overSla ? (
                 <span className="chip chip--live">Over SLA</span>
-              ) : r.refundOfferCents ? (
-                <span className="chip chip--ok">Offer out</span>
-              ) : r.transferred ? (
-                <span className="chip chip--spent">Paid out</span>
+              ) : r.transferred && !r.refundOfferCents ? (
+                // Money already left for the seller — a refund here means a
+                // clawback, so this is the state worth noticing.
+                <span className="chip chip--warn">Paid out</span>
               ) : (
-                <span className="chip chip--spent">Funds held</span>
+                <span className="status-plain">
+                  {r.refundOfferCents ? "offer out" : "funds held"}
+                </span>
               )}
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+    <Pager page={page} hasMore={hasMore} href={pagerHref} prevLabel="← Back" nextLabel="More →" />
     </>
   );
 }
@@ -112,22 +152,34 @@ function DisputeTable({
 export default async function AdminDisputesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; q?: string; category?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; category?: string; sla?: string; page?: string }>;
 }) {
-  const { view, q, category } = await searchParams;
+  const { view, q, category, sla, page: pageParam } = await searchParams;
+  const overSlaOnly = sla === "over";
+  const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
   const activeCategory = Object.keys(CATEGORY_LABEL).includes(category ?? "")
     ? (category as DisputeCategory)
     : undefined;
-  const filters = { query: q, category: activeCategory };
+  const filters = { query: q, category: activeCategory, overSlaOnly, page };
   const [open, resolved] = await Promise.all([
     getDisputeQueue("open", filters),
     getDisputeQueue("resolved", filters),
   ]);
 
-  const linkFor = (cat?: string) =>
+  const pagerHref = (tab: "open" | "resolved") => (target: number) =>
+    `/admin/disputes?${new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(activeCategory ? { category: activeCategory } : {}),
+      ...(overSlaOnly ? { sla: "over" } : {}),
+      ...(tab === "resolved" ? { view: "resolved" } : {}),
+      ...(target > 0 ? { page: String(target) } : {}),
+    })}`;
+
+  const linkFor = (cat?: string, slaOverride?: boolean) =>
     `/admin/disputes?${new URLSearchParams({
       ...(q ? { q } : {}),
       ...(cat ? { category: cat } : {}),
+      ...((slaOverride ?? overSlaOnly) ? { sla: "over" } : {}),
       ...(view === "resolved" ? { view } : {}),
     })}`;
 
@@ -160,6 +212,20 @@ export default async function AdminDisputesPage({
         </button>
       </form>
 
+      <div className="mb-1 flex justify-end">
+        <a
+          href={`/admin/export?${new URLSearchParams({
+            view: "disputes",
+            scope: view === "resolved" ? "resolved" : "open",
+            ...(q ? { q } : {}),
+            ...(activeCategory ? { category: activeCategory } : {}),
+          })}`}
+          className="jumplink"
+        >
+          Export CSV ↓
+        </a>
+      </div>
+
       <div className="filters mb-4" aria-label="Filter by category">
         <Link href={linkFor()} className={cx("fbtn", !activeCategory && "is-on")}>
           All
@@ -169,6 +235,13 @@ export default async function AdminDisputesPage({
             {label}
           </Link>
         ))}
+        <Link
+          href={linkFor(activeCategory, !overSlaOnly)}
+          className={cx("fbtn", overSlaOnly && "is-on")}
+          title="Only disputes already past the escalation window"
+        >
+          Over SLA
+        </Link>
       </div>
 
       <SheetTabs
@@ -186,6 +259,9 @@ export default async function AdminDisputesPage({
                 rows={open.rows}
                 total={open.total}
                 empty="No open disputes. The queue is clear."
+                page={open.page}
+                hasMore={open.hasMore}
+                pagerHref={pagerHref("open")}
               />
             ),
           },
@@ -197,6 +273,9 @@ export default async function AdminDisputesPage({
                 rows={resolved.rows}
                 total={resolved.total}
                 empty="Nothing resolved yet — history lands here."
+                page={resolved.page}
+                hasMore={resolved.hasMore}
+                pagerHref={pagerHref("resolved")}
               />
             ),
           },

@@ -229,6 +229,8 @@ export type Order = {
   dispute_resolved_at: string | null;
   /** Day-4 SLA escalation stamp (migration 0021). */
   dispute_escalated_at: string | null;
+  /** Once-only marker for the ops webhook alert on SLA breach (migration 0022). */
+  dispute_sla_alerted_at: string | null;
   /** Status to restore on resolution — always shipped/delivered/completed. */
   pre_dispute_status: OrderStatus | null;
   /** The seller's outstanding refund offer, awaiting buyer acceptance. */
@@ -345,6 +347,8 @@ export type Notification = {
 export type AdminUser = {
   user_id: string;
   note: string | null;
+  /** 'admin' acts, 'viewer' reads (migration 0023). */
+  role: "admin" | "viewer";
   created_at: string;
 };
 
@@ -392,6 +396,9 @@ export type WebhookEvent = {
   type: string;
   received_at: string;
   processed_at: string | null;
+  /** Raw Stripe event, kept for console drill-in and replay (0023). Null for
+   *  events recorded before payload retention. */
+  payload: unknown | null;
 };
 
 export type TransferIntentStatus =
@@ -545,6 +552,11 @@ export type Database = {
       is_admin: {
         Args: Record<string, never>;
         Returns: boolean;
+      };
+      /** 'admin' | 'viewer' for console members, null otherwise (0023). */
+      admin_role: {
+        Args: Record<string, never>;
+        Returns: string | null;
       };
     };
     Enums: Record<string, never>;

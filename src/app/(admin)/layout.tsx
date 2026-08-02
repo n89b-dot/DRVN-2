@@ -38,16 +38,23 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-rule-soft">
+      {/* Sticky: the nav carries the live queue badges — the console's only
+          ambient alerting — so it must survive scrolling a long queue. */}
+      <header className="sticky top-0 z-40 border-b border-rule-soft bg-paper">
         <div className="wrap flex flex-wrap items-center justify-between gap-3 py-4">
           <div className="flex items-baseline gap-3">
             <span className="font-display text-[19px] font-semibold tracking-tight">DRVN</span>
             <span className="microlabel !mb-0">Console</span>
+            {ctx.role === "viewer" && (
+              <span className="chip chip--warn" title="This login can look, not act — every mutation is refused server-side.">
+                read-only
+              </span>
+            )}
           </div>
           <AdminNav counts={counts} />
         </div>
       </header>
-      <main className="wrap py-8">{children}</main>
+      <main className="wrap console-main py-8">{children}</main>
     </div>
   );
 }

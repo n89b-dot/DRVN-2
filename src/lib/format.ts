@@ -23,6 +23,56 @@ export function cx(...classes: (false | null | string | undefined)[]): string {
 }
 
 /**
+ * Human label for a person, never a bare UUID: display name, then @username,
+ * then a "User a1b2c3d4" stub as the last resort for profiles with neither.
+ */
+export function personLabel(
+  p: { displayName?: string | null; username?: string | null; id?: string | null } | null | undefined,
+): string {
+  if (!p) return "—";
+  if (p.displayName) return p.displayName;
+  if (p.username) return `@${p.username}`;
+  return p.id ? `User ${p.id.slice(0, 8)}` : "—";
+}
+
+/**
+ * True when personLabel(p) yields a fallback ("User a1b2c3d4" or "—") rather
+ * than a real name — callers can style those recessive next to real names.
+ */
+export function isPersonStub(
+  p: { displayName?: string | null; username?: string | null; id?: string | null } | null | undefined,
+): boolean {
+  return !p || (!p.displayName && !p.username);
+}
+
+/**
+ * Currency for dashboard tiles: exact below $100k, compact above ("$1.23M",
+ * "$456K") so seven-figure weeks still fit a KPI tile. Pair with the exact
+ * figure in a `title` attribute — tables and CSV exports must never use this.
+ */
+export function formatMoneyCompact(cents: number): string {
+  const dollars = cents / 100;
+  if (Math.abs(dollars) < 100_000) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    }).format(dollars);
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumSignificantDigits: 3,
+  }).format(dollars);
+}
+
+/** "1 order", "3 orders" — count with a correctly pluralized unit. */
+export function plural(n: number, unit: string, units?: string): string {
+  return `${n} ${n === 1 ? unit : (units ?? `${unit}s`)}`;
+}
+
+/**
  * Converts a display name into a URL-safe slug fragment.
  */
 export function slugify(input: string): string {

@@ -4,12 +4,15 @@ import { notFound } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import { KeyValueTable } from "@/components/ui";
 import {
+  adminAddNote,
   adminForceRefund,
+  adminMessageParties,
   adminResolveForSeller,
 } from "@/lib/admin/actions";
 import { getOrderDetail } from "@/lib/admin/queries";
+import { ORDER_STATUS_CHIP } from "@/lib/admin/presentation";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
-import { cx } from "@/lib/format";
+import { cx, isPersonStub, personLabel, plural } from "@/lib/format";
 
 import { ActionDialog } from "../../_components/action-dialog";
 
@@ -22,15 +25,6 @@ const INTENT_STATE: Record<string, string> = {
   blocked_unpayable: "stuck — seller not payable",
   failed: "transfer failed — see Payments",
   cancelled: "no transfer — cancelled",
-};
-
-const STATUS_CHIP: Record<string, string> = {
-  disputed: "chip--live",
-  refunded: "chip--spent",
-  paid: "chip--ok",
-  shipped: "chip--ok",
-  delivered: "chip--ok",
-  completed: "chip--ok",
 };
 
 function days(iso: string | null): string {
@@ -61,11 +55,17 @@ export default async function AdminOrderPage({
 
   return (
     <>
+      <nav aria-label="Breadcrumb" className="mt-2">
+        <Link href="/admin/orders" className="jumplink">
+          ← Orders
+        </Link>
+      </nav>
+
       <Rv as="header" className="pagehead">
         <div className="flex flex-wrap items-baseline gap-3">
-          <h1>{items[0]?.title ?? "Order"}</h1>
-          <span className={cx("chip", STATUS_CHIP[order.status] ?? "chip--spent")}>
-            {order.status}
+          <h1>{items[0]?.title ?? `Order ${order.id.slice(0, 8)}`}</h1>
+          <span className={cx("chip", ORDER_STATUS_CHIP[order.status] ?? "chip--spent")}>
+            {order.status.replace("_", " ")}
           </span>
         </div>
         <p className="pagehead__sub">
@@ -190,13 +190,16 @@ export default async function AdminOrderPage({
           {buyer ? (
             <>
               <p className="order__name">
-                <Link href={`/admin/users?q=${buyer.username ?? ""}`} className="hover:text-live">
-                  {buyer.displayName ?? buyer.username ?? buyer.id}
+                <Link
+                  href={`/admin/users/${buyer.id}`}
+                  className={cx("hover:text-live", isPersonStub(buyer) && "person--stub")}
+                >
+                  {personLabel(buyer)}
                 </Link>
                 {buyer.suspendedAt && <span className="chip chip--live ml-2">suspended</span>}
               </p>
               <p className="order__meta mt-1">
-                {buyer.orderCount} orders · {buyer.disputeCount} disputes
+                {plural(buyer.orderCount, "order")} · {plural(buyer.disputeCount, "dispute")}
               </p>
             </>
           ) : (
@@ -209,13 +212,16 @@ export default async function AdminOrderPage({
           {seller ? (
             <>
               <p className="order__name">
-                <Link href={`/admin/users?q=${seller.username ?? ""}`} className="hover:text-live">
-                  {seller.displayName ?? seller.username ?? seller.id}
+                <Link
+                  href={`/admin/users/${seller.id}`}
+                  className={cx("hover:text-live", isPersonStub(seller) && "person--stub")}
+                >
+                  {personLabel(seller)}
                 </Link>
                 {seller.suspendedAt && <span className="chip chip--live ml-2">suspended</span>}
               </p>
               <p className="order__meta mt-1">
-                {seller.salesCount} sales · {seller.disputeCount} disputes ·{" "}
+                {plural(seller.salesCount, "sale")} · {plural(seller.disputeCount, "dispute")} ·{" "}
                 {seller.payoutsEnabled ? "payouts enabled" : "payouts NOT enabled"}
               </p>
             </>
@@ -247,7 +253,31 @@ export default async function AdminOrderPage({
 
       {/* ---------- Prior admin actions ---------- */}
       <section aria-label="Audit trail">
-        <span className="microlabel">Admin actions on this order</span>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <span className="microlabel !mb-0">Admin actions on this order</span>
+          <span className="flex gap-2">
+            <ActionDialog
+              action={adminAddNote}
+              title="Internal note"
+              trigger="Add note"
+              triggerClassName="relbtn !static"
+              hidden={{ subject_type: "order", subject_id: order.id, order_id: order.id }}
+              confirmNote="Internal only — lands in the audit trail below and the audit log, visible to admins alone."
+              fields={[{ kind: "reason", label: "Note", placeholder: "What the next admin needs to know" }]}
+              submitLabel="Record note"
+            />
+            <ActionDialog
+              action={adminMessageParties}
+              title="Message both parties"
+              trigger="Message parties"
+              triggerClassName="relbtn !static"
+              hidden={{ order_id: order.id }}
+              confirmNote="Both buyer and seller receive this as a notification from DRVN support. The full text is recorded in the audit log."
+              fields={[{ kind: "reason", label: "Message", placeholder: "e.g. We're reviewing this order; please upload photos of the damage." }]}
+              submitLabel="Send to both"
+            />
+          </span>
+        </div>
         {audit.length ? (
           <div className="rowlist">
             {audit.map((a) => (

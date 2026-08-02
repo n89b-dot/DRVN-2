@@ -2,6 +2,7 @@ import { getPaymentProvider } from "./provider";
 import { stripeClient } from "./stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
+import { sendAdminAlert } from "@/lib/admin/alerts";
 
 /**
  * The one refund path (Rev E items 1, 3, 5 — built once, correctly, and every
@@ -182,6 +183,13 @@ export async function refundOrder(
       amount_cents: amount,
       detail: `${failureReason} (initiated by ${initiatorLabel(initiator)}: ${reason})`,
     });
+    await sendAdminAlert({
+      kind: "recovery_case_opened",
+      title: "Refund failed — recovery case opened",
+      detail: failureReason,
+      orderId,
+      amountCents: amount,
+    });
     return { ok: false, error: failureReason };
   }
 
@@ -283,6 +291,13 @@ async function applyRefundEffects(
           .select("id")
           .maybeSingle();
         recoveryId = recovery?.id;
+        await sendAdminAlert({
+          kind: "recovery_case_opened",
+          title: "Transfer reversal failed — recovery case opened",
+          detail: `Reclaiming the seller's share of a refunded order failed; the platform is out of pocket until this closes.`,
+          orderId,
+          amountCents: reverseNow,
+        });
       }
     }
   }

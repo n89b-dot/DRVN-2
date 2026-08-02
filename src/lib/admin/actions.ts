@@ -2,10 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 
+import type Stripe from "stripe";
+
 import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "./audit";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
+import { dispatchStripeEvent } from "@/lib/payments/settlement";
 import { processDueTransfers } from "@/lib/payments/transfer-worker";
 import { getAdminContext } from "./guard";
 import { refundOrder } from "@/lib/payments/refunds";
@@ -30,10 +33,22 @@ export type AdminActionState = { ok?: string; error?: string } | null;
 
 type Ctx = { userId: string; admin: ReturnType<typeof createAdminClient> };
 
-async function requireAdmin(): Promise<Ctx | null> {
+/**
+ * Mutation gate: full admins only. Viewers (0023 read-only role) pass the
+ * layout's read gate but every action refuses them here with an explicit
+ * message — not a 404, because they legitimately know the console exists.
+ */
+async function requireAdmin(): Promise<Ctx | { error: string } | null> {
   const ctx = await getAdminContext();
   if (!ctx) return null;
+  if (ctx.role !== "admin") {
+    return { error: "Read-only access — this console login can look, not act." };
+  }
   return { userId: ctx.userId, admin: createAdminClient() };
+}
+
+function isCtx(v: Ctx | { error: string } | null): v is Ctx {
+  return Boolean(v && "admin" in v);
 }
 
 function field(formData: FormData, name: string): string {
@@ -77,6 +92,7 @@ export async function adminForceRefund(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const orderId = field(formData, "order_id");
   const reason = field(formData, "reason");
@@ -149,6 +165,7 @@ export async function adminResolveForSeller(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const orderId = field(formData, "order_id");
   const reason = field(formData, "reason");
@@ -213,6 +230,7 @@ export async function adminRemoveListing(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const listingId = field(formData, "listing_id");
   const reason = field(formData, "reason");
@@ -280,6 +298,7 @@ export async function adminRestoreListing(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const listingId = field(formData, "listing_id");
   const reason = field(formData, "reason");
@@ -323,6 +342,7 @@ export async function adminSuspendUser(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const userId = field(formData, "user_id");
   const reason = field(formData, "reason");
@@ -382,6 +402,7 @@ export async function adminUnsuspendUser(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const userId = field(formData, "user_id");
   const reason = field(formData, "reason");
@@ -445,6 +466,7 @@ export async function adminResolveReport(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const reportId = field(formData, "report_id");
   const outcome = field(formData, "outcome");
@@ -500,6 +522,7 @@ export async function adminRunTransferWorker(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const reason = field(formData, "reason");
   if (!reason) return { error: "A reason is required — it goes in the audit log." };
@@ -537,6 +560,7 @@ export async function adminResolveRecovery(
 ): Promise<AdminActionState> {
   const ctx = await requireAdmin();
   if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
 
   const recoveryId = field(formData, "recovery_id");
   const outcome = field(formData, "outcome");
@@ -576,5 +600,226 @@ export async function adminResolveRecovery(
     return { ok: "Recovery case closed." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not close the case." };
+  }
+}
+
+// ---------- Internal notes / party messaging (console audit follow-ups) ----------
+
+/**
+ * An internal note IS an audit entry — same append-only table, action
+ * `note.internal`, mutation a no-op. It shows up in the subject's admin
+ * history and the audit page with zero extra machinery, and inherits the
+ * same immutability guarantees as every other admin action.
+ */
+export async function adminAddNote(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const subjectType = field(formData, "subject_type");
+  const subjectId = field(formData, "subject_id");
+  const orderId = field(formData, "order_id");
+  const note = field(formData, "reason");
+  if (!["order", "user"].includes(subjectType)) return { error: "Bad subject." };
+  if (!subjectId) return { error: "Missing subject." };
+  if (!note) return { error: "Write the note first." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "note.internal",
+        subjectType: subjectType as "order" | "user",
+        subjectId,
+        orderId: orderId || undefined,
+        reason: note,
+      },
+      async () => ({})
+    );
+    revalidatePath("/admin", "layout");
+    return { ok: "Note recorded." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not record the note." };
+  }
+}
+
+/**
+ * Message both parties on an order. Deliberately notifications, not the order
+ * thread: the thread is the buyer↔seller channel (1:1 rows), and support
+ * words do not belong in their mouths. Both parties get the same text,
+ * attributed to DRVN support, and the full text lands in the audit log.
+ */
+export async function adminMessageParties(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const orderId = field(formData, "order_id");
+  const message = field(formData, "reason");
+  if (!orderId) return { error: "Missing order." };
+  if (!message) return { error: "Write the message first." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "order.message_parties",
+        subjectType: "order",
+        subjectId: orderId,
+        orderId,
+        reason: message,
+      },
+      async () => {
+        const { data: order } = await ctx.admin
+          .from("orders")
+          .select("id, buyer_id, seller_id")
+          .eq("id", orderId)
+          .maybeSingle();
+        if (!order) throw new Error("Order not found.");
+        await notifyBothParties(ctx.admin, order, "A message from DRVN support", message);
+        return { recipients: [order.buyer_id, order.seller_id].filter(Boolean).length };
+      }
+    );
+    revalidateOrder(orderId);
+    return { ok: "Message sent to both parties." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not send the message." };
+  }
+}
+
+// ---------- Bulk report resolution ----------
+
+/**
+ * Resolve every report in the submitted id set with one outcome and note —
+ * the moderation-sweep case (ten reports about one seller). One audit row
+ * per report, same as resolving them one by one; capped at 50 ids.
+ */
+export async function adminResolveReports(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const ids = field(formData, "report_ids").split(",").map((x) => x.trim()).filter(Boolean);
+  const outcome = field(formData, "outcome");
+  const note = field(formData, "note");
+  if (!ids.length) return { error: "No reports selected." };
+  if (ids.length > 50) return { error: "50 at a time, tops." };
+  if (!["actioned", "dismissed"].includes(outcome)) return { error: "Pick an outcome." };
+  if (!note) return { error: "A note is required — it goes in the audit log." };
+
+  let resolved = 0;
+  let skipped = 0;
+  for (const reportId of ids) {
+    try {
+      await auditedAction(
+        ctx.admin,
+        {
+          actorId: ctx.userId,
+          action: `report.${outcome}`,
+          subjectType: "report",
+          subjectId: reportId,
+          reason: `${note} (bulk: ${ids.length} reports)`,
+        },
+        async () => {
+          const { data: done, error } = await ctx.admin
+            .from("reports")
+            .update({
+              status: outcome as "actioned" | "dismissed",
+              resolved_by: ctx.userId,
+              resolved_at: new Date().toISOString(),
+              resolution_note: note,
+            })
+            .eq("id", reportId)
+            .eq("status", "open")
+            .select("id");
+          if (error) throw new Error(error.message);
+          if (!done?.length) throw new Error("already resolved");
+          return {};
+        }
+      );
+      resolved += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  revalidatePath("/admin", "layout");
+  return {
+    ok: `${resolved} report${resolved === 1 ? "" : "s"} ${outcome}${skipped ? `; ${skipped} already resolved` : ""}.`,
+  };
+}
+
+// ---------- Webhook replay ----------
+
+/**
+ * Re-run a recorded Stripe event through the same idempotent handlers the
+ * live webhook uses (dispatchStripeEvent). For investigations where an event
+ * half-applied — replaying an already-applied event is a no-op by design.
+ * Events recorded before payload retention (0023) cannot be replayed.
+ */
+export async function adminReplayWebhookEvent(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const eventId = field(formData, "event_id");
+  const reason = field(formData, "reason");
+  if (!eventId) return { error: "Missing event." };
+  if (!reason) return { error: "A reason is required — it goes in the audit log." };
+
+  try {
+    const outcome = await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "payments.replay_webhook",
+        subjectType: "payment",
+        subjectId: randomUUID(),
+        reason: `${reason} (event ${eventId})`,
+      },
+      async () => {
+        const { data: row } = await ctx.admin
+          .from("webhook_events")
+          .select("id, payload")
+          .eq("id", eventId)
+          .maybeSingle();
+        if (!row) throw new Error("Event not found.");
+        if (!row.payload) {
+          throw new Error("Recorded before payload retention (0023) — nothing stored to replay.");
+        }
+        const result = await dispatchStripeEvent(ctx.admin, row.payload as Stripe.Event);
+        if (result === "ok") {
+          await ctx.admin
+            .from("webhook_events")
+            .update({ processed_at: new Date().toISOString() })
+            .eq("id", eventId);
+        }
+        return { result };
+      }
+    );
+    revalidatePath("/admin", "layout");
+    return {
+      ok:
+        outcome.result === "ok"
+          ? "Event replayed and applied."
+          : outcome.result === "partial"
+            ? "Replayed — some orders could not finalize; check recovery cases."
+            : "Replayed — event type has no handler (ignored).",
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Replay failed." };
   }
 }

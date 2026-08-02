@@ -2,10 +2,11 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
-import { searchUsers, USER_STATE_FILTERS, type UserStateFilter } from "@/lib/admin/queries";
-import { cx } from "@/lib/format";
+import { searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
+import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
+import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +19,21 @@ export const dynamic = "force-dynamic";
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; state?: string }>;
+  searchParams: Promise<{ q?: string; state?: string; page?: string }>;
 }) {
-  const { q, state } = await searchParams;
+  const { q, state, page: pageParam } = await searchParams;
+  const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
   const activeState = (USER_STATE_FILTERS.some((f) => f.key === state)
     ? state
     : "all") as UserStateFilter;
-  const rows = await searchUsers(q, activeState);
+  const { rows, total, hasMore } = await searchUsers(q, activeState, page);
+
+  const pagerHref = (target: number) =>
+    `/admin/users?${new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(activeState !== "all" ? { state: activeState } : {}),
+      ...(target > 0 ? { page: String(target) } : {}),
+    })}`;
 
   return (
     <>
@@ -72,7 +81,9 @@ export default async function AdminUsersPage({
       {rows.length ? (
         <>
         <p className="order__meta mb-2">
-          {rows.length} user{rows.length === 1 ? "" : "s"}
+          {total} user{total === 1 ? "" : "s"}
+          {total > rows.length &&
+            ` · showing ${page * USERS_PAGE_SIZE + 1}–${page * USERS_PAGE_SIZE + rows.length}`}
         </p>
         <table className="ledger">
           <thead>
@@ -99,10 +110,13 @@ export default async function AdminUsersPage({
               <tr key={u.id}>
                 <td>
                   <Link
-                    href={u.username ? `/u/${u.username}` : `/admin/users?q=${u.id}`}
-                    className="order__name block hover:text-live"
+                    href={`/admin/users/${u.id}`}
+                    className={cx(
+                      "order__name block hover:text-live",
+                      isPersonStub(u) && "person--stub",
+                    )}
                   >
-                    {u.displayName ?? u.username ?? u.id.slice(0, 8)}
+                    {personLabel(u)}
                   </Link>
                   <span className="order__meta">
                     @{u.username ?? "—"} · joined {new Date(u.createdAt).toLocaleDateString()}
@@ -122,15 +136,15 @@ export default async function AdminUsersPage({
                   {u.disputeCount || "—"}
                 </td>
                 <td data-label="Payouts">
-                  <span className={cx("chip", u.payoutsEnabled ? "chip--ok" : "chip--spent")}>
-                    {u.payoutsEnabled ? "Enabled" : "Not set up"}
+                  <span className="status-plain">
+                    {u.payoutsEnabled ? "enabled" : "not set up"}
                   </span>
                 </td>
                 <td data-label="State">
                   {u.suspendedAt ? (
                     <span className="chip chip--live">Suspended</span>
                   ) : (
-                    <span className="chip chip--ok">Active</span>
+                    <span className="status-plain">active</span>
                   )}
                 </td>
                 <td>
@@ -165,6 +179,7 @@ export default async function AdminUsersPage({
             ))}
           </tbody>
         </table>
+        <Pager page={page} hasMore={hasMore} href={pagerHref} />
         </>
       ) : (
         <div className="tile">

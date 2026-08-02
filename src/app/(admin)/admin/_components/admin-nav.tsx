@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 import type { NavCounts } from "@/lib/admin/queries";
 import { cx } from "@/lib/format";
@@ -25,13 +26,21 @@ const LINKS = [
  */
 export function AdminNav({ counts }: { counts: NavCounts }) {
   const pathname = usePathname();
+  const navRef = useRef<HTMLElement>(null);
+  // On phones the nav is a horizontal rail — keep the section you're in
+  // on-screen instead of parked past the right edge.
+  useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [pathname]);
   const badgeFor: Record<string, number> = {
     "/admin/disputes": counts.disputes,
     "/admin/reports": counts.reports,
     "/admin/payments": counts.money,
   };
   return (
-    <nav aria-label="Console sections" className="filters !mb-0">
+    <nav ref={navRef} aria-label="Console sections" className="filters console-nav !mb-0">
       {LINKS.map(([href, label]) => {
         const active = href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
         const badge = badgeFor[href] ?? 0;

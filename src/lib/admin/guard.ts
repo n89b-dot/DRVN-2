@@ -14,8 +14,12 @@ import { createClient } from "@/lib/supabase/server";
  * already been one live money-extraction path (see 0017).
  */
 
+export type AdminRole = "admin" | "viewer";
+
 export type AdminContext = {
   userId: string;
+  /** 'admin' acts; 'viewer' reads (0023). Actions re-check this themselves. */
+  role: AdminRole;
   /** RLS client, authenticated as the admin — reads flow through policies. */
   supabase: Awaited<ReturnType<typeof createClient>>;
 };
@@ -32,8 +36,8 @@ export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  if (!isAdmin) return null;
+  const { data: role } = await supabase.rpc("admin_role");
+  if (role !== "admin" && role !== "viewer") return null;
 
-  return { userId: user.id, supabase };
+  return { userId: user.id, role, supabase };
 });

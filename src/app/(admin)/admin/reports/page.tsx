@@ -2,12 +2,13 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { SheetTabs } from "@/components/ui";
-import { adminResolveReport } from "@/lib/admin/actions";
-import { getReports, type AdminReportRow } from "@/lib/admin/queries";
+import { adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
+import { getReports, REPORTS_PAGE_SIZE, type AdminReportRow } from "@/lib/admin/queries";
 import type { ReportReason } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
+import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,21 @@ const REASON_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-function ReportList({ rows, open }: { rows: AdminReportRow[]; open: boolean }) {
+function ReportList({
+  rows,
+  open,
+  total,
+  page,
+  hasMore,
+  pagerHref,
+}: {
+  rows: AdminReportRow[];
+  open: boolean;
+  total: number;
+  page: number;
+  hasMore: boolean;
+  pagerHref: (page: number) => string;
+}) {
   if (!rows.length) {
     return (
       <div className="tile mt-4">
@@ -31,6 +46,39 @@ function ReportList({ rows, open }: { rows: AdminReportRow[]; open: boolean }) {
     );
   }
   return (
+    <>
+    <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2">
+      {total > rows.length ? (
+        <p className="order__meta !mb-0">
+          Showing {page * REPORTS_PAGE_SIZE + 1}–{page * REPORTS_PAGE_SIZE + rows.length} of {total}
+        </p>
+      ) : (
+        <span />
+      )}
+      {open && rows.length > 1 && (
+        <ActionDialog
+          action={adminResolveReports}
+          title={`Resolve all ${rows.length} shown`}
+          trigger={`Resolve all ${rows.length} shown`}
+          triggerClassName="relbtn !static"
+          hidden={{ report_ids: rows.map((r) => r.id).join(",") }}
+          confirmNote="Applies one outcome and note to every report listed on this page — the sweep for many flags about the same subject. Each report still gets its own audit row."
+          fields={[
+            {
+              kind: "select",
+              name: "outcome",
+              label: "Outcome",
+              options: [
+                { value: "actioned", label: "Actioned — content removed / seller handled" },
+                { value: "dismissed", label: "Dismissed — no breach" },
+              ],
+            },
+            { kind: "reason", name: "note", label: "Resolution note" },
+          ]}
+          submitLabel="Resolve all"
+        />
+      )}
+    </div>
     <div className="rowlist mt-4">
       {rows.map((r) => (
         <div key={r.id} className="jobrow">
@@ -86,6 +134,14 @@ function ReportList({ rows, open }: { rows: AdminReportRow[]; open: boolean }) {
         </div>
       ))}
     </div>
+    <Pager
+      page={page}
+      hasMore={hasMore}
+      href={pagerHref}
+      prevLabel={open ? "← Back" : "← Newer"}
+      nextLabel={open ? "More →" : "Older →"}
+    />
+    </>
   );
 }
 
@@ -97,16 +153,24 @@ function ReportList({ rows, open }: { rows: AdminReportRow[]; open: boolean }) {
 export default async function AdminReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; reason?: string }>;
+  searchParams: Promise<{ view?: string; reason?: string; page?: string }>;
 }) {
-  const { view, reason } = await searchParams;
+  const { view, reason, page: pageParam } = await searchParams;
+  const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
   const activeReason = Object.keys(REASON_LABEL).includes(reason ?? "")
     ? (reason as ReportReason)
     : undefined;
   const [open, closed] = await Promise.all([
-    getReports("open", { reason: activeReason }),
-    getReports("closed", { reason: activeReason }),
+    getReports("open", { reason: activeReason, page }),
+    getReports("closed", { reason: activeReason, page }),
   ]);
+
+  const pagerHref = (tab: "open" | "resolved") => (target: number) =>
+    `/admin/reports?${new URLSearchParams({
+      ...(activeReason ? { reason: activeReason } : {}),
+      ...(tab === "resolved" ? { view: "resolved" } : {}),
+      ...(target > 0 ? { page: String(target) } : {}),
+    })}`;
 
   const linkFor = (r?: string) =>
     `/admin/reports?${new URLSearchParams({
@@ -143,11 +207,33 @@ export default async function AdminReportsPage({
           {
             key: "open",
             label: "Open",
-            count: open.length,
-            live: open.length > 0,
-            panel: <ReportList rows={open} open />,
+            count: open.total,
+            live: open.total > 0,
+            panel: (
+              <ReportList
+                rows={open.rows}
+                open
+                total={open.total}
+                page={open.page}
+                hasMore={open.hasMore}
+                pagerHref={pagerHref("open")}
+              />
+            ),
           },
-          { key: "resolved", label: "Resolved", panel: <ReportList rows={closed} open={false} /> },
+          {
+            key: "resolved",
+            label: "Resolved",
+            panel: (
+              <ReportList
+                rows={closed.rows}
+                open={false}
+                total={closed.total}
+                page={closed.page}
+                hasMore={closed.hasMore}
+                pagerHref={pagerHref("resolved")}
+              />
+            ),
+          },
         ]}
       />
     </>

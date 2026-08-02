@@ -19,7 +19,8 @@ applied twice (idempotency check), self-checks pass. 0020 on 1 August 2026,
 applied twice, self-checks pass; the backfill created intents for every
 captured-but-untransferred order, and the worker's first pass (run from the
 admin console) cancelled the stub-era ones on record. 0021 on 1 August 2026,
-applied twice, self-checks pass.
+applied twice, self-checks pass. 0022 on 1 August 2026, applied twice
+(node-postgres), self-checks pass.
 
 ### Production wiring for the transfer worker
 
@@ -100,6 +101,7 @@ which drops every table in `public`.
 | **0019** | `0019_money_infra.sql` | Money infra: `webhook_events` dedup, `transfer_intents` (persist-before-Stripe + stuck-funds queue), `payment_recoveries`, refund-adjustment columns on orders. |
 | **0020** | `0020_transfer_scheduling.sql` | Transfers move on delivery + 7-day hold: `mark_due_transfer_intents()` + pg_cron `drvn-transfer-worker` (pg_net → `/api/jobs/transfers` when `job_config` is set), stuck-funds backfill. |
 | **0021** | `0021_dispute_sla.sql` | Dispute SLA: day-4 escalation notices (`escalate_stale_disputes()`, daily cron) + `dispute_escalated_at`; the day-10 auto-refund runs app-side in the worker pass. |
+| **0022** | `0022_sla_alert_stamp.sql` | `orders.dispute_sla_alerted_at` — once-only marker for the ops webhook alert (`ADMIN_ALERT_WEBHOOK_URL`) on SLA breach, sent by the app worker pass. |
 
 0006–0009 are new. **The app expects them**: pages that read `shipping_cents`,
 `notifications`, or call `purchase_begin` will degrade to an empty state and log

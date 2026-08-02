@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import { AUDIT_PAGE_SIZE, getAuditLog } from "@/lib/admin/queries";
 import type { AdminAuditSubjectType } from "@/lib/database.types";
-import { cx } from "@/lib/format";
+import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +16,15 @@ const SUBJECT_TYPES: AdminAuditSubjectType[] = [
   "payment",
 ];
 
+/** Fixed-width local timestamp ("2026-08-02 14:03") so the gutter never drifts. */
+function auditStamp(iso: string): string {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("en-CA")} ${d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
 /**
  * The append-only record. There is no edit and no delete — a wrong entry is
  * corrected by another action, and the database enforces that (0018 trigger,
@@ -25,17 +34,35 @@ const SUBJECT_TYPES: AdminAuditSubjectType[] = [
 export default async function AdminAuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; actor?: string; subject?: string; page?: string }>;
+  searchParams: Promise<{
+    action?: string;
+    actor?: string;
+    subject?: string;
+    page?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
-  const { action, actor, subject, page: pageParam } = await searchParams;
+  const { action, actor, subject, page: pageParam, from, to } = await searchParams;
+  const fromIso = from ? `${from}T00:00:00Z` : undefined;
+  const toIso = to
+    ? new Date(Date.parse(`${to}T00:00:00Z`) + 86_400_000).toISOString()
+    : undefined;
   const subjectType = SUBJECT_TYPES.includes(subject as AdminAuditSubjectType)
     ? (subject as AdminAuditSubjectType)
     : undefined;
   const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
-  const { rows, hasMore } = await getAuditLog({ action, actorQuery: actor, subjectType, page });
+  const { rows, hasMore } = await getAuditLog({
+    action,
+    actorQuery: actor,
+    subjectType,
+    page,
+    from: fromIso,
+    to: toIso,
+  });
 
   const link = (overrides: Record<string, string | undefined>) => {
-    const params = { action, actor, subject: subjectType, ...overrides };
+    const params = { action, actor, subject: subjectType, from, to, ...overrides };
     const qs = new URLSearchParams(
       Object.entries(params).filter((e): e is [string, string] => Boolean(e[1]))
     );
@@ -76,6 +103,14 @@ export default async function AdminAuditPage({
           className="ctl"
         />
         {subjectType && <input type="hidden" name="subject" value={subjectType} />}
+        <label htmlFor="audit-from" className="sr-only">
+          From date
+        </label>
+        <input id="audit-from" type="date" name="from" defaultValue={from ?? ""} className="ctl" />
+        <label htmlFor="audit-to" className="sr-only">
+          To date
+        </label>
+        <input id="audit-to" type="date" name="to" defaultValue={to ?? ""} className="ctl" />
         <button type="submit" className="btn">
           Filter
         </button>
@@ -98,34 +133,68 @@ export default async function AdminAuditPage({
 
       {rows.length ? (
         <>
-          <p className="order__meta mb-2">
-            Showing {page * AUDIT_PAGE_SIZE + 1}–{page * AUDIT_PAGE_SIZE + rows.length} · newest
-            first
-          </p>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <p className="order__meta !mb-0">
+              Showing {page * AUDIT_PAGE_SIZE + 1}–{page * AUDIT_PAGE_SIZE + rows.length} · newest
+              first
+            </p>
+            <a
+              href={`/admin/export?${new URLSearchParams({
+                view: "audit",
+                ...(action ? { action } : {}),
+                ...(actor ? { actor } : {}),
+                ...(subjectType ? { subject: subjectType } : {}),
+                ...(fromIso ? { from: fromIso } : {}),
+                ...(toIso ? { to: toIso } : {}),
+              })}`}
+              className="jumplink"
+            >
+              Export CSV ↓
+            </a>
+          </div>
           <div className="rowlist">
             {rows.map((r) => (
-              <div key={r.id} className="jobrow">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="flex items-baseline gap-2">
-                    <span className="chip chip--spent">{r.action}</span>
-                    <span className="order__name !text-[14.5px]">
-                      {r.actor?.username ?? r.actor?.displayName ?? r.actor_id.slice(0, 8)}
+              <div key={r.id} className="jobrow auditrow">
+                <span className="auditrow__ts">{auditStamp(r.created_at)}</span>
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-baseline gap-x-2.5">
+                    <span
+                      className={cx("auditrow__dot", `auditrow__dot--${r.subject_type}`)}
+                      title={r.subject_type}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={cx(
+                        "auditrow__actor",
+                        isPersonStub(r.actor ?? { id: r.actor_id }) && "person--stub",
+                      )}
+                    >
+                      {personLabel(r.actor ?? { id: r.actor_id })}
                     </span>
-                  </span>
-                  <span className="order__meta">{new Date(r.created_at).toLocaleString()}</span>
-                </div>
-                <p className="mt-1 text-[14.5px]">“{r.reason}”</p>
-                <p className="order__meta mt-0.5">
-                  {r.subject_type} {r.subject_id.slice(0, 8)}
-                  {r.order_id && (
-                    <>
-                      {" · "}
+                    <span className="auditrow__action">{r.action}</span>
+                  </p>
+                  <p className="mt-1 text-[14.5px]">“{r.reason}”</p>
+                  <p className="order__meta mt-0.5">
+                    {r.order_id === r.subject_id ? (
                       <Link href={`/admin/orders/${r.order_id}`} className="jumplink">
                         order {r.order_id.slice(0, 8)} →
                       </Link>
-                    </>
-                  )}
-                </p>
+                    ) : (
+                      <>
+                        <span className="sr-only">{r.subject_type} </span>
+                        {r.subject_id.slice(0, 8)}
+                        {r.order_id && (
+                          <>
+                            {" · "}
+                            <Link href={`/admin/orders/${r.order_id}`} className="jumplink">
+                              order {r.order_id.slice(0, 8)} →
+                            </Link>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </p>
+                </div>
               </div>
             ))}
           </div>

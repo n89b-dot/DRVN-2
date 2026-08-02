@@ -1,13 +1,9 @@
 import type Stripe from "stripe";
 
 import {
-  applyAccountUpdate,
-  applyChargeRefund,
-  applyDisputeEvent,
   claimWebhookEvent,
-  markRequiresAction,
+  dispatchStripeEvent,
   markWebhookEventProcessed,
-  settleIntent,
 } from "@/lib/payments/settlement";
 import { stripeClient } from "@/lib/payments/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -59,44 +55,13 @@ export async function POST(request: Request) {
   };
 
   try {
-    switch (event.type) {
-      case "payment_intent.succeeded":
-      case "payment_intent.payment_failed": {
-        const intent = event.data.object as Stripe.PaymentIntent;
-        const allApplied = await settleIntent(
-          admin,
-          intent,
-          event.type === "payment_intent.succeeded"
-        );
-        // A 500 makes Stripe redeliver — correct when a finalize genuinely
-        // failed, harmless when it later succeeds (the terminal-state guard
-        // skips it).
-        return done(allApplied ? "ok" : "partial", allApplied ? 200 : 500);
-      }
-      case "payment_intent.requires_action": {
-        await markRequiresAction(admin, event.data.object as Stripe.PaymentIntent);
-        return done("ok", 200);
-      }
-      case "charge.refunded": {
-        await applyChargeRefund(admin, event.data.object as Stripe.Charge);
-        return done("ok", 200);
-      }
-      case "charge.dispute.created": {
-        await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false);
-        return done("ok", 200);
-      }
-      case "charge.dispute.closed": {
-        await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true);
-        return done("ok", 200);
-      }
-      case "account.updated": {
-        await applyAccountUpdate(admin, event.data.object as Stripe.Account);
-        return done("ok", 200);
-      }
-      default:
-        // Not ours to handle — acknowledge so Stripe stops redelivering.
-        return done("ignored", 200);
-    }
+    // All handler mapping lives in dispatchStripeEvent (shared with the
+    // console's replay action). A 500 on "partial" makes Stripe redeliver —
+    // correct when a finalize genuinely failed, harmless when it later
+    // succeeds (the terminal-state guard skips it). "ignored" acknowledges so
+    // Stripe stops redelivering what isn't ours to handle.
+    const outcome = await dispatchStripeEvent(admin, event);
+    return done(outcome, outcome === "partial" ? 500 : 200);
   } catch (error) {
     // Unexpected failure: let Stripe redeliver rather than losing the event.
     reportError("[stripe:webhook] handler failed", { type: event.type, error });

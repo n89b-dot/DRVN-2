@@ -1,10 +1,11 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { ORDERS_PAGE_SIZE, searchOrders } from "@/lib/admin/queries";
+import { getOrderStatusCounts, ORDERS_PAGE_SIZE, searchOrders } from "@/lib/admin/queries";
+import { ORDER_STATUS_CHIP } from "@/lib/admin/presentation";
 import type { OrderStatus } from "@/lib/database.types";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
-import { cx } from "@/lib/format";
+import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -27,17 +28,47 @@ const STATUSES: OrderStatus[] = [
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    page?: string;
+    from?: string;
+    to?: string;
+    min?: string;
+    max?: string;
+  }>;
 }) {
-  const { q, status, page: pageParam } = await searchParams;
+  const { q, status, page: pageParam, from, to, min, max } = await searchParams;
   const activeStatus = STATUSES.includes(status as OrderStatus) ? (status as OrderStatus) : undefined;
   const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
-  const { rows, hasMore } = await searchOrders({ query: q, status: activeStatus, page });
+  const fromIso = from ? `${from}T00:00:00Z` : undefined;
+  const toIso = to
+    ? new Date(Date.parse(`${to}T00:00:00Z`) + 86_400_000).toISOString()
+    : undefined;
+  // Dollar inputs; blank or junk = unbounded.
+  const parseAmount = (v?: string) => {
+    const n = Number(v);
+    return v && Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : undefined;
+  };
+  const minCents = parseAmount(min);
+  const maxCents = parseAmount(max);
+  const [{ rows, hasMore }, counts] = await Promise.all([
+    searchOrders({ query: q, status: activeStatus, page, from: fromIso, to: toIso, minCents, maxCents }),
+    getOrderStatusCounts({ statuses: STATUSES, from: fromIso, to: toIso }),
+  ]);
+  const allCount = STATUSES.reduce((s, key) => s + (counts[key] ?? 0), 0);
 
+  const dateParams = {
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+    ...(minCents != null && min ? { min } : {}),
+    ...(maxCents != null && max ? { max } : {}),
+  };
   const pageLink = (target: number) =>
     `/admin/orders?${new URLSearchParams({
       ...(q ? { q } : {}),
       ...(activeStatus ? { status: activeStatus } : {}),
+      ...dateParams,
       ...(target > 0 ? { page: String(target) } : {}),
     })}`;
 
@@ -63,32 +94,88 @@ export default async function AdminOrdersPage({
           className="ctl"
         />
         {activeStatus && <input type="hidden" name="status" value={activeStatus} />}
+        <label htmlFor="admin-order-from" className="sr-only">
+          From date
+        </label>
+        <input id="admin-order-from" type="date" name="from" defaultValue={from ?? ""} className="ctl" />
+        <label htmlFor="admin-order-to" className="sr-only">
+          To date
+        </label>
+        <input id="admin-order-to" type="date" name="to" defaultValue={to ?? ""} className="ctl" />
+        <label htmlFor="admin-order-min" className="sr-only">
+          Minimum total ($)
+        </label>
+        <input
+          id="admin-order-min"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          name="min"
+          defaultValue={min ?? ""}
+          placeholder="Min $"
+          className="ctl max-w-[10ch]"
+        />
+        <label htmlFor="admin-order-max" className="sr-only">
+          Maximum total ($)
+        </label>
+        <input
+          id="admin-order-max"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          name="max"
+          defaultValue={max ?? ""}
+          placeholder="Max $"
+          className="ctl max-w-[10ch]"
+        />
         <button type="submit" className="btn">
           Search
         </button>
       </form>
 
       <div className="filters mb-4" aria-label="Filter by status">
-        <Link href={`/admin/orders${q ? `?q=${encodeURIComponent(q)}` : ""}`} className={cx("fbtn", !activeStatus && "is-on")}>
-          All
+        <Link
+          href={`/admin/orders?${new URLSearchParams({ ...(q ? { q } : {}), ...dateParams })}`}
+          className={cx("fbtn", !activeStatus && "is-on")}
+        >
+          All <span className="n ml-1">{allCount}</span>
         </Link>
         {STATUSES.map((s) => (
           <Link
             key={s}
-            href={`/admin/orders?${new URLSearchParams({ ...(q ? { q } : {}), status: s })}`}
+            href={`/admin/orders?${new URLSearchParams({ ...(q ? { q } : {}), ...dateParams, status: s })}`}
             className={cx("fbtn", activeStatus === s && "is-on")}
           >
             {s.replace("_", " ")}
+            {(counts[s] ?? 0) > 0 && <span className="n ml-1">{counts[s]}</span>}
           </Link>
         ))}
       </div>
 
       {rows.length ? (
         <>
-        <p className="order__meta mb-2">
-          Showing {page * ORDERS_PAGE_SIZE + 1}–{page * ORDERS_PAGE_SIZE + rows.length} · newest
-          first
-        </p>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="order__meta !mb-0">
+            Showing {page * ORDERS_PAGE_SIZE + 1}–{page * ORDERS_PAGE_SIZE + rows.length} · newest
+            first
+          </p>
+          <a
+            href={`/admin/export?${new URLSearchParams({
+              view: "orders",
+              ...(q ? { q } : {}),
+              ...(activeStatus ? { status: activeStatus } : {}),
+              ...(fromIso ? { from: fromIso } : {}),
+              ...(toIso ? { to: toIso } : {}),
+              ...(minCents != null && min ? { min } : {}),
+              ...(maxCents != null && max ? { max } : {}),
+            })}`}
+            className="jumplink"
+          >
+            Export CSV ↓
+          </a>
+        </div>
         <table className="ledger">
           <thead>
             <tr>
@@ -98,7 +185,9 @@ export default async function AdminOrdersPage({
               <th scope="col" className="text-right">
                 Total
               </th>
-              <th scope="col">Money</th>
+              <th scope="col" className="cell-gap">
+                Money
+              </th>
               <th scope="col">Status</th>
             </tr>
           </thead>
@@ -110,25 +199,41 @@ export default async function AdminOrdersPage({
                     {r.title}
                   </Link>
                   <span className="order__meta">
-                    {r.id.slice(0, 8)} · {new Date(r.createdAt).toLocaleDateString()}
+                    {/* When the title is already the id fallback, repeating the
+                        id below it says nothing — the date carries the line. */}
+                    {r.title === `Order ${r.id.slice(0, 8)}`
+                      ? new Date(r.createdAt).toLocaleDateString()
+                      : `${r.id.slice(0, 8)} · ${new Date(r.createdAt).toLocaleDateString()}`}
                   </span>
                 </td>
-                <td data-label="Buyer">{r.buyer?.username ?? "—"}</td>
-                <td data-label="Seller">{r.seller?.username ?? "—"}</td>
+                <td data-label="Buyer">
+                  <span className={cx(isPersonStub(r.buyer) && "person--stub")}>
+                    {personLabel(r.buyer)}
+                  </span>
+                </td>
+                <td data-label="Seller">
+                  <span className={cx(isPersonStub(r.seller) && "person--stub")}>
+                    {personLabel(r.seller)}
+                  </span>
+                </td>
                 <td className="ledger__num" data-label="Total">
                   {formatPrice(r.totalCents)}
                 </td>
-                <td data-label="Money">
+                <td data-label="Money" className="cell-gap">
                   {r.refundedCents > 0 ? (
                     <span className="chip chip--live">Refunded {formatPrice(r.refundedCents)}</span>
-                  ) : r.transferred ? (
-                    <span className="chip chip--ok">Paid out</span>
                   ) : (
-                    <span className="chip chip--spent">Held</span>
+                    <span className="status-plain">{r.transferred ? "paid out" : "held"}</span>
                   )}
                 </td>
                 <td data-label="Status">
-                  <span className="chip chip--spent">{r.status}</span>
+                  {ORDER_STATUS_CHIP[r.status] ? (
+                    <span className={cx("chip", ORDER_STATUS_CHIP[r.status])}>
+                      {r.status.replace("_", " ")}
+                    </span>
+                  ) : (
+                    <span className="status-plain">{r.status.replace("_", " ")}</span>
+                  )}
                 </td>
               </tr>
             ))}

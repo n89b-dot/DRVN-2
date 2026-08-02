@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { recordExternalRefund } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
+import { sendAdminAlert } from "@/lib/admin/alerts";
 
 /**
  * Webhook settlement logic (Rev D R1, reworked for Rev E) — everything the
@@ -253,6 +254,12 @@ export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Pr
       amount_cents: outstanding,
       detail: `Charge ${charge.id} (intent ${intentId}): ${outstanding} refunded at Stripe matches no single order. Attribute manually and book with a console refund.`,
     });
+    await sendAdminAlert({
+      kind: "recovery_case_opened",
+      title: "Unattributed partial refund — recovery case opened",
+      detail: `Charge ${charge.id}: a dashboard refund matches no single order.`,
+      amountCents: outstanding,
+    });
   }
 }
 
@@ -390,7 +397,8 @@ export async function applyAccountUpdate(admin: Admin, account: Stripe.Account) 
 export async function claimWebhookEvent(admin: Admin, event: Stripe.Event): Promise<boolean> {
   const { error } = await admin
     .from("webhook_events")
-    .insert({ id: event.id, type: event.type });
+    // Payload retained (0023) so the console can inspect and replay events.
+    .insert({ id: event.id, type: event.type, payload: event as unknown as null });
   if (!error) return true;
   if (error.code === "23505") {
     const { data: existing } = await admin
@@ -409,4 +417,41 @@ export async function markWebhookEventProcessed(admin: Admin, eventId: string): 
     .from("webhook_events")
     .update({ processed_at: new Date().toISOString() })
     .eq("id", eventId);
+}
+
+/**
+ * The one place a Stripe event maps to handlers — shared by the webhook route
+ * (live delivery) and the console's replay action (0023 payload retention).
+ * "partial" means a finalize genuinely failed and the event should be retried;
+ * every handler is idempotent, so replaying an already-applied event is safe.
+ */
+export async function dispatchStripeEvent(
+  admin: Admin,
+  event: Stripe.Event
+): Promise<"ok" | "partial" | "ignored"> {
+  switch (event.type) {
+    case "payment_intent.succeeded":
+    case "payment_intent.payment_failed": {
+      const intent = event.data.object as Stripe.PaymentIntent;
+      const allApplied = await settleIntent(admin, intent, event.type === "payment_intent.succeeded");
+      return allApplied ? "ok" : "partial";
+    }
+    case "payment_intent.requires_action":
+      await markRequiresAction(admin, event.data.object as Stripe.PaymentIntent);
+      return "ok";
+    case "charge.refunded":
+      await applyChargeRefund(admin, event.data.object as Stripe.Charge);
+      return "ok";
+    case "charge.dispute.created":
+      await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false);
+      return "ok";
+    case "charge.dispute.closed":
+      await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true);
+      return "ok";
+    case "account.updated":
+      await applyAccountUpdate(admin, event.data.object as Stripe.Account);
+      return "ok";
+    default:
+      return "ignored";
+  }
 }

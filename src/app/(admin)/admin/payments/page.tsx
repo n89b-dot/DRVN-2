@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
+import { adminReplayWebhookEvent, adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
 import { getPaymentsOps } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
-import { cx } from "@/lib/format";
+import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
 
@@ -182,7 +182,11 @@ export default async function AdminPaymentsPage({
                     </Link>
                     <span className="order__meta">{i.order_id.slice(0, 8)}</span>
                   </td>
-                  <td data-label="Seller">{i.seller?.username ?? "—"}</td>
+                  <td data-label="Seller">
+                    <span className={cx(isPersonStub(i.seller) && "person--stub")}>
+                      {personLabel(i.seller)}
+                    </span>
+                  </td>
                   <td className="ledger__num" data-label="Net owed">
                     {formatPrice(i.amount_cents)}
                   </td>
@@ -190,7 +194,11 @@ export default async function AdminPaymentsPage({
                     <span
                       className={cx(
                         "chip",
-                        ["blocked_unpayable", "failed"].includes(i.status) ? "chip--live" : "chip--spent"
+                        ["blocked_unpayable", "failed"].includes(i.status)
+                          ? "chip--live"
+                          : i.status === "ready"
+                            ? "chip--warn"
+                            : "chip--spent"
                       )}
                     >
                       {INTENT_LABEL[i.status] ?? i.status}
@@ -223,12 +231,36 @@ export default async function AdminPaymentsPage({
               <div key={e.id} className="jobrow">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="kv">{e.type}</span>
-                  <span className="order__meta">
-                    {new Date(e.receivedAt).toLocaleString()} ·{" "}
-                    {e.processedAt ? "processed" : "received"}
+                  <span className="flex items-baseline gap-2">
+                    <span className="order__meta">
+                      {new Date(e.receivedAt).toLocaleString()} ·{" "}
+                      {e.processedAt ? "processed" : "received"}
+                    </span>
+                    <ActionDialog
+                      action={adminReplayWebhookEvent}
+                      title={`Replay ${e.type}`}
+                      trigger="Replay"
+                      triggerClassName="relbtn !static"
+                      hidden={{ event_id: e.id }}
+                      confirmNote={
+                        e.payload
+                          ? "Re-runs this event through the same idempotent handlers the live webhook uses. Already-applied effects are skipped by design."
+                          : "This event was recorded before payload retention — there is nothing stored to replay."
+                      }
+                      fields={[{ kind: "reason" }]}
+                      submitLabel="Replay event"
+                    />
                   </span>
                 </div>
                 <p className="order__meta mt-0.5">{e.id}</p>
+                {e.payload && (
+                  <details className="mt-1">
+                    <summary className="jumplink cursor-pointer">payload</summary>
+                    <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-paper-deep p-3 text-[12px] leading-relaxed">
+                      {e.payload}
+                    </pre>
+                  </details>
+                )}
               </div>
             ))}
           </div>

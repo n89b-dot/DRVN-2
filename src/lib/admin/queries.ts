@@ -45,45 +45,91 @@ export type AdminOverview = {
   orders7d: number;
   gmv7dCents: number;
   refunds7dCents: number;
+  /** DRVN's own take: platform fees on the period's orders, net of the fee
+   *  share handed back on refunds. */
+  fees7dCents: number;
+  /** The 7 days before the last 7 — "is this getting worse?" without a click. */
+  orders7dPrev: number;
+  gmv7dPrevCents: number;
+  refunds7dPrevCents: number;
+  fees7dPrevCents: number;
   suspendedSellers: number;
   removedListings: number;
 };
 
+const GMV_STATUSES: OrderStatus[] = [
+  "paid",
+  "shipped",
+  "delivered",
+  "completed",
+  "disputed",
+  "refunded",
+];
+
 export async function getOverview(): Promise<AdminOverview> {
   const a = admin();
   const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const since14d = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const slaCutoff = new Date(Date.now() - DISPUTE_SLA_DAYS * 86_400_000).toISOString();
 
-  const [disputes, overSla, oldest, reports, recoveries, stuck, orders7, refunds7, suspended, removed] =
-    await Promise.all([
-      a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
-      a
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "disputed")
-        .lt("disputed_at", slaCutoff),
-      a
-        .from("orders")
-        .select("disputed_at")
-        .eq("status", "disputed")
-        .order("disputed_at", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-      a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
-      a.from("payment_recoveries").select("id", { count: "exact", head: true }).eq("status", "open"),
-      a
-        .from("transfer_intents")
-        .select("order_id", { count: "exact", head: true })
-        .in("status", ["blocked_unpayable", "failed"]),
-      a
-        .from("orders")
-        .select("total_cents")
-        .gte("created_at", since7d)
-        .in("status", ["paid", "shipped", "delivered", "completed", "disputed", "refunded"]),
-      a.from("orders").select("refunded_cents").gt("refunded_cents", 0).gte("refunded_at", since7d),
-      a.from("profiles").select("id", { count: "exact", head: true }).not("suspended_at", "is", null),
-      a.from("listings").select("id", { count: "exact", head: true }).eq("status", "removed"),
-    ]);
+  const [
+    disputes,
+    overSla,
+    oldest,
+    reports,
+    recoveries,
+    stuck,
+    orders7,
+    orders7Prev,
+    refunds7,
+    refunds7Prev,
+    suspended,
+    removed,
+  ] = await Promise.all([
+    a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
+    a
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "disputed")
+      .lt("disputed_at", slaCutoff),
+    a
+      .from("orders")
+      .select("disputed_at")
+      .eq("status", "disputed")
+      .order("disputed_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
+    a.from("payment_recoveries").select("id", { count: "exact", head: true }).eq("status", "open"),
+    a
+      .from("transfer_intents")
+      .select("order_id", { count: "exact", head: true })
+      .in("status", ["blocked_unpayable", "failed"]),
+    a
+      .from("orders")
+      .select("total_cents, platform_fee_cents")
+      .gte("created_at", since7d)
+      .in("status", GMV_STATUSES),
+    a
+      .from("orders")
+      .select("total_cents, platform_fee_cents")
+      .gte("created_at", since14d)
+      .lt("created_at", since7d)
+      .in("status", GMV_STATUSES),
+    a
+      .from("orders")
+      .select("refunded_cents, platform_fee_refunded_cents")
+      .gt("refunded_cents", 0)
+      .gte("refunded_at", since7d),
+    a
+      .from("orders")
+      .select("refunded_cents, platform_fee_refunded_cents")
+      .gt("refunded_cents", 0)
+      .gte("refunded_at", since14d)
+      .lt("refunded_at", since7d),
+    a.from("profiles").select("id", { count: "exact", head: true }).not("suspended_at", "is", null),
+    a.from("listings").select("id", { count: "exact", head: true }).eq("status", "removed"),
+  ]);
 
   const oldestDisputeDays = oldest.data?.disputed_at
     ? Math.floor((Date.now() - new Date(oldest.data.disputed_at).getTime()) / 86_400_000)
@@ -99,6 +145,15 @@ export async function getOverview(): Promise<AdminOverview> {
     orders7d: orders7.data?.length ?? 0,
     gmv7dCents: (orders7.data ?? []).reduce((s, o) => s + o.total_cents, 0),
     refunds7dCents: (refunds7.data ?? []).reduce((s, o) => s + o.refunded_cents, 0),
+    fees7dCents:
+      (orders7.data ?? []).reduce((s, o) => s + o.platform_fee_cents, 0) -
+      (refunds7.data ?? []).reduce((s, o) => s + o.platform_fee_refunded_cents, 0),
+    orders7dPrev: orders7Prev.data?.length ?? 0,
+    gmv7dPrevCents: (orders7Prev.data ?? []).reduce((s, o) => s + o.total_cents, 0),
+    refunds7dPrevCents: (refunds7Prev.data ?? []).reduce((s, o) => s + o.refunded_cents, 0),
+    fees7dPrevCents:
+      (orders7Prev.data ?? []).reduce((s, o) => s + o.platform_fee_cents, 0) -
+      (refunds7Prev.data ?? []).reduce((s, o) => s + o.platform_fee_refunded_cents, 0),
     suspendedSellers: suspended.count ?? 0,
     removedListings: removed.count ?? 0,
   };
@@ -139,71 +194,135 @@ export type DisputeQueueRow = {
   transferred: boolean;
 };
 
+export const DISPUTES_PAGE_SIZE = 50;
+
 export type DisputeQueueResult = {
   rows: DisputeQueueRow[];
   /** Before search/category filtering — "N open · M shown". */
   total: number;
+  page: number;
+  hasMore: boolean;
 };
 
+/**
+ * Search and filters run in the database, not over a capped fetch — a dispute
+ * beyond any page boundary is still findable, so the backlog can never hide.
+ */
 export async function getDisputeQueue(
   scope: "open" | "resolved",
-  opts: { query?: string; category?: DisputeCategory } = {}
+  opts: {
+    query?: string;
+    category?: DisputeCategory;
+    /** Only rows already past the SLA window — the escalation view. */
+    overSlaOnly?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}
 ): Promise<DisputeQueueResult> {
   const a = admin();
-  const base = a
+  const page = Math.max(0, opts.page ?? 0);
+  const size = Math.min(Math.max(1, opts.pageSize ?? DISPUTES_PAGE_SIZE), 5000);
+  const q = opts.query?.trim();
+
+  // Resolve free-text search to id sets first: parties by name, orders by
+  // item title. An id-shaped query is an order-id prefix instead.
+  const idPrefix = q && /^[0-9a-f-]{8,}$/i.test(q) ? q : undefined;
+  let partyIds: string[] = [];
+  let itemOrderIds: string[] = [];
+  if (q && !idPrefix) {
+    const [profiles, items] = await Promise.all([
+      a
+        .from("profiles")
+        .select("id")
+        .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+        .limit(20),
+      a.from("order_items").select("order_id").ilike("title", `%${q}%`).limit(200),
+    ]);
+    partyIds = (profiles.data ?? []).map((p) => p.id);
+    itemOrderIds = [...new Set((items.data ?? []).map((i) => i.order_id))];
+  }
+
+  const selected = a
     .from("orders")
     .select(
       "id, buyer_id, seller_id, disputed_at, dispute_category, dispute_reason, dispute_resolved_at, total_cents, currency, refund_offer_cents, transfer_reference, status"
-    )
-    .limit(200);
-
-  const { data: orders } =
-    scope === "open"
-      ? await base.eq("status", "disputed").order("disputed_at", { ascending: true })
-      : await base.not("dispute_resolved_at", "is", null).order("dispute_resolved_at", { ascending: false });
-
-  const rows = orders ?? [];
-  const parties = await partiesFor(a, rows.flatMap((o) => [o.buyer_id, o.seller_id]));
-  const titles = await titlesFor(a, rows.map((o) => o.id));
-
-  const mapped = rows.map((o) => {
-    const ageDays = o.disputed_at
-      ? Math.floor((Date.now() - new Date(o.disputed_at).getTime()) / 86_400_000)
-      : 0;
-    return {
-      orderId: o.id,
-      disputedAt: o.disputed_at,
-      ageDays,
-      overSla: ageDays >= DISPUTE_SLA_DAYS && o.status === "disputed",
-      category: o.dispute_category,
-      reason: o.dispute_reason,
-      totalCents: o.total_cents,
-      currency: o.currency,
-      refundOfferCents: o.refund_offer_cents,
-      buyer: o.buyer_id ? (parties.get(o.buyer_id) ?? null) : null,
-      seller: o.seller_id ? (parties.get(o.seller_id) ?? null) : null,
-      title: titles.get(o.id) ?? "Order",
-      transferred: Boolean(o.transfer_reference),
-    };
-  });
-
-  // Search + category narrow the view; `total` keeps the true queue size on
-  // screen ("N open · M shown") so a filter can never hide the backlog.
-  const q = opts.query?.trim().toLowerCase();
-  const filtered = mapped.filter((r) => {
-    if (opts.category && r.category !== opts.category) return false;
-    if (!q) return true;
-    return (
-      r.orderId.toLowerCase().startsWith(q) ||
-      r.title.toLowerCase().includes(q) ||
-      (r.buyer?.username ?? "").toLowerCase().includes(q) ||
-      (r.buyer?.displayName ?? "").toLowerCase().includes(q) ||
-      (r.seller?.username ?? "").toLowerCase().includes(q) ||
-      (r.seller?.displayName ?? "").toLowerCase().includes(q)
     );
+  let builder = (
+    scope === "open"
+      ? selected.eq("status", "disputed")
+      : selected.not("dispute_resolved_at", "is", null)
+  ).order(scope === "open" ? "disputed_at" : "dispute_resolved_at", {
+    ascending: scope === "open",
   });
 
-  return { rows: filtered, total: mapped.length };
+  if (opts.category) builder = builder.eq("dispute_category", opts.category);
+  if (opts.overSlaOnly && scope === "open") {
+    builder = builder.lt(
+      "disputed_at",
+      new Date(Date.now() - DISPUTE_SLA_DAYS * 86_400_000).toISOString()
+    );
+  }
+  if (idPrefix) {
+    builder = builder.ilike("id::text" as never, `${idPrefix}%`);
+  } else if (q) {
+    const clauses = [
+      ...(partyIds.length
+        ? [`buyer_id.in.(${partyIds.join(",")})`, `seller_id.in.(${partyIds.join(",")})`]
+        : []),
+      ...(itemOrderIds.length ? [`id.in.(${itemOrderIds.join(",")})`] : []),
+    ];
+    if (!clauses.length) {
+      const total = await countDisputes(a, scope);
+      return { rows: [], total, page, hasMore: false };
+    }
+    builder = builder.or(clauses.join(","));
+  }
+
+  const { data: orders } = await builder.range(page * size, page * size + size);
+
+  const fetched = orders ?? [];
+  const hasMore = fetched.length > size;
+  const rows = fetched.slice(0, size);
+  const [parties, titles, total] = await Promise.all([
+    partiesFor(a, rows.flatMap((o) => [o.buyer_id, o.seller_id])),
+    titlesFor(a, rows.map((o) => o.id)),
+    countDisputes(a, scope),
+  ]);
+
+  return {
+    page,
+    hasMore,
+    total,
+    rows: rows.map((o) => {
+      const ageDays = o.disputed_at
+        ? Math.floor((Date.now() - new Date(o.disputed_at).getTime()) / 86_400_000)
+        : 0;
+      return {
+        orderId: o.id,
+        disputedAt: o.disputed_at,
+        ageDays,
+        overSla: ageDays >= DISPUTE_SLA_DAYS && o.status === "disputed",
+        category: o.dispute_category,
+        reason: o.dispute_reason,
+        totalCents: o.total_cents,
+        currency: o.currency,
+        refundOfferCents: o.refund_offer_cents,
+        buyer: o.buyer_id ? (parties.get(o.buyer_id) ?? null) : null,
+        seller: o.seller_id ? (parties.get(o.seller_id) ?? null) : null,
+        title: titles.get(o.id) ?? `Order ${o.id.slice(0, 8)}`,
+        transferred: Boolean(o.transfer_reference),
+      };
+    }),
+  };
+}
+
+async function countDisputes(a: Admin, scope: "open" | "resolved"): Promise<number> {
+  const base = a.from("orders").select("id", { count: "exact", head: true });
+  const { count } =
+    scope === "open"
+      ? await base.eq("status", "disputed")
+      : await base.not("dispute_resolved_at", "is", null);
+  return count ?? 0;
 }
 
 async function titlesFor(a: Admin, orderIds: string[]): Promise<Map<string, string>> {
@@ -352,20 +471,35 @@ export type AdminOrdersResult = {
   hasMore: boolean;
 };
 
-export async function searchOrders(opts: {
+export type OrdersSearchOpts = {
   query?: string;
   status?: OrderStatus;
   page?: number;
-}): Promise<AdminOrdersResult> {
+  /** ISO timestamps — inclusive start, exclusive end. */
+  from?: string;
+  to?: string;
+  /** Inclusive order-total bounds, in cents. */
+  minCents?: number;
+  maxCents?: number;
+  /** Export path: rows per page (defaults to ORDERS_PAGE_SIZE, capped at 5000). */
+  pageSize?: number;
+};
+
+export async function searchOrders(opts: OrdersSearchOpts): Promise<AdminOrdersResult> {
   const a = admin();
   const page = Math.max(0, opts.page ?? 0);
+  const size = Math.min(Math.max(1, opts.pageSize ?? ORDERS_PAGE_SIZE), 5000);
   let builder = a
     .from("orders")
     .select("id, status, created_at, total_cents, refunded_cents, currency, buyer_id, seller_id, transfer_reference")
     .order("created_at", { ascending: false })
     // One extra row = a cheap hasMore signal without a second count query.
-    .range(page * ORDERS_PAGE_SIZE, page * ORDERS_PAGE_SIZE + ORDERS_PAGE_SIZE);
+    .range(page * size, page * size + size);
   if (opts.status) builder = builder.eq("status", opts.status);
+  if (opts.from) builder = builder.gte("created_at", opts.from);
+  if (opts.to) builder = builder.lt("created_at", opts.to);
+  if (opts.minCents != null) builder = builder.gte("total_cents", opts.minCents);
+  if (opts.maxCents != null) builder = builder.lte("total_cents", opts.maxCents);
 
   const query = opts.query?.trim();
   if (query) {
@@ -399,8 +533,8 @@ export async function searchOrders(opts: {
 
   const { data: orders } = await builder;
   const fetched = orders ?? [];
-  const hasMore = fetched.length > ORDERS_PAGE_SIZE;
-  const rows = fetched.slice(0, ORDERS_PAGE_SIZE);
+  const hasMore = fetched.length > size;
+  const rows = fetched.slice(0, size);
   const parties = await partiesFor(a, rows.flatMap((o) => [o.buyer_id, o.seller_id]));
   const titles = await titlesFor(a, rows.map((o) => o.id));
 
@@ -414,7 +548,7 @@ export async function searchOrders(opts: {
       totalCents: o.total_cents,
       refundedCents: o.refunded_cents,
       currency: o.currency,
-      title: titles.get(o.id) ?? "Order",
+      title: titles.get(o.id) ?? `Order ${o.id.slice(0, 8)}`,
       buyer: o.buyer_id ? (parties.get(o.buyer_id) ?? null) : null,
       seller: o.seller_id ? (parties.get(o.seller_id) ?? null) : null,
       transferred: Boolean(o.transfer_reference),
@@ -422,30 +556,103 @@ export async function searchOrders(opts: {
   };
 }
 
+/**
+ * Status → count for the segmented filter chips over the orders table
+ * (the Stripe idiom: the filter states their own size). Respects the active
+ * date range; free-text search is intentionally not applied — the chips
+ * describe the period, the search narrows the rows.
+ */
+export async function getOrderStatusCounts(opts: {
+  statuses: OrderStatus[];
+  from?: string;
+  to?: string;
+}): Promise<Record<string, number>> {
+  const a = admin();
+  const counts = await Promise.all(
+    opts.statuses.map(async (status) => {
+      let b = a.from("orders").select("id", { count: "exact", head: true }).eq("status", status);
+      if (opts.from) b = b.gte("created_at", opts.from);
+      if (opts.to) b = b.lt("created_at", opts.to);
+      const { count } = await b;
+      return [status, count ?? 0] as const;
+    })
+  );
+  return Object.fromEntries(counts);
+}
+
 // ---------- Listings ----------
 
 export type AdminListingRow = Pick<
   Listing,
-  "id" | "title" | "category" | "price_cents" | "currency" | "status" | "created_at" | "removed_reason"
-> & { seller: PartyRef | null };
+  | "id"
+  | "title"
+  | "description"
+  | "category"
+  | "condition"
+  | "price_cents"
+  | "currency"
+  | "status"
+  | "created_at"
+  | "removed_reason"
+> & { seller: PartyRef | null; imageUrl: string | null };
+
+export const LISTINGS_PAGE_SIZE = 50;
+
+export type AdminListingsResult = {
+  rows: AdminListingRow[];
+  /** Exact match count for the active search/status — not a fetch cap. */
+  total: number;
+  page: number;
+  hasMore: boolean;
+};
 
 export async function searchListings(opts: {
   query?: string;
   status?: Listing["status"];
-}): Promise<AdminListingRow[]> {
+  category?: string;
+  page?: number;
+}): Promise<AdminListingsResult> {
   const a = admin();
+  const page = Math.max(0, opts.page ?? 0);
   let builder = a
     .from("listings")
-    .select("id, seller_id, title, category, price_cents, currency, status, created_at, removed_reason")
+    .select(
+      "id, seller_id, title, description, category, condition, price_cents, currency, status, created_at, removed_reason",
+      { count: "exact" }
+    )
     .order("created_at", { ascending: false })
-    .limit(100);
+    .range(page * LISTINGS_PAGE_SIZE, page * LISTINGS_PAGE_SIZE + LISTINGS_PAGE_SIZE - 1);
   if (opts.status) builder = builder.eq("status", opts.status);
+  if (opts.category) builder = builder.eq("category", opts.category);
   if (opts.query?.trim()) builder = builder.ilike("title", `%${opts.query.trim()}%`);
 
-  const { data: listings } = await builder;
+  const { data: listings, count } = await builder;
   const rows = listings ?? [];
-  const parties = await partiesFor(a, rows.map((l) => l.seller_id));
-  return rows.map((l) => ({ ...l, seller: parties.get(l.seller_id) ?? null }));
+  const total = count ?? rows.length;
+  const [parties, images] = await Promise.all([
+    partiesFor(a, rows.map((l) => l.seller_id)),
+    rows.length
+      ? a
+          .from("listing_images")
+          .select("listing_id, url, position")
+          .in("listing_id", rows.map((l) => l.id))
+          .order("position", { ascending: true })
+      : Promise.resolve({ data: [] as { listing_id: string; url: string; position: number }[] }),
+  ]);
+  const firstImage = new Map<string, string>();
+  for (const img of images.data ?? []) {
+    if (!firstImage.has(img.listing_id)) firstImage.set(img.listing_id, img.url);
+  }
+  return {
+    page,
+    total,
+    hasMore: (page + 1) * LISTINGS_PAGE_SIZE < total,
+    rows: rows.map((l) => ({
+      ...l,
+      seller: parties.get(l.seller_id) ?? null,
+      imageUrl: firstImage.get(l.id) ?? null,
+    })),
+  };
 }
 
 // ---------- Users ----------
@@ -475,29 +682,74 @@ export const USER_STATE_FILTERS: { key: UserStateFilter; label: string }[] = [
   { key: "admins", label: "Admins" },
 ];
 
+export const USERS_PAGE_SIZE = 50;
+
+export type AdminUsersResult = {
+  rows: AdminUserRow[];
+  /** Exact match count for the active search/state — not a fetch cap. */
+  total: number;
+  page: number;
+  hasMore: boolean;
+};
+
+/**
+ * Derived states (sellers, console membership) resolve to id sets BEFORE the
+ * profiles query, so state filters and pagination compose in the database — a
+ * suspended seller past any fetch cap still shows under its filter.
+ */
 export async function searchUsers(
   query?: string,
-  state: UserStateFilter = "all"
-): Promise<AdminUserRow[]> {
+  state: UserStateFilter = "all",
+  page = 0
+): Promise<AdminUsersResult> {
   const a = admin();
+  page = Math.max(0, page);
+
+  let constrainIds: string[] | null = null;
+  if (state === "sellers" || state === "no_payouts") {
+    const [listings, sales] = await Promise.all([
+      a.from("listings").select("seller_id").limit(10_000),
+      a.from("orders").select("seller_id").limit(10_000),
+    ]);
+    constrainIds = [
+      ...new Set(
+        [...(listings.data ?? []), ...(sales.data ?? [])]
+          .map((r) => r.seller_id)
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+  } else if (state === "admins") {
+    const { data } = await a.from("admin_users").select("user_id");
+    constrainIds = (data ?? []).map((r) => r.user_id);
+  }
+  if (constrainIds && !constrainIds.length) return { rows: [], total: 0, page, hasMore: false };
+
   let builder = a
     .from("profiles")
-    .select("id, username, display_name, profile_type, created_at, suspended_at, suspended_reason, payouts_enabled")
+    .select(
+      "id, username, display_name, profile_type, created_at, suspended_at, suspended_reason, payouts_enabled",
+      { count: "exact" }
+    )
     .order("created_at", { ascending: false })
-    .limit(state === "all" ? 50 : 200);
+    .range(page * USERS_PAGE_SIZE, page * USERS_PAGE_SIZE + USERS_PAGE_SIZE - 1);
   if (query?.trim()) {
     builder = builder.or(`username.ilike.%${query.trim()}%,display_name.ilike.%${query.trim()}%`);
   }
   if (state === "suspended") builder = builder.not("suspended_at", "is", null);
-  const { data: profiles } = await builder;
+  if (state === "no_payouts") builder = builder.eq("payouts_enabled", false);
+  if (constrainIds) builder = builder.in("id", constrainIds);
+
+  const { data: profiles, count: total } = await builder;
   const rows = profiles ?? [];
-  if (!rows.length) return [];
+  if (!rows.length) return { rows: [], total: total ?? 0, page, hasMore: false };
 
   const ids = rows.map((p) => p.id);
+  const partyClause = `seller_id.in.(${ids.join(",")}),buyer_id.in.(${ids.join(",")})`;
   const [listings, sales, disputes, admins] = await Promise.all([
     a.from("listings").select("seller_id").in("seller_id", ids),
     a.from("orders").select("seller_id").in("seller_id", ids),
-    a.from("orders").select("seller_id, buyer_id").not("disputed_at", "is", null),
+    // Only this page's parties — never the whole orders table.
+    a.from("orders").select("seller_id, buyer_id").not("disputed_at", "is", null).or(partyClause),
     a.from("admin_users").select("user_id").in("user_id", ids),
   ]);
 
@@ -505,35 +757,199 @@ export async function searchUsers(
     (list ?? []).filter((x) => x === id).length;
   const adminSet = new Set((admins.data ?? []).map((r) => r.user_id));
 
-  const mapped = rows.map((p) => ({
-    id: p.id,
-    username: p.username,
-    displayName: p.display_name,
-    profileType: p.profile_type,
-    createdAt: p.created_at,
-    suspendedAt: p.suspended_at,
-    suspendedReason: p.suspended_reason,
-    payoutsEnabled: p.payouts_enabled,
-    listingCount: count(listings.data?.map((l) => l.seller_id), p.id),
-    saleCount: count(sales.data?.map((o) => o.seller_id), p.id),
-    disputeCount:
-      count(disputes.data?.map((o) => o.seller_id), p.id) +
-      count(disputes.data?.map((o) => o.buyer_id), p.id),
-    isAdmin: adminSet.has(p.id),
-  }));
+  return {
+    page,
+    total: total ?? rows.length,
+    hasMore: (page + 1) * USERS_PAGE_SIZE < (total ?? 0),
+    rows: rows.map((p) => ({
+      id: p.id,
+      username: p.username,
+      displayName: p.display_name,
+      profileType: p.profile_type,
+      createdAt: p.created_at,
+      suspendedAt: p.suspended_at,
+      suspendedReason: p.suspended_reason,
+      payoutsEnabled: p.payouts_enabled,
+      listingCount: count(listings.data?.map((l) => l.seller_id), p.id),
+      saleCount: count(sales.data?.map((o) => o.seller_id), p.id),
+      disputeCount:
+        count(disputes.data?.map((o) => o.seller_id), p.id) +
+        count(disputes.data?.map((o) => o.buyer_id), p.id),
+      isAdmin: adminSet.has(p.id),
+    })),
+  };
+}
 
-  // The derived states (sold/listed anything, console membership) can only be
-  // filtered after the counts exist.
-  switch (state) {
-    case "sellers":
-      return mapped.filter((u) => u.listingCount > 0 || u.saleCount > 0);
-    case "no_payouts":
-      return mapped.filter((u) => (u.listingCount > 0 || u.saleCount > 0) && !u.payoutsEnabled);
-    case "admins":
-      return mapped.filter((u) => u.isAdmin);
-    default:
-      return mapped;
-  }
+// ---------- User detail ----------
+
+export type AdminUserOrderRow = {
+  id: string;
+  status: OrderStatus;
+  createdAt: string;
+  totalCents: number;
+  refundedCents: number;
+  title: string;
+  counterparty: PartyRef | null;
+  disputed: boolean;
+};
+
+export type AdminUserDetail = {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  profileType: string;
+  createdAt: string;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+  payoutsEnabled: boolean;
+  stripeAccountId: string | null;
+  isAdmin: boolean;
+  /** Lifetime counts — not capped by the recent lists below. */
+  totals: {
+    purchases: number;
+    sales: number;
+    listings: number;
+    disputes: number;
+    reportsAgainst: number;
+  };
+  purchases: AdminUserOrderRow[];
+  sales: AdminUserOrderRow[];
+  listings: Pick<Listing, "id" | "title" | "status" | "price_cents" | "created_at" | "removed_reason">[];
+  reportsAgainst: (Report & { reporter: PartyRef | null })[];
+  adminHistory: AdminAuditLogEntry[];
+};
+
+const USER_DETAIL_LIST_LIMIT = 20;
+
+/**
+ * Everything a suspend/refund decision needs about one person, on one sheet:
+ * both sides of their order history, their stock, the reports naming them,
+ * and every admin action that ever touched them.
+ */
+export async function getUserDetail(userId: string): Promise<AdminUserDetail | null> {
+  const a = admin();
+  const { data: profile } = await a
+    .from("profiles")
+    .select(
+      "id, username, display_name, profile_type, created_at, suspended_at, suspended_reason, payouts_enabled, stripe_account_id"
+    )
+    .eq("id", userId)
+    .maybeSingle();
+  if (!profile) return null;
+
+  const orderCols =
+    "id, status, created_at, total_cents, refunded_cents, buyer_id, seller_id, disputed_at";
+  const [
+    purchases,
+    sales,
+    listings,
+    reports,
+    auditRows,
+    adminRow,
+    purchaseCount,
+    saleCount,
+    listingCount,
+    disputeCount,
+    reportCount,
+  ] = await Promise.all([
+    a
+      .from("orders")
+      .select(orderCols)
+      .eq("buyer_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(USER_DETAIL_LIST_LIMIT),
+    a
+      .from("orders")
+      .select(orderCols)
+      .eq("seller_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(USER_DETAIL_LIST_LIMIT),
+    a
+      .from("listings")
+      .select("id, title, status, price_cents, created_at, removed_reason")
+      .eq("seller_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(USER_DETAIL_LIST_LIMIT),
+    a
+      .from("reports")
+      .select("*")
+      .eq("subject_type", "user")
+      .eq("subject_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(USER_DETAIL_LIST_LIMIT),
+    a
+      .from("admin_audit_log")
+      .select("*")
+      .eq("subject_type", "user")
+      .eq("subject_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(USER_DETAIL_LIST_LIMIT),
+    a.from("admin_users").select("user_id").eq("user_id", userId).maybeSingle(),
+    a.from("orders").select("id", { count: "exact", head: true }).eq("buyer_id", userId),
+    a.from("orders").select("id", { count: "exact", head: true }).eq("seller_id", userId),
+    a.from("listings").select("id", { count: "exact", head: true }).eq("seller_id", userId),
+    a
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .not("disputed_at", "is", null)
+      .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
+    a
+      .from("reports")
+      .select("id", { count: "exact", head: true })
+      .eq("subject_type", "user")
+      .eq("subject_id", userId),
+  ]);
+
+  const purchaseRows = purchases.data ?? [];
+  const saleRows = sales.data ?? [];
+  const reportRows = reports.data ?? [];
+  const [parties, titles] = await Promise.all([
+    partiesFor(a, [
+      ...purchaseRows.map((o) => o.seller_id),
+      ...saleRows.map((o) => o.buyer_id),
+      ...reportRows.map((r) => r.reporter_id),
+    ]),
+    titlesFor(a, [...purchaseRows, ...saleRows].map((o) => o.id)),
+  ]);
+
+  const toRow = (o: (typeof purchaseRows)[number], counterpartyId: string | null): AdminUserOrderRow => ({
+    id: o.id,
+    status: o.status,
+    createdAt: o.created_at,
+    totalCents: o.total_cents,
+    refundedCents: o.refunded_cents,
+    title: titles.get(o.id) ?? `Order ${o.id.slice(0, 8)}`,
+    counterparty: counterpartyId ? (parties.get(counterpartyId) ?? null) : null,
+    disputed: Boolean(o.disputed_at),
+  });
+
+  return {
+    id: profile.id,
+    username: profile.username,
+    displayName: profile.display_name,
+    profileType: profile.profile_type,
+    createdAt: profile.created_at,
+    suspendedAt: profile.suspended_at,
+    suspendedReason: profile.suspended_reason,
+    payoutsEnabled: profile.payouts_enabled,
+    stripeAccountId: profile.stripe_account_id,
+    isAdmin: Boolean(adminRow.data),
+    totals: {
+      purchases: purchaseCount.count ?? 0,
+      sales: saleCount.count ?? 0,
+      listings: listingCount.count ?? 0,
+      disputes: disputeCount.count ?? 0,
+      reportsAgainst: reportCount.count ?? 0,
+    },
+    purchases: purchaseRows.map((o) => toRow(o, o.seller_id)),
+    sales: saleRows.map((o) => toRow(o, o.buyer_id)),
+    listings: listings.data ?? [],
+    reportsAgainst: reportRows.map((r) => ({
+      ...r,
+      reporter: r.reporter_id ? (parties.get(r.reporter_id) ?? null) : null,
+    })),
+    adminHistory: auditRows.data ?? [],
+  };
 }
 
 // ---------- Reports ----------
@@ -543,23 +959,34 @@ export type AdminReportRow = Report & {
   subjectLabel: string;
 };
 
+export const REPORTS_PAGE_SIZE = 50;
+
+export type AdminReportsResult = {
+  rows: AdminReportRow[];
+  total: number;
+  page: number;
+  hasMore: boolean;
+};
+
 export async function getReports(
   scope: "open" | "closed",
-  opts: { reason?: Report["reason"] } = {}
-): Promise<AdminReportRow[]> {
+  opts: { reason?: Report["reason"]; page?: number } = {}
+): Promise<AdminReportsResult> {
   const a = admin();
-  const { data: reports } = await a
+  const page = Math.max(0, opts.page ?? 0);
+  // Status, reason and paging all belong to the database — the old capped
+  // fetch-then-filter could hide open reports beyond the cap.
+  let builder = a
     .from("reports")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("created_at", { ascending: scope === "open" })
-    .limit(200)
-    .then((res) =>
-      scope === "open"
-        ? { data: (res.data ?? []).filter((r) => r.status === "open") }
-        : { data: (res.data ?? []).filter((r) => r.status !== "open") }
-    );
+    .range(page * REPORTS_PAGE_SIZE, page * REPORTS_PAGE_SIZE + REPORTS_PAGE_SIZE - 1);
+  builder = scope === "open" ? builder.eq("status", "open") : builder.neq("status", "open");
+  if (opts.reason) builder = builder.eq("reason", opts.reason);
 
-  const rows = (reports ?? []).filter((r) => !opts.reason || r.reason === opts.reason);
+  const { data: reports, count } = await builder;
+  const rows = reports ?? [];
+  const total = count ?? rows.length;
   const parties = await partiesFor(a, rows.map((r) => r.reporter_id));
 
   const listingIds = rows.filter((r) => r.subject_type === "listing").map((r) => r.subject_id);
@@ -572,14 +999,19 @@ export async function getReports(
   ]);
   const listingTitles = new Map((listings ?? []).map((l) => [l.id, l.title]));
 
-  return rows.map((r) => ({
-    ...r,
-    reporter: r.reporter_id ? (parties.get(r.reporter_id) ?? null) : null,
-    subjectLabel:
-      r.subject_type === "listing"
-        ? (listingTitles.get(r.subject_id) ?? "Listing (deleted)")
-        : (users.get(r.subject_id)?.username ?? users.get(r.subject_id)?.displayName ?? "User"),
-  }));
+  return {
+    page,
+    total,
+    hasMore: (page + 1) * REPORTS_PAGE_SIZE < total,
+    rows: rows.map((r) => ({
+      ...r,
+      reporter: r.reporter_id ? (parties.get(r.reporter_id) ?? null) : null,
+      subjectLabel:
+        r.subject_type === "listing"
+          ? (listingTitles.get(r.subject_id) ?? "Listing (deleted)")
+          : (users.get(r.subject_id)?.username ?? users.get(r.subject_id)?.displayName ?? "User"),
+    })),
+  };
 }
 
 // ---------- Payments ops ----------
@@ -587,7 +1019,14 @@ export async function getReports(
 export type PaymentsOps = {
   recoveries: (PaymentRecovery & { orderTitle: string })[];
   stuckIntents: (TransferIntent & { seller: PartyRef | null; orderTitle: string })[];
-  recentEvents: { id: string; type: string; receivedAt: string; processedAt: string | null }[];
+  recentEvents: {
+    id: string;
+    type: string;
+    receivedAt: string;
+    processedAt: string | null;
+    /** Pretty-printed payload for the drill-in; null for pre-0023 events. */
+    payload: string | null;
+  }[];
 };
 
 export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
@@ -650,6 +1089,7 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
       type: e.type,
       receivedAt: e.received_at,
       processedAt: e.processed_at,
+      payload: e.payload ? JSON.stringify(e.payload, null, 2) : null,
     })),
   };
 }
@@ -669,17 +1109,25 @@ export async function getAuditLog(
     actorQuery?: string;
     subjectType?: AdminAuditLogEntry["subject_type"];
     page?: number;
+    /** ISO timestamps — inclusive start, exclusive end. */
+    from?: string;
+    to?: string;
+    /** Export path: rows per page (defaults to AUDIT_PAGE_SIZE, capped at 5000). */
+    pageSize?: number;
   } = {}
 ): Promise<AuditLogResult> {
   const a = admin();
   const page = Math.max(0, opts.page ?? 0);
+  const size = Math.min(Math.max(1, opts.pageSize ?? AUDIT_PAGE_SIZE), 5000);
   let builder = a
     .from("admin_audit_log")
     .select("*")
     .order("created_at", { ascending: false })
-    .range(page * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE + AUDIT_PAGE_SIZE);
+    .range(page * size, page * size + size);
   if (opts.action) builder = builder.ilike("action", `${opts.action}%`);
   if (opts.subjectType) builder = builder.eq("subject_type", opts.subjectType);
+  if (opts.from) builder = builder.gte("created_at", opts.from);
+  if (opts.to) builder = builder.lt("created_at", opts.to);
   if (opts.actorQuery?.trim()) {
     const q = opts.actorQuery.trim();
     const { data: actors } = await a
@@ -693,8 +1141,8 @@ export async function getAuditLog(
   }
   const { data } = await builder;
   const fetched = data ?? [];
-  const hasMore = fetched.length > AUDIT_PAGE_SIZE;
-  const rows = fetched.slice(0, AUDIT_PAGE_SIZE);
+  const hasMore = fetched.length > size;
+  const rows = fetched.slice(0, size);
   const parties = await partiesFor(a, rows.map((r) => r.actor_id));
   return { rows: rows.map((r) => ({ ...r, actor: parties.get(r.actor_id) ?? null })), page, hasMore };
 }

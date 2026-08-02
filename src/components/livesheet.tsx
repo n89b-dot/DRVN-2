@@ -50,7 +50,17 @@ export function Rv({
       { threshold: 0.15 },
     );
     io.observe(el);
-    return () => io.disconnect();
+    // Guarantee: content must never stay hidden because the observer couldn't
+    // fire — zero-size viewports (hidden/background tabs) report no
+    // intersection at all, which left page headers frozen at opacity 0.
+    const failsafe = window.setTimeout(
+      () => el.classList.add("is-in"),
+      900 + stagger * 70,
+    );
+    return () => {
+      io.disconnect();
+      window.clearTimeout(failsafe);
+    };
   }, [reduce, stagger]);
 
   return (

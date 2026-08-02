@@ -73,6 +73,8 @@
   --live-tint: rgba(240, 58, 32, 0.1);
   --ok: #256b42;
   --ok-tint: rgba(46, 125, 79, 0.1);
+  --warn: #8a5a00; /* held money, due work — attention without alarm; 5.1:1 on paper */
+  --warn-tint: rgba(178, 122, 10, 0.13);
   --on-ink: #f8f6f0;
   --scrim: rgba(32, 35, 42, 0.45);
   --img-fallback: #e2dfd5;
@@ -132,6 +134,8 @@
   --live-tint: rgba(255, 69, 48, 0.14);
   --ok: #57b983;
   --ok-tint: rgba(87, 185, 131, 0.12);
+  --warn: #d9a13c;
+  --warn-tint: rgba(217, 161, 60, 0.14);
   --on-ink: #171511;
   --scrim: rgba(6, 5, 3, 0.62);
   --img-fallback: #262319;
@@ -768,6 +772,167 @@ video {
     max-width: 52ch;
     margin-top: 10px;
   }
+  /* Console pages are worked, not read. The product's display headings
+     (44px, tight tracking, 1.05 line-height) read as squished in a tool —
+     the console gets a calmer scale: smaller, looser, with real air between
+     title and standfirst, and the standfirst set dim so the H1 owns the row. */
+  .console-main .pagehead {
+    padding: 26px 0 20px;
+  }
+  .console-main .pagehead h1 {
+    font-size: clamp(24px, 2.6vw, 34px);
+    font-weight: 620;
+    letter-spacing: -0.008em;
+    line-height: 1.25;
+    margin-top: 0;
+  }
+  .console-main .pagehead__sub {
+    color: var(--dim);
+    font-size: 15px;
+    line-height: 1.55;
+    max-width: 64ch;
+    margin-top: 8px;
+  }
+  /* Stat figures at dashboard scale, not poster scale: the product's
+     .num-giant (up to 64px) filled a KPI tile edge-to-edge and shouted.
+     A stat should be the loudest thing in its card by a step, not a wall. */
+  .console-main .num-giant {
+    font-size: clamp(24px, 2.1vw, 30px);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    margin: 6px 0 2px;
+  }
+  /* Console filter bars hold up to five controls (query, two dates, two
+     amounts) — let the bar grow and wrap instead of crushing the query
+     field, and keep the free-text input the widest thing in it. */
+  .console-main .search {
+    width: 100%;
+    max-width: 920px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .console-main .search input[type="search"] {
+    flex: 1 1 200px;
+    min-width: 180px;
+  }
+  .console-main .search input[type="date"],
+  .console-main .search input[type="number"] {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  /* The submit rides the right edge — of the row it lands on — instead of
+     dangling bottom-left when the controls wrap. */
+  .console-main .search .btn {
+    margin-left: auto;
+  }
+  /* The marketing pages breathe between decks (48–80px); the console reads
+     top-to-bottom in one glance — header plus both KPI rows should fit a 13"
+     viewport, so decks sit close. */
+  .console-main .deck {
+    padding-bottom: 20px;
+  }
+  /* Working a queue means tracking a row across six columns — give the eye
+     a rail. Tone only, matching the rest of the console's hover language. */
+  .console-main .ledger tbody tr:hover {
+    background: var(--ghost);
+  }
+  /* Two adjacent column heads can fuse into a phrase ("TOTAL MONEY") —
+     a wider gutter breaks the ligature. */
+  .console-main .ledger .cell-gap {
+    padding-left: 28px;
+  }
+  /* Audit log rows anchor on a fixed timestamp gutter so actor names stack in
+     a clean column no matter how long the action name runs. The action reads
+     as what it is — a machine identifier — in quiet lowercase mono; the
+     subject type compresses to a colour-keyed dot. */
+  .console-main .auditrow {
+    display: grid;
+    grid-template-columns: 17ch minmax(0, 1fr);
+    column-gap: 14px;
+  }
+  .console-main .auditrow__ts {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding-top: 3px;
+  }
+  .console-main .auditrow__actor {
+    font-weight: 640;
+    font-size: 14.5px;
+  }
+  .console-main .auditrow__action {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .console-main .auditrow__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .console-main .auditrow__dot--order {
+    background: var(--ink);
+  }
+  .console-main .auditrow__dot--dispute {
+    background: var(--live);
+  }
+  .console-main .auditrow__dot--payment {
+    background: var(--warn);
+  }
+  .console-main .auditrow__dot--user {
+    background: var(--ok);
+  }
+  .console-main .auditrow__dot--listing {
+    background: var(--dim);
+  }
+  .console-main .auditrow__dot--report {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--live);
+  }
+  @media (max-width: 640px) {
+    /* Narrow screens: the gutter costs too much width — stack it. */
+    .console-main .auditrow {
+      grid-template-columns: 1fr;
+      row-gap: 2px;
+    }
+  }
+  /* Identity stubs ("User a1b2c3d4"): an id wearing a name's clothes. Set
+     them dim mono so a real name and a placeholder never read as peers. */
+  .console-main .person--stub {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    font-weight: 400;
+    color: var(--dim);
+  }
+  /* Nominal states in console tables: same slot a chip would occupy, none of
+     the ink — a routine row should read as texture, an exception as signal. */
+  .console-main .status-plain {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  /* Corner arrow on linked KPI tiles: the tile is a door, say so. */
+  .tile__go {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    font-family: var(--mono);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      transform var(--t-fast) ease;
+  }
+  a.tile:hover .tile__go,
+  a.tile:focus-visible .tile__go {
+    color: var(--live);
+    transform: translateX(3px);
+  }
 
   /* ---------- tiles (widgets-as-plates) ---------- */
   .deck {
@@ -780,6 +945,11 @@ video {
   }
   .deck--kpi {
     grid-template-columns: repeat(4, 1fr);
+  }
+  /* Console overview's business row: five tiles wide on desktop; the
+     existing .deck--kpi breakpoints still collapse it to 2 / 1 columns. */
+  .deck--kpi-5 {
+    grid-template-columns: repeat(5, 1fr);
   }
   .deck--two {
     grid-template-columns: 1.35fr 1fr;
@@ -1022,6 +1192,10 @@ video {
   .chip--spent {
     background: var(--ghost-strong);
     color: var(--dim);
+  }
+  .chip--warn {
+    background: var(--warn-tint);
+    color: var(--warn);
   }
 
   /* ---------- buttons — bracketed mono, press-in ---------- */
@@ -1344,6 +1518,10 @@ video {
     }
     .ledger__num {
       text-align: left;
+    }
+    /* The header-gutter fix is meaningless once rows stack — reset it. */
+    .console-main .ledger .cell-gap {
+      padding-left: 0;
     }
     .ledger__num::before {
       content: attr(data-label) " ";
@@ -1672,7 +1850,9 @@ video {
     padding: 12px 18px;
     font-family: var(--mono);
     font-size: 15px;
-    width: min(420px, 100%);
+    /* Wide enough that the placeholder — the only documentation of what's
+       searchable — never clips. */
+    width: min(560px, 100%);
   }
   .search input {
     border: 0;
@@ -2935,3 +3115,7 @@ video {
   outline: 2px solid var(--live);
   outline-offset: 2px;
 }
+
+
+
+
