@@ -2,13 +2,12 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { SheetTabs } from "@/components/ui";
-import { adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
 import { getReports, REPORTS_PAGE_SIZE, type AdminReportRow } from "@/lib/admin/queries";
 import type { ReportReason } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 
-import { ActionDialog } from "../_components/action-dialog";
 import { Pager } from "../_components/pager";
+import { OpenReportsList } from "./open-reports-list";
 
 export const dynamic = "force-dynamic";
 
@@ -22,16 +21,14 @@ const REASON_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-function ReportList({
+function OpenReportsPanel({
   rows,
-  open,
   total,
   page,
   hasMore,
   pagerHref,
 }: {
   rows: AdminReportRow[];
-  open: boolean;
   total: number;
   page: number;
   hasMore: boolean;
@@ -41,106 +38,81 @@ function ReportList({
     return (
       <div className="tile mt-4">
         <span className="microlabel">Queue</span>
-        <p className="order__meta">{open ? "No open reports." : "No resolved reports yet."}</p>
+        <p className="order__meta">No open reports.</p>
       </div>
     );
   }
   return (
     <>
-    <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2">
-      {total > rows.length ? (
-        <p className="order__meta !mb-0">
+      {total > rows.length && (
+        <p className="mt-3 order__meta !mb-0">
           Showing {page * REPORTS_PAGE_SIZE + 1}–{page * REPORTS_PAGE_SIZE + rows.length} of {total}
         </p>
-      ) : (
-        <span />
       )}
-      {open && rows.length > 1 && (
-        <ActionDialog
-          action={adminResolveReports}
-          title={`Resolve all ${rows.length} shown`}
-          trigger={`Resolve all ${rows.length} shown`}
-          triggerClassName="relbtn !static"
-          hidden={{ report_ids: rows.map((r) => r.id).join(",") }}
-          confirmNote="Applies one outcome and note to every report listed on this page — the sweep for many flags about the same subject. Each report still gets its own audit row."
-          fields={[
-            {
-              kind: "select",
-              name: "outcome",
-              label: "Outcome",
-              options: [
-                { value: "actioned", label: "Actioned — content removed / seller handled" },
-                { value: "dismissed", label: "Dismissed — no breach" },
-              ],
-            },
-            { kind: "reason", name: "note", label: "Resolution note" },
-          ]}
-          submitLabel="Resolve all"
-        />
+      <OpenReportsList rows={rows} />
+      <Pager page={page} hasMore={hasMore} href={pagerHref} prevLabel="← Back" nextLabel="More →" />
+    </>
+  );
+}
+
+function ResolvedReportsPanel({
+  rows,
+  total,
+  page,
+  hasMore,
+  pagerHref,
+}: {
+  rows: AdminReportRow[];
+  total: number;
+  page: number;
+  hasMore: boolean;
+  pagerHref: (page: number) => string;
+}) {
+  if (!rows.length) {
+    return (
+      <div className="tile mt-4">
+        <span className="microlabel">Queue</span>
+        <p className="order__meta">No resolved reports yet.</p>
+      </div>
+    );
+  }
+  return (
+    <>
+      {total > rows.length && (
+        <p className="mt-3 order__meta !mb-0">
+          Showing {page * REPORTS_PAGE_SIZE + 1}–{page * REPORTS_PAGE_SIZE + rows.length} of {total}
+        </p>
       )}
-    </div>
-    <div className="rowlist mt-4">
-      {rows.map((r) => (
-        <div key={r.id} className="jobrow">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="flex items-baseline gap-2">
-              <span className="chip chip--live">{REASON_LABEL[r.reason]}</span>
-              <Link
-                href={
-                  r.subject_type === "listing"
-                    ? `/admin/listings?q=${encodeURIComponent(r.subjectLabel)}`
-                    : `/admin/users?q=${encodeURIComponent(r.subjectLabel)}`
-                }
-                className="order__name hover:text-live"
-              >
-                {r.subject_type === "listing" ? "Listing" : "User"}: {r.subjectLabel}
-              </Link>
-            </span>
-            <span className="order__meta">
-              by {r.reporter?.username ?? "deleted account"} ·{" "}
-              {new Date(r.created_at).toLocaleDateString()}
-            </span>
-          </div>
-          {r.detail && <p className="mt-1 text-[14.5px]">“{r.detail}”</p>}
-          {open ? (
-            <div className="mt-2 flex gap-2">
-              <ActionDialog
-                action={adminResolveReport}
-                title="Resolve report"
-                trigger="Resolve"
-                triggerClassName="relbtn !static"
-                hidden={{ report_id: r.id }}
-                confirmNote="Actioned = you took the subject down or suspended the seller (do that from Listings/Users). Dismissed = no breach."
-                fields={[
-                  {
-                    kind: "select",
-                    name: "outcome",
-                    label: "Outcome",
-                    options: [
-                      { value: "actioned", label: "Actioned — content removed / seller handled" },
-                      { value: "dismissed", label: "Dismissed — no breach" },
-                    ],
-                  },
-                  { kind: "reason", name: "note", label: "Resolution note" },
-                ]}
-                submitLabel="Resolve report"
-              />
+      <div className="rowlist mt-4">
+        {rows.map((r) => (
+          <div key={r.id} className="jobrow">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="flex items-baseline gap-2">
+                <span className="chip chip--live">{REASON_LABEL[r.reason]}</span>
+                <Link
+                  href={
+                    r.subject_type === "listing"
+                      ? `/admin/listings?q=${encodeURIComponent(r.subjectLabel)}`
+                      : `/admin/users?q=${encodeURIComponent(r.subjectLabel)}`
+                  }
+                  className="order__name hover:text-live"
+                >
+                  {r.subject_type === "listing" ? "Listing" : "User"}: {r.subjectLabel}
+                </Link>
+              </span>
+              <span className="order__meta">
+                by {r.reporter?.username ?? "deleted account"} ·{" "}
+                {new Date(r.created_at).toLocaleDateString()}
+              </span>
             </div>
-          ) : (
+            {r.detail && <p className="mt-1 text-[14.5px]">“{r.detail}”</p>}
             <p className="order__meta mt-1">
               {r.status} — “{r.resolution_note}”
             </p>
-          )}
-        </div>
-      ))}
-    </div>
-    <Pager
-      page={page}
-      hasMore={hasMore}
-      href={pagerHref}
-      prevLabel={open ? "← Back" : "← Newer"}
-      nextLabel={open ? "More →" : "Older →"}
-    />
+          </div>
+        ))}
+      </div>
+      <Pager page={page} hasMore={hasMore} href={pagerHref} prevLabel="← Newer" nextLabel="Older →" />
     </>
   );
 }
@@ -210,9 +182,8 @@ export default async function AdminReportsPage({
             count: open.total,
             live: open.total > 0,
             panel: (
-              <ReportList
+              <OpenReportsPanel
                 rows={open.rows}
-                open
                 total={open.total}
                 page={open.page}
                 hasMore={open.hasMore}
@@ -224,9 +195,8 @@ export default async function AdminReportsPage({
             key: "resolved",
             label: "Resolved",
             panel: (
-              <ReportList
+              <ResolvedReportsPanel
                 rows={closed.rows}
-                open={false}
                 total={closed.total}
                 page={closed.page}
                 hasMore={closed.hasMore}

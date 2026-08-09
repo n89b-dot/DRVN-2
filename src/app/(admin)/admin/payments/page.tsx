@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
+import { PayloadViewer } from "../_components/payload-viewer";
 
 export const dynamic = "force-dynamic";
 
@@ -52,21 +53,23 @@ export default async function AdminPaymentsPage({
         </p>
       </Rv>
 
-      <form method="get" className="search mb-6" role="search">
-        <label htmlFor="payments-q" className="sr-only">
-          Search payments ops
-        </label>
-        <input
-          id="payments-q"
-          type="search"
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Order id, part title, or seller"
-          className="ctl"
-        />
-        <button type="submit" className="btn">
-          Search
-        </button>
+      <form method="get" className="finder mb-6" role="search">
+        <div className="search">
+          <label htmlFor="payments-q" className="sr-only">
+            Search payments ops
+          </label>
+          <input
+            id="payments-q"
+            type="search"
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Order id, part title, or seller"
+            className="ctl"
+          />
+          <button type="submit" className="btn">
+            Search
+          </button>
+        </div>
       </form>
 
       <section aria-label="Recovery cases" className="mb-8">
@@ -223,6 +226,109 @@ export default async function AdminPaymentsPage({
         )}
       </section>
 
+      <section aria-label="Refund operations" className="mb-8">
+        <span className="microlabel">Refund operations ({ops.refundOps.length} not completed)</span>
+        {ops.refundOps.length ? (
+          <table className="ledger">
+            <thead>
+              <tr>
+                <th scope="col">Order</th>
+                <th scope="col" className="text-right">Amount</th>
+                <th scope="col">State</th>
+                <th scope="col">Requested by</th>
+                <th scope="col">Last error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ops.refundOps.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <Link href={`/admin/orders/${r.order_id}`} className="order__name block hover:text-live">
+                      {r.orderTitle}
+                    </Link>
+                    <span className="order__meta">{r.id.slice(0, 8)}</span>
+                  </td>
+                  <td className="ledger__num" data-label="Amount">
+                    {formatPrice(r.amount_cents)}
+                  </td>
+                  <td data-label="State">
+                    <span
+                      className={cx(
+                        "chip",
+                        ["failed", "recovery_required"].includes(r.status)
+                          ? "chip--live"
+                          : r.status === "reversal_pending"
+                            ? "chip--warn"
+                            : "chip--spent"
+                      )}
+                    >
+                      {r.status.replaceAll("_", " ")}
+                    </span>
+                    {r.attempts > 0 && (
+                      <span className="order__meta mt-0.5 block">attempt {r.attempts}</span>
+                    )}
+                  </td>
+                  <td className="order__meta" data-label="Requested by">{r.requested_by}</td>
+                  <td className="order__meta" data-label="Last error">{r.last_error ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="tile mt-2">
+            <span className="microlabel">Refunds</span>
+            <p className="order__meta">
+              No in-flight, failed or recovery-required refund operations. Every refund is a
+              durable state machine (0026) — anything a crash abandons appears here and is
+              resumed by the worker pass.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section aria-label="Alert delivery" className="mb-8">
+        <span className="microlabel">Alert delivery backlog ({ops.alertBacklog.length})</span>
+        {ops.alertBacklog.length ? (
+          <div className="rowlist">
+            {ops.alertBacklog.map((alertRow) => (
+              <div key={alertRow.id} className="jobrow">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="order__name">{alertRow.title}</span>
+                  <span
+                    className={cx(
+                      "chip",
+                      alertRow.status === "failed"
+                        ? "chip--live"
+                        : alertRow.status === "disabled"
+                          ? "chip--spent"
+                          : "chip--warn"
+                    )}
+                  >
+                    {alertRow.status}
+                  </span>
+                </div>
+                <p className="order__meta">
+                  {alertRow.kind} · {new Date(alertRow.created_at).toLocaleString()}
+                  {alertRow.attempts > 0 ? ` · ${alertRow.attempts} attempts` : ""}
+                  {alertRow.status === "disabled"
+                    ? " · ADMIN_ALERT_WEBHOOK_URL was unset when this was raised"
+                    : ""}
+                  {alertRow.last_error ? ` — ${alertRow.last_error}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="tile mt-2">
+            <span className="microlabel">Alerts</span>
+            <p className="order__meta">
+              Nothing undelivered. Alerts are durable outbox rows (0026): delivery failures
+              retry with backoff here instead of vanishing.
+            </p>
+          </div>
+        )}
+      </section>
+
       <section aria-label="Webhook events">
         <span className="microlabel">Recent webhook events</span>
         {ops.recentEvents.length ? (
@@ -256,9 +362,7 @@ export default async function AdminPaymentsPage({
                 {e.payload && (
                   <details className="mt-1">
                     <summary className="jumplink cursor-pointer">payload</summary>
-                    <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-paper-deep p-3 text-[12px] leading-relaxed">
-                      {e.payload}
-                    </pre>
+                    <PayloadViewer payload={e.payload} eventType={e.type} />
                   </details>
                 )}
               </div>

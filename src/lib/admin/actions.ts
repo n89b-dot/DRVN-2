@@ -7,6 +7,7 @@ import type Stripe from "stripe";
 import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "./audit";
+import { sendAdminAlert } from "./alerts";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
 import { dispatchStripeEvent } from "@/lib/payments/settlement";
 import { processDueTransfers } from "@/lib/payments/transfer-worker";
@@ -29,7 +30,15 @@ import { reportError } from "@/lib/monitoring";
  * reconciliation, recovery cases).
  */
 
-export type AdminActionState = { ok?: string; error?: string } | null;
+export type AdminActionState =
+  | {
+      ok?: string;
+      error?: string;
+      /** Partial-failure detail for bulk actions — populated alongside `ok`
+       *  so the dialog can render per-id failures instead of a single count. */
+      results?: { done: number; failed: { id: string; error: string }[] };
+    }
+  | null;
 
 type Ctx = { userId: string; admin: ReturnType<typeof createAdminClient> };
 
@@ -197,6 +206,7 @@ export async function adminResolveForSeller(
           .update({
             status: order.pre_dispute_status ?? "delivered",
             dispute_resolved_at: new Date().toISOString(),
+            dispute_outcome: "admin_resolved",
             refund_offer_cents: null,
             refund_offered_at: null,
           })
@@ -698,9 +708,12 @@ export async function adminMessageParties(
 // ---------- Bulk report resolution ----------
 
 /**
- * Resolve every report in the submitted id set with one outcome and note —
- * the moderation-sweep case (ten reports about one seller). One audit row
- * per report, same as resolving them one by one; capped at 50 ids.
+ * Resolve every report in the submitted id set (an explicit selection made
+ * by the admin — checkboxes + select-all-on-page, never an implicit "every
+ * report shown") with one outcome and note. One audit row per report, same
+ * as resolving them one by one; capped at 50 ids. Every id is validated
+ * independently — a bad or already-resolved id is skipped and reported, not
+ * an abort of the whole batch.
  */
 export async function adminResolveReports(
   _prev: AdminActionState,
@@ -718,8 +731,8 @@ export async function adminResolveReports(
   if (!["actioned", "dismissed"].includes(outcome)) return { error: "Pick an outcome." };
   if (!note) return { error: "A note is required — it goes in the audit log." };
 
-  let resolved = 0;
-  let skipped = 0;
+  let done = 0;
+  const failed: { id: string; error: string }[] = [];
   for (const reportId of ids) {
     try {
       await auditedAction(
@@ -729,10 +742,10 @@ export async function adminResolveReports(
           action: `report.${outcome}`,
           subjectType: "report",
           subjectId: reportId,
-          reason: `${note} (bulk: ${ids.length} reports)`,
+          reason: `${note} (bulk: ${ids.length} selected)`,
         },
         async () => {
-          const { data: done, error } = await ctx.admin
+          const { data: updated, error } = await ctx.admin
             .from("reports")
             .update({
               status: outcome as "actioned" | "dismissed",
@@ -744,18 +757,19 @@ export async function adminResolveReports(
             .eq("status", "open")
             .select("id");
           if (error) throw new Error(error.message);
-          if (!done?.length) throw new Error("already resolved");
+          if (!updated?.length) throw new Error("Already resolved.");
           return {};
         }
       );
-      resolved += 1;
-    } catch {
-      skipped += 1;
+      done += 1;
+    } catch (error) {
+      failed.push({ id: reportId, error: error instanceof Error ? error.message : "Failed." });
     }
   }
   revalidatePath("/admin", "layout");
   return {
-    ok: `${resolved} report${resolved === 1 ? "" : "s"} ${outcome}${skipped ? `; ${skipped} already resolved` : ""}.`,
+    ok: `${done} report${done === 1 ? "" : "s"} ${outcome}${failed.length ? `; ${failed.length} failed` : ""}.`,
+    results: { done, failed },
   };
 }
 
@@ -822,4 +836,34 @@ export async function adminReplayWebhookEvent(
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Replay failed." };
   }
+}
+
+/**
+ * Settings page: fire a test alert down the configured webhook. Gated like
+ * every action, but deliberately NOT audited — it mutates no data, the audit
+ * subject enum has no row for it, and a test ping is operational plumbing,
+ * not an intervention.
+ */
+export async function adminSendTestAlert(
+  // useActionState fixes the (prev, formData) shape; a test ping needs neither.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _prev: AdminActionState,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  if (!process.env.ADMIN_ALERT_WEBHOOK_URL) {
+    return { error: "No webhook configured — set ADMIN_ALERT_WEBHOOK_URL and redeploy." };
+  }
+  await sendAdminAlert({
+    kind: "test",
+    title: "Test alert from the console settings page",
+    detail: "If you can read this, delivery works.",
+  });
+  // sendAdminAlert swallows delivery failures by design (money paths must not
+  // depend on the messenger) — so "sent" here means handed to the webhook.
+  return { ok: "Test alert dispatched — check the channel the webhook feeds." };
 }

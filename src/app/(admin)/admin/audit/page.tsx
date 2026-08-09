@@ -79,7 +79,8 @@ export default async function AdminAuditPage({
         </p>
       </Rv>
 
-      <form method="get" className="search mb-2" role="search">
+      <div className="finder mb-4">
+      <form method="get" className="search" role="search">
         <label htmlFor="audit-action" className="sr-only">
           Filter by action prefix
         </label>
@@ -116,9 +117,10 @@ export default async function AdminAuditPage({
         </button>
       </form>
 
-      <div className="filters mb-4" aria-label="Filter by subject">
+      <div className="filters" aria-label="Filter by subject">
+        <span className="microlabel filters__label">Subject</span>
         <Link href={link({ subject: undefined, page: undefined })} className={cx("fbtn", !subjectType && "is-on")}>
-          All subjects
+          All
         </Link>
         {SUBJECT_TYPES.map((s) => (
           <Link
@@ -129,6 +131,7 @@ export default async function AdminAuditPage({
             {s}
           </Link>
         ))}
+      </div>
       </div>
 
       {rows.length ? (

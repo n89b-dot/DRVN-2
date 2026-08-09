@@ -45,26 +45,28 @@ export default async function AdminUsersPage({
         </p>
       </Rv>
 
-      <form method="get" className="search mb-4" role="search">
-        <label htmlFor="admin-user-q" className="sr-only">
-          Search users
-        </label>
-        <input
-          id="admin-user-q"
-          type="search"
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Username or display name"
-          className="ctl"
-        />
-        {activeState !== "all" && <input type="hidden" name="state" value={activeState} />}
-        <button type="submit" className="btn">
-          Search
-        </button>
-      </form>
+      <div className="finder mb-4">
+        <form method="get" className="search" role="search">
+          <label htmlFor="admin-user-q" className="sr-only">
+            Search users
+          </label>
+          <input
+            id="admin-user-q"
+            type="search"
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Username or display name"
+            className="ctl"
+          />
+          {activeState !== "all" && <input type="hidden" name="state" value={activeState} />}
+          <button type="submit" className="btn">
+            Search
+          </button>
+        </form>
 
-      <div className="filters mb-4" aria-label="Filter by state">
-        {USER_STATE_FILTERS.map((f) => (
+        <div className="filters" aria-label="Filter by state">
+          <span className="microlabel filters__label">State</span>
+          {USER_STATE_FILTERS.map((f) => (
           <Link
             key={f.key}
             href={`/admin/users?${new URLSearchParams({
@@ -76,6 +78,7 @@ export default async function AdminUsersPage({
             {f.label}
           </Link>
         ))}
+        </div>
       </div>
 
       {rows.length ? (

@@ -23,6 +23,7 @@ export function ActionDialog({
   title,
   trigger,
   triggerClassName = "btn",
+  triggerDisabled = false,
   hidden,
   fields,
   submitLabel,
@@ -33,6 +34,8 @@ export function ActionDialog({
   title: string;
   trigger: string;
   triggerClassName?: string;
+  /** Disables the trigger without hiding it — e.g. a bulk action with nothing selected. */
+  triggerDisabled?: boolean;
   /** Subject ids etc., rendered as hidden inputs. */
   hidden: Record<string, string>;
   fields: ActionField[];
@@ -48,7 +51,9 @@ export function ActionDialog({
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (state?.ok) {
+    // Partial failures (bulk actions) stay open — the admin needs to read
+    // which ids failed and why, not have that swept away after a beat.
+    if (state?.ok && !state.results?.failed.length) {
       closeTimer.current = setTimeout(() => setOpen(false), 1200);
     }
     return () => {
@@ -58,7 +63,12 @@ export function ActionDialog({
 
   return (
     <>
-      <button type="button" className={triggerClassName} onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className={triggerClassName}
+        disabled={triggerDisabled}
+        onClick={() => setOpen(true)}
+      >
         {trigger}
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} label={title} align="center">
@@ -136,6 +146,18 @@ export function ActionDialog({
               <p role="status" aria-live="polite" className="chip chip--ok">
                 {state.ok}
               </p>
+            )}
+            {state?.results && state.results.failed.length > 0 && (
+              <div role="alert" aria-live="polite" className="field__err">
+                <p>{state.results.failed.length} could not be applied:</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {state.results.failed.map((f) => (
+                    <li key={f.id}>
+                      {f.id.slice(0, 8)} — {f.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
 
             <button

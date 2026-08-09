@@ -3,6 +3,7 @@ import "server-only";
 import type {
   AdminAuditLogEntry,
   DisputeCategory,
+  Json,
   Listing,
   Order,
   OrderStatus,
@@ -11,6 +12,7 @@ import type {
   Report,
   TransferIntent,
 } from "@/lib/database.types";
+import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -183,6 +185,10 @@ export type DisputeQueueRow = {
   disputedAt: string | null;
   ageDays: number;
   overSla: boolean;
+  /** Escalated — by the buyer's "step in" (0024) or the day-4 cron (0021). */
+  escalated: boolean;
+  /** True when the buyer explicitly escalated, not just the cron. */
+  buyerEscalated: boolean;
   category: DisputeCategory | null;
   reason: string | null;
   totalCents: number;
@@ -192,6 +198,9 @@ export type DisputeQueueRow = {
   seller: PartyRef | null;
   title: string;
   transferred: boolean;
+  /** The purchased grade, frozen at sale (0024) — the first item's, when the
+   *  order has several. Batched alongside titlesFor, no N+1. */
+  purchasedGrade: string | null;
 };
 
 export const DISPUTES_PAGE_SIZE = 50;
@@ -245,7 +254,7 @@ export async function getDisputeQueue(
   const selected = a
     .from("orders")
     .select(
-      "id, buyer_id, seller_id, disputed_at, dispute_category, dispute_reason, dispute_resolved_at, total_cents, currency, refund_offer_cents, transfer_reference, status"
+      "id, buyer_id, seller_id, disputed_at, dispute_category, dispute_reason, dispute_resolved_at, dispute_escalated_at, dispute_escalated_by, total_cents, currency, refund_offer_cents, transfer_reference, status"
     );
   let builder = (
     scope === "open"
@@ -283,9 +292,10 @@ export async function getDisputeQueue(
   const fetched = orders ?? [];
   const hasMore = fetched.length > size;
   const rows = fetched.slice(0, size);
-  const [parties, titles, total] = await Promise.all([
+  const [parties, titles, grades, total] = await Promise.all([
     partiesFor(a, rows.flatMap((o) => [o.buyer_id, o.seller_id])),
     titlesFor(a, rows.map((o) => o.id)),
+    gradesFor(a, rows.map((o) => o.id)),
     countDisputes(a, scope),
   ]);
 
@@ -302,6 +312,8 @@ export async function getDisputeQueue(
         disputedAt: o.disputed_at,
         ageDays,
         overSla: ageDays >= DISPUTE_SLA_DAYS && o.status === "disputed",
+        escalated: Boolean(o.dispute_escalated_at) && o.status === "disputed",
+        buyerEscalated: Boolean(o.dispute_escalated_by),
         category: o.dispute_category,
         reason: o.dispute_reason,
         totalCents: o.total_cents,
@@ -311,9 +323,27 @@ export async function getDisputeQueue(
         seller: o.seller_id ? (parties.get(o.seller_id) ?? null) : null,
         title: titles.get(o.id) ?? `Order ${o.id.slice(0, 8)}`,
         transferred: Boolean(o.transfer_reference),
+        purchasedGrade: grades.get(o.id) ?? null,
       };
     }),
   };
+}
+
+/** First item's purchased grade per order — one batched query alongside
+ *  titlesFor, so the queue's grade column doesn't cost an N+1. */
+async function gradesFor(a: Admin, orderIds: string[]): Promise<Map<string, string | null>> {
+  if (!orderIds.length) return new Map();
+  const { data: items } = await a
+    .from("order_items")
+    .select("order_id, condition_snapshot")
+    .in("order_id", orderIds);
+  const map = new Map<string, string | null>();
+  for (const item of items ?? []) {
+    if (map.has(item.order_id)) continue;
+    const snapshot = item.condition_snapshot as { grade?: string | null } | null;
+    map.set(item.order_id, snapshot?.grade ?? null);
+  }
+  return map;
 }
 
 async function countDisputes(a: Admin, scope: "open" | "resolved"): Promise<number> {
@@ -347,9 +377,31 @@ async function titlesFor(a: Admin, orderIds: string[]): Promise<Map<string, stri
 
 // ---------- Order detail ----------
 
+/** A listing's condition fields, current as of the read — the "as it reads
+ *  today" half of the purchased-vs-current comparison (0024 follow-up). */
+export type AdminCurrentListingCondition = {
+  status: Listing["status"];
+  category: string;
+  subcategory: string | null;
+  condition: string | null;
+  grade: string | null;
+  checklist: Json | null;
+  compatibilityNotes: string | null;
+};
+
 export type AdminOrderDetail = {
   order: Order;
-  items: { id: string; title: string | null; priceCents: number; listingId: string | null }[];
+  items: {
+    id: string;
+    title: string | null;
+    priceCents: number;
+    listingId: string | null;
+    /** Frozen at purchase (0024 trigger) — the contract a dispute is judged
+     *  against, whatever the listing looks like today. */
+    conditionSnapshot: Json | null;
+    /** Null when the listing was hard-deleted (rare) or never had one. */
+    currentListing: AdminCurrentListingCondition | null;
+  }[];
   payment: Payment | null;
   transferIntent: TransferIntent | null;
   buyer: (PartyRef & { suspendedAt: string | null; disputeCount: number; orderCount: number }) | null;
@@ -363,6 +415,8 @@ export type AdminOrderDetail = {
       })
     | null;
   messages: { id: string; senderId: string; body: string; createdAt: string }[];
+  /** Photos attached to the dispute by either party (0024). */
+  evidence: { id: string; uploaderId: string | null; url: string; note: string | null; createdAt: string }[];
   audit: AdminAuditLogEntry[];
 };
 
@@ -371,8 +425,11 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
   const { data: order } = await a.from("orders").select("*").eq("id", orderId).maybeSingle();
   if (!order) return null;
 
-  const [items, payment, intent, messages, audit] = await Promise.all([
-    a.from("order_items").select("id, title, price_cents, listing_id").eq("order_id", orderId),
+  const [items, payment, intent, messages, evidence, audit] = await Promise.all([
+    a
+      .from("order_items")
+      .select("id, title, price_cents, listing_id, condition_snapshot")
+      .eq("order_id", orderId),
     a.from("payments").select("*").eq("order_id", orderId).maybeSingle(),
     a.from("transfer_intents").select("*").eq("order_id", orderId).maybeSingle(),
     a
@@ -381,6 +438,11 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
       .eq("order_id", orderId)
       .order("created_at", { ascending: true })
       .limit(100),
+    a
+      .from("dispute_evidence")
+      .select("id, uploader_id, url, storage_path, note, created_at")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true }),
     a
       .from("admin_audit_log")
       .select("*")
@@ -421,18 +483,45 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
     };
   };
 
-  const [buyer, seller] = await Promise.all([
+  const itemRows = items.data ?? [];
+  const listingIds = itemRows
+    .map((i) => i.listing_id)
+    .filter((id): id is string => Boolean(id));
+
+  const [{ data: currentListings }, buyer, seller] = await Promise.all([
+    listingIds.length
+      ? a
+          .from("listings")
+          .select("id, status, category, subcategory, condition, grade, condition_checklist, compatibility_notes")
+          .in("id", listingIds)
+      : Promise.resolve({ data: [] as never[] }),
     loadParty(order.buyer_id, "buyer"),
     loadParty(order.seller_id, "seller"),
   ]);
+  const currentByListingId = new Map(
+    (currentListings ?? []).map((l) => [
+      l.id,
+      {
+        status: l.status,
+        category: l.category,
+        subcategory: l.subcategory,
+        condition: l.condition,
+        grade: l.grade,
+        checklist: l.condition_checklist,
+        compatibilityNotes: l.compatibility_notes,
+      } satisfies AdminCurrentListingCondition,
+    ])
+  );
 
   return {
     order,
-    items: (items.data ?? []).map((i) => ({
+    items: itemRows.map((i) => ({
       id: i.id,
       title: i.title,
       priceCents: i.price_cents,
       listingId: i.listing_id,
+      conditionSnapshot: i.condition_snapshot,
+      currentListing: i.listing_id ? (currentByListingId.get(i.listing_id) ?? null) : null,
     })),
     payment: payment.data ?? null,
     transferIntent: intent.data ?? null,
@@ -443,6 +532,13 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
       senderId: m.sender_id,
       body: m.body,
       createdAt: m.created_at,
+    })),
+    evidence: (await signEvidenceUrls(a, evidence.data ?? [])).map((e) => ({
+      id: e.id,
+      uploaderId: e.uploader_id,
+      url: e.url,
+      note: e.note,
+      createdAt: e.created_at,
     })),
     audit: audit.data ?? [],
   };
@@ -810,6 +906,9 @@ export type AdminUserDetail = {
     sales: number;
     listings: number;
     disputes: number;
+    /** Disputes this user (as seller) lost money on — refund accepted, admin
+     *  or SLA refund, chargeback (dispute_outcome, 0024). The defect ledger. */
+    disputesLost: number;
     reportsAgainst: number;
   };
   purchases: AdminUserOrderRow[];
@@ -850,6 +949,7 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
     saleCount,
     listingCount,
     disputeCount,
+    disputesLostCount,
     reportCount,
   ] = await Promise.all([
     a
@@ -893,6 +993,11 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
       .select("id", { count: "exact", head: true })
       .not("disputed_at", "is", null)
       .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
+    a
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", userId)
+      .in("dispute_outcome", ["refund_accepted", "auto_refunded", "admin_refunded", "chargeback_lost"]),
     a
       .from("reports")
       .select("id", { count: "exact", head: true })
@@ -939,6 +1044,7 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
       sales: saleCount.count ?? 0,
       listings: listingCount.count ?? 0,
       disputes: disputeCount.count ?? 0,
+      disputesLost: disputesLostCount.count ?? 0,
       reportsAgainst: reportCount.count ?? 0,
     },
     purchases: purchaseRows.map((o) => toRow(o, o.seller_id)),
@@ -1019,6 +1125,10 @@ export async function getReports(
 export type PaymentsOps = {
   recoveries: (PaymentRecovery & { orderTitle: string })[];
   stuckIntents: (TransferIntent & { seller: PartyRef | null; orderTitle: string })[];
+  /** In-flight, failed, and recovery-required refund operations (0026). */
+  refundOps: (import("@/lib/database.types").RefundOperation & { orderTitle: string })[];
+  /** Undelivered admin alerts: pending retries, exhausted, or no destination. */
+  alertBacklog: import("@/lib/database.types").AdminAlertOutboxRow[];
   recentEvents: {
     id: string;
     type: string;
@@ -1031,7 +1141,7 @@ export type PaymentsOps = {
 
 export async function getPaymentsOps(opts: { query?: string } = {}): Promise<PaymentsOps> {
   const a = admin();
-  const [recoveries, intents, events] = await Promise.all([
+  const [recoveries, intents, events, refundOps, alerts] = await Promise.all([
     a
       .from("payment_recoveries")
       .select("*")
@@ -1044,13 +1154,35 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
       .order("created_at", { ascending: true })
       .limit(100),
     a.from("webhook_events").select("*").order("received_at", { ascending: false }).limit(25),
+    a
+      .from("refund_operations")
+      .select("*")
+      .in("status", [
+        "requested",
+        "provider_pending",
+        "provider_succeeded",
+        "effects_pending",
+        "reversal_pending",
+        "failed",
+        "recovery_required",
+      ])
+      .order("created_at", { ascending: false })
+      .limit(100),
+    a
+      .from("admin_alert_outbox")
+      .select("*")
+      .in("status", ["pending", "failed", "disabled"])
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
 
   const recoveryRows = recoveries.data ?? [];
   const intentRows = intents.data ?? [];
+  const refundOpRows = refundOps.data ?? [];
   const titles = await titlesFor(a, [
     ...recoveryRows.map((r) => r.order_id).filter((id): id is string => Boolean(id)),
     ...intentRows.map((i) => i.order_id),
+    ...refundOpRows.map((r) => r.order_id),
   ]);
   const parties = await partiesFor(a, intentRows.map((i) => i.seller_id));
 
@@ -1084,6 +1216,16 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
   return {
     recoveries: filteredRecoveries,
     stuckIntents: filteredIntents,
+    refundOps: refundOpRows
+      .map((r) => ({ ...r, orderTitle: titles.get(r.order_id) ?? "Order" }))
+      .filter(
+        (r) =>
+          !q ||
+          r.order_id.toLowerCase().startsWith(q) ||
+          r.orderTitle.toLowerCase().includes(q) ||
+          r.status.includes(q)
+      ),
+    alertBacklog: alerts.data ?? [],
     recentEvents: (events.data ?? []).map((e) => ({
       id: e.id,
       type: e.type,
@@ -1168,4 +1310,63 @@ export async function getNavCounts(): Promise<NavCounts> {
     reports: reports.count ?? 0,
     money: (recoveries.count ?? 0) + (stuck.count ?? 0),
   };
+}
+
+// ---------- Console settings ----------
+
+export type AdminRosterRow = {
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  role: "admin" | "viewer";
+  note: string | null;
+  addedAt: string;
+};
+
+/**
+ * The console roster, for the Settings page — read-only by design: membership
+ * and roles live in SQL (0018/0023), so this surface shows who holds a key
+ * without ever becoming a place to mint one.
+ */
+export type AdminIdentity = {
+  username: string | null;
+  displayName: string | null;
+};
+
+/**
+ * The signed-in admin's own profile fields, for the console header. Service
+ * role, same as every other read here — profiles columns relevant to display
+ * (username/display_name) are public elsewhere in the app, but going through
+ * the admin client keeps this consistent with the rest of the file rather
+ * than depending on the caller's RLS session shape.
+ */
+export async function getAdminIdentity(userId: string): Promise<AdminIdentity> {
+  const a = admin();
+  const { data } = await a
+    .from("profiles")
+    .select("username, display_name")
+    .eq("id", userId)
+    .maybeSingle();
+  return { username: data?.username ?? null, displayName: data?.display_name ?? null };
+}
+
+export async function getAdminRoster(): Promise<AdminRosterRow[]> {
+  const a = admin();
+  const { data: rows } = await a
+    .from("admin_users")
+    .select("user_id, role, note, created_at")
+    .order("created_at", { ascending: true });
+  const ids = (rows ?? []).map((r) => r.user_id);
+  const { data: profiles } = ids.length
+    ? await a.from("profiles").select("id, username, display_name").in("id", ids)
+    : { data: [] as { id: string; username: string | null; display_name: string | null }[] };
+  const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
+  return (rows ?? []).map((r) => ({
+    userId: r.user_id,
+    username: byId.get(r.user_id)?.username ?? null,
+    displayName: byId.get(r.user_id)?.display_name ?? null,
+    role: r.role ?? "admin",
+    note: r.note,
+    addedAt: r.created_at,
+  }));
 }

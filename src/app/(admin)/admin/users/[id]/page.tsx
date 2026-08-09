@@ -89,6 +89,15 @@ export default async function AdminUserPage({
           @{user.username ?? "—"} · joined {new Date(user.createdAt).toLocaleDateString()} ·{" "}
           {plural(user.totals.purchases, "purchase")} · {plural(user.totals.sales, "sale")} ·{" "}
           {plural(user.totals.disputes, "dispute")}
+          {user.totals.disputesLost > 0 && (
+            <>
+              {" "}
+              ·{" "}
+              <span className="text-live">
+                {user.totals.disputesLost} lost as seller
+              </span>
+            </>
+          )}
         </p>
       </Rv>
 

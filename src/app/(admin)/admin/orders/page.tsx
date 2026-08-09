@@ -81,7 +81,8 @@ export default async function AdminOrdersPage({
         </p>
       </Rv>
 
-      <form method="get" className="search mb-2" role="search">
+      <div className="finder mb-4">
+      <form method="get" className="search" role="search">
         <label htmlFor="admin-order-q" className="sr-only">
           Search orders
         </label>
@@ -135,7 +136,8 @@ export default async function AdminOrdersPage({
         </button>
       </form>
 
-      <div className="filters mb-4" aria-label="Filter by status">
+      <div className="filters" aria-label="Filter by status">
+        <span className="microlabel filters__label">Status</span>
         <Link
           href={`/admin/orders?${new URLSearchParams({ ...(q ? { q } : {}), ...dateParams })}`}
           className={cx("fbtn", !activeStatus && "is-on")}
@@ -152,6 +154,7 @@ export default async function AdminOrdersPage({
             {(counts[s] ?? 0) > 0 && <span className="n ml-1">{counts[s]}</span>}
           </Link>
         ))}
+      </div>
       </div>
 
       {rows.length ? (
@@ -185,7 +188,7 @@ export default async function AdminOrdersPage({
               <th scope="col" className="text-right">
                 Total
               </th>
-              <th scope="col" className="cell-gap">
+              <th scope="col">
                 Money
               </th>
               <th scope="col">Status</th>
@@ -219,7 +222,7 @@ export default async function AdminOrdersPage({
                 <td className="ledger__num" data-label="Total">
                   {formatPrice(r.totalCents)}
                 </td>
-                <td data-label="Money" className="cell-gap">
+                <td data-label="Money">
                   {r.refundedCents > 0 ? (
                     <span className="chip chip--live">Refunded {formatPrice(r.refundedCents)}</span>
                   ) : (

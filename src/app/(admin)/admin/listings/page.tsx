@@ -55,59 +55,63 @@ export default async function AdminListingsPage({
         </p>
       </Rv>
 
-      <form method="get" className="search mb-2" role="search">
-        <label htmlFor="admin-listing-q" className="sr-only">
-          Search listings
-        </label>
-        <input
-          id="admin-listing-q"
-          type="search"
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Search titles"
-          className="ctl"
-        />
-        {activeStatus && <input type="hidden" name="status" value={activeStatus} />}
-        {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
-        <button type="submit" className="btn">
-          Search
-        </button>
-      </form>
+      <div className="finder mb-4">
+        <form method="get" className="search" role="search">
+          <label htmlFor="admin-listing-q" className="sr-only">
+            Search listings
+          </label>
+          <input
+            id="admin-listing-q"
+            type="search"
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Search titles"
+            className="ctl"
+          />
+          {activeStatus && <input type="hidden" name="status" value={activeStatus} />}
+          {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
+          <button type="submit" className="btn">
+            Search
+          </button>
+        </form>
 
-      <div className="filters mb-2" aria-label="Filter by status">
-        <Link
-          href={`/admin/listings?${linkParams({ status: undefined })}`}
-          className={cx("fbtn", !activeStatus && "is-on")}
-        >
-          All
-        </Link>
-        {STATUSES.map((s) => (
+        <div className="filters" aria-label="Filter by status">
+          <span className="microlabel filters__label">Status</span>
           <Link
-            key={s}
-            href={`/admin/listings?${linkParams({ status: s })}`}
-            className={cx("fbtn", activeStatus === s && "is-on")}
+            href={`/admin/listings?${linkParams({ status: undefined })}`}
+            className={cx("fbtn", !activeStatus && "is-on")}
           >
-            {s}
+            All
           </Link>
-        ))}
-      </div>
+          {STATUSES.map((s) => (
+            <Link
+              key={s}
+              href={`/admin/listings?${linkParams({ status: s })}`}
+              className={cx("fbtn", activeStatus === s && "is-on")}
+            >
+              {s}
+            </Link>
+          ))}
+        </div>
 
-      <div className="filters mb-4" aria-label="Filter by category">
-        <Link
-          href={`/admin/listings?${linkParams({ category: undefined })}`}
-          className={cx("fbtn", !activeCategory && "is-on")}
-        >
-          All categories
-        </Link>
-        {CATEGORIES.map((c) => (
+        <div className="filters" aria-label="Filter by category">
+          <span className="microlabel filters__label">Category</span>
           <Link
-            key={c.slug}
-            href={`/admin/listings?${linkParams({ category: c.slug })}`}
-            className={cx("fbtn", activeCategory === c.slug && "is-on")}
+            href={`/admin/listings?${linkParams({ category: undefined })}`}
+            className={cx("fbtn", !activeCategory && "is-on")}
           >
-            {c.label}
+            All
           </Link>
-        ))}
+          {CATEGORIES.map((c) => (
+            <Link
+              key={c.slug}
+              href={`/admin/listings?${linkParams({ category: c.slug })}`}
+              className={cx("fbtn", activeCategory === c.slug && "is-on")}
+            >
+              {c.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {rows.length ? (

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { KeyValueTable } from "@/components/ui";
+import { ConditionSummary, conditionMaterialDiff, type ConditionSnapshot } from "@/components/condition-summary";
 import {
   adminAddNote,
   adminForceRefund,
@@ -48,7 +49,8 @@ export default async function AdminOrderPage({
   const { id } = await params;
   const detail = await getOrderDetail(id);
   if (!detail) notFound();
-  const { order, items, payment, transferIntent, buyer, seller, messages, audit } = detail;
+  const { order, items, payment, transferIntent, buyer, seller, messages, evidence, audit } =
+    detail;
 
   const refundable = order.total_cents - order.refunded_cents;
   const disputed = order.status === "disputed";
@@ -87,7 +89,25 @@ export default async function AdminOrderPage({
             {order.refund_offer_cents
               ? ` The seller has offered ${formatPrice(order.refund_offer_cents)} — awaiting the buyer.`
               : ""}
+            {order.dispute_escalated_at
+              ? order.dispute_escalated_by
+                ? " Escalated by the buyer — support owes this case a decision."
+                : " Escalated by the SLA sweep."
+              : ""}
           </p>
+          {evidence.length > 0 && (
+            <div className="col-span-full mt-2">
+              <span className="microlabel">Evidence ({evidence.length})</span>
+              <div className="thumbs !mt-1">
+                {evidence.map((e) => (
+                  <a key={e.id} href={e.url} target="_blank" rel="noreferrer" className="thumb" title={e.note ?? undefined}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={e.url} alt={e.note ?? "Dispute evidence"} className="h-full w-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -115,6 +135,22 @@ export default async function AdminOrderPage({
                     ? `${formatPrice(order.refunded_cents)} (fee share ${formatPrice(order.platform_fee_refunded_cents)})`
                     : "—",
               },
+              ...(order.refund_offer_cents
+                ? [
+                    {
+                      label: "Seller's refund offer",
+                      value: `${formatPrice(order.refund_offer_cents)}${order.refund_offered_at ? ` · ${days(order.refund_offered_at)}` : ""} — awaiting buyer`,
+                    },
+                  ]
+                : []),
+              ...(order.dispute_outcome
+                ? [
+                    {
+                      label: "Dispute outcome",
+                      value: `${order.dispute_outcome.replace(/_/g, " ")}${order.dispute_resolved_at ? ` · ${days(order.dispute_resolved_at)}` : ""}`,
+                    },
+                  ]
+                : []),
             ]}
           />
           <div className="mt-4 flex flex-wrap gap-2">
@@ -230,6 +266,58 @@ export default async function AdminOrderPage({
           )}
         </section>
       </div>
+
+      {/* ---------- Condition: purchased vs current ---------- */}
+      {items.some((i) => i.conditionSnapshot || i.currentListing) && (
+        <section aria-label="Condition comparison" className="mb-8">
+          <span className="microlabel">Condition — purchased vs current</span>
+          <div className="deck deck--two mt-2">
+            {items.map((item) => {
+              const purchased = item.conditionSnapshot as ConditionSnapshot;
+              const current: ConditionSnapshot = item.currentListing
+                ? {
+                    condition: item.currentListing.condition,
+                    grade: item.currentListing.grade,
+                    checklist: item.currentListing.checklist,
+                    compatibility_notes: item.currentListing.compatibilityNotes,
+                  }
+                : null;
+              if (!purchased && !current) return null;
+              const changed = conditionMaterialDiff(purchased, current);
+              const category = item.currentListing?.category;
+              const subcategory = item.currentListing?.subcategory;
+              return (
+                <div key={item.id} className="tile" aria-label={item.title ?? "Item"}>
+                  <div className="tile__head">
+                    <span className="order__name">{item.title ?? "Part"}</span>
+                    {changed && <span className="chip chip--live">Changed since sale</span>}
+                  </div>
+                  <div className="mt-3 grid gap-4">
+                    <ConditionSummary
+                      snapshot={purchased}
+                      category={category}
+                      subcategory={subcategory}
+                      label="Purchased (frozen at sale)"
+                    />
+                    {item.currentListing ? (
+                      <ConditionSummary
+                        snapshot={current}
+                        category={category}
+                        subcategory={subcategory}
+                        label={`Current listing${item.currentListing.status !== "active" ? ` (${item.currentListing.status})` : ""}`}
+                      />
+                    ) : item.listingId ? (
+                      <p className="order__meta">Listing no longer exists.</p>
+                    ) : (
+                      <p className="order__meta">Not linked to a listing.</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* ---------- Thread ---------- */}
       <section aria-label="Order thread" className="mb-8">
