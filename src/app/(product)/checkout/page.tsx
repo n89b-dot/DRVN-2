@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Foot, Media, PaymentModeNotice } from "@/components/ui";
 import { loadCartSummary } from "@/lib/checkout-data";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
@@ -44,6 +44,14 @@ export default async function CheckoutPage() {
           <CheckoutSteps
             idempotencyKey={randomUUID()}
             allowsCollection={cart.allowsCollection}
+            mixedFulfilment={cart.mixedFulfilment}
+            items={cart.lines.map((line) => ({
+              id: line.id,
+              title: line.title,
+              priceLabel: formatPrice(line.priceCents),
+            }))}
+            subtotalLabel={formatPrice(cart.goodsCents)}
+            shippingLabel={cart.shippingCents > 0 ? formatPrice(cart.shippingCents) : "Free"}
             total={formatPrice(cart.totalCents)}
             savedCards={savedCards}
           />
@@ -88,11 +96,7 @@ export default async function CheckoutPage() {
                 separate orders — one payment.
               </p>
             )}
-            {!paymentsAreLive() && (
-              <p className="spec-note">
-                <b>Test mode</b> — payments run on Stripe&apos;s test rails; no real money moves.
-              </p>
-            )}
+            <PaymentModeNotice live={paymentsAreLive()} />
             <p className="field__hint mt-3">
               By placing this order you agree to DRVN&apos;s{" "}
               <Link href="/terms" className="jumplink">

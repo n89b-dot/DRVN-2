@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 
-import { recordExternalRefund } from "./refunds";
+import { recordExternalRefund, runRefundOperation } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
@@ -179,22 +179,58 @@ export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Pr
     return;
   }
 
-  // 1. Metadata-attributed refunds: cumulative target per order.
-  const targetByOrder = new Map<string, number>();
-  const orderIds = new Set(payments.map((p) => p.order_id));
+  // 0. Refunds our own state machine created: resume the operation rather
+  // than re-booking. The refund object carries operation_id metadata; if the
+  // process died between Stripe succeeding and our record advancing, this is
+  // the resume path (store the reference, then drive to completion).
+  for (const refund of charge.refunds?.data ?? []) {
+    const operationId = refund.metadata?.operation_id;
+    if (!operationId) continue;
+    if (refund.status && ["failed", "canceled"].includes(refund.status)) continue;
+    await admin
+      .from("refund_operations")
+      .update({
+        status: "provider_succeeded",
+        refund_reference: refund.id,
+        provider_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", operationId)
+      .in("status", ["requested", "provider_pending"]);
+    await runRefundOperation(admin, operationId);
+  }
+
+  // 1. Metadata-attributed refunds: cumulative target per order. Operations
+  // resumed above are excluded — their booking already lives in
+  // refund_operations; re-reading payments keeps the deltas honest.
+  const { data: refreshed } = await admin
+    .from("payments")
+    .select("id, order_id, amount_cents, refunded_cents, status")
+    .eq("provider_reference", intentId);
+  const current = refreshed ?? payments;
+
+  const targetByOrder = new Map<string, { target: number; refundId: string | null }>();
+  const orderIds = new Set(current.map((p) => p.order_id));
   let unattributedCents = 0;
   for (const refund of charge.refunds?.data ?? []) {
     if (refund.status && ["failed", "canceled"].includes(refund.status)) continue;
+    if (refund.metadata?.operation_id) continue; // handled above
     const orderId = refund.metadata?.order_id;
     if (orderId && orderIds.has(orderId)) {
-      targetByOrder.set(orderId, (targetByOrder.get(orderId) ?? 0) + refund.amount);
+      const prior = targetByOrder.get(orderId);
+      targetByOrder.set(orderId, {
+        target: (prior?.target ?? 0) + refund.amount,
+        // Only carry the exact Stripe reference when a single refund object
+        // maps to the order — the reference-dedup must not mis-key.
+        refundId: prior ? null : refund.id,
+      });
     } else {
       unattributedCents += refund.amount;
     }
   }
 
-  for (const [orderId, target] of targetByOrder) {
-    const payment = payments.find((p) => p.order_id === orderId);
+  for (const [orderId, { target, refundId }] of targetByOrder) {
+    const payment = current.find((p) => p.order_id === orderId);
     const alreadyBooked = payment?.refunded_cents ?? 0;
     const delta = target - alreadyBooked;
     if (delta > 0) {
@@ -202,13 +238,14 @@ export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Pr
         orderId,
         amountCents: delta,
         reason: `Stripe refund on ${charge.id}`,
+        refundReference: refundId ?? undefined,
       });
     }
   }
 
   // 2. Fully refunded — whatever the metadata says, every order ends refunded.
   if (charge.refunded) {
-    for (const p of payments) {
+    for (const p of current) {
       const remaining = p.amount_cents - (p.refunded_cents ?? 0);
       if (remaining > 0) {
         await recordExternalRefund(admin, {

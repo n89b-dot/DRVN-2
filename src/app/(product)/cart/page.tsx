@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Foot, Media, PaymentModeNotice } from "@/components/ui";
 import { getCartIds } from "@/lib/cart";
 import { formatPrice, platformFeeCents } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -12,9 +12,28 @@ import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Cart - DRVN" };
 
+/** Why a cart line other than "active" can't be bought right now. */
+const UNAVAILABLE_REASONS: Record<string, string> = {
+  reserved: "Someone else has this reserved",
+  sold: "Already sold",
+  paused: "Paused by the seller",
+  archived: "No longer listed",
+  removed: "Taken down",
+  draft: "Not published yet",
+};
+
+type InvalidLine = {
+  id: string;
+  title: string;
+  reason: string;
+};
+
 export default async function CartPage() {
   const ids = await getCartIds();
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: listings, error } = ids.length
     ? await supabase
@@ -29,7 +48,36 @@ export default async function CartPage() {
     reportError("[cart] failed to load listings", error);
   }
 
-  const active = (listings ?? []).filter((l) => l.status === "active");
+  const byId = new Map((listings ?? []).map((l) => [l.id, l]));
+
+  // A listing removed from the cookie's ids never silently disappears —
+  // every id is accounted for as either buyable, invalid-with-a-reason, or
+  // (below) hard-deleted and no longer in the table at all.
+  const invalid: InvalidLine[] = [];
+  const activeIds = new Set<string>();
+
+  for (const id of ids) {
+    const listing = byId.get(id);
+    if (!listing) {
+      invalid.push({ id, title: "A listing that's since been deleted", reason: "Deleted" });
+      continue;
+    }
+    if (user && listing.seller_id === user.id) {
+      invalid.push({ id, title: listing.title, reason: "This is your own listing" });
+      continue;
+    }
+    if (listing.status !== "active") {
+      invalid.push({
+        id,
+        title: listing.title,
+        reason: UNAVAILABLE_REASONS[listing.status] ?? "No longer available",
+      });
+      continue;
+    }
+    activeIds.add(id);
+  }
+
+  const active = (listings ?? []).filter((l) => activeIds.has(l.id));
 
   // Sellers are separate orders, so show the split *before* paying rather than
   // surprising the buyer with N orders afterwards.
@@ -60,9 +108,11 @@ export default async function CartPage() {
     if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
   }
 
-  // Anything in the cookie that is no longer buyable — say so instead of
-  // quietly dropping it at checkout.
-  const unavailable = (listings ?? []).filter((l) => l.status !== "active");
+  // Collection only shows as an option once you're actually checking out
+  // (one is_collection flag covers the whole basket) — flag here so a mixed
+  // basket doesn't lose the option without an explanation.
+  const collectionCapable = active.filter((l) => l.allows_collection).length;
+  const mixedFulfilment = collectionCapable > 0 && collectionCapable < active.length;
 
   return (
     <div className="mx-auto w-full max-w-[1060px] px-5 pb-10">
@@ -73,7 +123,7 @@ export default async function CartPage() {
         <h1>Check it over before you pay.</h1>
       </Rv>
 
-      {active.length === 0 ? (
+      {ids.length === 0 ? (
         <Rv className="undrawn undrawn--hero">
           <span className="undrawn__mark" aria-hidden="true">
             ⌕
@@ -87,13 +137,50 @@ export default async function CartPage() {
       ) : (
         <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="deck">
-          {unavailable.length > 0 && (
+          {invalid.length > 0 && (
+            <Rv className="tile">
+              <span className="microlabel microlabel--ink">
+                {invalid.length} part{invalid.length === 1 ? "" : "s"} can&apos;t be bought right now
+              </span>
+              <div className="rowlist mt-2">
+                {invalid.map((line) => (
+                  <div key={line.id} className="order is-invalid">
+                    <span className="min-w-0">
+                      <span className="order__name block truncate">{line.title}</span>
+                      <span className="order__meta block">{line.reason}</span>
+                    </span>
+                    <span className="order__actions">
+                      <form action={removeFromCart}>
+                        <input type="hidden" name="listing_id" value={line.id} />
+                        <button type="submit" className="relbtn !static">
+                          Remove
+                        </button>
+                      </form>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Rv>
+          )}
+
+          {mixedFulfilment && (
             <Rv className="alert">
-              <h4>Some parts are no longer available</h4>
+              <h4>Collection isn&apos;t offered for this basket</h4>
               <p>
-                {unavailable.map((l) => l.title).join(", ")} — sold or withdrawn since you added
-                {unavailable.length === 1 ? " it" : " them"}. Not included below.
+                Some parts here support collection and some don&apos;t — a basket can only check
+                out one way. Buy the collection-only parts separately if you&apos;d rather pick
+                them up.
               </p>
+            </Rv>
+          )}
+
+          {active.length === 0 && invalid.length > 0 && (
+            <Rv className="undrawn">
+              <h3>Nothing left to buy</h3>
+              <p>Remove the lines above, or add something else from the marketplace.</p>
+              <Link href="/marketplace" className="btn btn--ghost">
+                Browse the marketplace
+              </Link>
             </Rv>
           )}
 
@@ -181,14 +268,14 @@ export default async function CartPage() {
               )}
             </p>
 
-            <Link href="/checkout" className="btn btn--live mt-4 w-full">
-              Proceed to checkout
-            </Link>
-            {!paymentsAreLive() && (
-              <p className="spec-note">
-                <b>Test mode</b> — payments run on Stripe&apos;s test rails; no real money moves.
-              </p>
+            {active.length > 0 ? (
+              <Link href="/checkout" className="btn btn--live mt-4 w-full">
+                Proceed to checkout
+              </Link>
+            ) : (
+              <p className="field__hint mt-4">Remove the unavailable lines above to check out.</p>
             )}
+            <PaymentModeNotice live={paymentsAreLive()} />
           </Rv>
           </aside>
         </section>

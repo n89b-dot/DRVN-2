@@ -50,9 +50,12 @@ async function alertNewSlaBreaches(admin: Admin): Promise<number> {
       detail: (order.dispute_category ?? "other").replaceAll("_", " "),
       orderId: order.id,
       amountCents: order.total_cents,
+      // The outbox owns delivery and retry (0026); the dedup key makes a
+      // crashed pass's re-enqueue collapse instead of duplicating.
+      dedupKey: `dispute_over_sla:${order.id}`,
     });
-    // Stamp AFTER the send attempt: a crashed pass re-alerts (duplicate
-    // beats silent), a delivered one never repeats.
+    // Stamp AFTER the durable enqueue: delivery failures are now the
+    // outbox's retries, not a silently lost alert.
     await admin
       .from("orders")
       .update({ dispute_sla_alerted_at: new Date().toISOString() })
@@ -97,6 +100,7 @@ export async function processDisputeSla(admin: Admin): Promise<DisputeSlaSummary
         title: "SLA auto-refund failed",
         detail: outcome.error,
         orderId: order.id,
+        dedupKey: `dispute_auto_refund_failed:${order.id}`,
       });
     }
   }

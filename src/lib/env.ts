@@ -87,3 +87,97 @@ export function publicKey(): string | undefined {
 }
 
 export const isProduction = process.env.NODE_ENV === "production";
+
+// ---------------------------------------------------------------------------
+// Payments mode — explicit, and fail-closed in production
+// ---------------------------------------------------------------------------
+
+export type PaymentsMode = "stripe" | "stub";
+
+export class PaymentsConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PaymentsConfigError";
+  }
+}
+
+type EnvLike = Record<string, string | undefined>;
+
+/**
+ * Which provider the app runs on. Explicit `PAYMENTS_MODE` wins; otherwise
+ * the presence of the Stripe secret decides. The one thing this must never do
+ * is what the old code did — silently select the stub in production because a
+ * key went missing: a deploy that charges no one and marks orders paid.
+ *
+ * Rules (pure over `env` so they're unit-testable):
+ *  - PAYMENTS_MODE=stripe with no STRIPE_SECRET_KEY → throw, everywhere.
+ *  - PAYMENTS_MODE=stub in production → throw, unless
+ *    PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true (a deliberately separate, loud
+ *    override for non-public sandbox deploys).
+ *  - Unset mode: secret present → stripe; absent in production → throw
+ *    (fail closed); absent elsewhere → stub (the dev default).
+ */
+export function resolvePaymentsMode(env: EnvLike = process.env): PaymentsMode {
+  const explicit = env.PAYMENTS_MODE;
+  const production = env.NODE_ENV === "production";
+  const hasSecret = Boolean(env.STRIPE_SECRET_KEY);
+
+  if (explicit && explicit !== "stripe" && explicit !== "stub") {
+    throw new PaymentsConfigError(
+      `PAYMENTS_MODE must be "stripe" or "stub", got "${explicit}".`
+    );
+  }
+  if (explicit === "stripe" || (!explicit && hasSecret)) {
+    if (!hasSecret) {
+      throw new PaymentsConfigError(
+        "PAYMENTS_MODE=stripe but STRIPE_SECRET_KEY is not set. Set the key, or set PAYMENTS_MODE=stub for a non-money environment."
+      );
+    }
+    return "stripe";
+  }
+  // Stub — explicitly requested, or defaulted by an absent secret.
+  if (production && env.PAYMENTS_ALLOW_STUB_IN_PRODUCTION !== "true") {
+    throw new PaymentsConfigError(
+      explicit === "stub"
+        ? "PAYMENTS_MODE=stub is refused in production. Set PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true only for a non-public sandbox deployment."
+        : "No STRIPE_SECRET_KEY in production. Production cannot silently run fake payments — set the Stripe configuration, or explicitly opt a sandbox out with PAYMENTS_MODE=stub + PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true."
+    );
+  }
+  return "stub";
+}
+
+/**
+ * Everything live-money production must have, checked together so a deploy
+ * fails on the full list, not one variable at a time. Called at server start
+ * (instrumentation register) and again lazily by the provider factory.
+ */
+export function validatePaymentsEnv(env: EnvLike = process.env): {
+  mode: PaymentsMode;
+  warnings: string[];
+} {
+  const mode = resolvePaymentsMode(env); // throws on the fatal shapes
+  const production = env.NODE_ENV === "production";
+  const warnings: string[] = [];
+
+  if (mode === "stripe" && production) {
+    const missing: string[] = [];
+    if (!env.STRIPE_WEBHOOK_SECRET) missing.push("STRIPE_WEBHOOK_SECRET");
+    if (!env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) missing.push("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY");
+    // Live money without error reporting is flying blind — required, not advised.
+    if (!env.SENTRY_DSN) missing.push("SENTRY_DSN");
+    if (missing.length) {
+      throw new PaymentsConfigError(
+        `Live-money production is missing required configuration: ${missing.join(", ")}.`
+      );
+    }
+    if (!env.ADMIN_ALERT_WEBHOOK_URL) {
+      warnings.push(
+        "ADMIN_ALERT_WEBHOOK_URL is unset — admin alerts will accumulate as 'disabled' outbox rows instead of being delivered."
+      );
+    }
+    if (!env.CRON_SECRET) {
+      warnings.push("CRON_SECRET is unset — the transfer worker endpoint will refuse all runs.");
+    }
+  }
+  return { mode, warnings };
+}

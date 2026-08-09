@@ -21,6 +21,8 @@
  * transfers).
  */
 
+import { resolvePaymentsMode } from "@/lib/env";
+
 // 10% platform fee, deducted from the seller's proceeds — the buyer pays the
 // listed price and the seller receives price minus fee (PRD §7.4). The fee is
 // charged on goods only; shipping passes through untouched.
@@ -96,9 +98,11 @@ class StubPaymentProvider implements PaymentProvider {
 }
 
 export function getPaymentProvider(): PaymentProvider {
-  // Deliberately lazy-required so the stub path never loads the Stripe SDK,
-  // and so a missing key cleanly falls back to the stub in local dev.
-  if (process.env.STRIPE_SECRET_KEY) {
+  // resolvePaymentsMode fails closed: production can never silently get the
+  // stub because a key went missing — it throws instead (src/lib/env.ts).
+  const mode = resolvePaymentsMode();
+  if (mode === "stripe") {
+    // Lazy-required so the stub path never loads the Stripe SDK.
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- avoids a hard SDK dependency on the stub path
     const { StripePaymentProvider } = require("./stripe") as typeof import("./stripe");
     return new StripePaymentProvider();
