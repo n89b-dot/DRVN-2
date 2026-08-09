@@ -20,7 +20,13 @@ export type IconName =
   | "moon"
   | "rail"
   | "cart"
-  | "image";
+  | "image"
+  | "gauge"
+  | "scale"
+  | "box"
+  | "flag"
+  | "card"
+  | "book";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -91,6 +97,28 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
         <path d="m3.5 16.5 4.6-4.1a2 2 0 0 1 2.7.05L15 16.5m-1.6-1.4 1.9-1.7a2 2 0 0 1 2.7.06l2.4 2.2" />
       </>
     ),
+    gauge: (
+      <>
+        <path d="M4 18a8.5 8.5 0 1 1 16 0" />
+        <path d="m12 18 4.2-4.2" />
+        <circle cx="12" cy="18" r="1" />
+      </>
+    ),
+    scale: (
+      <>
+        <path d="M12 4v17M8 21h8M4 7h16" />
+        <path d="M7 7 4.5 12.5a2.8 2.8 0 0 0 5 0L7 7ZM17 7l-2.5 5.5a2.8 2.8 0 0 0 5 0L17 7Z" />
+      </>
+    ),
+    box: <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9ZM3.5 7.5 12 12l8.5-4.5M12 12v9" />,
+    flag: <path d="M5 21V4c4-2 6 2 10 0v9c-4 2-6-2-10 0" />,
+    card: (
+      <>
+        <rect x="3" y="6" width="18" height="13" rx="2" />
+        <path d="M3 10h18M7 15h4" />
+      </>
+    ),
+    book: <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4ZM5 17a3 3 0 0 1 3-3h11M9 8h6" />,
   };
 
   return (

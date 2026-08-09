@@ -43,7 +43,13 @@ export function isOwnStorageUrl(value: unknown): value is string {
  * policies in supabase/migrations/0001_v3_schema.sql, unchanged by
  * 0006_security_hardening.sql). Every bucket client uploads land in.
  */
-const OWNED_STORAGE_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images"];
+const OWNED_STORAGE_BUCKETS = [
+  "avatars",
+  "car-images",
+  "activity-images",
+  "listing-images",
+  "dispute-evidence",
+];
 
 /**
  * True for a storage URL that is both ours (`isOwnStorageUrl`) AND whose
@@ -62,6 +68,25 @@ export function isOwnedStorageUrl(value: unknown, userId: string): value is stri
 
   const [, bucket, folder] = match;
   return OWNED_STORAGE_BUCKETS.includes(bucket) && folder === userId;
+}
+
+/**
+ * dispute-evidence went private in 0027 (P0: it was a public bucket — see
+ * supabase/migrations/0027_evidence_privacy.sql). A private object has no
+ * fetchable "public" URL, so the upload flow submits the bare object path
+ * ('{uid}/{filename}', the same shape `storage.foldername` parses in the
+ * storage RLS policy) instead of calling `getPublicUrl`. This validates that
+ * path form and, for old rows still shaped as full URLs, falls back to the
+ * existing `isOwnedStorageUrl` check — legacy data isn't rewritten by this
+ * function, only accepted where it happens to still be readable this way.
+ */
+const DISPUTE_EVIDENCE_PATH_RE = /^([^/]+)\/[^/.]+\.[a-zA-Z0-9]+$/;
+
+export function isOwnedDisputeEvidenceRef(value: unknown, userId: string): value is string {
+  if (typeof value !== "string" || !value || !userId) return false;
+  const match = value.match(DISPUTE_EVIDENCE_PATH_RE);
+  if (match) return match[1] === userId;
+  return isOwnedStorageUrl(value, userId);
 }
 
 /**

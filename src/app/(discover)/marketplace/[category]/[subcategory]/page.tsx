@@ -50,12 +50,28 @@ export default async function SubcategoryPage({
         <h1>{subcategory.label}</h1>
       </Rv>
 
-      <div className="mb-6">
-        <FilterBar
-          action={`/marketplace/${category.slug}/${subcategory.slug}`}
-          filters={filters}
-          showFitToggle={Boolean(user)}
-        />
+      <FilterBar
+        action={`/marketplace/${category.slug}/${subcategory.slug}`}
+        filters={filters}
+        showFitToggle={Boolean(user)}
+      />
+
+      {/* Sibling subcategories stay one tap away — the sheet you're on is
+          inked, the rest are a hop sideways, matching the category page. */}
+      <div className="filters">
+        <span className="microlabel filters__label">Narrow it down</span>
+        <Link href={`/marketplace/${category.slug}`} className="fbtn">
+          All
+        </Link>
+        {category.subcategories.map((sub) => (
+          <Link
+            key={sub.slug}
+            href={`/marketplace/${category.slug}/${sub.slug}`}
+            className={`fbtn ${sub.slug === subcategory.slug ? "is-on" : ""}`}
+          >
+            {sub.label}
+          </Link>
+        ))}
       </div>
 
       <section className="deck">

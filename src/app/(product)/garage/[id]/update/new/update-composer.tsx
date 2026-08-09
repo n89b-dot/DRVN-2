@@ -22,7 +22,7 @@ export function UpdateComposer({ carId, userId }: { carId: string; userId: strin
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Title your update"
-        className="w-full bg-transparent text-[clamp(24px,3vw,34px)] font-[650] tracking-[-0.02em] outline-none placeholder:text-dim/50"
+        className="w-full bg-transparent text-[clamp(24px,3vw,34px)] font-[600] tracking-[-0.02em] outline-none placeholder:text-dim/50"
       />
 
       <div className="mt-6">

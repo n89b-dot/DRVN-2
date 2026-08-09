@@ -89,7 +89,7 @@ export function ProfileEditor({
             >
               <input type="hidden" name="avatar_url" value={avatarUrl ?? ""} />
               <div className="field">
-                <span className="microlabel">Avatar</span>
+                <label htmlFor={fid("avatar")} className="microlabel">Avatar</label>
                 <div className="flex items-center gap-4">
                   {avatarUrl ? (
                     <Media src={avatarUrl} alt="Your avatar" className="h-16 w-16 shrink-0 rounded-ctl" />
@@ -105,6 +105,7 @@ export function ProfileEditor({
                     {uploadingAvatar ? "Uploading…" : "Change photo"}
                   </button>
                   <input
+                    id={fid("avatar")}
                     ref={avatarFileRef}
                     type="file"
                     accept="image/*"
@@ -158,12 +159,11 @@ export function ProfileEditor({
                 </p>
               )}
               {saved && <span className="chip chip--ok">Profile saved</span>}
+              {/* Dialog primitive already appends its own Close button below —
+                  a second one here duplicated it. */}
               <div className="sheet__actions">
                 <button type="submit" disabled={pending} className="btn btn--live flex-1">
                   {pending ? "Saving…" : "Save profile"}
-                </button>
-                <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
-                  Close
                 </button>
               </div>
             </form>

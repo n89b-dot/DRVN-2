@@ -50,7 +50,17 @@ export type ProfileView = {
   reviewCount: number;
   salesCount: number;
   followerCount: number;
+  /** Pagination — "Show more" on the For sale / Reviews tabs. */
+  listingsPage: number;
+  listingsPageSize: number;
+  listingsHasMore: boolean;
+  reviewsPage: number;
+  reviewsPageSize: number;
+  reviewsHasMore: boolean;
 };
+
+export const PROFILE_LISTINGS_PAGE_SIZE = 24;
+export const PROFILE_REVIEWS_PAGE_SIZE = 20;
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -77,8 +87,14 @@ function formatDate(iso: string | null): string {
 export async function loadProfileView(
   supabase: SupabaseClient<Database>,
   profileId: string,
-  { publicOnly }: { publicOnly: boolean }
+  {
+    publicOnly,
+    listingsPage = 1,
+    reviewsPage = 1,
+  }: { publicOnly: boolean; listingsPage?: number; reviewsPage?: number }
 ): Promise<ProfileView> {
+  const listingsFrom = (Math.max(1, listingsPage) - 1) * PROFILE_LISTINGS_PAGE_SIZE;
+  const reviewsFrom = (Math.max(1, reviewsPage) - 1) * PROFILE_REVIEWS_PAGE_SIZE;
   let carsQuery = supabase
     .from("cars")
     .select("id, slug, name, year, make, model, color, tags")
@@ -155,27 +171,27 @@ export async function loadProfileView(
   // ---- Shopfront and credibility ----
   let listingsQuery = supabase
     .from("listings")
-    .select("id, title, price_cents, status, created_at")
+    .select("id, title, price_cents, status, created_at", { count: "exact" })
     .eq("seller_id", profileId)
     .order("created_at", { ascending: false })
-    .limit(24);
+    .range(listingsFrom, listingsFrom + PROFILE_LISTINGS_PAGE_SIZE - 1);
   listingsQuery = publicOnly
     ? listingsQuery.in("status", ["active", "sold"])
     : listingsQuery.not("status", "eq", "archived");
 
   const [
-    { data: listingRows },
-    { data: reviewRows },
+    { data: listingRows, count: listingsTotal },
+    { data: reviewRows, count: reviewsTotal },
     { count: salesCount },
     { count: followerCount },
   ] = await Promise.all([
     listingsQuery,
     supabase
       .from("reviews")
-      .select("id, rating, body, created_at, reviewer_id")
+      .select("id, rating, body, created_at, reviewer_id", { count: "exact" })
       .eq("reviewee_id", profileId)
       .order("created_at", { ascending: false })
-      .limit(20),
+      .range(reviewsFrom, reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE - 1),
     supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
@@ -187,6 +203,14 @@ export async function loadProfileView(
       .eq("target_type", "profile")
       .eq("target_id", profileId),
   ]);
+
+  // Average rating has to look at every review, not just the current page —
+  // otherwise it would drift as the reviewer paged through history. Just the
+  // rating column, so the extra round trip stays cheap even with many reviews.
+  const { data: allRatingRows } = await supabase
+    .from("reviews")
+    .select("rating")
+    .eq("reviewee_id", profileId);
 
   const listingIds = (listingRows ?? []).map((l) => l.id);
   const { data: listingImages } = listingIds.length
@@ -226,7 +250,7 @@ export async function loadProfileView(
     };
   });
 
-  const ratings = (reviewRows ?? []).map((r) => r.rating);
+  const ratings = (allRatingRows ?? []).map((r) => r.rating);
   const rating = ratings.length
     ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
     : null;
@@ -237,8 +261,14 @@ export async function loadProfileView(
     listings,
     reviews,
     rating,
-    reviewCount: ratings.length,
+    reviewCount: reviewsTotal ?? ratings.length,
     salesCount: salesCount ?? 0,
     followerCount: followerCount ?? 0,
+    listingsPage: Math.max(1, listingsPage),
+    listingsPageSize: PROFILE_LISTINGS_PAGE_SIZE,
+    listingsHasMore: (listingsTotal ?? 0) > listingsFrom + PROFILE_LISTINGS_PAGE_SIZE,
+    reviewsPage: Math.max(1, reviewsPage),
+    reviewsPageSize: PROFILE_REVIEWS_PAGE_SIZE,
+    reviewsHasMore: (reviewsTotal ?? 0) > reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE,
   };
 }

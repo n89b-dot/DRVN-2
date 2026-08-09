@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getVehicleMakes } from "@/lib/vehicles/vpic";
+import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
 import { DeleteListing } from "./delete-listing";
@@ -39,13 +42,19 @@ export default async function EditListingPage({
   }
   if (!listing || listing.seller_id !== user.id) notFound();
 
-  const [{ data: cars }, { data: images }] = await Promise.all([
+  const [{ data: cars }, { data: images }, { data: fitments }, makes] = await Promise.all([
     supabase.from("cars").select("id, name").eq("owner_id", user.id).order("created_at"),
     supabase
       .from("listing_images")
       .select("url, alt, position")
       .eq("listing_id", id)
       .order("position"),
+    supabase
+      .from("listing_fitments")
+      .select("make, model, year_start, year_end")
+      .eq("listing_id", id)
+      .order("created_at"),
+    getVehicleMakes(createAdminClient()),
   ]);
 
   const locked = ["sold", "reserved"].includes(listing.status);
@@ -85,6 +94,7 @@ export default async function EditListingPage({
       ) : (
         <SellForm
           cars={cars ?? []}
+          makes={makes.map((m) => m.name)}
           userId={user.id}
           listing={{
             id: listing.id,
@@ -93,6 +103,11 @@ export default async function EditListingPage({
             category: listing.category,
             subcategory: listing.subcategory,
             condition: listing.condition,
+            grade: listing.grade,
+            condition_checklist: listing.condition_checklist as Record<
+              string,
+              ChecklistAnswer
+            > | null,
             part_number: listing.part_number,
             price_cents: listing.price_cents,
             shipping_cents: listing.shipping_cents ?? 0,
@@ -103,6 +118,7 @@ export default async function EditListingPage({
             source_car_id: listing.source_car_id,
             status: listing.status,
             images: (images ?? []).map((i) => ({ url: i.url, alt: i.alt })),
+            fitments: fitments ?? [],
           }}
         />
       )}

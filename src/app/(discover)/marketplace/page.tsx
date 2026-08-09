@@ -35,43 +35,41 @@ export default async function MarketplacePage({
   return (
     <div className="wrap">
       <Rv as="header" className="pagehead">
-        <span className="microlabel">
-          Marketplace · {page.total} part{page.total === 1 ? "" : "s"} listed
-        </span>
-        <h1>
-          Find the part.
-          <br />
-          See the car it <span className="live-word">came off.</span>
-        </h1>
-        <p className="sub">
-          Every part here came off someone&apos;s build — open a listing and you can see exactly
-          which one. Search what you need, or browse by category.
-        </p>
+        {/* Selling lives where every marketplace keeps it: the top corner of
+            the page head, beside the headline — not stranded among the
+            search controls. */}
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+          <div className="min-w-0">
+            <span className="microlabel">
+              Marketplace · {page.total} part{page.total === 1 ? "" : "s"} listed
+            </span>
+            <h1>
+              Find the part.
+              <br />
+              See the car it <span className="live-word">came off.</span>
+            </h1>
+            <p className="sub">
+              Every part here came off someone&apos;s build — open a listing and you can see
+              exactly which one. Search what you need, or browse by category.
+            </p>
+          </div>
+          <Link href="/sell" className="btn btn--live w-full shrink-0 sm:w-auto">
+            List a part
+          </Link>
+        </div>
       </Rv>
 
-      {/* The basis is what makes this row wrap. With `flex-1` alone the form
-          shrank without limit — at 375px it crushed to 166px while "List a
-          part" stayed pinned beside it, stranded against a column of ragged
-          controls. 940px is the filter row's own single-line width, so the
-          button sits beside the form only when the form actually fits on one
-          line, and drops beneath it the moment it would have to wrap. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0 flex-1 basis-[940px]">
-          <FilterBar action="/marketplace" filters={filters} showFitToggle={Boolean(user)} />
-        </div>
-        <Link href="/sell" className="btn btn--live w-full shrink-0 sm:w-auto">
-          List a part
-        </Link>
-      </div>
+      <FilterBar action="/marketplace" filters={filters} showFitToggle={Boolean(user)} />
 
-      <div className="filters">
+      <div className="filters filters--roomy">
+        <span className="microlabel filters__label">Browse by category</span>
         <Link href="/marketplace" className={`fbtn ${hasQuery ? "" : "is-on"}`}>
           All
         </Link>
         {CATEGORIES.map((category) => (
           <Link key={category.slug} href={`/marketplace/${category.slug}`} className="fbtn">
-            <span className="mr-1 inline-block align-[-3px]">
-              <CategoryIcon name={category.icon} className="h-4 w-4" />
+            <span className="mr-1.5 inline-block align-[-4px]">
+              <CategoryIcon name={category.icon} className="h-5 w-5" />
             </span>
             {category.label}
           </Link>

@@ -60,7 +60,12 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
 
       <div className="deck">
         <CarDetailsForm car={car} />
-        <GalleryManager carId={car.id} userId={user.id} images={images ?? []} />
+        <GalleryManager
+          carId={car.id}
+          userId={user.id}
+          images={images ?? []}
+          coverImageUrl={car.cover_image_url}
+        />
         <ModsEditor carId={car.id} initialMods={mods ?? []} />
         <ActivityComposer carId={car.id} posts={posts ?? []} />
         <DangerZone carId={car.id} carName={car.name} />

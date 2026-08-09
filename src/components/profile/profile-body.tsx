@@ -61,7 +61,7 @@ function ActivityRows({ view }: { view: ProfileView }) {
 }
 
 /** The shopfront. A seller profile without this can't answer "what else have you got?". */
-function ListingRows({ view }: { view: ProfileView }) {
+function ListingRows({ view, basePath }: { view: ProfileView; basePath: string }) {
   if (view.listings.length === 0) {
     return (
       <div className="undrawn mt-5">
@@ -95,12 +95,22 @@ function ListingRows({ view }: { view: ProfileView }) {
           </span>
         </Link>
       ))}
+      {view.listingsHasMore && (
+        <div className="pt-2">
+          <Link
+            href={`${basePath}?view=forsale&listingsPage=${view.listingsPage + 1}`}
+            className="jumplink"
+          >
+            Show more listings →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
 
 /** Reviews were written and displayed nowhere but a single average number. */
-function ReviewRows({ view }: { view: ProfileView }) {
+function ReviewRows({ view, basePath }: { view: ProfileView; basePath: string }) {
   if (view.reviews.length === 0) {
     return (
       <div className="undrawn mt-5">
@@ -136,6 +146,16 @@ function ReviewRows({ view }: { view: ProfileView }) {
           {review.body && <p className="mt-1 max-w-[62ch] text-[15px] leading-7">{review.body}</p>}
         </article>
       ))}
+      {view.reviewsHasMore && (
+        <div className="pt-2">
+          <Link
+            href={`${basePath}?view=reviews&reviewsPage=${view.reviewsPage + 1}`}
+            className="jumplink"
+          >
+            Show more reviews →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -152,11 +172,14 @@ export function ProfileBody({
   view,
   contactLinks,
   initialTab,
+  basePath,
 }: {
   bio: string | null;
   view: ProfileView;
   contactLinks: ProfileLink[];
   initialTab?: string;
+  /** Profile URL ("/u/handle") — "Show more" links are built off this. */
+  basePath: string;
 }) {
   const aboutPanel = (
     <div className="mt-8 grid gap-12">
@@ -197,13 +220,13 @@ export function ProfileBody({
       label: "For sale",
       count: view.listings.filter((l) => l.status === "active").length || null,
       live: true,
-      panel: <ListingRows view={view} />,
+      panel: <ListingRows view={view} basePath={basePath} />,
     },
     {
       key: "reviews",
       label: "Reviews",
       count: view.reviewCount || null,
-      panel: <ReviewRows view={view} />,
+      panel: <ReviewRows view={view} basePath={basePath} />,
     },
     {
       key: "activity",

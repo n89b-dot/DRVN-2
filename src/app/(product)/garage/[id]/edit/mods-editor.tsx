@@ -145,7 +145,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
 
       {showPaste && (
         <div className="mt-4">
+          <label htmlFor="mods-paste" className="sr-only">
+            Paste your mod list
+          </label>
           <textarea
+            id="mods-paste"
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
             rows={6}
@@ -174,7 +178,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           <p className="field__hint">Confirm or edit the parsed lines before saving.</p>
           {rows.map((row) => (
             <div key={row.key} className="flex flex-wrap items-center gap-2">
+              <label htmlFor={`${row.key}-group`} className="sr-only">
+                Group
+              </label>
               <select
+                id={`${row.key}-group`}
                 value={row.group_label}
                 onChange={(e) => updateRow(row.key, { group_label: e.target.value })}
                 className="ctl !py-2 w-[130px] shrink-0"
@@ -183,25 +191,41 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   <option key={g}>{g}</option>
                 ))}
               </select>
+              <label htmlFor={`${row.key}-brand`} className="sr-only">
+                Brand
+              </label>
               <input
+                id={`${row.key}-brand`}
                 value={row.brand}
                 onChange={(e) => updateRow(row.key, { brand: e.target.value })}
                 placeholder="Brand"
                 className={`${inputClass} w-[110px] shrink-0`}
               />
+              <label htmlFor={`${row.key}-product`} className="sr-only">
+                Product
+              </label>
               <input
+                id={`${row.key}-product`}
                 value={row.product}
                 onChange={(e) => updateRow(row.key, { product: e.target.value })}
                 placeholder="Product"
                 className="ctl !py-2 max-w-none min-w-[150px] flex-1"
               />
+              <label htmlFor={`${row.key}-part`} className="sr-only">
+                Part number
+              </label>
               <input
+                id={`${row.key}-part`}
                 value={row.part_number}
                 onChange={(e) => updateRow(row.key, { part_number: e.target.value })}
                 placeholder="Part no."
                 className={`${inputClass} w-[110px] shrink-0`}
               />
+              <label htmlFor={`${row.key}-category`} className="sr-only">
+                Category
+              </label>
               <select
+                id={`${row.key}-category`}
                 value={row.category ?? ""}
                 onChange={(e) =>
                   updateRow(row.key, { category: (e.target.value || null) as ModCategory | null })

@@ -2,6 +2,8 @@
 
 import { useTransition } from "react";
 
+import { ConfirmDialog } from "@/components/ui";
+
 import { deleteCar } from "../../actions";
 
 export function DangerZone({ carId, carName }: { carId: string; carName: string }) {
@@ -14,18 +16,22 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
         Removes the car, its build page, photos, mods and updates. Parts you&apos;ve already sold
         keep their record. This cannot be undone.
       </p>
-      <form
-        action={(fd) => {
-          if (confirm(`Delete "${carName}" and everything on it?`)) {
-            startTransition(() => deleteCar(fd));
-          }
-        }}
+      <ConfirmDialog
+        title={`Delete "${carName}"?`}
+        destructive
+        consequences={[
+          "Removes the car, its build page, photos, mods and updates permanently",
+          "Parts you've already sold keep their listing record",
+          "This cannot be undone",
+        ]}
+        confirmLabel={pending ? "Deleting…" : "Delete this car"}
+        formAction={(fd) => startTransition(() => deleteCar(fd))}
+        hidden={{ id: carId }}
+        pending={pending}
+        triggerClassName="btn btn--ghost !text-live"
       >
-        <input type="hidden" name="id" value={carId} />
-        <button type="submit" disabled={pending} className="btn btn--ghost !text-live">
-          {pending ? "Deleting…" : "Delete this car"}
-        </button>
-      </form>
+        {pending ? "Deleting…" : "Delete this car"}
+      </ConfirmDialog>
     </section>
   );
 }

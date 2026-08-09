@@ -6,6 +6,8 @@ import { ActivityEngagement, type CommentView, type ReactionState } from "@/feat
 import { ACTIVITY_EMOJIS } from "@/features/activity/constants";
 import { createClient } from "@/lib/supabase/server";
 
+import { ActivityGallery } from "./activity-gallery";
+
 function initialsFor(name: string) {
   return name
     .split(" ")
@@ -132,25 +134,10 @@ export default async function ActivityDetailPage({
       {post.intro && <p className="max-w-[62ch] text-[15px] leading-7">{post.intro}</p>}
 
       {gallery.length > 0 && (
-        <div className="mt-6 grid grid-cols-[1fr_0.7fr] gap-3">
-          <Media
-            src={gallery[0].url}
-            alt={gallery[0].alt ?? post.title}
-            className="h-56 rounded-r"
-          />
-          {gallery.length > 1 && (
-            <div className="grid gap-3">
-              {gallery.slice(1, 3).map((img, i) => (
-                <Media
-                  key={i}
-                  src={img.url}
-                  alt={img.alt ?? post.title}
-                  className="h-[106px] rounded-ctl"
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <ActivityGallery
+          images={gallery.map((img) => ({ url: img.url, alt: img.alt }))}
+          title={post.title}
+        />
       )}
 
       {blocks.length > 0 && (
@@ -158,7 +145,7 @@ export default async function ActivityDetailPage({
           {blocks.map((block, index) => {
             if (block.type === "text") {
               return block.style === "heading" ? (
-                <h2 key={index} className="text-base font-[650]">
+                <h2 key={index} className="text-base font-[600]">
                   {block.text}
                 </h2>
               ) : (
@@ -169,7 +156,10 @@ export default async function ActivityDetailPage({
             }
             if (block.type === "images") {
               return (
-                <div key={index} className={`grid gap-3 ${block.urls.length > 1 ? "grid-cols-2" : ""}`}>
+                <div
+                  key={index}
+                  className={`grid gap-3 ${block.urls.length > 1 ? "grid-cols-1 sm:grid-cols-2" : ""}`}
+                >
                   {block.urls.map((url, i) => (
                     <Media
                       key={i}

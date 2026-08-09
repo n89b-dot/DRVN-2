@@ -15,6 +15,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/callback",
+          "/docs",
           "/cart",
           "/orders",
           "/settings",

@@ -16,9 +16,9 @@ const TABS: { key: FeedTab; label: string; loggedInOnly?: boolean }[] = [
 export default async function ExplorePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
-  const { tab: tabParam } = await searchParams;
+  const { tab: tabParam, page: pageParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -26,7 +26,9 @@ export default async function ExplorePage({
 
   const visibleTabs = TABS.filter((t) => !t.loggedInOnly || user);
   const tab = (visibleTabs.find((t) => t.key === tabParam)?.key ?? "all") as FeedTab;
-  const items = await fetchFeed(supabase, tab, Boolean(user));
+  const page = Math.max(1, Number(pageParam) || 1);
+  const feed = await fetchFeed(supabase, tab, Boolean(user), { page });
+  const items = feed.items;
 
   return (
     <div className="wrap">
@@ -42,6 +44,7 @@ export default async function ExplorePage({
       </Rv>
 
       <div className="filters">
+        <span className="microlabel filters__label">Show</span>
         {visibleTabs.map((t) => (
           <Link
             key={t.key}
@@ -51,7 +54,9 @@ export default async function ExplorePage({
             {t.label}
           </Link>
         ))}
-        <Link href="/marketplace" className="fbtn">
+        {/* Navigation, not a filter — it sits apart from the chips it
+            doesn't belong to. */}
+        <Link href="/marketplace" className="fbtn sm:ml-auto">
           Go to the marketplace →
         </Link>
       </div>
@@ -59,6 +64,40 @@ export default async function ExplorePage({
       <section className="deck">
         <MasonryFeed items={items} />
       </section>
+
+      {(page > 1 || feed.hasMore) && (
+        <nav className="mb-8 flex items-center justify-between gap-3" aria-label="Pagination">
+          {page > 1 ? (
+            <Link
+              href={`/explore?${new URLSearchParams({
+                ...(tab !== "all" ? { tab } : {}),
+                ...(page - 1 > 1 ? { page: String(page - 1) } : {}),
+              }).toString()}`}
+              className="btn btn--ghost"
+              rel="prev"
+            >
+              ← Previous
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="microlabel">Page {page}</span>
+          {feed.hasMore ? (
+            <Link
+              href={`/explore?${new URLSearchParams({
+                ...(tab !== "all" ? { tab } : {}),
+                page: String(page + 1),
+              }).toString()}`}
+              className="btn btn--ghost"
+              rel="next"
+            >
+              Next →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )}
 
       <Foot
         left="DRVN — builds and parts from the community"

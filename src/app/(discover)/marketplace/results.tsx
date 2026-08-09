@@ -72,6 +72,7 @@ export function MarketplaceResults({
           )}
         </span>
         <div className="filters !my-0" role="group" aria-label="Sort results">
+          <span className="microlabel filters__label">Sort</span>
           {SORTS.map((sort) => {
             const isOn = sort.key === activeSort;
             return (

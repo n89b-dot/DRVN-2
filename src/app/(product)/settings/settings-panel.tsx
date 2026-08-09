@@ -184,11 +184,13 @@ export function SettingsPanel({
   logout,
   savedCards,
   connect,
+  paymentsLive,
 }: {
   profile: SettingsProfile;
   logout: () => Promise<void>;
   savedCards: SavedCard[];
   connect: ConnectSummary;
+  paymentsLive: boolean;
 }) {
   // One section at a time (Mobbin pass: Contra / Cloudflare / Perplexity —
   // a rail plus a single active panel is what makes settings navigable).
@@ -334,11 +336,12 @@ export function SettingsPanel({
         <section id="payments" className="tile tile--deep">
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Payments &amp; fees</span>
-            <span className="chip">Test mode</span>
+            {!paymentsLive && <span className="chip">Test mode</span>}
           </div>
           <p className="field__hint max-w-[62ch]">
-            Payments run through a test provider — no money moves yet. Stripe Connect payouts plug
-            into the same seam.
+            {paymentsLive
+              ? "Payments run live through Stripe. Stripe Connect payouts plug into the same seam."
+              : "Payments run through a test provider — no money moves yet. Stripe Connect payouts plug into the same seam."}
           </p>
           <div className="mt-3">
             <div className="sheet__row">

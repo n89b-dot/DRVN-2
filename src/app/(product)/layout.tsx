@@ -22,7 +22,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
   const night = jar.get("ls-theme")?.value === "night";
   const railOpen = jar.get("ls-rail")?.value !== "closed";
 
-  const { cartCount, unreadCount } = await loadShellCounts(supabase, user.id);
+  const { cartCount, unreadCount, offersCount } = await loadShellCounts(supabase, user.id);
 
   return (
     <AppShell
@@ -31,6 +31,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       initialRailOpen={railOpen}
       cartCount={cartCount}
       unreadCount={unreadCount}
+      offersCount={offersCount}
     >
       {children}
     </AppShell>

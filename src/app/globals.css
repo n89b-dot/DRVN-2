@@ -14,7 +14,7 @@
   --color-tile: #f8f6f0; /* raised widget plate */
   --color-tile-2: #f1efe8; /* secondary plate */
   --color-ink: #20232a; /* text */
-  --color-dim: #6b6e78; /* secondary text (darkened from #656872 for AA) */
+  --color-dim: #63666f; /* secondary text — ≥4.8:1 on every plate incl. paper (axe-verified) */
   --color-live: #f03a20; /* THE signal — live states only */
   --color-ok: #2e7d4f; /* terminal states: settled / done / verified */
   --color-on-ink: #f8f6f0; /* text on ink surfaces */
@@ -34,6 +34,19 @@
   --color-text-muted: var(--color-dim);
   --color-accent: var(--color-live);
   --color-success: var(--color-ok);
+
+  /* State tokens beyond live/ok — `--live` was carrying primary CTA, "happening
+     now", unread and error/destructive all at once. These give error/warn/info
+     their own names without touching what's actually painted where nothing
+     else has changed yet: --warn and --info are genuinely new hues, while
+     --destructive stays the same red as --live on purpose (it's still "the
+     signal colour"), the DISTINCTION is semantic — components read
+     `.chip--danger` / `.btn--destructive` for "this is destructive", never
+     `.chip--live` / `.btn--live` for that meaning, even though the paint often
+     matches today. */
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-destructive: var(--color-live);
 
   --font-sans: var(--font-plex-sans), -apple-system, "Helvetica Neue", sans-serif;
   --font-mono: var(--font-plex-mono), "SF Mono", monospace;
@@ -75,6 +88,9 @@
   --ok-tint: rgba(46, 125, 79, 0.1);
   --warn: #8a5a00; /* held money, due work — attention without alarm; 5.1:1 on paper */
   --warn-tint: rgba(178, 122, 10, 0.13);
+  --info: #1d5c8a; /* neutral explainer/status, never a call to action; 6.1:1 on paper */
+  --info-tint: rgba(29, 92, 138, 0.1);
+  --destructive: var(--live); /* same hue as --live by design — see @theme note */
   --on-ink: #f8f6f0;
   --scrim: rgba(32, 35, 42, 0.45);
   --img-fallback: #e2dfd5;
@@ -136,6 +152,9 @@
   --ok-tint: rgba(87, 185, 131, 0.12);
   --warn: #d9a13c;
   --warn-tint: rgba(217, 161, 60, 0.14);
+  --info: #6cb2df; /* 7.9:1 on night paper */
+  --info-tint: rgba(108, 178, 223, 0.16);
+  --destructive: var(--live);
   --on-ink: #171511;
   --scrim: rgba(6, 5, 3, 0.62);
   --img-fallback: #262319;
@@ -174,8 +193,8 @@ html {
 
 body {
   font-family: var(--sans);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.55;
   color: var(--ink);
   background-color: var(--paper);
   background-image:
@@ -195,11 +214,20 @@ body {
   border-radius: 4px;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+/* The form-element font reset MUST sit in a layer. Unlayered CSS outranks
+   everything in `@layer components` regardless of specificity, so while this
+   lived outside a layer its `font` shorthand silently clobbered the font of
+   every classed control: `<button class="btn">` rendered 17px sans instead of
+   12px mono (its `<a class="btn">` twin rendered correctly), and every
+   `.ctl` select/input lost its mono. In `@layer base` the reset still catches
+   unclassed controls, and component classes now win as intended. */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
 }
 
 button {
@@ -228,6 +256,22 @@ video {
     margin: 0 auto;
     padding: 0 clamp(16px, 4vw, 40px);
   }
+  /* Width steps for the wrapper, gutter unchanged. A number of narrow
+     single-column pages (auth, legal, forms) hard-coded their own
+     `max-w-[Npx] px-5`, which fixes the gutter at 20px instead of following
+     the responsive clamp above — pair one of these with `.wrap` instead:
+     `wrap wrap--narrow` (720px — auth, legal, single-column forms),
+     `wrap wrap--medium` (900px — settings, sell/edit forms),
+     `wrap wrap--wide` (1060px — cart, checkout). */
+  .wrap--narrow {
+    max-width: 720px;
+  }
+  .wrap--medium {
+    max-width: 900px;
+  }
+  .wrap--wide {
+    max-width: 1060px;
+  }
 
   /* ---------- type utilities ---------- */
   .mono {
@@ -235,7 +279,7 @@ video {
   }
   .microlabel {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.14em;
@@ -244,11 +288,25 @@ video {
   .microlabel--ink {
     color: var(--ink);
   }
+  /* Section headings. The heading-position microlabel (ink, leading a
+     tile__head or bsec row) used to render at microlabel scale — smaller than
+     the buttons in its own section. In heading position it now sets at true
+     heading scale: sans, sentence case, clearly the largest text in the
+     section. Dim microlabels beside it stay micro — they're metadata. */
+  .tile__head > .microlabel--ink,
+  .bsec > .microlabel--ink {
+    font-family: var(--sans);
+    font-size: 18px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    letter-spacing: -0.01em;
+    text-transform: none;
+    line-height: 1.3;
+  }
   .microlabel--live {
     color: var(--live);
   }
   .num-giant {
-    font-weight: 650;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     font-size: clamp(40px, 5.4vw, 64px);
     line-height: 0.95;
     letter-spacing: -0.03em;
@@ -260,7 +318,7 @@ video {
   }
   .kv {
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 14px;
   }
   .kv b {
     font-weight: 500;
@@ -463,7 +521,7 @@ video {
     transition: color var(--t-fast) ease;
   }
   .railrow__label {
-    font-size: 14.5px;
+    font-size: 15.5px;
     font-weight: 600;
     letter-spacing: -0.01em;
     overflow: hidden;
@@ -649,7 +707,7 @@ video {
   }
   .indexrow__label {
     font-size: 21px;
-    font-weight: 650;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.02em;
     line-height: 1.15;
     transition: color var(--t-fast) ease;
@@ -657,7 +715,7 @@ video {
   .indexrow__note {
     grid-column: 2;
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--dim);
     line-height: 1.5;
   }
@@ -737,14 +795,17 @@ video {
 
   /* ---------- page head ---------- */
   .pagehead {
-    padding: clamp(28px, 5vw, 52px) 0 18px;
+    /* The head must hold its content at arm's length from what follows —
+       18px below the standfirst read as one dense block with the section
+       underneath. */
+    padding: clamp(28px, 5vw, 52px) 0 clamp(28px, 3.5vw, 40px);
   }
   .pagehead h1 {
-    font-weight: 650;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.02em;
     line-height: 1.05;
     font-size: clamp(28px, 4vw, 44px);
-    margin-top: 10px;
+    margin-top: 14px;
   }
   .pagehead h1 .live-word {
     color: var(--live);
@@ -770,14 +831,14 @@ video {
   .pagehead .sub {
     color: var(--dim);
     max-width: 52ch;
-    margin-top: 10px;
+    margin-top: 14px;
   }
   /* Console pages are worked, not read. The product's display headings
      (44px, tight tracking, 1.05 line-height) read as squished in a tool —
      the console gets a calmer scale: smaller, looser, with real air between
      title and standfirst, and the standfirst set dim so the H1 owns the row. */
   .console-main .pagehead {
-    padding: 26px 0 20px;
+    padding: 26px 0 26px;
   }
   .console-main .pagehead h1 {
     font-size: clamp(24px, 2.6vw, 34px);
@@ -788,7 +849,7 @@ video {
   }
   .console-main .pagehead__sub {
     color: var(--dim);
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.55;
     max-width: 64ch;
     margin-top: 8px;
@@ -826,22 +887,53 @@ video {
   .console-main .search .btn {
     margin-left: auto;
   }
+  /* Console nav: the pill row carries a small section icon beside each label. */
+  .console-nav .fbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  /* The console's index button borrows the product bar's `.indexbtn` styling
+     wholesale but runs its own promotion schedule: the pill row works down to
+     phone widths, so the index only takes over at ≤640px (the product's
+     ≤1080px rule must not surface it early — hence the compound selector). */
+  .indexbtn.console-indexbtn {
+    display: none;
+  }
+  @media (max-width: 640px) {
+    /* compound with .filters: its `display: flex` sits later in the file and
+       would win a single-class tie */
+    .filters.console-nav {
+      display: none;
+    }
+    .indexbtn.console-indexbtn {
+      display: inline-flex;
+    }
+  }
+  /* Section icon on an index row, sized to sit inside the 21px label line. */
+  .indexrow__ico {
+    width: 19px;
+    height: 19px;
+    display: inline-block;
+    vertical-align: -2.5px;
+    margin-right: 10px;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow.is-here .indexrow__ico,
+  .indexrow:hover .indexrow__ico,
+  .indexrow:focus-visible .indexrow__ico {
+    color: var(--live);
+  }
   /* The marketing pages breathe between decks (48–80px); the console reads
      top-to-bottom in one glance — header plus both KPI rows should fit a 13"
      viewport, so decks sit close. */
   .console-main .deck {
     padding-bottom: 20px;
   }
-  /* Working a queue means tracking a row across six columns — give the eye
-     a rail. Tone only, matching the rest of the console's hover language. */
-  .console-main .ledger tbody tr:hover {
-    background: var(--ghost);
-  }
-  /* Two adjacent column heads can fuse into a phrase ("TOTAL MONEY") —
-     a wider gutter breaks the ligature. */
-  .console-main .ledger .cell-gap {
-    padding-left: 28px;
-  }
+  /* Row hover now ships with `.ledger` itself — every ledger in the app wants
+     the rail, not just the console's. The column gutter that used to break
+     fused column heads ("TOTAL MONEY") is likewise part of the base recipe. */
   /* Audit log rows anchor on a fixed timestamp gutter so actor names stack in
      a clean column no matter how long the action name runs. The action reads
      as what it is — a machine identifier — in quiet lowercase mono; the
@@ -853,7 +945,7 @@ video {
   }
   .console-main .auditrow__ts {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--dim);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -861,11 +953,11 @@ video {
   }
   .console-main .auditrow__actor {
     font-weight: 640;
-    font-size: 14.5px;
+    font-size: 15.5px;
   }
   .console-main .auditrow__action {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--dim);
   }
   .console-main .auditrow__dot {
@@ -909,11 +1001,40 @@ video {
     font-weight: 400;
     color: var(--dim);
   }
+  /* Settings rows: label + explanation left, the control (or the value)
+     right — the settled grammar of every workspace settings page. */
+  .console-main .setrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 18px;
+    align-items: center;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .console-main .setrow:first-of-type {
+    border-top: 0;
+    padding-top: 10px;
+  }
+  .console-main .setrow__name {
+    font-size: 15.5px;
+    font-weight: 570;
+  }
+  .console-main .setrow__desc {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--dim);
+    line-height: 1.5;
+    max-width: 48ch;
+  }
+  .console-main .setrow__ctl {
+    justify-self: end;
+    text-align: right;
+  }
   /* Nominal states in console tables: same slot a chip would occupy, none of
      the ink — a routine row should read as texture, an exception as signal. */
   .console-main .status-plain {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--dim);
     white-space: nowrap;
   }
@@ -937,7 +1058,7 @@ video {
   /* ---------- tiles (widgets-as-plates) ---------- */
   .deck {
     display: grid;
-    gap: 14px;
+    gap: 16px;
     padding-bottom: clamp(48px, 7vw, 80px);
   }
   .deck > * {
@@ -961,7 +1082,7 @@ video {
   .tile {
     background: var(--tile);
     border-radius: var(--r);
-    padding: 18px;
+    padding: 20px;
     position: relative;
     transition:
       transform var(--t-move) var(--spring),
@@ -981,7 +1102,7 @@ video {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .tile__img {
     border-radius: var(--r-ctl);
@@ -1033,7 +1154,7 @@ video {
   }
   .livedim .val {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 500;
     color: var(--ink);
     font-variant-numeric: tabular-nums;
@@ -1135,7 +1256,7 @@ video {
     border-radius: var(--r-ctl);
     padding: 10px 16px;
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 14px;
     letter-spacing: 0.06em;
   }
   .capsule .dot {
@@ -1169,7 +1290,7 @@ video {
     align-items: center;
     gap: 6px;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 11.5px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     padding: 4px 10px;
@@ -1196,6 +1317,18 @@ video {
   .chip--warn {
     background: var(--warn-tint);
     color: var(--warn);
+  }
+  .chip--info {
+    background: var(--info-tint);
+    color: var(--info);
+  }
+  /* Distinct from `.chip--live` (an active/"happening now" state, tint only):
+     danger marks a terminal negative — failed, cancelled, disputed against
+     you. Solid fill instead of tint gives it more weight than a live badge so
+     the two never read as the same signal at a glance. */
+  .chip--danger {
+    background: var(--live);
+    color: var(--on-ink);
   }
 
   /* ---------- buttons — bracketed mono, press-in ---------- */
@@ -1247,6 +1380,19 @@ video {
   .btn--ghost:hover {
     background: var(--ghost-hover);
   }
+  /* Destructive action (cancel order, delete listing, remove card) — needs to
+     read as serious without competing with `.btn--live`, the one filled-red
+     button already spoken for as "the primary thing to do right now" (buy,
+     accept, list). Outline instead of fill keeps exactly one solid-red button
+     per surface, per the system's "one accent" rule. */
+  .btn--destructive {
+    background: transparent;
+    color: var(--live);
+    box-shadow: inset 0 0 0 1.5px var(--live);
+  }
+  .btn--destructive:hover {
+    background: var(--live-tint);
+  }
 
   /* ---------- offer / work-order rows ---------- */
   .order {
@@ -1256,7 +1402,7 @@ video {
     align-items: center;
     background: var(--tile);
     border-radius: var(--r);
-    padding: 14px 16px;
+    padding: 16px 18px;
     transition:
       transform var(--t-move) var(--spring),
       opacity var(--t-move) ease,
@@ -1281,14 +1427,14 @@ video {
   }
   .order__name {
     font-weight: 600;
-    font-size: 15.5px;
+    font-size: 16.5px;
     line-height: 1.35;
   }
   .order__meta {
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 14px;
     color: var(--dim);
-    margin-top: 3px;
+    margin-top: 4px;
     line-height: 1.55;
     max-width: 62ch;
   }
@@ -1318,6 +1464,12 @@ video {
     opacity: 0;
     transform: translateX(24px);
   }
+  .order.is-invalid {
+    opacity: 0.55;
+  }
+  .order.is-invalid .order__name {
+    color: var(--dim);
+  }
 
   /* ---------- rowlist: ruled rows inside a tile ---------- */
   .rowlist {
@@ -1328,7 +1480,7 @@ video {
     background: transparent;
     border-radius: 0;
     border-top: 1px solid var(--rule-soft);
-    padding: 13px 2px;
+    padding: 14px 2px;
   }
   .rowlist .order:first-child,
   .rowlist .jobrow:first-child {
@@ -1355,16 +1507,16 @@ video {
     display: flex;
     gap: 12px;
     align-items: baseline;
-    padding: 11px 0;
-    font-size: 15px;
-    line-height: 1.5;
+    padding: 12px 0;
+    font-size: 16px;
+    line-height: 1.55;
   }
   .feed li + li {
     border-top: 1px solid var(--rule-soft);
   }
   .feed time {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--dim);
     flex: none;
     width: 74px;
@@ -1372,7 +1524,7 @@ video {
   .feed .amt {
     margin-left: auto;
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 14.5px;
     color: var(--ink);
     font-weight: 500;
   }
@@ -1398,7 +1550,7 @@ video {
   }
   .week__day b {
     font-size: 20px;
-    font-weight: 650;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     font-variant-numeric: tabular-nums;
   }
   .week__day--hot {
@@ -1427,31 +1579,84 @@ video {
   }
   .ledger th {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--dim);
     text-align: left;
-    padding: 0 10px 9px 0;
+    /* A wider gutter than the old 10px: adjacent heads used to fuse into one
+       phrase ("TOP OFFER STATUS"), and the figures beneath needed the same
+       rhythm to read as separate measures. */
+    padding: 0 24px 14px 0;
     border-bottom: 1px solid var(--rule-mid);
     white-space: nowrap;
   }
   .ledger td {
-    padding: 13px 10px 13px 0;
+    /* Rows carry stacked content — title, sub-line, actions — so they need
+       real height to separate from the next row, not just a rule. */
+    padding: 18px 24px 18px 0;
     border-top: 1px solid var(--rule-soft);
     vertical-align: top;
   }
+  /* The last column already ends at the table edge; a trailing gutter there
+     just strands it away from the plate's own padding. */
+  .ledger th:last-child,
+  .ledger td:last-child {
+    padding-right: 0;
+  }
   .ledger tbody tr:first-child td {
     border-top: 0;
+  }
+  /* Tracking one row across six columns is the whole job of a ledger — give
+     the eye a rail. Tone only, matching the rest of the system's hover
+     language, and never on the expanded detail row. */
+  .ledger tbody tr:not(.ledger__detail):hover > td {
+    background: var(--ghost);
   }
   /* the row you're looking at lifts by tone, never by shadow */
   .ledger tbody tr.is-open > td {
     background: var(--tile-2);
   }
+  /* The part column holds free text a seller typed; everything to its right is
+     figures they scan down. Uncapped, one rambling title ("-STOCK, lol, just
+     Cusco front and rear sways…") sets the row height and shoves the numbers
+     out of alignment, so the title clamps to two lines — the full text stays
+     in the link's title attribute and on the listing itself.
+
+     `width: 100%` makes this the one elastic column: in auto table layout
+     every other column then settles at its content width, which pulls the
+     figures into a tight block on the right instead of stranding "$150" and
+     three em-dashes in four sprawling columns of dead space. The eye travels
+     a short distance to compare them, which is the entire point of a ledger. */
+  .ledger__part {
+    width: 100%;
+  }
+  /* One line, like every product table that works (Shopify, Square): a title
+     is a handle, not a paragraph. Ellipsis past 38ch — the full text lives in
+     the tooltip and on the listing. The row then reads as three registers with
+     air between them: title / part number / actions. */
+  .ledger__title {
+    display: block;
+    max-width: 38ch;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ledger__part .order__meta {
+    margin-top: 7px;
+  }
+  @media (max-width: 860px) {
+    /* Rows stack below this — a percentage width would strand the title in a
+       narrow column of its own. */
+    .ledger__part {
+      width: auto;
+    }
+  }
+
   .ledger__num {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 13.5px;
     font-variant-numeric: tabular-nums;
     text-align: right;
     white-space: nowrap;
@@ -1519,10 +1724,6 @@ video {
     .ledger__num {
       text-align: left;
     }
-    /* The header-gutter fix is meaningless once rows stack — reset it. */
-    .console-main .ledger .cell-gap {
-      padding-left: 0;
-    }
     .ledger__num::before {
       content: attr(data-label) " ";
       font-family: var(--mono);
@@ -1539,13 +1740,13 @@ video {
     border-collapse: collapse;
   }
   .spec td {
-    padding: 10px 0;
-    font-size: 15px;
+    padding: 11px 0;
+    font-size: 16px;
     vertical-align: baseline;
   }
   .spec td:first-child {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--dim);
@@ -1554,7 +1755,7 @@ video {
   .spec td:last-child {
     text-align: right;
     font-family: var(--mono);
-    font-size: 15px;
+    font-size: 15.5px;
   }
   .spec tr + tr td {
     border-top: 1px solid var(--rule-soft);
@@ -1592,15 +1793,15 @@ video {
   .sheet__row {
     display: flex;
     justify-content: space-between;
-    padding: 8px 0;
-    font-size: 15.5px;
+    padding: 9px 0;
+    font-size: 16px;
   }
   .sheet__row + .sheet__row {
     border-top: 1px solid var(--rule-soft);
   }
   .sheet__row b {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 13.5px;
   }
   .sheet__total b {
     color: var(--live);
@@ -1651,13 +1852,13 @@ video {
   }
   .mkt__name {
     font-weight: 600;
-    font-size: 16px;
-    margin-top: 10px;
+    font-size: 17px;
+    margin-top: 12px;
   }
   .mkt__price {
     font-family: var(--mono);
-    font-size: 14.5px;
-    margin-top: 2px;
+    font-size: 15px;
+    margin-top: 3px;
   }
   .mkt__meta {
     display: flex;
@@ -1670,11 +1871,11 @@ video {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    margin: 18px 0 22px;
+    margin: 26px 0 30px;
   }
   .fbtn {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 11.5px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 8px 14px;
@@ -1687,6 +1888,16 @@ video {
   }
   .fbtn:hover {
     color: var(--ink);
+  }
+  /* Primary chip rows — browse-by-category and anywhere else a chip row IS
+     the navigation, not a refinement. Same design, a full size up. */
+  .filters--roomy {
+    gap: 10px;
+  }
+  .filters--roomy .fbtn {
+    font-size: 13px;
+    letter-spacing: 0.09em;
+    padding: 13px 20px;
   }
   .fbtn.is-on {
     background: var(--ink);
@@ -1707,7 +1918,7 @@ video {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
-    margin: 18px 0 20px;
+    margin: 24px 0 26px;
   }
   .tabstrip [role="tab"][aria-selected="true"] {
     background: var(--ink);
@@ -1736,14 +1947,14 @@ video {
     gap: 18px;
     flex-wrap: wrap;
     align-items: baseline;
-    margin: 16px 0 4px;
+    margin: 20px 0 8px;
   }
   .jumprow .microlabel {
     flex: none;
   }
   .jumplink {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 11.5px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink);
@@ -1764,38 +1975,38 @@ video {
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    margin-top: 22px;
-    padding-bottom: 8px;
+    margin-top: 28px;
+    padding-bottom: 10px;
   }
   .bsec:first-of-type {
-    margin-top: 6px;
+    margin-top: 8px;
   }
   .bline {
     display: grid;
     grid-template-columns: 190px minmax(0, 1fr) auto;
-    gap: 4px 16px;
+    gap: 5px 18px;
     align-items: baseline;
-    padding: 12px 0;
+    padding: 14px 0;
     border-top: 1px solid var(--rule-soft);
   }
   .bline__label {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.13em;
     text-transform: uppercase;
     color: var(--dim);
   }
   .bline__val {
-    font-size: 16.5px;
+    font-size: 17.5px;
     font-weight: 600;
     letter-spacing: -0.01em;
     line-height: 1.35;
   }
   .bline__note {
     grid-column: 2;
-    font-size: 14px;
+    font-size: 15px;
     color: var(--dim);
-    line-height: 1.5;
+    line-height: 1.55;
     max-width: 64ch;
   }
   .bline .chip {
@@ -1840,6 +2051,53 @@ video {
     text-transform: uppercase;
   }
 
+  /* ---------- FINDER — the search command plate ----------
+     Search surfaces used to scatter their controls straight onto the canvas:
+     a naked input, four loose refinements, a floating submit. The finder
+     gathers them onto one raised plate — a labelled instrument with the
+     query line up top and refinements beneath, the way a parts counter
+     takes an order. One recipe serves the marketplace, category sheets and
+     the console queues. */
+  .finder {
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: 16px 18px;
+    display: grid;
+    gap: 12px;
+  }
+  .finder__main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  /* Inside the plate the query field sits on the recessed tone — on --tile
+     it would vanish into its own plate — and takes all the width the row
+     offers. */
+  .finder .search {
+    background: var(--paper-deep);
+    flex: 1 1 240px;
+    width: auto;
+    max-width: none;
+  }
+  .finder__refine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  /* Chip rows ride inside the plate without their canvas margins. */
+  .finder .filters {
+    margin: 0;
+  }
+  /* A chip row introduces itself: "Browse by category", "Status" — the label
+     sits in the row, centred on the chips, and never wraps away from them. */
+  .filters__label {
+    align-self: center;
+    flex: none;
+    margin-right: 6px;
+  }
+
   /* ---------- search field ---------- */
   .search {
     display: flex;
@@ -1872,9 +2130,9 @@ video {
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    padding: 22px 0 40px;
+    padding: 26px 0 44px;
     border-top: 1px solid var(--rule-mid);
-    margin-top: 8px;
+    margin-top: 24px;
   }
 
   /* ---------- hero media ---------- */
@@ -1938,10 +2196,26 @@ video {
   .ctl::placeholder {
     color: var(--dim);
   }
+  /* Selects drop the browser chrome and draw their own caret: the native
+     glyph sat flush against the label with no air, and its position drifted
+     per platform. A drafting tick in the dim ink, held 14px off the right
+     edge, with enough right padding that label and caret never touch. */
+  select.ctl {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 38px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23565963' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px 6px;
+  }
+  [data-theme="dark"] select.ctl {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238f8c82' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  }
   textarea.ctl {
     font-family: var(--sans);
-    font-size: 13.5px;
-    line-height: 1.5;
+    font-size: 15px;
+    line-height: 1.55;
     min-height: 88px;
     resize: vertical;
     max-width: none;
@@ -2076,7 +2350,7 @@ video {
 
   /* review entries — ruled, not boxed */
   .review {
-    padding: 14px 0;
+    padding: 16px 0;
     border-top: 1px solid var(--rule-soft);
   }
   .review:first-of-type {
@@ -2094,9 +2368,33 @@ video {
     color: var(--live);
     margin-left: auto;
   }
+
+  /* interactive star rating — a radiogroup of buttons, not a select */
+  .star-pick {
+    font-size: 22px;
+    line-height: 1;
+    color: var(--dimline);
+    background: none;
+    border: 0;
+    padding: 2px;
+    cursor: pointer;
+    transition: color var(--t-fast) ease, transform var(--t-fast) ease;
+  }
+  .star-pick:hover {
+    color: var(--live);
+    transform: scale(1.08);
+  }
+  .star-pick[data-on="true"] {
+    color: var(--live);
+  }
+  .star-pick:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
   .review p {
-    font-size: 13.5px;
-    margin-top: 6px;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-top: 7px;
     max-width: 72ch;
   }
 
@@ -2122,13 +2420,13 @@ video {
     font-size: 20px;
   }
   .undrawn h3 {
-    font-size: 18px;
-    font-weight: 650;
+    font-size: 19px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.01em;
   }
   .undrawn p {
     color: var(--dim);
-    font-size: 15px;
+    font-size: 16px;
     max-width: 42ch;
     margin: 0 auto;
   }
@@ -2185,7 +2483,7 @@ video {
   /* catalog page furniture */
   .spec-note {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 13px;
     line-height: 1.65;
     color: var(--dim);
     max-width: 76ch;
@@ -2201,15 +2499,15 @@ video {
   /* ---------- stacked form field ---------- */
   .field {
     display: grid;
-    gap: 7px;
-    margin-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 18px;
   }
   .field > .microlabel {
     display: block;
   }
   .field__hint {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--dim);
     line-height: 1.5;
   }
@@ -2219,7 +2517,7 @@ video {
      style. Empty errors are hidden via :empty instead. */
   .field__err {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--live);
     line-height: 1.5;
     display: flex;
@@ -2241,7 +2539,7 @@ video {
   }
   .field__ok {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--ok);
     display: none;
   }
@@ -2306,11 +2604,11 @@ video {
     color: var(--dim);
   }
   .drop h4 {
-    font-size: 16px;
-    font-weight: 650;
+    font-size: 17px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
   }
   .drop p {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--dim);
   }
 
@@ -2363,6 +2661,135 @@ video {
     background: var(--ghost);
   }
 
+  /* ---------- interactive gallery + lightbox (src/components/ui/gallery.tsx) ---------- */
+  .gallery__hero {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    cursor: zoom-in;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gallery__thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .gallery__thumb {
+    /* min 44px touch target even where the grid would otherwise pack tighter */
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity var(--t-fast) ease, outline-color var(--t-fast) ease;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+  .gallery__thumb:hover {
+    opacity: 0.85;
+  }
+  .gallery__thumb.is-active {
+    opacity: 1;
+    outline-color: var(--live);
+  }
+
+  .lightbox {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(1100px, 96vw);
+    max-height: 92vh;
+    background: transparent;
+    padding: 0;
+  }
+  .lightbox__stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    flex: 1;
+    touch-action: pan-y;
+  }
+  .lightbox__img {
+    display: block;
+    max-width: 100%;
+    max-height: 78vh;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+    overflow: auto;
+  }
+  .lightbox__img img {
+    display: block;
+    max-width: 100%;
+    max-height: 78vh;
+    width: auto;
+    height: auto;
+    border-radius: var(--r);
+    object-fit: contain;
+    transition: transform var(--t-move) var(--spring);
+  }
+  .lightbox__img.is-zoomed {
+    cursor: zoom-out;
+  }
+  .lightbox__img.is-zoomed img {
+    max-width: none;
+    max-height: none;
+    width: auto;
+    height: auto;
+    transform: scale(1.9);
+  }
+  .lightbox__nav {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 8px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-size: 22px;
+    line-height: 1;
+  }
+  .lightbox__nav:hover {
+    background: var(--live);
+  }
+  .lightbox__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--on-ink);
+  }
+  .lightbox__alt {
+    font-size: 13px;
+    color: var(--on-ink);
+    opacity: 0.75;
+    max-width: 62ch;
+  }
+  .lightbox__count {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--on-ink);
+    opacity: 0.75;
+    white-space: nowrap;
+  }
+  .lightbox .relbtn {
+    align-self: flex-start;
+    color: var(--on-ink);
+    border-color: rgba(248, 246, 240, 0.4);
+  }
+  .lightbox .relbtn:hover {
+    color: var(--live);
+    border-color: var(--live);
+  }
+
   /* ---------- numbered ruled steps ---------- */
   .steps {
     counter-reset: s;
@@ -2370,9 +2797,9 @@ video {
   .step {
     display: grid;
     grid-template-columns: 34px 1fr auto;
-    gap: 4px 14px;
+    gap: 5px 14px;
     align-items: baseline;
-    padding: 13px 0;
+    padding: 14px 0;
     border-top: 1px solid var(--rule-soft);
   }
   .step:first-child {
@@ -2389,13 +2816,14 @@ video {
     content: "0" counter(s);
   }
   .step__t {
-    font-size: 16.5px;
+    font-size: 17.5px;
     font-weight: 600;
     letter-spacing: -0.01em;
   }
   .step__d {
     grid-column: 2;
-    font-size: 14px;
+    font-size: 15px;
+    line-height: 1.55;
     color: var(--dim);
   }
   .step.is-now .step__n {
@@ -2416,8 +2844,8 @@ video {
   }
   .msg {
     display: grid;
-    gap: 5px;
-    padding: 13px 0 13px 14px;
+    gap: 6px;
+    padding: 14px 0 14px 16px;
     border-left: 2px solid var(--rule-mid);
     position: relative;
   }
@@ -2429,7 +2857,7 @@ video {
   }
   .msg__who {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--dim);
@@ -2438,13 +2866,13 @@ video {
     color: var(--live);
   }
   .msg__body {
-    font-size: 16px;
+    font-size: 17px;
     line-height: 1.55;
     max-width: 62ch;
   }
   .msg__meta {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--dim);
   }
   .msg__attach {
@@ -2488,8 +2916,8 @@ video {
     border-bottom: 1px solid var(--rule-mid);
   }
   .mail__subj {
-    font-size: 14px;
-    font-weight: 650;
+    font-size: 15px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
   }
   .mail__body {
     padding: 18px 16px;
@@ -2497,7 +2925,7 @@ video {
     gap: 12px;
   }
   .mail__body p {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.6;
     max-width: 58ch;
   }
@@ -2529,11 +2957,11 @@ video {
     grid-row: span 2;
   }
   .alert h4 {
-    font-size: 15px;
-    font-weight: 650;
+    font-size: 16px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
   }
   .alert p {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--dim);
     line-height: 1.55;
     max-width: 62ch;
@@ -2581,7 +3009,7 @@ video {
     display: flex;
     justify-content: space-between;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--dim);
   }
 
@@ -2590,25 +3018,25 @@ video {
     max-width: 68ch;
   }
   .prose h2 {
-    font-size: 18px;
-    font-weight: 650;
+    font-size: 21px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.01em;
-    margin: 26px 0 8px;
+    margin: 30px 0 10px;
   }
   .prose h2:first-child {
     margin-top: 0;
   }
   .prose h3 {
-    font-size: 14.5px;
-    font-weight: 650;
-    margin: 18px 0 6px;
+    font-size: 17px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    margin: 22px 0 8px;
   }
   .prose p,
   .prose li {
-    font-size: 16px;
-    line-height: 1.65;
+    font-size: 17px;
+    line-height: 1.7;
     color: var(--ink);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
   .prose ul,
   .prose ol {
@@ -2628,7 +3056,7 @@ video {
   }
   .toc a {
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 14px;
     padding: 8px 0;
     color: var(--dim);
     border-top: 1px solid var(--rule-soft);
@@ -2756,7 +3184,7 @@ video {
   }
   .bline__val {
     grid-column: 1;
-    font-size: 16.5px;
+    font-size: 17.5px;
   }
   .bline__note {
     grid-column: 1 / -1;
@@ -3014,7 +3442,7 @@ video {
     margin-top: 2px;
   }
   .order .order__actions .chip {
-    font-size: 9px;
+    font-size: 10px;
     padding: 3px 8px;
     letter-spacing: 0.1em;
   }

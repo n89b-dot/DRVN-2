@@ -54,10 +54,13 @@ export default async function PublicProfilePage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; listingsPage?: string; reviewsPage?: string }>;
 }) {
   const { username } = await params;
-  const { view: viewParam } = await searchParams;
+  const { view: viewParam, listingsPage: listingsPageParam, reviewsPage: reviewsPageParam } =
+    await searchParams;
+  const listingsPage = Math.max(1, Number(listingsPageParam) || 1);
+  const reviewsPage = Math.max(1, Number(reviewsPageParam) || 1);
   const supabase = await createClient();
 
   const { data: profile, error } = await supabase
@@ -88,7 +91,11 @@ export default async function PublicProfilePage({
     isFollowing = Boolean(follow);
   }
 
-  const view = await loadProfileView(supabase, profile.id, { publicOnly: true });
+  const view = await loadProfileView(supabase, profile.id, {
+    publicOnly: true,
+    listingsPage,
+    reviewsPage,
+  });
   const { website, rest } = splitLinks(profile.links);
   const name = profile.display_name ?? `@${profile.username}`;
 
@@ -135,6 +142,7 @@ export default async function PublicProfilePage({
         view={view}
         contactLinks={rest}
         initialTab={viewParam && TAB_KEYS.includes(viewParam) ? viewParam : undefined}
+        basePath={`/u/${profile.username}`}
       />
       {user?.id !== profile.id && (
         <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">

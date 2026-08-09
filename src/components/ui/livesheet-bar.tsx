@@ -18,7 +18,8 @@ export const BAR_ROUTES: BarRoute[] = [
   { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
   { href: "/garage", label: "Garage", note: "Your cars and their builds" },
   { href: "/listings", label: "Listings", note: "Views, watchers and offers on what you're selling" },
-  { href: "/orders", label: "Orders", note: "Offers, sales and purchases" },
+  { href: "/offers", label: "Offers", note: "Offers you've received and made, and their threads" },
+  { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery" },
   { href: "/messages", label: "Messages", note: "Every order and offer thread, in one list" },
   { href: "/profile", label: "Profile", note: "How buyers and sellers see you" },
   { href: "/settings", label: "Settings", note: "Account, notifications and payments" },
@@ -58,16 +59,22 @@ export function LivesheetBar({
   signedIn = true,
   cartCount = 0,
   unreadCount = 0,
+  offersCount = 0,
 }: {
   initialNight?: boolean;
   signedIn?: boolean;
   /** Rendered as a badge so a filled cart is visible from anywhere. */
   cartCount?: number;
   unreadCount?: number;
+  /** Offers waiting on this user — badges the Offers row in the index. */
+  offersCount?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const indexBtnRef = useRef<HTMLButtonElement>(null);
+  const FOCUSABLE_SEL =
+    'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   // The root layout's inline script (src/app/layout.tsx) stamps data-theme on
   // <html> from the cookie before first paint, independently of whatever
@@ -110,19 +117,47 @@ export function LivesheetBar({
     setOpen(false);
   }
 
-  // Escape closes; the page behind must not scroll while the index is over it.
+  // Escape closes; the page behind must not scroll while the index is over
+  // it; Tab is trapped inside the panel so it doesn't leak focus to the inert
+  // page underneath; closing restores focus to the button that opened it.
   useEffect(() => {
     if (!open) return;
+
+    const restoreTo = indexBtnRef.current;
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !panelRef.current) return;
+
+      const focusable = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SEL)
+      ).filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     panelRef.current?.querySelector<HTMLAnchorElement>("a")?.focus();
+
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      restoreTo?.focus();
     };
   }, [open]);
 
@@ -201,12 +236,15 @@ export function LivesheetBar({
           </nav>
 
           <button
+            ref={indexBtnRef}
             type="button"
             className={cx("indexbtn", open && "is-open")}
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
             aria-controls="sheet-index"
+            aria-haspopup="dialog"
             aria-label={open ? "Close the index" : "Open the index"}
+            style={{ minHeight: 44, minWidth: 44 }}
           >
             <span className="indexbtn__rules" aria-hidden="true">
               <i />
@@ -220,7 +258,13 @@ export function LivesheetBar({
 
       {/* THE INDEX — a second sheet unrolled over the page */}
       <div className={cx("indexwrap", open && "is-open")} id="sheet-index" aria-hidden={!open}>
-        <div className="indexsheet" ref={panelRef}>
+        <div
+          className="indexsheet"
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation index"
+        >
           <div className="wrap">
             <div className="index__head">
               <span className="microlabel">Menu</span>
@@ -231,6 +275,7 @@ export function LivesheetBar({
             <nav className="index__rows" aria-label="All sections">
               {indexRoutes.map((route, i) => {
                 const here = isActive(route.href);
+                const badge = route.href === "/offers" ? offersCount : 0;
                 return (
                   <Link
                     key={route.href}
@@ -243,7 +288,15 @@ export function LivesheetBar({
                     <span className="indexrow__n">{String(i + 1).padStart(2, "0")}</span>
                     <span className="indexrow__label">{route.label}</span>
                     <span className="indexrow__note">{route.note}</span>
-                    {here && <span className="indexrow__end chip chip--live">Here</span>}
+                    {here ? (
+                      <span className="indexrow__end chip chip--live">Here</span>
+                    ) : (
+                      badge > 0 && (
+                        <span className="indexrow__end chip chip--live">
+                          {badge > 9 ? "9+" : badge}
+                        </span>
+                      )
+                    )}
                   </Link>
                 );
               })}

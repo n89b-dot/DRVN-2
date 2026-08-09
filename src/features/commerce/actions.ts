@@ -12,7 +12,10 @@ import { getPaymentProvider } from "@/lib/payments/provider";
 import { refundOrder } from "@/lib/payments/refunds";
 import { getStripeCustomerId } from "@/lib/payments/customers";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
-import { DISPUTE_CATEGORIES } from "./disputes";
+import { isOwnedDisputeEvidenceRef } from "@/lib/media-url";
+import { deriveEvidenceStoragePath } from "@/lib/evidence-urls";
+import { sendAdminAlert } from "@/lib/admin/alerts";
+import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { DisputeCategory, PurchaseBeginResult } from "@/lib/database.types";
@@ -157,6 +160,7 @@ async function purchaseListings(
           ship_city: options.shipping.city,
           ship_postcode: options.shipping.postcode,
           ship_country: options.shipping.country,
+          ship_state: options.shipping.state,
           ship_phone: options.shipping.phone,
           is_collection: options.shipping.isCollection,
         })
@@ -257,7 +261,10 @@ export type ShippingDetails = {
   line2: string | null;
   city: string;
   postcode: string;
+  /** ISO 3166-1 alpha-2 code on new orders; see src/lib/geo/countries.ts. */
   country: string;
+  /** State / province / region — optional except client-side for US/CA/AU. */
+  state: string | null;
   phone: string | null;
   isCollection: boolean;
 };
@@ -273,6 +280,7 @@ function readShipping(formData: FormData): { shipping?: ShippingDetails; error?:
         city: "",
         postcode: "",
         country: "",
+        state: null,
         phone: String(formData.get("ship_phone") ?? "").trim() || null,
         isCollection: true,
       },
@@ -297,6 +305,7 @@ function readShipping(formData: FormData): { shipping?: ShippingDetails; error?:
       city,
       postcode,
       country,
+      state: String(formData.get("ship_state") ?? "").trim() || null,
       phone: String(formData.get("ship_phone") ?? "").trim() || null,
       isCollection: false,
     },
@@ -447,6 +456,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
 
   revalidatePath(`/listings/${listingId}`);
   revalidatePath("/orders");
+  revalidatePath("/offers");
   return { ok: "Offer sent. You'll find it under Orders." };
 }
 
@@ -489,6 +499,8 @@ export async function respondToOffer(
       .eq("id", offerId)
       .in("status", ["open", "countered"]);
     revalidatePath("/orders");
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${offerId}`);
     return { error: "This offer has expired." };
   }
 
@@ -507,6 +519,8 @@ export async function respondToOffer(
       .eq("id", offerId);
     if (error) return { error: error.message };
     revalidatePath("/orders");
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${offerId}`);
     return { ok: "Offer declined." };
   }
 
@@ -532,6 +546,8 @@ export async function respondToOffer(
       .eq("id", offerId);
     if (error) return { error: error.message };
     revalidatePath("/orders");
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${offerId}`);
     return { ok: "Counter sent." };
   }
 
@@ -562,6 +578,8 @@ export async function respondToOffer(
   await notifyOfferAccepted(admin, orderId);
 
   revalidatePath("/orders");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${offerId}`);
   revalidatePath(`/listings/${listing.id}`);
   return { ok: "Offer accepted — the buyer has 24 hours to complete checkout." };
 }
@@ -607,6 +625,8 @@ export async function withdrawOffer(
 
   if (error) return { error: error.message };
   revalidatePath("/orders");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${offerId}`);
   return { ok: "Offer withdrawn." };
 }
 
@@ -641,6 +661,8 @@ export async function acceptCounter(
       .eq("id", offerId)
       .in("status", ["open", "countered"]);
     revalidatePath("/orders");
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${offerId}`);
     return { error: "This offer has expired." };
   }
 
@@ -664,6 +686,8 @@ export async function acceptCounter(
   // As with accepting an offer: reserve now, charge at checkout, where the
   // buyer supplies a delivery address and confirms the amount.
   revalidatePath("/orders");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${offerId}`);
   redirect(`/orders/${orderId}/checkout`);
 }
 
@@ -714,6 +738,7 @@ export async function completeReservedOrder(
       ship_city: shipping!.city,
       ship_postcode: shipping!.postcode,
       ship_country: shipping!.country,
+      ship_state: shipping!.state,
       ship_phone: shipping!.phone,
       is_collection: shipping!.isCollection,
     })
@@ -839,6 +864,10 @@ export async function sendThreadMessage(
 
   revalidatePath("/orders");
   if (orderId) revalidatePath(`/orders/${orderId}`);
+  if (offerId) {
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${offerId}`);
+  }
   return { ok: "Sent." };
 }
 
@@ -850,19 +879,58 @@ export async function sendOfferMessage(
   return sendThreadMessage(prev, formData);
 }
 
+/**
+ * Marks a thread's incoming messages as read, scoped to exactly one channel
+ * (an order thread or an offer thread — messages never carry both at once,
+ * per sendThreadMessage). Only rows addressed to `userId` are touched, and
+ * only ones still unread, so this is safe to call unconditionally on every
+ * render of a thread — it is a no-op once caught up.
+ *
+ * Exported so server components (the order-thread page, the orders page's
+ * inline offer threads) can call it directly on their own request-scoped
+ * client, rather than going through the action + revalidate round trip.
+ */
+export async function markThreadMessagesRead(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  scope: { orderId: string } | { offerId: string }
+) {
+  let query = supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("recipient_id", userId)
+    .is("read_at", null);
+
+  query = "orderId" in scope ? query.eq("order_id", scope.orderId) : query.eq("offer_id", scope.offerId);
+
+  const { error } = await query;
+  if (error) {
+    // A missed read-receipt is not worth failing a page render over.
+    reportError("[commerce] markThreadMessagesRead failed", { scope, error });
+  }
+}
+
+/**
+ * Action-form entry point for markThreadMessagesRead — accepts `order_id` or
+ * `offer_id` in the FormData. Idempotent: marking an already-read thread is
+ * a no-op (the `read_at is null` filter matches nothing).
+ */
 export async function markMessagesRead(formData: FormData) {
   const { supabase, user } = await requireUser();
   const orderId = String(formData.get("order_id") ?? "");
-  const query = supabase
-    .from("messages")
-    .update({ read_at: new Date().toISOString() })
-    .eq("recipient_id", user.id)
-    .is("read_at", null);
+  const offerId = String(formData.get("offer_id") ?? "");
 
-  if (orderId) await query.eq("order_id", orderId);
-  else await query;
+  if (orderId) await markThreadMessagesRead(supabase, user.id, { orderId });
+  else if (offerId) await markThreadMessagesRead(supabase, user.id, { offerId });
+  else return;
 
   revalidatePath("/orders");
+  revalidatePath("/messages");
+  if (orderId) revalidatePath(`/messages/${orderId}`);
+  if (offerId) {
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${offerId}`);
+  }
 }
 
 // ---------- Fulfilment ----------
@@ -1098,7 +1166,7 @@ export async function openDispute(
 
   const { data: order } = await admin
     .from("orders")
-    .select("id, buyer_id, seller_id, status")
+    .select("id, buyer_id, seller_id, status, delivered_at")
     .eq("id", orderId)
     .maybeSingle();
   if (!order) return { error: "Order not found." };
@@ -1107,6 +1175,17 @@ export async function openDispute(
   // requestCancellation covers everything before dispatch.
   if (!["shipped", "delivered", "completed"].includes(order.status)) {
     return { error: "You can report a problem once the order has shipped." };
+  }
+  // The claim window (0024): 30 days from confirmed delivery. Sellers need
+  // finality too — an order can't stay disputable forever. Undelivered
+  // orders have no delivery date to count from, so they stay open.
+  if (
+    order.delivered_at &&
+    Date.now() - new Date(order.delivered_at).getTime() > DISPUTE_WINDOW_DAYS * 86_400_000
+  ) {
+    return {
+      error: `Problems must be reported within ${DISPUTE_WINDOW_DAYS} days of delivery — this order is past that window.`,
+    };
   }
   if (!order.seller_id) return { error: "The seller's account is no longer active." };
 
@@ -1323,6 +1402,7 @@ export async function closeDispute(
     .update({
       status: order.pre_dispute_status ?? "delivered",
       dispute_resolved_at: new Date().toISOString(),
+      dispute_outcome: "closed_by_buyer",
       refund_offer_cents: null,
       refund_offered_at: null,
     })
@@ -1347,6 +1427,141 @@ export async function closeDispute(
   return { ok: "Dispute closed." };
 }
 
+/** Buyer asks DRVN to step in — the explicit escalation (0024), available
+ *  once the seller-response window has passed with no live refund offer.
+ *  Reuses 0021's escalation state; the day-4 cron then skips this case. */
+export async function escalateDispute(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+  const admin = createAdminClient();
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "Missing order." };
+
+  const { data: order } = await admin
+    .from("orders")
+    .select(
+      "id, buyer_id, seller_id, status, total_cents, disputed_at, dispute_category, dispute_escalated_at, refund_offer_cents"
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
+  if (order.status !== "disputed") return { error: "This order isn't in dispute." };
+  if (order.dispute_escalated_at) return { error: "This dispute is already with DRVN support." };
+  if (order.refund_offer_cents) {
+    return { error: "The seller has a refund offer out — accept it or wait before escalating." };
+  }
+  const disputedAt = order.disputed_at ? new Date(order.disputed_at).getTime() : Date.now();
+  const waitMs = disputedAt + SELLER_RESPONSE_DAYS * 86_400_000 - Date.now();
+  if (waitMs > 0) {
+    return {
+      error: `Give the seller ${SELLER_RESPONSE_DAYS} days to respond first — you can escalate in ${Math.ceil(waitMs / 86_400_000)} day(s).`,
+    };
+  }
+
+  const { data: escalated, error } = await admin
+    .from("orders")
+    .update({
+      dispute_escalated_at: new Date().toISOString(),
+      dispute_escalated_by: user.id,
+    })
+    .eq("id", orderId)
+    .eq("status", "disputed")
+    .is("dispute_escalated_at", null)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!escalated?.length) return { error: "This dispute has already moved on — reload." };
+
+  if (order.seller_id) {
+    await postOrderSystemMessage(
+      admin,
+      orderId,
+      user.id,
+      order.seller_id,
+      "Asked DRVN to step in — the case is now with support."
+    );
+    await admin.from("notifications").insert({
+      user_id: order.seller_id,
+      kind: "dispute_escalated",
+      section: "marketplace",
+      title: "A dispute was escalated to DRVN",
+      body: "The buyer asked DRVN support to review this case. Unanswered disputes are refunded automatically.",
+      href: `/orders/${orderId}`,
+      actor_id: user.id,
+    });
+  }
+  await sendAdminAlert({
+    kind: "dispute_escalated",
+    title: "Buyer escalated a dispute",
+    detail: (order.dispute_category ?? "other").replaceAll("_", " "),
+    orderId,
+    amountCents: order.total_cents,
+  });
+
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: "Escalated — DRVN support will review this case." };
+}
+
+/** Either party attaches a photo to a disputed order (0024). The upload has
+ *  already happened browser-side into the dispute-evidence bucket; this
+ *  validates the URL really is that user's upload and records the row. */
+export async function addDisputeEvidence(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { user } = await requireUser();
+
+  if (!(await allowAction(RATE_LIMITS.disputeEvidence, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.disputeEvidence) };
+  }
+
+  const admin = createAdminClient();
+  const orderId = String(formData.get("order_id") ?? "");
+  const url = String(formData.get("url") ?? "");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+  if (!orderId) return { error: "Missing order." };
+  if (!isOwnedDisputeEvidenceRef(url, user.id)) {
+    return { error: "That photo didn't upload correctly — try again." };
+  }
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, buyer_id, seller_id, status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return { error: "Order not found." };
+  if (![order.buyer_id, order.seller_id].includes(user.id)) {
+    return { error: "That isn't your order." };
+  }
+  if (order.status !== "disputed") {
+    return { error: "Evidence can only be added while the dispute is open." };
+  }
+
+  const { data: existing } = await admin
+    .from("dispute_evidence")
+    .select("id")
+    .eq("order_id", orderId)
+    .eq("uploader_id", user.id);
+  if ((existing?.length ?? 0) >= 8) {
+    return { error: "You've attached the maximum of 8 photos." };
+  }
+
+  const { error } = await admin.from("dispute_evidence").insert({
+    order_id: orderId,
+    uploader_id: user.id,
+    url,
+    storage_path: deriveEvidenceStoragePath(url),
+    note: note || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: "Photo attached to the dispute." };
+}
+
 // ---------- Reviews ----------
 
 export async function submitReview(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
@@ -1358,7 +1573,10 @@ export async function submitReview(_prev: CommerceState, formData: FormData): Pr
   if (!orderId || !Number.isInteger(rating) || rating < 1 || rating > 5) {
     return { error: "Pick a rating from 1 to 5." };
   }
-  if (body.length > 2000) return { error: "Keep the review under 2000 characters." };
+  if (body.length > 1000) return { error: "Keep the review under 1000 characters." };
+  if (body.length > 0 && body.length < 5) {
+    return { error: "That review is too short — add a bit more or leave it blank." };
+  }
 
   const admin = createAdminClient();
   const { data: order } = await admin
@@ -1386,7 +1604,9 @@ export async function submitReview(_prev: CommerceState, formData: FormData): Pr
     body: body || null,
   });
   if (error) {
-    return { error: error.code === "23505" ? "You already reviewed this order." : error.message };
+    return {
+      error: error.code === "23505" ? "You've already reviewed this order." : error.message,
+    };
   }
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);

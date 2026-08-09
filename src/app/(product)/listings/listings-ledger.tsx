@@ -132,7 +132,9 @@ export function ListingsLedger({ rows }: { rows: LedgerRow[] }) {
           <th scope="col">
             <span className="sr-only">Expand</span>
           </th>
-          <th scope="col">Part</th>
+          <th scope="col" className="ledger__part">
+            Part
+          </th>
           <th scope="col">Source car</th>
           <th scope="col" className="text-right">
             Views
@@ -168,7 +170,7 @@ export function ListingsLedger({ rows }: { rows: LedgerRow[] }) {
                   </button>
                 </td>
 
-                <td>
+                <td className="ledger__part">
                   <span className="flex items-start gap-3">
                     <span className="order__img hidden sm:block">
                       <Media src={row.cover ?? undefined} alt={row.title} className="h-full w-full" />
@@ -176,14 +178,15 @@ export function ListingsLedger({ rows }: { rows: LedgerRow[] }) {
                     <span className="min-w-0">
                       <Link
                         href={`/listings/${row.id}`}
-                        className="order__name block transition-colors hover:text-live"
+                        className="order__name ledger__title transition-colors hover:text-live"
+                        title={row.title}
                       >
                         {row.title}
                       </Link>
                       <span className="order__meta block">
                         {row.partNumber ? `Part no. ${row.partNumber}` : "No part number"}
                       </span>
-                      <span className="mt-1 flex flex-wrap gap-1.5">
+                      <span className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
                         <Link href={`/listings/${row.id}/edit`} className="relbtn !static">
                           Edit
                         </Link>

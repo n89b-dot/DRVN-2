@@ -1,7 +1,7 @@
 // Hand-written types for the v3 schema (supabase/migrations/0001_v3_schema.sql).
 // Regenerate with `supabase gen types typescript` once the CLI is wired up.
 
-type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 type Table<Row, Required extends keyof Row = never> = {
   Row: Row;
@@ -48,6 +48,14 @@ export type Car = {
   tags: string[];
   cover_image_url: string | null;
   is_public: boolean;
+  /** VIN + decoded identity (migration 0025). The VIN verifies; the decoded
+   *  fields are what fitment matching reads. */
+  vin: string | null;
+  trim: string | null;
+  engine: string | null;
+  drivetrain: string | null;
+  body_class: string | null;
+  vin_decoded_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -114,6 +122,11 @@ export type Listing = {
   currency: string;
   location: string | null;
   compatibility_notes: string | null;
+  /** Seller-declared condition grade (migration 0024): 'a' | 'b' | 'c'. */
+  grade: ConditionGrade | null;
+  /** Per-category checklist answers: { question_key: 'yes'|'no'|'unknown' }.
+   *  The question catalog lives in src/lib/marketplace/grading.ts. */
+  condition_checklist: Json | null;
   status: ListingStatus;
   /** Public part-sheet loads, excluding the seller. */
   view_count: number;
@@ -211,7 +224,10 @@ export type Order = {
   ship_line2: string | null;
   ship_city: string | null;
   ship_postcode: string | null;
+  /** Free-text on legacy orders; ISO 3166-1 alpha-2 code on new ones (0028) — see countryLabel(). */
   ship_country: string | null;
+  /** State / province / region (migration 0028) — optional, required client-side for US/CA/AU. */
+  ship_state: string | null;
   ship_phone: string | null;
   is_collection: boolean;
   carrier: string | null;
@@ -227,8 +243,12 @@ export type Order = {
   disputed_at: string | null;
   disputed_by: string | null;
   dispute_resolved_at: string | null;
-  /** Day-4 SLA escalation stamp (migration 0021). */
+  /** Escalation stamp — day-4 cron (0021) or the buyer's explicit "step in". */
   dispute_escalated_at: string | null;
+  /** Who escalated: the buyer's id, or null for the cron (migration 0024). */
+  dispute_escalated_by: string | null;
+  /** How the dispute ended (migration 0024). */
+  dispute_outcome: DisputeOutcome | null;
   /** Once-only marker for the ops webhook alert on SLA breach (migration 0022). */
   dispute_sla_alerted_at: string | null;
   /** Status to restore on resolution — always shipped/delivered/completed. */
@@ -248,6 +268,18 @@ export type Order = {
   updated_at: string;
 };
 
+export type ConditionGrade = "a" | "b" | "c";
+
+/** How a dispute ended (migration 0024). Stamped by the resolution paths;
+ *  a seller "defect" is any outcome that returned the buyer's money. */
+export type DisputeOutcome =
+  | "refund_accepted"
+  | "closed_by_buyer"
+  | "auto_refunded"
+  | "admin_refunded"
+  | "admin_resolved"
+  | "chargeback_lost";
+
 export type DisputeCategory =
   | "item_not_received"
   | "item_not_as_described"
@@ -263,6 +295,50 @@ export type OrderItem = {
   price_cents: number;
   shipping_cents: number;
   quantity: number;
+  /** The listing's condition/grade/checklist frozen at purchase by trigger
+   *  (migration 0024) — the contract a dispute is judged against. */
+  condition_snapshot: Json | null;
+};
+
+/** Photos either party attaches to a dispute (migration 0024). */
+export type DisputeEvidence = {
+  id: string;
+  order_id: string;
+  uploader_id: string | null;
+  url: string;
+  /** Bucket-relative object path ('{uploader_uid}/{file}'), 0027 — the
+   *  private-bucket storage RLS policy and signEvidenceUrls() key off this
+   *  rather than parsing `url`. Backfilled for pre-0027 rows. */
+  storage_path: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+// ---------- Fitment (migration 0025) ----------
+
+export type VehicleMake = {
+  id: number;
+  name: string;
+  models_fetched_at: string | null;
+  created_at: string;
+};
+
+export type VehicleModel = {
+  id: number;
+  make_id: number;
+  name: string;
+  created_at: string;
+};
+
+/** The seller's structured fitment claim. Always presented as seller-stated. */
+export type ListingFitment = {
+  id: string;
+  listing_id: string;
+  make: string;
+  model: string;
+  year_start: number | null;
+  year_end: number | null;
+  created_at: string;
 };
 
 export type Payment = {
@@ -422,8 +498,72 @@ export type TransferIntent = {
   source_transaction: string | null;
   attempts: number;
   last_error: string | null;
+  /** Lease fields (0026): who claimed the row and until when. */
+  locked_at: string | null;
+  locked_by: string | null;
+  lease_expires_at: string | null;
+  next_attempt_at: string | null;
+  last_attempt_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// ---------- Money durability (migration 0026) ----------
+
+export type RefundOperationStatus =
+  | "requested"
+  | "provider_pending"
+  | "provider_succeeded"
+  | "effects_pending"
+  | "reversal_pending"
+  | "completed"
+  | "failed"
+  | "recovery_required";
+
+export type RefundOperation = {
+  id: string;
+  order_id: string;
+  payment_reference: string | null;
+  amount_cents: number;
+  currency: string;
+  remaining_before_cents: number;
+  reason: string;
+  requested_by: string;
+  actor_role: string;
+  idempotency_key: string;
+  refund_reference: string | null;
+  reversal_reference: string | null;
+  reversal_due_cents: number | null;
+  status: RefundOperationStatus;
+  external: boolean;
+  resolve_dispute: boolean;
+  dispute_outcome: string | null;
+  attempts: number;
+  next_attempt_at: string | null;
+  last_error: string | null;
+  recovery_id: string | null;
+  created_at: string;
+  updated_at: string;
+  provider_completed_at: string | null;
+  effects_completed_at: string | null;
+  reversal_completed_at: string | null;
+};
+
+export type AdminAlertOutboxRow = {
+  id: string;
+  kind: string;
+  title: string;
+  detail: string | null;
+  order_id: string | null;
+  amount_cents: number | null;
+  payload: Json;
+  dedup_key: string | null;
+  status: "pending" | "delivered" | "failed" | "disabled";
+  attempts: number;
+  next_attempt_at: string;
+  last_error: string | null;
+  created_at: string;
+  delivered_at: string | null;
 };
 
 /** Scheduler configuration (migration 0020) — service-role only. */
@@ -497,7 +637,16 @@ export type Database = {
       webhook_events: Table<WebhookEvent, "id" | "type">;
       transfer_intents: Table<TransferIntent, "order_id" | "amount_cents" | "currency">;
       payment_recoveries: Table<PaymentRecovery, "kind">;
+      refund_operations: Table<
+        RefundOperation,
+        "order_id" | "amount_cents" | "currency" | "remaining_before_cents" | "requested_by" | "idempotency_key"
+      >;
+      admin_alert_outbox: Table<AdminAlertOutboxRow, "kind" | "title">;
       job_config: Table<JobConfig, "key" | "value">;
+      dispute_evidence: Table<DisputeEvidence, "order_id" | "url">;
+      vehicle_makes: Table<VehicleMake, "id" | "name">;
+      vehicle_models: Table<VehicleModel, "make_id" | "name">;
+      listing_fitments: Table<ListingFitment, "listing_id" | "make" | "model">;
     };
     Views: Record<string, never>;
     Functions: {
@@ -557,6 +706,37 @@ export type Database = {
       admin_role: {
         Args: Record<string, never>;
         Returns: string | null;
+      };
+      /** Atomically reserves a refund amount as a refund_operations row (0026). */
+      begin_refund_operation: {
+        Args: {
+          p_order_id: string;
+          p_amount_cents: number | null;
+          p_reason: string;
+          p_requested_by: string;
+          p_actor_role: string;
+          p_resolve_dispute: boolean;
+          p_dispute_outcome: string | null;
+          p_payment_reference: string | null;
+          p_refund_reference?: string | null;
+          p_external?: boolean;
+        };
+        Returns: Json;
+      };
+      /** Applies all internal refund effects in one transaction (0026). */
+      settle_refund_operation: {
+        Args: { p_operation_id: string };
+        Returns: Json;
+      };
+      /** Leased, bounded transfer-intent claim under SKIP LOCKED (0026). */
+      claim_transfer_intents: {
+        Args: {
+          p_worker: string;
+          p_batch?: number;
+          p_lease_seconds?: number;
+          p_max_attempts?: number;
+        };
+        Returns: TransferIntent[];
       };
     };
     Enums: Record<string, never>;

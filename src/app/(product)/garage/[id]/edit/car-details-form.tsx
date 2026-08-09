@@ -39,6 +39,29 @@ export function CarDetailsForm({ car }: { car: Car }) {
             <input name="model" defaultValue={car.model ?? ""} className="ctl" />
           </Field>
         </div>
+        <Field label="VIN — optional, verifies the fields above">
+          <input
+            name="vin"
+            defaultValue={car.vin ?? ""}
+            maxLength={17}
+            placeholder="17 characters, on the windshield or door jamb"
+            autoCapitalize="characters"
+            spellCheck={false}
+            className="ctl max-w-none font-mono uppercase"
+          />
+          <span className="field__hint">
+            We decode it once (via the US NHTSA database) to fill and verify year, make, model,
+            trim and engine — that&apos;s what &quot;fits your car&quot; checks against. Never shown
+            publicly.
+          </span>
+          {car.vin_decoded_at && (
+            <span className="field__hint">
+              ✓ Decoded{car.trim ? ` — ${car.trim}` : ""}
+              {car.engine ? ` · ${car.engine}` : ""}
+              {car.drivetrain ? ` · ${car.drivetrain}` : ""}
+            </span>
+          )}
+        </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Color">
             <input name="color" defaultValue={car.color ?? ""} className="ctl" />

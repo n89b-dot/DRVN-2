@@ -12,7 +12,7 @@ export function SignupForm() {
   return (
     <div>
       <span className="microlabel">Create an account</span>
-      <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[650] leading-[1.05] tracking-[-0.02em]">
+      <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[600] leading-[1.05] tracking-[-0.02em]">
         Join <span className="text-live">DRVN.</span>
       </h1>
       <p className="mt-3 text-[15px] text-dim">
@@ -21,8 +21,11 @@ export function SignupForm() {
 
       <form action={action} className="mt-6">
         <div className="field">
-          <span className="microlabel">Email</span>
+          <label htmlFor="signup-email" className="microlabel">
+            Email
+          </label>
           <input
+            id="signup-email"
             name="email"
             type="email"
             required
@@ -35,13 +38,16 @@ export function SignupForm() {
           </span>
         </div>
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
-          <span className="microlabel">Password</span>
+          <label htmlFor="signup-password" className="microlabel">
+            Password
+          </label>
           <input
+            id="signup-password"
             name="password"
             type="password"
             required
             minLength={8}
-            placeholder="Twelve characters beats seven clever ones"
+            placeholder="At least 8 characters"
             autoComplete="new-password"
             className="ctl max-w-none"
           />

@@ -27,6 +27,10 @@ export type CartSummary = {
   feeCents: number;
   sellerCount: number;
   allowsCollection: boolean;
+  /** Some buyable lines allow collection and some don't — the checkout's one
+   *  is_collection flag can't represent both, so the option gets dropped for
+   *  the whole basket. Surfaced so that isn't silent. */
+  mixedFulfilment: boolean;
 };
 
 export async function loadCartSummary(): Promise<CartSummary> {
@@ -71,6 +75,14 @@ export async function loadCartSummary(): Promise<CartSummary> {
   const goodsCents = active.reduce((sum, l) => sum + l.price_cents, 0);
   const shippingCents = active.reduce((sum, l) => sum + (l.shipping_cents ?? 0), 0);
 
+  // Ids present in the cookie but missing from the query result are hard
+  // deleted, not just inactive — they still belong in "unavailable" rather
+  // than vanishing from the summary entirely.
+  const returnedIds = new Set((listings ?? []).map((l) => l.id));
+  const deleted = ids.filter((id) => !returnedIds.has(id)).map((id) => ({ id, title: "Deleted listing" }));
+
+  const collectionCapable = active.filter((l) => l.allows_collection).length;
+
   return {
     lines: active.map((l) => ({
       id: l.id,
@@ -82,14 +94,18 @@ export async function loadCartSummary(): Promise<CartSummary> {
       coverUrl: cover.get(l.id) ?? null,
       allowsCollection: l.allows_collection,
     })),
-    unavailable: (listings ?? [])
-      .filter((l) => l.status !== "active")
-      .map((l) => ({ id: l.id, title: l.title })),
+    unavailable: [
+      ...(listings ?? [])
+        .filter((l) => l.status !== "active")
+        .map((l) => ({ id: l.id, title: l.title })),
+      ...deleted,
+    ],
     goodsCents,
     shippingCents,
     totalCents: goodsCents + shippingCents,
     feeCents: platformFeeCents(goodsCents),
     sellerCount: sellerIds.length,
     allowsCollection: active.length > 0 && active.every((l) => l.allows_collection),
+    mixedFulfilment: collectionCapable > 0 && collectionCapable < active.length,
   };
 }

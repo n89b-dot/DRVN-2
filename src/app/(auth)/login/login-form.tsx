@@ -12,7 +12,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
   return (
     <div>
       <span className="microlabel">Sign in</span>
-      <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[650] leading-[1.05] tracking-[-0.02em]">
+      <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[600] leading-[1.05] tracking-[-0.02em]">
         Welcome <span className="text-live">back.</span>
       </h1>
       <p className="mt-3 text-[15px] text-dim">

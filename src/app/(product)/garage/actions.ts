@@ -8,6 +8,8 @@ import type { ActivityBlock } from "@/lib/activity-blocks";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
+import { decodeVin } from "@/lib/vehicles/vpic";
+import type { Car } from "@/lib/database.types";
 
 export type ActionState = { error?: string; ok?: string };
 
@@ -73,13 +75,58 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
   const yearRaw = String(formData.get("year") ?? "").trim();
   const tagsRaw = String(formData.get("tags") ?? "").trim();
 
+  // VIN decode (0025): the VIN is the verification input, the decoded fields
+  // are the fitment key. A new/changed VIN triggers one vPIC decode; decoded
+  // identity fills make/model/year only where the form left them blank (the
+  // owner's own words win), while trim/engine/drivetrain/body always come
+  // from the decode — they have no manual fields to fight with.
+  const vinRaw = String(formData.get("vin") ?? "").trim().toUpperCase();
+  if (vinRaw && (vinRaw.length < 11 || vinRaw.length > 17)) {
+    return { error: "That VIN doesn't look right — 17 characters on modern cars." };
+  }
+  const { data: existing } = await supabase
+    .from("cars")
+    .select("vin")
+    .eq("id", id)
+    .maybeSingle();
+
+  let make = String(formData.get("make") ?? "").trim() || null;
+  let model = String(formData.get("model") ?? "").trim() || null;
+  let year = yearRaw ? Number(yearRaw) : null;
+  let decodedFields: Partial<Car> = {};
+  let decodeNote: string | undefined;
+  if (vinRaw && vinRaw !== (existing?.vin ?? "")) {
+    const decoded = await decodeVin(vinRaw);
+    if (decoded) {
+      make = make ?? decoded.make;
+      model = model ?? decoded.model;
+      year = year ?? decoded.year;
+      decodedFields = {
+        trim: decoded.trim,
+        engine: decoded.engine,
+        drivetrain: decoded.drivetrain,
+        body_class: decoded.bodyClass,
+        vin_decoded_at: new Date().toISOString(),
+      };
+    } else {
+      decodeNote =
+        "Saved — but the VIN couldn't be decoded right now, so check make/model/year yourself.";
+    }
+  } else if (!vinRaw && existing?.vin) {
+    // VIN removed: keep make/model/year (they're the car's identity either
+    // way) but drop the decode provenance.
+    decodedFields = { vin_decoded_at: null };
+  }
+
   const { error } = await supabase
     .from("cars")
     .update({
       name,
-      make: String(formData.get("make") ?? "").trim() || null,
-      model: String(formData.get("model") ?? "").trim() || null,
-      year: yearRaw ? Number(yearRaw) : null,
+      make,
+      model,
+      year,
+      vin: vinRaw || null,
+      ...decodedFields,
       color: String(formData.get("color") ?? "").trim() || null,
       about: String(formData.get("about") ?? "").trim() || null,
       tags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [],
@@ -92,7 +139,7 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
 
   revalidatePath("/garage");
   revalidatePath(`/garage/${id}/edit`);
-  return {};
+  return decodeNote ? { error: decodeNote } : {};
 }
 
 export async function deleteCar(formData: FormData) {
@@ -259,6 +306,57 @@ export async function setCoverImage(formData: FormData): Promise<void> {
 
   const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
   if (car) revalidatePath(`/cars/${car.slug}`);
+}
+
+/**
+ * Swaps an image with its immediate neighbour by `position`. Reorder was
+ * previously drag-only in intent but had no implementation at all — this
+ * gives keyboard/touch users an equivalent up/down control.
+ */
+export async function moveCarImage(formData: FormData): Promise<void> {
+  const { supabase } = await requireUser();
+  const carId = String(formData.get("car_id") ?? "");
+  const imageId = String(formData.get("image_id") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (!carId || !imageId || (direction !== "up" && direction !== "down")) return;
+
+  const { data: images } = await supabase
+    .from("car_images")
+    .select("id, position")
+    .eq("car_id", carId)
+    .order("position");
+  if (!images) return;
+
+  const index = images.findIndex((img) => img.id === imageId);
+  if (index === -1) return;
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= images.length) return;
+
+  const a = images[index];
+  const b = images[swapIndex];
+
+  await supabase.from("car_images").update({ position: b.position }).eq("id", a.id);
+  await supabase.from("car_images").update({ position: a.position }).eq("id", b.id);
+
+  revalidatePath(`/garage/${carId}/edit`);
+}
+
+/** Lets the owner describe a photo for screen readers / SEO alt text. */
+export async function updateCarImageAlt(formData: FormData): Promise<ActionState> {
+  const { supabase } = await requireUser();
+  const carId = String(formData.get("car_id") ?? "");
+  const imageId = String(formData.get("image_id") ?? "");
+  const alt = String(formData.get("alt") ?? "").trim().slice(0, 200);
+  if (!imageId) return { error: "Missing image." };
+
+  const { error } = await supabase
+    .from("car_images")
+    .update({ alt: alt || null })
+    .eq("id", imageId);
+  if (error) return { error: error.message };
+
+  if (carId) revalidatePath(`/garage/${carId}/edit`);
+  return { ok: "Saved" };
 }
 
 export async function createActivityPost(

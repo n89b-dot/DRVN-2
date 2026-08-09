@@ -25,5 +25,8 @@ export {
   TabNav,
 } from "./primitives";
 export { Dialog } from "./dialog";
+export { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
+export { Gallery, GalleryLightbox, type GalleryImage as GalleryPhoto } from "./gallery";
 export { SheetTabs, resolveTab, type SheetTab } from "./sheet-tabs";
 export { Toast } from "./toast";
+export { PaymentModeNotice } from "./payment-mode-notice";

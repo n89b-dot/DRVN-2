@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import {
-  Dialog,
+  GalleryLightbox,
   KeyValueTable,
   SheetTabs,
   VehicleGallery,
@@ -277,21 +277,14 @@ export function CarTabs({
     <div>
       <SheetTabs tabs={tabs} initialTab={initialTab} label={`${carName} — build sections`} />
 
-      <Dialog
+      <GalleryLightbox
+        images={gallery}
+        index={lightbox ?? 0}
+        onIndexChange={setLightbox}
         open={lightbox !== null}
         onClose={() => setLightbox(null)}
-        label={`${carName} — photo`}
-        align="center"
-      >
-        {lightbox !== null && gallery[lightbox] && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={gallery[lightbox].url}
-            alt={gallery[lightbox].alt ?? carName}
-            className="max-h-[85vh] max-w-full rounded-r object-contain"
-          />
-        )}
-      </Dialog>
+        label={carName}
+      />
     </div>
   );
 }

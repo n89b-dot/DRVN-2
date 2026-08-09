@@ -16,11 +16,24 @@ export function Avatar({ size = "h-12 w-12", initials = "NB" }: { size?: string;
   return <span className={cx("monogram shrink-0", size)}>{initials}</span>;
 }
 
+/** Documented `sizes` presets, matched to how this component is actually used
+ *  around the app — a full-bleed hero, a card in a 2-4 col grid, a small
+ *  fixed-size thumbnail, or a fixed-size avatar/monogram-scale crop. Callers
+ *  can still pass any raw `sizes` string; these just name the common cases so
+ *  a caller isn't guessing at a viewport-width formula. */
+export const MEDIA_SIZES = {
+  hero: "100vw",
+  card: "(min-width: 768px) 33vw, 50vw",
+  thumb: "120px",
+  avatar: "48px",
+} as const;
+
 export function Media({
   src,
   alt,
   className = "",
   fallbackClassName = "",
+  sizes = MEDIA_SIZES.card,
 }: {
   src?: string;
   alt: string;
@@ -30,6 +43,10 @@ export function Media({
    *  hasn't been drawn yet rather than a dead grey block. Thumbnails and
    *  inline media leave it off and keep the plain fallback. */
   fallbackClassName?: string;
+  /** One of `MEDIA_SIZES`, or a raw `sizes` string for a layout those presets
+   *  don't cover. Defaults to the `card` preset, which matches what every
+   *  current caller was already hard-coding. */
+  sizes?: string;
 }) {
   if (!src) {
     // The plate variants carry a drawn mark; the plain fallback stays empty so
@@ -58,7 +75,7 @@ export function Media({
     <span className={`relative block overflow-hidden bg-img-fallback ${className}`}>
       {/* Optimization is on: next.config.ts allows the Supabase storage host,
           so these resize and serve AVIF/WebP instead of full-size originals. */}
-      <Image src={src} alt={alt} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />
+      <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
     </span>
   );
 }
@@ -97,6 +114,7 @@ export function HorizontalGallery({
           src={image}
           alt={`${alt} image ${index + 1}`}
           className={`${large ? "h-[90px] w-40" : "h-[90px] w-[89px]"} shrink-0 rounded-ctl`}
+          sizes={MEDIA_SIZES.thumb}
         />
       ))}
     </div>

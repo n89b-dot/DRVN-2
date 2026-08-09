@@ -45,7 +45,10 @@ export default async function CategoryPage({
         <h1>{category.label}</h1>
       </Rv>
 
+      <FilterBar action={`/marketplace/${category.slug}`} filters={filters} showFitToggle={Boolean(user)} />
+
       <div className="filters">
+        <span className="microlabel filters__label">Narrow it down</span>
         <Link href={`/marketplace/${category.slug}`} className={`fbtn ${!filters.subcategory ? "is-on" : ""}`}>
           All
         </Link>
@@ -54,10 +57,6 @@ export default async function CategoryPage({
             {sub.label}
           </Link>
         ))}
-      </div>
-
-      <div className="mb-6">
-        <FilterBar action={`/marketplace/${category.slug}`} filters={filters} showFitToggle={Boolean(user)} />
       </div>
 
       <section className="deck">

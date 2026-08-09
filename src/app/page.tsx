@@ -113,9 +113,9 @@ export default async function LandingPage() {
               <span className="chip">Build pages</span>
             </div>
             <p className="text-[15px] leading-relaxed">
-              No more &quot;came off a clean car, trust me.&quot; Listings link to the car&apos;s
-              build page — the mod list, the photos, the owner — so you know what you&apos;re
-              buying into.
+              No more &quot;came off a clean car, trust me.&quot; Parts released off a documented
+              build link straight to its page — the mod list, the photos, the owner — and
+              they&apos;re badged, so you can tell provenance from a plain listing at a glance.
             </p>
           </Rv>
           <Rv className="tile" stagger={2}>
@@ -141,6 +141,18 @@ export default async function LandingPage() {
                 Explore all builds →
               </Link>
             </div>
+            {cars.length === 0 && (
+              <div className="tile">
+                <span className="microlabel">First builds landing</span>
+                <p className="text-[15px] leading-relaxed text-dim">
+                  Garages are being documented right now. Add yours and your car&apos;s build
+                  page is the provenance behind every part you sell off it.
+                </p>
+                <Link href="/signup" className="jumplink mt-2 inline-block">
+                  Start your garage →
+                </Link>
+              </div>
+            )}
             <div className="mkt">
               {cars.map((car, i) => (
                 <Rv key={car.id} className="tile" stagger={i}>
@@ -172,6 +184,18 @@ export default async function LandingPage() {
                 Browse the marketplace →
               </Link>
             </div>
+            {listings.length === 0 && (
+              <div className="tile">
+                <span className="microlabel">The market is warming up</span>
+                <p className="text-[15px] leading-relaxed text-dim">
+                  Parts get listed straight off documented builds. Browse the marketplace, or
+                  be the first to release something off yours.
+                </p>
+                <Link href="/sell" className="jumplink mt-2 inline-block">
+                  List a part →
+                </Link>
+              </div>
+            )}
             <div className="mkt">
               {listings.map((listing, i) => (
                 <Rv key={listing.id} className="tile" stagger={i}>
@@ -217,6 +241,41 @@ export default async function LandingPage() {
                 </span>
               </div>
             </div>
+          </Rv>
+        </section>
+
+        {/* Buyer protection — the trust floor under every order */}
+        <section className="deck deck--three">
+          <Rv className="tile" stagger={0}>
+            <div className="tile__head">
+              <span className="microlabel">Payment held safe</span>
+            </div>
+            <p className="text-[15px] leading-relaxed">
+              Your payment is processed by Stripe and the seller isn&apos;t paid out until
+              after delivery plus a clearing window — the money waits until the part arrives.
+            </p>
+          </Rv>
+          <Rv className="tile" stagger={1}>
+            <div className="tile__head">
+              <span className="microlabel">Not as described?</span>
+            </div>
+            <p className="text-[15px] leading-relaxed">
+              Every used part is sold against a frozen condition disclosure. If what arrives
+              doesn&apos;t match it, open a dispute with photos — sellers must respond, and
+              DRVN steps in when they don&apos;t.
+            </p>
+          </Rv>
+          <Rv className="tile" stagger={2}>
+            <div className="tile__head">
+              <span className="microlabel">The full policy</span>
+            </div>
+            <p className="text-[15px] leading-relaxed">
+              Response windows, refunds, and what&apos;s covered — written down, not
+              vibes-based.{" "}
+              <Link href="/protection" className="jumplink">
+                Read buyer protection →
+              </Link>
+            </p>
           </Rv>
         </section>
 

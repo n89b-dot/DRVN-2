@@ -26,6 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/terms`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${base}/privacy`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${base}/fees`, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${base}/protection`, changeFrequency: "monthly", priority: 0.4 },
   ];
 
   const categoryEntries: MetadataRoute.Sitemap = CATEGORIES.flatMap((category) => [

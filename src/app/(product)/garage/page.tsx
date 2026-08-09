@@ -57,22 +57,29 @@ export default async function GaragePage() {
                       {[car.year, car.make, car.model].filter(Boolean).join(" ") || "No details yet"}
                     </span>
                   </span>
-                  <span className="order__actions">
+                  <span className="order__actions flex-col items-end gap-1.5">
                     {!car.is_public && <span className="chip">Private</span>}
-                    {/* The page's own copy promises listing parts straight off
-                        a build; until now there was no way to do it. */}
-                    <Link href={`/sell?car=${car.id}`} className="btn btn--live">
-                      List a part
-                    </Link>
-                    <Link href={`/garage/${car.id}/update/new`} className="btn btn--ghost">
-                      Post update
-                    </Link>
-                    <Link href={`/garage/${car.id}/edit`} className="btn btn--ghost">
-                      Manage
-                    </Link>
-                    <Link href={`/cars/${car.slug}`} className="btn btn--ghost">
-                      Build page
-                    </Link>
+                    <span className="flex gap-2">
+                      {/* Manage is where every other action on this car lives
+                          (photos, mods, updates, listing parts) — it's the one
+                          action that matters most from this list. */}
+                      <Link href={`/garage/${car.id}/edit`} className="btn btn--live">
+                        Manage
+                      </Link>
+                      <Link href={`/cars/${car.slug}`} className="btn btn--ghost">
+                        View build
+                      </Link>
+                    </span>
+                    <span className="flex gap-3">
+                      {/* The page's own copy promises listing parts straight off
+                          a build; these stay reachable, just quieter than Manage. */}
+                      <Link href={`/sell?car=${car.id}`} className="jumplink">
+                        List a part
+                      </Link>
+                      <Link href={`/garage/${car.id}/update/new`} className="jumplink">
+                        Post update
+                      </Link>
+                    </span>
                   </span>
                 </div>
               ))}

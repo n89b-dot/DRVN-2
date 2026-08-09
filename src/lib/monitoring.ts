@@ -40,11 +40,32 @@ function dsnParts(): { endpoint: string; key: string } | null {
   }
 }
 
+/** Best-available release/deploy identity, host-agnostic. */
+function releaseInfo(): Record<string, unknown> {
+  const release =
+    process.env.SENTRY_RELEASE ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    undefined;
+  const deployment = process.env.VERCEL_DEPLOYMENT_ID ?? process.env.DEPLOY_ID ?? undefined;
+  return {
+    ...(release ? { release } : {}),
+    ...(deployment ? { tags: { deployment } } : {}),
+  };
+}
+
 function eventId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/**
+ * In-flight sends, so serverless paths can flush before the runtime freezes —
+ * a webhook that reports an error and returns must not lose the report.
+ */
+const inFlight = new Set<Promise<void>>();
+let deliveryFailureLogged = false;
 
 async function send(event: Record<string, unknown>): Promise<void> {
   const dsn = dsnParts();
@@ -52,6 +73,9 @@ async function send(event: Record<string, unknown>): Promise<void> {
 
   const id = eventId();
   const now = new Date().toISOString();
+  const release = releaseInfo();
+  const baseTags = (release.tags as Record<string, string> | undefined) ?? {};
+  const eventTags = (event.tags as Record<string, string> | undefined) ?? {};
   const envelope =
     JSON.stringify({ event_id: id, sent_at: now }) +
     "\n" +
@@ -63,21 +87,38 @@ async function send(event: Record<string, unknown>): Promise<void> {
       platform: "javascript",
       environment: process.env.NODE_ENV ?? "development",
       server_name: "drvn",
+      ...release,
       ...event,
+      tags: { ...baseTags, ...eventTags },
     });
 
-  try {
-    await fetch(dsn.endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-sentry-envelope",
-        "X-Sentry-Auth": `Sentry sentry_version=7, sentry_client=drvn/1.0, sentry_key=${dsn.key}`,
-      },
-      body: envelope,
-    });
-  } catch {
-    // Monitoring must never take the product down with it.
-  }
+  const delivery = (async () => {
+    try {
+      await fetch(dsn.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-sentry-envelope",
+          "X-Sentry-Auth": `Sentry sentry_version=7, sentry_client=drvn/1.0, sentry_key=${dsn.key}`,
+        },
+        body: envelope,
+      });
+    } catch (error) {
+      // Monitoring must never take the product down with it — but a broken
+      // DSN should not be indistinguishable from an absent one either.
+      if (!deliveryFailureLogged) {
+        deliveryFailureLogged = true;
+        console.error("[monitoring] Sentry delivery failed (logged once)", error);
+      }
+    }
+  })();
+  inFlight.add(delivery);
+  void delivery.finally(() => inFlight.delete(delivery));
+  await delivery;
+}
+
+/** Await every pending report — call before returning from serverless paths. */
+export async function flushMonitoring(): Promise<void> {
+  await Promise.allSettled([...inFlight]);
 }
 
 export async function captureException(

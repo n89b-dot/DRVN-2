@@ -129,14 +129,16 @@ export function VehicleGallery({
 
   return (
     <div className="grid gap-3">
-      <div className="grid grid-cols-[1fr_0.7fr] gap-3">
+      {/* Single column below sm — the fixed 1fr/0.7fr split otherwise squeezed
+          the hero and side stack side by side on a phone. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_0.7fr]">
         {tile(hero, 0, "h-56 rounded-r")}
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {rest.slice(0, 2).map((image, i) => tile(image, i + 1, "h-[106px] rounded-ctl"))}
         </div>
       </div>
       {rest.length > 2 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {rest.slice(2, 5).map((image, i) => tile(image, i + 3, "h-24 rounded-ctl"))}
         </div>
       )}

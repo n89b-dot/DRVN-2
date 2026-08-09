@@ -15,9 +15,10 @@
 --    each being re-declared here.
 --  * dispute_evidence — photos both parties attach to a dispute; the missing
 --    half of "not as described" adjudication.
---  * orders.dispute_escalated_at — the buyer's explicit "ask DRVN to step
---    in", available after the seller-response window. Surfaces in the admin
---    queue ahead of the day-4 SLA sweep.
+--  * orders.dispute_escalated_by — the buyer's explicit "ask DRVN to step
+--    in". Escalation state already exists (0021 stamps dispute_escalated_at
+--    from the day-4 cron); a buyer pressing the button reaches the same
+--    state early, and this column records who did it (null = the cron).
 --  * orders.dispute_outcome — how a dispute actually ended, stamped by the
 --    resolution paths. Seller defects = count of outcomes that cost the
 --    buyer's money back; computed, never a counter that can drift.
@@ -92,8 +93,9 @@ create trigger order_items_condition_snapshot
 -- ============================================================
 -- orders — escalation + outcome
 -- ============================================================
+-- dispute_escalated_at itself is 0021's; only the attribution is new.
 alter table public.orders
-  add column if not exists dispute_escalated_at timestamptz,
+  add column if not exists dispute_escalated_by uuid references public.profiles (id) on delete set null,
   add column if not exists dispute_outcome text;
 
 alter table public.orders

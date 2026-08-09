@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, ListingCard, Media } from "@/components/ui";
 import { FeedList } from "@/components/ui/feed-list";
-import { fetchFeed } from "@/lib/feed";
+import { fetchFeed, fetchFollowedFeed, type FeedItem } from "@/lib/feed";
 import { recommendListings } from "@/lib/recommendations";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,6 +12,8 @@ import { SellerKpis } from "./seller-kpis";
 
 export const metadata = { title: "Home - DRVN" };
 
+const FEED_PAGE_SIZE = 12;
+
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 12) return "Morning";
@@ -19,15 +21,22 @@ function greeting(): string {
   return "Evening";
 }
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // All four only need user!.id, with no dependency on each other — including
+  // All five only need user!.id, with no dependency on each other — including
   // recommendListings, which hits its own admin client — so they run together.
-  const [{ data: profile }, { data: cars }, { count: savedCount }, items, recommended] =
+  const [{ data: profile }, { data: cars }, { count: savedCount }, followed, recommended] =
     await Promise.all([
       supabase.from("profiles").select("display_name, username").eq("id", user!.id).single(),
       supabase
@@ -37,9 +46,29 @@ export default async function HomePage() {
         .order("created_at")
         .limit(6),
       supabase.from("saves").select("target_id", { count: "exact", head: true }).eq("user_id", user!.id),
-      fetchFeed(supabase, "all", true),
+      fetchFollowedFeed(supabase, user!.id, { page, pageSize: FEED_PAGE_SIZE }),
       recommendListings(user!.id, 4),
     ]);
+
+  // The followed feed only covers cars and profiles this viewer follows — it
+  // won't fill a page for most accounts, and is empty outright for anyone who
+  // hasn't followed a build yet. Discovery (the same feed Explore uses) fills
+  // the rest of page one, clearly labelled as such rather than blended in as
+  // if it were personalized.
+  let discoveryItems: FeedItem[] = [];
+  const wantsDiscovery =
+    page === 1 && (followed.followsNothing || followed.items.length < FEED_PAGE_SIZE);
+  if (wantsDiscovery) {
+    const wantCount = followed.followsNothing ? FEED_PAGE_SIZE : FEED_PAGE_SIZE - followed.items.length;
+    const discoveryFeed = await fetchFeed(supabase, "all", true, {
+      page: 1,
+      pageSize: wantCount + followed.items.length,
+    });
+    const followedKeys = new Set(followed.items.map((i) => `${i.kind}-${i.id}`));
+    discoveryItems = discoveryFeed.items
+      .filter((i) => !followedKeys.has(`${i.kind}-${i.id}`))
+      .slice(0, wantCount);
+  }
 
   const firstName = profile?.display_name?.split(" ")[0];
   const garage = cars ?? [];
@@ -56,8 +85,9 @@ export default async function HomePage() {
           The garage is <span className="live-word">open.</span>
         </h1>
         <p className="sub">
-          Anything new on your listings lands here, along with the parts you&apos;re watching and
-          the latest from people whose builds you follow.
+          {followed.followsNothing
+            ? "Follow a build or a seller and their updates land here first — until then, this is a mix of what's new across DRVN."
+            : "The latest from the builds and people you follow, first — with a Discovery mix underneath once that runs out."}
         </p>
         <div className="jumprow">
           <span className="microlabel">Jump to</span>
@@ -172,16 +202,62 @@ export default async function HomePage() {
       )}
 
       {/* Feed */}
-      <section className="deck">
-        <Rv className="tile">
-          <div className="tile__head">
-            <span className="microlabel microlabel--ink">Latest from the community</span>
-          </div>
-          <FeedList items={items} />
-        </Rv>
-      </section>
+      {followed.items.length > 0 && (
+        <section className="deck">
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">From builds you follow</span>
+            </div>
+            <FeedList items={followed.items} />
+          </Rv>
+        </section>
+      )}
 
-      <Foot left="DRVN — home" right={<Link href="/marketplace">Browse parts →</Link>} />
+      {discoveryItems.length > 0 && (
+        <section className="deck">
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">
+                Discovery — {followed.followsNothing ? "what's new across DRVN" : "while your followed feed catches up"}
+              </span>
+            </div>
+            <FeedList items={discoveryItems} />
+          </Rv>
+        </section>
+      )}
+
+      {followed.items.length === 0 && discoveryItems.length === 0 && (
+        <section className="deck">
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">From builds you follow</span>
+            </div>
+            <FeedList items={[]} />
+          </Rv>
+        </section>
+      )}
+
+      {(page > 1 || followed.hasMore) && (
+        <nav className="mb-8 flex items-center justify-between gap-3" aria-label="Pagination">
+          {page > 1 ? (
+            <Link href={page - 1 === 1 ? "/home" : `/home?page=${page - 1}`} className="btn btn--ghost" rel="prev">
+              ← Previous
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="microlabel">Page {page}</span>
+          {followed.hasMore ? (
+            <Link href={`/home?page=${page + 1}`} className="btn btn--ghost" rel="next">
+              Next →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )}
+
+      <Foot left="DRVN — home" right={<Link href="/explore">See everything on Explore →</Link>} />
     </div>
   );
 }

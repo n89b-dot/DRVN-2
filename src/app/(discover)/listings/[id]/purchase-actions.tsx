@@ -9,18 +9,20 @@ import {
   makeOffer,
   type CommerceState,
 } from "@/features/commerce/actions";
-import { Dialog, Toast } from "@/components/ui";
+import { Dialog, PaymentModeNotice, Toast } from "@/components/ui";
 
 export function PurchaseActions({
   listingId,
   isLoggedIn,
   isOwn,
   isActive,
+  paymentsLive,
 }: {
   listingId: string;
   isLoggedIn: boolean;
   isOwn: boolean;
   isActive: boolean;
+  paymentsLive: boolean;
 }) {
   const router = useRouter();
   const idBase = useId();
@@ -97,9 +99,7 @@ export function PurchaseActions({
         </p>
       )}
       {cartState?.ok && <Toast message="Added to cart ✓" />}
-      <p className="spec-note">
-        <b>Test mode</b> — payments run on Stripe&apos;s test rails; no real money moves.
-      </p>
+      <PaymentModeNotice live={paymentsLive} />
 
       {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll
           lock. The amount input is a real <label> now — screen readers used

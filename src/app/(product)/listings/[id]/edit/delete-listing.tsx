@@ -1,41 +1,32 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
+
+import { ConfirmDialog } from "@/components/ui";
 
 import { deleteListing } from "../../../sell/actions";
 
-/** Two-step, and the safe choice is the default — deletion is irreversible. */
+/** Deletion is irreversible — the shared confirm dialog states that plainly. */
 export function DeleteListing({ listingId }: { listingId: string }) {
-  const [confirming, setConfirming] = useState(false);
   const [state, formAction, pending] = useActionState(deleteListing, null);
 
-  if (!confirming) {
-    return (
-      <button type="button" onClick={() => setConfirming(true)} className="relbtn !static">
-        Delete this listing
-      </button>
-    );
-  }
-
   return (
-    <div className="grid gap-2">
-      <p className="field__err">This can&apos;t be undone.</p>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => setConfirming(false)} className="btn btn--ghost">
-          Keep it
-        </button>
-        <form action={formAction}>
-          <input type="hidden" name="id" value={listingId} />
-          <button type="submit" className="btn btn--live" disabled={pending}>
-            {pending ? "Deleting…" : "Delete permanently"}
-          </button>
-        </form>
-      </div>
-      {state?.error && (
-        <p role="alert" aria-live="polite" className="field__err">
-          {state.error}
-        </p>
-      )}
-    </div>
+    <ConfirmDialog
+      title="Delete this listing?"
+      destructive
+      consequences={[
+        "Removes the listing and its photos permanently",
+        "This can't be undone",
+        "A reserved or sold listing can't be deleted — its order history depends on it",
+      ]}
+      confirmLabel={pending ? "Deleting…" : "Delete permanently"}
+      formAction={formAction}
+      hidden={{ id: listingId }}
+      pending={pending}
+      error={state?.error}
+      triggerClassName="relbtn !static"
+    >
+      Delete this listing
+    </ConfirmDialog>
   );
 }

@@ -14,7 +14,17 @@ import { BAR_ROUTES, LivesheetBar } from "./livesheet-bar";
  * Collapsed it keeps the register numbers, which is how a drawing indexes
  * itself when there's no room for words.
  */
-function AppRail({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+function AppRail({
+  open,
+  onToggle,
+  offersCount = 0,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  /** Offers waiting on this user — shown next to the Offers row so the rail
+   *  keeps saying what the old inline /orders microlabel used to. */
+  offersCount?: number;
+}) {
   const pathname = usePathname();
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -44,16 +54,24 @@ function AppRail({ open, onToggle }: { open: boolean; onToggle: () => void }) {
       <nav className="rail__rows">
         {BAR_ROUTES.map((route, i) => {
           const here = isActive(route.href);
+          const badge = route.href === "/offers" ? offersCount : 0;
           return (
             <Link
               key={route.href}
               href={route.href}
               className={cx("railrow", here && "is-here")}
               aria-current={here ? "page" : undefined}
-              title={open ? undefined : route.label}
+              title={open ? undefined : badge > 0 ? `${route.label} (${badge})` : route.label}
             >
               <span className="railrow__n">{String(i + 1).padStart(2, "0")}</span>
-              <span className="railrow__label">{route.label}</span>
+              <span className="railrow__label flex items-center justify-between gap-2">
+                {route.label}
+                {badge > 0 && (
+                  <span className="chip chip--live shrink-0" aria-hidden="true">
+                    {badge > 9 ? "9+" : badge}
+                  </span>
+                )}
+              </span>
             </Link>
           );
         })}
@@ -77,6 +95,7 @@ export function AppShell({
   initialRailOpen,
   cartCount = 0,
   unreadCount = 0,
+  offersCount = 0,
   children,
 }: {
   signedIn: boolean;
@@ -84,6 +103,8 @@ export function AppShell({
   initialRailOpen: boolean;
   cartCount?: number;
   unreadCount?: number;
+  /** Offers waiting on this user — badges the Offers row in the rail and index. */
+  offersCount?: number;
   children: ReactNode;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
@@ -104,13 +125,14 @@ export function AppShell({
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      {signedIn && <AppRail open={railOpen} onToggle={toggleRail} />}
+      {signedIn && <AppRail open={railOpen} onToggle={toggleRail} offersCount={offersCount} />}
       <div className="shell__body">
         <LivesheetBar
           initialNight={initialNight}
           signedIn={signedIn}
           cartCount={cartCount}
           unreadCount={unreadCount}
+          offersCount={offersCount}
         />
         <main id="main" className="min-w-0">{children}</main>
       </div>

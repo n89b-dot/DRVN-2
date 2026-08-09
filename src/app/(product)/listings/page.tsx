@@ -40,6 +40,14 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 const LIVE_OFFER_STATES = ["open", "countered"];
+const PAGE_SIZE = 50;
+// Register membership ("live" vs "under offer") is computed in memory from
+// joined offer data, not a plain column — there's no SQL WHERE for it. So the
+// underlying listings fetch still has to pull everything to compute tallies
+// and registers correctly; what changed is the *render*, which used to dump
+// all (up to) 200 rows into one table. This ceiling is a backstop against a
+// pathological account, not the normal page size — see PAGE_SIZE for that.
+const FETCH_CEILING = 2000;
 
 // Phrasing for the empty state's "Nothing ___" heading — kept distinct from
 // the chip label ("Under offer" reads oddly as "Nothing under offer" → "on offer").
@@ -80,12 +88,13 @@ function sortRows(rows: LedgerRow[], sort: SortKey): LedgerRow[] {
 export default async function SellerListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ register?: string; sort?: string; deleted?: string }>;
+  searchParams: Promise<{ register?: string; sort?: string; deleted?: string; page?: string }>;
 }) {
-  const { register: registerParam, sort: sortParam, deleted } = await searchParams;
+  const { register: registerParam, sort: sortParam, deleted, page: pageParam } = await searchParams;
   const register: Register =
     REGISTERS.find((r) => r.key === registerParam)?.key ?? "all";
   const sort: SortKey = SORTS.find((s) => s.key === sortParam)?.key ?? "top_offer";
+  const page = Math.max(1, Number(pageParam) || 1);
 
   const supabase = await createClient();
   const {
@@ -100,7 +109,7 @@ export default async function SellerListingsPage({
     )
     .eq("seller_id", user.id)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(FETCH_CEILING);
 
   if (error) reportError("[listings] failed to load", error);
 
@@ -214,12 +223,22 @@ export default async function SellerListingsPage({
   );
   const tally = (key: Register) => rows.filter((row) => matchesRegister(row, key)).length;
 
-  const href = (next: Partial<{ register: Register; sort: SortKey }>) => {
+  const clampedPage = Math.min(page, Math.max(1, Math.ceil(visible.length / PAGE_SIZE)));
+  const pageFrom = (clampedPage - 1) * PAGE_SIZE;
+  const visiblePage = visible.slice(pageFrom, pageFrom + PAGE_SIZE);
+  const hasMore = pageFrom + PAGE_SIZE < visible.length;
+
+  const href = (next: Partial<{ register: Register; sort: SortKey; page: number }>) => {
     const params = new URLSearchParams();
     const r = next.register ?? register;
     const s = next.sort ?? sort;
+    // Changing the filter or sort always resets to page 1 — a stale page
+    // number pointing past the end of a newly-filtered set is worse than
+    // just starting over.
+    const p = "register" in next || "sort" in next ? undefined : next.page;
     if (r !== "all") params.set("register", r);
     if (s !== "top_offer") params.set("sort", s);
+    if (p && p > 1) params.set("page", String(p));
     const q = params.toString();
     return q ? `/listings?${q}` : "/listings";
   };
@@ -287,6 +306,12 @@ export default async function SellerListingsPage({
             <div className="tile__head">
               <span className="microlabel microlabel--ink">
                 Your listings · click a row for offer history
+                {visible.length > PAGE_SIZE && (
+                  <>
+                    {" · "}
+                    {pageFrom + 1}–{Math.min(pageFrom + PAGE_SIZE, visible.length)} of {visible.length}
+                  </>
+                )}
               </span>
               <span className="flex flex-wrap items-baseline gap-3">
                 <span className="microlabel">Sort</span>
@@ -303,7 +328,27 @@ export default async function SellerListingsPage({
                 ))}
               </span>
             </div>
-            <ListingsLedger rows={visible} />
+            <ListingsLedger rows={visiblePage} />
+
+            {(clampedPage > 1 || hasMore) && (
+              <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
+                {clampedPage > 1 ? (
+                  <Link href={href({ page: clampedPage - 1 })} className="btn btn--ghost" rel="prev">
+                    ← Previous
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                <span className="microlabel">Page {clampedPage}</span>
+                {hasMore ? (
+                  <Link href={href({ page: clampedPage + 1 })} className="btn btn--ghost" rel="next">
+                    Next →
+                  </Link>
+                ) : (
+                  <span />
+                )}
+              </nav>
+            )}
           </Rv>
         </section>
       )}

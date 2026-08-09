@@ -3,11 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Foot, ListingCard, Media } from "@/components/ui";
+import { Foot, Gallery, ListingCard } from "@/components/ui";
+import { DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
 import { SaveButton } from "@/features/social/buttons";
-import { fetchGarageFitment, matchGarageFitment } from "@/lib/marketplace/fitment";
+import { fetchGarageFitment, matchFitmentClaims, matchGarageFitment } from "@/lib/marketplace/fitment";
+import { checklistRows, gradeLabel, gradeMeaning } from "@/lib/marketplace/grading";
 import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
+import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { ReportButton } from "@/features/moderation/report-button";
@@ -93,6 +96,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     { data: sourceModLine },
     watchCounts,
     { data: reviews },
+    { data: fitments },
     { data: questions },
   ] = await Promise.all([
     supabase
@@ -129,6 +133,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     fetchWatchCounts(supabase, [id]),
     // Seller rating + Q&A
     supabase.from("reviews").select("rating").eq("reviewee_id", listing.seller_id),
+    supabase
+      .from("listing_fitments")
+      .select("make, model, year_start, year_end")
+      .eq("listing_id", id)
+      .order("created_at"),
     supabase
       .from("listing_questions")
       .select("id, parent_id, body, created_at, author_id")
@@ -172,7 +181,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             .eq("target_id", id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      user && listing.source_car_id
+      user && (listing.source_car_id || (fitments ?? []).length)
         ? fetchGarageFitment(supabase, user.id)
         : Promise.resolve({ cars: [], index: new Map<string, string>() }),
       qaAuthorIds.length
@@ -189,17 +198,25 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const isSaved = Boolean(save);
 
   // "Fits your car" (PRD §7.1 — see src/lib/marketplace/fitment.ts for the
-  // shared rule): only computable when the listing has a source car with
-  // structured make+model, so this deliberately doesn't try to infer fitment
-  // from title/description text.
+  // shared rules): structured seller-stated fitment rows (0025) first, then
+  // the source-car make+model hint. Never inferred from title/description
+  // text, and always labeled seller-stated.
+  const fitmentClaims = fitments ?? [];
   let fitMatch: string | null = null;
   let viewerHasGarage = false;
-  if (user && listing.source_car_id) {
+  if (user && (listing.source_car_id || fitmentClaims.length)) {
     viewerHasGarage = garageFitment.cars.length > 0;
-    if (sourceCar) {
+    fitMatch = matchFitmentClaims(garageFitment.cars, fitmentClaims);
+    if (!fitMatch && sourceCar) {
       fitMatch = matchGarageFitment(garageFitment.index, sourceCar.make, sourceCar.model);
     }
   }
+
+  const checklist = checklistRows(listing.category, listing.subcategory, listing.condition_checklist);
+  const yearsLabel = (f: { year_start: number | null; year_end: number | null }) =>
+    f.year_start || f.year_end
+      ? ` ${f.year_start ?? "…"}–${f.year_end ?? "…"}`
+      : "";
 
   const qaName = (aid: string) => {
     const a = (qaAuthors ?? []).find((x) => x.id === aid);
@@ -254,20 +271,12 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         {/* Left: media + measured facts + Q&A */}
         <div className="min-w-0">
           {gallery.length > 0 ? (
-            <>
-              <Rv className="hero-media">
-                <Media src={gallery[0].url} alt={gallery[0].alt ?? listing.title} className="h-full w-full" />
-              </Rv>
-              {gallery.length > 1 && (
-                <div className="thumbs">
-                  {gallery.slice(1).map((image) => (
-                    <span key={image.id} className="thumb">
-                      <Media src={image.url} alt={image.alt ?? listing.title} className="h-full w-full" />
-                    </span>
-                  ))}
-                </div>
-              )}
-            </>
+            <Rv>
+              <Gallery
+                images={gallery.map((image) => ({ url: image.url, alt: image.alt }))}
+                label={listing.title}
+              />
+            </Rv>
           ) : (
             <div className="undrawn undrawn--hero">
               <span className="undrawn__mark" aria-hidden="true">
@@ -293,15 +302,67 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          {listing.compatibility_notes && (
+          {/* The contract half of the listing (0024): grade + checklist,
+              exactly what freezes onto the order at purchase. */}
+          {(listing.grade || checklist.length > 0) && (
+            <div className="mt-8">
+              <span className="microlabel microlabel--ink">Condition — seller-declared</span>
+              {listing.grade && (
+                <p className="mt-2 text-[14.5px]">
+                  <span className="chip chip--ok">{gradeLabel(listing.grade)}</span>{" "}
+                  <span className="text-dim">{gradeMeaning(listing.grade)}</span>
+                </p>
+              )}
+              {checklist.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1.5">
+                  {checklist.map((row) => (
+                    <li key={row.key} className="flex items-baseline justify-between gap-3 text-[13.5px]">
+                      <span>{row.label}</span>
+                      <span
+                        className={
+                          row.answer === "yes"
+                            ? "chip chip--ok"
+                            : row.answer === "no"
+                              ? "chip chip--spent"
+                              : "chip"
+                        }
+                      >
+                        {row.answer === "unknown" ? "Not sure" : row.answer}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="spec-note mt-2">
+                Declared by the seller at listing time and recorded on the order if you buy.
+              </p>
+            </div>
+          )}
+
+          {(fitmentClaims.length > 0 || listing.compatibility_notes) && (
             <div className="alert mt-8">
               <span className="alert__ico" aria-hidden="true">
                 ⚠
               </span>
-              <h4>Fitment — the seller&apos;s notes</h4>
-              <p className="whitespace-pre-line">{listing.compatibility_notes}</p>
+              <h4>Fitment — seller-stated</h4>
+              {fitmentClaims.length > 0 && (
+                <ul className="flex flex-wrap gap-1.5">
+                  {fitmentClaims.map((f, i) => (
+                    <li key={i} className="chip">
+                      {f.make} {f.model}
+                      {yearsLabel(f)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {listing.compatibility_notes && (
+                <p className="whitespace-pre-line">{listing.compatibility_notes}</p>
+              )}
               <p className="spec-note col-span-full mt-2">
-                <b>Seller-stated.</b> Not verified by DRVN — always confirm fitment for your car.
+                <b>Seller-stated.</b> Not verified by DRVN — always confirm fitment for your car.{" "}
+                <Link href="/protection" className="jumplink">
+                  How protection works
+                </Link>
               </p>
             </div>
           )}
@@ -340,6 +401,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 Offers accepted from {formatPrice(listing.offer_floor_cents)}.
               </p>
             )}
+            {listing.status === "active" && (
+              <p className="spec-note mt-2">
+                Sellers are expected to dispatch within 3 working days of a sale.
+              </p>
+            )}
             {/* What the sheet has seen of this part — watchers are live, views
                 are cumulative, so only the watcher line carries the live dot. */}
             <LiveDim
@@ -357,6 +423,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               isLoggedIn={Boolean(user)}
               isOwn={user?.id === listing.seller_id}
               isActive={listing.status === "active"}
+              paymentsLive={paymentsAreLive()}
             />
             {user?.id !== listing.seller_id && (
               <div className="mt-3">
@@ -395,14 +462,33 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             )}
           </Rv>
 
-          {/* Fitment: only computable against a structured source car —
-              gated on make+model actually existing, so "doesn't match" can
-              only ever mean a real comparison ran. A source car that is
-              private (RLS returns null) or missing its make/model gets no
-              tile rather than a false negative; the seller-notes block
-              above stays the honest fallback. */}
-          {listing.source_car_id && sourceCar?.make && sourceCar?.model && (
-            <Rv className="tile" stagger={2}>
+          {/* Buyer protection summary — the dispute rules live on /protection;
+              this is the short version so a buyer sees the guarantee before
+              they need it, not only after something goes wrong. */}
+          <Rv className="tile" stagger={2}>
+            <span className="microlabel microlabel--ink">Buyer protection</span>
+            <p className="kv mt-2 text-dim">
+              Covered: item never arrives, arrives damaged, is significantly not as described, or
+              is the wrong item.
+            </p>
+            <p className="spec-note mt-2">
+              Report a problem within {DISPUTE_WINDOW_DAYS} days of delivery and the seller has{" "}
+              {SELLER_RESPONSE_DAYS} days to respond before DRVN can step in.
+            </p>
+            <Link href="/protection" className="jumplink mt-2 inline-flex">
+              How protection &amp; disputes work
+            </Link>
+          </Rv>
+
+          {/* Fitment: computable against the seller's structured fitment rows
+              (0025) or a structured source car — gated on one of them
+              actually existing, so "doesn't match" can only ever mean a real
+              comparison ran. A source car that is private (RLS returns null)
+              or missing its make/model contributes nothing; the seller-notes
+              block above stays the honest fallback. */}
+          {(fitmentClaims.length > 0 ||
+            (listing.source_car_id && sourceCar?.make && sourceCar?.model)) && (
+            <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Fitment</span>
               {!user ? (
                 <p className="kv mt-2">
@@ -420,7 +506,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 </p>
               ) : fitMatch ? (
                 <p className="mt-2">
-                  <span className="chip chip--ok">Fits your {fitMatch}</span>
+                  <span className="chip">Potential match — {fitMatch}</span>
+                  <span className="spec-note mt-1 block">Seller-stated — confirm before you buy.</span>
                 </p>
               ) : (
                 <p className="mt-2">
@@ -431,7 +518,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           )}
 
           {sourceCar?.is_public && (
-            <Rv className="tile tile--deep" stagger={3}>
+            <Rv className="tile tile--deep" stagger={4}>
               <div className="tile__head">
                 <span className="microlabel microlabel--ink">
                   {modLineName ? `Came off ${sourceCar.name}` : "Came off this car"}

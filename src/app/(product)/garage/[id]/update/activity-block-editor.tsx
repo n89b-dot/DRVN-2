@@ -157,9 +157,12 @@ export function ActivityBlockEditor({
         {blocks.map((block, index) => (
           <div key={block.key}>
             <InsertBlock onInsert={(type) => insertAt(index, type)} />
-            <div className="group relative rounded-r border border-transparent p-2 transition hover:border-[color:var(--rule-mid)]">
-              {/* Block controls */}
-              <div className="absolute -top-3 right-3 z-10 hidden gap-1 rounded-chip bg-paper-deep px-1.5 py-0.5 font-mono text-xs text-dim group-hover:flex">
+            <div className="group relative rounded-r border border-transparent p-2 transition hover:border-[color:var(--rule-mid)] focus-within:border-[color:var(--rule-mid)]">
+              {/* Block controls — hover-only left keyboard and touch users
+                  unable to move or delete a block at all. focus-within keeps
+                  them reachable via Tab; pointer-coarse keeps them visible on
+                  touch devices, which have no hover state. */}
+              <div className="absolute -top-3 right-3 z-10 hidden gap-1 rounded-chip bg-paper-deep px-1.5 py-0.5 font-mono text-xs text-dim group-hover:flex group-focus-within:flex pointer-coarse:flex">
                 <button type="button" onClick={() => move(block.key, -1)} className="px-1 hover:text-ink" aria-label="Move up">↑</button>
                 <button type="button" onClick={() => move(block.key, 1)} className="px-1 hover:text-ink" aria-label="Move down">↓</button>
                 <button
@@ -195,7 +198,7 @@ export function ActivityBlockEditor({
                     placeholder={block.style === "heading" ? "Heading…" : "Write something…"}
                     className={`w-full resize-y bg-transparent outline-none placeholder:text-dim/50 ${
                       block.style === "heading"
-                        ? "text-lg font-[650]"
+                        ? "text-lg font-[600]"
                         : "text-[15px] leading-7"
                     }`}
                   />

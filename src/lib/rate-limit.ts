@@ -28,6 +28,7 @@ export const RATE_LIMITS = {
   react: { action: "react", limit: 60, windowSeconds: 60 * 5 },
   sendMessage: { action: "message", limit: 40, windowSeconds: 60 * 10 },
   openDispute: { action: "dispute", limit: 5, windowSeconds: 60 * 60 },
+  disputeEvidence: { action: "dispute-evidence", limit: 20, windowSeconds: 60 * 60 },
   createListing: { action: "listing", limit: 20, windowSeconds: 60 * 60 },
   passwordReset: { action: "password-reset", limit: 5, windowSeconds: 60 * 30 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },

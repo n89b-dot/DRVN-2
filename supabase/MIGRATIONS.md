@@ -20,7 +20,11 @@ applied twice, self-checks pass; the backfill created intents for every
 captured-but-untransferred order, and the worker's first pass (run from the
 admin console) cancelled the stub-era ones on record. 0021 on 1 August 2026,
 applied twice, self-checks pass. 0022 on 1 August 2026, applied twice
-(node-postgres), self-checks pass.
+(node-postgres), self-checks pass. 0026–0027 on 6 August 2026, applied twice
+each (node-postgres), self-checks pass; `claim_transfer_intents` smoke-tested
+live (0 claimable — queue healthy). 0024–0025 on 2 August 2026, applied twice
+(node-postgres); columns, tables and the dispute-evidence bucket verified
+live post-apply.
 
 ### Production wiring for the transfer worker
 
@@ -102,6 +106,11 @@ which drops every table in `public`.
 | **0020** | `0020_transfer_scheduling.sql` | Transfers move on delivery + 7-day hold: `mark_due_transfer_intents()` + pg_cron `drvn-transfer-worker` (pg_net → `/api/jobs/transfers` when `job_config` is set), stuck-funds backfill. |
 | **0021** | `0021_dispute_sla.sql` | Dispute SLA: day-4 escalation notices (`escalate_stale_disputes()`, daily cron) + `dispute_escalated_at`; the day-10 auto-refund runs app-side in the worker pass. |
 | **0022** | `0022_sla_alert_stamp.sql` | `orders.dispute_sla_alerted_at` — once-only marker for the ops webhook alert (`ADMIN_ALERT_WEBHOOK_URL`) on SLA breach, sent by the app worker pass. |
+| **0023** | `0023_admin_roles_webhook_payloads.sql` | `admin_users.role` (admin/viewer) + `webhook_events.payload` retention for console inspection/replay. |
+| **0024** | `0024_grading_dispute_process.sql` | Condition grades + checklists, immutable `order_items.condition_snapshot`, dispute evidence table + bucket, escalation/outcome columns. |
+| **0025** | `0025_fitment.sql` | Structured fitment: `listing_fitments`, vPIC make/model cache, `cars` VIN columns. |
+| **0026** | `0026_money_durability.sql` | **P0 money durability:** `refund_operations` state machine (`begin_refund_operation`/`settle_refund_operation`), transfer-intent leases + `claim_transfer_intents()` (FOR UPDATE SKIP LOCKED, stale-claim recovery), `admin_alert_outbox`. |
+| **0027** | `0027_evidence_privacy.sql` | **P0: flips `dispute-evidence` from a public bucket to private** — drops the blanket public-read storage policy, adds a participant/uploader/admin-scoped one keyed on the new `dispute_evidence.storage_path` column (backfilled from the legacy `url`). App now renders short-lived signed URLs (`src/lib/evidence-urls.ts`) instead of the old public URL. |
 
 0006–0009 are new. **The app expects them**: pages that read `shipping_cents`,
 `notifications`, or call `purchase_begin` will degrade to an empty state and log

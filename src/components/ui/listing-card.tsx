@@ -22,7 +22,9 @@ export type ListingCardData = {
 
 /** Market card — an `a.tile` for the `.mkt` grid: part number annotation, image
  *  plate, name, mono price with the watch count set against it, chip row.
- *  Fits-your-car is an ok chip (a fact, not a signal). */
+ *  Fitment is seller-stated, not verified, so it's a neutral chip (a
+ *  possibility to check, not a guaranteed fact) with a title tooltip saying
+ *  as much. */
 export function ListingCard({ listing }: { listing: ListingCardData }) {
   const meta = [conditionLabel(listing.condition), listing.location].filter(Boolean);
   const watching = listing.watch_count ?? 0;
@@ -50,7 +52,14 @@ export function ListingCard({ listing }: { listing: ListingCardData }) {
         )}
       </p>
       <span className="mkt__meta">
-        {listing.fits_car_name && <span className="chip chip--ok">Fits your {listing.fits_car_name}</span>}
+        {listing.fits_car_name && (
+          <span
+            className="chip"
+            title="Seller-stated fitment — verify before you buy"
+          >
+            Potential match — {listing.fits_car_name}
+          </span>
+        )}
         {meta.map((m) => (
           <span key={m} className="chip">
             {m}

@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
@@ -29,19 +28,15 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
       cartCount={cartCount}
       unreadCount={unreadCount}
     >
+      {/* No blanket footer here — every (discover) page renders its own
+          contextual page-level <Foot> (see src/components/ui/livesheet-bar.tsx)
+          with page-specific left/right content, and stacking a second generic
+          one under it read as two footers on one sheet. Two routes currently
+          render no <Foot> at all — cars/[slug]/activity/[postId]/page.tsx and
+          u/[username]/page.tsx — and so have no footer for now; their owners
+          should add a page-level <Foot left="…" right={…} /> to match the
+          rest of this route group. */}
       {children}
-      <footer className="wrap flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-[color:var(--rule-soft)] py-6">
-        <span className="microlabel">© {new Date().getFullYear()} DRVN</span>
-        <Link href="/terms" className="microlabel transition-colors hover:text-ink">
-          Terms
-        </Link>
-        <Link href="/privacy" className="microlabel transition-colors hover:text-ink">
-          Privacy
-        </Link>
-        <Link href="/fees" className="microlabel transition-colors hover:text-ink">
-          Fees
-        </Link>
-      </footer>
     </AppShell>
   );
 }

@@ -1,5 +1,5 @@
 import { listSavedCards } from "@/lib/payments/customers";
-import { getPaymentProvider } from "@/lib/payments/provider";
+import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { logout } from "@/app/(auth)/actions";
@@ -30,6 +30,7 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-[900px] px-6 pb-10">
       <SettingsPanel
+        paymentsLive={paymentsAreLive()}
         savedCards={savedCards}
         connect={{
           stripeConfigured: getPaymentProvider().name === "stripe",

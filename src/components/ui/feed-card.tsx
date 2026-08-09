@@ -16,7 +16,24 @@ function AuthorLine({ name }: { name: string | null }) {
   return <p className="kv mt-0.5 text-dim">{name ?? "—"}</p>;
 }
 
-export function FeedCard({ item, variantHint = 0 }: { item: FeedItem; variantHint?: number }) {
+/**
+ * A stable small integer per item, so its tile variant doesn't reshuffle
+ * every time the array is re-sorted, filtered, or paginated — deriving the
+ * variant from the item's own id keeps a given post looking the same
+ * wherever it lands on the page, instead of from its position in the array
+ * (which used to make every card on a page reflow when pagination changed
+ * what came before it).
+ */
+function stableHint(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+export function FeedCard({ item, variantHint }: { item: FeedItem; variantHint?: number }) {
+  const hint = variantHint ?? stableHint(item.id);
   if (item.kind === "part") {
     return (
       <Link href={`/listings/${item.id}`} className="tile block">
@@ -61,7 +78,7 @@ export function FeedCard({ item, variantHint = 0 }: { item: FeedItem; variantHin
 
   const href = `/cars/${item.carSlug}/activity/${item.id}`;
 
-  if (!item.cover_url || variantHint % 2 === 1) {
+  if (!item.cover_url || hint % 2 === 1) {
     // Fresh entry — annotation-style deep tile, no photo required.
     return (
       <Link href={href} className="tile tile--deep block">
@@ -88,7 +105,7 @@ export function FeedCard({ item, variantHint = 0 }: { item: FeedItem; variantHin
   // Variant A: image-top entry.
   return (
     <Link href={href} className="tile block">
-      <span className={`tile__img block ${variantHint % 4 === 2 ? "aspect-[4/5]" : "aspect-[3/2]"}`}>
+      <span className={`tile__img block ${hint % 4 === 2 ? "aspect-[4/5]" : "aspect-[3/2]"}`}>
         <Media src={item.cover_url} alt={item.title} className="h-full w-full" />
       </span>
       <p className="mkt__name clamp2">{item.title}</p>
@@ -113,8 +130,8 @@ export function MasonryFeed({ items }: { items: FeedItem[] }) {
   }
   return (
     <div className="columns-1 gap-[14px] sm:columns-2 lg:columns-3 [&>*]:mb-[14px] [&>*]:break-inside-avoid">
-      {items.map((item, index) => (
-        <FeedCard key={`${item.kind}-${item.id}`} item={item} variantHint={index} />
+      {items.map((item) => (
+        <FeedCard key={`${item.kind}-${item.id}`} item={item} />
       ))}
     </div>
   );
