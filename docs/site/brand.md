@@ -6,11 +6,11 @@
   brand full stop: the wordmark is `DRVN.` where the terminal dot is set in the
   live signal color. The dot is the brand's one flourish — it reads as the
   "recording" light on the sheet.
-- The wordmark is set in IBM Plex Sans at weight 650 with tight tracking; it is
+- The wordmark is set in IBM Plex Sans at weight 600 with tight tracking; it is
   typography, not a drawn logo. There is no separate icon mark — in tight
   spaces (favicons, monograms) use a `D` on an ink plate with radius 10px.
 - Beside the wordmark, chrome may carry the microlabel `PARTS MARKETPLACE`
-  (mono, 10.5px, uppercase, 0.14em tracking, dim).
+  (mono, 12px, uppercase, 0.14em tracking, dim).
 
 ## Positioning
 
@@ -47,12 +47,24 @@ different values — never a second stylesheet.
 | `tile` | `#F8F6F0` | raised widget plate |
 | `tile-2` | `#F1EFE8` | secondary / deeper plate |
 | `ink` | `#20232A` | text; ink-inverted surfaces |
-| `dim` | `#6B6E78` | secondary text, microlabels |
-| `live` | `#F03A20` | THE signal — live states only |
-| `ok` | `#2E7D4F` | settled / done / verified |
+| `dim` | `#565963` (`:root`) / `#63666F` (`@theme`) | secondary text, microlabels |
+| `live` | `#C02C14` (`:root`) / `#F03A20` (`@theme`) | THE signal — live states only |
+| `ok` | `#256B42` (`:root`) / `#2E7D4F` (`@theme`) | settled / done / verified |
 | `warn` | `#8A5A00` | held money, due work |
+| `info` | `#1D5C8A` (+ `--info-tint`) | neutral explainer status tone — never a CTA |
+| `destructive` | aliases `live` | destructive actions; same hue, distinct semantic name |
 | `on-ink` | `#F8F6F0` | text on ink surfaces |
 | `img-fallback` | `#E2DFD5` | media box before an image |
+
+> **Trap avoidance — `:root` vs `@theme` diverge on DAY.** The R3 contrast
+> pass (see `src/app/globals.css`, ~line 79) darkened `--dim`, `--live` and
+> `--ok` on `:root` so text usage clears WCAG 4.5:1 on paper, while the
+> `@theme` scale tokens (`text-dim`, `text-live`, `text-ok` utilities) kept
+> the original hues. This is deliberate: check *which* layer you are reading
+> before copying a hex. Dark theme values were already passing and match.
+
+The "one accent" rule applies to the *signal* accent (`live`); `info` is a
+status tone alongside `ok`/`warn`, never a call to action.
 
 ### NIGHT (the drawing office after hours)
 
@@ -67,6 +79,9 @@ different values — never a second stylesheet.
 | `live` | `#FF4530` |
 | `ok` | `#57B983` |
 | `warn` | `#D9A13C` |
+| `warn-tint` | `rgba(217, 161, 60, 0.14)` |
+| `info` | `#6CB2DF` |
+| `info-tint` | `rgba(108, 178, 223, 0.16)` |
 | `on-ink` | `#171511` |
 | `img-fallback` | `#262319` |
 

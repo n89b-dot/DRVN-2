@@ -3,7 +3,7 @@
  *
  * Every HTML page under /docs has a markdown twin so agents and LLMs can read
  * the same documentation as plain text: the twin is served at /docs/md/<slug>
- * with a text/markdown content type, and /llms.txt indexes all of them.
+ * with a text/markdown content type, and /docs/llms.txt indexes all of them.
  *
  * `file` paths are relative to the repository root. Authored microsite pages
  * live in docs/site/; reference entries point at pre-existing repo documents
@@ -120,6 +120,21 @@ export const REFERENCE_DOCS: DocEntry[] = [
     title: "Production runbook",
     description: "Operating the deployed product: jobs, webhooks, incident notes.",
     file: "docs/production-runbook.md",
+    kind: "reference",
+  },
+  {
+    slug: "remediation-status",
+    title: "Remediation status",
+    description:
+      "Remediation status — the Aug 2026 hardening pass, issues 1–54, all verified.",
+    file: "docs/remediation-status.md",
+    kind: "reference",
+  },
+  {
+    slug: "listing-importer-spec",
+    title: "Listing importer specification",
+    description: "Listing importer specification.",
+    file: "docs/listing-importer-spec.md",
     kind: "reference",
   },
 ];

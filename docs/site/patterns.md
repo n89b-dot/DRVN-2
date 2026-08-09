@@ -12,8 +12,12 @@ Page-level patterns: how components compose into the product's surfaces.
 | Marketplace | `/marketplace` (+ `[category]`/`[subcategory]`) | search + fitment switch + filter row + `.mkt` grid (3→2→1 cols) |
 | Listing | `/listings/[id]` | measured spec table, buy box (capsule + buy/offer), off-this-car, keeper livedims, Q&A |
 | Car sheet | `/cars/[slug]` (+ `/activity/[postId]`) | hero callouts, jumprow, KPI tiles, for-sale rowlist, build blines, activity feed |
-| Garage | `/garage` (+ add car, `[id]/edit`, updates) | owner callouts, release-a-part flow, blines `--own` + relbtn, documents |
+| Garage | `/garage` (+ add car, `[id]/edit`; updates at `[id]/update/new` and `[id]/update/[postId]/edit`) | owner callouts, release-a-part flow, blines `--own` + relbtn, documents |
 | Sell | `/sell` | draft autosave; photos → part → provenance → condition → price → review; live preview card + completeness rail |
+| Seller listings | `/listings` (seller register) + `/listings/[id]/edit` | ledger of the seller's listings; edit reuses the sell form |
+| Messages | `/messages` + `/messages/[orderId]` | per-order threads on the `.msg`/`.thread` idiom |
+| Offers | `/offers` + `/offers/[id]` | open work orders, accept/counter/pass |
+| Payouts | `/payouts` | payout history + Stripe Connect status |
 | Orders (seller) | `/orders` job detail | pipe + dispatch form + payout math + past jobs |
 | Orders (buyer) | `/orders` | KPI, transit pipe + countdown, tracking spec, inspection alert, past purchases |
 | Cart | `/cart` | review surface only — see P20 |
@@ -22,9 +26,9 @@ Page-level patterns: how components compose into the product's surfaces.
 | Notifications | `/notifications` | actionable rows, policy blines, mail previews |
 | Profile | `/u/[username]` + `/profile` | keeper record, grade blines, cars, live listings, reviews, activity |
 | Settings | `/settings` | rail + one section at a time (01–05 indices), signals matrix, savebar |
-| Auth | `/login`, `/signup`, reset, verify | 420px authwrap, field states, verify capsule |
+| Auth | `/login`, `/signup`, `/login/forgot`, `/login/reset`, `/onboarding` | 420px authwrap, field states (there is no verify route) |
 | Legal | `/terms`, `/privacy`, `/fees`, `/protection` | `.prose` + `.toc` |
-| Admin console | `/admin/*` | gated (404 to non-admins); own nav; same tokens |
+| Admin console | `/admin/*` — 11 routes: admin, audit, disputes, listings, orders, orders/[id], payments, reports, settings, users, users/[id] | gated (404 to non-admins); own nav; same tokens |
 | This microsite | `/docs/*` | gated like the console; markdown twins at `/docs/md/*` |
 
 ## Commerce patterns (Mobbin-derived, exact values)
@@ -58,6 +62,13 @@ Cart is a **review surface only** — no address form, no payment fields.
   "Add a card" opens a sheet with the Payment Element (SetupIntent).
 - Reassurance line: card details held by Stripe, not DRVN.
 - Remove is immediate + toast (reversible: re-add).
+
+### P23 — Payment-mode notice
+
+- Commerce surfaces render `PaymentModeNotice` (a `.spec-note` line): while
+  Stripe runs on test rails it states "Test mode — no real money moves";
+  once payments are live it renders nothing. One shared component, so the
+  copy can never claim test mode after money is real.
 
 ## Empty states (the 14-rule digest)
 

@@ -9,8 +9,10 @@ the product's design and documentation. It is served in two forms:
 
 - **HTML** — browsable pages at `/docs/*`, with live rendered components.
 - **Markdown** — every page has a plain-text twin at `/docs/md/<slug>`
-  (`text/markdown`), and `/llms.txt` indexes all of them. If you are an LLM or
-  agent, read the markdown endpoints.
+  (`text/markdown`), and `/docs/llms.txt` indexes all of them. If you are an
+  LLM or agent, read the markdown endpoints.
+
+This index page renders at `/docs` itself — there is no `/docs/index` route.
 
 ## Sections
 
@@ -35,6 +37,8 @@ Deeper source documents, served verbatim:
 | Product overview | `/docs/md/product-overview` |
 | PRD v3.1 | `/docs/md/prd` |
 | Production runbook | `/docs/md/production-runbook` |
+| Remediation status (Aug 2026 hardening pass, issues 1–54) | `/docs/md/remediation-status` |
+| Listing importer specification | `/docs/md/listing-importer-spec` |
 
 ## One-line orientation
 

@@ -227,26 +227,34 @@ export default function DesignSystemPage() {
             </table>
           </Specimen>
           <Specimen
-            name="Behavior hooks & reduced motion"
+            name="Behavior components, hooks & reduced motion"
             note="prefers-reduced-motion: reveals render settled, pulses stop, count-ups print final values — countdowns keep running (information, not decoration)."
           >
             <table className="spec w-full">
               <tbody>
                 <tr>
-                  <td>useReveal</td>
-                  <td>IO reveals, 70ms stagger</td>
+                  <td>Rv</td>
+                  <td>IO reveal wrapper, 70ms stagger (livesheet.tsx)</td>
                 </tr>
                 <tr>
-                  <td>useCountUp</td>
-                  <td>900ms ease-out numerals</td>
+                  <td>LiveDim</td>
+                  <td>measured value — live red + pulsing dot, blank dashed spine</td>
                 </tr>
                 <tr>
-                  <td>useLiveCount</td>
-                  <td>Realtime ticks, 900ms live flash</td>
+                  <td>Countdown</td>
+                  <td>server-authoritative H:MM:SS from expiresAt</td>
                 </tr>
                 <tr>
-                  <td>useCountdown</td>
-                  <td>server-authoritative H:MM:SS</td>
+                  <td>useFinePointer</td>
+                  <td>pointer-precision gate (src/lib/hooks)</td>
+                </tr>
+                <tr>
+                  <td>useReducedMotion</td>
+                  <td>prefers-reduced-motion flag (src/lib/hooks)</td>
+                </tr>
+                <tr>
+                  <td>useKonamiCode</td>
+                  <td>easter-egg key sequence (src/lib/hooks)</td>
                 </tr>
               </tbody>
             </table>

@@ -25,7 +25,8 @@ The contract. When a change violates one of these, the change is wrong.
 - No pills. No shadows. No gradients. No glass.
 - No borders as edges (the `.mail` frame is the sole exception — it depicts
   an external artifact; `dimline` is for dimension/leader lines only).
-- No second accent color. No status color as navigation.
+- One *signal* accent only (`live`). `ok`/`warn`/`info` are status tones,
+  never navigation or CTAs.
 - No spinners — ghost rows with the drawing sweep.
 - No fake data, fake liveness or decorative pulsing.
 - No tile-in-tile; never nest decks.
@@ -37,11 +38,13 @@ The contract. When a change violates one of these, the change is wrong.
   contrast whenever a token moves.
 - Touch targets ≥ 44px for primary controls (filter chips and bar icons were
   specifically fixed to meet this).
-- `:focus-visible`: 2px live outline, offset 3px — never removed.
+- `:focus-visible`: 2px live outline, offset 3px, border-radius 4px — never
+  removed.
 - `prefers-reduced-motion`: draws render settled, pulses stop, count-ups
   print final values; countdowns keep running (information, not decoration).
 - Dialogs and sheets trap focus, close on Escape, and lock body scroll.
-- Toasts are `role=status`; icon-only controls carry `aria-label`;
+- Toasts render as `<output>`, which carries an implicit `status` role;
+  icon-only controls carry `aria-label`;
   pressed states use `aria-pressed`.
 - Inline validation appears after blur and is announced next to the control.
 
@@ -64,6 +67,8 @@ The contract. When a change violates one of these, the change is wrong.
   don't read cookies in layouts that could otherwise stay static.
 - Reusable UI goes in `src/components/ui` and is exported from its
   `index.ts`; product pages and this microsite import the same source.
+  (Current exceptions: `feed-list.tsx` and `skeleton.tsx` live in `ui/` but
+  are not in the barrel — import them from their files directly.)
 - Server actions re-verify auth/membership themselves; layouts are
   convenience gates only. Admin (and this microsite) 404 — never 403 — to
   non-members.

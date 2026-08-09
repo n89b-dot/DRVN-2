@@ -26,10 +26,12 @@ Two layers:
 
 1. **Scale tokens** — declared in Tailwind v4 `@theme` so they become
    utilities (`bg-paper`, `text-ink`, `text-dim`, `bg-tile`, `rounded-r`…):
-   paper, paper-deep, tile, tile-2, ink, dim, live, ok, on-ink, img-fallback,
-   the two font stacks, and the radius scale.
+   paper, paper-deep, tile, tile-2, ink, dim, live, ok, warn, info,
+   destructive (aliases live), on-ink, img-fallback, the two font stacks, and
+   the radius scale.
 2. **Alpha + state tokens** — plain custom properties on `:root` (dimline,
-   grid-line, live-tint, ok-tint, warn/warn-tint, scrim, ink-hover,
+   grid-line, live-tint, ok-tint, warn/warn-tint, info/info-tint,
+   destructive, scrim, ink-hover,
    live-hover, ghost-hover, rule-soft, rule-mid, ghost, ghost-strong,
    photo-filter). Used directly via `var(...)` in component CSS.
 
@@ -78,11 +80,16 @@ is reserved for dimension and leader lines.
 | stagger | 70ms per index | reveal groups |
 | pulse | 2.2s ease-in-out infinite | live dots |
 | count-up | 900ms ease-out cubic | `[data-count]` numerals |
-| toast dwell | 2600ms | `.toast` |
+| toast dwell | 3200ms | `.toast` |
 
-Behavior hooks (production): `useReveal` (IntersectionObserver reveals),
-`useCountUp`, `useLiveCount` (Supabase Realtime ticks with a 900ms live
-flash), `useCountdown(expiresAt)` (server-authoritative H:MM:SS).
+Behavior primitives (production) are **components**, not hooks, in
+`src/components/livesheet.tsx`: `Rv` (IntersectionObserver reveal wrapper,
+70ms stagger via its `stagger` prop), `LiveDim` (the signature measured
+value — `live` red + pulsing dot, `blank` dashed spine) and
+`Countdown` (server-authoritative H:MM:SS from `expiresAt`). The real hooks
+live in `src/lib/hooks/`: `useFinePointer`, `useReducedMotion`,
+`useKonamiCode`. Live-updating counts over Supabase Realtime are **planned**,
+not built — no Realtime subscription exists in the codebase today.
 
 `prefers-reduced-motion`: reveals/draws render settled, pulses and sweeps
 stop, count-ups print the final value, ticks never start — **countdowns keep
@@ -119,5 +126,7 @@ colors are never navigation.
 | Production tokens + all component CSS | `src/app/globals.css` |
 | Source mockups + contract | `design-mockups/livesheet/` (`design.md`, `design.html`, `livesheet.css`) |
 | React chrome + primitives | `src/components/ui/` |
+| Behavior components (Rv, LiveDim, Countdown) | `src/components/livesheet.tsx` |
 | Theme bootstrap | `src/app/layout.tsx` |
 | This microsite | `src/app/(docs)/` + `docs/site/*.md` |
+| Docs registry (pages + reference library) | `src/lib/docs/site.ts` |

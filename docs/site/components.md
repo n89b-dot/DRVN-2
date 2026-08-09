@@ -34,7 +34,7 @@ Format: **class — shape — key rules.**
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.microlabel` | Mono 10.5–11.5 uppercase 0.14em dim | 2–6 words; variants `--ink`, `--live` |
+| `.microlabel` | Mono 12 uppercase 0.14em dim | 2–6 words; variants `--ink`, `--live` |
 | `.livedim` | pl18 + 1px spine + 7px ticks; microlabel + `.val` (mono 13 tabular) | `--live`: red value + pulsing dot; `--blank`: dashed spine — THE signature component |
 | `.dimline-h` | 1px horizontal rule with end ticks | Draws in (scaleX) over 650ms when `.is-in` |
 | `.num-giant` | Sans 650 clamp(40–64) tabular | KPI numeral above a livedim; `--blank` for `—` |
@@ -44,8 +44,8 @@ Format: **class — shape — key rules.**
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.btn` | Mono 12 uppercase, 13×20 pad, r10, ink bg, `[` `]` bracket pseudos | Press scale(.97); `--live` (one per surface), `--ghost` (paper-deep); no spinner variant |
-| `.chip` | Mono 11 uppercase, 4×10, r6 | `--live`, `--ok`, `--warn`, `--ink`, `--spent`; status, never navigation |
+| `.btn` | Mono 12 uppercase, 13×20 pad, r10, ink bg, `[` `]` bracket pseudos | Press scale(.97); `--live` (one per surface), `--ghost` (paper-deep), `--destructive` (reads serious without competing with the one filled-red `--live`); no spinner variant |
+| `.chip` | Mono 11 uppercase, 4×10, r6 | `--live`, `--ok`, `--warn`, `--ink`, `--spent`, `--danger`, `--info`, `--x` (removable filter chip); status, never navigation |
 | `.capsule` | Ink band r10, 10×16, mono; `.dot` pulse + `.cd` countdown | `--paper` (+1px baseline shadow-rule), `--quiet` |
 | `.relbtn` | Small release button in `.bline--own` rows | Owner "release this part" affordance |
 | `.fbtn` / `.filters` | Mono 11 filter buttons, r10, paper-deep | `.is-on` ink; `[aria-pressed=true]` live (fitment switch); 44px touch target |
@@ -62,7 +62,7 @@ Format: **class — shape — key rules.**
 | `.ledger` | Ruled data table for the seller's listings register | The one genuinely tabular surface |
 | `.feed` | `li`: mono time (74px col) + text + `.amt` right | `--live` amounts for money in motion |
 | `.week` | 7-col strip; `.week__day` paper-deep r10 | `--hot` live bg + tag |
-| `.pipe` / `.pip` | 9px pips + 14px dimline connectors + mono labels | `.is-on` live; empty pipeline renders at reduced opacity |
+| `.pipe` / `.pip` | 9px pips + 14px dimline connectors + mono labels | `.is-on` live; empty pipeline renders at reduced opacity; `.pip` only exists as a `.pipe .pip` descendant — there is no standalone `.pip` class |
 | `.guide` | 6px track r3 + ok-tint band + 2px live "you" marker + mono scale | Price guidance |
 | `.review` | Ruled entry: head + mono live stars right + paragraph | |
 | `.monogram` | 64px (44 sm) ink plate r10, mono initials | Avatar fallback |
@@ -95,7 +95,7 @@ Format: **class — shape — key rules.**
 | `.alert` | r10 tinted ground + icon color, grid auto/1fr | `--live`, `--ok`; never a side-bar stroke |
 | `.msg` / `.thread` / `.composer` | 2px left spine; `--me` live spine, `--sys` dashed; mono who/meta | Annotations, not chat bubbles |
 | `.mail` | 1px rule-mid frame: bar/body/foot | The ONLY framed component — it depicts an external artifact |
-| `.toast` | Fixed bottom ink pill r10 mono uppercase | `role=status`, 2600ms dwell |
+| `.toast` | Fixed bottom ink pill r10 mono uppercase | Renders `<output aria-live="polite">` (implicit status role), 3200ms default dwell |
 
 ## 09 States
 
@@ -119,6 +119,43 @@ Format: **class — shape — key rules.**
 | `NarrowColumn`, `Avatar`, `Media`, `MetadataTags`, `SectionLabel`, `HorizontalGallery`, `TabNav` | primitives.tsx | Layout + media primitives (Media takes `fallbackClassName` for undrawn covers) |
 | `LinkedTitle`, `TimelineRow`, `WebsitePill`, `ProfileHeader`, `VehicleGallery`, `KeyValueTable`, `EmbeddedVideo`, `SectionHeading` | patterns.tsx | Profile/build-log patterns |
 | `Dialog` | dialog.tsx | Modal on the sheet idiom |
+| `ConfirmDialog` | confirm-dialog.tsx | Two-step destructive confirm on the dialog idiom |
+| `Gallery`, `GalleryLightbox` (+ `GalleryPhoto` type) | gallery.tsx | Interactive gallery (hero + thumbs) and lightbox |
 | `SheetTabs`, `resolveTab` | sheet-tabs.tsx | URL-driven jumprow tabs |
 | `Toast` | toast.tsx | Status toast |
-| `Skeleton` | skeleton.tsx | Ghost loading blocks |
+| `PaymentModeNotice` | payment-mode-notice.tsx | Test/live Stripe mode banner |
+| `SkeletonRows`, `SkeletonPage` | skeleton.tsx | Ghost loading blocks — **not** exported from `ui/index.ts`; import from the file directly |
+
+Components living outside the `ui/index.ts` barrel:
+
+| Export | File | Purpose |
+| --- | --- | --- |
+| `FeedList` | src/components/ui/feed-list.tsx | Activity feed list (`.feed` rows) — in `ui/` but not the barrel |
+| `Rv`, `LiveDim`, `Countdown` | src/components/livesheet.tsx | Behavior components: reveal wrapper, signature measured value, server-authoritative countdown |
+| `ConditionSummary` | src/components/condition-summary.tsx | Part condition snapshot summary |
+| `ProfileBody` | src/components/profile/profile-body.tsx | Profile page body composition |
+
+## 11 Further CSS families (globals.css)
+
+Previously undocumented class families, one line each:
+
+| Family | Purpose |
+| --- | --- |
+| `.buybar` | Sticky phone purchase bar fixed to the bottom edge while the real purchase controls are off-screen (desktop keeps the full rail) |
+| `.pdp` | Listing detail two-column layout: 1.35fr/1fr grid ≥981px, `.pdp__media` / `.pdp__more` column flow |
+| `.finder` | The one search/filter recipe (tile plate) serving the marketplace, category sheets and console queues |
+| `.gallery` / `.lightbox` | Interactive gallery hero + thumb strip (`.gallery__hero/__thumbs/__thumb`) and full-screen lightbox — backs `Gallery`/`GalleryLightbox` |
+| `.tabstrip` | Real panel-switching tabs (car sheet, profile) reusing the `.fbtn` vocabulary; selection is ink, never signal red |
+| `.star-pick` | Interactive star rating — a radiogroup of buttons, not a select |
+| `.jobrow` | Seller job row inside `.rowlist` (orders register) |
+| `.filterchips` | Active-filter readout between the finder and results (removable `.chip--x` chips) |
+| `.barbadge` | Count badge on cart/notifications — a legitimately live number in the signal colour |
+| `.authswap` | Mono link row swapping between login and signup on auth pages |
+| `.spec-note` | Catalog-page furniture: dim mono footnote under spec tables |
+| `.toc` | Table-of-contents link column for legal/long-form pages |
+| `.prose` | Legal / long-form prose styling |
+| `.shell` | The register rail layout: signed-in desktop rail + content ("the drawing's left margin") |
+| `.cat-ico` | 40px category icon plate, r10 |
+| `.indexlight` | The lighting (theme) switch spelled out inside the index sheet — the bar's version is icon-only |
+| `.railtoggle` | Collapse/expand control for the register rail |
+| `.console-nav` / `.console-main` | Admin console layer: console nav (a `.filters` compound, hidden ≤640px for the index button) and the console content column with its calmer display/stat scale |

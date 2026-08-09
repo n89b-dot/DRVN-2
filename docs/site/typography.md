@@ -15,11 +15,12 @@ with `tabular-nums`.
 
 | Tier | Face | Spec | Where |
 | --- | --- | --- | --- |
-| Display | Sans 650 | `clamp(28px, 4vw, 44px)` / 1.05 / -0.02em | `.pagehead h1` — the only display type |
-| Num-giant | Sans 650 | `clamp(40px, 5.4vw, 64px)` / 0.95 / -0.03em, tabular | `.num-giant` KPI numerals |
-| Section head | Sans 650 | 18px / 1.3 / -0.01em, sentence case | `.tile__head > .microlabel--ink`, `.bsec > .microlabel--ink` — promoted from label to heading; always larger than the section's buttons |
-| H2 | Sans 650 | 18–21px / 1.4 / -0.01em | tile heads (18px), prose h2 (21px) |
-| H3 | Sans 650 | 15–17px / 1.4 | drop/alert/mail headings, prose h3 |
+| Display | Sans 600 | `clamp(28px, 4vw, 44px)` / 1.05 / -0.02em | `.pagehead h1` — the only display type |
+| Display (console) | Sans 620 | `clamp(24px, 2.6vw, 34px)` / 1.25 / -0.008em | `.console-main .pagehead h1` — the admin console's calmer display tier. 620 is not a loaded cut (the browser synthesizes it between 600 and 700) — a known wrinkle |
+| Num-giant | Sans 600 | `clamp(40px, 5.4vw, 64px)` / 0.95 / -0.03em, tabular | `.num-giant` KPI numerals |
+| Section head | Sans 600 | 18px / 1.3 / -0.01em, sentence case | `.tile__head > .microlabel--ink`, `.bsec > .microlabel--ink` — promoted from label to heading; always larger than the section's buttons |
+| H2 | Sans 600 | 18–21px / 1.4 / -0.01em | tile heads (18px), prose h2 (21px) |
+| H3 | Sans 600 | 15–17px / 1.4 | drop/alert/mail headings, prose h3 |
 | Value | Sans 600 | 17.5px / 1.35 / -0.01em | `.bline__val` — ruled-row values |
 | Body | Sans 400 | 17px / 1.55 | `<body>` default |
 | Body-sm | Sans 400 | 15–16px / 1.55 | feed items, reviews, spec cells, row notes |
