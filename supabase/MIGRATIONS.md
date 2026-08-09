@@ -7,24 +7,26 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0006–0019 applied
+## Status: 0001–0028 applied
 
-0006–0009 on 26 July 2026; 0010–0015 during the Rev C/D sessions; 0016 on
-31 July 2026. 0014–0016 columns verified live column-by-column on 31 July 2026.
-0017 on 1 August 2026 (Rev E session, exploit reproduced then re-verified
-blocked). 0018 on 1 August 2026 — applied twice (idempotency check) and
-verified live by impersonation: all 23 assertions in
-`supabase/tests/admin_guard.sql` pass, rolled back. 0019 on 1 August 2026,
-applied twice (idempotency check), self-checks pass. 0020 on 1 August 2026,
-applied twice, self-checks pass; the backfill created intents for every
-captured-but-untransferred order, and the worker's first pass (run from the
-admin console) cancelled the stub-era ones on record. 0021 on 1 August 2026,
-applied twice, self-checks pass. 0022 on 1 August 2026, applied twice
-(node-postgres), self-checks pass. 0026–0027 on 6 August 2026, applied twice
-each (node-postgres), self-checks pass; `claim_transfer_intents` smoke-tested
-live (0 claimable — queue healthy). 0024–0025 on 2 August 2026, applied twice
-(node-postgres); columns, tables and the dispute-evidence bucket verified
-live post-apply.
+0001–0005 by hand pre-July; 0006–0009 on 26 July 2026; 0010–0015 during the
+Rev C/D sessions; 0016 on 31 July 2026 (0014–0016 columns verified live
+column-by-column on 31 July 2026). 0017 on 1 August 2026 (Rev E session,
+exploit reproduced then re-verified blocked). 0018 on 1 August 2026 — applied
+twice (idempotency check) and verified live by impersonation: all 23
+assertions in `supabase/tests/admin_guard.sql` pass, rolled back. 0019 on
+1 August 2026, applied twice (idempotency check), self-checks pass. 0020 on
+1 August 2026, applied twice, self-checks pass; the backfill created intents
+for every captured-but-untransferred order, and the worker's first pass (run
+from the admin console) cancelled the stub-era ones on record. 0021 on
+1 August 2026, applied twice, self-checks pass. 0022 on 1 August 2026, applied
+twice (node-postgres), self-checks pass. 0023–0025 on 2 August 2026, applied
+twice (node-postgres); columns, tables and the dispute-evidence bucket
+verified live post-apply. 0026–0027 on 6 August 2026, applied twice each
+(node-postgres), self-checks pass; `claim_transfer_intents` smoke-tested live
+(0 claimable — queue healthy). 0028 on 9 August 2026 (shipping address
+region), applied with the money-durability sweep — see
+`docs/remediation-status.md`.
 
 ### Production wiring for the transfer worker
 
@@ -45,7 +47,9 @@ console's Payments → "Run worker now" is the processing path.
 Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
 `supabase/tests/purchase_guard.sql` passes all nine assertions, and the
 notification triggers raise into the correct sections. The commands below are
-the record of how, and what to do for the next environment.
+the record of how, and what to do for the next environment. For standing up a
+**production** project from scratch, follow
+[docs/production-runbook.md](../docs/production-runbook.md).
 
 ### Applying without Docker or psql
 
@@ -111,21 +115,11 @@ which drops every table in `public`.
 | **0025** | `0025_fitment.sql` | Structured fitment: `listing_fitments`, vPIC make/model cache, `cars` VIN columns. |
 | **0026** | `0026_money_durability.sql` | **P0 money durability:** `refund_operations` state machine (`begin_refund_operation`/`settle_refund_operation`), transfer-intent leases + `claim_transfer_intents()` (FOR UPDATE SKIP LOCKED, stale-claim recovery), `admin_alert_outbox`. |
 | **0027** | `0027_evidence_privacy.sql` | **P0: flips `dispute-evidence` from a public bucket to private** — drops the blanket public-read storage policy, adds a participant/uploader/admin-scoped one keyed on the new `dispute_evidence.storage_path` column (backfilled from the legacy `url`). App now renders short-lived signed URLs (`src/lib/evidence-urls.ts`) instead of the old public URL. |
+| **0028** | `0028_shipping_address_region.sql` | `orders.ship_state` — shipping address state/province/region (required in checkout for US/CA/AU); `ship_country` moves to ISO codes going forward. |
 
-0006–0009 are new. **The app expects them**: pages that read `shipping_cents`,
-`notifications`, or call `purchase_begin` will degrade to an empty state and log
-an error until they're applied. That degradation is deliberate — nothing crashes
-— but the product isn't correct until they're in.
-
-## Suggested sequence
-
-1. Take a snapshot / point-in-time backup first. 0007 alters `orders`
-   constraints and nullability.
-2. Paste and run **0006**, then **0007**, then **0008**, then **0009**, checking
-   each returns without error before moving on.
-3. Verify with `tests/purchase_guard.sql` (below).
-4. Rotate the service-role key and DB password if you haven't already — the key
-   in `.env.local` predates this work.
+On a fresh environment, apply **0001–0028 in order**; for the production path
+(baselining, verification, Stripe live wiring, first admin) follow
+[docs/production-runbook.md](../docs/production-runbook.md).
 
 ## Verifying the purchase guard
 

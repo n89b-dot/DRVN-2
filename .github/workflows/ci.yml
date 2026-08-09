@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply migrations 0001–0016
+      - name: Apply all migrations
         env:
           PGPASSWORD: postgres
         run: |

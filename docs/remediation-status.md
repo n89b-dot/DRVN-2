@@ -1,5 +1,7 @@
 # Remediation status — production-readiness sweep (Aug 2026)
 
+> **Archive note (2026-08-09):** the pass is complete — all 54 issues verified, the work is committed (commits `12063f7`…`b49737f`) and migrations 0026–0028 are applied. Kept as a record.
+
 Working tracker for the comprehensive remediation pass. The implemented code is
 the deliverable; this file preserves continuity. Statuses: `Not inspected`,
 `Confirmed`, `In progress`, `Implemented`, `Verified`, `Externally blocked`,

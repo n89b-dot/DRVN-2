@@ -1,12 +1,14 @@
 # Next-session brief — admin console + remaining Rev E work
 
+> **SUPERSEDED — historical brief (early Aug 2026).** Everything in Tasks 1–2 has shipped; the admin console exists; there are 28 migrations. Kept as archive.
+
 Paste everything below the line into a new chat. It is written to be
 self-contained: a fresh session has none of the prior conversation.
 
 ---
 
 Work in `/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2` — the **`DRVN 2`** folder, not
-the dead v1 `DRVN` repo beside it. Read `AGENTS.md` and `docs/README.md` first; the
+the dead v1 `DRVN` repo beside it. Read `AGENTS.md` and the root `README.md` first; the
 authoritative spec is `docs/DRVN-PRD-v3.1.md`. This is Next.js 16 (App Router) +
 Supabase, design system "Livesheet" (`docs/livesheet-inventory.md`, tokens in
 `src/app/globals.css`).

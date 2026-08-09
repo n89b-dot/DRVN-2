@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-09 — Documentation accuracy pass
+
+Top-level documentation brought current with the build: this changelog caught up past 2026-08-01; `docs/product-overview.md`'s "Where we are" and design-language sections updated (Stripe is live, the current visual system is Livesheet, fitment has a structured picker); status banners added to `docs/DRVN-PRD-v3.1.md`, `docs/next-session-brief.md` and `docs/remediation-status.md` marking them as rationale/archive; `supabase/MIGRATIONS.md` status corrected to 0001–0028 applied with the July-era apply instructions replaced by a pointer to the production runbook; `.env.example` gained `CRON_SECRET`, `PAYMENTS_MODE` and `PAYMENTS_ALLOW_STUB_IN_PRODUCTION`; `docs/livesheet-inventory.md`'s route map updated for the shipped `/messages`, `/offers`, legal and protection surfaces and the `/docs` microsite.
+
+## 2026-08-02 → 2026-08-09 — Offers, fitment, money durability, admin ops, docs microsite
+
+**Offers and messages surfaced** (`12063f7`). A dedicated `/offers` surface with negotiation threads (`/offers/[id]`), an order messages view at `/messages` + `/messages/[orderId]`, and a notification open route that lands each notification on the right thing.
+
+**Migrations 0023–0028.** `0023` admin roles (admin/viewer) + webhook payload retention for console inspection/replay; `0024` grading & dispute process — condition grades and checklists, immutable `order_items.condition_snapshot`, dispute evidence table + bucket, escalation/outcome columns; `0025` structured fitment — `listing_fitments`, vPIC make/model cache, VIN columns, feeding the fitment picker on `/sell` (`5b42e86`); `0026` **P0 money durability** — `refund_operations` state machine, transfer-intent leases with `claim_transfer_intents()` (FOR UPDATE SKIP LOCKED, stale-claim recovery), durable `admin_alert_outbox` (`4518142`); `0027` **P0 evidence privacy** — the `dispute-evidence` bucket flipped from public to private, participant/uploader/admin-scoped policy, app renders short-lived signed URLs; `0028` shipping address region.
+
+**Admin console iteration** (`f8ffa1b`, `4d08545`, `604fb19`). Operational completeness — filters and search across queues, pagination, CSV exports, a per-user detail view, durable operator alerts with tests, and a settings area with the webhook payload viewer.
+
+**Docs, tests, polish** (`397bb2e`, `156c501`, `b49737f`). An in-app docs microsite at `/docs` (including `/docs/design-system` and `/docs/llms.txt`), the listing importer spec, and the `/protection` page; an a11y E2E spec beside the golden path plus CI hardening; and a UI pass — shared confirm dialog, gallery, condition summary, broad polish across discover/product/auth.
+
+## 2026-07-31 → 2026-08-01 — Stripe: the money is real (Rev D R1)
+
+**Stripe integration lands** (`833aef3`, `d53c548`). Checkout runs on real PaymentIntents (saved payment methods included), sellers onboard onto **Stripe Connect** with return URLs through the app, `/payouts` shows the real ledger, and disputes and dashboard events arrive through a complete webhook — which is the settlement authority: orders settle on `payment_intent.succeeded`, never on the client's word. Later the same day the money loop tightened further (`02a211f`): transfers move only on buyer-confirmed **delivery + a 7-day clearing hold**, and **every refund path reverses the seller's transfer** proportionally through the one refund core.
+
 ## 2026-08-01 — Ops: dispute SLA, reporting, dependency security, runbook (Rev E items 12–15)
 
 **Dispute SLA (`0021_dispute_sla.sql`).** Nothing strands: at day 4 a daily pg_cron job (`escalate_stale_disputes()`) notifies both parties the case is flagged for support and stamps `dispute_escalated_at`; at day 10 of seller silence (no refund offer outstanding) the worker pass auto-refunds the buyer through the one refund path — reversal and fee reconciliation included — recorded as `dispute_sla` in the audit trail of the money. An admin or seller acting first naturally prevents both stages.

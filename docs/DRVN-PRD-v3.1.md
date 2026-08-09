@@ -1,5 +1,7 @@
 # DRVN Product Requirements Document v3.1 (As-Built Revision)
 
+> **Status (2026-08-09):** This PRD records product intent as of July 2026 and is retained as design rationale. The build has moved past it — Stripe payments, admin console, offers/messages, fitment, 28 migrations and a full test/CI suite have shipped. Current state lives in README.md, CHANGELOG.md and docs/remediation-status.md.
+
 ## Marketplace-First Platform for Modified Cars — Sell Your Parts, Show Your Build
 
 **Product Name:** DRVN

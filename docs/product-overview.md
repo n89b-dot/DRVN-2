@@ -71,6 +71,13 @@ left collapsing sidebar rather than a top nav.
 
 ## Why the design looks the way it does
 
+> **Note (2026-08-09):** the two subsections below record the **v1-era rationale** (dark
+> `#1A1D1F`, blue `#3B71FE`, DM Sans) and are kept for the reasoning. The shipped system
+> today is **Livesheet**: IBM Plex Sans/Mono, light-first paper `#efede6` / ink `#20232a`,
+> a single signal accent (live `#f03a20`), and a descending radius scale (16/10/6/3).
+> Details live in the in-app `/docs` microsite and
+> [docs/livesheet-inventory.md](livesheet-inventory.md).
+
 ### Dark, premium, enthusiast-native — but disciplined
 The palette is dark by design (app background `#1A1D1F`), because automotive photography —
 paint, chrome, night shots — reads dramatically better on dark surfaces. But the key
@@ -126,9 +133,11 @@ cleaner and faster to scan. A **garage-fitment toggle** ("show parts that fit my
 A **single, well-sectioned form** (not a wizard) covering basics → photos → came-from car
 (optional) → compatibility notes → price/location → review, with an optional sticky preview.
 Linking to a garage car is **fully optional** (people sell parts for cars they've since
-sold). Compatibility is **freeform seller notes**, clearly labeled non-authoritative — this
-is the fitment-integrity rule made concrete: no structured picker a seller can assert as
-truth.
+sold). Compatibility began as **freeform seller notes** only; since migration `0025` the
+sell form also has a **structured fitment picker** backed by platform (vPIC-sourced)
+make/model data, so structured fitment comes from platform data rather than free
+assertion. The integrity rule still stands: seller-stated compatibility remains clearly
+labeled non-authoritative and never drives the platform's "fits your car" signal.
 
 ### Garage — a private back-office
 The garage is your **private dashboard** for managing cars and their content — not the public
@@ -169,11 +178,12 @@ second (sold, new offer, offer accepted, questions, price drops) — so the prod
 like it's only about offloading parts.
 
 ### Settings — config + the content-management layer
-Account/profile config, notification prefs, and billing/payout scaffolding (Stripe-likely),
-plus purchase/sales history once checkout is live. It's also the practical home for some of
+Account/profile config, notification prefs, and real billing/payouts — Stripe Connect
+onboarding lives in Settings → Payments, with the payout ledger at `/payouts` — plus
+purchase/sales history now that checkout is live. It's also the practical home for some of
 the **read.cv-style editor modals** — the content-management layer the prototype was missing,
-which is a first-class part of the build, not an afterthought. The in-app `/design-system`
-reference page stays reachable here during testing.
+which is a first-class part of the build, not an afterthought. The design reference now
+lives in the in-app docs microsite (`/docs/design-system`).
 
 ## Why the technical choices support the product
 
@@ -197,12 +207,18 @@ reference page stays reachable here during testing.
 
 ## Where we are
 
-The build is far along: **M0 Foundation, M1 Cars & Profiles, M2 Marketplace Core, and M4
-Discovery & Engagement are shipped**; **M3 Commerce is functional but runs on a stub payment
-provider** (the 10% platform fee is live; Stripe Connect is the swap-in), and **M5
-Recommendations shipped its rule-based first phase**. The biggest remaining items are real
-payments, the logged-out marketing home, AI-assisted mod parsing, and a messaging UI. For the
-authoritative as-built requirements, milestone status, and re-scoped roadmap, see
-[DRVN-PRD-v3.1.md](DRVN-PRD-v3.1.md).
+*(updated 2026-08-09)* All milestones are shipped and the money is real. **Stripe is fully
+integrated**: Connect onboarding for sellers, PaymentIntents checkout with saved payment
+methods, transfers that move only on buyer-confirmed delivery plus a 7-day clearing hold,
+a durable refund state machine that reverses the seller's transfer on every refund path,
+a dispute SLA with escalation and auto-refund, and a webhook that is the settlement
+authority. Messaging exists (`/messages`, order-scoped threads) alongside a dedicated
+offers surface (`/offers` with negotiation threads). There is a full **admin console** at
+`/admin` (role-based membership, append-only audit log, disputes/orders/listings/users/
+reports/payments-ops/settings surfaces). The schema stands at **28 applied migrations**,
+and CI runs typecheck/lint/unit tests, the SQL guard suites (`purchase_guard`,
+`admin_guard`) against a real Postgres, and the E2E specs. For history see
+[CHANGELOG.md](../CHANGELOG.md); for the original as-built requirements see
+[DRVN-PRD-v3.1.md](DRVN-PRD-v3.1.md) (retained as design rationale).
 
 > **Show your build. Sell your parts. Find what fits.**

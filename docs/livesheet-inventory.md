@@ -97,10 +97,10 @@ print final, ticks never start — countdowns keep running (information, not dec
 | `sell.html` | `/sell` | draft autosave head, photos→part→provenance→condition→price→review; live preview card + completeness rail |
 | `orders.html` (job card) | `/orders` (seller job detail) | pipe + dispatch form + payout math + past jobs |
 | `buyer-orders.html` | `/orders` (buyer side) | KPI, transit pipe + countdown, tracking spec, inspection alert, past purchases |
-| `buyer-offers.html` | `/orders` offers section (or `/offers`) | live/countered/won/lapsed rowlists, negotiation thread |
+| `buyer-offers.html` | `/offers` + `/offers/[id]` (shipped) | live/countered/won/lapsed rowlists, negotiation thread |
 | `watchlist.html` | `/saved` | watched part tiles + saved searches + followed sheets |
 | `notifications.html` | `/notifications` | actionable rows, policy blines, mail previews, prefs pointer |
-| `messages.html` | — (Phase 2) | thread list + msg spine thread + composer + safety alert |
+| `messages.html` | `/messages` + `/messages/[orderId]` (shipped) | thread list + msg spine thread + composer + safety alert |
 | `profile.html` (keeper sheet) | `/u/[username]` + `/profile` | keeper record, grade blines, cars, live listings, reviews, activity |
 | `settings.html` | `/settings` | config blines by section, signals matrix (sq checks), savebar, theme select |
 | `auth.html` | `/login`, `/signup`, reset, verify | authwrap 420px, field states, OAuth ghosts, verify listening capsule |
@@ -108,9 +108,10 @@ print final, ticks never start — countdowns keep running (information, not dec
 | `empty-states.html` | all routes | 14 numbered rules: dashed plates, `—` values, factual $0.00, waiting copy, ghost loading, reconnect freeze, error tile, expired/sold desaturation |
 | `edge-cases.html` | all routes | truncation (clamp2/trunc), free/zero money, 0-photo tiles, long counts, RTL-ish stress |
 | `form-states.html` | all forms | rest/filled/disabled/required/hint-counter/inline-error-after-blur/summary/async-check/cross-field/server-reject/pending/fail/two-step-confirm/undo/unsaved/draft-restore/optimistic-rollback |
-| `safety.html` | — (Phase 2) | report/dispute/refund/blocked/verification |
-| `legal.html` | — (Phase 2 or static) | prose + toc + fees spec + cookies |
-| `design.html` + `design.md` | `/design-system` + docs | living reference; update as the contract when new components appear |
+| `safety.html` | `/protection` + report/dispute surfaces (shipped) | report/dispute/refund/blocked/verification |
+| `legal.html` | `/terms`, `/privacy`, `/fees`, `/protection` (shipped) | prose + toc + fees spec + cookies |
+| `design.html` + `design.md` | the `/docs` microsite (`/docs/design-system`) | living reference; update as the contract when new components appear. The old `/design-system` route no longer exists |
+| — (no dedicated mockup) | `/admin` — the admin console (`(admin)` group, 11 pages) | ships in Livesheet language: same rowlists, KPI tiles, capsules; queues (disputes, reports, payments ops), order sheet, audit |
 
 ## Do/Don't distillation for the port
 

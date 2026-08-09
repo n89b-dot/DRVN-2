@@ -50,7 +50,7 @@ inferences* (potential fitment matches — never presented as verified).
 
 ```bash
 npm ci
-cp .env.example .env.local   # if present; otherwise create .env.local (below)
+cp .env.example .env.local
 npm run dev                  # http://localhost:3000
 ```
 
