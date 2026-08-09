@@ -16,6 +16,9 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // The Livesheet reveal/live-button animations never fully settle, which
+    // starves Playwright's stability check; the app honours the OS setting.
+    contextOptions: { reducedMotion: "reduce" },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

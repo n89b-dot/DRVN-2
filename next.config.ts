@@ -41,6 +41,14 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // The docs markdown route reads repo markdown off disk at request time
+  // (src/app/(docs)/docs/md/[slug]/route.ts — registry in src/lib/docs/site.ts).
+  // The read is marked turbopackIgnore so the tracer doesn't pull in the whole
+  // project; these globs ship the actual documents with the route instead.
+  outputFileTracingIncludes: {
+    "/docs/md/[slug]": ["./docs/**/*.md", "./design-mockups/livesheet/design.md"],
+  },
+
   images: {
     // Storage-hosted media was served unoptimized at full size to an
     // image-heavy feed; this turns resizing and modern formats back on.
