@@ -36,6 +36,8 @@ Then verify, exactly as CI does:
 
 - `supabase/tests/purchase_guard.sql` — all nine PASS notices
 - `supabase/tests/admin_guard.sql` — "all admin-guard checks passed"
+- `supabase/tests/security_guard.sql` — "all security-guard checks passed"
+- `supabase/tests/money_guard.sql` — "all money-guard checks passed"
 
 ## 3. Baseline the migration history
 
@@ -61,7 +63,10 @@ from unnest(array[
   '0010_listing_part_number', '0011_listing_views', '0012_commerce_hardening',
   '0013_scheduled_jobs', '0014_disputes', '0015_stripe_customers',
   '0016_connect_accounts', '0017_lock_payment_columns', '0018_admin',
-  '0019_money_infra', '0020_transfer_scheduling', '0021_dispute_sla'
+  '0019_money_infra', '0020_transfer_scheduling', '0021_dispute_sla',
+  '0022_sla_alert_stamp', '0023_admin_roles_webhook_payloads',
+  '0024_grading_dispute_process', '0025_fitment', '0026_money_durability',
+  '0027_evidence_privacy', '0028_shipping_address_region'
 ]) as f
 on conflict do nothing;
 ```
@@ -81,8 +86,14 @@ Environment (deployment platform):
 | `STRIPE_WEBHOOK_SECRET` | from the production webhook endpoint below |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | live publishable key |
 | `CRON_SECRET` | random 32+ chars; gates `/api/jobs/transfers` |
-| `SENTRY_DSN` | error alerting — settlement paths depend on it being real |
+| `SENTRY_DSN` | **required in live-money production** — boot fails without it (`validatePaymentsEnv`) |
+| `ADMIN_ALERT_WEBHOOK_URL` | operator alerts (Slack-compatible). Unset = alerts accumulate as `disabled` outbox rows, visible in Admin → Payments |
+| `PAYMENTS_MODE` | optional; set `stripe` explicitly in production. Production **refuses** stub mode without `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true` |
 | `NEXT_PUBLIC_SITE_URL` | production origin |
+
+Boot-time validation: `src/instrumentation.ts` runs `validatePaymentsEnv()` —
+a production deploy missing Stripe keys, webhook secret, publishable key, or
+`SENTRY_DSN` fails at startup, loudly, instead of running fake payments.
 
 Stripe (live mode):
 
@@ -116,6 +127,33 @@ on conflict do nothing;
 Membership is SQL-only by design (0018). Turn on MFA for that account in
 Supabase Auth. The console is at `/admin`; it 404s for everyone else.
 
+## 5b. Money reconciliation & recovery (run these when things go wrong)
+
+Every money queue is durable and visible in **Admin → Payments**:
+
+- **Refund operations** (`refund_operations`, 0026): anything not `completed`
+  appears here. The worker pass (`/api/jobs/transfers`) resumes abandoned
+  operations automatically (`resumeIncompleteRefunds`) — reconciling against
+  Stripe by `operation_id` metadata before ever re-calling, so retries cannot
+  double-refund. `failed` = Stripe refused (terminal; a retry is a fresh
+  refund from the order page). `recovery_required` / reversal failures open
+  `payment_recoveries` cases and alert.
+- **Transfer pipeline** (`transfer_intents`): leased claims expire (5 min), so
+  a crashed worker's rows return to the pool on the next pass — no manual
+  unsticking. Exhausted attempts (8) open a recovery case + `transfer_stuck`
+  alert. `reconcileTransferRecords` repairs order↔intent reference gaps both
+  directions every pass.
+- **Failed transfer recovery**: fix the cause (usually seller onboarding —
+  `account.updated` auto-unblocks), then "Run worker now". For an intent at
+  8 attempts, clear `attempts`/`next_attempt_at` via SQL after diagnosing.
+- **Alert backlog** (`admin_alert_outbox`): `pending` retries with backoff on
+  every worker pass; `failed` = 10 attempts exhausted; `disabled` = no
+  destination configured when raised.
+- **Evidence privacy verification**: `select public from storage.buckets
+  where id = 'dispute-evidence';` must be `false`; fetching a stored evidence
+  URL unauthenticated must 400/403. (0027 self-checks assert this at apply
+  time.)
+
 ## 6. Backups, and the rehearsed restore
 
 Supabase Pro runs daily backups plus PITR. **A backup that has never been
@@ -124,7 +162,10 @@ restored is a hope, not a plan** — rehearse quarterly:
 1. Create a scratch Supabase project.
 2. Restore the latest production backup into it (dashboard → Backups →
    Restore, or `pg_restore` from a downloaded dump).
-3. Run both guard SQL suites against the restored copy.
+3. Run `supabase/tests/restore_integrity.sql` against the copy (read-only:
+   auth references, money invariants, transfer references, evidence bucket
+   privacy, RLS presence — raises on any failure), then the four guard
+   suites.
 4. Point a local app at the copy (`.env.local` overrides) and click through:
    sign-in, marketplace, an order detail, `/admin`.
 5. Record the date and the wall-clock restore time below, then delete the

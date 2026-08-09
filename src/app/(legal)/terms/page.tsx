@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
+import { paymentsAreLive } from "@/lib/payments/provider";
 
 export const metadata = {
   title: "Terms of Service - DRVN",
@@ -93,11 +94,13 @@ export default function TermsPage() {
           plus shipping — the number on the listing is the number they pay. See{" "}
           <Link href="/fees">the fee schedule</Link>.
         </p>
-        <p>
-          <strong>Payments are in test mode.</strong> While DRVN runs on a test payment provider, no
-          money changes hands and no payouts are made. Do not treat an order as a completed sale
-          until we announce live payments.
-        </p>
+        {!paymentsAreLive() && (
+          <p>
+            <strong>Payments are in test mode.</strong> While DRVN runs on a test payment
+            provider, no money changes hands and no payouts are made. Do not treat an order as a
+            completed sale until we announce live payments.
+          </p>
+        )}
 
         <h2>7. Dispatch, delivery and cancellation</h2>
         <p>

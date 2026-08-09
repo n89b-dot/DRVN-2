@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import { PLATFORM_FEE_BPS, platformFeeCents } from "@/lib/payments/fee";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+import { paymentsAreLive } from "@/lib/payments/provider";
 
 export const metadata = {
   title: "Fees - DRVN",
@@ -80,11 +81,13 @@ export default function FeesPage() {
         </Rv>
 
         <Rv className="tile" stagger={3}>
-          <span className="microlabel microlabel--ink">Payments are in test mode</span>
+          <span className="microlabel microlabel--ink">
+            {paymentsAreLive() ? "Payments are live" : "Payments are in test mode"}
+          </span>
           <p className="mt-2 text-[15px] leading-relaxed">
-            DRVN currently runs on a test payment provider: orders are real records, but no money
-            moves and no payouts are made yet. The fee maths above is already live in the code, so
-            nothing about the numbers will change when real payments switch on.
+            {paymentsAreLive()
+              ? "Payments run live through Stripe: orders move real money and payouts are made on the schedule above. The fee maths hasn't changed — it's been the same since checkout shipped."
+              : "DRVN currently runs on a test payment provider: orders are real records, but no money moves and no payouts are made yet. The fee maths above is already live in the code, so nothing about the numbers will change when real payments switch on."}
           </p>
           <div className="mt-4">
             <Link href="/terms" className="jumplink inline-flex">

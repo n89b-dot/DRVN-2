@@ -2,22 +2,30 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Foot, LivesheetBar } from "@/components/ui";
+import { loadShellCounts } from "@/lib/shell-counts";
+import { createClient } from "@/lib/supabase/server";
 
 /**
- * Policy pages. Reachable signed in or out, and — unlike the product and
- * discover shells — they don't need to know which: they await nothing, so
- * this layout reads no cookies and does no auth check, which keeps
- * terms/privacy/fees statically prerenderable. The bar renders its
- * signed-out (public) variant here; a signed-in visitor still reaches every
- * destination through the rail on any other page. Theme (day/night) is
- * applied client-side before paint by the inline script in the root layout
- * (src/app/layout.tsx), so no cookie read is needed for that either.
+ * Policy pages. Reachable signed in or out — mirrors how (discover)/layout.tsx
+ * resolves the session, so a signed-in visitor gets the signed-in bar (their
+ * cart/notification badges, "List a part" instead of "Join DRVN") here too,
+ * instead of being shown "Sign in / Join DRVN" while already signed in. This
+ * opts terms/privacy/fees out of static prerendering (a cookies() + auth read
+ * now runs on every request), which is the deliberate trade for a header that
+ * doesn't lie about whether you're signed in.
  */
-export default function LegalLayout({ children }: { children: ReactNode }) {
+export default async function LegalLayout({ children }: { children: ReactNode }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { cartCount, unreadCount } = await loadShellCounts(supabase, user?.id ?? null);
+
   return (
     <div className="min-h-screen">
-      <LivesheetBar signedIn={false} />
-      <main className="mx-auto w-full max-w-[720px] px-5 pb-10">
+      <LivesheetBar signedIn={Boolean(user)} cartCount={cartCount} unreadCount={unreadCount} />
+      <main className="wrap wrap--narrow pb-10">
         {children}
         <Foot
           left="DRVN"
@@ -26,6 +34,7 @@ export default function LegalLayout({ children }: { children: ReactNode }) {
               <Link href="/terms">Terms</Link>
               <Link href="/privacy">Privacy</Link>
               <Link href="/fees">Fees</Link>
+              <Link href="/protection">Protection</Link>
             </span>
           }
         />
