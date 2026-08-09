@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { mapModCategoryToListing } from "@/lib/mods/category-map";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
 import { SellForm } from "./sell-form";
 import { reportError } from "@/lib/monitoring";
@@ -25,11 +27,10 @@ export default async function SellPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: cars, error } = await supabase
-    .from("cars")
-    .select("id, name")
-    .eq("owner_id", user.id)
-    .order("created_at");
+  const [{ data: cars, error }, makes] = await Promise.all([
+    supabase.from("cars").select("id, name").eq("owner_id", user.id).order("created_at"),
+    getVehicleMakes(createAdminClient()),
+  ]);
 
   if (error) reportError("[sell] failed to load cars", error);
 
@@ -100,7 +101,12 @@ export default async function SellPage({
         </p>
       </Rv>
 
-      <SellForm cars={cars ?? []} userId={user.id} prefill={prefill} />
+      <SellForm
+        cars={cars ?? []}
+        makes={makes.map((m) => m.name)}
+        userId={user.id}
+        prefill={prefill}
+      />
 
       <div className="mt-8">
         <Link href="/listings" className="jumplink inline-flex">

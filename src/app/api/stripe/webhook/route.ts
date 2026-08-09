@@ -7,7 +7,7 @@ import {
 } from "@/lib/payments/settlement";
 import { stripeClient } from "@/lib/payments/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { reportError } from "@/lib/monitoring";
+import { flushMonitoring, reportError } from "@/lib/monitoring";
 
 /**
  * Stripe webhook — the source of truth for async payments.
@@ -66,5 +66,9 @@ export async function POST(request: Request) {
     // Unexpected failure: let Stripe redeliver rather than losing the event.
     reportError("[stripe:webhook] handler failed", { type: event.type, error });
     return new Response("handler failed", { status: 500 });
+  } finally {
+    // Serverless: the runtime may freeze the instant the response returns —
+    // error reports on money paths must land first.
+    await flushMonitoring();
   }
 }

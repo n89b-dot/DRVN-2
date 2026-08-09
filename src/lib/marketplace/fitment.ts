@@ -13,6 +13,13 @@ import type { Database } from "@/lib/database.types";
 
 export type GarageFitmentIndex = Map<string, string>;
 
+export type GarageCar = {
+  name: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+};
+
 function fitKey(make: string, model: string): string {
   return `${make.toLowerCase()}|${model.toLowerCase()}`;
 }
@@ -28,6 +35,37 @@ export function buildGarageFitmentIndex(
     }
   }
   return index;
+}
+
+/** A seller-stated fitment claim (listing_fitments, 0025). */
+export type FitmentClaim = {
+  make: string;
+  model: string;
+  year_start: number | null;
+  year_end: number | null;
+};
+
+/**
+ * Matches structured seller-stated fitment rows against a garage. Exact
+ * case-insensitive make+model; a claim with year bounds also requires the
+ * car's year inside them (a car without a year matches year-bounded claims —
+ * the claim is seller-stated either way, so the hint errs open and the badge
+ * carries the label). Returns the first matching car's name, else null.
+ */
+export function matchFitmentClaims(cars: GarageCar[], claims: FitmentClaim[]): string | null {
+  for (const car of cars) {
+    if (!car.make || !car.model) continue;
+    const key = fitKey(car.make, car.model);
+    for (const claim of claims) {
+      if (fitKey(claim.make, claim.model) !== key) continue;
+      if (car.year !== null) {
+        if (claim.year_start !== null && car.year < claim.year_start) continue;
+        if (claim.year_end !== null && car.year > claim.year_end) continue;
+      }
+      return car.name;
+    }
+  }
+  return null;
 }
 
 /** Returns the garage car's name if `make`+`model` matches one, else null. */
@@ -49,12 +87,12 @@ export async function fetchGarageFitment(
   supabase: SupabaseClient<Database>,
   viewerId: string
 ): Promise<{
-  cars: { name: string; make: string | null; model: string | null }[];
+  cars: GarageCar[];
   index: GarageFitmentIndex;
 }> {
   const { data: cars } = await supabase
     .from("cars")
-    .select("name, make, model")
+    .select("name, make, model, year")
     .eq("owner_id", viewerId);
 
   return { cars: cars ?? [], index: buildGarageFitmentIndex(cars ?? []) };

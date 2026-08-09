@@ -2,11 +2,13 @@
 
 import { useActionState, useRef, useState } from "react";
 
+import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
 import { isLowConfidence } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/client";
 
 import { createListing, updateListing, type SellState } from "./actions";
+import { FitmentPicker, type FitmentRow } from "./fitment-picker";
 
 function Section({
   step,
@@ -47,6 +49,8 @@ export type ListingDraft = {
   category: string;
   subcategory: string | null;
   condition: string | null;
+  grade: string | null;
+  condition_checklist: Record<string, ChecklistAnswer> | null;
   part_number: string | null;
   price_cents: number;
   shipping_cents: number;
@@ -57,15 +61,19 @@ export type ListingDraft = {
   source_car_id: string | null;
   status: string;
   images: GalleryImage[];
+  fitments: FitmentRow[];
 };
 
 export function SellForm({
   cars,
+  makes,
   userId,
   listing,
   prefill,
 }: {
   cars: { id: string; name: string }[];
+  /** Canonical make names for the fitment picker's suggestions. */
+  makes: string[];
   userId: string;
   /** Present when editing an existing listing. */
   listing?: ListingDraft;
@@ -88,6 +96,10 @@ export function SellForm({
     {}
   );
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
+  const [subcategory, setSubcategory] = useState(
+    listing?.subcategory ?? prefill?.subcategory ?? ""
+  );
+  const [condition, setCondition] = useState(listing?.condition ?? "used");
   const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -96,6 +108,56 @@ export function SellForm({
   const subcategories = CATEGORIES.find((c) => c.slug === category)?.subcategories ?? [];
   const money = (cents: number | null | undefined) =>
     cents === null || cents === undefined ? "" : (cents / 100).toFixed(2);
+
+  // Completeness + validation-summary state. Price/shipping are lifted from
+  // uncontrolled defaultValue inputs so the checklist and readiness note can
+  // read them live, without re-plumbing the rest of the form.
+  const [grade, setGrade] = useState(listing?.grade ?? "");
+  const [attestAccurate, setAttestAccurate] = useState(false);
+  const [price, setPrice] = useState(money(listing?.price_cents));
+  const [shipping, setShipping] = useState(money(listing?.shipping_cents ?? 0));
+  const [fitmentCount, setFitmentCount] = useState(listing?.fitments?.length ?? 0);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const usedNeedsGrade = condition !== "new";
+
+  /** Mirrors the server's hard checks that a submitter can see before the
+   *  round-trip — anything the server alone can validate (ownership, rate
+   *  limits) stays server-side and still surfaces via state.error. */
+  function validate(formData: FormData): Record<string, string> {
+    const errors: Record<string, string> = {};
+    const title = String(formData.get("title") ?? "").trim();
+    if (!title) errors.title = "Title is required.";
+    else if (title.length > 140) errors.title = "Keep the title under 140 characters.";
+
+    const categoryValue = String(formData.get("category") ?? "");
+    if (!categoryValue) errors.category = "Pick a category.";
+
+    const priceRaw = String(formData.get("price") ?? "").trim();
+    const priceCents = Math.round(Number(priceRaw) * 100);
+    if (!priceRaw || !Number.isFinite(priceCents) || priceCents < 0) {
+      errors.price = "Enter a valid price.";
+    }
+
+    if (usedNeedsGrade && grade && !attestAccurate) {
+      errors.attest_accurate = "Confirm the condition disclosure is accurate before publishing.";
+    }
+
+    return errors;
+  }
+
+  const fieldLabels: Record<string, string> = {
+    title: "Title",
+    category: "Category",
+    price: "Asking price",
+    attest_accurate: "Condition disclosure confirmation",
+  };
+  const fieldAnchors: Record<string, string> = {
+    title: "sell-title",
+    category: "sell-category",
+    price: "sell-price",
+    attest_accurate: "sell-attest",
+  };
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -162,13 +224,56 @@ export function SellForm({
     setImages((current) => current.map((img, i) => (i === index ? { ...img, alt } : img)));
   }
 
+  const errorEntries = Object.entries(fieldErrors);
+
   return (
-    <form action={action} className="deck !pb-0">
+    <form
+      action={(formData) => {
+        const errors = validate(formData);
+        if (Object.keys(errors).length) {
+          setFieldErrors(errors);
+          return;
+        }
+        setFieldErrors({});
+        action(formData);
+      }}
+      className="deck !pb-0"
+    >
       <input type="hidden" name="image_urls" value={JSON.stringify(images)} />
       {listing && <input type="hidden" name="id" value={listing.id} />}
       {prefill?.modItemId && (
         <input type="hidden" name="mod_item_id" value={prefill.modItemId} />
       )}
+
+      {errorEntries.length > 0 && (
+        <div role="alert" aria-live="assertive" className="tile !mb-0 text-live">
+          <p className="font-semibold">Fix these before submitting:</p>
+          <ul className="mt-1 list-disc pl-5 text-[13.5px]">
+            {errorEntries.map(([field, message]) => (
+              <li key={field}>
+                <a href={`#${fieldAnchors[field] ?? field}`} className="jumplink underline">
+                  {fieldLabels[field] ?? field}
+                </a>
+                {" — "}
+                {message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Completeness checklist — a lightweight, live-updating nudge toward a
+          strong listing. Nothing here blocks submit; the hard requirements
+          are enforced above and on the server. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] uppercase tracking-[0.08em] text-dim">
+        <span>Photos {images.length > 0 ? "✓" : "—"}</span>
+        <span aria-hidden="true">·</span>
+        <span>Condition {!usedNeedsGrade || grade ? "✓" : "—"}</span>
+        <span aria-hidden="true">·</span>
+        <span>Fitment {fitmentCount > 0 ? "✓" : "—"}</span>
+        <span aria-hidden="true">·</span>
+        <span>Shipping {shipping.trim() !== "" ? "✓" : "—"}</span>
+      </div>
 
       <Section step={1} title="The part — what you're releasing">
         <div className="field !mb-0">
@@ -180,7 +285,14 @@ export function SellForm({
             defaultValue={listing?.title ?? prefill?.title ?? ""}
             placeholder="e.g. 034 High-Flow Downpipe for B9 S4"
             className="ctl max-w-none"
+            aria-describedby={fieldErrors.title ? "sell-title-error" : undefined}
+            aria-invalid={fieldErrors.title ? true : undefined}
           />
+          {fieldErrors.title && (
+            <p id="sell-title-error" className="field__err">
+              {fieldErrors.title}
+            </p>
+          )}
           <span className="field__hint">
             Clear titles sell faster — brand, model, then the car it fits.
           </span>
@@ -188,7 +300,7 @@ export function SellForm({
         {/* .field--row collapses to one column on small screens; a bare
             grid-cols-2 kept these side by side at 375px. */}
         <div className="field--row">
-          <label className="field !mb-0">
+          <div className="field !mb-0">
             <label htmlFor="sell-category" className="microlabel">Category</label>
             <select id="sell-category"
               name="category"
@@ -196,6 +308,8 @@ export function SellForm({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="ctl max-w-none"
+              aria-describedby={fieldErrors.category ? "sell-category-error" : undefined}
+              aria-invalid={fieldErrors.category ? true : undefined}
             >
               <option value="" disabled>
                 Choose…
@@ -206,6 +320,11 @@ export function SellForm({
                 </option>
               ))}
             </select>
+            {fieldErrors.category && (
+              <p id="sell-category-error" className="field__err">
+                {fieldErrors.category}
+              </p>
+            )}
             {!listing &&
               prefill?.modConfidence !== undefined &&
               prefill?.modConfidence !== null &&
@@ -214,12 +333,13 @@ export function SellForm({
                   Guessed from a low-confidence parse of the build line — check it.
                 </span>
               )}
-          </label>
-          <label className="field !mb-0">
+          </div>
+          <div className="field !mb-0">
             <label htmlFor="sell-subcategory" className="microlabel">Subcategory — optional</label>
             <select id="sell-subcategory"
               name="subcategory"
-              defaultValue={listing?.subcategory ?? prefill?.subcategory ?? ""}
+              value={subcategory}
+              onChange={(e) => setSubcategory(e.target.value)}
               className="ctl max-w-none"
               disabled={!subcategories.length}
             >
@@ -230,14 +350,15 @@ export function SellForm({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         </div>
         <div className="field--row">
-          <label className="field !mb-0">
+          <div className="field !mb-0">
             <label htmlFor="sell-condition" className="microlabel">Condition</label>
             <select id="sell-condition"
               name="condition"
-              defaultValue={listing?.condition ?? "used"}
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
               className="ctl max-w-none"
             >
               {CONDITIONS.map((c) => (
@@ -246,8 +367,8 @@ export function SellForm({
                 </option>
               ))}
             </select>
-          </label>
-          <label className="field !mb-0">
+          </div>
+          <div className="field !mb-0">
             <label htmlFor="sell-part_number" className="microlabel">Part number — optional</label>
             <input id="sell-part_number"
               name="part_number"
@@ -259,9 +380,85 @@ export function SellForm({
             <span className="field__hint">
               What a buyer cross-references. Seller-entered, not verified.
             </span>
-          </label>
+          </div>
         </div>
-        <label className="field !mb-0">
+        {/* Grade + checklist: dispute prevention (0024). Only for used parts —
+            "new" already says everything a grade would. The checklist follows
+            the category, so a turbo gets asked about shaft play and a wheel
+            about curb rash; every answer renders on the listing and freezes
+            onto the order as the contract. */}
+        {condition !== "new" && (
+          <>
+            <div className="field !mb-0">
+              <label htmlFor="sell-grade" className="microlabel">Grade — how honest sellers price</label>
+              <select id="sell-grade"
+                name="grade"
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                className="ctl max-w-none"
+              >
+                <option value="">Not graded</option>
+                {GRADES.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label} — {g.meaning}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {category && (
+              <fieldset className="field !mb-0">
+                <legend className="microlabel">
+                  Condition checklist — each answer shows on the listing
+                </legend>
+                <div className="mt-1 flex flex-col gap-2">
+                  {checklistFor(category, subcategory || null).map((q) => (
+                    <div key={q.key} className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[13.5px]">{q.label}</span>
+                      <span className="flex gap-3" role="radiogroup" aria-label={q.label}>
+                        {(["yes", "no", "unknown"] as const).map((answer) => (
+                          <label key={answer} className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-dim">
+                            <input
+                              type="radio"
+                              name={`chk_${q.key}`}
+                              value={answer}
+                              defaultChecked={listing?.condition_checklist?.[q.key] === answer}
+                              className="accent-live"
+                            />
+                            {answer === "unknown" ? "Not sure" : answer}
+                          </label>
+                        ))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <span className="field__hint mt-1">
+                  Answer what you know — honest &quot;not sure&quot; beats a wrong yes. These are
+                  part of the sale record if there&apos;s ever a dispute.
+                </span>
+              </fieldset>
+            )}
+            {grade && (
+              <label className="flex items-start gap-2 text-[13px]">
+                <input
+                  type="checkbox"
+                  id="sell-attest"
+                  name="attest_accurate"
+                  checked={attestAccurate}
+                  onChange={(e) => setAttestAccurate(e.target.checked)}
+                  className="accent-live mt-0.5"
+                  aria-describedby={fieldErrors.attest_accurate ? "sell-attest-error" : undefined}
+                />
+                <span>I confirm this condition disclosure is accurate.</span>
+              </label>
+            )}
+            {grade && fieldErrors.attest_accurate && (
+              <p id="sell-attest-error" className="field__err">
+                {fieldErrors.attest_accurate}
+              </p>
+            )}
+          </>
+        )}
+        <div className="field !mb-0">
           <label htmlFor="sell-description" className="microlabel">Description</label>
           <textarea id="sell-description"
             name="description"
@@ -271,7 +468,7 @@ export function SellForm({
             placeholder="What is it, why is it coming off, anything a buyer should know."
             className="ctl !max-w-none"
           />
-        </label>
+        </div>
       </Section>
 
       <Section
@@ -384,22 +581,33 @@ export function SellForm({
 
       <Section
         step={4}
-        title="Fitment — your words"
+        title="Fitment — what it fits"
         hint="Seller-stated, shown as informational. Never a guarantee."
       >
-        <textarea
-          name="compatibility_notes"
-          rows={3}
-          maxLength={2000}
-          defaultValue={listing?.compatibility_notes ?? ""}
-          placeholder='e.g. "Came off a 2019 B9 S4. Should fit B9/B9.5 S4/S5, verify for RS5."'
-          className="ctl !max-w-none"
+        <FitmentPicker
+          makes={makes}
+          initial={listing?.fitments ?? []}
+          onCountChange={setFitmentCount}
         />
+        <div className="field !mb-0">
+          <label htmlFor="sell-compatibility_notes" className="microlabel">
+            Notes — anything the rows can&apos;t say
+          </label>
+          <textarea
+            id="sell-compatibility_notes"
+            name="compatibility_notes"
+            rows={3}
+            maxLength={2000}
+            defaultValue={listing?.compatibility_notes ?? ""}
+            placeholder='e.g. "Needs the OEM bracket from a facelift car. Verify for RS5."'
+            className="ctl !max-w-none"
+          />
+        </div>
       </Section>
 
       <Section step={5} title="Price, shipping & location">
         <div className="field--row">
-          <label className="field !mb-0">
+          <div className="field !mb-0">
             <label htmlFor="sell-price" className="microlabel">Asking price</label>
             <div className="ctl__prefix">
               <span>$</span>
@@ -407,29 +615,38 @@ export function SellForm({
                 name="price"
                 required
                 inputMode="decimal"
-                defaultValue={money(listing?.price_cents)}
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
                 placeholder="0"
                 className="ctl"
+                aria-describedby={fieldErrors.price ? "sell-price-error" : undefined}
+                aria-invalid={fieldErrors.price ? true : undefined}
               />
             </div>
-          </label>
-          <label className="field !mb-0">
+            {fieldErrors.price && (
+              <p id="sell-price-error" className="field__err">
+                {fieldErrors.price}
+              </p>
+            )}
+          </div>
+          <div className="field !mb-0">
             <label htmlFor="sell-shipping" className="microlabel">Shipping — flat rate</label>
             <div className="ctl__prefix">
               <span>$</span>
               <input id="sell-shipping"
                 name="shipping"
                 inputMode="decimal"
-                defaultValue={money(listing?.shipping_cents ?? 0)}
+                value={shipping}
+                onChange={(e) => setShipping(e.target.value)}
                 placeholder="0"
                 className="ctl"
               />
             </div>
             <span className="field__hint">Leave at 0 for free shipping.</span>
-          </label>
+          </div>
         </div>
         <div className="field--row">
-          <label className="field !mb-0">
+          <div className="field !mb-0">
             <label htmlFor="sell-offer_floor" className="microlabel">Lowest offer you&apos;d read — optional</label>
             <div className="ctl__prefix">
               <span>$</span>
@@ -442,8 +659,8 @@ export function SellForm({
               />
             </div>
             <span className="field__hint">Offers below this are declined automatically.</span>
-          </label>
-          <label className="field !mb-0">
+          </div>
+          <div className="field !mb-0">
             <label htmlFor="sell-location" className="microlabel">Location</label>
             <input id="sell-location"
               name="location"
@@ -451,7 +668,7 @@ export function SellForm({
               placeholder="City, state"
               className="ctl max-w-none"
             />
-          </label>
+          </div>
         </div>
         <label className="flex items-center gap-2 text-[13px]">
           <input
@@ -463,6 +680,28 @@ export function SellForm({
           Buyers may collect in person
         </label>
       </Section>
+
+      {!isEdit &&
+        (() => {
+          const warnings: string[] = [];
+          if (images.length === 0) warnings.push("No photos yet — listings with photos sell faster.");
+          if (usedNeedsGrade && !grade) warnings.push("No grade set for a used part — buyers weight this heavily.");
+          if (!shipping.trim() || Number(shipping) === 0) warnings.push("Shipping is $0 — confirm that's intentional, not just unset.");
+          if (!warnings.length) return null;
+          return (
+            <div role="status" aria-live="polite" className="tile !mb-0">
+              <p className="microlabel microlabel--ink">Before you publish</p>
+              <ul className="mt-1 list-disc pl-5 text-[13px] text-dim">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+              <p className="field__hint mt-1">
+                These are nudges, not blockers — you can still publish or save a draft as-is.
+              </p>
+            </div>
+          );
+        })()}
 
       {state.error && (
         <p role="alert" aria-live="polite" className="field__err">

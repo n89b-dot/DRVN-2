@@ -2,7 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
 import type { ListingCardData } from "@/components/ui";
-import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
+import {
+  buildGarageFitmentIndex,
+  matchFitmentClaims,
+  matchGarageFitment,
+  type GarageCar,
+} from "@/lib/marketplace/fitment";
 import { reportError } from "@/lib/monitoring";
 
 export type ListingSort = "newest" | "price_asc" | "price_desc";
@@ -94,25 +99,49 @@ export async function fetchListings(
 
   // Resolve the viewer's garage first: the fitment filter needs to constrain the
   // query itself, not the page it returns.
-  let fitSourceCarIds: string[] | null = null;
+  let fitSourceCarIds: string[] = [];
+  let fitDeclaredListingIds: string[] = [];
   let garageByKey = new Map<string, string>();
-  let garageCars: { name: string; make: string | null; model: string | null }[] = [];
+  let garageCars: GarageCar[] = [];
 
   if (viewerId) {
-    const { data } = await supabase.from("cars").select("name, make, model").eq("owner_id", viewerId);
+    const { data } = await supabase
+      .from("cars")
+      .select("name, make, model, year")
+      .eq("owner_id", viewerId);
     garageCars = data ?? [];
     garageByKey = buildGarageFitmentIndex(garageCars);
 
     if (filters.fit === "1" && garageByKey.size) {
       const makes = [...new Set(garageCars.map((c) => c.make).filter(Boolean))] as string[];
-      const { data: matching } = await supabase
-        .from("cars")
-        .select("id, make, model")
-        .in("make", makes);
+      // Two ways a listing can fit (both seller-stated): its source car
+      // matches the garage, or a structured fitment row (0025) does. The
+      // make pre-filter runs case-insensitively — fitment rows come from
+      // the vPIC picker whose casing ("Volkswagen") needn't match a
+      // hand-typed garage make ("volkswagen").
+      // Quoted so multi-word makes ("Aston Martin") survive the PostgREST
+      // or-syntax; quotes/commas/parens in the value are stripped, not data.
+      const makeClause = makes
+        .map((m) => `make.ilike."${m.replace(/["\\,()]/g, " ").trim()}"`)
+        .join(",");
+      const [{ data: matchingCars }, { data: claims }] = await Promise.all([
+        supabase.from("cars").select("id, make, model").or(makeClause),
+        supabase
+          .from("listing_fitments")
+          .select("listing_id, make, model, year_start, year_end")
+          .or(makeClause),
+      ]);
 
-      fitSourceCarIds = (matching ?? [])
+      fitSourceCarIds = (matchingCars ?? [])
         .filter((c) => matchGarageFitment(garageByKey, c.make, c.model))
         .map((c) => c.id);
+      fitDeclaredListingIds = [
+        ...new Set(
+          (claims ?? [])
+            .filter((f) => matchFitmentClaims(garageCars, [f]))
+            .map((f) => f.listing_id)
+        ),
+      ];
     }
   }
 
@@ -155,12 +184,16 @@ export async function fetchListings(
   }
 
   if (filters.fit === "1") {
-    // No garage, or nothing in it matches any source car → no results by
+    // No garage, or nothing matching by either route → no results by
     // definition. Say so rather than showing an unfiltered page.
-    if (!fitSourceCarIds?.length) {
+    if (!fitSourceCarIds.length && !fitDeclaredListingIds.length) {
       return { results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
     }
-    query = query.in("source_car_id", fitSourceCarIds);
+    const clauses = [
+      ...(fitSourceCarIds.length ? [`source_car_id.in.(${fitSourceCarIds.join(",")})`] : []),
+      ...(fitDeclaredListingIds.length ? [`id.in.(${fitDeclaredListingIds.join(",")})`] : []),
+    ];
+    query = query.or(clauses.join(","));
   }
 
   if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
@@ -192,19 +225,33 @@ export async function fetchListings(
     if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
   }
 
-  // Fitment hint for the rows on this page.
+  // Fitment hint for the rows on this page — declared rows (0025) first,
+  // source-car match as the fallback, mirroring the listing page's order.
   const fitByListing = new Map<string, string>();
   const sourceCarIds = listings.map((l) => l.source_car_id).filter(Boolean) as string[];
-  if (viewerId && garageByKey.size && sourceCarIds.length) {
-    const { data: sourceCars } = await supabase
-      .from("cars")
-      .select("id, make, model")
-      .in("id", sourceCarIds);
+  if (viewerId && garageByKey.size) {
+    const [{ data: sourceCars }, { data: pageClaims }] = await Promise.all([
+      sourceCarIds.length
+        ? supabase.from("cars").select("id, make, model").in("id", sourceCarIds)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("listing_fitments")
+        .select("listing_id, make, model, year_start, year_end")
+        .in("listing_id", ids),
+    ]);
 
+    const claimsByListing = new Map<string, NonNullable<typeof pageClaims>>();
+    for (const claim of pageClaims ?? []) {
+      const bucket = claimsByListing.get(claim.listing_id) ?? [];
+      bucket.push(claim);
+      claimsByListing.set(claim.listing_id, bucket);
+    }
     const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
     for (const listing of listings) {
+      const declared = matchFitmentClaims(garageCars, claimsByListing.get(listing.id) ?? []);
       const source = listing.source_car_id ? sourceById.get(listing.source_car_id) : null;
-      const match = source ? matchGarageFitment(garageByKey, source.make, source.model) : null;
+      const match =
+        declared ?? (source ? matchGarageFitment(garageByKey, source.make, source.model) : null);
       if (match) fitByListing.set(listing.id, match);
     }
   }

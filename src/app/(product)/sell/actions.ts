@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { checklistFor, sanitizeChecklist } from "@/lib/marketplace/grading";
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { keepValidGalleryImages } from "@/lib/media-url";
@@ -69,17 +70,47 @@ async function readListingFields(formData: FormData, userId: string) {
     }
   }
 
+  const subcategory = String(formData.get("subcategory") ?? "") || null;
+  const condition = String(formData.get("condition") ?? "used") as
+    | "new"
+    | "like_new"
+    | "used"
+    | "for_parts";
+
+  // Grade + checklist (0024): the checklist arrives as one radio group per
+  // question (chk_<key>); collect and validate against the catalog for this
+  // category. New parts carry neither.
+  const gradeRaw = String(formData.get("grade") ?? "");
+  const grade =
+    condition !== "new" && ["a", "b", "c"].includes(gradeRaw)
+      ? (gradeRaw as "a" | "b" | "c")
+      : null;
+
+  // Seller-accuracy attestation: a graded used part is a specific condition
+  // claim buyers rely on, so publishing one requires an explicit "this is
+  // accurate" confirmation — not just a client-side nudge.
+  if (grade && formData.get("attest_accurate") !== "on") {
+    return { error: "Confirm the condition disclosure is accurate before saving a graded part." };
+  }
+
+  const rawAnswers: Record<string, unknown> = {};
+  for (const q of checklistFor(category, subcategory)) {
+    const answer = formData.get(`chk_${q.key}`);
+    if (typeof answer === "string" && answer) rawAnswers[q.key] = answer;
+  }
+  const checklist =
+    condition !== "new" ? sanitizeChecklist(category, subcategory, rawAnswers) : null;
+
   return {
+    fitments: readFitments(formData),
     fields: {
       title,
       description: description || null,
       category,
-      subcategory: String(formData.get("subcategory") ?? "") || null,
-      condition: String(formData.get("condition") ?? "used") as
-        | "new"
-        | "like_new"
-        | "used"
-        | "for_parts",
+      subcategory,
+      condition,
+      grade,
+      condition_checklist: checklist,
       price_cents: price,
       shipping_cents: shipping,
       offer_floor_cents: floor,
@@ -145,6 +176,8 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     }
   }
 
+  const { error: fitmentError } = await saveFitments(supabase, listing.id, parsed.fitments);
+
   // Close the loop from the build sheet: if this part came off a specific mod
   // line, link them so the car page can show it as listed.
   const modItemId = String(formData.get("mod_item_id") ?? "");
@@ -168,6 +201,9 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
       error:
         "Listing created, but the photos couldn't be saved. Open it from Listings and re-add them from Edit.",
     };
+  }
+  if (fitmentError) {
+    return { error: `Listing created, but: ${fitmentError}` };
   }
 
   if (asDraft) redirect(`/listings/${listing.id}/edit?saved=draft`);
@@ -246,10 +282,13 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
     }
   }
 
+  const { error: fitmentError } = await saveFitments(supabase, id, parsed.fitments);
+
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/marketplace");
   revalidatePath("/sell");
+  if (fitmentError) return { error: `Listing updated, but: ${fitmentError}` };
   return { ok: "Listing updated." };
 }
 
@@ -402,6 +441,58 @@ export async function unlinkModListing(formData: FormData): Promise<ListingActio
   revalidatePath(`/cars/${car.slug}`);
   if (mod?.linked_listing_id) revalidatePath(`/listings/${mod.linked_listing_id}`);
   return { ok: "Link removed." };
+}
+
+type FitmentInput = { make: string; model: string; year_start: number | null; year_end: number | null };
+
+/**
+ * Parses the fitment picker's hidden JSON field (0025) into clean rows.
+ * Same tolerance stance as the checklist: malformed rows are dropped, never
+ * fatal — the structured claims are additive to the freeform notes.
+ */
+function readFitments(formData: FormData): FitmentInput[] {
+  const parsed = safeParseJson(formData.get("fitments"));
+  if (!Array.isArray(parsed)) return [];
+  const saneYear = (y: unknown): number | null =>
+    typeof y === "number" && Number.isInteger(y) && y >= 1930 && y <= 2035 ? y : null;
+  const rows: FitmentInput[] = [];
+  const seen = new Set<string>();
+  for (const row of parsed.slice(0, 10)) {
+    if (!row || typeof row !== "object") continue;
+    const make = String((row as Record<string, unknown>).make ?? "").trim().slice(0, 60);
+    const model = String((row as Record<string, unknown>).model ?? "").trim().slice(0, 80);
+    if (!make || !model) continue;
+    let start = saneYear((row as Record<string, unknown>).year_start);
+    let end = saneYear((row as Record<string, unknown>).year_end);
+    if (start !== null && end !== null && end < start) [start, end] = [end, start];
+    const key = `${make.toLowerCase()}|${model.toLowerCase()}|${start ?? ""}|${end ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ make, model, year_start: start, year_end: end });
+  }
+  return rows;
+}
+
+/**
+ * Mirrors the picker's rows to listing_fitments — delete-and-reinsert, the
+ * same shape the gallery uses. RLS ("sellers manage fitment") scopes both
+ * statements to listings this user owns.
+ */
+async function saveFitments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  listingId: string,
+  fitments: FitmentInput[]
+): Promise<{ error?: string }> {
+  await supabase.from("listing_fitments").delete().eq("listing_id", listingId);
+  if (!fitments.length) return {};
+  const { error } = await supabase
+    .from("listing_fitments")
+    .insert(fitments.map((f) => ({ listing_id: listingId, ...f })));
+  if (error) {
+    reportError("[sell] fitment rows failed", { listingId, error });
+    return { error: "Fitment rows couldn't be saved — re-add them from Edit." };
+  }
+  return {};
 }
 
 function safeParseJson(value: FormDataEntryValue | null): unknown {
