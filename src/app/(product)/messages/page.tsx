@@ -8,10 +8,17 @@ import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Messages - DRVN" };
 
-/** Bounded: enough recent messages to reconstruct the 50 most-active threads
- *  without ever scanning a user's entire history. */
-const MESSAGE_SCAN_LIMIT = 400;
-const THREAD_LIMIT = 50;
+/**
+ * Threads aren't a table — they're derived by collapsing the `messages` table
+ * down to one row per order/offer. This window is how far back that
+ * derivation scans to find them. Bumped from the old 400/50 caps, but still a
+ * window: a conversation whose last message falls outside it won't appear.
+ * Deep paging (beyond what fits in one scan) can't reach threads older than
+ * the window — a real limitation of deriving threads at read time rather than
+ * from a materialised table.
+ */
+const MESSAGE_SCAN_LIMIT = 1200;
+const PAGE_SIZE = 20;
 
 function initialsOf(name: string) {
   return name
@@ -33,6 +40,15 @@ type ThreadRow = {
   unread: number;
 };
 
+function withParams(params: Record<string, string | undefined>, overrides: Record<string, string | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries({ ...params, ...overrides })) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `/messages?${query}` : "/messages";
+}
+
 /**
  * The inbox that never existed. Order and offer threads always worked, but
  * they only ever rendered on the surface that spawned them — an order detail
@@ -41,19 +57,36 @@ type ThreadRow = {
  * sorted by whoever spoke last, and sends the reader back to wherever the
  * conversation actually renders.
  */
-export default async function MessagesPage() {
+export default async function MessagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; q?: string }>;
+}) {
+  const { page: pageParam, q } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const query = (q ?? "").trim();
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: recent, error } = await supabase
-    .from("messages")
-    .select("id, listing_id, offer_id, order_id, sender_id, recipient_id, body, created_at")
-    .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-    .order("created_at", { ascending: false })
-    .limit(MESSAGE_SCAN_LIMIT);
+  const [{ data: recent, error }, { count: totalUnreadCount }] = await Promise.all([
+    supabase
+      .from("messages")
+      .select("id, listing_id, offer_id, order_id, sender_id, recipient_id, body, created_at")
+      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_SCAN_LIMIT),
+    // Was previously derived from a 500-row scan of unread messages, which
+    // silently undercounted past that cap — this is exact.
+    supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", user.id)
+      .is("read_at", null),
+  ]);
 
   if (error) {
     reportError("[messages] failed to load", error);
@@ -71,17 +104,20 @@ export default async function MessagesPage() {
     threadByKey.set(key, m);
   }
   const allThreads = Array.from(threadByKey.values());
-  // Either cap can silently hide history: more threads than THREAD_LIMIT, or a
-  // scan that filled up (older threads' latest messages fell off the end).
-  const truncated =
-    allThreads.length > THREAD_LIMIT || (recent ?? []).length === MESSAGE_SCAN_LIMIT;
-  const lastMessages = allThreads.slice(0, THREAD_LIMIT);
+  // The scan window filled up — there may be older threads this pass never saw.
+  const windowExhausted = (recent ?? []).length === MESSAGE_SCAN_LIMIT;
 
-  const orderIds = [...new Set(lastMessages.map((m) => m.order_id).filter((x): x is string => Boolean(x)))];
-  const listingIds = [...new Set(lastMessages.map((m) => m.listing_id).filter((x): x is string => Boolean(x)))];
+  const totalPages = Math.max(1, Math.ceil(allThreads.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages);
+  const from = (clampedPage - 1) * PAGE_SIZE;
+  const pageThreads = allThreads.slice(from, from + PAGE_SIZE);
+  const hasMore = from + PAGE_SIZE < allThreads.length;
+
+  const orderIds = [...new Set(pageThreads.map((m) => m.order_id).filter((x): x is string => Boolean(x)))];
+  const listingIds = [...new Set(pageThreads.map((m) => m.listing_id).filter((x): x is string => Boolean(x)))];
   const counterpartyIds = [
     ...new Set(
-      lastMessages.map((m) => (m.sender_id === user.id ? m.recipient_id : m.sender_id)).filter((x): x is string => Boolean(x))
+      pageThreads.map((m) => (m.sender_id === user.id ? m.recipient_id : m.sender_id)).filter((x): x is string => Boolean(x))
     ),
   ];
 
@@ -90,8 +126,7 @@ export default async function MessagesPage() {
       .from("messages")
       .select("order_id, offer_id")
       .eq("recipient_id", user.id)
-      .is("read_at", null)
-      .limit(500),
+      .is("read_at", null),
     orderIds.length
       ? supabase.from("orders").select("id, buyer_id, seller_id, buyer_label, seller_label").in("id", orderIds)
       : Promise.resolve({ data: [] }),
@@ -108,7 +143,7 @@ export default async function MessagesPage() {
     unreadByKey.set(key, (unreadByKey.get(key) ?? 0) + 1);
   }
 
-  const rows: ThreadRow[] = lastMessages.map((m) => {
+  const rows: ThreadRow[] = pageThreads.map((m) => {
     const key = m.order_id ? `order:${m.order_id}` : `offer:${m.offer_id}`;
     const counterpartyId = m.sender_id === user.id ? m.recipient_id : m.sender_id;
     const profile = (profiles ?? []).find((p) => p.id === counterpartyId);
@@ -127,7 +162,7 @@ export default async function MessagesPage() {
 
     return {
       key,
-      href: m.order_id ? `/messages/${m.order_id}` : `/orders#offer-${m.offer_id}`,
+      href: m.order_id ? `/messages/${m.order_id}` : `/offers/${m.offer_id}`,
       counterpartyName,
       counterpartyAvatar: profile?.avatar_url ?? null,
       listingTitle: listing?.title ?? "Listing",
@@ -137,9 +172,19 @@ export default async function MessagesPage() {
     };
   });
 
-  // Counted over every unread thread the user has, not just the visible
-  // rows, so the badge can't undercount when the thread list is capped.
-  const totalUnread = [...unreadByKey.values()].reduce((sum, n) => sum + n, 0);
+  // Search only ever looks at the page already loaded above — a real
+  // cross-history search would mean indexing threads server-side, which
+  // doesn't exist yet. Labelled honestly rather than implying full recall.
+  const filteredRows = query
+    ? rows.filter(
+        (row) =>
+          row.listingTitle.toLowerCase().includes(query.toLowerCase()) ||
+          row.counterpartyName.toLowerCase().includes(query.toLowerCase())
+      )
+    : rows;
+
+  const totalUnread = totalUnreadCount ?? 0;
+  const params = { q: query || undefined };
 
   return (
     <NarrowColumn>
@@ -164,21 +209,45 @@ export default async function MessagesPage() {
         </p>
       </Rv>
 
+      <form action="/messages" method="get" className="filters" role="search">
+        <span className="microlabel filters__label">Search your recent conversations</span>
+        <input
+          type="search"
+          name="q"
+          defaultValue={query}
+          placeholder="Listing title or person…"
+          className="ctl !max-w-xs"
+        />
+        <button type="submit" className="fbtn">
+          Search
+        </button>
+        {query && (
+          <Link href="/messages" className="fbtn">
+            Clear
+          </Link>
+        )}
+      </form>
+
       <Rv className="tile" stagger={1}>
         <div className="tile__head">
           <span className="microlabel microlabel--ink">Conversations</span>
-          {rows.length > 0 && <span className="chip">{rows.length}</span>}
+          {allThreads.length > 0 && <span className="chip">{allThreads.length}</span>}
         </div>
 
-        {truncated && (
+        {windowExhausted && (
           <p className="field__hint mt-2">
-            Showing your {THREAD_LIMIT} most recent conversations — older threads live on their
-            order pages.
+            Showing conversations from your most recent {MESSAGE_SCAN_LIMIT} messages — a very old,
+            quiet thread may not appear.
           </p>
         )}
-        {rows.length > 0 ? (
+        {query && (
+          <p className="field__hint mt-2">
+            {filteredRows.length} of {rows.length} on this page match &ldquo;{query}&rdquo;.
+          </p>
+        )}
+        {filteredRows.length > 0 ? (
           <div className="rowlist mt-2">
-            {rows.map((row) => (
+            {filteredRows.map((row) => (
               <Link key={row.key} href={row.href} className="order">
                 {row.counterpartyAvatar ? (
                   <span className="h-11 w-11 shrink-0 overflow-hidden rounded-ctl bg-img-fallback">
@@ -219,12 +288,37 @@ export default async function MessagesPage() {
             <span className="undrawn__mark" aria-hidden="true">
               ✎
             </span>
-            <h3>Nothing here yet</h3>
+            <h3>{query ? "No matches on this page" : "Nothing here yet"}</h3>
             <p>
-              Questions on your listings and chats about your orders will collect here — reply from
-              either place and it shows up in this list.
+              {query
+                ? "Try another page, or clear the search to see every recent conversation."
+                : "Questions on your listings and chats about your orders will collect here — reply from either place and it shows up in this list."}
             </p>
           </div>
+        )}
+
+        {(clampedPage > 1 || hasMore) && (
+          <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
+            {clampedPage > 1 ? (
+              <Link
+                href={withParams(params, { page: clampedPage - 1 === 1 ? undefined : String(clampedPage - 1) })}
+                className="btn btn--ghost"
+                rel="prev"
+              >
+                ← Previous
+              </Link>
+            ) : (
+              <span />
+            )}
+            <span className="microlabel">Page {clampedPage}</span>
+            {hasMore ? (
+              <Link href={withParams(params, { page: String(clampedPage + 1) })} className="btn btn--ghost" rel="next">
+                Next →
+              </Link>
+            ) : (
+              <span />
+            )}
+          </nav>
         )}
       </Rv>
 

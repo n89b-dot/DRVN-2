@@ -3,8 +3,12 @@ import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, Media } from "@/components/ui";
-import { DISPUTE_CATEGORIES } from "@/features/commerce/disputes";
+import { ConditionSummary, type ConditionSnapshot } from "@/components/condition-summary";
+import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
+import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
+import { countryLabel } from "@/lib/geo/countries";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { ReviewForm } from "../review-form";
@@ -12,10 +16,12 @@ import { OrderPipeline, StatusChip } from "../order-pipeline";
 import {
   AcceptRefundButton,
   CloseDisputeButton,
+  DisputeEvidenceForm,
+  EscalateDisputeButton,
   RefundOfferForm,
   ReportProblemForm,
 } from "./disputes";
-import { CancelOrder, DispatchForm } from "./fulfilment";
+import { CancelOrder, DispatchForm, ReceivedButton } from "./fulfilment";
 import { reportError } from "@/lib/monitoring";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -59,8 +65,14 @@ export default async function OrderDetailPage({
 
   const counterpartyId = isBuyer ? order.seller_id : order.buyer_id;
 
-  const [{ data: items }, { data: counterparty }, { data: messages }, { data: reviews }, { data: payment }] =
-    await Promise.all([
+  const [
+    { data: items },
+    { data: counterparty },
+    { data: messages },
+    { data: reviews },
+    { data: payment },
+    { data: evidence },
+  ] = await Promise.all([
       supabase.from("order_items").select("*").eq("order_id", id),
       counterpartyId
         ? supabase
@@ -74,27 +86,54 @@ export default async function OrderDetailPage({
         .select("id, sender_id, body, created_at")
         .eq("order_id", id)
         .order("created_at"),
-      supabase.from("reviews").select("order_id, reviewer_id").eq("order_id", id),
+      supabase.from("reviews").select("order_id, reviewer_id, rating").eq("order_id", id),
       supabase
         .from("payments")
         .select("status, provider, provider_reference, refunded_cents")
         .eq("order_id", id)
         .maybeSingle(),
+      // RLS: participants only ("participants read dispute evidence", 0024).
+      supabase
+        .from("dispute_evidence")
+        .select("id, uploader_id, url, storage_path, note, created_at")
+        .eq("order_id", id)
+        .order("created_at"),
     ]);
+
+  // dispute-evidence is a private bucket (0027) — the stored `url` is stale
+  // (public-shaped or a bare path), so render a short-lived signed one
+  // instead. Signing needs the admin storage client; RLS already gated the
+  // `evidence` select above to this order's participants.
+  const signedEvidence = await signEvidenceUrls(createAdminClient(), evidence ?? []);
 
   const listingIds = (items ?? [])
     .map((i) => i.listing_id)
     .filter((x): x is string => Boolean(x));
-  const { data: images } = listingIds.length
-    ? await supabase
-        .from("listing_images")
-        .select("listing_id, url, position")
-        .in("listing_id", listingIds)
-        .order("position")
-    : { data: [] };
+  const [{ data: images }, { data: listingMeta }] = await Promise.all([
+    listingIds.length
+      ? supabase
+          .from("listing_images")
+          .select("listing_id, url, position")
+          .in("listing_id", listingIds)
+          .order("position")
+      : Promise.resolve({ data: [] }),
+    // Category/subcategory for the checklist's question catalog — the
+    // snapshot itself only carries answers, not which questions they
+    // answer (0024's trigger doesn't freeze category). Best-effort: a
+    // listing edited since the sale still has the right catalog (question
+    // keys are stable per category); a hard-deleted one falls back to
+    // humanized raw keys in ConditionSummary.
+    listingIds.length
+      ? supabase.from("listings").select("id, category, subcategory").in("id", listingIds)
+      : Promise.resolve({ data: [] }),
+  ]);
   const cover = new Map<string, string>();
   for (const img of images ?? []) {
     if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
+  }
+  const listingCategory = new Map<string, { category: string; subcategory: string | null }>();
+  for (const l of listingMeta ?? []) {
+    listingCategory.set(l.id, { category: l.category, subcategory: l.subcategory });
   }
 
   // Falls back to the snapshot label, so a deleted account still reads sensibly.
@@ -104,7 +143,30 @@ export default async function OrderDetailPage({
     (isBuyer ? order.seller_label : order.buyer_label) ??
     "DRVN member";
 
-  const reviewedByMe = (reviews ?? []).some((r) => r.reviewer_id === user.id);
+  // Escalation gate (0024): seller-response window passed, no live offer, not
+  // already escalated. Computed here, not in JSX — render stays pure.
+  const canEscalate =
+    isBuyer &&
+    order.status === "disputed" &&
+    !order.dispute_escalated_at &&
+    !order.refund_offer_cents &&
+    Boolean(order.disputed_at) &&
+    // `new Date()` not `Date.now()` — the purity lint's house pattern.
+    new Date().getTime() - new Date(order.disputed_at!).getTime() >
+      SELLER_RESPONSE_DAYS * 86_400_000;
+
+  // Seller-response deadline (0024/0021), for the same reason canEscalate is
+  // computed here rather than in JSX — `new Date()` not `Date.now()`, the
+  // purity lint's house pattern.
+  const sellerResponseDueBy = order.disputed_at
+    ? new Date(new Date(order.disputed_at).getTime() + SELLER_RESPONSE_DAYS * 86_400_000)
+    : null;
+  const sellerResponseOverdue = Boolean(
+    sellerResponseDueBy && new Date().getTime() > sellerResponseDueBy.getTime()
+  );
+
+  const myReview = (reviews ?? []).find((r) => r.reviewer_id === user.id);
+  const reviewedByMe = Boolean(myReview);
   const canReview = ["delivered", "completed"].includes(order.status) && !reviewedByMe;
   const payout = order.total_cents - order.platform_fee_cents;
 
@@ -182,7 +244,33 @@ export default async function OrderDetailPage({
             </div>
           </Rv>
 
-          <Rv className="tile" stagger={1}>
+          {/* As purchased (0024): the grade/checklist/notes frozen onto
+              this order at the moment of sale — the contract, not the
+              listing as it reads today. */}
+          {(items ?? []).some((item) => item.condition_snapshot) && (
+            <Rv className="tile" stagger={1}>
+              <span className="microlabel microlabel--ink">As purchased</span>
+              <div className="mt-3 grid gap-5">
+                {(items ?? []).map((item) => {
+                  const snapshot = item.condition_snapshot as ConditionSnapshot;
+                  if (!snapshot) return null;
+                  const meta = item.listing_id ? listingCategory.get(item.listing_id) : undefined;
+                  return (
+                    <ConditionSummary
+                      key={item.id}
+                      snapshot={snapshot}
+                      category={meta?.category}
+                      subcategory={meta?.subcategory}
+                      label={(items ?? []).length > 1 ? (item.title ?? "Part") : "Condition"}
+                      note="Declared by the seller at listing time and frozen onto this order at purchase."
+                    />
+                  );
+                })}
+              </div>
+            </Rv>
+          )}
+
+          <Rv className="tile" stagger={2}>
             <div className="flex items-baseline justify-between gap-3">
               <span className="min-w-0">
                 <span className="microlabel microlabel--ink block">Conversation</span>
@@ -199,11 +287,23 @@ export default async function OrderDetailPage({
           </Rv>
 
           {canReview && (
-            <Rv className="tile" stagger={2}>
+            <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Rate this trade</span>
               <div className="mt-3">
                 <ReviewForm orderId={id} revieweeName={counterpartyName} />
               </div>
+            </Rv>
+          )}
+
+          {myReview && (
+            <Rv className="tile" stagger={3}>
+              <span className="microlabel microlabel--ink">Your review</span>
+              <p className="mt-2">
+                <span className="review__stars !ml-0" aria-label={`${myReview.rating} out of 5`}>
+                  {"★".repeat(myReview.rating)}
+                  <span className="text-dim">{"★".repeat(5 - myReview.rating)}</span>
+                </span>
+              </p>
             </Rv>
           )}
         </div>
@@ -300,9 +400,10 @@ export default async function OrderDetailPage({
                   </>
                 )}
                 <br />
-                {order.ship_city} {order.ship_postcode}
+                {order.ship_city}
+                {order.ship_state ? `, ${order.ship_state}` : ""} {order.ship_postcode}
                 <br />
-                {order.ship_country}
+                {countryLabel(order.ship_country)}
                 {order.ship_phone && (
                   <>
                     <br />
@@ -344,13 +445,38 @@ export default async function OrderDetailPage({
             </Rv>
           )}
 
+          {isBuyer && order.status === "shipped" && (
+            <Rv className="tile" stagger={3}>
+              <span className="microlabel microlabel--ink">Has it arrived?</span>
+              <p className="spec-note">
+                Confirming receipt starts the seller&apos;s payout clearing window — check the
+                part against its condition disclosure first.
+              </p>
+              <div className="mt-3">
+                <ReceivedButton orderId={id} />
+              </div>
+            </Rv>
+          )}
+
           {isBuyer && ["shipped", "delivered", "completed"].includes(order.status) && (
             <Rv className="tile" stagger={4}>
               <span className="microlabel microlabel--ink">Something wrong?</span>
               <p className="spec-note">
                 Item missing, damaged or not as described — open a dispute and the seller can
-                offer a refund.
+                offer a refund.{" "}
+                <Link href="/protection" className="jumplink">
+                  How protection works
+                </Link>
               </p>
+              {order.delivered_at && (
+                <p className="spec-note">
+                  You can report a problem until{" "}
+                  {new Date(
+                    new Date(order.delivered_at).getTime() + DISPUTE_WINDOW_DAYS * 86_400_000
+                  ).toLocaleDateString()}
+                  {" "}— {DISPUTE_WINDOW_DAYS} days after delivery.
+                </p>
+              )}
               <div className="mt-3">
                 <ReportProblemForm orderId={id} />
               </div>
@@ -361,7 +487,9 @@ export default async function OrderDetailPage({
             <Rv className="tile tile--deep" stagger={4}>
               <div className="tile__head">
                 <span className="microlabel microlabel--ink">Dispute</span>
-                <span className="chip chip--spent">In dispute</span>
+                <span className={order.dispute_escalated_at ? "chip chip--live" : "chip chip--spent"}>
+                  {order.dispute_escalated_at ? "With DRVN support" : "In dispute"}
+                </span>
               </div>
               <p className="mt-2 text-[14.5px]">
                 {DISPUTE_CATEGORIES.find((c) => c.value === order.dispute_category)?.label ??
@@ -374,6 +502,60 @@ export default async function OrderDetailPage({
                 Opened {order.disputed_at ? new Date(order.disputed_at).toLocaleDateString() : ""}
                 {isBuyer ? " by you" : ` by ${counterpartyName}`}
               </p>
+
+              {/* Deadlines the dispute runs against (0024/0021): the seller's
+                  response window, and — once it's passed — when the buyer can
+                  ask DRVN to step in. Both derive from disputed_at; nothing
+                  here is computed server-side beyond what canEscalate above
+                  already checks. */}
+              {sellerResponseDueBy && !order.dispute_escalated_at && (
+                <p className="spec-note">
+                  {sellerResponseOverdue
+                    ? `Seller response was due ${sellerResponseDueBy.toLocaleDateString()} — ${isBuyer ? "you can now ask DRVN to step in." : "the buyer can now ask DRVN to step in."}`
+                    : `Seller response due by ${sellerResponseDueBy.toLocaleDateString()}. Escalation to DRVN opens after that.`}
+                </p>
+              )}
+
+              {/* The contract this dispute is judged against: the grade and
+                  checklist the listing declared, frozen at purchase (0024) —
+                  distinct from anything said in the conversation since. */}
+              {(items ?? []).map((item) => {
+                const snapshot = item.condition_snapshot as ConditionSnapshot;
+                if (!snapshot) return null;
+                const meta = item.listing_id ? listingCategory.get(item.listing_id) : undefined;
+                return (
+                  <div key={item.id} className="mt-3">
+                    <ConditionSummary
+                      snapshot={snapshot}
+                      category={meta?.category}
+                      subcategory={meta?.subcategory}
+                      label="What the listing promised (frozen at purchase)"
+                      note="This is the contract the dispute is judged against — not anything said since in the conversation below."
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Evidence: photos beat adjectives in a condition argument. */}
+              {signedEvidence.length > 0 && (
+                <div className="mt-3">
+                  <span className="microlabel">Photos on this case</span>
+                  <div className="thumbs !mt-1">
+                    {signedEvidence.map((e) => (
+                      <a key={e.id} href={e.url} target="_blank" rel="noreferrer" className="thumb">
+                        <Media
+                          src={e.url}
+                          alt={e.note ?? "Dispute evidence photo"}
+                          className="h-full w-full"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="mt-3">
+                <DisputeEvidenceForm orderId={id} userId={user.id} />
+              </div>
 
               {order.refund_offer_cents ? (
                 <div className="mt-3 grid gap-2">
@@ -392,6 +574,18 @@ export default async function OrderDetailPage({
                     <RefundOfferForm orderId={id} totalCents={order.total_cents} />
                   </div>
                 )
+              )}
+
+              {/* Escalation (0024): shown once the seller-response window has
+                  passed with no live offer and no prior escalation — the
+                  server action re-checks all three. */}
+              {canEscalate && (
+                <div className="mt-3">
+                  <p className="spec-note">
+                    The seller has had {SELLER_RESPONSE_DAYS} days — you can bring DRVN in.
+                  </p>
+                  <EscalateDisputeButton orderId={id} />
+                </div>
               )}
 
               {isBuyer && (

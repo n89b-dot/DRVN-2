@@ -11,6 +11,8 @@ import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Notifications - DRVN" };
 
+const PAGE_SIZE = 25;
+
 type Row = {
   id: string;
   kind: string;
@@ -21,6 +23,20 @@ type Row = {
   read_at: string | null;
   created_at: string;
 };
+
+type SectionFilter = "engagement" | "marketplace";
+
+function withParams(
+  params: Record<string, string | undefined>,
+  overrides: Record<string, string | undefined>
+) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries({ ...params, ...overrides })) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `/notifications?${query}` : "/notifications";
+}
 
 function Section({
   label,
@@ -69,7 +85,13 @@ function Section({
                   })}
                 </time>
                 {row.href ? (
-                  <Link href={row.href} className="min-w-0 flex-1 transition-colors hover:text-live">
+                  // Routed through /notifications/open/[id] so opening a row
+                  // is also the read receipt, without turning every row into
+                  // a form (a plain link keeps middle-click / new-tab working).
+                  <Link
+                    href={`/notifications/open/${row.id}`}
+                    className="min-w-0 flex-1 transition-colors hover:text-live"
+                  >
                     {content}
                   </Link>
                 ) : (
@@ -87,27 +109,50 @@ function Section({
 }
 
 /**
- * Reads the real `notifications` table (migration 0009). Previously this page
- * derived four event types at read time from `follows` and `saves`, so nothing
- * commerce-related could ever appear — a seller was never told a question had
- * been asked or an offer made — and there was no unread state.
+ * Reads the real `notifications` table (migration 0009).
+ *
+ * Filters (`?filter=unread`, `?section=`) and pagination (`?page=`, 25/page)
+ * are applied at the query level. Preference filtering (a user can mute a
+ * kind entirely) still happens in memory afterwards, since it depends on a
+ * JSON column rather than a plain filterable one — the one place a page can
+ * come back with fewer than 25 rows even though more exist.
  */
-export default async function NotificationsPage() {
+export default async function NotificationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string; section?: string; page?: string }>;
+}) {
+  const { filter, section: sectionParam, page: pageParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: rows, error }, { data: me }] = await Promise.all([
-    supabase
-      .from("notifications")
-      .select("id, kind, section, title, body, href, read_at, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase.from("profiles").select("notification_prefs").eq("id", user.id).maybeSingle(),
-  ]);
+  const unreadOnly = filter === "unread";
+  const section: SectionFilter | undefined =
+    sectionParam === "engagement" || sectionParam === "marketplace" ? sectionParam : undefined;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+
+  let query = supabase
+    .from("notifications")
+    .select("id, kind, section, title, body, href, read_at, created_at", { count: "exact" })
+    .eq("user_id", user.id);
+  if (unreadOnly) query = query.is("read_at", null);
+  if (section) query = query.eq("section", section);
+  query = query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
+
+  const [{ data: rows, count, error }, { data: me }, { count: totalUnreadCount }] =
+    await Promise.all([
+      query,
+      supabase.from("profiles").select("notification_prefs").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .is("read_at", null),
+    ]);
 
   if (error) {
     reportError("[notifications] failed to load", error);
@@ -122,7 +167,14 @@ export default async function NotificationsPage() {
 
   const engagement = visible.filter((r) => r.section === "engagement");
   const marketplace = visible.filter((r) => r.section === "marketplace");
-  const unreadTotal = visible.filter((r) => !r.read_at).length;
+  const unreadTotal = totalUnreadCount ?? 0;
+  const total = count ?? 0;
+  const hasMore = from + PAGE_SIZE < total;
+
+  const params = {
+    filter: unreadOnly ? "unread" : undefined,
+    section,
+  };
 
   return (
     <NarrowColumn>
@@ -150,18 +202,100 @@ export default async function NotificationsPage() {
         )}
       </Rv>
 
-      <div className="deck">
-        <Section
-          label="Your builds — people and posts"
-          rows={engagement}
-          empty="Quiet — follows, saves, comments and reviews land here"
-        />
-        <Section
-          label="Marketplace — offers, sales and questions"
-          rows={marketplace}
-          empty="Quiet — offers, sales, questions and dispatch updates land here"
-        />
+      <div className="filters" role="group" aria-label="Filter notifications">
+        <span className="microlabel filters__label">Show</span>
+        <Link
+          href={withParams(params, { filter: undefined, page: undefined })}
+          className={`fbtn ${!unreadOnly ? "is-on" : ""}`}
+          aria-current={!unreadOnly ? "true" : undefined}
+        >
+          All
+        </Link>
+        <Link
+          href={withParams(params, { filter: "unread", page: undefined })}
+          className={`fbtn ${unreadOnly ? "is-on" : ""}`}
+          aria-current={unreadOnly ? "true" : undefined}
+        >
+          Unread
+        </Link>
+        <span className="mx-1 text-dim" aria-hidden="true">
+          ·
+        </span>
+        <Link
+          href={withParams(params, { section: undefined, page: undefined })}
+          className={`fbtn ${!section ? "is-on" : ""}`}
+          aria-current={!section ? "true" : undefined}
+        >
+          Both
+        </Link>
+        <Link
+          href={withParams(params, { section: "engagement", page: undefined })}
+          className={`fbtn ${section === "engagement" ? "is-on" : ""}`}
+          aria-current={section === "engagement" ? "true" : undefined}
+        >
+          Your builds
+        </Link>
+        <Link
+          href={withParams(params, { section: "marketplace", page: undefined })}
+          className={`fbtn ${section === "marketplace" ? "is-on" : ""}`}
+          aria-current={section === "marketplace" ? "true" : undefined}
+        >
+          Marketplace
+        </Link>
       </div>
+
+      <div className="deck">
+        {(!section || section === "engagement") && (
+          <Section
+            label="Your builds — people and posts"
+            rows={engagement}
+            empty={
+              unreadOnly
+                ? "No unread activity here"
+                : "Quiet — follows, saves, comments and reviews land here"
+            }
+          />
+        )}
+        {(!section || section === "marketplace") && (
+          <Section
+            label="Marketplace — offers, sales and questions"
+            rows={marketplace}
+            empty={
+              unreadOnly
+                ? "No unread marketplace activity"
+                : "Quiet — offers, sales, questions and dispatch updates land here"
+            }
+          />
+        )}
+      </div>
+
+      {(page > 1 || hasMore) && (
+        <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
+          {page > 1 ? (
+            <Link
+              href={withParams(params, { page: page - 1 === 1 ? undefined : String(page - 1) })}
+              className="btn btn--ghost"
+              rel="prev"
+            >
+              ← Previous
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="microlabel">Page {page}</span>
+          {hasMore ? (
+            <Link
+              href={withParams(params, { page: String(page + 1) })}
+              className="btn btn--ghost"
+              rel="next"
+            >
+              Next →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )}
 
       <Foot
         left="DRVN — notifications"
