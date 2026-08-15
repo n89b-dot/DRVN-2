@@ -1,4 +1,23 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
+
+// Make the Supabase URL + service key visible to the test process (admin
+// setup/cleanup in e2e/helpers.ts). Next loads these itself for the app; the
+// Playwright process needs them too. Minimal parser — no dotenv dependency.
+// Never overrides variables already set in the environment.
+for (const file of [".env.test.local", ".env.local"]) {
+  const envPath = path.join(__dirname, file);
+  if (!fs.existsSync(envPath)) continue;
+  for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!match) continue;
+    const [, key, raw] = match;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = raw.replace(/^(["'])(.*)\1$/, "$2");
+  }
+}
 
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
