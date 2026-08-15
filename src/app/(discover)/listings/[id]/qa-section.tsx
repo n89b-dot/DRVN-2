@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useOptimistic, useState } from "react";
 
 import { askQuestion, type CommerceState } from "@/features/commerce/actions";
 
@@ -53,7 +53,9 @@ function Thread({
           {item.isSeller && <span className="chip chip--ok ml-2 normal-case">Seller</span>}
         </span>
         <p className="msg__body">{item.body}</p>
-        <span className="msg__meta">{formatTimestamp(item.created_at)}</span>
+        <span className="msg__meta">
+          {item.id.startsWith("optimistic-") ? "Posting…" : formatTimestamp(item.created_at)}
+        </span>
         {isLoggedIn && !replying && (
           <button
             type="button"
@@ -128,8 +130,33 @@ export function QASection({
 }) {
   const [state, action, pending] = useActionState<CommerceState, FormData>(askQuestion, {});
 
-  const topLevel = items.filter((i) => !i.parent_id);
-  const repliesFor = (id: string) => items.filter((i) => i.parent_id === id);
+  // The record is the receipt: the question appears in the thread the moment
+  // it's posted, marked "Posting…" until the server revalidates. On failure
+  // React reverts the optimistic entry automatically and `state.error`
+  // explains what happened — no perceived-loss moment where the composer
+  // clears and nothing appears.
+  const [optimisticItems, addOptimistic] = useOptimistic<QAItem[], QAItem>(
+    items,
+    (current, added) => [...current, added]
+  );
+
+  const submit = (formData: FormData) => {
+    const body = String(formData.get("body") ?? "").trim();
+    if (body) {
+      addOptimistic({
+        id: `optimistic-${Date.now()}`,
+        parent_id: (formData.get("parent_id") as string | null) || null,
+        body,
+        created_at: new Date().toISOString(),
+        authorName: isSeller ? "You (seller)" : "You",
+        isSeller,
+      });
+    }
+    action(formData);
+  };
+
+  const topLevel = optimisticItems.filter((i) => !i.parent_id);
+  const repliesFor = (id: string) => optimisticItems.filter((i) => i.parent_id === id);
 
   return (
     <div className="mt-10">
@@ -153,19 +180,23 @@ export function QASection({
             listingId={listingId}
             isLoggedIn={isLoggedIn}
             depth={0}
-            action={action}
+            action={submit}
             pending={pending}
           />
         ))}
         {topLevel.length === 0 && (
-          <p className="py-2 font-mono text-[12.5px] text-dim">
-            No questions yet — answers appear here for everyone.
-          </p>
+          <div className="undrawn">
+            <span className="undrawn__mark" aria-hidden="true">
+              ?
+            </span>
+            <h3>No questions yet</h3>
+            <p>Ask the seller anything — answers appear here for everyone.</p>
+          </div>
         )}
       </div>
 
       {isLoggedIn && !isSeller && (
-        <form action={action} className="composer">
+        <form action={submit} className="composer">
           <div className="composer__row">
             <input type="hidden" name="listing_id" value={listingId} />
             <input name="body" required aria-label="Ask the seller a question" placeholder="Ask the seller a question…" className="ctl max-w-none flex-1" />

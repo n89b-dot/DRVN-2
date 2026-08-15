@@ -82,7 +82,7 @@ export function CarTabs({
 
   const buildPanel = (
     <div className="mt-2">
-      {about && <p className="max-w-[62ch] text-[15px] leading-7">{about}</p>}
+      {about && <p className="max-w-[62ch] text-body leading-7">{about}</p>}
 
       {hasBuild ? (
         <section className={about ? "mt-8" : ""}>
@@ -132,9 +132,22 @@ export function CarTabs({
         </section>
       ) : (
         !about && (
-          <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
-            No mods listed yet for this car.
-          </p>
+          <div className="undrawn">
+            <span className="undrawn__mark" aria-hidden="true">
+              ✎
+            </span>
+            <h3>No mods listed yet</h3>
+            <p>
+              {isOwner
+                ? "The build sheet starts with the first mod you record."
+                : "This build sheet is still blank — the owner hasn't recorded any mods."}
+            </p>
+            {isOwner && (
+              <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
+                Record a mod
+              </Link>
+            )}
+          </div>
         )
       )}
     </div>
@@ -253,9 +266,22 @@ export function CarTabs({
       {gallery.length > 0 ? (
         <VehicleGallery images={gallery} onSelect={(i) => setLightbox(i)} />
       ) : (
-        <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
-          No photos of this car yet.
-        </p>
+        <div className="undrawn">
+          <span className="undrawn__mark" aria-hidden="true">
+            ✎
+          </span>
+          <h3>No photos yet</h3>
+          <p>
+            {isOwner
+              ? "Photos give the build sheet its face — add the first one."
+              : "The owner hasn't photographed this car yet."}
+          </p>
+          {isOwner && (
+            <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
+              Add photos
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );

@@ -7,13 +7,34 @@ import { cx } from "@/lib/format";
 
 import { Icon } from "./icons";
 
-export function NarrowColumn({ children }: { children: ReactNode }) {
-  return <div className="wrap pb-6">{children}</div>;
+/** Constrained page column. Despite its name this rendered the full 1200px
+ *  `.wrap` for years — every "narrow" page was actually full-width. It now
+ *  does what it says: `narrow` (720px) for reading/list surfaces, with
+ *  `medium`/`wide` variants for pages that need more room. */
+export function NarrowColumn({
+  children,
+  width = "narrow",
+}: {
+  children: ReactNode;
+  width?: "narrow" | "medium" | "wide";
+}) {
+  return <div className={`wrap wrap--${width} pb-6`}>{children}</div>;
 }
 
 /** Identity mark — a Livesheet monogram plate (soft square, never a circle). */
-export function Avatar({ size = "h-12 w-12", initials = "NB" }: { size?: string; initials?: string }) {
-  return <span className={cx("monogram shrink-0", size)}>{initials}</span>;
+/** Named avatar scale — sm 44 · md 48 · lg 64 · xl 88. Sizes live in CSS
+ *  (`.monogram--*`) so call sites can't invent off-system dimensions. */
+const AVATAR_SIZES = {
+  sm: "monogram--sm",
+  md: "monogram--md",
+  lg: "", // base .monogram is 64px
+  xl: "monogram--xl",
+} as const;
+
+export type AvatarSize = keyof typeof AVATAR_SIZES;
+
+export function Avatar({ size = "md", initials = "NB" }: { size?: AvatarSize; initials?: string }) {
+  return <span className={cx("monogram shrink-0", AVATAR_SIZES[size])}>{initials}</span>;
 }
 
 /** Documented `sizes` presets, matched to how this component is actually used
@@ -22,18 +43,32 @@ export function Avatar({ size = "h-12 w-12", initials = "NB" }: { size?: string;
  *  can still pass any raw `sizes` string; these just name the common cases so
  *  a caller isn't guessing at a viewport-width formula. */
 export const MEDIA_SIZES = {
+  /** Full-bleed page hero. */
   hero: "100vw",
+  /** Large in-column feature image (e.g. a PDP gallery hero at desktop). */
+  feature: "(min-width: 981px) 60vw, 100vw",
+  /** Garage/Home vehicle presentation — a leading section image, larger than
+   *  a card but never a hero. */
+  vehicle: "(min-width: 981px) 420px, (min-width: 640px) 50vw, 100vw",
+  /** A card in a 2–4 column grid. */
   card: "(min-width: 768px) 33vw, 50vw",
+  /** Compact row media in a ledger/list line (~56–90px box). */
+  row: "96px",
+  /** Small fixed-size thumbnail (~84–120px box). */
   thumb: "120px",
-  avatar: "48px",
+  /** Monogram-scale crop. */
+  avatar: "88px",
 } as const;
+
+export type MediaRole = keyof typeof MEDIA_SIZES;
 
 export function Media({
   src,
   alt,
   className = "",
   fallbackClassName = "",
-  sizes = MEDIA_SIZES.card,
+  role,
+  sizes,
 }: {
   src?: string;
   alt: string;
@@ -43,11 +78,15 @@ export function Media({
    *  hasn't been drawn yet rather than a dead grey block. Thumbnails and
    *  inline media leave it off and keep the plain fallback. */
   fallbackClassName?: string;
-  /** One of `MEDIA_SIZES`, or a raw `sizes` string for a layout those presets
-   *  don't cover. Defaults to the `card` preset, which matches what every
-   *  current caller was already hard-coding. */
+  /** Semantic delivery hint — which rendered-size family this image belongs
+   *  to. Prefer this over a raw `sizes` string so a row thumbnail can't
+   *  silently fetch a card-sized asset (or a hero fetch a thumbnail). */
+  role?: MediaRole;
+  /** Raw `sizes` escape hatch for a layout the role presets don't cover.
+   *  Wins over `role` when both are passed. */
   sizes?: string;
 }) {
+  const resolvedSizes = sizes ?? MEDIA_SIZES[role ?? "card"];
   if (!src) {
     // The plate variants carry a drawn mark; the plain fallback stays empty so
     // thumbnails and inline media don't sprout a badge at 44px.
@@ -75,7 +114,7 @@ export function Media({
     <span className={`relative block overflow-hidden bg-img-fallback ${className}`}>
       {/* Optimization is on: next.config.ts allows the Supabase storage host,
           so these resize and serve AVIF/WebP instead of full-size originals. */}
-      <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
+      <Image src={src} alt={alt} fill sizes={resolvedSizes} className="object-cover" />
     </span>
   );
 }

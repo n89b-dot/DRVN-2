@@ -57,11 +57,11 @@ export default function PatternsPage() {
                 <tr key={route}>
                   <td>
                     {name}
-                    <span className="mt-0.5 block font-mono text-[10.5px] normal-case tracking-normal">
+                    <span className="mt-0.5 block font-mono text-micro normal-case tracking-normal">
                       {route}
                     </span>
                   </td>
-                  <td className="!text-left !text-[13.5px] text-dim">{composition}</td>
+                  <td className="!text-left !text-micro text-dim">{composition}</td>
                 </tr>
               ))}
             </tbody>
@@ -168,7 +168,7 @@ export default function PatternsPage() {
         <Rule className="mb-4" />
         <div className="deck deck--two">
           <Specimen name="Geometry & values">
-            <ol className="list-decimal space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ol className="list-decimal space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>Dashed undrawn plates keep the geometry of the content they stand for.</li>
               <li>
                 <span className="kv">—</span> for empty values; <span className="kv">$0.00</span>{" "}
@@ -182,7 +182,7 @@ export default function PatternsPage() {
             </ol>
           </Specimen>
           <Specimen name="First-run & edges">
-            <ol className="list-decimal space-y-1.5 pl-5 text-[13.5px] leading-relaxed" start={8}>
+            <ol className="list-decimal space-y-1.5 pl-5 text-micro leading-relaxed" start={8}>
               <li>First-run: blank-sheet hero, KPI blanks, how-it-fills steps, ghost orders.</li>
               <li>Photoless covers use the undrawn plate language.</li>
               <li>Empty pipelines render at reduced opacity — the shape of work to come.</li>
@@ -204,13 +204,13 @@ export default function PatternsPage() {
         </div>
         <Rule className="mb-4" />
         <div className="tile">
-          <p className="text-[13.5px] leading-relaxed">
+          <p className="text-micro leading-relaxed">
             Every form handles the full ladder — rest → filled → disabled → required →
             hint/counter → inline error <b>after blur</b> → error summary → async check →
             cross-field → server reject → pending → fail → two-step confirm → undo →
             unsaved-changes → draft restore → optimistic rollback.
           </p>
-          <p className="mt-3 text-[13.5px] leading-relaxed text-dim">
+          <p className="mt-3 text-micro leading-relaxed text-dim">
             Controls keep a transparent 1px border at rest so validation borders never shift
             layout. Settings uses a dirty-flag + sticky savebar + save toast. Countdowns and
             expiries are server-authoritative.

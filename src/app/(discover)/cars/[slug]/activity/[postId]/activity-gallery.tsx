@@ -25,7 +25,7 @@ export function ActivityGallery({ images, title }: { images: GalleryPhoto[]; tit
       className="block w-full text-left transition hover:opacity-85"
       aria-label={`View photo ${index + 1} of ${images.length} full-screen`}
     >
-      <Media src={image.url} alt={image.alt ?? title} className={className} />
+      <Media src={image.url} alt={image.alt ?? title} className={className} role="card" />
     </button>
   );
 

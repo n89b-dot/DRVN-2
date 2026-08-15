@@ -303,7 +303,7 @@ export default async function CarPage({
 
       {car.cover_image_url && (
         <Rv className="hero-media mb-6">
-          <Media src={car.cover_image_url} alt={car.name} className="h-full w-full" />
+          <Media src={car.cover_image_url} alt={car.name} className="h-full w-full" role="hero" />
         </Rv>
       )}
 

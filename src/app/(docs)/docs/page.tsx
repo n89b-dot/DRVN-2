@@ -65,8 +65,8 @@ export default function DocsHome() {
                 ↗
               </span>
             </div>
-            <h2 className="text-[18px] font-semibold tracking-tight">{card.title}</h2>
-            <p className="mt-1 text-[13.5px] leading-relaxed text-dim">{card.note}</p>
+            <h2 className="text-section font-semibold tracking-tight">{card.title}</h2>
+            <p className="mt-1 text-micro leading-relaxed text-dim">{card.note}</p>
           </Link>
         ))}
       </div>
@@ -82,7 +82,7 @@ export default function DocsHome() {
               <span className="microlabel !mb-0">Markdown twins</span>
               <span className="kv">/docs/md/&lt;slug&gt;</span>
             </div>
-            <p className="text-[13.5px] leading-relaxed text-dim">
+            <p className="text-micro leading-relaxed text-dim">
               Every page here has a plain-markdown twin served with{" "}
               <span className="kv">text/markdown</span>. Fetch{" "}
               <Link className="jumplink" href="/docs/llms.txt">

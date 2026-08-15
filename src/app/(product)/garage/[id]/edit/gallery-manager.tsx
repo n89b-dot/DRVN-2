@@ -3,8 +3,9 @@
 import { useRef, useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
+import { recordStagedUpload } from "@/lib/media-staging";
 import { createClient } from "@/lib/supabase/client";
-import { Media } from "@/components/ui";
+import { ConfirmDialog, Media } from "@/components/ui";
 
 import { addCarImage, deleteCarImage, moveCarImage, setCoverImage, updateCarImageAlt } from "../../actions";
 
@@ -24,7 +25,6 @@ export function GalleryManager({
   const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [, startTransition] = useTransition();
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [editingAlt, setEditingAlt] = useState<string | null>(null);
 
   async function handleFiles(files: FileList | null) {
@@ -55,6 +55,9 @@ export function GalleryManager({
         const {
           data: { publicUrl },
         } = supabase.storage.from("car-images").getPublicUrl(path);
+        // Ledger the upload for GC (0029) before the DB row exists — if
+        // addCarImage fails below, the 48h sweep reclaims the object.
+        void recordStagedUpload("car-images", path, publicUrl).catch(() => {});
         const result = await addCarImage(carId, publicUrl);
         if (result.error) {
           setError(result.error);
@@ -83,7 +86,7 @@ export function GalleryManager({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
-          className="btn btn--ghost"
+          className="btn btn--ghost pointer-coarse:min-h-10"
         >
           {uploading ? "Uploading…" : "Upload photos"}
         </button>
@@ -112,7 +115,7 @@ export function GalleryManager({
             const isCover = coverImageUrl === image.url;
             return (
               <li key={image.id} className="thumb group">
-                <Media src={image.url} alt={image.alt ?? "Car photo"} className="h-full w-full" />
+                <Media src={image.url} alt={image.alt ?? "Car photo"} className="h-full w-full" role="thumb" />
 
                 {isCover && (
                   <span className="thumb__tag" aria-hidden="true">
@@ -141,7 +144,7 @@ export function GalleryManager({
                       }
                       disabled={index === 0}
                       aria-label={`Move photo ${index + 1} earlier`}
-                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
+                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30 pointer-coarse:!h-10 pointer-coarse:!w-10"
                     >
                       ↑
                     </button>
@@ -158,7 +161,7 @@ export function GalleryManager({
                       }
                       disabled={index === images.length - 1}
                       aria-label={`Move photo ${index + 1} later`}
-                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
+                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30 pointer-coarse:!h-10 pointer-coarse:!w-10"
                     >
                       ↓
                     </button>
@@ -173,7 +176,7 @@ export function GalleryManager({
                     }}
                     disabled={isCover}
                     aria-label={isCover ? `Photo ${index + 1} is the cover` : `Set photo ${index + 1} as cover`}
-                    className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
+                    className="thumb__x !static !top-0 !right-0 disabled:opacity-30 pointer-coarse:!h-10 pointer-coarse:!w-10"
                   >
                     ★
                   </button>
@@ -184,43 +187,26 @@ export function GalleryManager({
                     type="button"
                     onClick={() => setEditingAlt(editingAlt === image.id ? null : image.id)}
                     aria-label={`Edit description for photo ${index + 1}`}
-                    className="thumb__x !static !top-0 !right-0"
+                    className="thumb__x !static !top-0 !right-0 pointer-coarse:!h-10 pointer-coarse:!w-10"
                   >
                     ✎
                   </button>
-                  {pendingDelete === image.id ? (
-                    <form
-                      action={(fd) => startTransition(() => deleteCarImage(fd))}
-                      className="flex gap-1"
-                    >
-                      <input type="hidden" name="image_id" value={image.id} />
-                      <input type="hidden" name="car_id" value={carId} />
-                      <button
-                        type="submit"
-                        aria-label={`Confirm delete photo ${index + 1}`}
-                        className="thumb__x !static !top-0 !right-0"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPendingDelete(null)}
-                        aria-label="Cancel delete"
-                        className="thumb__x !static !top-0 !right-0"
-                      >
-                        ✕
-                      </button>
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete(image.id)}
-                      aria-label={`Delete photo ${index + 1}`}
-                      className="thumb__x !static !top-0 !right-0"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  {/* The app's one confirmation idiom — this was a bespoke
+                      inline ✕→✓ two-step, the only such flow in the product. */}
+                  <ConfirmDialog
+                    title={`Delete photo ${index + 1}?`}
+                    consequences={[
+                      "Removes this photo from the gallery permanently",
+                      isCover ? "The next photo becomes the cover" : "Other photos are unaffected",
+                    ]}
+                    confirmLabel="Delete photo"
+                    destructive
+                    formAction={(fd) => startTransition(() => deleteCarImage(fd))}
+                    hidden={{ image_id: image.id, car_id: carId }}
+                    triggerClassName="thumb__x !static !top-0 !right-0 pointer-coarse:!h-10 pointer-coarse:!w-10"
+                  >
+                    ✕
+                  </ConfirmDialog>
                 </div>
 
                 {editingAlt === image.id && (
@@ -243,10 +229,10 @@ export function GalleryManager({
                       name="alt"
                       defaultValue={image.alt ?? ""}
                       placeholder="Describe this photo"
-                      className="ctl max-w-none text-xs"
+                      className="ctl max-w-none text-xs pointer-coarse:min-h-10"
                       autoFocus
                     />
-                    <button type="submit" className="jumplink text-xs">
+                    <button type="submit" className="jumplink text-xs pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:min-w-10 pointer-coarse:items-center pointer-coarse:justify-center">
                       Save
                     </button>
                   </form>
@@ -256,7 +242,13 @@ export function GalleryManager({
           })}
         </ul>
       ) : (
-        <p className="field__hint mt-4">No photos yet — the first upload becomes the cover.</p>
+        <div className="undrawn mt-4">
+          <span className="undrawn__mark" aria-hidden="true">
+            ✎
+          </span>
+          <h3>No photos yet</h3>
+          <p>The first upload becomes the cover.</p>
+        </div>
       )}
     </section>
   );

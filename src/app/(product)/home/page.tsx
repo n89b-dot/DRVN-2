@@ -1,25 +1,19 @@
 import Link from "next/link";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Foot, ListingCard, Media } from "@/components/ui";
+import { Foot, ListingCard, VehicleCard } from "@/components/ui";
 import { FeedList } from "@/components/ui/feed-list";
 import { fetchFeed, fetchFollowedFeed, type FeedItem } from "@/lib/feed";
 import { recommendListings } from "@/lib/recommendations";
 import { createClient } from "@/lib/supabase/server";
 
+import { Greeting } from "./greeting";
 import { PostUpdatePrompt } from "./post-update-prompt";
 import { SellerKpis } from "./seller-kpis";
 
 export const metadata = { title: "Home - DRVN" };
 
 const FEED_PAGE_SIZE = 12;
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Morning";
-  if (h < 18) return "Afternoon";
-  return "Evening";
-}
 
 export default async function HomePage({
   searchParams,
@@ -41,7 +35,7 @@ export default async function HomePage({
       supabase.from("profiles").select("display_name, username").eq("id", user!.id).single(),
       supabase
         .from("cars")
-        .select("id, slug, name, cover_image_url")
+        .select("id, slug, name, make, model, year, cover_image_url")
         .eq("owner_id", user!.id)
         .order("created_at")
         .limit(6),
@@ -79,7 +73,7 @@ export default async function HomePage({
       <Rv as="header" className="pagehead">
         <span className="microlabel">Home</span>
         <h1>
-          {greeting()}
+          <Greeting />
           {firstName ? `, ${firstName}` : ""}.
           <br />
           The garage is <span className="live-word">open.</span>
@@ -119,17 +113,9 @@ export default async function HomePage({
             </span>
           </div>
           {garage.length > 0 ? (
-            <div className="rowlist">
+            <div className="vlist mt-2">
               {garage.map((car) => (
-                <Link key={car.id} href={`/cars/${car.slug}`} className="order">
-                  <span className="order__img">
-                    <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
-                  </span>
-                  <span>
-                    <span className="order__name block">{car.name}</span>
-                    <span className="order__meta block">view build page →</span>
-                  </span>
-                </Link>
+                <VehicleCard key={car.id} vehicle={car} variant="row" />
               ))}
             </div>
           ) : (

@@ -1,5 +1,7 @@
 import { getCartIds } from "@/lib/cart";
+import { readGuestOrders } from "@/lib/guest-checkout";
 import { platformFeeCents } from "@/lib/payments/fee";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -32,6 +34,100 @@ export type CartSummary = {
    *  the whole basket. Surfaced so that isn't silent. */
   mixedFulfilment: boolean;
 };
+
+/**
+ * The basket of a checkout that is *already paying*.
+ *
+ * Submitting the shipping step calls `purchase_begin`, which flips each
+ * listing active → reserved to claim it. A server action re-renders the route
+ * it ran on, so the checkout page immediately re-read a cart whose lines were
+ * no longer `active` — saw nothing buyable, and redirected to /cart with the
+ * Payment Element half-rendered and the money in flight. For a guest it was
+ * worse: RLS hides reserved listings from anon, so their own basket read as
+ * deleted.
+ *
+ * The orders are the truth once they exist, so this reads them back. Scoped
+ * strictly: a signed-in buyer sees their own pending orders, a guest sees only
+ * the ones named in their HMAC-signed checkout receipt.
+ */
+export async function loadInFlightCheckout(userId: string | null): Promise<CartSummary | null> {
+  const guestOrderIds = userId ? [] : await readGuestOrders();
+  if (!userId && !guestOrderIds.length) return null;
+
+  const admin = createAdminClient();
+  let query = admin
+    .from("orders")
+    .select("id, subtotal_cents, shipping_cents, total_cents, seller_id")
+    .eq("status", "pending");
+  query = userId ? query.eq("buyer_id", userId) : query.in("id", guestOrderIds);
+
+  const { data: orders } = await query;
+  if (!orders?.length) return null;
+
+  const { data: items } = await admin
+    .from("order_items")
+    .select("id, order_id, listing_id, title, price_cents, shipping_cents")
+    .in("order_id", orders.map((o) => o.id));
+  if (!items?.length) return null;
+
+  const listingIds = (items ?? [])
+    .map((i) => i.listing_id)
+    .filter((id): id is string => Boolean(id));
+  const [{ data: images }, { data: sellers }] = await Promise.all([
+    listingIds.length
+      ? admin
+          .from("listing_images")
+          .select("listing_id, url, position")
+          .in("listing_id", listingIds)
+          .order("position")
+      : Promise.resolve({ data: [] }),
+    admin
+      .from("profiles")
+      .select("id, display_name, username")
+      .in("id", [...new Set(orders.map((o) => o.seller_id).filter((id): id is string => Boolean(id)))]),
+  ]);
+
+  const cover = new Map<string, string>();
+  for (const img of images ?? []) {
+    if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
+  }
+  const sellerFor = (orderId: string) => {
+    const sellerId = orders.find((o) => o.id === orderId)?.seller_id ?? null;
+    const seller = (sellers ?? []).find((s) => s.id === sellerId);
+    return {
+      id: sellerId ?? "",
+      name: seller?.display_name ?? (seller?.username ? `@${seller.username}` : "Seller"),
+    };
+  };
+
+  const goodsCents = orders.reduce((sum, o) => sum + o.subtotal_cents, 0);
+  const shippingCents = orders.reduce((sum, o) => sum + o.shipping_cents, 0);
+
+  return {
+    lines: items.map((item) => {
+      const seller = sellerFor(item.order_id);
+      return {
+        id: item.listing_id ?? item.id,
+        title: item.title ?? "Part",
+        priceCents: item.price_cents,
+        shippingCents: item.shipping_cents ?? 0,
+        sellerId: seller.id,
+        sellerName: seller.name,
+        coverUrl: item.listing_id ? (cover.get(item.listing_id) ?? null) : null,
+        // Fulfilment was already decided when the order was created.
+        allowsCollection: false,
+      };
+    }),
+    unavailable: [],
+    goodsCents,
+    shippingCents,
+    totalCents: orders.reduce((sum, o) => sum + o.total_cents, 0),
+    feeCents: platformFeeCents(goodsCents),
+    sellerCount: new Set(orders.map((o) => o.seller_id)).size,
+    allowsCollection: false,
+    mixedFulfilment: false,
+  };
+}
 
 export async function loadCartSummary(): Promise<CartSummary> {
   const ids = await getCartIds();

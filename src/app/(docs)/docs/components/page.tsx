@@ -42,7 +42,7 @@ export default function ComponentsPage() {
           note="Sticky, 86% paper + blur(14px). Logo carries the live full stop; links are mono 12.5 uppercase; .is-active gets the ink ground. The bar above this page is the docs variant of the same idiom. ≤640px the nav becomes one scrollable row."
         >
           <div className="flex items-center justify-between rounded-ctl bg-paper px-4 py-3">
-            <span className="bar__logo !text-[15px]">
+            <span className="bar__logo !text-body">
               DRVN<em>.</em> <span className="microlabel">Parts marketplace</span>
             </span>
             <span className="flex gap-2">
@@ -109,10 +109,10 @@ export default function ComponentsPage() {
         >
           <div className="pagehead is-in !p-0">
             <span className="microlabel">Sheet 01 — Your desk</span>
-            <h1 className="!text-[28px]">
+            <h1 className="!text-head">
               Your sheet is <span className="live-word">moving</span>
             </h1>
-            <p className="sub !mt-2 !text-[14px]">Three offers open, one payout booked.</p>
+            <p className="sub !mt-2 !text-body">Three offers open, one payout booked.</p>
           </div>
         </Specimen>
         <Specimen
@@ -142,13 +142,13 @@ export default function ComponentsPage() {
           note="The one grid: gap 14. KPI is 4-col, two is 1.35fr/1fr, three is 3-col. Children take min-width: 0; never nest decks."
         >
           <div className="deck deck--three !pb-0">
-            <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-[11px] text-dim">
+            <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-micro text-dim">
               1
             </div>
-            <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-[11px] text-dim">
+            <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-micro text-dim">
               2
             </div>
-            <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-[11px] text-dim">
+            <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-micro text-dim">
               3
             </div>
           </div>
@@ -161,11 +161,11 @@ export default function ComponentsPage() {
           <div className="band !p-5">
             <div className="band__stats">
               <div>
-                <span className="num-giant !text-[34px]">8,412</span>
+                <span className="num-giant !text-head">8,412</span>
                 <span className="microlabel">Parts on the sheets</span>
               </div>
               <div>
-                <span className="num-giant !text-[34px]">$1.2M</span>
+                <span className="num-giant !text-head">$1.2M</span>
                 <span className="microlabel">Settled to keepers</span>
               </div>
             </div>
@@ -264,7 +264,7 @@ export default function ComponentsPage() {
         </Specimen>
         <Specimen
           name="Chip"
-          klass=".chip / --live --ok --warn --ink --spent"
+          klass=".chip / --live --ok --warn --info --ink --spent --danger"
           note="Status, never navigation. Spent desaturates — sold things stay on the sheet."
         >
           <div className="flex flex-wrap items-center gap-3">
@@ -488,7 +488,7 @@ export default function ComponentsPage() {
             <span className="monogram monogram--sm">GI</span>
             <div className="review min-w-0 flex-1 !border-t-0 !pt-0">
               <div className="review__head">
-                <span className="order__name text-[14px]">@garage.iida</span>
+                <span className="order__name text-body">@garage.iida</span>
                 <span className="microlabel !mb-0">Jul 2</span>
                 <span className="review__stars">★★★★★</span>
               </div>
@@ -539,7 +539,7 @@ export default function ComponentsPage() {
           <div className="drop !py-8">
             <span className="drop__mark" aria-hidden="true" />
             <h4>Drop photos here</h4>
-            <p className="text-[12.5px] text-dim">First photo leads the listing.</p>
+            <p className="text-micro text-dim">First photo leads the listing.</p>
           </div>
         </Specimen>
         <Specimen
@@ -591,25 +591,29 @@ export default function ComponentsPage() {
         <Specimen
           name="Market card"
           klass=".mkt > a.tile"
-          note="The market grid: 3/2 cover, name, mono price, meta chips. Grid steps 3 → 2 → 1 columns. Hover lifts the tile -2px."
+          note="The market grid: 3/2 cover, name first, then the price line — the card's single loudest element (20px mono 500, shipping docked as a quiet annotation) — one dot-separated meta line (never chips), and a hairline-divided seller footer. Non-active state rides the image as an ink flag. Grid steps 3 → 2 → 1 columns. Hover lifts the tile -2px."
         >
           <div className="mkt !grid-cols-2">
             <a className="tile" href="#commerce">
               <div className="tile__img aspect-[3/2]" />
               <div className="mkt__name">KW V3 coilovers, 32k mi</div>
-              <div className="mkt__price">$1,240</div>
-              <div className="mkt__meta">
-                <span className="chip">E46 M3</span>
-                <span className="chip chip--ok">Receipts</span>
-              </div>
+              <p className="mkt__price">
+                $1,240 <span className="mkt__ship">+ $60 ship</span>
+              </p>
+              <p className="mkt__metaline">Fits E46 M3 · Used — good · Portland</p>
+              <span className="mkt__seller">
+                <span className="monogram monogram--xs">TW</span>
+                <span>T. Wilkins · 4.8 ★ · 23 reviews</span>
+              </span>
             </a>
             <a className="tile" href="#commerce">
-              <div className="plate-undrawn tile__img aspect-[3/2]" />
+              <span className="tile__img relative block aspect-[3/2]">
+                <span className="plate-undrawn absolute inset-0" />
+                <span className="mkt__flag">Sold</span>
+              </span>
               <div className="mkt__name">Recaro SR3 pair</div>
-              <div className="mkt__price">$880</div>
-              <div className="mkt__meta">
-                <span className="chip chip--live">3 offers</span>
-              </div>
+              <p className="mkt__price">$880</p>
+              <p className="mkt__metaline">Used — fair · Leeds</p>
             </a>
           </div>
         </Specimen>
@@ -663,10 +667,16 @@ export default function ComponentsPage() {
         >
           <div className="space-y-3">
             <div className="alert alert--live">
+              <span className="alert__ico" aria-hidden="true">
+                ●
+              </span>
               <h4>Inspection window closes in 18 hours.</h4>
               <p>Confirm the part matches the listing, or open a dispute before the window ends.</p>
             </div>
             <div className="alert alert--ok">
+              <span className="alert__ico" aria-hidden="true">
+                ✓
+              </span>
               <h4>Receipts are what make a part sell.</h4>
               <p>Parts released from receipted lines sell roughly twice as fast.</p>
             </div>
@@ -711,7 +721,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Toast"
           klass=".toast"
-          note="A fixed bottom ink band, mono uppercase, role=status, 2600ms dwell. Rendered statically here — in the product it travels in on --t-move."
+          note="A fixed bottom ink band, mono uppercase, role=status, 3200ms dwell. Wraps at 60ch. Rendered statically here — in the product it travels in on --t-move."
         >
           <span className="toast !static !translate-x-0">Saved — sheet up to date</span>
         </Specimen>
@@ -777,7 +787,7 @@ export default function ComponentsPage() {
           klass=".clamp2 / .trunc"
           note="Long content is clamped explicitly, never allowed to wrap a row off its grid."
         >
-          <p className="clamp2 max-w-[320px] text-[13.5px]">
+          <p className="clamp2 max-w-[320px] text-micro">
             Genuine BBS RS 3-piece wheels, 16x8 et24, freshly rebuilt with new bolts, lips
             polished, barrels powder-coated, includes original centre caps and the receipts for
             every part of the rebuild since 2019.
@@ -799,7 +809,18 @@ export default function ComponentsPage() {
             <tbody>
               <tr>
                 <td>livesheet-bar.tsx</td>
-                <td>LivesheetBar (product chrome, index sheet, theme toggle) · Foot · BAR_ROUTES</td>
+                <td>LivesheetBar (product chrome, index sheet, theme toggle) · Foot</td>
+              </tr>
+              <tr>
+                <td>nav-routes.ts</td>
+                <td>
+                  The register — PRIMARY_NAV · BAR_ROUTES · MARKETPLACE_FAMILY ·
+                  PUBLIC_ROUTES · matchesFamily
+                </td>
+              </tr>
+              <tr>
+                <td>marketplace-nav.tsx</td>
+                <td>MarketplaceNav — Marketplace | Listings | Offers | Orders, signed in only</td>
               </tr>
               <tr>
                 <td>app-shell.tsx</td>
@@ -840,6 +861,13 @@ export default function ComponentsPage() {
                 <td>Dialog — modal on the sheet idiom</td>
               </tr>
               <tr>
+                <td>auth-intent-dialog.tsx</td>
+                <td>
+                  AuthIntentDialog — why an account is needed, per intent
+                  (offer/buy/save/follow/sell), carrying ?next= back to the action
+                </td>
+              </tr>
+              <tr>
                 <td>sheet-tabs.tsx</td>
                 <td>SheetTabs · resolveTab — URL-driven jumprow tabs</td>
               </tr>
@@ -849,7 +877,7 @@ export default function ComponentsPage() {
               </tr>
             </tbody>
           </table>
-          <p className="mt-3 text-[12.5px] leading-relaxed text-dim">
+          <p className="mt-3 text-micro leading-relaxed text-dim">
             Rule: product pages and this board import the same source. A new component lands in
             src/components/ui, gets a class in globals.css if it needs one, a row in this table,
             and a specimen above.

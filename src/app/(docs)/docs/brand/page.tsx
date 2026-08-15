@@ -8,9 +8,9 @@ const DAY_SWATCHES = [
   { name: "tile", hex: "#F8F6F0", role: "raised plate" },
   { name: "tile-2", hex: "#F1EFE8", role: "secondary plate" },
   { name: "ink", hex: "#20232A", role: "text / inverted" },
-  { name: "dim", hex: "#6B6E78", role: "secondary text" },
-  { name: "live", hex: "#F03A20", role: "THE signal" },
-  { name: "ok", hex: "#2E7D4F", role: "settled / verified" },
+  { name: "dim", hex: "#565963", role: "secondary text" },
+  { name: "live", hex: "#C02C14", role: "THE signal" },
+  { name: "ok", hex: "#256B42", role: "settled / verified" },
   { name: "warn", hex: "#8A5A00", role: "held / due" },
   { name: "img-fallback", hex: "#E2DFD5", role: "media fallback" },
 ];
@@ -43,7 +43,7 @@ function SwatchGrid({ swatches, onDark }: { swatches: typeof DAY_SWATCHES; onDar
             }}
           />
           <div className="kv mt-1.5 block">{swatch.name}</div>
-          <div className="text-[11px] text-dim">
+          <div className="text-micro text-dim">
             {swatch.hex} · {swatch.role}
           </div>
         </div>
@@ -77,10 +77,10 @@ export default function BrandPage() {
         <Specimen
           name="The wordmark"
           klass=".bar__logo idiom"
-          note="Always uppercase, IBM Plex Sans 650, tight tracking. The terminal dot is set in the live color — the recording light on the sheet. Beside it, chrome may carry a mono microlabel."
+          note="Always uppercase, IBM Plex Sans 600, tight tracking. The terminal dot is set in the live color — the recording light on the sheet. Beside it, chrome may carry a mono microlabel."
         >
           <div className="flex items-end gap-6">
-            <span className="text-[44px] font-semibold leading-none tracking-tight">
+            <span className="text-display font-semibold leading-none tracking-tight">
               DRVN<em className="not-italic" style={{ color: "var(--live)" }}>.</em>
             </span>
             <span className="microlabel !mb-1">Parts marketplace</span>
@@ -108,7 +108,7 @@ export default function BrandPage() {
             name="Say"
             note="Factual, workshop-adjacent, quiet. Copy reads like annotations on a drawing."
           >
-            <ul className="space-y-2 text-[13.5px] leading-relaxed">
+            <ul className="space-y-2 text-micro leading-relaxed">
               <li>&ldquo;3 offers open&rdquo;</li>
               <li>&ldquo;No offers yet. Your listing is live.&rdquo;</li>
               <li>
@@ -121,7 +121,7 @@ export default function BrandPage() {
             </ul>
           </Specimen>
           <Specimen name="Never say" note="No exclamation marks, no apology, no fake liveness.">
-            <ul className="space-y-2 text-[13.5px] leading-relaxed text-dim">
+            <ul className="space-y-2 text-micro leading-relaxed text-dim">
               <li className="line-through">&ldquo;You&rsquo;ve got offers!&rdquo;</li>
               <li className="line-through">&ldquo;Oops, nothing here!&rdquo;</li>
               <li className="line-through">&ldquo;Free!!&rdquo;</li>
@@ -180,13 +180,13 @@ export default function BrandPage() {
             note="Plates separate by tone, never borders or shadows. The body carries a faint 40px graticule — the drafting sheet itself."
           >
             <div className="flex gap-3">
-              <div className="grid h-20 flex-1 place-items-center rounded-r bg-paper text-[11px] text-dim">
+              <div className="grid h-20 flex-1 place-items-center rounded-r bg-paper text-micro text-dim">
                 paper
               </div>
-              <div className="grid h-20 flex-1 place-items-center rounded-r bg-paper-deep text-[11px] text-dim">
+              <div className="grid h-20 flex-1 place-items-center rounded-r bg-paper-deep text-micro text-dim">
                 paper-deep
               </div>
-              <div className="grid h-20 flex-1 place-items-center rounded-r bg-tile text-[11px] text-dim">
+              <div className="grid h-20 flex-1 place-items-center rounded-r bg-tile text-micro text-dim">
                 tile
               </div>
             </div>
@@ -196,13 +196,13 @@ export default function BrandPage() {
             note="rule-soft and rule-mid rule rows inside plates; dimline is reserved for dimension and leader lines — never card borders."
           >
             <div className="space-y-4 pt-2">
-              <div style={{ borderTop: "1px solid var(--rule-soft)" }} className="pt-1 text-[11px] text-dim">
+              <div style={{ borderTop: "1px solid var(--rule-soft)" }} className="pt-1 text-micro text-dim">
                 rule-soft — ruled rows
               </div>
-              <div style={{ borderTop: "1px solid var(--rule-mid)" }} className="pt-1 text-[11px] text-dim">
+              <div style={{ borderTop: "1px solid var(--rule-mid)" }} className="pt-1 text-micro text-dim">
                 rule-mid — footers, mail frames
               </div>
-              <div style={{ borderTop: "1px dashed var(--dimline)" }} className="pt-1 text-[11px] text-dim">
+              <div style={{ borderTop: "1px dashed var(--dimline)" }} className="pt-1 text-micro text-dim">
                 dimline — dimension &amp; leader lines only
               </div>
             </div>

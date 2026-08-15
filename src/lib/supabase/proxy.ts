@@ -4,6 +4,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasSupabaseConfig, isProduction, publicKey } from "@/lib/env";
 import { reportError } from "@/lib/monitoring";
 
+/**
+ * Routes that mean nothing without an account.
+ *
+ * `/cart` and `/checkout` are deliberately absent: buying is the service, and
+ * a guest fills a cart and pays without an account, identifying themselves
+ * with an email at the payment step. `/orders` stays gated — a *placed* order
+ * is account state, and a guest reaches theirs through the signed
+ * guest-checkout receipt (`/order-placed`) or the emailed link.
+ */
 const PRODUCT_PREFIXES = [
   "/home",
   "/garage",
@@ -12,7 +21,6 @@ const PRODUCT_PREFIXES = [
   "/notifications",
   "/settings",
   "/sell",
-  "/cart",
   "/orders",
 ];
 

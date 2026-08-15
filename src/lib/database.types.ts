@@ -35,6 +35,19 @@ export type Profile = {
   updated_at: string;
 };
 
+/**
+ * Service-role-only email → account index (migration 0036). RLS is enabled
+ * with no policies, so anon/authenticated read nothing; only the admin client
+ * touches it, and only to answer "does this email already have an account?"
+ * during guest checkout. Never expose it through a client-facing query.
+ */
+export type AccountEmail = {
+  user_id: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Car = {
   id: string;
   owner_id: string;
@@ -264,6 +277,9 @@ export type Order = {
   refunded_cents: number;
   platform_fee_refunded_cents: number;
   refunded_at: string | null;
+  /** The accepted offer this order came from (migration 0034). Null on
+   *  buy-now and cart orders, which have no negotiation behind them. */
+  origin_offer_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -341,6 +357,19 @@ export type ListingFitment = {
   created_at: string;
 };
 
+/** Client-side storage upload awaiting a DB reference (migration 0029).
+ *  `consumed_at` is stamped when a persisting action saves the URL; rows
+ *  still unconsumed after 48h are GC'd along with their storage objects. */
+export type StagedUpload = {
+  id: string;
+  owner_id: string;
+  bucket: string;
+  path: string;
+  url: string;
+  created_at: string;
+  consumed_at: string | null;
+};
+
 export type Payment = {
   id: string;
   order_id: string;
@@ -394,15 +423,44 @@ export type ListingQuestion = {
 
 export type Message = {
   id: string;
-  listing_id: string;
+  /** Nullable since 0031: an order-context message may outlive its listing. */
+  listing_id: string | null;
   offer_id: string | null;
   /** Post-sale threads hang off the order, so buy-now purchases have a channel. */
   order_id: string | null;
+  /** Trigger-stamped pointer to the materialised thread (migration 0031). */
+  conversation_id: string | null;
   sender_id: string;
   recipient_id: string;
   body: string;
   read_at: string | null;
   created_at: string;
+};
+
+/**
+ * One row per message channel (migration 0031) — the durable form of what the
+ * inbox used to derive by scanning `messages`. Written exclusively by the
+ * message triggers; clients only ever select.
+ */
+export type Conversation = {
+  id: string;
+  type: "order" | "offer";
+  order_id: string | null;
+  offer_id: string | null;
+  listing_id: string | null;
+  participant_a: string;
+  participant_b: string;
+  created_at: string;
+  last_message_id: string | null;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+};
+
+/** Trigger-maintained per-user unread counter (migration 0031). */
+export type ConversationUnread = {
+  conversation_id: string;
+  user_id: string;
+  unread_count: number;
 };
 
 export type Notification = {
@@ -593,6 +651,18 @@ export type PaymentRecovery = {
   resolution_note: string | null;
 };
 
+/** One row of the Explore timeline view (migration 0032) — a UNION of
+ *  public cars, published activity posts, and active listings, ordered by
+ *  `happened_at`. security_invoker, so RLS on the underlying tables applies. */
+export type FeedEvent = {
+  kind: "car" | "update" | "part";
+  id: string;
+  happened_at: string;
+  /** The car the event hangs off: itself, the post's car, or the listing's
+   *  source car (null for listings without one). */
+  car_id: string | null;
+};
+
 /** Shape returned by the `purchase_begin` RPC. */
 export type PurchaseBeginResult = {
   orders: {
@@ -608,10 +678,46 @@ export type PurchaseBeginResult = {
   skipped: { listing_id: string; reason: string }[];
 };
 
+/** One seller-ledger row from the `seller_listing_stats` RPC (0030). */
+export type SellerListingStat = {
+  id: string;
+  title: string;
+  part_number: string | null;
+  price_cents: number;
+  status: ListingStatus;
+  view_count: number;
+  created_at: string;
+  source_car_id: string | null;
+  /** First listing image by position, or null for an unphotographed listing. */
+  cover_url: string | null;
+  watch_count: number;
+  /** Best live ('open'/'countered') offer, counter beating the original. */
+  top_offer_cents: number | null;
+  /** Soonest expiry among live offers — the row's countdown. */
+  soonest_offer_expiry: string | null;
+  /** Root questions with no reply pointing at them. */
+  unanswered_questions: number;
+  /** Window count of the whole filtered register, repeated on every row. */
+  total_count: number;
+};
+
+/** Single-row chip counts from the `seller_register_tally` RPC (0030). */
+export type SellerRegisterTally = {
+  all_count: number;
+  live_count: number;
+  offer_count: number;
+  draft_count: number;
+  paused_count: number;
+  reserved_count: number;
+  archived_count: number;
+  sold_count: number;
+};
+
 export type Database = {
   public: {
     Tables: {
       profiles: Table<Profile, "id">;
+      account_emails: Table<AccountEmail, "user_id" | "email">;
       cars: Table<Car, "owner_id" | "slug" | "name">;
       car_images: Table<CarImage, "car_id" | "url">;
       activity_posts: Table<ActivityPost, "car_id" | "author_id" | "title">;
@@ -629,7 +735,9 @@ export type Database = {
       offers: Table<Offer, "listing_id" | "buyer_id" | "amount_cents">;
       reviews: Table<Review, "order_id" | "reviewer_id" | "reviewee_id" | "rating">;
       listing_questions: Table<ListingQuestion, "listing_id" | "author_id" | "body">;
-      messages: Table<Message, "listing_id" | "sender_id" | "recipient_id" | "body">;
+      messages: Table<Message, "sender_id" | "recipient_id" | "body">;
+      conversations: Table<Conversation, "type" | "participant_a" | "participant_b">;
+      conversation_unreads: Table<ConversationUnread, "conversation_id" | "user_id">;
       notifications: Table<Notification, "user_id" | "kind" | "section" | "title">;
       admin_users: Table<AdminUser, "user_id">;
       admin_audit_log: Table<AdminAuditLogEntry, "actor_id" | "action" | "subject_type" | "subject_id" | "reason">;
@@ -647,8 +755,15 @@ export type Database = {
       vehicle_makes: Table<VehicleMake, "id" | "name">;
       vehicle_models: Table<VehicleModel, "make_id" | "name">;
       listing_fitments: Table<ListingFitment, "listing_id" | "make" | "model">;
+      staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
     };
-    Views: Record<string, never>;
+    Views: {
+      /** Explore timeline (migration 0032). Read-only; no Insert/Update. */
+      feed_events: {
+        Row: FeedEvent;
+        Relationships: [];
+      };
+    };
     Functions: {
       /** Claims listings and creates pending orders in one transaction (0007). */
       purchase_begin: {
@@ -689,6 +804,12 @@ export type Database = {
         Returns: boolean;
       };
       search_listing_ids: {
+        Args: { p_query: string };
+        Returns: string[];
+      };
+      /** Ids of the caller's conversations matching q by preview, counterparty
+       *  name, or message body — bounded at 50, RLS-scoped (0031). */
+      search_user_messages: {
         Args: { p_query: string };
         Returns: string[];
       };
@@ -737,6 +858,27 @@ export type Database = {
           p_max_attempts?: number;
         };
         Returns: TransferIntent[];
+      };
+      /** One page of seller-ledger rows, filtered/sorted/counted in SQL (0030). */
+      seller_listing_stats: {
+        Args: {
+          p_seller: string;
+          p_register?: string;
+          p_sort?: string;
+          p_limit?: number;
+          p_offset?: number;
+        };
+        Returns: SellerListingStat[];
+      };
+      /** Register chip counts for the seller's ledger, one grouped scan (0030). */
+      seller_register_tally: {
+        Args: { p_seller: string };
+        Returns: SellerRegisterTally[];
+      };
+      /** Buyer questions across the seller's whole catalog with no reply (0035). */
+      seller_open_questions: {
+        Args: { p_seller: string };
+        Returns: number;
       };
     };
     Enums: Record<string, never>;

@@ -65,7 +65,7 @@ function parsePaste(text: string): Row[] {
   }));
 }
 
-const inputClass = "ctl !py-2";
+const inputClass = "ctl";
 
 export function ModsEditor({ carId, initialMods }: { carId: string; initialMods: ModItem[] }) {
   const [rows, setRows] = useState<Row[]>(
@@ -84,7 +84,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   );
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(initialMods.length === 0);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);
 
@@ -99,7 +99,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       if (result?.error) {
         // Surface the refusal in the editor's existing status line instead of
         // clearing the link locally while the server kept it.
-        setStatus(result.error);
+        setStatus({ kind: "error", message: result.error });
       } else {
         updateRow(row.key, { linked_listing_id: null });
       }
@@ -126,7 +126,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     }));
     startTransition(async () => {
       const result = await saveModItems(carId, items);
-      setStatus(result.error ?? "Saved.");
+      setStatus(
+        result.error
+          ? { kind: "error", message: result.error }
+          : { kind: "ok", message: "Saved ✓" }
+      );
     });
   }
 
@@ -185,7 +189,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 id={`${row.key}-group`}
                 value={row.group_label}
                 onChange={(e) => updateRow(row.key, { group_label: e.target.value })}
-                className="ctl !py-2 w-[130px] shrink-0"
+                className="ctl w-[130px] shrink-0"
               >
                 {MOD_GROUPS.map((g) => (
                   <option key={g}>{g}</option>
@@ -209,7 +213,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 value={row.product}
                 onChange={(e) => updateRow(row.key, { product: e.target.value })}
                 placeholder="Product"
-                className="ctl !py-2 max-w-none min-w-[150px] flex-1"
+                className="ctl max-w-none min-w-[150px] flex-1"
               />
               <label htmlFor={`${row.key}-part`} className="sr-only">
                 Part number
@@ -230,7 +234,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 onChange={(e) =>
                   updateRow(row.key, { category: (e.target.value || null) as ModCategory | null })
                 }
-                className="ctl !py-2 w-[130px] shrink-0"
+                className="ctl w-[130px] shrink-0"
               >
                 <option value="">Category</option>
                 {MOD_CATEGORIES.map((c) => (
@@ -321,9 +325,16 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           + Add a line manually
         </button>
         <div className="flex items-center gap-3">
-          {status && (
-            <span className={`chip ${status === "Saved." ? "chip--ok" : "chip--live"}`}>{status}</span>
-          )}
+          {status &&
+            (status.kind === "ok" ? (
+              <span role="status" className="chip chip--ok">
+                {status.message}
+              </span>
+            ) : (
+              <span role="alert" className="field__err">
+                {status.message}
+              </span>
+            ))}
           <button
             type="button"
             onClick={save}

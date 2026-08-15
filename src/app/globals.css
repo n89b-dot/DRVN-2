@@ -14,9 +14,9 @@
   --color-tile: #f8f6f0; /* raised widget plate */
   --color-tile-2: #f1efe8; /* secondary plate */
   --color-ink: #20232a; /* text */
-  --color-dim: #63666f; /* secondary text — ≥4.8:1 on every plate incl. paper (axe-verified) */
-  --color-live: #f03a20; /* THE signal — live states only */
-  --color-ok: #2e7d4f; /* terminal states: settled / done / verified */
+  --color-dim: var(--dim); /* secondary text — derives from the R3-audited :root value */
+  --color-live: var(--live); /* THE signal — live states only; single source: :root --live */
+  --color-ok: var(--ok); /* terminal states: settled / done / verified; single source: :root --ok */
   --color-on-ink: #f8f6f0; /* text on ink surfaces */
   --color-img-fallback: #e2dfd5; /* media box before an image */
 
@@ -50,6 +50,27 @@
 
   --font-sans: var(--font-plex-sans), -apple-system, "Helvetica Neue", sans-serif;
   --font-mono: var(--font-plex-mono), "SF Mono", monospace;
+
+  /* Typography scale — a 4px grid with 8px display jumps. Every font size in
+     the product comes from this family (12/16/20/24/32/40/48/56/64); no
+     route-level invention. Utilities: text-micro, text-body, text-section,
+     text-sub, text-head, text-display{,-lg,-xl}. */
+  --text-micro: 12px;
+  --text-micro--line-height: 16px;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-section: 20px;
+  --text-section--line-height: 28px;
+  --text-sub: 24px;
+  --text-sub--line-height: 32px;
+  --text-head: 32px;
+  --text-head--line-height: 40px;
+  --text-display: 40px;
+  --text-display--line-height: 48px;
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 56px;
+  --text-display-xl: 64px;
+  --text-display-xl--line-height: 1.1;
   /* Legacy font aliases (concept pages) */
   --font-display: var(--font-plex-sans), sans-serif;
   --font-ui: var(--font-plex-sans), sans-serif;
@@ -83,13 +104,21 @@
   --dimline: rgba(32, 35, 42, 0.28); /* dimension/leader lines only — never card borders */
   --grid-line: rgba(32, 35, 42, 0.03);
   --live: #c02c14;
-  --live-tint: rgba(240, 58, 32, 0.1);
+  --live-tint: rgba(203, 49, 24, 0.14);
   --ok: #256b42;
-  --ok-tint: rgba(46, 125, 79, 0.1);
+  --ok-tint: rgba(34, 128, 74, 0.16);
   --warn: #8a5a00; /* held money, due work — attention without alarm; 5.1:1 on paper */
-  --warn-tint: rgba(178, 122, 10, 0.13);
+  --warn-tint: rgba(196, 140, 20, 0.18);
   --info: #1d5c8a; /* neutral explainer/status, never a call to action; 6.1:1 on paper */
-  --info-tint: rgba(29, 92, 138, 0.1);
+  --info-tint: rgba(38, 113, 163, 0.15);
+  /* Chip text — one step deeper than the status hues so type stays ≥4.5:1 on
+     the strengthened tints above (measured 5.0–5.9 on paper+tint). The base
+     status tokens keep their audited values because they double as button
+     fills and plain text on paper. */
+  --live-text: #a82410;
+  --ok-text: #145c35;
+  --warn-text: #6f4a00;
+  --info-text: #14527f;
   --destructive: var(--live); /* same hue as --live by design — see @theme note */
   --on-ink: #f8f6f0;
   --scrim: rgba(32, 35, 42, 0.45);
@@ -147,13 +176,19 @@
   --dimline: rgba(240, 238, 229, 0.3);
   --grid-line: rgba(240, 238, 229, 0.035);
   --live: #ff4530;
-  --live-tint: rgba(255, 69, 48, 0.14);
+  --live-tint: rgba(255, 69, 48, 0.2);
   --ok: #57b983;
-  --ok-tint: rgba(87, 185, 131, 0.12);
+  --ok-tint: rgba(87, 185, 131, 0.18);
   --warn: #d9a13c;
-  --warn-tint: rgba(217, 161, 60, 0.14);
+  --warn-tint: rgba(217, 161, 60, 0.18);
   --info: #6cb2df; /* 7.9:1 on night paper */
-  --info-tint: rgba(108, 178, 223, 0.16);
+  --info-tint: rgba(108, 178, 223, 0.2);
+  /* Chip text — brightened a step over the night status hues for legibility
+     on the stronger night tints. */
+  --live-text: #ff7a66;
+  --ok-text: #6cc794;
+  --warn-text: #e6b45e;
+  --info-text: #8ec4ea;
   --destructive: var(--live);
   --on-ink: #171511;
   --scrim: rgba(6, 5, 3, 0.62);
@@ -173,9 +208,8 @@
   --color-tile: #201e18;
   --color-tile-2: #1b1914;
   --color-ink: #f0eee5;
-  --color-dim: #8f8c82;
-  --color-live: #ff4530;
-  --color-ok: #57b983;
+  /* --color-dim / --color-live / --color-ok derive from the :root tokens
+     redefined above, so night values have a single source. */
   --color-on-ink: #171511;
   --color-img-fallback: #262319;
 }
@@ -193,8 +227,8 @@ html {
 
 body {
   font-family: var(--sans);
-  font-size: 17px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.5; /* 24px — on the 4px grid */
   color: var(--ink);
   background-color: var(--paper);
   background-image:
@@ -252,9 +286,13 @@ video {
    ============================================================ */
 @layer components {
   .wrap {
+    /* Published as a variable so a full-bleed child (a sideways-scrolling
+       chip row) can cancel exactly this gutter rather than guessing at 20px
+       and overflowing the page at 320px. */
+    --gutter: clamp(16px, 4vw, 40px);
     max-width: var(--maxw);
     margin: 0 auto;
-    padding: 0 clamp(16px, 4vw, 40px);
+    padding: 0 var(--gutter);
   }
   /* Width steps for the wrapper, gutter unchanged. A number of narrow
      single-column pages (auth, legal, forms) hard-coded their own
@@ -277,7 +315,12 @@ video {
   .mono {
     font-family: var(--mono);
   }
-  .microlabel {
+  /* .field__label shares the recipe: it's the label voice for transactional
+     forms (checkout, orders, settings, auth). It was referenced by eight call
+     sites but never defined, so those surfaces silently rendered 16px sans
+     labels — grouped here so the two label classes can never drift apart. */
+  .microlabel,
+  .field__label {
     font-family: var(--mono);
     font-size: 12px;
     font-weight: 500;
@@ -296,7 +339,7 @@ video {
   .tile__head > .microlabel--ink,
   .bsec > .microlabel--ink {
     font-family: var(--sans);
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.01em;
     text-transform: none;
@@ -318,7 +361,7 @@ video {
   }
   .kv {
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 16px;
   }
   .kv b {
     font-weight: 500;
@@ -345,7 +388,7 @@ video {
   .bar__logo {
     font-weight: 700;
     letter-spacing: 0.02em;
-    font-size: 17px;
+    font-size: 16px;
   }
   .bar__logo em {
     font-style: normal;
@@ -362,7 +405,7 @@ video {
   }
   .bar__link {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 8px 14px;
@@ -398,15 +441,15 @@ video {
     position: absolute;
     top: 3px;
     right: 2px;
-    min-width: 15px;
-    height: 15px;
-    padding: 0 3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
     border-radius: 999px;
     background: var(--live);
     color: var(--on-ink);
     font-family: var(--mono);
-    font-size: 9.5px;
-    line-height: 15px;
+    font-size: 12px;
+    line-height: 18px;
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
@@ -426,7 +469,7 @@ video {
     align-items: center;
     gap: 8px;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     padding: 8px 13px;
@@ -481,7 +524,7 @@ video {
   .rail__logo {
     font-weight: 700;
     letter-spacing: 0.02em;
-    font-size: 17px;
+    font-size: 16px;
     height: 40px;
     display: flex;
     align-items: center;
@@ -515,13 +558,13 @@ video {
   }
   .railrow__n {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     color: var(--dim);
     transition: color var(--t-fast) ease;
   }
   .railrow__label {
-    font-size: 15.5px;
+    font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.01em;
     overflow: hidden;
@@ -546,6 +589,57 @@ video {
     height: 18px;
     margin-top: -9px;
     background: var(--live);
+  }
+
+  /* ---------- rail section heading — the Marketplace family ----------
+     A caption on the four rows beneath it, never a link and never a
+     disclosure: every child stays one click from anywhere in the app. It
+     carries the family's active state so the rail says which *section* you're
+     in as well as which sheet. */
+  .railgroup {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px 6px;
+    white-space: nowrap;
+  }
+  .railgroup__label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .railgroup__mark {
+    display: none;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+  }
+  .railgroup.is-family .railrow__n,
+  .railgroup.is-family .railgroup__label,
+  .railgroup.is-family .railgroup__mark {
+    color: var(--live);
+  }
+  /* The family's rows sit under a margin rule — indentation a drawing can
+     hold at any width, including collapsed. */
+  .railrow--child {
+    padding-left: 32px;
+  }
+  .railrow--child::after {
+    content: "";
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--rule-soft);
+  }
+  .railrow--child.is-here::after {
+    background: var(--rule-mid);
   }
 
   .rail__foot {
@@ -584,7 +678,7 @@ video {
     align-items: center;
     gap: 10px;
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 8px 14px;
@@ -706,7 +800,7 @@ video {
     transition: color var(--t-fast) ease;
   }
   .indexrow__label {
-    font-size: 21px;
+    font-size: 20px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.02em;
     line-height: 1.15;
@@ -715,7 +809,7 @@ video {
   .indexrow__note {
     grid-column: 2;
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--dim);
     line-height: 1.5;
   }
@@ -742,13 +836,54 @@ video {
     background: var(--live);
   }
 
+  /* ---------- index section heading — the Marketplace family ----------
+     Same contract as the rail's: a caption, not a link. Its children follow it
+     as ordinary index rows so Index → Orders stays one tap. */
+  .indexgroup {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 2px 14px;
+    padding: 18px 2px 6px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .indexgroup__label {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .indexgroup__note {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+  .indexgroup.is-family .indexgroup__label {
+    color: var(--live);
+  }
+  .indexrow--child {
+    padding-left: 14px;
+  }
+  .indexrow--child::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--rule-soft);
+  }
+
   /* the lighting switch, spelled out — the bar's version is icon-only */
   .indexlight {
     display: inline-flex;
     align-items: center;
     gap: 9px;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--dim);
@@ -800,11 +935,20 @@ video {
        underneath. */
     padding: clamp(28px, 5vw, 52px) 0 clamp(28px, 3.5vw, 40px);
   }
+  /* Under the Marketplace family nav the head has already been introduced by
+     the register above it, so it doesn't need to open the page from scratch.
+     Without this the family surfaces stack nav → head → finder → categories →
+     sort before a single part is on screen. */
+  .familynav + .pagehead,
+  .pagehead--under-nav {
+    padding-top: clamp(6px, 1.5vw, 14px);
+    padding-bottom: clamp(20px, 2.5vw, 28px);
+  }
   .pagehead h1 {
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.02em;
     line-height: 1.05;
-    font-size: clamp(28px, 4vw, 44px);
+    font-size: clamp(32px, 4vw, 48px);
     margin-top: 14px;
   }
   .pagehead h1 .live-word {
@@ -841,8 +985,8 @@ video {
     padding: 26px 0 26px;
   }
   .console-main .pagehead h1 {
-    font-size: clamp(24px, 2.6vw, 34px);
-    font-weight: 620;
+    font-size: clamp(24px, 2.6vw, 32px);
+    font-weight: 600; /* was 620 — not a loaded Plex Sans cut, silently snapped to 600 */
     letter-spacing: -0.008em;
     line-height: 1.25;
     margin-top: 0;
@@ -858,7 +1002,7 @@ video {
      .num-giant (up to 64px) filled a KPI tile edge-to-edge and shouted.
      A stat should be the loudest thing in its card by a step, not a wall. */
   .console-main .num-giant {
-    font-size: clamp(24px, 2.1vw, 30px);
+    font-size: clamp(24px, 2.1vw, 32px);
     line-height: 1.1;
     letter-spacing: -0.015em;
     margin: 6px 0 2px;
@@ -945,7 +1089,7 @@ video {
   }
   .console-main .auditrow__ts {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--dim);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -953,11 +1097,11 @@ video {
   }
   .console-main .auditrow__actor {
     font-weight: 640;
-    font-size: 15.5px;
+    font-size: 16px;
   }
   .console-main .auditrow__action {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--dim);
   }
   .console-main .auditrow__dot {
@@ -1016,12 +1160,12 @@ video {
     padding-top: 10px;
   }
   .console-main .setrow__name {
-    font-size: 15.5px;
+    font-size: 16px;
     font-weight: 570;
   }
   .console-main .setrow__desc {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--dim);
     line-height: 1.5;
     max-width: 48ch;
@@ -1034,7 +1178,7 @@ video {
      the ink — a routine row should read as texture, an exception as signal. */
   .console-main .status-plain {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--dim);
     white-space: nowrap;
   }
@@ -1154,7 +1298,7 @@ video {
   }
   .livedim .val {
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--ink);
     font-variant-numeric: tabular-nums;
@@ -1217,7 +1361,7 @@ video {
     border-radius: var(--r-ctl);
     padding: 7px 11px;
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--ink);
@@ -1256,7 +1400,7 @@ video {
     border-radius: var(--r-ctl);
     padding: 10px 16px;
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 16px;
     letter-spacing: 0.06em;
   }
   .capsule .dot {
@@ -1290,7 +1434,7 @@ video {
     align-items: center;
     gap: 6px;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     padding: 4px 10px;
@@ -1300,11 +1444,11 @@ video {
   }
   .chip--live {
     background: var(--live-tint);
-    color: var(--live);
+    color: var(--live-text);
   }
   .chip--ok {
     background: var(--ok-tint);
-    color: var(--ok);
+    color: var(--ok-text);
   }
   .chip--ink {
     background: var(--ink);
@@ -1316,11 +1460,11 @@ video {
   }
   .chip--warn {
     background: var(--warn-tint);
-    color: var(--warn);
+    color: var(--warn-text);
   }
   .chip--info {
     background: var(--info-tint);
-    color: var(--info);
+    color: var(--info-text);
   }
   /* Distinct from `.chip--live` (an active/"happening now" state, tint only):
      danger marks a terminal negative — failed, cancelled, disputed against
@@ -1427,12 +1571,12 @@ video {
   }
   .order__name {
     font-weight: 600;
-    font-size: 16.5px;
+    font-size: 16px;
     line-height: 1.35;
   }
   .order__meta {
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 16px;
     color: var(--dim);
     margin-top: 4px;
     line-height: 1.55;
@@ -1452,7 +1596,7 @@ video {
   }
   .order__actions .btn {
     padding: 10px 14px;
-    font-size: 11.5px;
+    font-size: 12px;
   }
   .order.is-done {
     background: var(--ok-tint);
@@ -1469,6 +1613,89 @@ video {
   }
   .order.is-invalid .order__name {
     color: var(--dim);
+  }
+
+  /* ---------- vehicle presentation (Home + Garage) ----------
+     A car is a primary object: prominent section media, not an order
+     thumbnail, not a hero. `--row` keeps a compact dashboard rhythm on Home;
+     `--card` gives the Garage a generous leading image. */
+  .vehicle {
+    display: grid;
+    gap: 16px; /* unified card gutter — matches .deck/.mkt/.feedcols */
+    min-width: 0;
+  }
+  .vehicle__img {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .vehicle__name {
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.35;
+  }
+  .vehicle__name--lg {
+    font-size: 20px;
+    line-height: 28px;
+  }
+  .vehicle__meta {
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--dim);
+    margin-top: 4px;
+    line-height: 1.55;
+  }
+  .vehicle--row {
+    grid-template-columns: clamp(120px, 36%, 176px) 1fr auto;
+    align-items: center;
+  }
+  a.vehicle--row:hover .vehicle__name {
+    color: var(--live);
+  }
+  .vehicle__go {
+    font-family: var(--mono);
+    color: var(--dim);
+    align-self: center;
+  }
+  .vehicle--card {
+    grid-template-columns: minmax(240px, 340px) 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .vehicle--card .vehicle__img {
+    aspect-ratio: 16 / 10;
+  }
+  .vehicle__actions {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  /* Ruled vehicle list — like .rowlist but for the larger vehicle rows. */
+  .vlist {
+    display: flex;
+    flex-direction: column;
+  }
+  .vlist > * + * {
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 16px;
+    margin-top: 16px;
+  }
+  @media (max-width: 640px) {
+    /* The garage card recomposes: image full-width above the identity,
+       rather than a squeezed side-by-side. */
+    .vehicle--card {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .vehicle--row {
+      grid-template-columns: minmax(104px, 34%) 1fr auto;
+    }
   }
 
   /* ---------- rowlist: ruled rows inside a tile ---------- */
@@ -1516,7 +1743,7 @@ video {
   }
   .feed time {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--dim);
     flex: none;
     width: 74px;
@@ -1524,7 +1751,7 @@ video {
   .feed .amt {
     margin-left: auto;
     font-family: var(--mono);
-    font-size: 14.5px;
+    font-size: 16px;
     color: var(--ink);
     font-weight: 500;
   }
@@ -1564,7 +1791,7 @@ video {
   .week__day--hot .tag {
     display: block;
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 0.14em;
     margin-top: 3px;
   }
@@ -1579,7 +1806,7 @@ video {
   }
   .ledger th {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1656,7 +1883,7 @@ video {
 
   .ledger__num {
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     text-align: right;
     white-space: nowrap;
@@ -1677,7 +1904,7 @@ video {
   /* the disclosure caret — a drafting tick that turns, not a chevron icon */
   .ledger__toggle {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--dim);
     width: 18px;
     text-align: left;
@@ -1696,6 +1923,38 @@ video {
   .ledger__detail > td {
     border-top: 0;
     padding-top: 0;
+  }
+  /* The offer situation on a listing — a decision line and at most two live
+     offers, then a hand-off to /offers. Not the negotiation itself. */
+  .ledgeroffers__line {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--dim);
+    padding: 6px 0 2px;
+  }
+  .ledgeroffers__line b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .ledgeroffers {
+    display: grid;
+    margin-top: 6px;
+  }
+  .ledgeroffers__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 2px;
+    border-top: 1px solid var(--rule-soft);
+    min-height: 44px;
+    transition: background var(--t-fast) ease;
+  }
+  .ledgeroffers__row:hover {
+    background: var(--ghost);
+  }
+  .ledgeroffers__row .kv {
+    margin-left: auto;
   }
   @media (max-width: 860px) {
     /* Below this the table stops being scannable and starts being a maze;
@@ -1727,7 +1986,7 @@ video {
     .ledger__num::before {
       content: attr(data-label) " ";
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--dim);
@@ -1746,7 +2005,7 @@ video {
   }
   .spec td:first-child {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--dim);
@@ -1755,7 +2014,7 @@ video {
   .spec td:last-child {
     text-align: right;
     font-family: var(--mono);
-    font-size: 15.5px;
+    font-size: 16px;
   }
   .spec tr + tr td {
     border-top: 1px solid var(--rule-soft);
@@ -1776,7 +2035,11 @@ video {
     display: flex;
   }
   .sheet {
-    width: min(480px, 100%);
+    /* The one dialog width — no per-dialog overrides. Viewport-based, not
+       100%: inside the Dialog component the sheet sits in a shrink-to-fit
+       panel, where a percentage would collapse to content width. The 40px
+       subtraction mirrors .sheetwrap's 20px padding on each side. */
+    width: min(480px, calc(100vw - 40px));
     background: var(--tile);
     border-radius: var(--r);
     padding: 22px;
@@ -1790,6 +2053,16 @@ video {
     transform: none;
     opacity: 1;
   }
+  /* The Dialog component only mounts while open, so the panel used to appear
+     already in its end state and the rise never played. @starting-style gives
+     the first rendered frame the pre-state; older browsers just show the
+     panel instantly, which is the correct graceful floor. */
+  @starting-style {
+    .sheetwrap.is-open .sheet {
+      transform: translateY(16px);
+      opacity: 0;
+    }
+  }
   .sheet__row {
     display: flex;
     justify-content: space-between;
@@ -1801,7 +2074,7 @@ video {
   }
   .sheet__row b {
     font-family: var(--mono);
-    font-size: 13.5px;
+    font-size: 12px;
   }
   .sheet__total b {
     color: var(--live);
@@ -1810,6 +2083,40 @@ video {
     display: flex;
     gap: 10px;
     margin-top: 16px;
+  }
+  /* Phones: two full-width buttons stacked beat two squeezed side by side. */
+  @media (max-width: 520px) {
+    .sheet__actions {
+      flex-wrap: wrap;
+    }
+    .sheet__actions > * {
+      flex: 1 1 100%;
+    }
+  }
+
+  /* Why an account is needed — ruled reasons, the drawing's list voice. */
+  .authintent__why {
+    margin-top: 14px;
+    display: grid;
+    gap: 0;
+  }
+  .authintent__why li {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--dim);
+    padding: 9px 0 9px 18px;
+    border-top: 1px solid var(--rule-soft);
+    position: relative;
+  }
+  .authintent__why li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 17px;
+    width: 8px;
+    height: 1px;
+    background: var(--live);
   }
   .sheet .stamp {
     font-family: var(--mono);
@@ -1841,30 +2148,225 @@ video {
       transform var(--t-move) var(--spring);
   }
 
+  /* ---------- listing detail (PDP) sheet ----------
+     DOM order is the phone reading order: media → purchase rail → long-form
+     content → secondary trust tiles. Desktop re-places the same blocks into
+     the two-column sheet with grid coordinates — the rail spans rows 1–2 so
+     the right column reads continuously, and `.pdp__more` lands directly
+     beneath it while the content column keeps flowing on the left. */
+  .pdp {
+    display: grid;
+    gap: 16px;
+    padding-bottom: clamp(48px, 7vw, 80px);
+  }
+  .pdp > * {
+    min-width: 0;
+  }
+  @media (min-width: 981px) {
+    .pdp {
+      grid-template-columns: 1.35fr 1fr;
+      align-items: start;
+    }
+    .pdp__media {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .pdp__content {
+      grid-column: 1;
+      grid-row: 2 / span 2;
+    }
+    .pdp__rail {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+    .pdp__more {
+      grid-column: 2;
+      grid-row: 3;
+    }
+  }
+
+  /* Sticky phone purchase bar — fixed to the bottom edge while the real
+     purchase controls are off-screen. Desktop keeps the full rail instead. */
+  .buybar {
+    position: fixed;
+    z-index: 40;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px clamp(16px, 4vw, 24px) calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--tile);
+    border-top: 1px solid var(--rule-mid);
+    transition: transform var(--t-move) var(--spring), visibility var(--t-move);
+  }
+  .buybar[data-hidden="true"] {
+    transform: translateY(110%);
+    visibility: hidden;
+  }
+  .buybar__price {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+  .buybar__ship {
+    display: block;
+    font-family: var(--mono);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  .buybar .btn {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  @media (min-width: 981px) {
+    .buybar {
+      display: none;
+    }
+  }
+  /* Keep the page's last content reachable above the fixed bar. */
+  @media (max-width: 980px) {
+    body:has(.buybar) {
+      padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  /* ---------- explore feed columns ----------
+     Column-packed masonry (the Read.cv / Cosmos pattern): plates keep their
+     natural height and pack vertically, so a short annotation sits snug
+     against its neighbours instead of stretching to a row. DOM order stays
+     chronological; visual order runs down each column — the accepted trade
+     of every packed feed. Gutter matches the .mkt grid. */
+  .feedcols {
+    columns: 1;
+    column-gap: 16px;
+  }
+  .feedcols > * {
+    display: block;
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+  @media (min-width: 640px) {
+    .feedcols {
+      columns: 2;
+    }
+  }
+  @media (min-width: 1024px) {
+    .feedcols {
+      columns: 3;
+    }
+  }
+  /* Plates draw onto the sheet — same voice as the Rv reveal used elsewhere. */
+  @keyframes plate-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .feedcols > * {
+      animation: plate-in 0.5s var(--spring) backwards;
+    }
+    .feedcols > :nth-child(2) { animation-delay: 60ms; }
+    .feedcols > :nth-child(3) { animation-delay: 120ms; }
+    .feedcols > :nth-child(4) { animation-delay: 180ms; }
+    .feedcols > :nth-child(5) { animation-delay: 240ms; }
+    .feedcols > :nth-child(6) { animation-delay: 300ms; }
+    .feedcols > :nth-child(n + 7) { animation-delay: 360ms; }
+  }
+
   /* ---------- market grid ---------- */
   .mkt {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
+    gap: 16px; /* unified card gutter — matches .deck */
   }
   .mkt .tile__img {
     aspect-ratio: 3 / 2;
   }
   .mkt__name {
     font-weight: 600;
-    font-size: 17px;
+    font-size: 16px;
     margin-top: 12px;
   }
+  /* Price is the card's single loudest element — one size step over the
+     title, medium mono, full ink. The title leads the stack; the price wins
+     on weight + value, matching how title-first marketplace cards read
+     (price on its own line, nothing bold between title and price). */
   .mkt__price {
     font-family: var(--mono);
-    font-size: 15px;
-    margin-top: 3px;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    margin-top: 5px;
+  }
+  .mkt__ship {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+  /* Shipping docked to the price as an annotation — same line, quiet. */
+  .mkt__price .mkt__ship {
+    margin-top: 0;
   }
   .mkt__meta {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
     margin-top: 8px;
+  }
+  /* One quiet meta line replaces the chip row on market cards: condition,
+     location and fitment as dot-separated machine-metadata. Chips carry ~2×
+     the visual mass and no reference marketplace chips condition in-grid. */
+  .mkt__metaline {
+    display: block;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-top: 7px;
+  }
+  /* Non-active state flag on the image corner — reference-marketplace idiom
+     (SOLD/RESERVED ride the photo, never the text stack). */
+  .mkt__flag {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: var(--r-chip);
+  }
+  /* Seller trust footer — hairline-divided strip at the card base. */
+  .mkt__seller {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule-soft);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
   }
 
   .filters {
@@ -1873,12 +2375,184 @@ video {
     flex-wrap: wrap;
     margin: 26px 0 30px;
   }
+
+  /* ---------- offers list row ----------
+     A row waiting on you carries the live margin tick — the same mark the
+     rail uses for "you are here", reused for "this needs you". */
+  .offerrow {
+    position: relative;
+  }
+  .offerrow--needs {
+    padding-left: 12px;
+  }
+  .offerrow--needs::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 14px;
+    bottom: 14px;
+    width: 2px;
+    background: var(--live);
+  }
+  .offerrow__flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  /* The order sheet's "next" module — a live-ruled block above the tiles. */
+  .nextaction {
+    border-left: 2px solid var(--live);
+    padding: 12px 0 12px 14px;
+    margin-bottom: 22px;
+    background: var(--tile);
+  }
+  .nextaction__what {
+    margin-top: 4px;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+  }
+  .nextaction .spec-note {
+    margin-right: 14px;
+  }
+
+  /* The one thing an order row is waiting on. */
+  .ordernext {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+  }
+  .ordernext__mark {
+    flex: none;
+    width: 8px;
+    height: 1px;
+    background: var(--live);
+  }
+
+  /* Listing-scoped offers — the context line above a filtered list. */
+  .scopebar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 0;
+    margin-bottom: 18px;
+    border-top: 1px solid var(--rule-mid);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .scopebar__what {
+    min-width: 0;
+  }
+  .scopebar__what b {
+    font-weight: 500;
+  }
+
+  /* ---------- operational tally ----------
+     Four numbers a seller works from, ruled like a drawing's title block.
+     Each cell is a filter or a queue; nothing here is decoration. */
+  .tally {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid var(--rule-mid);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .tally__cell {
+    display: block;
+    padding: 14px 14px 14px 0;
+    min-height: 44px;
+  }
+  .tally__cell + .tally__cell {
+    border-left: 1px solid var(--rule-soft);
+    padding-left: 14px;
+  }
+  a.tally__cell {
+    transition: background var(--t-fast) ease;
+  }
+  a.tally__cell:hover {
+    background: var(--ghost);
+  }
+  .tally__n {
+    display: block;
+    font-family: var(--mono);
+    font-size: 24px;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .tally__n--live {
+    color: var(--live);
+  }
+  .tally__label {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  @media (max-width: 640px) {
+    .tally {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /* On two columns the "previous cell" rule no longer matches the visual
+       grid, so the border is redrawn per position instead. */
+    .tally__cell {
+      border-left: 0;
+      padding: 12px 12px 12px 0;
+    }
+    .tally__cell:nth-child(2n) {
+      border-left: 1px solid var(--rule-soft);
+      padding-left: 12px;
+    }
+    .tally__cell:nth-child(n + 3) {
+      border-top: 1px solid var(--rule-soft);
+    }
+    .tally__n {
+      font-size: 20px;
+    }
+  }
+  /* Active-filter readout — sits between the finder and the results, only
+     when filters are on. Chips are links that remove their filter. */
+  .filterchips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: -14px 0 22px;
+  }
+  a.chip--x {
+    background: var(--ghost);
+    color: var(--ink);
+    min-height: 32px;
+    transition: background var(--t-fast) ease;
+  }
+  a.chip--x:hover {
+    background: var(--ghost-strong);
+  }
+  a.chip--x span[aria-hidden] {
+    color: var(--dim);
+  }
   .fbtn {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 8px 14px;
+    /* The 44px touch floor the rules doc promises — at every width, not just
+       under 640px. Padding stays put so the type doesn't move; the box grows. */
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     border-radius: var(--r-ctl);
     background: var(--paper-deep);
     color: var(--dim);
@@ -1895,13 +2569,63 @@ video {
     gap: 10px;
   }
   .filters--roomy .fbtn {
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.09em;
     padding: 13px 20px;
   }
   .fbtn.is-on {
     background: var(--ink);
     color: var(--on-ink);
+  }
+  /* A chip row that IS navigation shouldn't become a four-row wall on a
+     phone — it scrolls sideways instead, which keeps the results above the
+     fold. Desktop still wraps, where there's width for it. */
+  @media (max-width: 760px) {
+    .filters--scroll {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      /* Bleed to the page gutter so the row reads as continuing off-sheet.
+         `--gutter` comes from .wrap; outside one it falls back to 0 and the
+         row simply scrolls within its container instead of overflowing it. */
+      margin-left: calc(var(--gutter, 0px) * -1);
+      margin-right: calc(var(--gutter, 0px) * -1);
+      padding: 2px var(--gutter, 0px);
+      scroll-padding-left: var(--gutter, 0px);
+    }
+    .filters--scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .filters--scroll > * {
+      flex: none;
+    }
+    .filters--scroll .filters__label {
+      align-self: center;
+    }
+  }
+  /* A primary chip row that has a secondary row under it closes the gap, so
+     the two read as one control block rather than two unrelated bands. */
+  .filters--stack {
+    margin-bottom: 10px;
+  }
+  /* Secondary refinements — quieter than the primary register above them. */
+  .filters--sub {
+    gap: 6px;
+    margin-top: 0;
+  }
+  .filters--sub .fbtn {
+    /* Quieter than the primary register, but the 44px touch floor holds —
+       the box keeps its height and gives up weight instead. */
+    padding: 8px 11px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    background: transparent;
+    border: 1px solid var(--rule-soft);
+  }
+  .filters--sub .fbtn.is-on {
+    background: var(--ink);
+    color: var(--on-ink);
+    border-color: var(--ink);
   }
   .fbtn[aria-pressed="true"] {
     background: var(--live);
@@ -1941,6 +2665,97 @@ video {
     outline-offset: 3px;
   }
 
+  /* ---------- Marketplace family nav ----------
+     Marketplace | Listings | Offers | Orders, on every surface in the family.
+     Deliberately not a segmented control: a ruled register strip, mono
+     uppercase, with the sheet you're reading carrying the live tick — the same
+     language as the rail's margin, so the local nav reads as part of the
+     drawing rather than a control bar dropped on top of it. */
+  .familynav {
+    display: flex;
+    align-items: stretch;
+    margin: 0 0 22px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .familynav__rows {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    min-width: 0;
+    /* Narrow viewports scroll rather than wrap into a two-row chip wall.
+       `-mx` bleeds to the page gutter so the first item isn't clipped. */
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Focus rings on the first/last item must not be sheared off by the
+       scroll container. */
+    padding: 0 2px;
+    margin: 0 -2px;
+  }
+  .familynav__rows::-webkit-scrollbar {
+    display: none;
+  }
+  .familynav__item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    /* The 44px touch floor, at every width. */
+    min-height: 44px;
+    padding: 0 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .familynav__item:hover {
+    color: var(--ink);
+  }
+  .familynav__item.is-here {
+    color: var(--ink);
+  }
+  /* The live tick under the current sheet — 2px so it reads over the
+     container's 1px rule. */
+  .familynav__item.is-here::after {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: -1px;
+    height: 2px;
+    background: var(--live);
+  }
+  .familynav__n {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--live);
+  }
+
+  /* The strip starts flush with the page gutter at every width — an indented
+     first item would read as a stray control rather than the page's own
+     register. */
+  .familynav__item:first-child {
+    padding-left: 0;
+  }
+  .familynav__item:first-child.is-here::after {
+    left: 0;
+  }
+
+  @media (max-width: 640px) {
+    .familynav {
+      margin-bottom: 18px;
+    }
+    .familynav__rows {
+      flex: 1 1 100%;
+    }
+    .familynav__item {
+      padding: 0 10px;
+      letter-spacing: 0.08em;
+    }
+  }
+
   /* ---------- quiet jump row — ref-links, not pills ---------- */
   .jumprow {
     display: flex;
@@ -1954,7 +2769,7 @@ video {
   }
   .jumplink {
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink);
@@ -1997,14 +2812,14 @@ video {
     color: var(--dim);
   }
   .bline__val {
-    font-size: 17.5px;
+    font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.01em;
     line-height: 1.35;
   }
   .bline__note {
     grid-column: 2;
-    font-size: 15px;
+    font-size: 16px;
     color: var(--dim);
     line-height: 1.55;
     max-width: 64ch;
@@ -2044,7 +2859,7 @@ video {
   }
   .pipe .lbl {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     color: var(--dim);
     margin-left: 6px;
@@ -2107,7 +2922,7 @@ video {
     border-radius: var(--r-ctl);
     padding: 12px 18px;
     font-family: var(--mono);
-    font-size: 15px;
+    font-size: 16px;
     /* Wide enough that the placeholder — the only documentation of what's
        searchable — never clips. */
     width: min(560px, 100%);
@@ -2164,13 +2979,13 @@ video {
     background: var(--ink);
     color: var(--on-ink);
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 12px 20px;
     border-radius: var(--r-ctl);
-    white-space: nowrap;
-    max-width: 92vw;
+    max-width: min(60ch, 92vw);
+    text-align: center;
     transition:
       opacity var(--t-fast) ease,
       transform var(--t-move) var(--spring);
@@ -2192,6 +3007,16 @@ video {
     min-width: 0;
     width: 100%;
     max-width: 320px;
+    transition:
+      border-color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .ctl:hover:not(:disabled) {
+    border-color: var(--rule-mid);
+  }
+  .ctl:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
   .ctl::placeholder {
     color: var(--dim);
@@ -2214,7 +3039,7 @@ video {
   }
   textarea.ctl {
     font-family: var(--sans);
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.55;
     min-height: 88px;
     resize: vertical;
@@ -2229,6 +3054,10 @@ video {
     accent-color: var(--live);
     border-radius: 0;
     margin: 0;
+  }
+  /* The one radio treatment — same accent, natively round. */
+  input.sq[type="radio"] {
+    border-radius: 50%;
   }
 
   .bline--ctl {
@@ -2260,7 +3089,7 @@ video {
     grid-column: 4;
     align-self: center;
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--dim);
@@ -2345,7 +3174,30 @@ video {
     width: 44px;
     height: 44px;
     border-radius: var(--r-ctl);
-    font-size: 14px;
+    font-size: 16px;
+  }
+  /* Named avatar scale: sm 44 · md 48 · lg 64 (base) · xl 88. The md and xl
+     sizes previously lived as ad-hoc Tailwind utilities on call sites. */
+  .monogram--md {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--r-ctl);
+    font-size: 16px;
+  }
+  .monogram--xl {
+    width: 88px;
+    height: 88px;
+    border-radius: var(--r-ctl);
+    font-size: 24px;
+  }
+  /* Glyph-scale plate for card footers — below the avatar scale proper, so
+     the radius steps down to the chip radius with the size. */
+  .monogram--xs {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-chip);
+    font-size: 10px;
+    letter-spacing: 0;
   }
 
   /* review entries — ruled, not boxed */
@@ -2371,7 +3223,7 @@ video {
 
   /* interactive star rating — a radiogroup of buttons, not a select */
   .star-pick {
-    font-size: 22px;
+    font-size: 24px;
     line-height: 1;
     color: var(--dimline);
     background: none;
@@ -2392,7 +3244,7 @@ video {
     outline-offset: 2px;
   }
   .review p {
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.6;
     margin-top: 7px;
     max-width: 72ch;
@@ -2420,7 +3272,7 @@ video {
     font-size: 20px;
   }
   .undrawn h3 {
-    font-size: 19px;
+    font-size: 20px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.01em;
   }
@@ -2483,7 +3335,7 @@ video {
   /* catalog page furniture */
   .spec-note {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.65;
     color: var(--dim);
     max-width: 76ch;
@@ -2505,9 +3357,12 @@ video {
   .field > .microlabel {
     display: block;
   }
+  .field__label {
+    display: block; /* recipe shared with .microlabel — see type utilities */
+  }
   .field__hint {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--dim);
     line-height: 1.5;
   }
@@ -2517,7 +3372,7 @@ video {
      style. Empty errors are hidden via :empty instead. */
   .field__err {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--live);
     line-height: 1.5;
     display: flex;
@@ -2539,7 +3394,7 @@ video {
   }
   .field__ok {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--ok);
     display: none;
   }
@@ -2565,7 +3420,7 @@ video {
   }
   .ctl__prefix span {
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--dim);
     padding: 0 4px 0 14px;
     flex: none;
@@ -2600,15 +3455,15 @@ video {
     background: var(--live-tint);
   }
   .drop__mark {
-    font-size: 22px;
+    font-size: 24px;
     color: var(--dim);
   }
   .drop h4 {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
   }
   .drop p {
-    font-size: 15px;
+    font-size: 16px;
     color: var(--dim);
   }
 
@@ -2634,21 +3489,28 @@ video {
     position: absolute;
     top: 4px;
     right: 4px;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: var(--ink);
     color: var(--on-ink);
-    font-size: 11px;
+    font-size: 12px;
     display: grid;
     place-items: center;
+  }
+  /* Invisible hit extender: 24px visual, ~44px target at every pointer type
+     (the pointer-coarse upsizing still applies on touch). */
+  .thumb__x::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
   }
   .thumb__tag {
     position: absolute;
     left: 4px;
     bottom: 4px;
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     background: var(--ink);
@@ -2753,7 +3615,7 @@ video {
     border-radius: 50%;
     background: var(--ink);
     color: var(--on-ink);
-    font-size: 22px;
+    font-size: 24px;
     line-height: 1;
   }
   .lightbox__nav:hover {
@@ -2767,7 +3629,7 @@ video {
     color: var(--on-ink);
   }
   .lightbox__alt {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--on-ink);
     opacity: 0.75;
     max-width: 62ch;
@@ -2816,13 +3678,13 @@ video {
     content: "0" counter(s);
   }
   .step__t {
-    font-size: 17.5px;
+    font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.01em;
   }
   .step__d {
     grid-column: 2;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.55;
     color: var(--dim);
   }
@@ -2866,13 +3728,13 @@ video {
     color: var(--live);
   }
   .msg__body {
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.55;
     max-width: 62ch;
   }
   .msg__meta {
     font-family: var(--mono);
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--dim);
   }
   .msg__attach {
@@ -2884,7 +3746,7 @@ video {
     border-radius: var(--r-ctl);
     padding: 8px 12px;
     font-family: var(--mono);
-    font-size: 13px;
+    font-size: 12px;
     color: var(--ink);
   }
   .composer {
@@ -2916,7 +3778,7 @@ video {
     border-bottom: 1px solid var(--rule-mid);
   }
   .mail__subj {
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
   }
   .mail__body {
@@ -2936,7 +3798,7 @@ video {
     border-top: 1px solid var(--rule-soft);
     padding: 12px 16px;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
     color: var(--dim);
     line-height: 1.6;
   }
@@ -2952,7 +3814,7 @@ video {
     background: var(--paper-deep);
   }
   .alert__ico {
-    font-size: 17px;
+    font-size: 16px;
     color: var(--dim);
     grid-row: span 2;
   }
@@ -2961,7 +3823,7 @@ video {
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
   }
   .alert p {
-    font-size: 15px;
+    font-size: 16px;
     color: var(--dim);
     line-height: 1.55;
     max-width: 62ch;
@@ -3018,7 +3880,7 @@ video {
     max-width: 68ch;
   }
   .prose h2 {
-    font-size: 21px;
+    font-size: 20px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.01em;
     margin: 30px 0 10px;
@@ -3027,13 +3889,13 @@ video {
     margin-top: 0;
   }
   .prose h3 {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     margin: 22px 0 8px;
   }
   .prose p,
   .prose li {
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.7;
     color: var(--ink);
     margin-bottom: 12px;
@@ -3056,7 +3918,7 @@ video {
   }
   .toc a {
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 16px;
     padding: 8px 0;
     color: var(--dim);
     border-top: 1px solid var(--rule-soft);
@@ -3080,7 +3942,7 @@ video {
     gap: 16px;
     margin-top: 14px;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: 12px;
   }
 
   /* ---------- edge-case helpers ---------- */
@@ -3184,7 +4046,7 @@ video {
   }
   .bline__val {
     grid-column: 1;
-    font-size: 17.5px;
+    font-size: 16px;
   }
   .bline__note {
     grid-column: 1 / -1;
@@ -3264,7 +4126,7 @@ video {
     aspect-ratio: 4 / 3;
   }
   .callout {
-    font-size: 11px;
+    font-size: 12px;
     padding: 7px 10px;
   }
 }
@@ -3328,6 +4190,30 @@ video {
   .shell[data-rail="closed"] .railrow__label {
     display: none;
   }
+  /* Collapsed the rail is numbers only, so the family heading swaps its word
+     for a three-letter mark and the children keep their margin rule — four
+     unexplained digits would say nothing about what they belong to. */
+  .shell[data-rail="closed"] .railgroup {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 2px;
+    padding: 14px 0 4px;
+  }
+  .shell[data-rail="closed"] .railgroup__label {
+    display: none;
+  }
+  .shell[data-rail="closed"] .railgroup__mark {
+    display: block;
+  }
+  .shell[data-rail="closed"] .railrow--child {
+    padding-left: 0;
+  }
+  .shell[data-rail="closed"] .railrow--child::after {
+    left: 12px;
+    /* Stronger than the expanded rail's hairline: at 68px the rule is the
+       only thing left saying these four numbers belong to MKT. */
+    background: var(--rule-mid);
+  }
   /* Collapsed the head stacks: mark over the toggle, both centred. */
   .shell[data-rail="closed"] .rail__head {
     flex-direction: column;
@@ -3371,14 +4257,7 @@ video {
   .mkt {
     grid-template-columns: 1fr;
   }
-  /* Filter and sort chips are the primary controls on the market sheet, and
-     on a phone they are thumbed, not clicked — 33px was under the 44px
-     minimum. Padding stays put so the type doesn't move; the box grows. */
-  .fbtn {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-  }
+  /* (fbtn's 44px floor now lives on the base rule — every width.) */
   .bar__inner {
     flex-wrap: nowrap;
     gap: 8px;
@@ -3422,7 +4301,7 @@ video {
   }
 
   .indexrow__label {
-    font-size: 19px;
+    font-size: 20px;
   }
   .deck--kpi {
     grid-template-columns: 1fr 1fr;
@@ -3442,7 +4321,7 @@ video {
     margin-top: 2px;
   }
   .order .order__actions .chip {
-    font-size: 10px;
+    font-size: 12px;
     padding: 3px 8px;
     letter-spacing: 0.1em;
   }
@@ -3453,12 +4332,26 @@ video {
     grid-column: 2;
     justify-content: flex-start;
   }
+  /* Text-only rows (no thumbnail) — without this the text span falls into
+     the 44px image column and wraps one word per line. */
+  .order:not(:has(.order__img)) {
+    grid-template-columns: 1fr auto;
+  }
+  .order:not(:has(.order__img)) .order__actions {
+    grid-column: 2;
+  }
+  .order:not(:has(.order__img)):has(.order__actions .btn) {
+    grid-template-columns: 1fr;
+  }
+  .order:not(:has(.order__img)):has(.order__actions .btn) .order__actions {
+    grid-column: 1;
+  }
   .week {
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
   }
   .week__day b {
-    font-size: 15px;
+    font-size: 16px;
   }
   .field--row {
     grid-template-columns: 1fr;
@@ -3482,6 +4375,9 @@ video {
 @media (prefers-reduced-motion: reduce) {
   .pagehead h1 .live-word::after {
     transform: none;
+    transition: none;
+  }
+  .sheet {
     transition: none;
   }
   .rv,

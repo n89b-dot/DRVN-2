@@ -88,7 +88,7 @@ export default async function LandingPage() {
 
         {heroImage && (
           <Rv className="hero-media mb-10">
-            <Media src={heroImage} alt="A modified car on DRVN" className="h-full w-full" />
+            <Media src={heroImage} alt="A modified car on DRVN" className="h-full w-full" role="hero" />
           </Rv>
         )}
 
@@ -100,7 +100,7 @@ export default async function LandingPage() {
                 <span className="mono">01</span> — Find the part
               </span>
             </div>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               Search by name, brand or part number — or flip one switch and only see parts that
               fit the car you actually drive.
             </p>
@@ -112,7 +112,7 @@ export default async function LandingPage() {
               </span>
               <span className="chip">Build pages</span>
             </div>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               No more &quot;came off a clean car, trust me.&quot; Parts released off a documented
               build link straight to its page — the mod list, the photos, the owner — and
               they&apos;re badged, so you can tell provenance from a plain listing at a glance.
@@ -125,7 +125,7 @@ export default async function LandingPage() {
               </span>
               <span className="chip">Free to list</span>
             </div>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               List a part in a few minutes, straight off your own build. Take offers, get paid,
               ship it. 10% when it sells — nothing to list, nothing to browse.
             </p>
@@ -144,7 +144,7 @@ export default async function LandingPage() {
             {cars.length === 0 && (
               <div className="tile">
                 <span className="microlabel">First builds landing</span>
-                <p className="text-[15px] leading-relaxed text-dim">
+                <p className="text-body leading-relaxed text-dim">
                   Garages are being documented right now. Add yours and your car&apos;s build
                   page is the provenance behind every part you sell off it.
                 </p>
@@ -162,6 +162,7 @@ export default async function LandingPage() {
                         src={car.cover_image_url ?? undefined}
                         alt={car.name}
                         className="h-full w-full"
+                        role="card"
                       />
                     </span>
                     <p className="mkt__name">{car.name}</p>
@@ -187,7 +188,7 @@ export default async function LandingPage() {
             {listings.length === 0 && (
               <div className="tile">
                 <span className="microlabel">The market is warming up</span>
-                <p className="text-[15px] leading-relaxed text-dim">
+                <p className="text-body leading-relaxed text-dim">
                   Parts get listed straight off documented builds. Browse the marketplace, or
                   be the first to release something off yours.
                 </p>
@@ -250,7 +251,7 @@ export default async function LandingPage() {
             <div className="tile__head">
               <span className="microlabel">Payment held safe</span>
             </div>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               Your payment is processed by Stripe and the seller isn&apos;t paid out until
               after delivery plus a clearing window — the money waits until the part arrives.
             </p>
@@ -259,7 +260,7 @@ export default async function LandingPage() {
             <div className="tile__head">
               <span className="microlabel">Not as described?</span>
             </div>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               Every used part is sold against a frozen condition disclosure. If what arrives
               doesn&apos;t match it, open a dispute with photos — sellers must respond, and
               DRVN steps in when they don&apos;t.
@@ -269,7 +270,7 @@ export default async function LandingPage() {
             <div className="tile__head">
               <span className="microlabel">The full policy</span>
             </div>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               Response windows, refunds, and what&apos;s covered — written down, not
               vibes-based.{" "}
               <Link href="/protection" className="jumplink">

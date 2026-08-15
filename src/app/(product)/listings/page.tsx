@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
-import { fetchWatchCounts } from "@/lib/marketplace/query";
+import { Foot, MarketplaceNav } from "@/components/ui";
+import type { SellerListingStat, SellerRegisterTally } from "@/lib/database.types";
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 import { ListingsLedger, type LedgerOffer, type LedgerRow } from "./listings-ledger";
@@ -19,16 +20,27 @@ export const metadata = { title: "Your listings - DRVN" };
  */
 type Register = "all" | "live" | "offer" | "draft" | "paused" | "reserved" | "archived" | "sold";
 
-const REGISTERS: { key: Register; label: string }[] = [
+/**
+ * Eight equally-loud chips made the phone layout a wall and gave "Archived"
+ * the same weight as "Under offer". The four a seller works from every day
+ * lead; the rest are a quieter status row underneath, still URL-addressable
+ * and still keyboard-reachable — nothing was hidden behind a disclosure.
+ */
+const PRIMARY_REGISTERS: { key: Register; label: string }[] = [
   { key: "all", label: "All" },
   { key: "live", label: "Live" },
   { key: "offer", label: "Under offer" },
   { key: "draft", label: "Draft" },
+];
+
+const SECONDARY_REGISTERS: { key: Register; label: string }[] = [
   { key: "paused", label: "Paused" },
   { key: "reserved", label: "Reserved" },
-  { key: "archived", label: "Archived" },
   { key: "sold", label: "Sold" },
+  { key: "archived", label: "Archived" },
 ];
+
+const REGISTERS = [...PRIMARY_REGISTERS, ...SECONDARY_REGISTERS];
 
 type SortKey = "top_offer" | "views" | "watch" | "asking" | "newest";
 
@@ -39,15 +51,7 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "asking", label: "Asking" },
 ];
 
-const LIVE_OFFER_STATES = ["open", "countered"];
 const PAGE_SIZE = 50;
-// Register membership ("live" vs "under offer") is computed in memory from
-// joined offer data, not a plain column — there's no SQL WHERE for it. So the
-// underlying listings fetch still has to pull everything to compute tallies
-// and registers correctly; what changed is the *render*, which used to dump
-// all (up to) 200 rows into one table. This ceiling is a backstop against a
-// pathological account, not the normal page size — see PAGE_SIZE for that.
-const FETCH_CEILING = 2000;
 
 // Phrasing for the empty state's "Nothing ___" heading — kept distinct from
 // the chip label ("Under offer" reads oddly as "Nothing under offer" → "on offer").
@@ -62,28 +66,25 @@ const EMPTY_REGISTER_PHRASE: Record<Register, string> = {
   sold: "sold",
 };
 
-function sortRows(rows: LedgerRow[], sort: SortKey): LedgerRow[] {
-  const by = [...rows];
-  switch (sort) {
-    // Descending on every measure: a seller opens this page to find the
-    // listing that most needs an answer, not the quietest one.
-    case "top_offer":
-      return by.sort((a, b) => (b.topOfferCents ?? -1) - (a.topOfferCents ?? -1));
-    case "views":
-      return by.sort((a, b) => b.views - a.views);
-    case "watch":
-      return by.sort((a, b) => b.watchers - a.watchers);
-    case "asking":
-      return by.sort((a, b) => b.priceCents - a.priceCents);
-    default:
-      return by;
-  }
-}
+const TALLY_FIELD: Record<Register, keyof SellerRegisterTally> = {
+  all: "all_count",
+  live: "live_count",
+  offer: "offer_count",
+  draft: "draft_count",
+  paused: "paused_count",
+  reserved: "reserved_count",
+  archived: "archived_count",
+  sold: "sold_count",
+};
 
 /**
  * The seller's ledger (Werkbank C1/C2). Replaces a flat card list with the
  * tabular scan a seller actually needs — views and watchers against asking and
  * the best live offer, with the offer window ticking in the row.
+ *
+ * Filtering, sorting, aggregation and pagination all happen in the
+ * `seller_listing_stats` / `seller_register_tally` RPCs (migration 0030) —
+ * the page only ever holds one page of rows plus the offers behind them.
  */
 export default async function SellerListingsPage({
   searchParams,
@@ -102,131 +103,116 @@ export default async function SellerListingsPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: listings, error } = await supabase
-    .from("listings")
-    .select(
-      "id, title, part_number, price_cents, status, view_count, created_at, source_car_id"
-    )
-    .eq("seller_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(FETCH_CEILING);
+  const fetchStats = (forPage: number) =>
+    supabase.rpc("seller_listing_stats", {
+      p_seller: user.id,
+      p_register: register,
+      p_sort: sort,
+      p_limit: PAGE_SIZE,
+      p_offset: (forPage - 1) * PAGE_SIZE,
+    });
 
-  if (error) reportError("[listings] failed to load", error);
+  const [statsRes, tallyRes, questionsRes, offersCount] = await Promise.all([
+    fetchStats(page),
+    supabase.rpc("seller_register_tally", { p_seller: user.id }),
+    supabase.rpc("seller_open_questions", { p_seller: user.id }),
+    loadOffersNeedingAttention(supabase, user.id),
+  ]);
 
-  const all = listings ?? [];
-  const listingIds = all.map((l) => l.id);
-  const carIds = [...new Set(all.map((l) => l.source_car_id).filter(Boolean))] as string[];
+  // Fail soft when 0030 hasn't been applied yet (or the RPC errors): the
+  // ledger renders empty rather than crashing, and the error is on record.
+  if (statsRes.error) reportError("[listings] seller_listing_stats failed", statsRes.error);
+  if (tallyRes.error) reportError("[listings] seller_register_tally failed", tallyRes.error);
+  // 0035 — a missing function must not take the ledger down with it.
+  if (questionsRes.error)
+    reportError("[listings] seller_open_questions failed", questionsRes.error);
+  const openQuestions = questionsRes.error ? 0 : (questionsRes.data ?? 0);
 
-  const [{ data: images }, { data: offers }, { data: questions }, { data: cars }, watchCounts] =
-    await Promise.all([
-      listingIds.length
-        ? supabase
-            .from("listing_images")
-            .select("listing_id, url, position")
-            .in("listing_id", listingIds)
-            .order("position")
-        : Promise.resolve({ data: [] }),
-      listingIds.length
-        ? supabase
-            .from("offers")
-            .select("id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at, created_at")
-            .in("listing_id", listingIds)
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [] }),
-      listingIds.length
-        ? supabase
-            .from("listing_questions")
-            .select("id, listing_id, parent_id")
-            .in("listing_id", listingIds)
-        : Promise.resolve({ data: [] }),
-      carIds.length
-        ? supabase.from("cars").select("id, name, slug").in("id", carIds)
-        : Promise.resolve({ data: [] }),
-      fetchWatchCounts(supabase, listingIds),
-    ]);
+  const tallyRow: SellerRegisterTally | null = tallyRes.data?.[0] ?? null;
+  const tally = (key: Register) => tallyRow?.[TALLY_FIELD[key]] ?? 0;
 
-  const buyerIds = [...new Set((offers ?? []).map((o) => o.buyer_id))];
+  let stats: SellerListingStat[] = statsRes.data ?? [];
+  // The window count travels on every row; an empty page falls back to the
+  // chip tally (same register semantics) so a stale ?page can be clamped.
+  let total = stats[0]?.total_count ?? tally(register);
+  const clampedPage = Math.min(page, Math.max(1, Math.ceil(total / PAGE_SIZE)));
+  if (clampedPage !== page && total > 0 && !statsRes.error) {
+    // A stale page number pointing past the end of the filtered set: refetch
+    // the real last page instead of showing an empty table.
+    const retry = await fetchStats(clampedPage);
+    if (retry.error) reportError("[listings] seller_listing_stats failed", retry.error);
+    stats = retry.data ?? [];
+    total = stats[0]?.total_count ?? total;
+  }
+
+  const listingIds = stats.map((s) => s.id);
+  const carIds = [...new Set(stats.map((s) => s.source_car_id).filter(Boolean))] as string[];
+
+  // Offer history only for the rows on screen — the expandable detail is the
+  // one thing the RPC doesn't aggregate.
+  const [offersRes, carsRes] = await Promise.all([
+    listingIds.length
+      ? supabase
+          .from("offers")
+          .select("id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at, created_at")
+          .in("listing_id", listingIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    carIds.length
+      ? supabase.from("cars").select("id, name, slug").in("id", carIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (offersRes.error) reportError("[listings] offers failed to load", offersRes.error);
+  if (carsRes.error) reportError("[listings] cars failed to load", carsRes.error);
+  const offers = offersRes.data ?? [];
+
+  const buyerIds = [...new Set(offers.map((o) => o.buyer_id))];
   const { data: buyers } = buyerIds.length
     ? await supabase.from("profiles").select("id, display_name, username").in("id", buyerIds)
     : { data: [] };
+  const buyerById = new Map((buyers ?? []).map((b) => [b.id, b]));
   const buyerName = (id: string) => {
-    const b = (buyers ?? []).find((x) => x.id === id);
+    const b = buyerById.get(id);
     return b?.display_name ?? (b?.username ? `@${b.username}` : "A buyer");
   };
 
-  const cover = new Map<string, string>();
-  for (const img of images ?? []) {
-    if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
+  const offersByListing = new Map<string, LedgerOffer[]>();
+  for (const o of offers) {
+    const list = offersByListing.get(o.listing_id) ?? [];
+    list.push({
+      id: o.id,
+      amount_cents: o.amount_cents,
+      counter_amount_cents: o.counter_amount_cents,
+      status: o.status,
+      expires_at: o.expires_at,
+      created_at: o.created_at,
+      buyerName: buyerName(o.buyer_id),
+    });
+    offersByListing.set(o.listing_id, list);
   }
-  const carById = new Map((cars ?? []).map((c) => [c.id, c]));
+  const carById = new Map((carsRes.data ?? []).map((c) => [c.id, c]));
 
-  const unansweredFor = (id: string) => {
-    const forListing = (questions ?? []).filter((q) => q.listing_id === id);
-    const answered = new Set(forListing.filter((q) => q.parent_id).map((q) => q.parent_id));
-    return forListing.filter((q) => !q.parent_id && !answered.has(q.id)).length;
-  };
-
-  const rows: LedgerRow[] = all.map((listing) => {
-    const listingOffers = (offers ?? []).filter((o) => o.listing_id === listing.id);
-    const live = listingOffers.filter((o) => LIVE_OFFER_STATES.includes(o.status));
-
-    // The top offer is the best *live* one — a declined £2k offer is history,
-    // not a number to price against.
-    const topOfferCents = live.length
-      ? Math.max(...live.map((o) => o.counter_amount_cents ?? o.amount_cents))
-      : null;
-
-    const expiries = live
-      .map((o) => o.expires_at)
-      .filter(Boolean)
-      .sort() as string[];
-
-    const car = listing.source_car_id ? carById.get(listing.source_car_id) : null;
-
+  const rows: LedgerRow[] = stats.map((s) => {
+    const car = s.source_car_id ? carById.get(s.source_car_id) : null;
     return {
-      id: listing.id,
-      title: listing.title,
-      partNumber: listing.part_number,
-      cover: cover.get(listing.id) ?? null,
-      status: listing.status,
-      priceCents: listing.price_cents,
-      views: listing.view_count ?? 0,
-      watchers: watchCounts.get(listing.id) ?? 0,
+      id: s.id,
+      title: s.title,
+      partNumber: s.part_number,
+      cover: s.cover_url,
+      status: s.status,
+      priceCents: s.price_cents,
+      views: s.view_count ?? 0,
+      watchers: s.watch_count ?? 0,
       sourceCar: car ? { slug: car.slug, name: car.name } : null,
-      topOfferCents,
-      expiresAt: expiries[0] ?? null,
-      offers: listingOffers.map<LedgerOffer>((o) => ({
-        id: o.id,
-        amount_cents: o.amount_cents,
-        counter_amount_cents: o.counter_amount_cents,
-        status: o.status,
-        expires_at: o.expires_at,
-        created_at: o.created_at,
-        buyerName: buyerName(o.buyer_id),
-      })),
-      unansweredQuestions: unansweredFor(listing.id),
+      topOfferCents: s.top_offer_cents,
+      expiresAt: s.soonest_offer_expiry,
+      offers: offersByListing.get(s.id) ?? [],
+      unansweredQuestions: s.unanswered_questions ?? 0,
     };
   });
 
-  // Shared with the tally below so a chip's count always matches what
-  // clicking it shows.
-  const matchesRegister = (row: LedgerRow, key: Register) => {
-    if (key === "all") return true;
-    if (key === "live") return row.status === "active" && row.topOfferCents === null;
-    if (key === "offer") return row.topOfferCents !== null;
-    return row.status === key;
-  };
-
-  const visible = sortRows(
-    rows.filter((row) => matchesRegister(row, register)),
-    sort
-  );
-  const tally = (key: Register) => rows.filter((row) => matchesRegister(row, key)).length;
-
-  const clampedPage = Math.min(page, Math.max(1, Math.ceil(visible.length / PAGE_SIZE)));
   const pageFrom = (clampedPage - 1) * PAGE_SIZE;
-  const visiblePage = visible.slice(pageFrom, pageFrom + PAGE_SIZE);
-  const hasMore = pageFrom + PAGE_SIZE < visible.length;
+  const hasMore = pageFrom + rows.length < total;
 
   const href = (next: Partial<{ register: Register; sort: SortKey; page: number }>) => {
     const params = new URLSearchParams();
@@ -245,11 +231,10 @@ export default async function SellerListingsPage({
 
   return (
     <div className="wrap">
+      <MarketplaceNav current="listings" offersCount={offersCount} />
+
       <Rv as="header" className="pagehead">
-        <span className="microlabel">
-          Listings &amp; offers · {tally("live")} live · {tally("offer")} under offer
-          {tally("draft") > 0 ? ` · ${tally("draft")} draft` : ""}
-        </span>
+        <span className="microlabel">Your inventory</span>
         <h1>
           Every part you&apos;ve <span className="live-word">listed.</span>
         </h1>
@@ -262,6 +247,31 @@ export default async function SellerListingsPage({
         </Link>
       </Rv>
 
+      {/* The seller's working state, in four numbers. Each one is a filter or
+          a queue — nothing here is a metric for its own sake. */}
+      <div className="tally" role="group" aria-label="Listing summary">
+        <Link href={href({ register: "live" })} className="tally__cell">
+          <span className="tally__n">{tally("live")}</span>
+          <span className="tally__label">Live</span>
+        </Link>
+        <Link href={href({ register: "offer" })} className="tally__cell">
+          <span className={`tally__n ${tally("offer") > 0 ? "tally__n--live" : ""}`}>
+            {tally("offer")}
+          </span>
+          <span className="tally__label">Under offer</span>
+        </Link>
+        <Link href={href({ register: "draft" })} className="tally__cell">
+          <span className="tally__n">{tally("draft")}</span>
+          <span className="tally__label">Drafts</span>
+        </Link>
+        <span className="tally__cell">
+          <span className={`tally__n ${openQuestions > 0 ? "tally__n--live" : ""}`}>
+            {openQuestions}
+          </span>
+          <span className="tally__label">Questions to answer</span>
+        </span>
+      </div>
+
       {deleted && (
         <div className="alert alert--ok mb-6">
           <span className="alert__ico" aria-hidden="true">
@@ -272,8 +282,12 @@ export default async function SellerListingsPage({
         </div>
       )}
 
-      <div className="filters" role="group" aria-label="Filter listings by status">
-        {REGISTERS.map((r) => (
+      <div
+        className="filters filters--stack filters--scroll"
+        role="group"
+        aria-label="Filter listings by status"
+      >
+        {PRIMARY_REGISTERS.map((r) => (
           <Link
             key={r.key}
             href={href({ register: r.key })}
@@ -285,7 +299,25 @@ export default async function SellerListingsPage({
         ))}
       </div>
 
-      {visible.length === 0 ? (
+      <div
+        className="filters filters--sub filters--scroll"
+        role="group"
+        aria-label="Filter listings by other statuses"
+      >
+        <span className="microlabel filters__label">Status</span>
+        {SECONDARY_REGISTERS.map((r) => (
+          <Link
+            key={r.key}
+            href={href({ register: r.key })}
+            className={`fbtn ${r.key === register ? "is-on" : ""}`}
+            aria-current={r.key === register ? "page" : undefined}
+          >
+            {r.label} {tally(r.key)}
+          </Link>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
         <Rv className="undrawn undrawn--hero">
           <span className="undrawn__mark" aria-hidden="true">
             ✎
@@ -305,11 +337,11 @@ export default async function SellerListingsPage({
           <Rv className="tile">
             <div className="tile__head">
               <span className="microlabel microlabel--ink">
-                Your listings · click a row for offer history
-                {visible.length > PAGE_SIZE && (
+                Your listings · click a row for its offers
+                {total > PAGE_SIZE && (
                   <>
                     {" · "}
-                    {pageFrom + 1}–{Math.min(pageFrom + PAGE_SIZE, visible.length)} of {visible.length}
+                    {pageFrom + 1}–{pageFrom + rows.length} of {total}
                   </>
                 )}
               </span>
@@ -328,7 +360,7 @@ export default async function SellerListingsPage({
                 ))}
               </span>
             </div>
-            <ListingsLedger rows={visiblePage} />
+            <ListingsLedger rows={rows} />
 
             {(clampedPage > 1 || hasMore) && (
               <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">

@@ -38,7 +38,7 @@ export default function ProtectionPage() {
         {/* ---------- The listing is the contract ---------- */}
         <Rv className="tile tile--deep">
           <span className="microlabel microlabel--ink">The listing is the contract</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Every claim a seller makes on a listing — photos, description, grade, checklist
             answers, fitment — is recorded on the order at the moment you buy. If there&apos;s ever
             a dispute, it&apos;s judged against what the listing said, not against what anyone
@@ -50,7 +50,7 @@ export default function ProtectionPage() {
         {/* ---------- Grades ---------- */}
         <Rv className="tile" stagger={1}>
           <span className="microlabel microlabel--ink">Condition grades</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Used parts carry a seller-declared letter grade. The scale is deliberately short and
             conservative — there is no &quot;mint&quot;:
           </p>
@@ -82,14 +82,14 @@ export default function ProtectionPage() {
         {/* ---------- Checklists ---------- */}
         <Rv className="tile" stagger={2}>
           <span className="microlabel microlabel--ink">Condition checklists</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Alongside the grade, sellers answer a short checklist that changes with the kind of
             part — a turbo gets asked about shaft play and oil in the housings, a wheel about
             bends and welds, an ECU about being unmarried from its old car. Every answer
             (&quot;yes&quot;, &quot;no&quot;, or an honest &quot;not sure&quot;) is shown on the
             listing and frozen onto the order when you buy.
           </p>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             For sellers: &quot;not sure&quot; is always safer than a wrong &quot;yes&quot;. A
             disclosed defect is a Grade C sale; an undisclosed one is a lost dispute.
           </p>
@@ -98,7 +98,7 @@ export default function ProtectionPage() {
         {/* ---------- Fitment ---------- */}
         <Rv className="tile" stagger={3}>
           <span className="microlabel microlabel--ink">Fitment — always seller-stated</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Sellers declare what a part fits as structured rows — make, model, year range — plus
             freeform notes. When a car in your garage matches, you&apos;ll see a{" "}
             <b>&quot;fits your car&quot;</b> hint on the listing and can filter the marketplace to
@@ -106,7 +106,7 @@ export default function ProtectionPage() {
             decode it once (via the US government&apos;s NHTSA database) to verify year, make,
             model, trim and engine. The VIN itself is never shown publicly.
           </p>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Be clear about what the hint is: <b>the seller&apos;s claim, checked against your
             car</b> — not a guarantee from DRVN. Aftermarket parts especially can vary by trim,
             options and model year. Always confirm before buying; the Q&amp;A on every listing
@@ -119,7 +119,7 @@ export default function ProtectionPage() {
         {/* ---------- The dispute process ---------- */}
         <Rv className="tile tile--deep" stagger={4}>
           <span className="microlabel microlabel--ink">If something&apos;s wrong: the process</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Problems are handled on the order page, in the open, with a clock on every step. Valid
             reasons: the item never arrived, arrived damaged, is significantly not as described,
             or is the wrong item. Changed your mind isn&apos;t covered — this is a used-parts
@@ -182,7 +182,7 @@ export default function ProtectionPage() {
         {/* ---------- Accountability ---------- */}
         <Rv className="tile" stagger={5}>
           <span className="microlabel microlabel--ink">Accountability, both directions</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Disputes a seller loses — refunds accepted, forced, or automatic — go on their record
             and inform how DRVN treats their account. Buyers who abuse the process lose access to
             it. And closing a dispute yourself when it&apos;s sorted (&quot;resolved, no action

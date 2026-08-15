@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
+import { Foot, MarketplaceNav } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { getCategory } from "@/lib/marketplace/taxonomy";
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
+import { ActiveFilters } from "../../active-filters";
 import { MarketplaceResults } from "../../results";
 import { FilterBar } from "../../filter-bar";
 
@@ -28,14 +30,19 @@ export default async function SubcategoryPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const page = await fetchListings(
-    supabase,
-    { ...filters, category: category.slug, subcategory: subcategory.slug },
-    user?.id
-  );
+  const [page, offersCount] = await Promise.all([
+    fetchListings(
+      supabase,
+      { ...filters, category: category.slug, subcategory: subcategory.slug },
+      user?.id
+    ),
+    user ? loadOffersNeedingAttention(supabase, user.id) : Promise.resolve(0),
+  ]);
 
   return (
     <div className="wrap">
+      {user && <MarketplaceNav current="marketplace" offersCount={offersCount} />}
+
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
@@ -55,10 +62,14 @@ export default async function SubcategoryPage({
         filters={filters}
         showFitToggle={Boolean(user)}
       />
+      <ActiveFilters
+        basePath={`/marketplace/${category.slug}/${subcategory.slug}`}
+        filters={filters as Record<string, string | undefined>}
+      />
 
       {/* Sibling subcategories stay one tap away — the sheet you're on is
           inked, the rest are a hop sideways, matching the category page. */}
-      <div className="filters">
+      <div className="filters filters--roomy filters--scroll">
         <span className="microlabel filters__label">Narrow it down</span>
         <Link href={`/marketplace/${category.slug}`} className="fbtn">
           All
@@ -79,6 +90,8 @@ export default async function SubcategoryPage({
           page={page}
           basePath={`/marketplace/${category.slug}/${subcategory.slug}`}
           params={filters as Record<string, string | undefined>}
+          emptyTitle={`No ${subcategory.label.toLowerCase()} listed right now`}
+          emptyBody={`Nothing in ${category.label.toLowerCase()} / ${subcategory.label.toLowerCase()} yet — check back, or be the first to list one.`}
         />
       </section>
 

@@ -65,7 +65,7 @@ export default function FeesPage() {
 
         <Rv className="tile" stagger={1}>
           <span className="microlabel microlabel--ink">What the buyer pays</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             The asking price plus the seller&apos;s shipping. Nothing is added at checkout — the
             number on the listing is the number you pay. The fee is invisible to buyers because it
             comes out of the seller&apos;s side.
@@ -74,7 +74,7 @@ export default function FeesPage() {
 
         <Rv className="tile" stagger={2}>
           <span className="microlabel microlabel--ink">Why charge from day one</span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             Because introducing a fee later, once people have built their listings around free, is a
             bait and switch. The rate has been the same since the first line of checkout code.
           </p>
@@ -84,7 +84,7 @@ export default function FeesPage() {
           <span className="microlabel microlabel--ink">
             {paymentsAreLive() ? "Payments are live" : "Payments are in test mode"}
           </span>
-          <p className="mt-2 text-[15px] leading-relaxed">
+          <p className="mt-2 text-body leading-relaxed">
             {paymentsAreLive()
               ? "Payments run live through Stripe: orders move real money and payouts are made on the schedule above. The fee maths hasn't changed — it's been the same since checkout shipped."
               : "DRVN currently runs on a test payment provider: orders are real records, but no money moves and no payouts are made yet. The fee maths above is already live in the code, so nothing about the numbers will change when real payments switch on."}

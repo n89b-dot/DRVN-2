@@ -6,7 +6,7 @@ import { completeOnboarding, type AuthState } from "../actions";
 
 type Availability = "idle" | "checking" | "available" | "taken" | "invalid" | "unknown";
 
-export function OnboardingForm({ email }: { email: string }) {
+export function OnboardingForm({ email, next }: { email: string; next?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(completeOnboarding, {});
   const [username, setUsername] = useState("");
   const [availability, setAvailability] = useState<Availability>("idle");
@@ -58,6 +58,8 @@ export function OnboardingForm({ email }: { email: string }) {
       <p className="kv mt-3 text-dim">Signed up as {email}</p>
 
       <form action={action} className="mt-6">
+        {/* Where this account was headed before it had to pick a handle. */}
+        {next && <input type="hidden" name="next" value={next} />}
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
           <label htmlFor="onb-username" className="microlabel">
             Handle

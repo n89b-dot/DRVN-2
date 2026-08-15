@@ -26,6 +26,9 @@ export type ConfirmDialogProps = {
   error?: string | null;
   /** Extra fields rendered above the buttons — e.g. a reason input. */
   fields?: React.ReactNode;
+  /** Typed confirmation for the irreversible tier: the confirm button stays
+   *  disabled until the user types this exact string (e.g. the car's name). */
+  confirmText?: string;
 };
 
 /**
@@ -52,11 +55,14 @@ export function ConfirmDialog({
   pending = false,
   error,
   fields,
+  confirmText,
 }: ConfirmDialogProps) {
   const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const confirmBlocked = Boolean(confirmText) && typed.trim() !== confirmText;
 
   const list = Array.isArray(consequences) ? (
-    <ul className="mt-2 grid gap-1 list-disc pl-4 text-[13.5px] leading-relaxed text-dim">
+    <ul className="mt-2 grid gap-1 list-disc pl-4 text-micro leading-relaxed text-dim">
       {consequences.map((c, i) => (
         <li key={i}>{c}</li>
       ))}
@@ -66,10 +72,24 @@ export function ConfirmDialog({
   );
 
   const content = (
-    <div className="sheet w-[min(92vw,440px)]">
-      <h2 className="mb-1 font-display text-[17px] font-semibold tracking-tight">{title}</h2>
+    <div className="sheet">
+      <h2 className="mb-1 font-display text-body font-semibold tracking-tight">{title}</h2>
       {list}
       {fields}
+      {confirmText && (
+        <div className="field mt-3 !mb-0">
+          <label className="microlabel" htmlFor="confirm-text-gate">
+            Type <b className="text-ink normal-case">{confirmText}</b> to confirm
+          </label>
+          <input
+            id="confirm-text-gate"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            autoComplete="off"
+            className="ctl max-w-none"
+          />
+        </div>
+      )}
       {error && (
         <p role="alert" aria-live="polite" className="field__err mt-2">
           {error}
@@ -82,7 +102,7 @@ export function ConfirmDialog({
         <button
           type={formAction ? "submit" : "button"}
           onClick={formAction ? undefined : () => onConfirm?.()}
-          disabled={pending}
+          disabled={pending || confirmBlocked}
           className={destructive ? "btn btn--live" : "btn"}
         >
           {pending ? "Working…" : confirmLabel}

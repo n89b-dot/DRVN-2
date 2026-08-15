@@ -1,4 +1,5 @@
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
+import { SlashFocus } from "@/components/ui/slash-focus";
 
 /**
  * GET-form filter bar — server-rendered, no client JS needed.
@@ -37,9 +38,15 @@ export function FilterBar({
             name="q"
             defaultValue={filters.q ?? ""}
             placeholder="Search parts…"
-            aria-label="Search parts"
+            aria-label="Search parts — press / to focus"
           />
+          {/* Keyboard affordance in the system's own voice — hidden where
+              there's no hardware keyboard to press it on. */}
+          <kbd className="microlabel hidden select-none md:inline" aria-hidden="true">
+            /
+          </kbd>
         </label>
+        <SlashFocus />
         <button type="submit" className="btn w-full sm:w-auto">
           Search
         </button>
@@ -88,7 +95,7 @@ export function FilterBar({
           />
         </span>
         {showFitToggle && (
-          <label className="flex basis-full items-center gap-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim sm:ml-auto sm:basis-auto">
+          <label className="flex basis-full items-center gap-2 font-mono text-micro uppercase tracking-[0.1em] text-dim sm:ml-auto sm:basis-auto">
             <input
               type="checkbox"
               name="fit"

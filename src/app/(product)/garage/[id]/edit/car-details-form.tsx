@@ -84,7 +84,7 @@ export function CarDetailsForm({ car }: { car: Car }) {
             placeholder="What's the story with this car?"
           />
         </Field>
-        <label className="flex items-center gap-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+        <label className="flex items-center gap-2 font-mono text-micro uppercase tracking-[0.1em] text-dim">
           <input type="checkbox" name="is_public" defaultChecked={car.is_public} className="sq" />
           Public sheet — anyone can read it
         </label>

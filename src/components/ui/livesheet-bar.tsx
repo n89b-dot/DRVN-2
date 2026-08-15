@@ -6,36 +6,27 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 
 import { cx } from "@/lib/format";
 import { Icon, type IconName } from "./icons";
+import {
+  BAR_ROUTES,
+  FAMILY_HREFS,
+  isMarketplaceFamily,
+  matchesFamily,
+  PRIMARY_NAV,
+  PUBLIC_ROUTES,
+  type NavEntry,
+  type NavRoute,
+} from "./nav-routes";
 
-type BarRoute = { href: string; label: string; note: string };
-type IconRoute = BarRoute & { icon: IconName };
+type IconRoute = NavRoute & { icon: IconName };
 
-// The register. On signed-in desktop these live in the rail; everywhere else
-// they live in the index (the compact menu).
-export const BAR_ROUTES: BarRoute[] = [
-  { href: "/home", label: "Home", note: "What's moved since you looked" },
-  { href: "/explore", label: "Explore", note: "Builds from the community" },
-  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
-  { href: "/garage", label: "Garage", note: "Your cars and their builds" },
-  { href: "/listings", label: "Listings", note: "Views, watchers and offers on what you're selling" },
-  { href: "/offers", label: "Offers", note: "Offers you've received and made, and their threads" },
-  { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery" },
-  { href: "/messages", label: "Messages", note: "Every order and offer thread, in one list" },
-  { href: "/profile", label: "Profile", note: "How buyers and sellers see you" },
-  { href: "/settings", label: "Settings", note: "Account, notifications and payments" },
-];
+/** Re-exported so existing call sites keep importing the register from here. */
+export { BAR_ROUTES };
 
 // Icon-only in the bar at every width — the furniture that stays to hand.
 const UTILITY_ROUTES: IconRoute[] = [
   { href: "/cart", label: "Cart", note: "Parts waiting for checkout", icon: "cart" },
   { href: "/notifications", label: "Notifications", note: "Offers, sales and activity", icon: "bell" },
   { href: "/saved", label: "Saved", note: "Parts, builds and sellers you follow", icon: "bookmark" },
-];
-
-// Signed-out visitors get the two public surfaces, not the whole register.
-const PUBLIC_ROUTES: BarRoute[] = [
-  { href: "/explore", label: "Explore", note: "Builds from the community" },
-  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
 ];
 
 /** Theme — an icon switch, not a labelled control. */
@@ -95,7 +86,13 @@ export function LivesheetBar({
   );
   const bumpTheme = () => themeListeners.current.forEach((cb) => cb());
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    // Family members overlap on prefix (/listings vs /listings/<id>), so they
+    // resolve through the family matcher rather than a bare startsWith.
+    const familyKey = FAMILY_HREFS[href];
+    if (familyKey) return matchesFamily(pathname, familyKey);
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
   const toggleTheme = () => {
     const next = document.documentElement.dataset.theme === "dark" ? "day" : "night";
@@ -161,10 +158,29 @@ export function LivesheetBar({
     };
   }, [open]);
 
-  // The index carries whatever the current surface doesn't already show.
-  const indexRoutes: BarRoute[] = signedIn
-    ? [...BAR_ROUTES, ...UTILITY_ROUTES]
-    : [...PUBLIC_ROUTES, { href: "/login", label: "Sign in", note: "Back to your garage and listings" }];
+  // The index carries whatever the current surface doesn't already show. The
+  // Marketplace family appears as a heading with its four children directly
+  // beneath — Index → Orders is one tap, never Index → Marketplace → Orders.
+  const indexEntries: NavEntry[] = signedIn
+    ? [...PRIMARY_NAV, ...UTILITY_ROUTES.map((route) => ({ kind: "route" as const, ...route }))]
+    : [
+        ...PUBLIC_ROUTES.map((route) => ({ kind: "route" as const, ...route })),
+        {
+          kind: "route" as const,
+          href: "/login",
+          label: "Sign in",
+          note: "Back to your garage and listings",
+        },
+      ];
+  const familyHere = isMarketplaceFamily(pathname);
+  // Register numbers count routes only — a heading is a caption on the rows
+  // beneath it, so numbering it would leave a gap in the sequence.
+  let indexRegister = 0;
+  const indexRows = indexEntries.map((entry) => ({
+    entry,
+    n: entry.kind === "route" ? String(++indexRegister).padStart(2, "0") : null,
+  }));
+  const indexRouteCount = indexRegister;
 
   return (
     <>
@@ -268,31 +284,47 @@ export function LivesheetBar({
           <div className="wrap">
             <div className="index__head">
               <span className="microlabel">Menu</span>
-              <span className="microlabel">{indexRoutes.length} sections</span>
+              <span className="microlabel">{indexRouteCount} sections</span>
             </div>
             <div className="dimline-h" aria-hidden="true" />
 
             <nav className="index__rows" aria-label="All sections">
-              {indexRoutes.map((route, i) => {
-                const here = isActive(route.href);
-                const badge = route.href === "/offers" ? offersCount : 0;
+              {indexRows.map(({ entry, n }, i) => {
+                if (entry.kind === "group") {
+                  return (
+                    <p
+                      key={`group-${entry.label}`}
+                      className={cx("indexgroup", familyHere && "is-family")}
+                      style={{ ["--i" as string]: i }}
+                    >
+                      <span className="indexgroup__label">{entry.label}</span>
+                      <span className="indexgroup__note">{entry.note}</span>
+                    </p>
+                  );
+                }
+
+                const here = isActive(entry.href);
+                const badge = entry.href === "/offers" ? offersCount : 0;
                 return (
                   <Link
-                    key={route.href}
-                    href={route.href}
-                    className={cx("indexrow", here && "is-here")}
+                    key={entry.href}
+                    href={entry.href}
+                    className={cx("indexrow", entry.child && "indexrow--child", here && "is-here")}
                     style={{ ["--i" as string]: i }}
                     aria-current={here ? "page" : undefined}
                     tabIndex={open ? undefined : -1}
                   >
-                    <span className="indexrow__n">{String(i + 1).padStart(2, "0")}</span>
-                    <span className="indexrow__label">{route.label}</span>
-                    <span className="indexrow__note">{route.note}</span>
+                    <span className="indexrow__n">{n}</span>
+                    <span className="indexrow__label">{entry.label}</span>
+                    <span className="indexrow__note">{entry.note}</span>
                     {here ? (
                       <span className="indexrow__end chip chip--live">Here</span>
                     ) : (
                       badge > 0 && (
-                        <span className="indexrow__end chip chip--live">
+                        <span
+                          className="indexrow__end chip chip--live"
+                          aria-label={`${badge} needing your attention`}
+                        >
                           {badge > 9 ? "9+" : badge}
                         </span>
                       )

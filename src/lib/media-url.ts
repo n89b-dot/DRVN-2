@@ -101,6 +101,22 @@ export function keepValidImageUrls(values: unknown, max = 12, userId?: string): 
     .slice(0, max);
 }
 
+/**
+ * Splits a public storage URL back into its bucket + object path — the shape
+ * the storage API's remove() wants. Only URLs that pass `isOwnStorageUrl`
+ * resolve; anything else returns null so callers can't be steered into
+ * deleting objects on a host we don't own.
+ */
+export function parseStorageObject(value: unknown): { bucket: string; path: string } | null {
+  if (!isOwnStorageUrl(value)) return null;
+  const match = new URL(value).pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+  if (!match) return null;
+  const [, bucket, rawPath] = match;
+  const path = decodeURIComponent(rawPath);
+  if (!path || path.includes("..")) return null;
+  return { bucket, path };
+}
+
 export type GalleryImageInput = { url: string; alt: string | null };
 
 /**

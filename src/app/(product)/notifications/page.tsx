@@ -102,7 +102,7 @@ function Section({
           })}
         </ul>
       ) : (
-        <p className="py-2 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">{empty}</p>
+        <p className="py-2 font-mono text-micro uppercase tracking-[0.1em] text-dim">{empty}</p>
       )}
     </Rv>
   );

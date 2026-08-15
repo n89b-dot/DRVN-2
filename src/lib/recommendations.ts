@@ -135,7 +135,7 @@ export async function recommendListings(
   // Hydrate, keeping only active listings not sold by the user themselves.
   const { data: listings } = await admin
     .from("listings")
-    .select("id, title, price_cents, condition, location, seller_id, status")
+    .select("id, title, price_cents, shipping_cents, condition, location, seller_id, status")
     .in("id", ranked.slice(0, limit * 3));
   const { data: images } = listings?.length
     ? await admin
@@ -158,6 +158,7 @@ export async function recommendListings(
       id: listing.id,
       title: listing.title,
       price_cents: listing.price_cents,
+      shipping_cents: listing.shipping_cents,
       condition: listing.condition,
       location: listing.location,
       cover_url: cover.get(listing.id) ?? null,

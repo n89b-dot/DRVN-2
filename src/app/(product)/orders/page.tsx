@@ -2,11 +2,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
+import { Foot, MarketplaceNav } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 import { OrderPipeline } from "./order-pipeline";
+import {
+  GROUP_LABELS,
+  isRawStatus,
+  isStateGroup,
+  nextAction,
+  STATE_GROUPS,
+} from "./next-action";
 import { ReceivedButton } from "./[id]/fulfilment";
 import { reportError } from "@/lib/monitoring";
 
@@ -46,20 +54,28 @@ function milestones(order: {
   return stamps;
 }
 
-/**
- * Orders, on their own now that offers have moved to /offers.
- *
- * This used to render every offer inline (two 25-row queries, merged) on
- * top of a single unpaginated list of every order the user had ever placed
- * or sold. Orders are now tabbed (purchases/sales) and paginated 25 at a
- * time; offers get a compact summary card pointing at their own surface.
- */
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; page?: string; placed?: string; skipped?: string; offer?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    page?: string;
+    placed?: string;
+    skipped?: string;
+    offer?: string;
+    state?: string;
+    status?: string;
+  }>;
 }) {
-  const { view: viewParam, page: pageParam, placed, skipped, offer: legacyOfferId } = await searchParams;
+  const {
+    view: viewParam,
+    page: pageParam,
+    placed,
+    skipped,
+    offer: legacyOfferId,
+    state: stateParam,
+    status: statusParam,
+  } = await searchParams;
 
   // Legacy deep link — anchors (`#offer-<id>`) can't be read server-side at
   // all, so only a query-param form of the old link can be redirected here.
@@ -67,6 +83,9 @@ export default async function OrdersPage({
   if (legacyOfferId) redirect(`/offers/${legacyOfferId}`);
 
   const view = viewParam === "sales" ? "sales" : "purchases";
+  const state = isStateGroup(stateParam) ? stateParam : undefined;
+  // A raw status is the operational escape hatch and wins over the group.
+  const rawStatus = isRawStatus(statusParam) ? statusParam : undefined;
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
@@ -78,45 +97,37 @@ export default async function OrdersPage({
 
   const roleColumn = view === "purchases" ? "buyer_id" : "seller_id";
 
-  const [{ data: orders, count, error: ordersError }, { data: myListings }] = await Promise.all([
-    supabase
-      .from("orders")
-      .select("*", { count: "exact" })
-      .eq(roleColumn, user.id)
-      .order("created_at", { ascending: false })
-      .range(from, from + PAGE_SIZE - 1),
-    supabase.from("listings").select("id").eq("seller_id", user.id).limit(2000),
-  ]);
+  let ordersQuery = supabase
+    .from("orders")
+    .select("*", { count: "exact" })
+    .eq(roleColumn, user.id);
+  if (rawStatus) ordersQuery = ordersQuery.eq("status", rawStatus);
+  else if (state) ordersQuery = ordersQuery.in("status", [...STATE_GROUPS[state]]);
+
+  const { data: orders, count, error: ordersError } = await ordersQuery
+    .order("created_at", { ascending: false })
+    .range(from, from + PAGE_SIZE - 1);
 
   if (ordersError) reportError("[orders] failed to load orders", ordersError);
 
   const rows = orders ?? [];
   const orderIds = rows.map((o) => o.id);
-  const myListingIds = (myListings ?? []).map((l) => l.id);
 
-  const [{ data: items }, { count: receivedOpenCount }, { count: madeCounteredCount }, { count: needsDispatchCount }] =
-    await Promise.all([
-      orderIds.length
-        ? supabase.from("order_items").select("*").in("order_id", orderIds)
-        : Promise.resolve({ data: [] }),
-      myListingIds.length
-        ? supabase
-            .from("offers")
-            .select("id", { count: "exact", head: true })
-            .in("listing_id", myListingIds)
-            .eq("status", "open")
-        : Promise.resolve({ count: 0 }),
-      supabase
-        .from("offers")
-        .select("id", { count: "exact", head: true })
-        .eq("buyer_id", user.id)
-        .eq("status", "countered"),
-      supabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("seller_id", user.id)
-        .eq("status", "paid"),
-    ]);
+  // The offers counts that fed the promo card are gone — the family nav puts
+  // Offers one click away on every surface, so a card duplicating navigation
+  // inside page content had nothing left to do. The attention count is still
+  // read, but now only to badge the nav.
+  const [{ data: items }, offersCount, { count: needsDispatchCount }] = await Promise.all([
+    orderIds.length
+      ? supabase.from("order_items").select("*").in("order_id", orderIds)
+      : Promise.resolve({ data: [] }),
+    loadOffersNeedingAttention(supabase, user.id),
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", user.id)
+      .eq("status", "paid"),
+  ]);
 
   const listingIds = [...new Set((items ?? []).map((i) => i.listing_id).filter((x): x is string => Boolean(x)))];
   const counterpartyIds = [
@@ -145,53 +156,86 @@ export default async function OrdersPage({
   const hasMore = from + PAGE_SIZE < total;
   const firstOnPage = total === 0 ? 0 : from + 1;
   const lastOnPage = from + rows.length;
-  const params = { view: viewParam, page: pageParam };
-  const openOffersTotal = (receivedOpenCount ?? 0) + (madeCounteredCount ?? 0);
+  const params = {
+    view: viewParam,
+    page: pageParam,
+    state: stateParam,
+    status: statusParam,
+  };
+  const isSale = view === "sales";
 
-  const OrderRow = ({ order }: { order: (typeof rows)[number] }) => (
-    <Link href={`/orders/${order.id}`} className="jobrow block transition-colors hover:bg-[color:var(--paper-deep)]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <OrderPipeline status={order.status} progressStatus={order.pre_dispute_status} />
-        <span className="kv font-medium">{formatPrice(order.total_cents)}</span>
-      </div>
-      <ul className="mt-2">
-        {(items ?? [])
-          .filter((i) => i.order_id === order.id)
-          .map((i) => (
-            <li key={i.id} className="flex justify-between gap-3 py-0.5">
-              <span className="order__name min-w-0 truncate !text-[14.5px]">
-                {i.title ?? listingTitle(i.listing_id)}
-              </span>
-              <span className="kv shrink-0 text-dim">{formatPrice(i.price_cents)}</span>
-            </li>
-          ))}
-      </ul>
-      <p className="order__meta mt-1">
-        {view === "purchases"
-          ? `Seller — ${name(order.seller_id, order.seller_label)}`
-          : `Buyer — ${name(order.buyer_id, order.buyer_label)} · payout ${formatPrice(
-              order.total_cents - order.platform_fee_cents
-            )}`}
-      </p>
-      <p className="order__meta mt-0.5 flex flex-wrap gap-x-3">
-        {milestones(order).map((m) => (
-          <span key={m.label}>
-            {m.label} {m.date}
+  const OrderRow = ({ order }: { order: (typeof rows)[number] }) => {
+    const action = nextAction(order, isSale);
+    // The one milestone worth a list row: the latest thing that happened.
+    // The full stamp history belongs on the order, not on every line here.
+    const stamps = milestones(order);
+    const latest = stamps[stamps.length - 1];
+
+    return (
+      <Link
+        href={`/orders/${order.id}`}
+        className="jobrow block transition-colors hover:bg-[color:var(--paper-deep)]"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <OrderPipeline status={order.status} progressStatus={order.pre_dispute_status} />
+          <span className="kv font-medium">
+            {isSale
+              ? `${formatPrice(order.total_cents - order.platform_fee_cents)} payout`
+              : formatPrice(order.total_cents)}
           </span>
-        ))}
-      </p>
-    </Link>
-  );
+        </div>
+        <ul className="mt-2">
+          {(items ?? [])
+            .filter((i) => i.order_id === order.id)
+            .map((i) => (
+              <li key={i.id} className="flex justify-between gap-3 py-0.5">
+                <span className="order__name min-w-0 truncate !text-body">
+                  {i.title ?? listingTitle(i.listing_id)}
+                </span>
+                <span className="kv shrink-0 text-dim">{formatPrice(i.price_cents)}</span>
+              </li>
+            ))}
+        </ul>
+        <p className="order__meta mt-1">
+          {isSale
+            ? `Buyer — ${name(order.buyer_id, order.buyer_label)}`
+            : `Seller — ${name(order.seller_id, order.seller_label)}`}
+          {latest && ` · ${latest.label} ${latest.date}`}
+        </p>
+        {/* What this order wants next, said once and said loudly — the row
+            used to lay every milestone out flat and ask the reader to work
+            out which one mattered. */}
+        {action && (
+          <p className="ordernext">
+            <span className="ordernext__mark" aria-hidden="true" />
+            {action}
+          </p>
+        )}
+      </Link>
+    );
+  };
 
   return (
     <div className="wrap">
+      <MarketplaceNav current="orders" offersCount={offersCount} />
+
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Orders
+          Transactions
           {(needsDispatchCount ?? 0) > 0 && (
             <>
               {" · "}
-              <span className="microlabel--live">{needsDispatchCount} to dispatch</span>
+              <Link
+                href={withParams("/orders", params, {
+                  view: "sales",
+                  status: "paid",
+                  state: undefined,
+                  page: undefined,
+                })}
+                className="microlabel--live underline decoration-dotted underline-offset-4"
+              >
+                {needsDispatchCount} to dispatch
+              </Link>
             </>
           )}
         </span>
@@ -215,23 +259,12 @@ export default async function OrdersPage({
         </div>
       )}
 
-      <Rv className="tile tile--deep mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <span className="microlabel microlabel--ink">Offers</span>
-            <p className="order__meta mt-1">
-              {openOffersTotal > 0
-                ? `${openOffersTotal} offer${openOffersTotal === 1 ? "" : "s"} waiting on you`
-                : "Nothing waiting on you right now"}
-            </p>
-          </div>
-          <Link href="/offers" className="btn btn--ghost">
-            Open offers →
-          </Link>
-        </div>
-      </Rv>
+      {/* The Offers promo card that used to sit here is gone: the family nav
+          above already puts Offers one click away with its own attention
+          badge, and duplicating navigation inside page content only made the
+          two disagree. */}
 
-      <div className="mb-4 filters !my-0" role="group" aria-label="Order view">
+      <div className="filters filters--stack filters--scroll" role="group" aria-label="Order view">
         <span className="microlabel filters__label">Show</span>
         <Link
           href={withParams("/orders", params, { view: undefined, page: undefined })}
@@ -247,6 +280,58 @@ export default async function OrdersPage({
         >
           Sales
         </Link>
+      </div>
+
+      <div
+        className="filters filters--sub filters--scroll"
+        role="group"
+        aria-label="Filter orders by state"
+      >
+        <span className="microlabel filters__label">State</span>
+        <Link
+          href={withParams("/orders", params, {
+            state: undefined,
+            status: undefined,
+            page: undefined,
+          })}
+          className={`fbtn ${!state && !rawStatus ? "is-on" : ""}`}
+          aria-current={!state && !rawStatus ? "true" : undefined}
+        >
+          All
+        </Link>
+        {GROUP_LABELS.map((g) => (
+          <Link
+            key={g.key}
+            href={withParams("/orders", params, {
+              state: g.key,
+              status: undefined,
+              page: undefined,
+            })}
+            className={`fbtn ${state === g.key && !rawStatus ? "is-on" : ""}`}
+            aria-current={state === g.key && !rawStatus ? "true" : undefined}
+          >
+            {g.label}
+          </Link>
+        ))}
+        {/* The operational escape hatch: once you're in a group, its raw
+            states are addressable individually rather than only from a URL
+            you had to know to type. */}
+        {state &&
+          STATE_GROUPS[state].map((s) => (
+            <Link
+              key={s}
+              href={withParams("/orders", params, { status: s, page: undefined })}
+              className={`fbtn ${rawStatus === s ? "is-on" : ""}`}
+              aria-current={rawStatus === s ? "true" : undefined}
+            >
+              {s.replace(/_/g, " ")}
+            </Link>
+          ))}
+        {rawStatus && !state && (
+          <span className="fbtn is-on" aria-current="true">
+            {rawStatus.replace(/_/g, " ")}
+          </span>
+        )}
       </div>
 
       {rows.length > 0 ? (
@@ -281,15 +366,36 @@ export default async function OrdersPage({
           <span className="undrawn__mark" aria-hidden="true">
             ⏱
           </span>
-          <h3>{view === "purchases" ? "No purchases yet" : "No sales yet"}</h3>
+          <h3>
+            {state || rawStatus
+              ? "Nothing in this state"
+              : view === "purchases"
+                ? "No purchases yet"
+                : "No sales yet"}
+          </h3>
           <p>
-            {view === "purchases"
-              ? "Buy now or have an offer accepted and it'll show up here."
-              : "Buyers can't offer until you list a part."}
+            {state || rawStatus
+              ? "No orders match this filter right now."
+              : view === "purchases"
+                ? "Buy now or have an offer accepted and it'll show up here."
+                : "Buyers can't offer until you list a part."}
           </p>
-          <Link href={view === "purchases" ? "/marketplace" : "/sell"} className="btn btn--ghost">
-            {view === "purchases" ? "Browse the marketplace" : "List a part"}
-          </Link>
+          {state || rawStatus ? (
+            <Link
+              href={withParams("/orders", params, {
+                state: undefined,
+                status: undefined,
+                page: undefined,
+              })}
+              className="btn btn--ghost"
+            >
+              Show all orders
+            </Link>
+          ) : (
+            <Link href={view === "purchases" ? "/marketplace" : "/sell"} className="btn btn--ghost">
+              {view === "purchases" ? "Browse the marketplace" : "List a part"}
+            </Link>
+          )}
         </Rv>
       )}
 
@@ -321,9 +427,11 @@ export default async function OrdersPage({
         </nav>
       )}
 
+      {/* Order-specific guidance. The old footer explained the 72-hour offer
+          expiry, which is a rule about a surface this page no longer holds. */}
       <Foot
-        left="DRVN — offers expire 72 hours after they're made"
-        right={<Link href="/sell">List a part →</Link>}
+        left="DRVN — payouts release once delivery is confirmed"
+        right={<Link href="/protection">How buyer protection works →</Link>}
       />
     </div>
   );

@@ -127,11 +127,11 @@ export default async function ActivityDetailPage({
           )}
         </span>
         <div className="mt-2 flex items-center gap-3">
-          <Avatar size="h-11 w-11 text-sm" initials={initials} />
+          <Avatar size="sm" initials={initials} />
           <h1 className="!mt-0 !text-[clamp(22px,3vw,32px)]">{post.title}</h1>
         </div>
       </header>
-      {post.intro && <p className="max-w-[62ch] text-[15px] leading-7">{post.intro}</p>}
+      {post.intro && <p className="max-w-[62ch] text-body leading-7">{post.intro}</p>}
 
       {gallery.length > 0 && (
         <ActivityGallery
@@ -149,7 +149,7 @@ export default async function ActivityDetailPage({
                   {block.text}
                 </h2>
               ) : (
-                <p key={index} className="max-w-[62ch] whitespace-pre-line text-[15px] leading-7">
+                <p key={index} className="max-w-[62ch] whitespace-pre-line text-body leading-7">
                   {block.text}
                 </p>
               );
@@ -166,6 +166,7 @@ export default async function ActivityDetailPage({
                       src={url}
                       alt={`${post.title} photo ${i + 1}`}
                       className={`${block.urls.length > 1 ? "h-44" : "h-64"} w-full rounded-ctl`}
+                      role="feature"
                     />
                   ))}
                 </div>

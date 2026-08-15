@@ -47,7 +47,7 @@ function ReadOnlyLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="bline">
       <span className="bline__label">{label}</span>
-      <span className="bline__val !text-[15px]">{value}</span>
+      <span className="bline__val !text-body">{value}</span>
     </div>
   );
 }
@@ -78,7 +78,7 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
               className="flex cursor-pointer items-center justify-between gap-4 border-b border-[color:var(--rule-soft)] py-3"
             >
               <span className="min-w-0">
-                <span className="block font-mono text-[12px] uppercase tracking-[0.08em]">
+                <span className="block font-mono text-micro uppercase tracking-[0.08em]">
                   {pref.label}
                 </span>
                 <span className="order__meta block">{pref.hint}</span>
@@ -234,7 +234,7 @@ export function SettingsPanel({
               type="button"
               onClick={() => show(x.id)}
               aria-current={active === x.id ? "true" : undefined}
-              className={`rounded-ctl px-3 py-2 text-left font-mono text-[12px] uppercase tracking-[0.08em] whitespace-nowrap ${
+              className={`rounded-ctl px-3 py-2 text-left font-mono text-micro uppercase tracking-[0.08em] whitespace-nowrap ${
                 active === x.id
                   ? "bg-[color:var(--paper-deep)] font-semibold text-ink"
                   : "text-dim hover:text-ink"

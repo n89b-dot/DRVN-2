@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Foot, MarketplaceNav, Media } from "@/components/ui";
 import { ConditionSummary, type ConditionSnapshot } from "@/components/condition-summary";
 import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
@@ -11,7 +11,10 @@ import { countryLabel } from "@/lib/geo/countries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
+
 import { ReviewForm } from "../review-form";
+import { nextAction } from "../next-action";
 import { OrderPipeline, StatusChip } from "../order-pipeline";
 import {
   AcceptRefundButton,
@@ -165,6 +168,22 @@ export default async function OrderDetailPage({
     sellerResponseDueBy && new Date().getTime() > sellerResponseDueBy.getTime()
   );
 
+  // The family nav's Offers badge, and the offer this order came from — a
+  // real column since 0034, so an order can name its negotiation without the
+  // page reconstructing the link from order items and timestamps.
+  const [offersCount, { data: originOffer }] = await Promise.all([
+    loadOffersNeedingAttention(supabase, user.id),
+    order.origin_offer_id
+      ? supabase
+          .from("offers")
+          .select("id, amount_cents, counter_amount_cents")
+          .eq("id", order.origin_offer_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const action = nextAction(order, isSeller);
+
   const myReview = (reviews ?? []).find((r) => r.reviewer_id === user.id);
   const reviewedByMe = Boolean(myReview);
   const canReview = ["delivered", "completed"].includes(order.status) && !reviewedByMe;
@@ -180,9 +199,16 @@ export default async function OrderDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-[820px] px-5 pb-10">
+      {/* An order sheet is still inside Orders — the family nav says so, and
+          the breadcrumb underneath names the way back to the list. */}
+      <MarketplaceNav current="orders" offersCount={offersCount} />
+
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          {isBuyer ? "Your purchase" : "Your sale"} · ref {id.slice(0, 8).toUpperCase()}
+          <Link href="/orders" className="jumplink">
+            Orders
+          </Link>{" "}
+          / {id.slice(0, 8).toUpperCase()} · {isBuyer ? "your purchase" : "your sale"}
         </span>
         <h1>
           {(items ?? []).length === 1
@@ -195,6 +221,34 @@ export default async function OrderDetailPage({
           <StatusChip status={order.status} />
         </div>
       </Rv>
+
+      {/* What this order needs next, above the tiles — a reader shouldn't have
+          to open every panel to work out whose turn it is. The controls stay
+          where they belong; this names the move and points at them. */}
+      {action && (
+        <div className="nextaction">
+          <span className="microlabel">Next</span>
+          <p className="nextaction__what">{action}</p>
+          {originOffer && (
+            <p className="spec-note">
+              From an accepted offer of{" "}
+              {formatPrice(originOffer.counter_amount_cents ?? originOffer.amount_cents)} —{" "}
+              <Link href={`/offers/${originOffer.id}`} className="jumplink">
+                open the offer
+              </Link>
+            </p>
+          )}
+        </div>
+      )}
+      {!action && originOffer && (
+        <p className="spec-note mb-4">
+          From an accepted offer of{" "}
+          {formatPrice(originOffer.counter_amount_cents ?? originOffer.amount_cents)} —{" "}
+          <Link href={`/offers/${originOffer.id}`} className="jumplink">
+            open the offer
+          </Link>
+        </p>
+      )}
 
       {placed && (
         <div className="alert alert--ok mb-6">
@@ -222,6 +276,7 @@ export default async function OrderDetailPage({
                       src={item.listing_id ? cover.get(item.listing_id) : undefined}
                       alt={item.title ?? "Part"}
                       className="h-full w-full"
+                      role="row"
                     />
                   </span>
                   <span className="min-w-0">
@@ -385,11 +440,11 @@ export default async function OrderDetailPage({
               {order.is_collection ? "Collection" : "Delivery"}
             </span>
             {order.is_collection ? (
-              <p className="mt-2 text-[14.5px]">
+              <p className="mt-2 text-body">
                 Collection in person — arrange it in the conversation.
               </p>
             ) : order.ship_line1 ? (
-              <address className="mt-2 not-italic text-[14.5px] leading-relaxed">
+              <address className="mt-2 not-italic text-body leading-relaxed">
                 {order.ship_name}
                 <br />
                 {order.ship_line1}
@@ -412,7 +467,7 @@ export default async function OrderDetailPage({
                 )}
               </address>
             ) : (
-              <p className="mt-2 text-[14.5px] text-dim">No address recorded.</p>
+              <p className="mt-2 text-body text-dim">No address recorded.</p>
             )}
 
             {order.tracking_number && (
@@ -491,7 +546,7 @@ export default async function OrderDetailPage({
                   {order.dispute_escalated_at ? "With DRVN support" : "In dispute"}
                 </span>
               </div>
-              <p className="mt-2 text-[14.5px]">
+              <p className="mt-2 text-body">
                 {DISPUTE_CATEGORIES.find((c) => c.value === order.dispute_category)?.label ??
                   "Reported a problem"}
               </p>
@@ -547,6 +602,7 @@ export default async function OrderDetailPage({
                           src={e.url}
                           alt={e.note ?? "Dispute evidence photo"}
                           className="h-full w-full"
+                          role="row"
                         />
                       </a>
                     ))}

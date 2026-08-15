@@ -6,13 +6,19 @@ import { useState, type ReactNode } from "react";
 
 import { cx } from "@/lib/format";
 import { Icon } from "./icons";
-import { BAR_ROUTES, LivesheetBar } from "./livesheet-bar";
+import { LivesheetBar } from "./livesheet-bar";
+import { FAMILY_HREFS, isMarketplaceFamily, matchesFamily, PRIMARY_NAV } from "./nav-routes";
 
 /**
  * The register rail — the drawing's left margin. Signed-in desktop only;
  * below 1081px the index (in the bar) carries navigation instead.
  * Collapsed it keeps the register numbers, which is how a drawing indexes
  * itself when there's no room for words.
+ *
+ * Marketplace is a *section heading*, not a link and not a disclosure: its
+ * four children (Marketplace, Listings, Offers, Orders) sit indented beneath
+ * it and each is one click from anywhere, so nobody has to pass through
+ * Marketplace to reach Orders.
  */
 function AppRail({
   open,
@@ -26,7 +32,18 @@ function AppRail({
   offersCount?: number;
 }) {
   const pathname = usePathname();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    // Family members overlap on prefix (/listings vs /listings/<id>), so they
+    // resolve through the family matcher rather than a bare startsWith.
+    const familyKey = FAMILY_HREFS[href];
+    if (familyKey) return matchesFamily(pathname, familyKey);
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+  const familyHere = isMarketplaceFamily(pathname);
+
+  // Register numbers run continuously down the rail, headings included — the
+  // heading is part of the index, not a caption floating beside it.
+  let register = 0;
 
   return (
     <aside className="rail" aria-label="Sections">
@@ -52,20 +69,41 @@ function AppRail({
       </div>
 
       <nav className="rail__rows">
-        {BAR_ROUTES.map((route, i) => {
-          const here = isActive(route.href);
-          const badge = route.href === "/offers" ? offersCount : 0;
+        {PRIMARY_NAV.map((entry) => {
+          const n = String(++register).padStart(2, "0");
+
+          if (entry.kind === "group") {
+            return (
+              <p
+                key={`group-${entry.label}`}
+                className={cx("railgroup", familyHere && "is-family")}
+                title={open ? undefined : entry.label}
+              >
+                <span className="railrow__n">{n}</span>
+                <span className="railgroup__label">{entry.label}</span>
+                {/* Collapsed, the rail is numbers only — this keeps the family
+                    legible instead of leaving four unexplained digits. */}
+                <span className="railgroup__mark" aria-hidden="true">
+                  {entry.short}
+                </span>
+              </p>
+            );
+          }
+
+          const here = isActive(entry.href);
+          const badge = entry.href === "/offers" ? offersCount : 0;
           return (
             <Link
-              key={route.href}
-              href={route.href}
-              className={cx("railrow", here && "is-here")}
+              key={entry.href}
+              href={entry.href}
+              className={cx("railrow", entry.child && "railrow--child", here && "is-here")}
               aria-current={here ? "page" : undefined}
-              title={open ? undefined : badge > 0 ? `${route.label} (${badge})` : route.label}
+              title={open ? undefined : badge > 0 ? `${entry.label} (${badge})` : entry.label}
+              aria-label={badge > 0 ? `${entry.label}, ${badge} needing your attention` : undefined}
             >
-              <span className="railrow__n">{String(i + 1).padStart(2, "0")}</span>
+              <span className="railrow__n">{n}</span>
               <span className="railrow__label flex items-center justify-between gap-2">
-                {route.label}
+                {entry.label}
                 {badge > 0 && (
                   <span className="chip chip--live shrink-0" aria-hidden="true">
                     {badge > 9 ? "9+" : badge}

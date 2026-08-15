@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
+import { Foot, MarketplaceNav } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { getCategory } from "@/lib/marketplace/taxonomy";
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
+import { ActiveFilters } from "../active-filters";
 import { MarketplaceResults } from "../results";
 import { FilterBar } from "../filter-bar";
 
@@ -27,14 +29,19 @@ export default async function CategoryPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const page = await fetchListings(
-    supabase,
-    { ...filters, category: category.slug, subcategory: filters.subcategory },
-    user?.id
-  );
+  const [page, offersCount] = await Promise.all([
+    fetchListings(
+      supabase,
+      { ...filters, category: category.slug, subcategory: filters.subcategory },
+      user?.id
+    ),
+    user ? loadOffersNeedingAttention(supabase, user.id) : Promise.resolve(0),
+  ]);
 
   return (
     <div className="wrap">
+      {user && <MarketplaceNav current="marketplace" offersCount={offersCount} />}
+
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
@@ -46,8 +53,12 @@ export default async function CategoryPage({
       </Rv>
 
       <FilterBar action={`/marketplace/${category.slug}`} filters={filters} showFitToggle={Boolean(user)} />
+      <ActiveFilters
+        basePath={`/marketplace/${category.slug}`}
+        filters={filters as Record<string, string | undefined>}
+      />
 
-      <div className="filters">
+      <div className="filters filters--roomy filters--scroll">
         <span className="microlabel filters__label">Narrow it down</span>
         <Link href={`/marketplace/${category.slug}`} className={`fbtn ${!filters.subcategory ? "is-on" : ""}`}>
           All
@@ -64,6 +75,8 @@ export default async function CategoryPage({
           page={page}
           basePath={`/marketplace/${category.slug}`}
           params={filters as Record<string, string | undefined>}
+          emptyTitle={`No ${category.label.toLowerCase()} listed right now`}
+          emptyBody="Parts land here as owners pull them off their builds — check back, or be the first to list one."
         />
       </section>
 

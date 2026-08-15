@@ -44,6 +44,12 @@ export function MarketplaceResults({
   const firstOnPage = (current - 1) * pageSize + 1;
   const lastOnPage = (current - 1) * pageSize + results.length;
 
+  // "Clear the filters" only means something when filters are set — an empty
+  // category with no query shouldn't offer a no-op escape hatch.
+  const hasFilters = ["q", "condition", "min", "max", "location", "fit", "sort"].some(
+    (k) => params[k]
+  );
+
   if (results.length === 0) {
     return (
       <div className="undrawn undrawn--hero">
@@ -52,9 +58,11 @@ export function MarketplaceResults({
         </span>
         <h3>{emptyTitle}</h3>
         <p>{emptyBody}</p>
-        <Link href={basePath} className="btn btn--ghost">
-          Clear the filters
-        </Link>
+        {hasFilters && (
+          <Link href={basePath} className="btn btn--ghost">
+            Clear the filters
+          </Link>
+        )}
       </div>
     );
   }

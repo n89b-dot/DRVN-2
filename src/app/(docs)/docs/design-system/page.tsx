@@ -19,7 +19,7 @@ const MOTION = [
   { token: "stagger", value: "70ms / index", role: "reveal groups" },
   { token: "pulse", value: "2.2s infinite", role: "live dots" },
   { token: "count-up", value: "900ms ease-out", role: "[data-count] numerals" },
-  { token: "toast dwell", value: "2600ms", role: ".toast" },
+  { token: "toast dwell", value: "3200ms", role: ".toast" },
 ];
 
 export default function DesignSystemPage() {
@@ -51,7 +51,7 @@ export default function DesignSystemPage() {
             name="The concept"
             note="Every page is a sheet — a drafting drawing of the user's world. Content sits on raised plates over a papery canvas with a faint 40px graticule. Mono microlabels annotate; the one accent marks what's happening right now."
           >
-            <p className="text-[13.5px] leading-relaxed">
+            <p className="text-micro leading-relaxed">
               The system&rsquo;s signature is the <strong>livedim</strong> — a value measured the
               way a draftsman dimensions a part: spine, ticks, microlabel, mono value. When the
               value is live it turns red and its dot pulses.
@@ -141,7 +141,7 @@ export default function DesignSystemPage() {
             name="Why an inline script"
             note="The script mirrors the cookie before any CSS paints, so there's no theme flash — without calling cookies() in the root layout, which would opt every static route into dynamic rendering."
           >
-            <p className="text-[13.5px] leading-relaxed text-dim">
+            <p className="text-micro leading-relaxed text-dim">
               Layouts that await nothing (legal, docs pages once cached) stay statically
               renderable; the toggle rewrites the DOM attribute and the cookie together.
             </p>
@@ -186,11 +186,11 @@ export default function DesignSystemPage() {
                 </tr>
                 <tr>
                   <td>Grid gap</td>
-                  <td>14px (.deck — the one gap)</td>
+                  <td>16px (.deck / .mkt / .feedcols — the one gap)</td>
                 </tr>
                 <tr>
                   <td>Tile padding</td>
-                  <td>18px</td>
+                  <td>20px</td>
                 </tr>
                 <tr>
                   <td>Section bottom</td>
@@ -198,7 +198,7 @@ export default function DesignSystemPage() {
                 </tr>
                 <tr>
                   <td>Narrow column</td>
-                  <td>540px (profile-type surfaces)</td>
+                  <td>720px (profile-type surfaces — .wrap--narrow / NarrowColumn)</td>
                 </tr>
               </tbody>
             </table>

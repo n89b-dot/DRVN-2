@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
-import { safeRedirectPath } from "@/lib/safe-redirect";
+import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = { error?: string; ok?: string };
@@ -13,6 +13,10 @@ export type AuthState = { error?: string; ok?: string };
  * username means onboarding never completed — which used to be reachable by
  * signing up with email/password and then logging in through /login, leaving
  * the account permanently without a username and every /u/ link broken.
+ *
+ * A pending destination survives that detour: onboarding carries it and
+ * redirects there on completion instead of unconditionally to /home, which
+ * used to drop the original intent for every brand-new account.
  */
 async function destinationForUser(userId: string, requested?: unknown): Promise<string> {
   const supabase = await createClient();
@@ -22,7 +26,7 @@ async function destinationForUser(userId: string, requested?: unknown): Promise<
     .eq("id", userId)
     .single();
 
-  if (!profile?.username) return "/onboarding";
+  if (!profile?.username) return onboardingPath(requested);
   return safeRedirectPath(requested, "/home");
 }
 
@@ -48,6 +52,11 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
 export async function signup(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  // Signup used to accept no destination at all, so "sign in → create an
+  // account instead" lost whatever the visitor was in the middle of. The
+  // destination now survives both branches below, including the email
+  // round-trip, and is validated as an internal path before it's used.
+  const next = safeRedirectPath(formData.get("next"), "");
 
   if (!email || !password) {
     return { error: "Email and password are required." };
@@ -65,10 +74,16 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
 
   // If email confirmation is disabled, a session exists now → onboarding.
   if (data.session) {
-    redirect("/onboarding");
+    redirect(onboardingPath(next));
   }
 
-  redirect("/login?message=check-email");
+  // Email confirmation on: the destination rides through the confirmation
+  // notice on /login and comes back out the other side of sign-in.
+  redirect(
+    next
+      ? `/login?message=check-email&next=${encodeURIComponent(next)}`
+      : "/login?message=check-email"
+  );
 }
 
 export async function logout() {
@@ -85,6 +100,9 @@ export async function completeOnboarding(
     .trim()
     .toLowerCase();
   const displayName = String(formData.get("display_name") ?? "").trim();
+  // Onboarding used to end at /home unconditionally, which is where a new
+  // account's original intent (an offer on a specific listing) died.
+  const next = formData.get("next");
 
   if (!/^[a-z0-9_]{3,24}$/.test(username)) {
     return { error: "Username must be 3-24 characters: letters, numbers, underscores." };
@@ -117,7 +135,7 @@ export async function completeOnboarding(
     return { error: error.message };
   }
 
-  redirect("/home");
+  redirect(safeRedirectPath(next, "/home"));
 }
 
 // ---------- Password reset ----------

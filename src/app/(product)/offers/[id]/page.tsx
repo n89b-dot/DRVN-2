@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Foot, MarketplaceNav, Media } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { markThreadMessagesRead } from "@/features/commerce/actions";
@@ -82,30 +83,29 @@ export default async function OfferThreadPage({
   // addressed to them, safe to call unconditionally on every render.
   await markThreadMessagesRead(supabase, user.id, { offerId: id });
 
-  // Accepted offers open an order but the schema doesn't carry offer_id on
-  // orders — the best available link is the buyer's most recent order
-  // against this listing, which is unambiguous in practice since a listing
-  // can only be reserved/sold once. Best-effort: if this ever returns the
-  // wrong order the checkout page itself still gates on ownership.
+  // The order an acceptance produced, by the canonical relation (migration
+  // 0034). This used to be a guess — every order_item for the listing, then
+  // the buyer's most recent matching order — which only held while a listing
+  // sold exactly once. `origin_offer_id` is written inside offer_accept_begin
+  // in the same transaction that creates the order, and is unique, so an
+  // offer can never resolve to somebody else's transaction.
+  //
+  // Null on offers accepted before 0034 was applied: those rows were left
+  // unlinked rather than backfilled from a heuristic, so the thread simply
+  // doesn't offer a checkout link for them.
   let acceptedOrderId: string | null = null;
+  let acceptedOrderStatus: string | null = null;
   if (offer.status === "accepted") {
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("order_id")
-      .eq("listing_id", listing.id);
-    const candidateOrderIds = (items ?? []).map((i) => i.order_id);
-    if (candidateOrderIds.length) {
-      const { data: order } = await supabase
-        .from("orders")
-        .select("id, created_at")
-        .in("id", candidateOrderIds)
-        .eq("buyer_id", offer.buyer_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      acceptedOrderId = order?.id ?? null;
-    }
+    const { data: order } = await supabase
+      .from("orders")
+      .select("id, status")
+      .eq("origin_offer_id", offer.id)
+      .maybeSingle();
+    acceptedOrderId = order?.id ?? null;
+    acceptedOrderStatus = order?.status ?? null;
   }
+
+  const offersCount = await loadOffersNeedingAttention(supabase, user.id);
 
   const counterpartyName =
     counterparty?.display_name ?? (counterparty?.username ? `@${counterparty.username}` : "DRVN member");
@@ -155,11 +155,16 @@ export default async function OfferThreadPage({
 
   return (
     <div className="wrap">
+      {/* A thread is still inside the Offers surface — the family nav keeps
+          saying so, and the breadcrumb underneath names the way back. */}
+      <MarketplaceNav current="offers" offersCount={offersCount} />
+
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           <Link href="/offers" className="jumplink">
-            ← All offers
-          </Link>
+            Offers
+          </Link>{" "}
+          / {listing.title}
         </span>
         <h1>
           {incoming ? "Offer on your listing" : "Your offer"} <span className="live-word">{formatPrice(offer.amount_cents)}</span>
@@ -174,6 +179,7 @@ export default async function OfferThreadPage({
               alt={listing.title}
               className="h-full w-full"
               fallbackClassName="plate-undrawn"
+              role="row"
             />
           </span>
           <span className="min-w-0">
@@ -190,10 +196,27 @@ export default async function OfferThreadPage({
           </span>
         </div>
 
+        {/* Accepted offers name the order they became — by the canonical
+            relation (0034), not by guessing at the buyer's recent orders. */}
         {acceptedOrderId && (
-          <div className="mt-3 border-t border-[color:var(--rule-soft)] pt-3">
-            <CheckoutLink orderId={acceptedOrderId} />
+          <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-[color:var(--rule-soft)] pt-3">
+            {acceptedOrderStatus === "pending" && isBuyer ? (
+              <CheckoutLink orderId={acceptedOrderId} />
+            ) : null}
+            <Link href={`/orders/${acceptedOrderId}`} className="jumplink">
+              Order {acceptedOrderId.slice(0, 8).toUpperCase()} →
+            </Link>
           </div>
+        )}
+        {offer.status === "accepted" && !acceptedOrderId && (
+          <p className="spec-note mt-3 border-t border-[color:var(--rule-soft)] pt-3">
+            This offer was accepted before orders recorded which offer they came
+            from — find it in{" "}
+            <Link href="/orders" className="jumplink">
+              Orders
+            </Link>
+            .
+          </p>
         )}
       </Rv>
 
@@ -204,7 +227,7 @@ export default async function OfferThreadPage({
         <ol className="rowlist">
           {history.map((entry, i) => (
             <li key={i} className="jobrow flex items-center justify-between gap-3 !py-2">
-              <span className="order__name !text-[14px]">{entry.label}</span>
+              <span className="order__name !text-body">{entry.label}</span>
               <span className="kv shrink-0 text-dim">
                 {entry.amount != null && `${formatPrice(entry.amount)} · `}
                 {new Date(entry.at).toLocaleString(undefined, {
@@ -234,7 +257,10 @@ export default async function OfferThreadPage({
         />
       </Rv>
 
-      <Foot left="DRVN — offers expire 72 hours after they're made" right={<Link href="/offers">All offers →</Link>} />
+      <Foot
+        left="DRVN — offers expire 72 hours after they're made"
+        right={<Link href="/offers">All offers →</Link>}
+      />
     </div>
   );
 }

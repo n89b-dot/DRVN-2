@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
+import { isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
+import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
 import { formatPrice } from "@/lib/payments/fee";
 import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
 import { getPaymentProvider } from "@/lib/payments/provider";
@@ -49,10 +51,22 @@ async function requireUser() {
   return { supabase, user };
 }
 
+/** The signed-in user, or null. Buying does not require one. */
+async function optionalUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return { supabase, user };
+}
+
 // ---------- Cart ----------
 
 export async function addToCart(formData: FormData): Promise<CommerceState> {
-  const { supabase, user } = await requireUser();
+  // Buying is the service, not an account feature: a visitor fills a cart and
+  // checks out as a guest. Identity is collected once, at checkout, as the
+  // email a receipt has to go to anyway.
+  const { supabase, user } = await optionalUser();
   const id = String(formData.get("listing_id") ?? "");
   if (!id) return { error: "Missing listing." };
 
@@ -67,7 +81,9 @@ export async function addToCart(formData: FormData): Promise<CommerceState> {
   if (!listing || listing.status !== "active") {
     return { error: "That part is no longer available." };
   }
-  if (listing.seller_id === user.id) {
+  // Only meaningful when we know who's asking; `purchase_begin` enforces it
+  // again at claim time regardless of what the cookie holds.
+  if (user && listing.seller_id === user.id) {
     return { error: "That's your own listing." };
   }
 
@@ -316,18 +332,61 @@ export async function checkoutCart(
   _prev: CommerceState,
   formData: FormData
 ): Promise<CommerceState> {
-  const { user } = await requireUser();
+  const { user } = await optionalUser();
   const ids = await getCartIds();
   if (!ids.length) return { error: "Your cart is empty." };
 
   const { shipping, error: shippingError } = readShipping(formData);
   if (shippingError) return { error: shippingError };
 
+  // Guest checkout: the email is the only extra thing asked for, and it's the
+  // address the receipt and dispatch notices have to go to anyway. It resolves
+  // to a real (passwordless, unclaimed) account, so the order is an ordinary
+  // order — same RLS, same disputes, same payouts — rather than a second class
+  // of record the rest of the system has to special-case.
+  let buyerId = user?.id ?? null;
+  let guestEmail: string | null = null;
+
+  if (!buyerId) {
+    const email = String(formData.get("email") ?? "").trim();
+    if (!email) return { error: "Add an email so we can send your order confirmation." };
+    if (!isPlausibleEmail(email)) return { error: "That email doesn't look right." };
+
+    const { buyer, error: buyerError } = await resolveGuestBuyer(
+      email,
+      shipping?.name ?? null
+    );
+    if (buyerError || !buyer) return { error: buyerError ?? "We couldn't set up your order." };
+
+    buyerId = buyer.id;
+    guestEmail = email;
+
+    // A brand-new account has no display name, so the seller would see
+    // "DRVN member" against an order that has a real name on the parcel.
+    // Only ever set on an account this checkout created — never overwrite a
+    // registered member's own name.
+    if (buyer.created && shipping?.name) {
+      await createAdminClient()
+        .from("profiles")
+        .update({ display_name: shipping.name })
+        .eq("id", buyer.id)
+        .is("display_name", null);
+    }
+  }
+
   // Carried on the form so a double-submitted checkout replays the first
   // result instead of creating a second set of orders.
   const idempotencyKey = String(formData.get("idempotency_key") ?? "") || randomUUID();
 
-  const outcome = await purchaseListings(user.id, ids, { idempotencyKey, shipping });
+  const outcome = await purchaseListings(buyerId, ids, { idempotencyKey, shipping });
+
+  // Whatever happens next — an inline confirmation or a Stripe redirect — the
+  // guest has no session, so this browser needs a receipt saying which orders
+  // are its own. Order ids only, HMAC-signed: it can never be widened into
+  // "read this account".
+  if (guestEmail && outcome.orderIds.length) {
+    await setGuestOrders(outcome.orderIds);
+  }
 
   // Clear only what was actually bought — the old code emptied the whole cart
   // regardless, losing items that were never purchased.
@@ -353,6 +412,18 @@ export async function checkoutCart(
       outcome.skipped.map((s) => s.title).join(", ").slice(0, 300)
     );
   }
+
+  // A guest has no session, so /orders would bounce them to /login the moment
+  // their money went through. They get the public confirmation instead, plus
+  // an emailed link that signs them in and doubles as the account claim.
+  if (guestEmail) {
+    await sendOrderAccessLink(
+      guestEmail,
+      outcome.orderIds.length === 1 ? `/orders/${outcome.orderIds[0]}` : "/orders"
+    );
+    redirect(`/order-placed?${params.toString()}`);
+  }
+
   if (outcome.orderIds.length === 1) {
     redirect(`/orders/${outcome.orderIds[0]}?${params.toString()}`);
   }
@@ -368,7 +439,8 @@ export async function checkoutCart(
  * address is already on file, and DRVN has no saved-address concept yet.
  */
 export async function buyNow(formData: FormData): Promise<void> {
-  await requireUser();
+  // No account needed to get here. The cart and checkout are public surfaces;
+  // the buyer identifies themselves with an email at the payment step.
   const id = String(formData.get("listing_id") ?? "");
   if (!id) redirect("/marketplace");
 
@@ -853,7 +925,9 @@ export async function sendThreadMessage(
   if (!recipient) return { error: "The other party's account is no longer active." };
 
   const { error } = await supabase.from("messages").insert({
-    listing_id: listingId!,
+    // Nullable since 0031: an order whose listing was deleted (order_items
+    // keeps listing_id null) still gets its message through.
+    listing_id: listingId,
     offer_id: offerId,
     order_id: orderId,
     sender_id: user.id,

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { Media } from "@/components/ui";
 import { youtubeId, type ActivityBlock } from "@/lib/activity-blocks";
+import { deleteStagedIfUnconsumed, recordStagedUpload } from "@/lib/media-staging";
 import { createClient } from "@/lib/supabase/client";
 
 export type BlockDraft = { key: string } & ActivityBlock;
@@ -125,7 +126,10 @@ export function ActivityBlockEditor({
           setUploadError(error.message);
           continue;
         }
-        urls.push(supabase.storage.from("activity-images").getPublicUrl(path).data.publicUrl);
+        const { publicUrl } = supabase.storage.from("activity-images").getPublicUrl(path).data;
+        // Ledger the upload for GC (0029) — fire-and-forget, never blocking.
+        void recordStagedUpload("activity-images", path, publicUrl).catch(() => {});
+        urls.push(publicUrl);
       }
       if (urls.length) {
         patch(key, (b) => (b.type === "images" ? { ...b, urls: [...b.urls, ...urls] } : b));
@@ -163,12 +167,12 @@ export function ActivityBlockEditor({
                   them reachable via Tab; pointer-coarse keeps them visible on
                   touch devices, which have no hover state. */}
               <div className="absolute -top-3 right-3 z-10 hidden gap-1 rounded-chip bg-paper-deep px-1.5 py-0.5 font-mono text-xs text-dim group-hover:flex group-focus-within:flex pointer-coarse:flex">
-                <button type="button" onClick={() => move(block.key, -1)} className="px-1 hover:text-ink" aria-label="Move up">↑</button>
-                <button type="button" onClick={() => move(block.key, 1)} className="px-1 hover:text-ink" aria-label="Move down">↓</button>
+                <button type="button" onClick={() => move(block.key, -1)} className="px-1 hover:text-ink pointer-coarse:min-h-10 pointer-coarse:min-w-10" aria-label="Move up">↑</button>
+                <button type="button" onClick={() => move(block.key, 1)} className="px-1 hover:text-ink pointer-coarse:min-h-10 pointer-coarse:min-w-10" aria-label="Move down">↓</button>
                 <button
                   type="button"
                   onClick={() => setBlocks((all) => all.filter((b) => b.key !== block.key))}
-                  className="px-1 hover:text-live"
+                  className="px-1 hover:text-live pointer-coarse:min-h-10 pointer-coarse:min-w-10"
                   aria-label="Delete block"
                 >
                   ✕
@@ -199,7 +203,7 @@ export function ActivityBlockEditor({
                     className={`w-full resize-y bg-transparent outline-none placeholder:text-dim/50 ${
                       block.style === "heading"
                         ? "text-lg font-[600]"
-                        : "text-[15px] leading-7"
+                        : "text-body leading-7"
                     }`}
                   />
                 </div>
@@ -211,15 +215,18 @@ export function ActivityBlockEditor({
                     <div className={`grid gap-3 ${block.urls.length > 1 ? "grid-cols-2" : ""}`}>
                       {block.urls.map((url, i) => (
                         <div key={i} className="relative">
-                          <Media src={url} alt={`Photo ${i + 1}`} className="h-44 w-full rounded-ctl" />
+                          <Media src={url} alt={`Photo ${i + 1}`} className="h-44 w-full rounded-ctl" role="feature" />
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
+                              // Best-effort cleanup: the server only deletes a
+                              // still-staged, unconsumed, unreferenced upload.
+                              void deleteStagedIfUnconsumed(url).catch(() => {});
                               patch(block.key, (b) =>
                                 b.type === "images" ? { ...b, urls: b.urls.filter((_, j) => j !== i) } : b
-                              )
-                            }
-                            className="thumb__x !static !h-auto !w-auto absolute right-2 top-2"
+                              );
+                            }}
+                            className="thumb__x !static !h-auto !w-auto absolute right-2 top-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
                             aria-label="Remove photo"
                           >
                             ✕

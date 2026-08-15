@@ -66,6 +66,88 @@ export async function fetchWatchCounts(
   return counts;
 }
 
+type HydratableListingRow = {
+  id: string;
+  title: string;
+  price_cents: number;
+  shipping_cents?: number | null;
+  condition: string | null;
+  location: string | null;
+  part_number?: string | null;
+  seller_id?: string | null;
+};
+
+/**
+ * Turns raw listing rows into ListingCardData: cover image, watch count and
+ * the seller trust line (profile name + review average), batched across the
+ * whole row set. One shape for every surface that renders a ListingCard —
+ * the marketplace grid and the PDP rails previously selected different
+ * fields, so the same component silently rendered two densities on one page.
+ */
+export async function hydrateListingCards(
+  supabase: SupabaseClient<Database>,
+  rows: HydratableListingRow[]
+): Promise<ListingCardData[]> {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const sellerIds = [...new Set(rows.map((r) => r.seller_id).filter(Boolean))] as string[];
+
+  const [{ data: images }, watchCounts, { data: sellerProfiles }, { data: sellerReviews }] =
+    await Promise.all([
+      supabase
+        .from("listing_images")
+        .select("listing_id, url, position")
+        .in("listing_id", ids)
+        .order("position"),
+      fetchWatchCounts(supabase, ids),
+      sellerIds.length
+        ? supabase.from("profiles").select("id, display_name, username").in("id", sellerIds)
+        : Promise.resolve({ data: [] }),
+      sellerIds.length
+        ? supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", sellerIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+  const coverByListing = new Map<string, string>();
+  for (const image of images ?? []) {
+    if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
+  }
+
+  const ratingBySeller = new Map<string, { sum: number; n: number }>();
+  for (const r of sellerReviews ?? []) {
+    const agg = ratingBySeller.get(r.reviewee_id) ?? { sum: 0, n: 0 };
+    agg.sum += r.rating;
+    agg.n += 1;
+    ratingBySeller.set(r.reviewee_id, agg);
+  }
+  const sellerById = new Map(
+    (sellerProfiles ?? []).map((p) => {
+      const agg = ratingBySeller.get(p.id);
+      return [
+        p.id,
+        {
+          name: p.display_name ?? (p.username ? `@${p.username}` : "Seller"),
+          rating: agg ? (agg.sum / agg.n).toFixed(1) : null,
+          review_count: agg?.n ?? 0,
+        },
+      ] as const;
+    })
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    price_cents: r.price_cents,
+    shipping_cents: r.shipping_cents,
+    condition: r.condition,
+    location: r.location,
+    cover_url: coverByListing.get(r.id) ?? null,
+    part_number: r.part_number,
+    watch_count: watchCounts.get(r.id) ?? 0,
+    seller: r.seller_id ? (sellerById.get(r.seller_id) ?? null) : null,
+  }));
+}
+
 function parseSort(value: string | undefined): ListingSort {
   return value === "price_asc" || value === "price_desc" ? value : "newest";
 }
@@ -148,7 +230,7 @@ export async function fetchListings(
   let query = supabase
     .from("listings")
     .select(
-      "id, title, price_cents, shipping_cents, condition, location, source_car_id, part_number",
+      "id, title, price_cents, shipping_cents, condition, location, source_car_id, part_number, seller_id",
       { count: "exact" }
     )
     .eq("status", "active");
@@ -164,13 +246,21 @@ export async function fetchListings(
     // Escape the PostgREST `or` separators before interpolating user input.
     const term = filters.q.replace(/[,()]/g, " ").trim();
     if (term) {
-      query = query.or(
-        [
-          `title.ilike.%${term}%`,
-          `description.ilike.%${term}%`,
-          `compatibility_notes.ilike.%${term}%`,
-        ].join(",")
-      );
+      const clauses = [
+        `title.ilike.%${term}%`,
+        `description.ilike.%${term}%`,
+        `compatibility_notes.ilike.%${term}%`,
+        `part_number.ilike.%${term}%`,
+      ];
+      // Part numbers are typed with or without separators ("11-42-7-566-327"
+      // vs "11427566327"). Both sides normalise: the query strips separators
+      // here, the listing side is the stored generated column
+      // part_number_compact (0033) — an exact-substring match, not fuzzy.
+      const compact = term.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      if (compact.length >= 4 && /\d/.test(compact)) {
+        clauses.push(`part_number_compact.ilike.%${compact}%`);
+      }
+      query = query.or(clauses.join(","));
     }
   }
 
@@ -211,19 +301,9 @@ export async function fetchListings(
   }
 
   const ids = listings.map((l) => l.id);
-  const [{ data: images }, watchCounts] = await Promise.all([
-    supabase
-      .from("listing_images")
-      .select("listing_id, url, position")
-      .in("listing_id", ids)
-      .order("position"),
-    fetchWatchCounts(supabase, ids),
-  ]);
-
-  const coverByListing = new Map<string, string>();
-  for (const image of images ?? []) {
-    if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
-  }
+  // Covers, watch counts and seller trust hydrate in parallel with the
+  // fitment lookups below.
+  const cardsPromise = hydrateListingCards(supabase, listings);
 
   // Fitment hint for the rows on this page — declared rows (0025) first,
   // source-car match as the fallback, mirroring the listing page's order.
@@ -257,18 +337,12 @@ export async function fetchListings(
   }
 
   const total = count ?? listings.length;
+  const cards = await cardsPromise;
 
   return {
-    results: listings.map((l) => ({
-      id: l.id,
-      title: l.title,
-      price_cents: l.price_cents,
-      condition: l.condition,
-      location: l.location,
-      cover_url: coverByListing.get(l.id) ?? null,
-      fits_car_name: fitByListing.get(l.id) ?? null,
-      part_number: l.part_number,
-      watch_count: watchCounts.get(l.id) ?? 0,
+    results: cards.map((card) => ({
+      ...card,
+      fits_car_name: fitByListing.get(card.id) ?? null,
     })),
     total,
     page,

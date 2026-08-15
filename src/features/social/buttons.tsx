@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { AuthIntentDialog } from "@/components/ui";
 import { cx } from "@/lib/format";
 
 import {
@@ -30,13 +30,16 @@ export function SaveButton({
   initialSaved: boolean;
   isLoggedIn: boolean;
 }) {
-  const router = useRouter();
   const [saved, setSaved] = useState(initialSaved);
   const [pending, startTransition] = useTransition();
+  // Signed out, the shared auth-intent dialog explains what the account is
+  // for and carries the return path — same pattern as Buy now / Make an offer,
+  // rather than a bespoke redirect per button.
+  const [askAuth, setAskAuth] = useState(false);
 
   function onClick() {
     if (!isLoggedIn) {
-      router.push(`/login?next=${encodeURIComponent(path)}`);
+      setAskAuth(true);
       return;
     }
     startTransition(async () => {
@@ -46,9 +49,17 @@ export function SaveButton({
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={pending} className={toggleClass(saved)}>
-      {saved ? "Saved" : "Save"}
-    </button>
+    <>
+      <button type="button" onClick={onClick} disabled={pending} className={toggleClass(saved)}>
+        {saved ? "Saved" : "Save"}
+      </button>
+      <AuthIntentDialog
+        open={askAuth}
+        onClose={() => setAskAuth(false)}
+        intent="save"
+        returnPath={path}
+      />
+    </>
   );
 }
 
@@ -67,13 +78,13 @@ export function FollowButton({
   isLoggedIn: boolean;
   labels?: [string, string];
 }) {
-  const router = useRouter();
   const [following, setFollowing] = useState(initialFollowing);
   const [pending, startTransition] = useTransition();
+  const [askAuth, setAskAuth] = useState(false);
 
   function onClick() {
     if (!isLoggedIn) {
-      router.push(`/login?next=${encodeURIComponent(path)}`);
+      setAskAuth(true);
       return;
     }
     startTransition(async () => {
@@ -83,8 +94,16 @@ export function FollowButton({
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={pending} className={toggleClass(following)}>
-      {following ? labels[1] : labels[0]}
-    </button>
+    <>
+      <button type="button" onClick={onClick} disabled={pending} className={toggleClass(following)}>
+        {following ? labels[1] : labels[0]}
+      </button>
+      <AuthIntentDialog
+        open={askAuth}
+        onClose={() => setAskAuth(false)}
+        intent="follow"
+        returnPath={path}
+      />
+    </>
   );
 }

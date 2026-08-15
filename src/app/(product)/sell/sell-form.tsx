@@ -2,8 +2,10 @@
 
 import { useActionState, useRef, useState } from "react";
 
+import { Media } from "@/components/ui";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
+import { deleteStagedIfUnconsumed, recordStagedUpload } from "@/lib/media-staging";
 import { isLowConfidence } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/client";
 
@@ -30,7 +32,7 @@ function Section({
           {String(step).padStart(2, "0")}
         </span>
         <div>
-          <h2 className="text-[16.5px] font-semibold tracking-[-0.01em]">{title}</h2>
+          <h2 className="text-body font-semibold tracking-[-0.01em]">{title}</h2>
           {hint && <p className="field__hint mt-0.5">{hint}</p>}
         </div>
       </div>
@@ -186,6 +188,9 @@ export function SellForm({
         const {
           data: { publicUrl },
         } = supabase.storage.from("listing-images").getPublicUrl(path);
+        // Ledger the upload for GC (0029) — fire-and-forget: a miss only
+        // means the 48h sweep re-checks it, never a blocked photo flow.
+        void recordStagedUpload("listing-images", path, publicUrl).catch(() => {});
         setImages((u) => [...u, { url: publicUrl, alt: null }]);
       }
     } finally {
@@ -217,6 +222,11 @@ export function SellForm({
   }
 
   function removeImage(index: number) {
+    // Best-effort storage cleanup for a photo backed out of before saving.
+    // The server only deletes when the upload is still staged, unconsumed
+    // and unreferenced, so an already-published URL is never touched.
+    const removed = images[index];
+    if (removed) void deleteStagedIfUnconsumed(removed.url).catch(() => {});
     setImages((current) => current.filter((_, i) => i !== index));
   }
 
@@ -248,7 +258,7 @@ export function SellForm({
       {errorEntries.length > 0 && (
         <div role="alert" aria-live="assertive" className="tile !mb-0 text-live">
           <p className="font-semibold">Fix these before submitting:</p>
-          <ul className="mt-1 list-disc pl-5 text-[13.5px]">
+          <ul className="mt-1 list-disc pl-5 text-micro">
             {errorEntries.map(([field, message]) => (
               <li key={field}>
                 <a href={`#${fieldAnchors[field] ?? field}`} className="jumplink underline">
@@ -265,7 +275,7 @@ export function SellForm({
       {/* Completeness checklist — a lightweight, live-updating nudge toward a
           strong listing. Nothing here blocks submit; the hard requirements
           are enforced above and on the server. */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] uppercase tracking-[0.08em] text-dim">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-micro uppercase tracking-[0.08em] text-dim">
         <span>Photos {images.length > 0 ? "✓" : "—"}</span>
         <span aria-hidden="true">·</span>
         <span>Condition {!usedNeedsGrade || grade ? "✓" : "—"}</span>
@@ -413,10 +423,10 @@ export function SellForm({
                 <div className="mt-1 flex flex-col gap-2">
                   {checklistFor(category, subcategory || null).map((q) => (
                     <div key={q.key} className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[13.5px]">{q.label}</span>
+                      <span className="text-micro">{q.label}</span>
                       <span className="flex gap-3" role="radiogroup" aria-label={q.label}>
                         {(["yes", "no", "unknown"] as const).map((answer) => (
-                          <label key={answer} className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.08em] text-dim">
+                          <label key={answer} className="flex items-center gap-1 font-mono text-micro uppercase tracking-[0.08em] text-dim">
                             <input
                               type="radio"
                               name={`chk_${q.key}`}
@@ -438,7 +448,7 @@ export function SellForm({
               </fieldset>
             )}
             {grade && (
-              <label className="flex items-start gap-2 text-[13px]">
+              <label className="flex items-start gap-2 text-micro">
                 <input
                   type="checkbox"
                   id="sell-attest"
@@ -480,13 +490,17 @@ export function SellForm({
           {images.map((img, index) => (
             <div key={img.url} className="flex flex-col gap-1.5">
               <span className="thumb">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url} alt={img.alt || `Photo ${index + 1}`} />
+                <Media
+                  src={img.url}
+                  alt={img.alt || `Photo ${index + 1}`}
+                  className="h-full w-full"
+                  role="thumb"
+                />
                 {index === 0 && <span className="thumb__tag">Cover</span>}
                 <button
                   type="button"
                   onClick={() => removeImage(index)}
-                  className="thumb__x"
+                  className="thumb__x pointer-coarse:!h-10 pointer-coarse:!w-10"
                   aria-label={`Remove photo ${index + 1}`}
                 >
                   ✕
@@ -497,7 +511,7 @@ export function SellForm({
                   type="button"
                   onClick={() => moveImage(index, -1)}
                   disabled={index === 0}
-                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30"
+                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-micro uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
                   aria-label={`Move photo ${index + 1} earlier`}
                 >
                   ←
@@ -506,7 +520,7 @@ export function SellForm({
                   type="button"
                   onClick={() => moveImage(index, 1)}
                   disabled={index === images.length - 1}
-                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30"
+                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-micro uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
                   aria-label={`Move photo ${index + 1} later`}
                 >
                   →
@@ -515,7 +529,7 @@ export function SellForm({
                   <button
                     type="button"
                     onClick={() => makeCover(index)}
-                    className="flex-1 truncate rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim transition hover:text-ink"
+                    className="flex-1 truncate rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-micro uppercase tracking-[0.08em] text-dim transition hover:text-ink pointer-coarse:min-h-10"
                   >
                     Set cover
                   </button>
@@ -526,7 +540,7 @@ export function SellForm({
                 onChange={(e) => updateAlt(index, e.target.value)}
                 placeholder="Alt text — optional"
                 maxLength={200}
-                className="ctl max-w-none !py-1 text-[12px]"
+                className="ctl max-w-none !py-1 text-micro pointer-coarse:min-h-10"
                 aria-label={`Alt text for photo ${index + 1}`}
               />
             </div>
@@ -670,7 +684,7 @@ export function SellForm({
             />
           </div>
         </div>
-        <label className="flex items-center gap-2 text-[13px]">
+        <label className="flex items-center gap-2 text-micro">
           <input
             type="checkbox"
             name="allows_collection"
@@ -691,7 +705,7 @@ export function SellForm({
           return (
             <div role="status" aria-live="polite" className="tile !mb-0">
               <p className="microlabel microlabel--ink">Before you publish</p>
-              <ul className="mt-1 list-disc pl-5 text-[13px] text-dim">
+              <ul className="mt-1 list-disc pl-5 text-micro text-dim">
                 {warnings.map((w) => (
                   <li key={w}>{w}</li>
                 ))}

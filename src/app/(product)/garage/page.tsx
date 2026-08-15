@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Foot, VehicleCard } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 
 import { AddCarForm } from "./add-car-form";
@@ -45,43 +45,39 @@ export default async function GaragePage() {
               <span className="microlabel microlabel--ink">Your cars</span>
               <span className="chip">{garage.length}</span>
             </div>
-            <div className="rowlist">
+            <div className="vlist mt-2">
               {garage.map((car) => (
-                <div key={car.id} className="order">
-                  <span className="order__img">
-                    <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
-                  </span>
-                  <span>
-                    <span className="order__name block">{car.name}</span>
-                    <span className="order__meta block">
-                      {[car.year, car.make, car.model].filter(Boolean).join(" ") || "No details yet"}
-                    </span>
-                  </span>
-                  <span className="order__actions flex-col items-end gap-1.5">
-                    {!car.is_public && <span className="chip">Private</span>}
-                    <span className="flex gap-2">
-                      {/* Manage is where every other action on this car lives
-                          (photos, mods, updates, listing parts) — it's the one
-                          action that matters most from this list. */}
-                      <Link href={`/garage/${car.id}/edit`} className="btn btn--live">
-                        Manage
-                      </Link>
-                      <Link href={`/cars/${car.slug}`} className="btn btn--ghost">
-                        View build
-                      </Link>
-                    </span>
-                    <span className="flex gap-3">
-                      {/* The page's own copy promises listing parts straight off
-                          a build; these stay reachable, just quieter than Manage. */}
-                      <Link href={`/sell?car=${car.id}`} className="jumplink">
-                        List a part
-                      </Link>
-                      <Link href={`/garage/${car.id}/update/new`} className="jumplink">
-                        Post update
-                      </Link>
-                    </span>
-                  </span>
-                </div>
+                <VehicleCard
+                  key={car.id}
+                  vehicle={car}
+                  variant="card"
+                  actions={
+                    <div className="vehicle__actions">
+                      {!car.is_public && <span className="chip">Private</span>}
+                      <span className="flex flex-wrap gap-2">
+                        {/* Manage is where every other action on this car lives
+                            (photos, mods, updates, listing parts) — it's the one
+                            action that matters most from this list. */}
+                        <Link href={`/garage/${car.id}/edit`} className="btn btn--live">
+                          Manage
+                        </Link>
+                        <Link href={`/cars/${car.slug}`} className="btn btn--ghost">
+                          View build
+                        </Link>
+                      </span>
+                      <span className="flex flex-wrap gap-3">
+                        {/* The page's own copy promises listing parts straight off
+                            a build; these stay reachable, just quieter than Manage. */}
+                        <Link href={`/sell?car=${car.id}`} className="jumplink">
+                          List a part
+                        </Link>
+                        <Link href={`/garage/${car.id}/update/new`} className="jumplink">
+                          Post update
+                        </Link>
+                      </span>
+                    </div>
+                  }
+                />
               ))}
             </div>
           </Rv>

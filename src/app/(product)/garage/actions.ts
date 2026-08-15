@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { slugify } from "@/lib/format";
 import type { ActivityBlock } from "@/lib/activity-blocks";
+import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
@@ -243,6 +244,9 @@ export async function addCarImage(carId: string, url: string): Promise<ActionSta
     .insert({ car_id: carId, url, position: count ?? 0 });
   if (error) return { error: error.message };
 
+  // The URL is referenced now — release it from the staged-upload GC.
+  await finalizeMediaUrls(supabase, [url]);
+
   // First image becomes the cover automatically; changeable via setCoverImage.
   if ((count ?? 0) === 0) {
     await supabase.from("cars").update({ cover_image_url: url }).eq("id", carId);
@@ -288,6 +292,11 @@ export async function deleteCarImage(formData: FormData) {
           .update({ cover_image_url: next?.url ?? null })
           .eq("id", image.car_id);
       }
+
+      // With the row (and any cover pointer) gone, the storage object may be
+      // orphaned — the helper re-checks every referencing table before
+      // touching storage and never fails this action.
+      await deleteMediaIfUnreferenced(image.url);
     }
   }
 
@@ -438,6 +447,8 @@ export async function createRichActivityPost(
     await supabase.from("activity_images").insert(
       imageUrls.map((url, index) => ({ post_id: post.id, url, position: index }))
     );
+    // The URLs are referenced now — release them from the staged-upload GC.
+    await finalizeMediaUrls(supabase, imageUrls);
   }
 
   revalidatePath(`/garage/${carId}/edit`);
@@ -520,11 +531,24 @@ export async function updateActivityPost(
       user.id
     );
 
+    // Snapshot the outgoing gallery first, so photos this edit drops can be
+    // GC'd once nothing references them anymore.
+    const { data: previousImages } = await supabase
+      .from("activity_images")
+      .select("url")
+      .eq("post_id", postId);
+
     await supabase.from("activity_images").delete().eq("post_id", postId);
     if (imageUrls.length) {
       await supabase
         .from("activity_images")
         .insert(imageUrls.map((url, index) => ({ post_id: postId, url, position: index })));
+      await finalizeMediaUrls(supabase, imageUrls);
+    }
+
+    const kept = new Set(imageUrls);
+    for (const prev of previousImages ?? []) {
+      if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url);
     }
   }
 
@@ -609,6 +633,18 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
     return { error: "That image couldn't be verified. Try uploading it again." };
   }
 
+  // Snapshot the outgoing avatar before it's overwritten, so the replaced
+  // object can be GC'd once nothing references it.
+  let previousAvatarUrl: string | null = null;
+  if (avatarUrl) {
+    const { data: current } = await supabase
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", user.id)
+      .maybeSingle();
+    previousAvatarUrl = current?.avatar_url ?? null;
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -622,6 +658,13 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
     .eq("id", user.id);
 
   if (error) return { error: error.message };
+
+  if (avatarUrl) {
+    await finalizeMediaUrls(supabase, [avatarUrl]);
+    if (previousAvatarUrl && previousAvatarUrl !== avatarUrl) {
+      await deleteMediaIfUnreferenced(previousAvatarUrl);
+    }
+  }
 
   revalidatePath("/profile");
   revalidatePath("/settings");
@@ -667,12 +710,25 @@ export async function deleteAccount(_prev: ActionState, formData: FormData): Pro
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
 
-  // Remove uploaded media, which the row cascade doesn't reach.
+  // Remove uploaded media, which the row cascade doesn't reach. car-images
+  // and activity-images nest one level deeper (`${uid}/${carId}/...`), and
+  // storage list() is not recursive — a subfolder comes back as an entry
+  // with no object id — so those folders get one level of descent.
   for (const bucket of ["avatars", "car-images", "activity-images", "listing-images"]) {
-    const { data: files } = await admin.storage.from(bucket).list(user.id);
-    if (files?.length) {
-      await admin.storage.from(bucket).remove(files.map((f) => `${user.id}/${f.name}`));
+    const { data: entries } = await admin.storage.from(bucket).list(user.id);
+    if (!entries?.length) continue;
+    const paths: string[] = [];
+    for (const entry of entries) {
+      if (entry.id) {
+        paths.push(`${user.id}/${entry.name}`);
+      } else {
+        const { data: nested } = await admin.storage.from(bucket).list(`${user.id}/${entry.name}`);
+        for (const file of nested ?? []) {
+          if (file.id) paths.push(`${user.id}/${entry.name}/${file.name}`);
+        }
+      }
     }
+    if (paths.length) await admin.storage.from(bucket).remove(paths);
   }
 
   // Cascades through profiles → cars, listings, activity, saves, follows.

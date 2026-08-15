@@ -1,11 +1,13 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { CategoryIcon, Foot } from "@/components/ui";
+import { CategoryIcon, Foot, MarketplaceNav, SellCta } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
+import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
+import { ActiveFilters } from "./active-filters";
 import { FilterBar } from "./filter-bar";
 import { MarketplaceResults } from "./results";
 
@@ -22,7 +24,12 @@ export default async function MarketplacePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const page = await fetchListings(supabase, filters, user?.id);
+  // The family nav is signed-in navigation, so the badge only ever costs a
+  // query for someone who can see it.
+  const [page, offersCount] = await Promise.all([
+    fetchListings(supabase, filters, user?.id),
+    user ? loadOffersNeedingAttention(supabase, user.id) : Promise.resolve(0),
+  ]);
   const hasQuery = Boolean(
     filters.q ||
       filters.condition ||
@@ -34,6 +41,10 @@ export default async function MarketplacePage({
 
   return (
     <div className="wrap">
+      {/* Marketplace is public — a signed-out visitor browses, searches and
+          opens listings without ever being shown Listings/Offers/Orders. */}
+      {user && <MarketplaceNav current="marketplace" offersCount={offersCount} />}
+
       <Rv as="header" className="pagehead">
         {/* Selling lives where every marketplace keeps it: the top corner of
             the page head, beside the headline — not stranded among the
@@ -53,15 +64,19 @@ export default async function MarketplacePage({
               exactly which one. Search what you need, or browse by category.
             </p>
           </div>
-          <Link href="/sell" className="btn btn--live w-full shrink-0 sm:w-auto">
-            List a part
-          </Link>
+          {/* Signed out this explains why an account is needed rather than
+              dropping the visitor on /login mid-thought. */}
+          <SellCta isLoggedIn={Boolean(user)} className="w-full shrink-0 sm:w-auto" />
         </div>
       </Rv>
 
       <FilterBar action="/marketplace" filters={filters} showFitToggle={Boolean(user)} />
+      <ActiveFilters
+        basePath="/marketplace"
+        filters={filters as Record<string, string | undefined>}
+      />
 
-      <div className="filters filters--roomy">
+      <div className="filters filters--roomy filters--scroll">
         <span className="microlabel filters__label">Browse by category</span>
         <Link href="/marketplace" className={`fbtn ${hasQuery ? "" : "is-on"}`}>
           All

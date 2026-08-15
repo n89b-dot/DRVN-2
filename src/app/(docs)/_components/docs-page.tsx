@@ -88,7 +88,7 @@ export function Specimen({
         {klass ? <span className="kv">{klass}</span> : null}
       </div>
       <div className="specimen-body">{children}</div>
-      {note ? <p className="mt-3 text-[13.5px] leading-relaxed text-dim">{note}</p> : null}
+      {note ? <p className="mt-3 text-micro leading-relaxed text-dim">{note}</p> : null}
     </section>
   );
 }
@@ -109,10 +109,10 @@ export function SpecimenGroup({
     <section id={id} className="scroll-mt-24 pb-[clamp(32px,4vw,48px)]">
       <div className="mb-3 mt-8 flex items-baseline gap-3">
         <span className="microlabel microlabel--ink !mb-0">{index}</span>
-        <h2 className="text-[18px] font-[600] leading-[1.3] tracking-[-0.01em]">{title}</h2>
+        <h2 className="text-section font-[600] leading-[1.3] tracking-[-0.01em]">{title}</h2>
       </div>
       <Rule className="mb-4" />
-      <div className="deck deck--two !gap-[14px]">{children}</div>
+      <div className="deck deck--two">{children}</div>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { useActionState, useId, useRef, useState } from "react";
 
 import { Avatar, Dialog, Media } from "@/components/ui";
 import { initialsFrom } from "@/components/profile/helpers";
+import { recordStagedUpload } from "@/lib/media-staging";
 import { createClient } from "@/lib/supabase/client";
 
 import { updateProfile, type ActionState } from "../garage/actions";
@@ -58,6 +59,9 @@ export function ProfileEditor({
       const {
         data: { publicUrl },
       } = supabase.storage.from("avatars").getPublicUrl(path);
+      // Ledger the upload for GC (0029) — if the profile is never saved, the
+      // 48h sweep reclaims the object. Fire-and-forget.
+      void recordStagedUpload("avatars", path, publicUrl).catch(() => {});
       setAvatarUrl(publicUrl);
     } finally {
       setUploadingAvatar(false);
@@ -92,9 +96,9 @@ export function ProfileEditor({
                 <label htmlFor={fid("avatar")} className="microlabel">Avatar</label>
                 <div className="flex items-center gap-4">
                   {avatarUrl ? (
-                    <Media src={avatarUrl} alt="Your avatar" className="h-16 w-16 shrink-0 rounded-ctl" />
+                    <Media src={avatarUrl} alt="Your avatar" className="h-16 w-16 shrink-0 rounded-ctl" role="avatar" />
                   ) : (
-                    <Avatar size="h-16 w-16 text-xl" initials={initialsFrom(profile.display_name)} />
+                    <Avatar size="lg" initials={initialsFrom(profile.display_name)} />
                   )}
                   <button
                     type="button"

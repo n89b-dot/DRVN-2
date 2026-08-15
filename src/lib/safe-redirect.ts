@@ -18,3 +18,14 @@ export function safeRedirectPath(value: unknown, fallback = "/home"): string {
 
   return path;
 }
+
+/**
+ * `/onboarding` with a validated internal destination attached, so an account
+ * created halfway through making an offer still lands back on that listing
+ * instead of being dropped on /home. Nothing reaches the query string that
+ * `safeRedirectPath` hasn't already vetted.
+ */
+export function onboardingPath(requested?: unknown): string {
+  const next = safeRedirectPath(requested, "");
+  return next ? `/onboarding?next=${encodeURIComponent(next)}` : "/onboarding";
+}

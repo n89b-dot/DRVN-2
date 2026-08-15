@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { CheckoutSteps } from "@/app/(product)/checkout/checkout-steps";
+import { CheckoutSteps } from "@/app/(discover)/checkout/checkout-steps";
 import { listSavedCards } from "@/lib/payments/customers";
 import { Rv } from "@/components/livesheet";
 import { Foot, Media } from "@/components/ui";
@@ -109,7 +109,7 @@ export default async function CompleteOrderPage({
         <h1>
           Finish up and it&apos;s <span className="live-word">yours.</span>
         </h1>
-        <p className="mt-2 text-[15px] text-dim">
+        <p className="mt-2 text-body text-dim">
           {sellerName} accepted your offer, so the part is held for you. Add a delivery address to
           complete the order.
           {expiresSoon && (
@@ -141,6 +141,7 @@ export default async function CompleteOrderPage({
                       src={item.listing_id ? cover.get(item.listing_id) : undefined}
                       alt={item.title ?? "Part"}
                       className="h-full w-full"
+                      role="row"
                     />
                   </span>
                   <span className="min-w-0">

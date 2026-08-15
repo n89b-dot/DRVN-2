@@ -47,8 +47,11 @@ export async function loadShellCounts(
  * seller answered and it's your turn). Two head-only counts — cheap even
  * with a large listing catalog since the second query only ever touches
  * offers, never listings.
+ *
+ * Exported because the Marketplace-family subnav badges the same number as
+ * the rail and the index; every surface says "needs you", never "exists".
  */
-async function loadOffersNeedingAttention(
+export async function loadOffersNeedingAttention(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<number> {

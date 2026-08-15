@@ -60,7 +60,7 @@ export function ReportButton({
         label={`Report ${subjectLabel}`}
         align="center"
       >
-        <div className="sheet w-[min(92vw,440px)] text-left">
+        <div className="sheet text-left">
           <span className="microlabel microlabel--ink">Report {subjectLabel}</span>
           <p className="field__hint mt-1">
             Goes straight to DRVN&apos;s review queue. The {subjectType === "listing" ? "seller" : "user"}{" "}

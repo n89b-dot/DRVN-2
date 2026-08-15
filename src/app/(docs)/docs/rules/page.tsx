@@ -29,7 +29,7 @@ export default function RulesPage() {
         <Rule className="mb-4" />
         <div className="deck deck--two">
           <Specimen name="Do">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>Separate surfaces by tone — paper, paper-deep, tile, tile-2.</li>
               <li>Rule every list inside a tile (1px rule-soft tops).</li>
               <li>
@@ -46,7 +46,7 @@ export default function RulesPage() {
             </ul>
           </Specimen>
           <Specimen name="Don't">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-dim">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed text-dim">
               <li>No pills. No shadows. No gradients. No glass.</li>
               <li>
                 No borders as edges — the mail frame is the sole exception (it depicts an
@@ -69,7 +69,7 @@ export default function RulesPage() {
         <Rule className="mb-4" />
         <div className="deck deck--two">
           <Specimen name="Non-negotiable">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>
                 Every text/ground pair clears WCAG AA 4.5:1 in <b>both</b> lightings — re-measure
                 whenever a token moves.
@@ -80,7 +80,7 @@ export default function RulesPage() {
             </ul>
           </Specimen>
           <Specimen name="Behavior">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>
                 prefers-reduced-motion: draws render settled, pulses stop, count-ups print final
                 values — countdowns keep running (information, not decoration).
@@ -99,7 +99,7 @@ export default function RulesPage() {
         </div>
         <Rule className="mb-4" />
         <div className="tile">
-          <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+          <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
             <li>Microlabels: 2–6 words, uppercase mono — they name regions, not sentences.</li>
             <li>
               Copy is factual and quiet — annotations on a drawing. State what happened and what
@@ -118,7 +118,7 @@ export default function RulesPage() {
         <Rule className="mb-4" />
         <div className="deck deck--two">
           <Specimen name="Tokens & theming">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>
                 Tokens only — never hardcode a hex, radius or duration that has one. New values
                 require a token in globals.css <b>and</b> a contract update in the Livesheet
@@ -135,7 +135,7 @@ export default function RulesPage() {
             </ul>
           </Specimen>
           <Specimen name="Structure & safety">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>
                 Reusable UI lives in src/components/ui and exports through its index.ts — product
                 pages and this board import the same source.
@@ -144,11 +144,11 @@ export default function RulesPage() {
                 Server actions re-verify auth themselves; layouts are convenience gates. Admin and
                 this microsite 404 — never 403 — to non-members.
               </li>
-              <li>Keep the layout primitives (NarrowColumn 540px, .wrap 1200px) — no magic numbers.</li>
+              <li>Keep the layout primitives (NarrowColumn 720px, .wrap 1200px (semantic: wrap--narrow 720 / wrap--medium 900 / wrap--wide 1060)) — no magic numbers.</li>
             </ul>
           </Specimen>
           <Specimen name="Build gotchas">
-            <ul className="list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>
                 Rules added inside @layer components get tree-shaken if unreferenced — declare
                 app-global component classes unlayered (see .plate-undrawn).
@@ -160,7 +160,7 @@ export default function RulesPage() {
             </ul>
           </Specimen>
           <Specimen name="Adding a component">
-            <ol className="list-decimal space-y-1.5 pl-5 text-[13.5px] leading-relaxed">
+            <ol className="list-decimal space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>Class in globals.css (tokens only).</li>
               <li>React wrapper in src/components/ui if it carries behavior.</li>
               <li>Document it in docs/site/components.md.</li>

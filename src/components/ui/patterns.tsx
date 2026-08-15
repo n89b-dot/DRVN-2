@@ -10,7 +10,7 @@ export function LinkedTitle({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="group inline-flex items-center gap-1.5 text-left text-[15.5px] font-semibold text-ink transition-colors hover:text-live"
+      className="group inline-flex items-center gap-1.5 text-left text-body font-semibold text-ink transition-colors hover:text-live"
     >
       <span>{label}</span>
       <span className="font-mono text-xs text-dim transition group-hover:text-live">→</span>
@@ -71,23 +71,23 @@ export function ProfileHeader({
   avatarUrl?: string | null;
 }) {
   void avatarSquare; // everything on the sheet is a soft square plate
-  const avatarClass = "h-[88px] w-[88px] shrink-0 rounded-ctl";
+  const avatarClass = "h-22 w-22 shrink-0 rounded-ctl"; // 88px — the xl step of the avatar scale
   return (
     <header className="flex items-start gap-5">
       {avatarUrl ? (
-        <Media src={avatarUrl} alt={name} className={avatarClass} />
+        <Media src={avatarUrl} alt={name} className={avatarClass} role="avatar" />
       ) : (
-        <Avatar size="h-[88px] w-[88px] text-xl" initials={initials} />
+        <Avatar size="xl" initials={initials} />
       )}
       <div className="min-w-0 flex-1 pt-1.5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.01em]">{name}</h1>
+            <h1 className="text-sub font-semibold leading-tight tracking-[-0.01em]">{name}</h1>
             {handle && <p className="kv mt-1 text-dim">{handle}</p>}
           </div>
           {action && <div className="shrink-0">{action}</div>}
         </div>
-        {tagline && <p className="mt-1.5 max-w-[52ch] text-[14px] text-dim">{tagline}</p>}
+        {tagline && <p className="mt-1.5 max-w-[52ch] text-body text-dim">{tagline}</p>}
         {website && (
           <span className="mt-3 inline-flex">
             <WebsitePill label={website.label} href={website.href} />
@@ -113,7 +113,7 @@ export function VehicleGallery({
   const [hero, ...rest] = images;
 
   const tile = (image: GalleryImage, index: number, className: string) => {
-    const media = <Media src={image.url} alt={image.alt ?? "Car photo"} className={`${className} w-full`} />;
+    const media = <Media src={image.url} alt={image.alt ?? "Car photo"} className={`${className} w-full`} role="card" />;
     if (!onSelect) return <div key={index}>{media}</div>;
     return (
       <button

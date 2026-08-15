@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useOptimistic, useRef, useState, useTransition } from "react";
 
 
 import { addComment, toggleReaction, type CommentState } from "./actions";
@@ -31,7 +31,22 @@ export function ActivityEngagement({
   comments: CommentView[];
 }) {
   const router = useRouter();
-  const [local, setLocal] = useState<ReactionState>(reactions);
+  // Optimistic with rollback: the count moves instantly, and if the server
+  // rejects the toggle React reverts to the source-of-truth `reactions` prop
+  // automatically — the old manual useState copy left a wrong count on screen
+  // after a failure, forever.
+  const [optimisticReactions, applyToggle] = useOptimistic<ReactionState, string>(
+    reactions,
+    (prev, emoji) => {
+      const current = prev[emoji] ?? { count: 0, reacted: false };
+      const reacted = !current.reacted;
+      return {
+        ...prev,
+        [emoji]: { count: Math.max(0, current.count + (reacted ? 1 : -1)), reacted },
+      };
+    }
+  );
+  const [reactError, setReactError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [state, action, pending] = useActionState<CommentState, FormData>(addComment, {});
   const formRef = useRef<HTMLFormElement>(null);
@@ -42,17 +57,14 @@ export function ActivityEngagement({
 
   function onReact(emoji: string) {
     if (!isLoggedIn) return goLogin();
-    setLocal((prev) => {
-      const current = prev[emoji] ?? { count: 0, reacted: false };
-      const reacted = !current.reacted;
-      return {
-        ...prev,
-        [emoji]: { count: Math.max(0, current.count + (reacted ? 1 : -1)), reacted },
-      };
-    });
+    setReactError(null);
     startTransition(async () => {
+      applyToggle(emoji);
       const result = await toggleReaction(postId, emoji, path);
-      if ("error" in result && result.error === "login") goLogin();
+      if ("error" in result && result.error) {
+        if (result.error === "login") goLogin();
+        else setReactError("That reaction didn't save — try again.");
+      }
     });
   }
 
@@ -92,13 +104,15 @@ export function ActivityEngagement({
         </form>
 
         {ACTIVITY_EMOJIS.map((emoji) => {
-          const r = local[emoji] ?? { count: 0, reacted: false };
+          const r = optimisticReactions[emoji] ?? { count: 0, reacted: false };
           return (
             <button
               key={emoji}
               type="button"
               onClick={() => onReact(emoji)}
-              className={`chip !gap-1 !py-2 text-base ${r.reacted ? "chip--live" : ""}`}
+              // Reacted = selection, and selection is ink in this system
+              // (matching .fbtn.is-on) — red stays reserved for live-now.
+              className={`chip !gap-1 !py-2 text-base ${r.reacted ? "chip--ink" : ""}`}
             >
               <span className="flex items-center gap-1">
                 {emoji}
@@ -109,9 +123,9 @@ export function ActivityEngagement({
         })}
       </div>
 
-      {state.error && (
+      {(state.error || reactError) && (
         <p role="alert" aria-live="polite" className="field__err mt-2">
-          {state.error}
+          {state.error ?? reactError}
         </p>
       )}
     </div>

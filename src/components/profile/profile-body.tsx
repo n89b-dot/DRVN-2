@@ -29,7 +29,7 @@ function VehicleRows({ view }: { view: ProfileView }) {
         </TimelineRow>
       ))}
       {view.vehicles.length === 0 && (
-        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+        <p className="mt-5 font-mono text-micro uppercase tracking-[0.1em] text-dim">
           No cars yet
         </p>
       )}
@@ -52,7 +52,7 @@ function ActivityRows({ view }: { view: ProfileView }) {
         </TimelineRow>
       ))}
       {view.activity.length === 0 && (
-        <p className="mt-5 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+        <p className="mt-5 font-mono text-micro uppercase tracking-[0.1em] text-dim">
           No entries
         </p>
       )}
@@ -143,7 +143,7 @@ function ReviewRows({ view, basePath }: { view: ProfileView; basePath: string })
               · {review.date}
             </span>
           </div>
-          {review.body && <p className="mt-1 max-w-[62ch] text-[15px] leading-7">{review.body}</p>}
+          {review.body && <p className="mt-1 max-w-[62ch] text-body leading-7">{review.body}</p>}
         </article>
       ))}
       {view.reviewsHasMore && (
@@ -183,7 +183,7 @@ export function ProfileBody({
 }) {
   const aboutPanel = (
     <div className="mt-8 grid gap-12">
-      {bio && <p className="max-w-[62ch] text-[15px] leading-7">{bio}</p>}
+      {bio && <p className="max-w-[62ch] text-body leading-7">{bio}</p>}
 
       <section>
         <SectionHeading>Cars &amp; builds</SectionHeading>
@@ -201,7 +201,7 @@ export function ProfileBody({
                   href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="bline__val !text-[15px] transition-colors hover:text-live"
+                  className="bline__val !text-body transition-colors hover:text-live"
                 >
                   {link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
                 </a>

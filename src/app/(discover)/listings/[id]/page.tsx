@@ -6,9 +6,10 @@ import { LiveDim, Rv } from "@/components/livesheet";
 import { Foot, Gallery, ListingCard } from "@/components/ui";
 import { DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
 import { SaveButton } from "@/features/social/buttons";
+import { parseAuthIntent } from "@/lib/auth-intent";
 import { fetchGarageFitment, matchFitmentClaims, matchGarageFitment } from "@/lib/marketplace/fitment";
 import { checklistRows, gradeLabel, gradeMeaning } from "@/lib/marketplace/grading";
-import { fetchWatchCounts } from "@/lib/marketplace/query";
+import { fetchWatchCounts, hydrateListingCards } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
@@ -75,8 +76,17 @@ export async function generateMetadata({
   };
 }
 
-export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ListingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  /** `?action=offer` — an intent carried back through sign-in/signup/OAuth. */
+  searchParams: Promise<{ action?: string }>;
+}) {
   const { id } = await params;
+  const { action } = await searchParams;
+  const resumeAction = parseAuthIntent(action);
   const supabase = await createClient();
 
   const { data: listing } = await supabase.from("listings").select("*").eq("id", id).single();
@@ -114,7 +124,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       : Promise.resolve({ data: null }),
     supabase
       .from("listings")
-      .select("id, title, price_cents, condition, location")
+      .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id")
       .eq("seller_id", listing.seller_id)
       .eq("status", "active")
       .neq("id", id)
@@ -165,12 +175,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   }
 
   const qaAuthorIds = [...new Set((questions ?? []).map((q) => q.author_id))];
-  const moreIds = (moreFromSeller ?? []).map((l) => l.id);
 
   // Second group: each of these depends only on results already in hand
   // above (user, or ids derived from listing/questions/moreFromSeller), not
   // on each other, so they can also run concurrently.
-  const [{ data: save }, garageFitment, { data: qaAuthors }, { data: moreImages }] =
+  const [{ data: save }, garageFitment, { data: qaAuthors }, moreFromSellerCards] =
     await Promise.all([
       user
         ? supabase
@@ -187,13 +196,9 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       qaAuthorIds.length
         ? supabase.from("profiles").select("id, display_name, username").in("id", qaAuthorIds)
         : Promise.resolve({ data: [] }),
-      moreIds.length
-        ? supabase
-            .from("listing_images")
-            .select("listing_id, url, position")
-            .in("listing_id", moreIds)
-            .order("position")
-        : Promise.resolve({ data: [] }),
+      // Same card shape as the search grid — the rails previously selected a
+      // thinner row and rendered a visibly different card on the same page.
+      hydrateListingCards(supabase, moreFromSeller ?? []),
     ]);
   const isSaved = Boolean(save);
 
@@ -239,12 +244,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     .slice(0, 2)
     .toUpperCase();
 
-  // Covers for "more from seller"
-  const moreCover = new Map<string, string>();
-  for (const img of moreImages ?? []) {
-    if (!moreCover.has(img.listing_id)) moreCover.set(img.listing_id, img.url);
-  }
-
   const gallery = images ?? [];
 
   return (
@@ -267,9 +266,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <h1>{listing.title}</h1>
       </Rv>
 
-      <div className="deck deck--two">
-        {/* Left: media + measured facts + Q&A */}
-        <div className="min-w-0">
+      {/* DOM order is the mobile reading order — media, then price/purchase,
+          then the long-form facts, then secondary tiles. Desktop re-places the
+          same four blocks into the familiar two-column sheet via `.pdp` grid
+          areas, so no block is duplicated and tab order stays sensible. */}
+      <div className="pdp">
+        {/* Media */}
+        <div className="pdp__media min-w-0">
           {gallery.length > 0 ? (
             <Rv>
               <Gallery
@@ -286,17 +289,149 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               <p>The seller hasn&apos;t photographed this part yet. Ask them below.</p>
             </div>
           )}
+        </div>
 
-          {listing.status !== "active" && (
-            <p className="mt-4">
-              <span className="chip chip--spent">This listing is {listing.status}</span>
+        {/* Purchase rail: asking plate + fitment-vs-garage. On mobile this sits
+            directly under the gallery so price and actions come before the
+            long description; on desktop it is the right column. */}
+        <div className="pdp__rail flex min-w-0 flex-col gap-4 self-start">
+          <Rv className="tile" stagger={1}>
+            {listing.status !== "active" && (
+              <p className="mb-3">
+                <span className="chip chip--spent">This listing is {listing.status}</span>
+              </p>
+            )}
+            <span className="microlabel">Asking</span>
+            <p className="num-giant mt-1">{formatPrice(listing.price_cents)}</p>
+            {/* Shipping was charged at checkout but never shown here, so a
+                buyer met the real total only after committing. */}
+            <p className="kv mt-1">
+              {listing.shipping_cents > 0 ? (
+                <>
+                  + {formatPrice(listing.shipping_cents)} shipping ·{" "}
+                  <b>{formatPrice(listing.price_cents + listing.shipping_cents)} total</b>
+                </>
+              ) : (
+                "Shipping included"
+              )}
+              {listing.allows_collection && " · collection available"}
             </p>
-          )}
+            <p className="kv mt-2 text-dim">
+              {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(" · ")}
+            </p>
+            {listing.offer_floor_cents !== null && listing.status === "active" && (
+              <p className="spec-note mt-2">
+                Offers accepted from {formatPrice(listing.offer_floor_cents)}.
+              </p>
+            )}
+            {listing.status === "active" && (
+              <p className="spec-note mt-2">
+                Sellers are expected to dispatch within 3 working days of a sale.
+              </p>
+            )}
+            {/* What the sheet has seen of this part — watchers are live, views
+                are cumulative, so only the watcher line carries the live dot. */}
+            <LiveDim
+              label="Watching"
+              value={watchCount > 0 ? `${watchCount} watching` : "—"}
+              live={watchCount > 0}
+              blank={watchCount === 0}
+            />
+            {listing.part_number && (
+              <LiveDim label="Part number" value={listing.part_number} />
+            )}
 
+            <PurchaseActions
+              listingId={listing.id}
+              isLoggedIn={Boolean(user)}
+              isOwn={user?.id === listing.seller_id}
+              isActive={listing.status === "active"}
+              paymentsLive={paymentsAreLive()}
+              priceCents={listing.price_cents}
+              shippingCents={listing.shipping_cents}
+              resumeAction={resumeAction}
+            />
+            {user?.id !== listing.seller_id && (
+              <div className="mt-3">
+                <SaveButton
+                  targetType="listing"
+                  targetId={listing.id}
+                  path={`/listings/${listing.id}`}
+                  initialSaved={isSaved}
+                  isLoggedIn={Boolean(user)}
+                />
+              </div>
+            )}
+            {user?.id !== listing.seller_id && (
+              <div className="mt-3">
+                <ReportButton
+                  subjectType="listing"
+                  subjectId={listing.id}
+                  subjectLabel={listing.title}
+                  isLoggedIn={Boolean(user)}
+                />
+              </div>
+            )}
+
+            {seller && (
+              <Link href={`/u/${seller.username}`} className="mt-5 flex items-center gap-3 border-t border-[color:var(--rule-soft)] pt-5">
+                <span className="monogram monogram--sm">{sellerInitials}</span>
+                <span className="min-w-0">
+                  <span className="order__name block">{seller.display_name ?? (seller.username ? `@${seller.username}` : "Seller on DRVN")}</span>
+                  <span className="order__meta block">
+                    {avgRating
+                      ? `${avgRating} ★ · ${(reviews ?? []).length} review${(reviews ?? []).length === 1 ? "" : "s"}`
+                      : (seller.location ?? "Seller on DRVN")}
+                  </span>
+                </span>
+              </Link>
+            )}
+          </Rv>
+
+          {/* Fitment: computable against the seller's structured fitment rows
+              (0025) or a structured source car — gated on one of them
+              actually existing, so "doesn't match" can only ever mean a real
+              comparison ran. A source car that is private (RLS returns null)
+              or missing its make/model contributes nothing; the seller-notes
+              block above stays the honest fallback. */}
+          {(fitmentClaims.length > 0 ||
+            (listing.source_car_id && sourceCar?.make && sourceCar?.model)) && (
+            <Rv className="tile" stagger={3}>
+              <span className="microlabel microlabel--ink">Fitment</span>
+              {!user ? (
+                <p className="kv mt-2">
+                  <Link href={`/login?next=${encodeURIComponent("/garage")}`} className="jumplink">
+                    Add your car
+                  </Link>{" "}
+                  to check whether this fits.
+                </p>
+              ) : !viewerHasGarage ? (
+                <p className="kv mt-2">
+                  <Link href="/garage" className="jumplink">
+                    Add a car to your garage
+                  </Link>{" "}
+                  to check whether this fits.
+                </p>
+              ) : fitMatch ? (
+                <p className="mt-2">
+                  <span className="chip">Potential match — {fitMatch}</span>
+                  <span className="spec-note mt-1 block">Seller-stated — confirm before you buy.</span>
+                </p>
+              ) : (
+                <p className="mt-2">
+                  <span className="chip">Doesn&apos;t match your garage</span>
+                </p>
+              )}
+            </Rv>
+          )}
+        </div>
+
+        {/* Content: long-form facts + Q&A */}
+        <div className="pdp__content min-w-0">
           {listing.description && (
             <div className="mt-8">
               <span className="microlabel microlabel--ink">Description</span>
-              <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed">
+              <p className="mt-2 whitespace-pre-line text-body leading-relaxed">
                 {listing.description}
               </p>
             </div>
@@ -308,26 +443,31 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <div className="mt-8">
               <span className="microlabel microlabel--ink">Condition — seller-declared</span>
               {listing.grade && (
-                <p className="mt-2 text-[14.5px]">
+                <p className="mt-2 text-body">
                   <span className="chip chip--ok">{gradeLabel(listing.grade)}</span>{" "}
                   <span className="text-dim">{gradeMeaning(listing.grade)}</span>
                 </p>
               )}
+              {/* One accent maximum in this block: rows use monochrome marks
+                  (✓ / — / ?) instead of a stack of tinted chips; the grade
+                  chip above is the block's single color. */}
               {checklist.length > 0 && (
                 <ul className="mt-3 flex flex-col gap-1.5">
                   {checklist.map((row) => (
-                    <li key={row.key} className="flex items-baseline justify-between gap-3 text-[13.5px]">
+                    <li key={row.key} className="flex items-baseline justify-between gap-3 text-micro">
                       <span>{row.label}</span>
-                      <span
-                        className={
-                          row.answer === "yes"
-                            ? "chip chip--ok"
-                            : row.answer === "no"
-                              ? "chip chip--spent"
-                              : "chip"
-                        }
-                      >
-                        {row.answer === "unknown" ? "Not sure" : row.answer}
+                      <span className="font-mono text-dim">
+                        {row.answer === "yes" ? (
+                          <>
+                            <span aria-hidden="true">✓ </span>yes
+                          </>
+                        ) : row.answer === "no" ? (
+                          <>
+                            <span aria-hidden="true">— </span>no
+                          </>
+                        ) : (
+                          "not sure"
+                        )}
                       </span>
                     </li>
                   ))}
@@ -375,93 +515,9 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           />
         </div>
 
-        {/* Right: asking plate + off-this-car */}
-        <div className="flex flex-col gap-4 self-start">
-          <Rv className="tile" stagger={1}>
-            <span className="microlabel">Asking</span>
-            <p className="num-giant mt-1">{formatPrice(listing.price_cents)}</p>
-            {/* Shipping was charged at checkout but never shown here, so a
-                buyer met the real total only after committing. */}
-            <p className="kv mt-1">
-              {listing.shipping_cents > 0 ? (
-                <>
-                  + {formatPrice(listing.shipping_cents)} shipping ·{" "}
-                  <b>{formatPrice(listing.price_cents + listing.shipping_cents)} total</b>
-                </>
-              ) : (
-                "Shipping included"
-              )}
-              {listing.allows_collection && " · collection available"}
-            </p>
-            <p className="kv mt-2 text-dim">
-              {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(" · ")}
-            </p>
-            {listing.offer_floor_cents !== null && listing.status === "active" && (
-              <p className="spec-note mt-2">
-                Offers accepted from {formatPrice(listing.offer_floor_cents)}.
-              </p>
-            )}
-            {listing.status === "active" && (
-              <p className="spec-note mt-2">
-                Sellers are expected to dispatch within 3 working days of a sale.
-              </p>
-            )}
-            {/* What the sheet has seen of this part — watchers are live, views
-                are cumulative, so only the watcher line carries the live dot. */}
-            <LiveDim
-              label="Watching"
-              value={watchCount > 0 ? `${watchCount} watching` : "—"}
-              live={watchCount > 0}
-              blank={watchCount === 0}
-            />
-            {listing.part_number && (
-              <LiveDim label="Part number" value={listing.part_number} />
-            )}
-
-            <PurchaseActions
-              listingId={listing.id}
-              isLoggedIn={Boolean(user)}
-              isOwn={user?.id === listing.seller_id}
-              isActive={listing.status === "active"}
-              paymentsLive={paymentsAreLive()}
-            />
-            {user?.id !== listing.seller_id && (
-              <div className="mt-3">
-                <SaveButton
-                  targetType="listing"
-                  targetId={listing.id}
-                  path={`/listings/${listing.id}`}
-                  initialSaved={isSaved}
-                  isLoggedIn={Boolean(user)}
-                />
-              </div>
-            )}
-            {user?.id !== listing.seller_id && (
-              <div className="mt-3">
-                <ReportButton
-                  subjectType="listing"
-                  subjectId={listing.id}
-                  subjectLabel={listing.title}
-                  isLoggedIn={Boolean(user)}
-                />
-              </div>
-            )}
-
-            {seller && (
-              <Link href={`/u/${seller.username}`} className="mt-5 flex items-center gap-3 border-t border-[color:var(--rule-soft)] pt-5">
-                <span className="monogram monogram--sm">{sellerInitials}</span>
-                <span className="min-w-0">
-                  <span className="order__name block">{seller.display_name ?? `@${seller.username}`}</span>
-                  <span className="order__meta block">
-                    {avgRating
-                      ? `${avgRating} ★ · ${(reviews ?? []).length} review${(reviews ?? []).length === 1 ? "" : "s"}`
-                      : (seller.location ?? "Seller on DRVN")}
-                  </span>
-                </span>
-              </Link>
-            )}
-          </Rv>
-
+        {/* Secondary: protection + provenance — trust context that shouldn't
+            outrank the description on a phone. */}
+        <div className="pdp__more flex min-w-0 flex-col gap-4 self-start">
           {/* Buyer protection summary — the dispute rules live on /protection;
               this is the short version so a buyer sees the guarantee before
               they need it, not only after something goes wrong. */}
@@ -479,43 +535,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               How protection &amp; disputes work
             </Link>
           </Rv>
-
-          {/* Fitment: computable against the seller's structured fitment rows
-              (0025) or a structured source car — gated on one of them
-              actually existing, so "doesn't match" can only ever mean a real
-              comparison ran. A source car that is private (RLS returns null)
-              or missing its make/model contributes nothing; the seller-notes
-              block above stays the honest fallback. */}
-          {(fitmentClaims.length > 0 ||
-            (listing.source_car_id && sourceCar?.make && sourceCar?.model)) && (
-            <Rv className="tile" stagger={3}>
-              <span className="microlabel microlabel--ink">Fitment</span>
-              {!user ? (
-                <p className="kv mt-2">
-                  <Link href={`/login?next=${encodeURIComponent("/garage")}`} className="jumplink">
-                    Add your car
-                  </Link>{" "}
-                  to check whether this fits.
-                </p>
-              ) : !viewerHasGarage ? (
-                <p className="kv mt-2">
-                  <Link href="/garage" className="jumplink">
-                    Add a car to your garage
-                  </Link>{" "}
-                  to check whether this fits.
-                </p>
-              ) : fitMatch ? (
-                <p className="mt-2">
-                  <span className="chip">Potential match — {fitMatch}</span>
-                  <span className="spec-note mt-1 block">Seller-stated — confirm before you buy.</span>
-                </p>
-              ) : (
-                <p className="mt-2">
-                  <span className="chip">Doesn&apos;t match your garage</span>
-                </p>
-              )}
-            </Rv>
-          )}
 
           {sourceCar?.is_public && (
             <Rv className="tile tile--deep" stagger={4}>
@@ -540,25 +559,15 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
       <SimilarInCategory category={listing.category} excludeId={listing.id} supabase={supabase} />
 
-      {(moreFromSeller ?? []).length > 0 && (
+      {moreFromSellerCards.length > 0 && (
         <section className="deck">
           <div>
             <div className="tile__head">
               <span className="microlabel microlabel--ink">More from this seller</span>
             </div>
             <div className="mkt">
-              {(moreFromSeller ?? []).map((item) => (
-                <ListingCard
-                  key={item.id}
-                  listing={{
-                    id: item.id,
-                    title: item.title,
-                    price_cents: item.price_cents,
-                    condition: item.condition,
-                    location: item.location,
-                    cover_url: moreCover.get(item.id) ?? null,
-                  }}
-                />
+              {moreFromSellerCards.map((card) => (
+                <ListingCard key={card.id} listing={card} />
               ))}
             </div>
           </div>
@@ -584,7 +593,7 @@ async function SimilarInCategory({
 }) {
   const { data: similar } = await supabase
     .from("listings")
-    .select("id, title, price_cents, condition, location")
+    .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id")
     .eq("status", "active")
     .eq("category", category)
     .neq("id", excludeId)
@@ -593,16 +602,8 @@ async function SimilarInCategory({
 
   if (!similar?.length) return null;
 
-  const ids = similar.map((l) => l.id);
-  const { data: images } = await supabase
-    .from("listing_images")
-    .select("listing_id, url, position")
-    .in("listing_id", ids)
-    .order("position");
-  const cover = new Map<string, string>();
-  for (const img of images ?? []) {
-    if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
-  }
+  // Same card shape as the search grid (covers, watch, seller trust).
+  const cards = await hydrateListingCards(supabase, similar);
 
   return (
     <section className="deck">
@@ -611,18 +612,8 @@ async function SimilarInCategory({
           <span className="microlabel microlabel--ink">Similar in this category</span>
         </div>
         <div className="mkt">
-          {similar.map((item) => (
-            <ListingCard
-              key={item.id}
-              listing={{
-                id: item.id,
-                title: item.title,
-                price_cents: item.price_cents,
-                condition: item.condition,
-                location: item.location,
-                cover_url: cover.get(item.id) ?? null,
-              }}
-            />
+          {cards.map((card) => (
+            <ListingCard key={card.id} listing={card} />
           ))}
         </div>
       </div>

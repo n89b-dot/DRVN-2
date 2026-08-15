@@ -28,7 +28,10 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
         formAction={(fd) => startTransition(() => deleteCar(fd))}
         hidden={{ id: carId }}
         pending={pending}
-        triggerClassName="btn btn--ghost !text-live"
+        // The purpose-built destructive trigger (red outline, transparent
+        // ground), and a typed gate for the irreversible tier.
+        triggerClassName="btn btn--destructive"
+        confirmText={carName}
       >
         {pending ? "Deleting…" : "Delete this car"}
       </ConfirmDialog>

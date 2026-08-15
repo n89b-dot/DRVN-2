@@ -18,7 +18,15 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
   const night = jar.get("ls-theme")?.value === "night";
   const railOpen = jar.get("ls-rail")?.value !== "closed";
 
-  const { cartCount, unreadCount } = await loadShellCounts(supabase, user?.id ?? null);
+  // `offersCount` used to be discarded here, so a signed-in visitor browsing
+  // the public marketplace saw an unbadged Offers row while the same rail on
+  // /orders showed the count. The loader already computes it for a signed-in
+  // user (and short-circuits to 0 for a visitor) — the shell just has to pass
+  // it on.
+  const { cartCount, unreadCount, offersCount } = await loadShellCounts(
+    supabase,
+    user?.id ?? null
+  );
 
   return (
     <AppShell
@@ -27,6 +35,7 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
       initialRailOpen={railOpen}
       cartCount={cartCount}
       unreadCount={unreadCount}
+      offersCount={offersCount}
     >
       {/* No blanket footer here — every (discover) page renders its own
           contextual page-level <Foot> (see src/components/ui/livesheet-bar.tsx)

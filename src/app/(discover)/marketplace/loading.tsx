@@ -1,5 +1,5 @@
-import { SkeletonPage } from "@/components/ui/skeleton";
+import { SkeletonCardGrid } from "@/components/ui/skeleton";
 
 export default function Loading() {
-  return <SkeletonPage />;
+  return <SkeletonCardGrid label="Marketplace" />;
 }

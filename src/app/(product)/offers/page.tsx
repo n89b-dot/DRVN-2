@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
+import { Foot, MarketplaceNav } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -32,20 +32,36 @@ function withParams(
   return query ? `${base}?${query}` : base;
 }
 
+/** A UUID, and nothing else — the listing filter goes straight into a query. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * The dedicated offers surface. This used to be two capped, unpaginated
- * queries inlined on /orders (25 each, no way to see older offers, no way
- * to filter). Offers now get their own list with role/status filters and
- * real pagination, and each row links to a full thread rather than
- * rendering its conversation inline.
+ * The canonical negotiation surface, for both sides of the marketplace.
+ *
+ * This used to be two capped, unpaginated queries inlined on /orders (25
+ * each, no way to see older offers, no way to filter). Offers now get their
+ * own list with role/status filters, a listing scope the seller's ledger
+ * hands over, and real pagination — and each row links to a full thread
+ * rather than rendering its conversation inline.
  */
 export default async function OffersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string; status?: string; page?: string; offer?: string }>;
+  searchParams: Promise<{
+    role?: string;
+    status?: string;
+    page?: string;
+    offer?: string;
+    listing?: string;
+  }>;
 }) {
-  const { role: roleParam, status: statusParam, page: pageParam, offer: legacyOfferId } =
-    await searchParams;
+  const {
+    role: roleParam,
+    status: statusParam,
+    page: pageParam,
+    offer: legacyOfferId,
+    listing: listingParam,
+  } = await searchParams;
 
   // Legacy `/orders?offer=<id>` and other query-param deep links land here —
   // fragment links (`#offer-<id>`) can't be read server-side at all, so
@@ -54,6 +70,9 @@ export default async function OffersPage({
 
   const role = roleParam === "made" ? "made" : "received";
   const status = isStatus(statusParam) ? statusParam : undefined;
+  // `?listing=<id>` is how the seller's ledger hands a listing over to its
+  // canonical offers surface. Ignored unless it's a well-formed id.
+  const listingFilter = listingParam && UUID_RE.test(listingParam) ? listingParam : undefined;
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
@@ -92,6 +111,10 @@ export default async function OffersPage({
       : supabase.from("offers").select("*", { count: "exact" }).eq("buyer_id", user.id);
 
   if (status) query = query.eq("status", status);
+  // Narrowing to a listing composes with role and status rather than
+  // replacing them — and it can't widen access: `received` is still bounded
+  // by the seller's own listing ids, `made` by their buyer_id.
+  if (listingFilter) query = query.eq("listing_id", listingFilter);
 
   const { data: offers, count, error } = await query
     .order("created_at", { ascending: false })
@@ -172,6 +195,10 @@ export default async function OffersPage({
       created_at: o.created_at,
       expiresLabel: expiresLabel(o.expires_at),
       unread: unreadOffers.has(o.id),
+      // The same definition the rail badge counts: an open offer you received,
+      // or a counter that came back on one you made. Never "an offer exists".
+      needsYou:
+        role === "received" ? o.status === "open" : o.status === "countered",
     };
   });
 
@@ -179,14 +206,38 @@ export default async function OffersPage({
   const hasMore = from + PAGE_SIZE < total;
   const firstOnPage = total === 0 ? 0 : from + 1;
   const lastOnPage = from + items.length;
+  const attentionCount = (receivedOpenCount ?? 0) + (madeCounteredCount ?? 0);
+  // The listing filter travels with every other control on the page, so
+  // switching role or status keeps the scope you're in. The title comes from
+  // the rows where possible; a scope with no rows on this page (a status
+  // filter that matches nothing) still has to be able to name itself.
+  let scopedListingTitle: string | null = null;
+  if (listingFilter) {
+    scopedListingTitle = (listings ?? []).find((l) => l.id === listingFilter)?.title ?? null;
+    if (!scopedListingTitle) {
+      const { data: scoped } = await supabase
+        .from("listings")
+        .select("title")
+        .eq("id", listingFilter)
+        .maybeSingle();
+      scopedListingTitle = scoped?.title ?? null;
+    }
+  }
 
-  const params = { role: roleParam, status: statusParam, page: pageParam };
+  const params = {
+    role: roleParam,
+    status: statusParam,
+    page: pageParam,
+    listing: listingFilter,
+  };
 
   return (
     <div className="wrap">
+      <MarketplaceNav current="offers" offersCount={attentionCount} />
+
       <Rv as="header" className="pagehead">
         <span className="microlabel">
-          Offers
+          Negotiations
           {(receivedOpenCount ?? 0) > 0 && (
             <>
               {" · "}
@@ -208,45 +259,73 @@ export default async function OffersPage({
         <p className="sub">Answer what&apos;s come in, track what you&apos;ve sent, and open any thread.</p>
       </Rv>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="filters !my-0" role="group" aria-label="Offer role">
-          <span className="microlabel filters__label">Show</span>
-          <Link
-            href={withParams("/offers", params, { role: undefined, page: undefined })}
-            className={`fbtn ${role === "received" ? "is-on" : ""}`}
-            aria-current={role === "received" ? "true" : undefined}
-          >
-            Received{(receivedOpenCount ?? 0) > 0 ? ` (${receivedOpenCount})` : ""}
-          </Link>
-          <Link
-            href={withParams("/offers", params, { role: "made", page: undefined })}
-            className={`fbtn ${role === "made" ? "is-on" : ""}`}
-            aria-current={role === "made" ? "true" : undefined}
-          >
-            Made
-          </Link>
-        </div>
-
-        <div className="filters !my-0" role="group" aria-label="Offer status">
-          <span className="microlabel filters__label">Status</span>
-          <Link
-            href={withParams("/offers", params, { status: undefined, page: undefined })}
-            className={`fbtn ${!status ? "is-on" : ""}`}
-            aria-current={!status ? "true" : undefined}
-          >
-            All
-          </Link>
-          {STATUSES.map((s) => (
-            <Link
-              key={s}
-              href={withParams("/offers", params, { status: s, page: undefined })}
-              className={`fbtn ${status === s ? "is-on" : ""}`}
-              aria-current={status === s ? "true" : undefined}
-            >
-              {s[0].toUpperCase() + s.slice(1)}
+      {/* Arrived from a listing in the ledger: name the scope and give it an
+          obvious way out, so a filtered list never reads as an empty inbox. */}
+      {listingFilter && (
+        <div className="scopebar">
+          <span className="scopebar__what">
+            <span className="microlabel">Filtered</span>
+            <span className="mt-1 block text-body">
+              Offers on <b>{scopedListingTitle ?? "this listing"}</b>
+            </span>
+          </span>
+          <span className="flex flex-wrap items-center gap-4">
+            <Link href={`/listings/${listingFilter}`} className="jumplink">
+              Open the listing →
             </Link>
-          ))}
+            <Link
+              href={withParams("/offers", params, { listing: undefined, page: undefined })}
+              className="jumplink"
+            >
+              Clear filter ×
+            </Link>
+          </span>
         </div>
+      )}
+
+      {/* Role leads, status refines — the same two-tier shape Listings and
+          Orders use, so the family's filter rows read identically. */}
+      <div className="filters filters--stack filters--scroll" role="group" aria-label="Offer role">
+        <span className="microlabel filters__label">Show</span>
+        <Link
+          href={withParams("/offers", params, { role: undefined, page: undefined })}
+          className={`fbtn ${role === "received" ? "is-on" : ""}`}
+          aria-current={role === "received" ? "true" : undefined}
+        >
+          Received{(receivedOpenCount ?? 0) > 0 ? ` (${receivedOpenCount})` : ""}
+        </Link>
+        <Link
+          href={withParams("/offers", params, { role: "made", page: undefined })}
+          className={`fbtn ${role === "made" ? "is-on" : ""}`}
+          aria-current={role === "made" ? "true" : undefined}
+        >
+          Made
+        </Link>
+      </div>
+
+      <div
+        className="filters filters--sub filters--scroll"
+        role="group"
+        aria-label="Offer status"
+      >
+        <span className="microlabel filters__label">Status</span>
+        <Link
+          href={withParams("/offers", params, { status: undefined, page: undefined })}
+          className={`fbtn ${!status ? "is-on" : ""}`}
+          aria-current={!status ? "true" : undefined}
+        >
+          All
+        </Link>
+        {STATUSES.map((s) => (
+          <Link
+            key={s}
+            href={withParams("/offers", params, { status: s, page: undefined })}
+            className={`fbtn ${status === s ? "is-on" : ""}`}
+            aria-current={status === s ? "true" : undefined}
+          >
+            {s[0].toUpperCase() + s.slice(1)}
+          </Link>
+        ))}
       </div>
 
       {error ? (
@@ -280,13 +359,24 @@ export default async function OffersPage({
           </span>
           <h3>No offers here</h3>
           <p>
-            {role === "received"
-              ? "When someone offers on one of your listings it lands here."
-              : "Offers you've made on other people's listings show up here."}
+            {listingFilter
+              ? "No offers match this filter on that listing."
+              : role === "received"
+                ? "When someone offers on one of your listings it lands here."
+                : "Offers you've made on other people's listings show up here."}
           </p>
-          <Link href="/marketplace" className="btn btn--ghost">
-            Browse the marketplace
-          </Link>
+          {listingFilter ? (
+            <Link
+              href={withParams("/offers", params, { listing: undefined, page: undefined })}
+              className="btn btn--ghost"
+            >
+              Show all offers
+            </Link>
+          ) : (
+            <Link href="/marketplace" className="btn btn--ghost">
+              Browse the marketplace
+            </Link>
+          )}
         </Rv>
       )}
 
@@ -318,9 +408,11 @@ export default async function OffersPage({
         </nav>
       )}
 
+      {/* The expiry rule belongs here — this is the offers surface. It used
+          to be footed on /orders too, where it explained nothing. */}
       <Foot
         left="DRVN — offers expire 72 hours after they're made"
-        right={<Link href="/orders">Back to orders →</Link>}
+        right={<Link href="/marketplace">Browse the marketplace →</Link>}
       />
     </div>
   );

@@ -8,6 +8,10 @@ import { OAuthButton } from "../oauth-button";
 
 export function LoginForm({ next, message }: { next?: string; message?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, {});
+  // Every route out of this page keeps the destination: the signup swap and
+  // the OAuth button used to drop it, so "create an account instead" or
+  // "continue with Google" silently abandoned whatever brought you here.
+  const carry = next ? `?next=${encodeURIComponent(next)}` : "";
 
   return (
     <div>
@@ -15,7 +19,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[600] leading-[1.05] tracking-[-0.02em]">
         Welcome <span className="text-live">back.</span>
       </h1>
-      <p className="mt-3 text-[15px] text-dim">
+      <p className="mt-3 text-body text-dim">
         Your garage, your listings, your orders — one sign-in.
       </p>
 
@@ -75,7 +79,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
       </form>
 
       <div className="authswap">
-        <Link href="/signup" className="jumplink">
+        <Link href={`/signup${carry}`} className="jumplink">
           New here? Create an account
         </Link>
       </div>
@@ -83,7 +87,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
       <div className="mt-6">
         <span className="microlabel">Or use an account you already have</span>
         <div className="mt-3">
-          <OAuthButton />
+          <OAuthButton next={next} />
         </div>
       </div>
     </div>

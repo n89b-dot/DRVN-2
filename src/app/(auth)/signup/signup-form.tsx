@@ -6,8 +6,9 @@ import { useActionState } from "react";
 import { signup, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
 
-export function SignupForm() {
+export function SignupForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signup, {});
+  const carry = next ? `?next=${encodeURIComponent(next)}` : "";
 
   return (
     <div>
@@ -15,11 +16,12 @@ export function SignupForm() {
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[600] leading-[1.05] tracking-[-0.02em]">
         Join <span className="text-live">DRVN.</span>
       </h1>
-      <p className="mt-3 text-[15px] text-dim">
+      <p className="mt-3 text-body text-dim">
         Show your build. Sell your parts. Find what fits.
       </p>
 
       <form action={action} className="mt-6">
+        {next && <input type="hidden" name="next" value={next} />}
         <div className="field">
           <label htmlFor="signup-email" className="microlabel">
             Email
@@ -75,7 +77,7 @@ export function SignupForm() {
       </form>
 
       <div className="authswap">
-        <Link href="/login" className="jumplink">
+        <Link href={`/login${carry}`} className="jumplink">
           Already have an account? Sign in
         </Link>
       </div>
@@ -83,7 +85,7 @@ export function SignupForm() {
       <div className="mt-6">
         <span className="microlabel">Or use an account you already have</span>
         <div className="mt-3">
-          <OAuthButton />
+          <OAuthButton next={next} />
         </div>
       </div>
     </div>

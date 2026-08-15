@@ -82,7 +82,7 @@ export function ConditionSummary({
     <div>
       <span className="microlabel microlabel--ink">{label}</span>
       {(snapshot.grade || snapshot.condition) && (
-        <p className="mt-2 text-[14.5px]">
+        <p className="mt-2 text-body">
           {snapshot.grade && <span className="chip chip--ok">{gradeLabel(snapshot.grade)}</span>}{" "}
           {snapshot.grade && <span className="text-dim">{gradeMeaning(snapshot.grade)}</span>}
           {!snapshot.grade && snapshot.condition && (
@@ -96,7 +96,7 @@ export function ConditionSummary({
       {rows.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1.5">
           {rows.map((row) => (
-            <li key={row.key} className="flex items-baseline justify-between gap-3 text-[13.5px]">
+            <li key={row.key} className="flex items-baseline justify-between gap-3 text-micro">
               <span>{row.label}</span>
               <span className={answerChipClass(row.answer)}>
                 {row.answer === "unknown" ? "Not sure" : row.answer}

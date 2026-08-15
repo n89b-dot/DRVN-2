@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useId, useState, useTransition } from "react";
+import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
 
 import {
   addToCart,
@@ -9,7 +9,9 @@ import {
   makeOffer,
   type CommerceState,
 } from "@/features/commerce/actions";
-import { Dialog, PaymentModeNotice, Toast } from "@/components/ui";
+import { AuthIntentDialog, Dialog, PaymentModeNotice, Toast } from "@/components/ui";
+import type { AuthIntent } from "@/lib/auth-intent";
+import { formatPrice } from "@/lib/marketplace/taxonomy";
 
 export function PurchaseActions({
   listingId,
@@ -17,52 +19,107 @@ export function PurchaseActions({
   isOwn,
   isActive,
   paymentsLive,
+  priceCents,
+  shippingCents,
+  resumeAction = null,
 }: {
   listingId: string;
   isLoggedIn: boolean;
   isOwn: boolean;
   isActive: boolean;
   paymentsLive: boolean;
+  priceCents: number;
+  shippingCents: number;
+  /** `?action=` on the URL — the intent this visitor authenticated to resume. */
+  resumeAction?: AuthIntent | null;
 }) {
   const router = useRouter();
   const idBase = useId();
-  const [offerOpen, setOfferOpen] = useState(false);
+  // Coming back from sign-in with `?action=offer` opens the dialog on first
+  // render (initial state from props — no setState-in-effect); guarded on
+  // isLoggedIn so a stale link can't put a signed-out visitor into a form
+  // they can't submit.
+  const [offerOpen, setOfferOpen] = useState(() => resumeAction === "offer" && isLoggedIn);
+  // Which gated action a signed-out visitor reached for, if any.
+  const [authIntent, setAuthIntent] = useState<AuthIntent | null>(null);
   const [offerState, offerAction, offerPending] = useActionState<CommerceState, FormData>(makeOffer, {});
   const [pending, startTransition] = useTransition();
+  // Cart gets its own pending so "Buy now" doesn't flash "Processing…" while
+  // a different button is the one working — and vice versa.
+  const [cartPending, startCartTransition] = useTransition();
   const [cartState, setCartState] = useState<CommerceState | null>(null);
+
+  // The sticky phone bar shows only while the real controls are off-screen,
+  // so the same action never appears twice at once. Starts hidden: on load
+  // the purchase tile sits right under the gallery and is usually visible.
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [actionsInView, setActionsInView] = useState(true);
+
+  useEffect(() => {
+    const node = actionsRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setActionsInView(entry.isIntersecting),
+      { rootMargin: "0px 0px -56px 0px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  // Strip `?action=` once so a refresh (or a shared link) doesn't reopen the
+  // dialog forever. Ref-guarded — a pure side effect, no state involved.
+  const strippedRef = useRef(false);
+  useEffect(() => {
+    if (strippedRef.current || !resumeAction || !isLoggedIn) return;
+    strippedRef.current = true;
+    router.replace(`/listings/${listingId}`, { scroll: false });
+  }, [resumeAction, isLoggedIn, listingId, router]);
 
   if (isOwn || !isActive) return null;
 
-  function guard(run: () => void) {
+  /**
+   * Actions that genuinely need an account explain themselves rather than
+   * bouncing to /login. The dialog carries
+   * `?next=/listings/<id>?action=<intent>` through sign-in, signup, OAuth and
+   * onboarding, so the visitor lands back here mid-action.
+   *
+   * Buying is NOT one of them: a guest can buy a part and identifies
+   * themselves with an email at checkout. Making an offer is, because a
+   * negotiation has to stay attached to someone across counters, notifications
+   * and a 72-hour expiry.
+   */
+  function guard(intent: AuthIntent, run: () => void) {
     if (!isLoggedIn) {
-      router.push(`/login?next=${encodeURIComponent(`/listings/${listingId}`)}`);
+      setAuthIntent(intent);
       return;
     }
     run();
   }
 
+  function runBuyNow() {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("listing_id", listingId);
+      await buyNow(fd);
+    });
+  }
+
+  const buybarHidden = actionsInView || offerOpen;
+
   return (
-    <div className="mt-5 flex flex-col gap-2">
+    <div ref={actionsRef} className="mt-5 flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={pending}
-          onClick={() =>
-            guard(() =>
-              startTransition(async () => {
-                const fd = new FormData();
-                fd.set("listing_id", listingId);
-                await buyNow(fd);
-              })
-            )
-          }
+          onClick={runBuyNow}
           className="btn btn--live flex-1"
         >
           {pending ? "Processing…" : "Buy now"}
         </button>
         <button
           type="button"
-          onClick={() => guard(() => setOfferOpen(true))}
+          onClick={() => guard("offer", () => setOfferOpen(true))}
           className="btn btn--ghost flex-1"
         >
           Make an offer
@@ -75,22 +132,20 @@ export function PurchaseActions({
       ) : (
         <button
           type="button"
-          disabled={pending}
+          disabled={pending || cartPending}
           onClick={() =>
-            guard(() =>
-              startTransition(async () => {
-                const fd = new FormData();
-                fd.set("listing_id", listingId);
-                const result = await addToCart(fd);
-                setCartState(result);
-                // Refresh the shell so the cart badge count updates in place.
-                if (result.ok) router.refresh();
-              })
-            )
+            startCartTransition(async () => {
+              const fd = new FormData();
+              fd.set("listing_id", listingId);
+              const result = await addToCart(fd);
+              setCartState(result);
+              // Refresh the shell so the cart badge count updates in place.
+              if (result.ok) router.refresh();
+            })
           }
           className="btn btn--ghost"
         >
-          Add to cart
+          {cartPending ? "Adding…" : "Add to cart"}
         </button>
       )}
       {cartState?.error && (
@@ -101,6 +156,14 @@ export function PurchaseActions({
       {cartState?.ok && <Toast message="Added to cart ✓" />}
       <PaymentModeNotice live={paymentsLive} />
 
+      {/* Signed out: say why an account is needed before asking for one. */}
+      <AuthIntentDialog
+        open={authIntent !== null}
+        onClose={() => setAuthIntent(null)}
+        intent={authIntent ?? "offer"}
+        returnPath={`/listings/${listingId}`}
+      />
+
       {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll
           lock. The amount input is a real <label> now — screen readers used
           to announce it as "edit text, blank". */}
@@ -109,7 +172,9 @@ export function PurchaseActions({
           <span className="microlabel microlabel--ink">Make an offer</span>
           <form action={offerAction} className="mt-4 flex flex-col gap-3">
             <input type="hidden" name="listing_id" value={listingId} />
-            <div className="field">
+            {/* Wire the field-state classes so a rejected amount paints the
+                control itself (tinted border), not just the error line. */}
+            <div className={`field ${offerState.error ? "is-invalid" : offerState.ok ? "is-ok" : ""}`}>
               <label htmlFor={`${idBase}-amount`} className="microlabel">
                 Your offer
               </label>
@@ -158,6 +223,38 @@ export function PurchaseActions({
           </form>
         </div>
       </Dialog>
+
+      {/* Phone-only sticky purchase bar (hidden ≥981px in CSS). `inert` keeps
+          the duplicate controls out of the tab order and away from assistive
+          tech while the real ones are on screen. */}
+      <div
+        className="buybar"
+        data-hidden={buybarHidden ? "true" : undefined}
+        inert={buybarHidden}
+        aria-label="Purchase"
+      >
+        <span className="buybar__price">
+          {formatPrice(priceCents)}
+          <span className="buybar__ship">
+            {shippingCents > 0 ? `+ ${formatPrice(shippingCents)} ship` : "Ship incl."}
+          </span>
+        </span>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={runBuyNow}
+          className="btn btn--live min-w-0 flex-1"
+        >
+          {pending ? "Processing…" : "Buy now"}
+        </button>
+        <button
+          type="button"
+          onClick={() => guard("offer", () => setOfferOpen(true))}
+          className="btn btn--ghost min-w-0 flex-1"
+        >
+          Offer
+        </button>
+      </div>
     </div>
   );
 }

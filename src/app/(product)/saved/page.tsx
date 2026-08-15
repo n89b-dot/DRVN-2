@@ -188,7 +188,7 @@ export default async function SavedPage({
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
     <div className="order">
       <Link href={`/cars/${car.slug}`} className="order__img">
-        <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" />
+        <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" role="row" />
       </Link>
       <span className="min-w-0">
         <Link
@@ -318,8 +318,9 @@ export default async function SavedPage({
                         title: l.title,
                         price_cents: l.price_cents,
                         condition: l.condition,
-                        location: l.status === "active" ? l.location : `${l.status}`,
+                        location: l.location,
                         cover_url: cover.get(l.id) ?? null,
+                        status_flag: l.status === "active" ? null : l.status,
                       }}
                     />
                     <form action={removeSave} className="mt-2">
@@ -333,7 +334,7 @@ export default async function SavedPage({
                 ))}
               </div>
             ) : (
-              <p className="py-4 font-mono text-[12.5px] uppercase tracking-[0.1em] text-dim">
+              <p className="py-4 font-mono text-micro uppercase tracking-[0.1em] text-dim">
                 {query ? `No saved parts match "${query}"` : "Nothing saved yet"}
               </p>
             )}
@@ -414,7 +415,7 @@ export default async function SavedPage({
               {(profiles ?? []).map((p) => (
                 <div key={p.id} className="order">
                   <Avatar
-                    size="h-11 w-11 text-xs"
+                    size="sm"
                     initials={initialsOf(p.display_name ?? p.username ?? "?")}
                   />
                   <span className="min-w-0">
@@ -422,7 +423,7 @@ export default async function SavedPage({
                       href={`/u/${p.username}`}
                       className="order__name block truncate transition-colors hover:text-live"
                     >
-                      {p.display_name ?? `@${p.username}`}
+                      {p.display_name ?? (p.username ? `@${p.username}` : "DRVN member")}
                     </Link>
                     <span className="order__meta block">view profile →</span>
                   </span>

@@ -18,7 +18,7 @@ export default function ResetPasswordPage() {
       <h1 className="mt-1">
         Set a new <span className="live-word">password.</span>
       </h1>
-      <p className="mt-2 text-[15px] text-dim">
+      <p className="mt-2 text-body text-dim">
         Pick something at least 8 characters long. You&apos;ll be signed in straight after.
       </p>
 

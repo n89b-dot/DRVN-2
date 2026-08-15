@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { checklistFor, sanitizeChecklist } from "@/lib/marketplace/grading";
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
+import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -173,6 +174,9 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     if (imageError) {
       reportError("[sell] listing images failed", { listingId: listing.id, imageError });
       imagesFailed = true;
+    } else {
+      // The URLs are referenced now — release them from the staged-upload GC.
+      await finalizeMediaUrls(supabase, images.map((img) => img.url));
     }
   }
 
@@ -279,6 +283,17 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
         }
         return { error: "Photos couldn't be saved — try again." };
       }
+    }
+
+    await finalizeMediaUrls(supabase, images.map((img) => img.url));
+
+    // Photos dropped by this edit may have lost their last reference — GC
+    // their storage objects. The helper re-checks every referencing table
+    // (covers, other listings, activity posts) before touching storage, and
+    // never fails the save.
+    const kept = new Set(images.map((img) => img.url));
+    for (const prev of previousImages ?? []) {
+      if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url);
     }
   }
 

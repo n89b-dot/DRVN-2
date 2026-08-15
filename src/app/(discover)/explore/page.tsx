@@ -27,7 +27,8 @@ export default async function ExplorePage({
   const visibleTabs = TABS.filter((t) => !t.loggedInOnly || user);
   const tab = (visibleTabs.find((t) => t.key === tabParam)?.key ?? "all") as FeedTab;
   const page = Math.max(1, Number(pageParam) || 1);
-  const feed = await fetchFeed(supabase, tab, Boolean(user), { page });
+  // viewerId powers per-viewer signals on cards (garage fitment hints).
+  const feed = await fetchFeed(supabase, tab, Boolean(user), { page, viewerId: user?.id ?? null });
   const items = feed.items;
 
   return (
@@ -43,21 +44,26 @@ export default async function ExplorePage({
         </p>
       </Rv>
 
-      <div className="filters">
+      {/* Link-filters in the marketplace-sort idiom: role=group + aria-current,
+          .fbtn reserved for exactly this meaning. (Not SheetTabs — these are
+          server-filtered links, and client tab panels would force fetching all
+          three feeds per view.) */}
+      <div className="filters" role="group" aria-label="Filter the feed">
         <span className="microlabel filters__label">Show</span>
         {visibleTabs.map((t) => (
           <Link
             key={t.key}
             href={t.key === "all" ? "/explore" : `/explore?tab=${t.key}`}
             className={`fbtn ${tab === t.key ? "is-on" : ""}`}
+            aria-current={tab === t.key ? "true" : undefined}
           >
             {t.label}
           </Link>
         ))}
-        {/* Navigation, not a filter — it sits apart from the chips it
-            doesn't belong to. */}
-        <Link href="/marketplace" className="fbtn sm:ml-auto">
-          Go to the marketplace →
+        {/* Navigation, not a filter — a ref-link, not a chip, so "changes this
+            page" and "leaves this page" stop sharing a costume. */}
+        <Link href="/marketplace" className="relbtn !static self-center sm:ml-auto">
+          Go to the marketplace
         </Link>
       </div>
 
