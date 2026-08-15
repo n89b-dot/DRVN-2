@@ -7,7 +7,25 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0001–0028 applied
+## Status: 0001–0036 applied
+
+0036 (account_emails) applied 15 August 2026 via node-postgres, applied twice
+(idempotency check); self-checks pass, 6 addresses backfilled. It exists so
+guest checkout can answer "does this email already have an account?" — RLS is
+enabled with NO policies, so anon/authenticated read nothing and only the
+service role can use it. Deliberately not a column on `profiles`, which is
+publicly readable.
+
+0034 (orders.origin_offer_id) and 0035 (seller_open_questions) applied
+15 August 2026 via node-postgres, each applied twice (idempotency check);
+self-checks pass. 0034's backfill reported `linked 0 / 0 unlinked` on this
+project — there were no accepted-offer orders to link, so nothing was
+inferred. On an environment with history it links only pairings recorded in
+the payments idempotency key (`offer:<offer_id>:<order_id>`); pre-0012
+accepts have no such key and are left null rather than guessed.
+
+0029 (staged media) – 0032 (feed events view) applied 9 August 2026 via
+node-postgres, each applied twice (idempotency check); 0031 self-checks pass.
 
 0001–0005 by hand pre-July; 0006–0009 on 26 July 2026; 0010–0015 during the
 Rev C/D sessions; 0016 on 31 July 2026 (0014–0016 columns verified live
@@ -43,6 +61,22 @@ on conflict (key) do update set value = excluded.value, updated_at = now();
 Until that's configured (e.g. in dev, where the cloud DB can't reach
 localhost), the cron still marks intents due every 10 minutes and the admin
 console's Payments → "Run worker now" is the processing path.
+
+### 0029 — staged media + GC scheduling (pending)
+
+`0029_staged_media.sql` adds the `staged_uploads` ledger the photo-upload
+lifecycle writes to (src/lib/media-staging.ts / src/lib/media-lifecycle.ts).
+After applying it, schedule the abandoned-upload sweep — a daily hit on the
+authenticated job route is enough:
+
+```
+curl -X POST https://<app-host>/api/jobs/media-gc \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+The route is idempotent and batch-limited (200 rows/pass); it only deletes
+storage objects that are >48h staged, unconsumed AND unreferenced by any
+image/avatar/cover column, so re-running or overlapping runs are safe.
 
 Applied to project `grunnjojhdevhuckujmc` (`drvn-v3`) and verified:
 `supabase/tests/purchase_guard.sql` passes all nine assertions, and the
@@ -116,6 +150,14 @@ which drops every table in `public`.
 | **0026** | `0026_money_durability.sql` | **P0 money durability:** `refund_operations` state machine (`begin_refund_operation`/`settle_refund_operation`), transfer-intent leases + `claim_transfer_intents()` (FOR UPDATE SKIP LOCKED, stale-claim recovery), `admin_alert_outbox`. |
 | **0027** | `0027_evidence_privacy.sql` | **P0: flips `dispute-evidence` from a public bucket to private** — drops the blanket public-read storage policy, adds a participant/uploader/admin-scoped one keyed on the new `dispute_evidence.storage_path` column (backfilled from the legacy `url`). App now renders short-lived signed URLs (`src/lib/evidence-urls.ts`) instead of the old public URL. |
 | **0028** | `0028_shipping_address_region.sql` | `orders.ship_state` — shipping address state/province/region (required in checkout for US/CA/AU); `ship_country` moves to ISO codes going forward. |
+| **0029** | `0029_staged_media.sql` | `staged_uploads` ledger for the photo-upload lifecycle + the abandoned-upload GC sweep. |
+| **0030** | `0030_seller_listing_stats.sql` | `seller_listing_stats` / `seller_register_tally` RPCs — the ledger's page of rows and its chip counts, filtered/sorted/counted in SQL. |
+| **0031** | `0031_conversations.sql` | Conversations + unread counters; `messages.listing_id` nullable. |
+| **0032** | `0032_feed_events.sql` | `feed_events` union view. |
+| **0033** | `0033_part_number_compact.sql` | Separator-insensitive part-number search (`listings.part_number_compact` generated column + index). |
+| **0034** | `0034_order_origin_offer.sql` | `orders.origin_offer_id` — the canonical accepted-offer → order link, written inside `offer_accept_begin` and unique. Replaces the offer thread's "most recent matching order" guess. Backfilled only from the payments idempotency key; buy-now orders stay null. |
+| **0035** | `0035_seller_open_questions.sql` | `seller_open_questions()` — buyer questions with no reply across the seller's whole catalog, for the listings summary. |
+| **0036** | `0036_account_emails.sql` | `account_emails` — service-role-only email → account index for guest checkout (RLS on, no policies), kept in step with `auth.users` by trigger. |
 
 On a fresh environment, apply **0001–0028 in order**; for the production path
 (baselining, verification, Stripe live wiring, first admin) follow

@@ -110,8 +110,10 @@ Format: **class — shape — key rules.**
 
 | Export | File | Purpose |
 | --- | --- | --- |
-| `LivesheetBar`, `Foot`, `BAR_ROUTES` | livesheet-bar.tsx | Product top bar (signed in/out), index sheet, theme toggle; page footer |
+| `LivesheetBar`, `Foot` | livesheet-bar.tsx | Product top bar (signed in/out), index sheet, theme toggle; page footer |
 | `AppShell` | app-shell.tsx | Signed-in shell: rail + content |
+| `BAR_ROUTES`, `PRIMARY_NAV`, `MARKETPLACE_FAMILY`, `PUBLIC_ROUTES`, `matchesFamily`, `isMarketplaceFamily` | nav-routes.tsx | The register, read by the rail, the index and the family subnav. Marketplace/Listings/Offers/Orders are one group; the family matchers keep `/listings` (seller register) and `/listings/<id>` (public part sheet) apart |
+| `MarketplaceNav` | marketplace-nav.tsx | Marketplace \| Listings \| Offers \| Orders — the family's local register, on every family surface for signed-in users only |
 | `Icon` (`IconName`) | icons.tsx | The stroke icon set |
 | `CategoryIcon` | category-icon.tsx | Part-category glyphs |
 | `ListingCard` | listing-card.tsx | Market card (`.mkt` tile) from `ListingCardData` |
@@ -119,6 +121,7 @@ Format: **class — shape — key rules.**
 | `NarrowColumn`, `Avatar`, `Media`, `MetadataTags`, `SectionLabel`, `HorizontalGallery`, `TabNav` | primitives.tsx | Layout + media primitives (Media takes `fallbackClassName` for undrawn covers) |
 | `LinkedTitle`, `TimelineRow`, `WebsitePill`, `ProfileHeader`, `VehicleGallery`, `KeyValueTable`, `EmbeddedVideo`, `SectionHeading` | patterns.tsx | Profile/build-log patterns |
 | `Dialog` | dialog.tsx | Modal on the sheet idiom |
+| `AuthIntentDialog` | auth-intent-dialog.tsx | The one place DRVN asks a signed-out visitor for an account — contextual copy per intent (offer/buy/save/follow/sell), carrying `?next=` back to the action |
 | `ConfirmDialog` | confirm-dialog.tsx | Two-step destructive confirm on the dialog idiom |
 | `Gallery`, `GalleryLightbox` (+ `GalleryPhoto` type) | gallery.tsx | Interactive gallery (hero + thumbs) and lightbox |
 | `SheetTabs`, `resolveTab` | sheet-tabs.tsx | URL-driven jumprow tabs |
