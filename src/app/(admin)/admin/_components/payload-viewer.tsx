@@ -61,7 +61,7 @@ export function PayloadViewer({ payload, eventType }: { payload: string; eventTy
 
   if (!parsed || typeof parsed !== "object") {
     return (
-      <pre className="mt-2 max-h-80 overflow-auto rounded-lg bg-paper-deep p-3 text-[12px] leading-relaxed">
+      <pre className="mt-2 max-h-80 overflow-auto rounded-ctl bg-paper-deep p-3 text-micro leading-relaxed">
         {payload}
       </pre>
     );
@@ -89,7 +89,7 @@ export function PayloadViewer({ payload, eventType }: { payload: string; eventTy
         <CopyButton label="payment_intent id" value={paymentIntentId} />
         <CopyButton label="charge id" value={chargeId} />
       </div>
-      <div className="rounded-lg bg-paper-deep p-3 text-[12px] leading-relaxed">
+      <div className="rounded-ctl bg-paper-deep p-3 text-micro leading-relaxed">
         {Object.entries(redacted).map(([key, value]) => (
           <details key={key} className="mb-1 last:mb-0">
             <summary className="cursor-pointer font-medium">{key}</summary>

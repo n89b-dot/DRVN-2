@@ -5,6 +5,9 @@ import { AUDIT_PAGE_SIZE, getAuditLog } from "@/lib/admin/queries";
 import type { AdminAuditSubjectType } from "@/lib/database.types";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
+import { ConsoleEmpty } from "../_components/console-empty";
+import { Pager } from "../_components/pager";
+
 export const dynamic = "force-dynamic";
 
 const SUBJECT_TYPES: AdminAuditSubjectType[] = [
@@ -176,7 +179,7 @@ export default async function AdminAuditPage({
                     </span>
                     <span className="auditrow__action">{r.action}</span>
                   </p>
-                  <p className="mt-1 text-[14.5px]">“{r.reason}”</p>
+                  <p className="mt-1 text-body">“{r.reason}”</p>
                   <p className="order__meta mt-0.5">
                     {r.order_id === r.subject_id ? (
                       <Link href={`/admin/orders/${r.order_id}`} className="jumplink">
@@ -201,32 +204,23 @@ export default async function AdminAuditPage({
               </div>
             ))}
           </div>
-          {(page > 0 || hasMore) && (
-            <div className="mt-4 flex items-center justify-between">
-              {page > 0 ? (
-                <Link href={link({ page: String(page - 1) === "0" ? undefined : String(page - 1) })} className="jumplink">
-                  ← Newer
-                </Link>
-              ) : (
-                <span />
-              )}
-              {hasMore && (
-                <Link href={link({ page: String(page + 1) })} className="jumplink">
-                  Older →
-                </Link>
-              )}
-            </div>
-          )}
+          <Pager
+            page={page}
+            hasMore={hasMore}
+            href={(target) => link({ page: target > 0 ? String(target) : undefined })}
+          />
         </>
       ) : (
-        <div className="tile">
-          <span className="microlabel">Log</span>
-          <p className="order__meta">
-            {action || actor || subjectType
-              ? "No entries match those filters."
-              : "No admin actions recorded yet."}
-          </p>
-        </div>
+        <ConsoleEmpty
+          title={action || actor || subjectType ? "No entries match" : "No actions recorded yet"}
+          body={
+            action || actor || subjectType
+              ? "Widen or clear the filters to see the full log."
+              : "Every admin mutation lands here with its reason."
+          }
+          actionHref={action || actor || subjectType ? "/admin/audit" : undefined}
+          actionLabel="Clear the filters"
+        />
       )}
     </>
   );

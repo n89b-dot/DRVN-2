@@ -6,6 +6,7 @@ import { getReports, REPORTS_PAGE_SIZE, type AdminReportRow } from "@/lib/admin/
 import type { ReportReason } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 
+import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
 import { OpenReportsList } from "./open-reports-list";
 
@@ -36,10 +37,12 @@ function OpenReportsPanel({
 }) {
   if (!rows.length) {
     return (
-      <div className="tile mt-4">
-        <span className="microlabel">Queue</span>
-        <p className="order__meta">No open reports.</p>
-      </div>
+      <ConsoleEmpty
+        className="mt-4"
+        mark="—"
+        title="No open reports"
+        body="User reports land here for review as they arrive."
+      />
     );
   }
   return (
@@ -70,10 +73,12 @@ function ResolvedReportsPanel({
 }) {
   if (!rows.length) {
     return (
-      <div className="tile mt-4">
-        <span className="microlabel">Queue</span>
-        <p className="order__meta">No resolved reports yet.</p>
-      </div>
+      <ConsoleEmpty
+        className="mt-4"
+        mark="—"
+        title="No resolved reports yet"
+        body="Reports move here once actioned or dismissed."
+      />
     );
   }
   return (
@@ -105,7 +110,7 @@ function ResolvedReportsPanel({
                 {new Date(r.created_at).toLocaleDateString()}
               </span>
             </div>
-            {r.detail && <p className="mt-1 text-[14.5px]">“{r.detail}”</p>}
+            {r.detail && <p className="mt-1 text-body">“{r.detail}”</p>}
             <p className="order__meta mt-1">
               {r.status} — “{r.resolution_note}”
             </p>

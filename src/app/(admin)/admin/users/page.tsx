@@ -2,10 +2,12 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
+import { SUSPENDED_CHIP } from "@/lib/admin/presentation";
 import { searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
+import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
@@ -145,7 +147,7 @@ export default async function AdminUsersPage({
                 </td>
                 <td data-label="State">
                   {u.suspendedAt ? (
-                    <span className="chip chip--live">Suspended</span>
+                    <span className={cx("chip", SUSPENDED_CHIP)}>Suspended</span>
                   ) : (
                     <span className="status-plain">active</span>
                   )}
@@ -185,10 +187,12 @@ export default async function AdminUsersPage({
         <Pager page={page} hasMore={hasMore} href={pagerHref} />
         </>
       ) : (
-        <div className="tile">
-          <span className="microlabel">Results</span>
-          <p className="order__meta">No users match that search and filter.</p>
-        </div>
+        <ConsoleEmpty
+          title="No users match"
+          body="Try a different search, or widen the state filter."
+          actionHref="/admin/users"
+          actionLabel="Clear the search"
+        />
       )}
     </>
   );

@@ -66,7 +66,15 @@ export default async function AdminOrderPage({
       <Rv as="header" className="pagehead">
         <div className="flex flex-wrap items-baseline gap-3">
           <h1>{items[0]?.title ?? `Order ${order.id.slice(0, 8)}`}</h1>
-          <span className={cx("chip", ORDER_STATUS_CHIP[order.status] ?? "chip--spent")}>
+          {/* Same exception-first rule as the orders table: nominal states are
+              plain text, only actionable ones get a chip. */}
+          <span
+            className={
+              ORDER_STATUS_CHIP[order.status]
+                ? cx("chip", ORDER_STATUS_CHIP[order.status])
+                : "status-plain"
+            }
+          >
             {order.status.replace("_", " ")}
           </span>
         </div>
@@ -232,7 +240,7 @@ export default async function AdminOrderPage({
                 >
                   {personLabel(buyer)}
                 </Link>
-                {buyer.suspendedAt && <span className="chip chip--live ml-2">suspended</span>}
+                {buyer.suspendedAt && <span className="chip chip--danger ml-2">suspended</span>}
               </p>
               <p className="order__meta mt-1">
                 {plural(buyer.orderCount, "order")} · {plural(buyer.disputeCount, "dispute")}
@@ -254,7 +262,7 @@ export default async function AdminOrderPage({
                 >
                   {personLabel(seller)}
                 </Link>
-                {seller.suspendedAt && <span className="chip chip--live ml-2">suspended</span>}
+                {seller.suspendedAt && <span className="chip chip--danger ml-2">suspended</span>}
               </p>
               <p className="order__meta mt-1">
                 {plural(seller.salesCount, "sale")} · {plural(seller.disputeCount, "dispute")} ·{" "}
@@ -290,7 +298,7 @@ export default async function AdminOrderPage({
                 <div key={item.id} className="tile" aria-label={item.title ?? "Item"}>
                   <div className="tile__head">
                     <span className="order__name">{item.title ?? "Part"}</span>
-                    {changed && <span className="chip chip--live">Changed since sale</span>}
+                    {changed && <span className="chip chip--warn">Changed since sale</span>}
                   </div>
                   <div className="mt-3 grid gap-4">
                     <ConditionSummary
@@ -330,7 +338,7 @@ export default async function AdminOrderPage({
                   {m.senderId === order.buyer_id ? "Buyer" : m.senderId === order.seller_id ? "Seller" : "System"} ·{" "}
                   {new Date(m.createdAt).toLocaleString()}
                 </p>
-                <p className="mt-0.5 text-[14.5px]">{m.body}</p>
+                <p className="mt-0.5 text-body">{m.body}</p>
               </div>
             ))}
           </div>
@@ -373,7 +381,7 @@ export default async function AdminOrderPage({
                 <p className="order__meta">
                   {a.action} · {new Date(a.created_at).toLocaleString()}
                 </p>
-                <p className="mt-0.5 text-[14.5px]">“{a.reason}”</p>
+                <p className="mt-0.5 text-body">“{a.reason}”</p>
               </div>
             ))}
           </div>

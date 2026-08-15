@@ -72,9 +72,9 @@ export function ActionDialog({
         {trigger}
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} label={title} align="center">
-        <div className="sheet w-[min(92vw,460px)]">
-          <h2 className="mb-1 font-display text-[17px] font-semibold tracking-tight">{title}</h2>
-          {confirmNote && <p className="mb-3 text-[13.5px] text-dim">{confirmNote}</p>}
+        <div className="sheet">
+          <h2 className="mb-1 font-display text-body font-semibold tracking-tight">{title}</h2>
+          {confirmNote && <p className="mb-3 text-micro text-dim">{confirmNote}</p>}
 
           <form action={formAction} className="grid gap-3">
             {Object.entries(hidden).map(([name, value]) => (
@@ -117,7 +117,7 @@ export function ActionDialog({
                       className="ctl"
                       placeholder="Leave blank for the full amount"
                     />
-                    {f.hint && <p className="mt-1 text-[12.5px] text-dim">{f.hint}</p>}
+                    {f.hint && <p className="mt-1 text-micro text-dim">{f.hint}</p>}
                   </div>
                 );
               }

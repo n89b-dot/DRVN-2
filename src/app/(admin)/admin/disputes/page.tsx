@@ -8,6 +8,7 @@ import { gradeLabel } from "@/lib/marketplace/grading";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
+import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
@@ -37,12 +38,14 @@ function DisputeTable({
 }) {
   if (!rows.length) {
     return (
-      <div className="tile mt-4">
-        <span className="microlabel">Queue</span>
-        <p className="order__meta">
-          {total > 0 ? `Nothing matches — ${total} in the queue without filters.` : empty}
-        </p>
-      </div>
+      <ConsoleEmpty
+        className="mt-4"
+        mark={total > 0 ? "⌕" : "—"}
+        title={total > 0 ? "Nothing matches" : "Queue clear"}
+        body={total > 0 ? `${total} in the queue without filters.` : empty}
+        actionHref={total > 0 ? "/admin/disputes" : undefined}
+        actionLabel="Clear the filters"
+      />
     );
   }
   return (

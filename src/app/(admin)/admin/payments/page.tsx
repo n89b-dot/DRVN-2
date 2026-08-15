@@ -2,11 +2,13 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminReplayWebhookEvent, adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
+import { payoutAlertChip, refundChip, transferChip } from "@/lib/admin/presentation";
 import { getPaymentsOps } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
+import { ConsoleEmpty } from "../_components/console-empty";
 import { PayloadViewer } from "../_components/payload-viewer";
 
 export const dynamic = "force-dynamic";
@@ -87,7 +89,7 @@ export default async function AdminPaymentsPage({
                   </span>
                   <span className="order__meta">{new Date(r.created_at).toLocaleString()}</span>
                 </div>
-                <p className="mt-1 text-[14.5px]">
+                <p className="mt-1 text-body">
                   {r.order_id ? (
                     <Link href={`/admin/orders/${r.order_id}`} className="jumplink">
                       {r.orderTitle} →
@@ -124,10 +126,12 @@ export default async function AdminPaymentsPage({
             ))}
           </div>
         ) : (
-          <div className="tile mt-2">
-            <span className="microlabel">Open</span>
-            <p className="order__meta">Nothing open. Failed reversals and refunds land here.</p>
-          </div>
+          <ConsoleEmpty
+            className="mt-2"
+            mark="—"
+            title="Nothing open"
+            body="Failed reversals and refunds land here."
+          />
         )}
         {closedRecoveries.length > 0 && (
           <details className="mt-3">
@@ -194,18 +198,13 @@ export default async function AdminPaymentsPage({
                     {formatPrice(i.amount_cents)}
                   </td>
                   <td data-label="State">
-                    <span
-                      className={cx(
-                        "chip",
-                        ["blocked_unpayable", "failed"].includes(i.status)
-                          ? "chip--live"
-                          : i.status === "ready"
-                            ? "chip--warn"
-                            : "chip--spent"
-                      )}
-                    >
-                      {INTENT_LABEL[i.status] ?? i.status}
-                    </span>
+                    {transferChip(i.status) ? (
+                      <span className={cx("chip", transferChip(i.status))}>
+                        {INTENT_LABEL[i.status] ?? i.status}
+                      </span>
+                    ) : (
+                      <span className="status-plain">{INTENT_LABEL[i.status] ?? i.status}</span>
+                    )}
                     {i.last_error && <span className="order__meta mt-0.5 block">{i.last_error}</span>}
                   </td>
                   <td className="order__meta" data-label="Available">
@@ -216,13 +215,12 @@ export default async function AdminPaymentsPage({
             </tbody>
           </table>
         ) : (
-          <div className="tile mt-2">
-            <span className="microlabel">Pipeline</span>
-            <p className="order__meta">
-              No held or stuck transfers. Sellers who sold before finishing payout onboarding
-              appear here instead of vanishing into an error log.
-            </p>
-          </div>
+          <ConsoleEmpty
+            className="mt-2"
+            mark="—"
+            title="No held or stuck transfers"
+            body="Sellers who sold before finishing payout onboarding appear here instead of vanishing into an error log."
+          />
         )}
       </section>
 
@@ -252,18 +250,13 @@ export default async function AdminPaymentsPage({
                     {formatPrice(r.amount_cents)}
                   </td>
                   <td data-label="State">
-                    <span
-                      className={cx(
-                        "chip",
-                        ["failed", "recovery_required"].includes(r.status)
-                          ? "chip--live"
-                          : r.status === "reversal_pending"
-                            ? "chip--warn"
-                            : "chip--spent"
-                      )}
-                    >
-                      {r.status.replaceAll("_", " ")}
-                    </span>
+                    {refundChip(r.status) ? (
+                      <span className={cx("chip", refundChip(r.status))}>
+                        {r.status.replaceAll("_", " ")}
+                      </span>
+                    ) : (
+                      <span className="status-plain">{r.status.replaceAll("_", " ")}</span>
+                    )}
                     {r.attempts > 0 && (
                       <span className="order__meta mt-0.5 block">attempt {r.attempts}</span>
                     )}
@@ -275,14 +268,12 @@ export default async function AdminPaymentsPage({
             </tbody>
           </table>
         ) : (
-          <div className="tile mt-2">
-            <span className="microlabel">Refunds</span>
-            <p className="order__meta">
-              No in-flight, failed or recovery-required refund operations. Every refund is a
-              durable state machine (0026) — anything a crash abandons appears here and is
-              resumed by the worker pass.
-            </p>
-          </div>
+          <ConsoleEmpty
+            className="mt-2"
+            mark="—"
+            title="No refund operations in flight"
+            body="Every refund is a durable state machine (0026) — anything a crash abandons appears here and is resumed by the worker pass."
+          />
         )}
       </section>
 
@@ -294,18 +285,13 @@ export default async function AdminPaymentsPage({
               <div key={alertRow.id} className="jobrow">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="order__name">{alertRow.title}</span>
-                  <span
-                    className={cx(
-                      "chip",
-                      alertRow.status === "failed"
-                        ? "chip--live"
-                        : alertRow.status === "disabled"
-                          ? "chip--spent"
-                          : "chip--warn"
-                    )}
-                  >
-                    {alertRow.status}
-                  </span>
+                  {payoutAlertChip(alertRow.status) ? (
+                    <span className={cx("chip", payoutAlertChip(alertRow.status))}>
+                      {alertRow.status}
+                    </span>
+                  ) : (
+                    <span className="status-plain">{alertRow.status}</span>
+                  )}
                 </div>
                 <p className="order__meta">
                   {alertRow.kind} · {new Date(alertRow.created_at).toLocaleString()}
@@ -319,13 +305,12 @@ export default async function AdminPaymentsPage({
             ))}
           </div>
         ) : (
-          <div className="tile mt-2">
-            <span className="microlabel">Alerts</span>
-            <p className="order__meta">
-              Nothing undelivered. Alerts are durable outbox rows (0026): delivery failures
-              retry with backoff here instead of vanishing.
-            </p>
-          </div>
+          <ConsoleEmpty
+            className="mt-2"
+            mark="—"
+            title="Nothing undelivered"
+            body="Alerts are durable outbox rows (0026): delivery failures retry with backoff here instead of vanishing."
+          />
         )}
       </section>
 
@@ -369,12 +354,12 @@ export default async function AdminPaymentsPage({
             ))}
           </div>
         ) : (
-          <div className="tile mt-2">
-            <span className="microlabel">Stream</span>
-            <p className="order__meta">
-              No events recorded yet — the dedup table fills as Stripe delivers.
-            </p>
-          </div>
+          <ConsoleEmpty
+            className="mt-2"
+            mark="—"
+            title="No events recorded yet"
+            body="The dedup table fills as Stripe delivers."
+          />
         )}
       </section>
     </>

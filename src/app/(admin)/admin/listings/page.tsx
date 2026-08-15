@@ -8,6 +8,7 @@ import { CATEGORIES, formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
+import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
@@ -224,10 +225,12 @@ export default async function AdminListingsPage({
         <Pager page={page} hasMore={hasMore} href={pagerHref} />
         </>
       ) : (
-        <div className="tile">
-          <span className="microlabel">Results</span>
-          <p className="order__meta">No listings match.</p>
-        </div>
+        <ConsoleEmpty
+          title="No listings match"
+          body="Try a different search or status filter."
+          actionHref="/admin/listings"
+          actionLabel="Clear the search"
+        />
       )}
     </>
   );

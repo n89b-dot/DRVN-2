@@ -7,6 +7,9 @@ import type { OrderStatus } from "@/lib/database.types";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
+import { ConsoleEmpty } from "../_components/console-empty";
+import { Pager } from "../_components/pager";
+
 export const dynamic = "force-dynamic";
 
 const STATUSES: OrderStatus[] = [
@@ -223,8 +226,10 @@ export default async function AdminOrdersPage({
                   {formatPrice(r.totalCents)}
                 </td>
                 <td data-label="Money">
+                  {/* A completed refund is settled history, not an alarm —
+                      spent desaturates rather than shouting. */}
                   {r.refundedCents > 0 ? (
-                    <span className="chip chip--live">Refunded {formatPrice(r.refundedCents)}</span>
+                    <span className="chip chip--spent">Refunded {formatPrice(r.refundedCents)}</span>
                   ) : (
                     <span className="status-plain">{r.transferred ? "paid out" : "held"}</span>
                   )}
@@ -242,28 +247,15 @@ export default async function AdminOrdersPage({
             ))}
           </tbody>
         </table>
-        {(page > 0 || hasMore) && (
-          <div className="mt-4 flex items-center justify-between">
-            {page > 0 ? (
-              <Link href={pageLink(page - 1)} className="jumplink">
-                ← Newer
-              </Link>
-            ) : (
-              <span />
-            )}
-            {hasMore && (
-              <Link href={pageLink(page + 1)} className="jumplink">
-                Older →
-              </Link>
-            )}
-          </div>
-        )}
+        <Pager page={page} hasMore={hasMore} href={pageLink} />
         </>
       ) : (
-        <div className="tile">
-          <span className="microlabel">Results</span>
-          <p className="order__meta">Nothing matches. Try a shorter prefix or a username.</p>
-        </div>
+        <ConsoleEmpty
+          title="Nothing matches"
+          body="Try a shorter prefix or a username."
+          actionHref="/admin/orders"
+          actionLabel="Clear the search"
+        />
       )}
     </>
   );

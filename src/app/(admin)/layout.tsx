@@ -8,6 +8,7 @@ import { getAdminContext } from "@/lib/admin/guard";
 import { getAdminIdentity, getNavCounts } from "@/lib/admin/queries";
 import { cx } from "@/lib/format";
 
+import { SlashFocus } from "@/components/ui/slash-focus";
 import { AdminNav } from "./admin/_components/admin-nav";
 
 /**
@@ -59,7 +60,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <header className="sticky top-0 z-[60] border-b border-rule-soft bg-paper">
         <div className="wrap flex flex-wrap items-center justify-between gap-3 py-4">
           <div className="flex items-baseline gap-3">
-            <span className="font-display text-[19px] font-semibold tracking-tight">DRVN</span>
+            <span className="font-display text-section font-semibold tracking-tight">DRVN</span>
             <span className="microlabel !mb-0">Console</span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -88,7 +89,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </div>
         </div>
       </header>
-      <main className="wrap console-main py-8">{children}</main>
+      <main className="wrap console-main py-8">
+        {/* `/` jumps to the page's search — the console is a power-user surface. */}
+        <SlashFocus />
+        {children}
+      </main>
     </div>
   );
 }

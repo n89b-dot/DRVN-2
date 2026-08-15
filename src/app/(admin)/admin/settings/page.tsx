@@ -214,7 +214,7 @@ export default async function AdminSettingsPage() {
               return (
                 <div key={m.userId} className="jobrow">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className={cx("order__name !text-[14.5px]", stub && "person--stub")}>
+                    <span className={cx("order__name !text-body", stub && "person--stub")}>
                       {m.displayName ?? (m.username ? `@${m.username}` : `User ${m.userId.slice(0, 8)}`)}
                     </span>
                     {m.role === "viewer" ? (

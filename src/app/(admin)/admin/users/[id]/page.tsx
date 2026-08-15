@@ -240,7 +240,7 @@ export default async function AdminUserPage({
                     {r.status}
                   </span>
                 </div>
-                {r.detail && <p className="mt-1 text-[14.5px]">“{r.detail}”</p>}
+                {r.detail && <p className="mt-1 text-body">“{r.detail}”</p>}
               </div>
             ))}
           </div>
@@ -268,7 +268,7 @@ export default async function AdminUserPage({
                 <p className="order__meta">
                   {a.action} · {new Date(a.created_at).toLocaleString()}
                 </p>
-                <p className="mt-0.5 text-[14.5px]">“{a.reason}”</p>
+                <p className="mt-0.5 text-body">“{a.reason}”</p>
               </div>
             ))}
           </div>

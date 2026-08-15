@@ -55,9 +55,10 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
   return (
     <>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-[13.5px]">
+        <label className="flex items-center gap-2 text-micro">
           <input
             type="checkbox"
+            className="sq"
             checked={allSelected}
             onChange={toggleAll}
             aria-label="Select all reports shown"
@@ -84,10 +85,10 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
               <label className="flex items-start gap-2">
                 <input
                   type="checkbox"
+                  className="sq mt-1"
                   checked={selected.has(r.id)}
                   onChange={() => toggleOne(r.id)}
                   aria-label={`Select report on ${r.subjectLabel}`}
-                  className="mt-1"
                 />
                 <span className="flex flex-wrap items-baseline gap-2">
                   <span className="chip chip--live">{REASON_LABEL[r.reason]}</span>
@@ -108,7 +109,7 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                 {new Date(r.created_at).toLocaleDateString()}
               </span>
             </div>
-            {r.detail && <p className="mt-1 text-[14.5px]">“{r.detail}”</p>}
+            {r.detail && <p className="mt-1 text-body">“{r.detail}”</p>}
             <div className="mt-2 flex gap-2">
               <ActionDialog
                 action={adminResolveReport}
