@@ -47,6 +47,7 @@ const BLANK_ADDRESS: Address = {
  */
 export function CheckoutSteps({
   idempotencyKey,
+  needsEmail = false,
   allowsCollection,
   mixedFulfilment = false,
   items,
@@ -58,6 +59,8 @@ export function CheckoutSteps({
   orderId,
 }: {
   idempotencyKey: string;
+  /** Signed-out checkout: collect the email the order confirmation goes to. */
+  needsEmail?: boolean;
   allowsCollection: boolean;
   /** Basket mixes collection-capable and shipping-only listings, so the
    *  single is_collection flag can't cover it — explain why the checkbox
@@ -82,6 +85,9 @@ export function CheckoutSteps({
   // the old version only remembered {name, line1, city} and lost everything
   // else on every edit.
   const [address, setAddress] = useState<Address>(BLANK_ADDRESS);
+  // Held in state for the same reason the address is: "Change" must re-render
+  // the form filled in, not blank.
+  const [email, setEmail] = useState("");
   const [saved, setSaved] = useState(false);
   const errorId = useId();
 
@@ -101,13 +107,21 @@ export function CheckoutSteps({
 
   return (
     <div className="grid gap-4">
-      <ol className="microlabel flex list-none gap-0 p-0" aria-label="Checkout progress">
-        <li aria-current={paymentStep ? undefined : "step"} className={paymentStep ? "" : "microlabel--ink"}>
-          1 Shipping
+      {/* The system's documented step recipe (auto-numbered 01/02, live
+          numeral on the current step) — checkout previously hand-rolled a
+          dot-separated microlabel list while `.steps` had zero call sites. */}
+      <ol className="steps list-none p-0 m-0" aria-label="Checkout progress">
+        <li
+          className={`step ${paymentStep ? "is-done" : "is-now"}`}
+          aria-current={paymentStep ? undefined : "step"}
+        >
+          <span className="step__n" aria-hidden="true" />
+          <span className="step__t">Shipping</span>
+          {paymentStep && <span className="chip chip--ok">Done</span>}
         </li>
-        <li aria-hidden="true">&nbsp;·&nbsp;</li>
-        <li aria-current={paymentStep ? "step" : undefined} className={paymentStep ? "microlabel--ink" : ""}>
-          2 Payment
+        <li className={`step ${paymentStep ? "is-now" : ""}`} aria-current={paymentStep ? "step" : undefined}>
+          <span className="step__n" aria-hidden="true" />
+          <span className="step__t">Payment</span>
         </li>
       </ol>
 
@@ -139,7 +153,7 @@ export function CheckoutSteps({
               breakdown together, immediately before the payment element, so
               the buyer sees the whole commitment in one place before paying. */}
           <div className="tile grid gap-3">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="tile__head">
               <span className="microlabel microlabel--ink">Review your order</span>
               <Link href="/cart" className="jumplink shrink-0">
                 Change
@@ -154,6 +168,22 @@ export function CheckoutSteps({
                     <b className="shrink-0">{item.priceLabel}</b>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {needsEmail && email && (
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="field__label block">Confirmation to</span>
+                  <span className="order__meta block truncate">{email}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingAddress(true)}
+                  className="jumplink shrink-0"
+                >
+                  Change
+                </button>
               </div>
             )}
 
@@ -243,6 +273,7 @@ export function CheckoutSteps({
               state: String(fd.get("ship_state") ?? ""),
               phone: String(fd.get("ship_phone") ?? ""),
             });
+            if (needsEmail) setEmail(String(fd.get("email") ?? ""));
             setSaved(true);
             setEditingAddress(false);
             formAction(fd);
@@ -252,14 +283,43 @@ export function CheckoutSteps({
           <input type="hidden" name="idempotency_key" value={idempotencyKey} />
           {orderId && <input type="hidden" name="order_id" value={orderId} />}
 
+          {/* Guest checkout: one field, and it's the one a receipt needs
+              anyway. No password, no signup step — the emailed link that
+              follows is what proves the address and sets the account up. */}
+          {needsEmail && (
+            <fieldset className="grid gap-3 border-0 p-0">
+              <legend className="microlabel microlabel--ink mb-1">Where to send it</legend>
+              <label className="field">
+                <span className="field__label">Email</span>
+                <input
+                  name="email"
+                  type="email"
+                  className="ctl !max-w-none"
+                  required
+                  autoComplete="email"
+                  placeholder="you@somewhere"
+                  defaultValue={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+                <span className="field__hint">
+                  Your receipt, dispatch updates and a link to track the order. No password
+                  needed — and no account to create first.{" "}
+                  <Link href={`/login?next=${encodeURIComponent("/checkout")}`} className="jumplink">
+                    Already have an account?
+                  </Link>
+                </span>
+              </label>
+            </fieldset>
+          )}
+
           {allowsCollection && (
-            <label className="flex items-center gap-2 text-[13px]">
+            <label className="flex items-center gap-2 text-micro">
               <input
                 type="checkbox"
                 name="is_collection"
                 checked={collection}
                 onChange={(event) => setCollection(event.target.checked)}
-                className="accent-live"
+                className="sq"
               />
               Collecting in person — no delivery address needed
             </label>

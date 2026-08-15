@@ -115,7 +115,7 @@ export default async function CartPage() {
   const mixedFulfilment = collectionCapable > 0 && collectionCapable < active.length;
 
   return (
-    <div className="mx-auto w-full max-w-[1060px] px-5 pb-10">
+    <div className="wrap wrap--wide pb-10">
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           Cart · {active.length} part{active.length === 1 ? "" : "s"}
@@ -139,10 +139,12 @@ export default async function CartPage() {
           <div className="deck">
           {invalid.length > 0 && (
             <Rv className="tile">
-              <span className="microlabel microlabel--ink">
-                {invalid.length} part{invalid.length === 1 ? "" : "s"} can&apos;t be bought right now
-              </span>
-              <div className="rowlist mt-2">
+              <div className="tile__head">
+                <span className="microlabel microlabel--ink">
+                  {invalid.length} part{invalid.length === 1 ? "" : "s"} can&apos;t be bought right now
+                </span>
+              </div>
+              <div className="rowlist">
                 {invalid.map((line) => (
                   <div key={line.id} className="order is-invalid">
                     <span className="min-w-0">
@@ -165,6 +167,12 @@ export default async function CartPage() {
 
           {mixedFulfilment && (
             <Rv className="alert">
+              {/* .alert is a grid of [icon | content] — without the icon cell
+                  the heading lands in the narrow auto column and the body
+                  renders beside it instead of beneath. */}
+              <span className="alert__ico" aria-hidden="true">
+                ⚠
+              </span>
               <h4>Collection isn&apos;t offered for this basket</h4>
               <p>
                 Some parts here support collection and some don&apos;t — a basket can only check
@@ -191,10 +199,12 @@ export default async function CartPage() {
 
             return (
               <Rv key={sellerId} className="tile" stagger={index}>
-                <span className="microlabel microlabel--ink">
-                  From {sellerName(sellerId)} · one order
-                </span>
-                <div className="rowlist mt-2">
+                <div className="tile__head">
+                  <span className="microlabel microlabel--ink">
+                    From {sellerName(sellerId)} · one order
+                  </span>
+                </div>
+                <div className="rowlist">
                   {lines.map((listing) => (
                     <div key={listing.id} className="order">
                       <span className="order__img">
@@ -202,6 +212,7 @@ export default async function CartPage() {
                           src={cover.get(listing.id) ?? undefined}
                           alt={listing.title}
                           className="h-full w-full"
+                          role="row"
                         />
                       </span>
                       <span className="min-w-0">
@@ -241,8 +252,10 @@ export default async function CartPage() {
 
           <aside>
           <Rv className="tile tile--deep lg:sticky lg:top-20" stagger={sellerIds.length}>
-            <span className="microlabel microlabel--ink">Order summary</span>
-            <div className="mt-2">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Order summary</span>
+            </div>
+            <div>
               <div className="sheet__row">
                 <span>Parts</span>
                 <b>{formatPrice(goods)}</b>

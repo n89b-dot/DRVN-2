@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot, Media, PaymentModeNotice } from "@/components/ui";
-import { loadCartSummary } from "@/lib/checkout-data";
+import { loadCartSummary, loadInFlightCheckout } from "@/lib/checkout-data";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -25,15 +25,25 @@ export default async function CheckoutPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/checkout");
 
-  const cart = await loadCartSummary();
-  if (!cart.lines.length) redirect("/cart");
+  // Submitting the shipping step reserves every listing in the basket, and a
+  // server action re-renders the route it ran on — so by the time this runs
+  // again mid-payment the cart legitimately holds nothing `active`. Falling
+  // back to the in-flight orders keeps the buyer on the Payment Element
+  // instead of bouncing them to /cart with the charge already started.
+  const cart =
+    (await loadCartSummary().then((summary) =>
+      summary.lines.length ? summary : null
+    )) ?? (await loadInFlightCheckout(user?.id ?? null));
+  if (!cart?.lines.length) redirect("/cart");
 
-  const savedCards = await listSavedCards(user.id).catch(() => []);
+  // Guests check out too — buying is the service, not an account feature.
+  // Saved cards only exist for a signed-in buyer; a guest pays with the
+  // Payment Element and identifies themselves with an email.
+  const savedCards = user ? await listSavedCards(user.id).catch(() => []) : [];
 
   return (
-    <div className="mx-auto w-full max-w-[1060px] px-5 pb-10">
+    <div className="wrap wrap--wide pb-10">
       <Rv as="header" className="pagehead">
         <span className="microlabel">Secure checkout · {cart.lines.length} part{cart.lines.length === 1 ? "" : "s"}</span>
         <h1>Nearly yours.</h1>
@@ -43,6 +53,7 @@ export default async function CheckoutPage() {
         <div>
           <CheckoutSteps
             idempotencyKey={randomUUID()}
+            needsEmail={!user}
             allowsCollection={cart.allowsCollection}
             mixedFulfilment={cart.mixedFulfilment}
             items={cart.lines.map((line) => ({
@@ -59,12 +70,14 @@ export default async function CheckoutPage() {
 
         <aside>
           <Rv className="tile tile--deep lg:sticky lg:top-20">
-            <span className="microlabel microlabel--ink">Order summary</span>
-            <div className="rowlist mt-2">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Order summary</span>
+            </div>
+            <div className="rowlist">
               {cart.lines.map((line) => (
                 <div key={line.id} className="order">
                   <span className="order__img">
-                    <Media src={line.coverUrl ?? undefined} alt={line.title} className="h-full w-full" />
+                    <Media src={line.coverUrl ?? undefined} alt={line.title} className="h-full w-full" role="row" />
                   </span>
                   <span className="min-w-0">
                     <span className="order__name block truncate">{line.title}</span>

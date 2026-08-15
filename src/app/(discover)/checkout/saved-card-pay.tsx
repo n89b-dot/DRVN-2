@@ -78,7 +78,7 @@ export function SavedCardPay({
               name="card_choice"
               checked={selected === card.id}
               onChange={() => setSelected(card.id)}
-              className="accent-live"
+              className="sq"
             />
             <span className="min-w-0">
               <span className="order__name block uppercase">

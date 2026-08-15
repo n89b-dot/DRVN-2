@@ -6,6 +6,43 @@ import { useMemo, useState } from "react";
 
 import { saveCardOnIntent } from "@/features/commerce/payment-methods";
 
+/** Livesheet tokens → Stripe appearance. Reads the computed CSS custom
+ *  properties so the iframe follows any palette retune; hexes are only the
+ *  SSR-safe fallbacks. */
+function appearanceFromTokens(night: boolean) {
+  const token = (name: string, fallback: string) =>
+    typeof document !== "undefined"
+      ? getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+      : fallback;
+  const live = token("--live", night ? "#ff4530" : "#c02c14");
+  const dim = token("--dim", night ? "#8f8c82" : "#565963");
+  return {
+    theme: (night ? "night" : "stripe") as "night" | "stripe",
+    variables: {
+      colorPrimary: live,
+      colorBackground: token("--paper-deep", night ? "#100f0c" : "#e5e2d8"),
+      colorText: token("--ink", night ? "#f0eee5" : "#20232a"),
+      colorTextSecondary: dim,
+      colorDanger: live,
+      borderRadius: "10px",
+      fontSizeBase: "16px",
+    },
+    rules: {
+      ".Input": { border: "1px solid transparent", boxShadow: "none" },
+      ".Input:focus": {
+        border: "1px solid transparent",
+        boxShadow: `0 0 0 2px ${live}`,
+      },
+      ".Label": {
+        fontSize: "12px",
+        textTransform: "uppercase",
+        letterSpacing: "0.14em",
+        color: dim,
+      },
+    },
+  };
+}
+
 /**
  * The browser half of an async payment: `purchase_begin` reserved the parts
  * and the server minted a PaymentIntent — this confirms it. On success Stripe
@@ -37,7 +74,12 @@ export function PaymentConfirm({
       stripe={stripePromise}
       options={{
         clientSecret,
-        appearance: { theme: night ? "night" : "stripe" },
+        // The card field is the most consequential input in the product —
+        // themed to the Livesheet tokens instead of Stripe's defaults so it
+        // matches .ctl (paper-deep ground, 10px radius, live focus ring).
+        // Tokens are read from the live stylesheet (CSS vars can't cross into
+        // Stripe's iframe), so a palette retune carries over automatically.
+        appearance: appearanceFromTokens(night),
       }}
     >
       <ConfirmInner
@@ -99,12 +141,12 @@ function ConfirmInner({
       <span className="microlabel microlabel--ink">Payment</span>
       <PaymentElement />
       {canSaveCard && (
-        <label className="flex items-center gap-2 text-[13px]">
+        <label className="flex items-center gap-2 text-micro">
           <input
             type="checkbox"
             checked={saveCard}
             onChange={(event) => setSaveCard(event.target.checked)}
-            className="accent-live"
+            className="sq"
           />
           Save this card for next time
         </label>
