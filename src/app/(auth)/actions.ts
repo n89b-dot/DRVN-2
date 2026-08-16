@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
+import { DISPLAY_NAME_MAX } from "@/lib/limits";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = { error?: string; ok?: string };
@@ -110,8 +111,8 @@ export async function completeOnboarding(
   if (!displayName) {
     return { error: "Display name is required." };
   }
-  if (displayName.length > 80) {
-    return { error: "Display name must be 80 characters or fewer." };
+  if (displayName.length > DISPLAY_NAME_MAX) {
+    return { error: `Display name must be ${DISPLAY_NAME_MAX} characters or fewer.` };
   }
 
   const supabase = await createClient();

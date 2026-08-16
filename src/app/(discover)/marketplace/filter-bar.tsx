@@ -1,4 +1,5 @@
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
+import { FinderRefineSheet } from "@/components/ui";
 import { SlashFocus } from "@/components/ui/slash-focus";
 
 /**
@@ -52,7 +53,18 @@ export function FilterBar({
         </button>
       </div>
 
-      <div className="finder__refine">
+      {/* Compact screens sheet the dense refinement row behind one "Refine"
+          control (see FinderRefineSheet) — five stacked controls were pushing
+          the results below the fold. ≥640px this renders the same inline
+          `.finder__refine` row as before; the fields stay mounted either way,
+          so they always submit with the search. */}
+      <FinderRefineSheet
+        activeCount={
+          [filters.condition, filters.location, filters.min, filters.max, filters.fit].filter(
+            Boolean
+          ).length
+        }
+      >
         <select
           name="condition"
           defaultValue={filters.condition ?? ""}
@@ -106,7 +118,7 @@ export function FilterBar({
             {fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for your garage"}
           </label>
         )}
-      </div>
+      </FinderRefineSheet>
     </form>
   );
 }

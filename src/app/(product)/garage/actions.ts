@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { slugify } from "@/lib/format";
+import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
 import type { ActivityBlock } from "@/lib/activity-blocks";
 import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
@@ -381,6 +382,11 @@ export async function createActivityPost(
   const videoUrl = String(formData.get("video_url") ?? "").trim();
 
   if (!carId || !title) return { error: "A title is required." };
+  if (title.length > ACTIVITY_TITLE_MAX) {
+    // Mirrors the edit path — create used to accept any length, so the same
+    // post could be inserted here and then refuse to save in the editor.
+    return { error: `Keep the title under ${ACTIVITY_TITLE_MAX} characters.` };
+  }
   if (videoUrl && !/^https?:\/\//.test(videoUrl)) {
     return { error: "Video URL must start with http(s)://" };
   }
@@ -400,7 +406,9 @@ export async function createActivityPost(
 
   revalidatePath(`/garage/${carId}/edit`);
   if (car) revalidatePath(`/cars/${car.slug}`);
-  return {};
+  // A real ok signal — the composer closes on it; the list gaining the row
+  // is the receipt.
+  return { ok: "Published." };
 }
 
 export async function createRichActivityPost(
@@ -469,7 +477,7 @@ export async function updateActivityPost(
   const postId = String(formData.get("post_id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   if (!postId || !title) return { error: "A title is required." };
-  if (title.length > 160) return { error: "Keep the title under 160 characters." };
+  if (title.length > ACTIVITY_TITLE_MAX) return { error: `Keep the title under ${ACTIVITY_TITLE_MAX} characters.` };
 
   const { data: post } = await supabase
     .from("activity_posts")

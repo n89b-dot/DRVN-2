@@ -74,6 +74,14 @@ export const SITE_PAGES: DocEntry[] = [
     file: "docs/site/rules.md",
     kind: "site",
   },
+  {
+    slug: "material",
+    title: "Material 3 as a behavioral reference",
+    description:
+      "What the component library borrows from Material 3 (behavior, adaptive model) and what it never will (any of Google's styling).",
+    file: "docs/site/material.md",
+    kind: "site",
+  },
 ];
 
 export const REFERENCE_DOCS: DocEntry[] = [

@@ -548,7 +548,7 @@ video {
     grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
     gap: 12px;
-    padding: 11px 20px;
+    padding: 10px 20px;
     position: relative;
     white-space: nowrap;
     transition: background var(--t-fast) ease;
@@ -556,29 +556,75 @@ video {
   .railrow:hover {
     background: var(--tile-2);
   }
-  .railrow__n {
-    font-family: var(--mono);
-    font-size: 12px;
-    letter-spacing: 0.1em;
+  /* The margin column: a stroke icon where the register number used to be.
+     Icons survive the collapsed rail, which bare digits never did. */
+  .railrow__ico {
+    position: relative;
+    display: grid;
+    place-items: center;
     color: var(--dim);
-    transition: color var(--t-fast) ease;
+    transition:
+      color var(--t-fast) ease,
+      transform var(--t-move) var(--spring);
   }
+  .railrow:hover .railrow__ico {
+    transform: translateX(2px);
+  }
+  .railrow.is-here .railrow__ico {
+    transform: none;
+  }
+  /* Attention, said small enough to survive collapse: a live dot riding the
+     icon. The full count lives in the label's chip when the rail is open. */
+  .railrow__dot {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--live);
+    /* A paper ring so the dot reads against any icon stroke behind it. */
+    box-shadow: 0 0 0 2px var(--paper);
+  }
+  /* Weight belongs to the row you're on. Every row used to be 16/600, which
+     spent the emphasis before anything was selected and left parents and
+     children indistinguishable. */
   .railrow__label {
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: var(--ink);
     overflow: hidden;
     opacity: 1;
     transition:
       opacity var(--t-fast) ease 80ms,
       transform var(--t-move) var(--spring);
   }
-  /* the register you're on: a raised plate and a live tick in the margin */
+  /* Every row keeps one height. The page chip is 26px tall, which pushed a
+     badged row (Marketplace holding a count, Offers) 5px past its neighbours
+     and broke the rail's pitch — in the rail it's a count pill, sized to sit
+     inside the label's line box. */
+  .railrow .chip {
+    height: 18px;
+    min-width: 18px;
+    justify-content: center;
+    padding: 0 5px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+  .railrow:hover .railrow__ico {
+    color: var(--ink);
+  }
+  /* the register you're on: a raised plate, live margin ink, and the one
+     weight step the rail reserves for it */
   .railrow.is-here {
     background: var(--tile);
   }
-  .railrow.is-here .railrow__n {
+  .railrow.is-here .railrow__ico {
     color: var(--live);
+  }
+  .railrow.is-here .railrow__label {
+    font-weight: 600;
   }
   .railrow.is-here::before {
     content: "";
@@ -596,38 +642,137 @@ video {
      disclosure: every child stays one click from anywhere in the app. It
      carries the family's active state so the rail says which *section* you're
      in as well as which sheet. */
-  .railgroup {
+  /* Parent row + disclosure. The link fills the row at top-level weight;
+     the chevron is its own 28px control so expanding never risks a
+     navigation, and vice versa. */
+  /* The family is one block in the rail's rhythm: the same air above the
+     parent row as below the last child, folded or open. The old margin sat on
+     the parent row alone, so Marketplace hung 6px low and its children ran
+     straight into Garage. */
+  /* No margin: Marketplace is an ordinary top-level row, so it must sit on
+     exactly the same rhythm as Home/Explore/Garage/Messages. A 6px band above
+     and below put it in a slot 12px taller than every other row, which reads
+     as a row that isn't quite aligned with its neighbours. The family reads as
+     a group from the indent and margin rule on its children, not from air. */
+  .railfamily {
+    margin: 0;
+  }
+  .railfam {
+    position: relative;
+  }
+  .railfam__link {
+    padding-right: 44px;
+  }
+  .railfam__toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
     display: grid;
-    grid-template-columns: 22px minmax(0, 1fr);
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px 6px;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-ctl);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .railfam__toggle:hover {
+    color: var(--ink);
+    background: var(--ghost);
+  }
+  /* The back-chevron points left; open rotates it to point down, closed to
+     point right — the same grammar as every disclosure since the dawn of
+     sidebars. */
+  .railfam__toggle > svg {
+    transform: rotate(180deg);
+    transition: transform var(--t-move) var(--spring);
+  }
+  .railfam__toggle.is-open > svg {
+    transform: rotate(-90deg);
+  }
+  /* Passing through the family with the section folded: the parent holds the
+     live margin ink without claiming aria-current. */
+  .railrow.is-holding .railrow__ico {
+    color: var(--live);
+  }
+  .railrow.is-holding::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    margin-top: -9px;
+    background: var(--live);
+    opacity: 0.55;
+  }
+
+  /* The disclosure body: rows stay mounted so the collapsed icon rail can
+     always show them; the fold is a grid-rows collapse, which animates
+     without measuring heights. */
+  .railkids {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--t-move) var(--spring);
+  }
+  .railkids__in {
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* Air at the ends of the open list, so the children sit *inside* the
+     section instead of butting against the parent row and Garage. It rides on
+     the first/last rows rather than the container, so a 0fr fold still
+     collapses to nothing. */
+  .railkids__in > .railrow--child:first-child {
+    margin-top: 4px;
+  }
+  .railkids.is-folded {
+    grid-template-rows: 0fr;
+  }
+
+  /* Kept for the mobile index, which still uses the caption-style heading. */
+  .railgroup {
+    display: block;
+    padding: 18px 20px 6px;
     white-space: nowrap;
   }
   .railgroup__label {
+    display: block;
     font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.14em;
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--dim);
     overflow: hidden;
   }
-  .railgroup__mark {
-    display: none;
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    color: var(--dim);
-  }
-  .railgroup.is-family .railrow__n,
-  .railgroup.is-family .railgroup__label,
-  .railgroup.is-family .railgroup__mark {
+  .railgroup.is-family .railgroup__label {
     color: var(--live);
   }
-  /* The family's rows sit under a margin rule — indentation a drawing can
-     hold at any width, including collapsed. */
+  /* Children step down, not sideways: one size below the top-level rows,
+     dimmer ink at rest, under a hairline margin rule. The old version indented
+     them but kept 16/600 — they read as five more top-level pages. */
   .railrow--child {
+    padding-top: 8px;
+    padding-bottom: 8px;
     padding-left: 32px;
+  }
+  .railrow--child .railrow__label {
+    font-size: 13px;
+    font-weight: 400; /* loaded Plex cuts only — 450 would synthesize */
+    color: var(--dim);
+  }
+  .railrow--child:hover .railrow__label {
+    color: var(--ink);
+  }
+  .railrow--child.is-here .railrow__label {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .railrow--child .railrow__ico > svg {
+    width: 15px;
+    height: 15px;
   }
   .railrow--child::after {
     content: "";
@@ -792,10 +937,26 @@ video {
       opacity var(--t-move) ease calc(var(--i, 0) * 45ms),
       transform var(--t-move) var(--spring) calc(var(--i, 0) * 45ms);
   }
+  /* Register number — still used by surfaces that kept the numeric margin
+     (the admin console's nav, the docs specimens). */
   .indexrow__n {
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: 0.1em;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow.is-here .indexrow__n {
+    color: var(--live);
+  }
+  /* The margin column: a stroke icon where the register number used to be.
+     Baseline-aligned grids drop icon glyphs, so it self-centers on the first
+     row instead. */
+  .indexrow__ico {
+    display: grid;
+    place-items: center;
+    align-self: center;
+    grid-row: 1;
     color: var(--dim);
     transition: color var(--t-fast) ease;
   }
@@ -823,8 +984,18 @@ video {
     color: var(--live);
   }
   /* the register you're on carries a live tick in the margin */
-  .indexrow.is-here .indexrow__n {
+  .indexrow.is-here .indexrow__ico {
     color: var(--live);
+  }
+  /* Family children step down a size from the top-level rows — the same
+     hierarchy the rail draws, spoken at the index's scale. */
+  .indexrow--child .indexrow__label {
+    font-size: 17px;
+    font-weight: 500;
+  }
+  .indexrow--child .indexrow__ico > svg {
+    width: 16px;
+    height: 16px;
   }
   .indexrow.is-here::before {
     content: "";
@@ -943,6 +1114,22 @@ video {
   .pagehead--under-nav {
     padding-top: clamp(6px, 1.5vw, 14px);
     padding-bottom: clamp(20px, 2.5vw, 28px);
+  }
+  /* Working surfaces — an inbox, a short ledger — are glanced at, not
+     introduced. The display head spent ~290px of a 900px viewport before the
+     first row, which pushed a list of five conversations under the fold. Same
+     voice, less runway. */
+  .pagehead--tight {
+    padding: clamp(20px, 2.4vw, 28px) 0 clamp(14px, 1.8vw, 20px);
+  }
+  .pagehead--tight h1 {
+    font-size: clamp(26px, 2.6vw, 34px);
+    margin-top: 10px;
+  }
+  .pagehead--tight .sub {
+    font-size: 15px;
+    max-width: 60ch;
+    margin-top: 8px;
   }
   .pagehead h1 {
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
@@ -1748,6 +1935,24 @@ video {
     flex: none;
     width: 74px;
   }
+  /* The 74px date column is a desktop reservation, and on a narrow phone it is
+     paid for by the only thing on the row that carries meaning. Measured with
+     a real notification title ("Your offer on the KW V3 coilovers was countered
+     by the seller") inside the 720px column: 2 lines at 375px and up, but 3
+     lines at 360px and below, where the date is taking 21–23% of the row to
+     say "16 Aug". Below 375px the date stops holding a column and sits above
+     the content instead, which is the only change — it keeps its place, its
+     size and its order everywhere else. */
+  @media (max-width: 374.98px) {
+    .feed li {
+      flex-wrap: wrap;
+      gap: 2px 12px;
+    }
+    .feed time {
+      width: auto;
+      flex: 1 0 100%;
+    }
+  }
   .feed .amt {
     margin-left: auto;
     font-family: var(--mono);
@@ -1841,9 +2046,143 @@ video {
   .ledger tbody tr:not(.ledger__detail):hover > td {
     background: var(--ghost);
   }
+  /* The hover band eases in and keeps the plate's own radius at both ends —
+     a square flash cutting across the tile's rounded corners read as a
+     rendering glitch, not a hover. */
+  .ledger td {
+    transition: background var(--t-fast) ease;
+  }
+  .ledger tbody tr:not(.ledger__detail) > td:first-child {
+    border-radius: var(--r-ctl) 0 0 var(--r-ctl);
+  }
+  .ledger tbody tr:not(.ledger__detail) > td:last-child {
+    border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+  }
   /* the row you're looking at lifts by tone, never by shadow */
   .ledger tbody tr.is-open > td {
     background: var(--tile-2);
+  }
+
+  /* ---------- expandable ledger (the seller's listings) ----------
+     The whole row is the disclosure, so it says so with the cursor; the
+     working controls (Edit / Pause / Archive) appear when the row is engaged
+     — hover, keyboard focus, or open — instead of sitting in every row as
+     permanent furniture. Touch layouts keep them visible: there is no hover
+     to reveal them. */
+  .ledger--expand tbody tr:not(.ledger__detail) {
+    cursor: pointer;
+  }
+  /* The row band is the tile's content width, so without an inset the title
+     and the status chip sit hard against its rounded ends — the radius then
+     reads as a clipping artifact rather than a band. Padding on the outer
+     cells (heads too, so the columns stay aligned) gives the corners room to
+     be corners. */
+  .ledger--expand th:first-child,
+  .ledger--expand td:first-child {
+    padding-left: 14px;
+  }
+  .ledger--expand th:last-child,
+  .ledger--expand td:last-child {
+    padding-right: 14px;
+  }
+  .ledger__acts {
+    opacity: 0;
+    transition: opacity var(--t-fast) ease;
+  }
+  .ledger--expand tr:hover .ledger__acts,
+  .ledger--expand tr:focus-within .ledger__acts,
+  .ledger--expand tr.is-open .ledger__acts {
+    opacity: 1;
+  }
+  @media (hover: none), (max-width: 860px) {
+    .ledger__acts {
+      opacity: 1;
+    }
+  }
+
+  /* Sort in the column header, where every product table keeps it. The
+     active column is ink with a live arrow; the others take the arrow only
+     on hover, as an offer. */
+  .ledger__th {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .ledger__th:hover {
+    color: var(--ink);
+  }
+  .ledger__th .ledger__tharrow {
+    opacity: 0;
+    color: var(--live);
+    transition: opacity var(--t-fast) ease;
+  }
+  .ledger__th:hover .ledger__tharrow {
+    opacity: 0.5;
+  }
+  .ledger__th.is-on {
+    color: var(--ink);
+  }
+  .ledger__th.is-on .ledger__tharrow {
+    opacity: 1;
+  }
+
+  /* A status chip is a stamp — "UNDER / OFFER" across two lines read as a
+     wrapping bug, not a stamp. */
+  .ledger td .chip {
+    white-space: nowrap;
+  }
+  /* Figure columns and the status chip share one first-line box.
+     Left alone, a 17px figure line sat beside a 26px chip: the figures rode
+     ~6px high against the chip, and the second lines beneath them ("2 offers"
+     vs "Expires …") landed on different baselines. That mismatch across three
+     adjacent columns is what reads as an uneven layout. One shared height
+     puts every first line on one centre and every second line on one top. */
+  .ledger--expand .ledger__figure,
+  .ledger--expand tbody td:last-child > .chip {
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+  }
+  .ledger--expand .ledger__figure {
+    justify-content: flex-end;
+  }
+  .ledger--expand tbody td:last-child > .chip {
+    width: fit-content;
+  }
+
+  /* The second line of a figure column — "2 offers ▸", "Expires 71:39:15".
+     One class for both so they cannot drift apart again. */
+  .ledger__sub {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .ledger__offershint {
+    color: var(--live);
+  }
+
+  /* The table head disappears below 861px — this row stands in for the
+     column sort at those widths only. */
+  .ledger__sortbar {
+    display: none;
+  }
+  @media (max-width: 860px) {
+    .ledger__sortbar {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid var(--rule-mid);
+    }
   }
   /* The part column holds free text a seller typed; everything to its right is
      figures they scan down. Uncapped, one rambling title ("-STOCK, lol, just
@@ -1901,23 +2240,40 @@ video {
   .ledger__sort.is-on {
     color: var(--ink);
   }
-  /* the disclosure caret — a drafting tick that turns, not a chevron icon */
+  /* The disclosure caret — a drafting tick that turns, not a chevron icon.
+     Sized as a real control (the rail's section disclosure grammar): 28px
+     box, centred glyph, its own hover plate. At 12px of dim mono it was a
+     signpost nobody saw. */
   .ledger__toggle {
-    font-family: var(--mono);
-    font-size: 12px;
     color: var(--dim);
-    width: 18px;
-    text-align: left;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-ctl);
+    /* The chevron points left at rest, so it starts rotated to point right —
+       closed — and turns to point down when open. */
     transition:
-      transform var(--t-fast) var(--spring),
-      color var(--t-fast) ease;
-    display: inline-block;
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .ledger__toggle > svg {
+    transform: rotate(180deg);
+    transition: transform var(--t-move) var(--spring);
+  }
+  .ledger__toggle.is-on > svg {
+    transform: rotate(-90deg);
   }
   .ledger__toggle:hover {
     color: var(--ink);
+    background: var(--ghost-strong);
+  }
+  /* The row is the disclosure, so the tick brightens with the whole row —
+     it reads as "this opens" before the pointer ever reaches it. */
+  .ledger--expand tr:hover .ledger__toggle {
+    color: var(--ink);
   }
   .ledger__toggle.is-on {
-    transform: rotate(90deg);
     color: var(--live);
   }
   .ledger__detail > td {
@@ -1990,6 +2346,20 @@ video {
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--dim);
+    }
+    /* Stacked, the caret's cell became a stranded one-glyph line above the
+       title. It pins to the row's top corner instead — still the disclosure,
+       now reading as the row's own mark. */
+    .ledger--expand tbody tr {
+      position: relative;
+    }
+    .ledger--expand td:first-child {
+      position: absolute;
+      top: 6px;
+      right: 4px;
+      left: auto;
+      width: auto;
+      padding: 0;
     }
   }
 
@@ -2091,6 +2461,54 @@ video {
     }
     .sheet__actions > * {
       flex: 1 1 100%;
+    }
+  }
+
+  /* ---------- bottom sheet — the dialog plate risen from the bottom edge.
+     Compact screens get the full-width sheet; the `--inline-sm` variant
+     dissolves entirely at ≥640px so its children flow back into the
+     surrounding layout (one DOM, two compositions). ---------- */
+  .bsheet {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--scrim);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .bsheet.is-open {
+    display: flex;
+  }
+  .bsheet__panel {
+    width: min(640px, 100%);
+    max-height: 85dvh;
+    overflow-y: auto;
+    background: var(--tile);
+    border-radius: var(--r) var(--r) 0 0;
+    padding: 22px 22px calc(22px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    gap: 12px;
+    transform: translateY(24px);
+    opacity: 0;
+    transition:
+      transform var(--t-move) var(--spring),
+      opacity var(--t-move) ease;
+  }
+  .bsheet.is-open .bsheet__panel {
+    transform: none;
+    opacity: 1;
+  }
+  @starting-style {
+    .bsheet.is-open .bsheet__panel {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  @media (min-width: 640px) {
+    .bsheet--inline-sm,
+    .bsheet--inline-sm .bsheet__panel {
+      display: contents;
     }
   }
 
@@ -2225,16 +2643,45 @@ video {
     min-height: 44px;
     white-space: nowrap;
   }
+  /* The bar retires wherever its page's real controls come back into view.
+     The PDP hands its rail a column at 981px (`.pdp`), so that is where the
+     plain bar stops. The cart and checkout stack until Tailwind's `lg`
+     (1024px), so `--wide` carries the same recipe those extra 43px further —
+     without that split, 981–1023px would show a one-column cart with its
+     checkout action stranded at the bottom and no bar to reach it. */
   @media (min-width: 981px) {
-    .buybar {
+    .buybar:not(.buybar--wide) {
       display: none;
     }
   }
-  /* Keep the page's last content reachable above the fixed bar. */
+  @media (min-width: 1024px) {
+    .buybar--wide {
+      display: none;
+    }
+  }
+  /* Keep the page's last content reachable above the fixed bar. Keyed per
+     variant so each stops reserving the space exactly when its bar goes. */
   @media (max-width: 980px) {
     body:has(.buybar) {
       padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
     }
+  }
+  @media (min-width: 981px) and (max-width: 1023px) {
+    body:has(.buybar--wide) {
+      padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+  /* A cart line is a total and one action, not a price/shipping pair, so the
+     total takes the room the PDP gives its two-line price block. */
+  .buybar__total {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .buybar__total .microlabel {
+    font-size: 11px;
+    letter-spacing: 0.12em;
   }
 
   /* ---------- explore feed columns ----------
@@ -2374,6 +2821,17 @@ video {
     gap: 8px;
     flex-wrap: wrap;
     margin: 26px 0 30px;
+  }
+  /* A one-line search row. `.ctl` is `width: 100%`, which as a flex item
+     claims the whole line and wraps the submit button onto a second one —
+     two rows of chrome above a list that has three items in it. */
+  .filters--tight {
+    align-items: center;
+    margin: 16px 0 18px;
+  }
+  .filters--tight .ctl {
+    width: auto;
+    flex: 1 1 240px;
   }
 
   /* ---------- offers list row ----------
@@ -2660,6 +3118,36 @@ video {
   .tabstrip [role="tab"][aria-selected="true"] .n--live {
     color: var(--on-ink);
   }
+  /* A phone gets one navigation axis, not a two-row chip wall. The strip holds
+     its line and scrolls sideways instead — the same recipe `.filters--scroll`
+     already uses for chip rows, so the two read as one vocabulary. Wrapping
+     "The build / For sale / Activity / Gallery" onto a second row pushed the
+     panel itself below the fold, which is the content the tabs exist to reach.
+     Desktop keeps wrapping: at that width there is nothing to wrap. */
+  @media (max-width: 760px) {
+    .tabstrip {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      /* Bleed to the page gutter so the row continues off-sheet rather than
+         stopping short, and so the trailing tab can scroll fully clear of the
+         edge. `--gutter` comes from .wrap; outside one it falls back to 0. */
+      margin-left: calc(var(--gutter, 0px) * -1);
+      margin-right: calc(var(--gutter, 0px) * -1);
+      /* 2px vertical keeps focus rings off the scroll container's shear line. */
+      padding: 2px var(--gutter, 0px);
+      scroll-padding-left: var(--gutter, 0px);
+      scroll-padding-right: var(--gutter, 0px);
+    }
+    .tabstrip::-webkit-scrollbar {
+      display: none;
+    }
+    .tabstrip [role="tab"] {
+      flex: none;
+      white-space: nowrap;
+    }
+  }
+
   [role="tabpanel"]:focus-visible {
     outline: 2px solid var(--live);
     outline-offset: 3px;
@@ -2753,6 +3241,54 @@ video {
     .familynav__item {
       padding: 0 10px;
       letter-spacing: 0.08em;
+    }
+  }
+
+  /* ---------- settings section register ----------
+     Above `md` this is the sticky vertical rail beside the sheet. Below it,
+     it is a sideways-scrolling row — and it was scrolling *blind*: the row
+     stopped dead at the column edge with nothing to say another section
+     followed, because it had neither the gutter bleed nor the trailing
+     padding the chip rows use. It now runs the same recipe as
+     `.filters--scroll` and the tab strip, so an item is caught mid-cut at the
+     page edge and the overflow reads without adding an arrow or a gradient to
+     say it. Targets take the 44px floor here too — they were ~34px. */
+  .sectionnav {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-left: calc(var(--gutter, 0px) * -1);
+    margin-right: calc(var(--gutter, 0px) * -1);
+    padding: 2px var(--gutter, 0px);
+    scroll-padding-left: var(--gutter, 0px);
+    scroll-padding-right: var(--gutter, 0px);
+  }
+  .sectionnav::-webkit-scrollbar {
+    display: none;
+  }
+  .sectionnav > * {
+    flex: none;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* The rail. Desktop keeps the compact register it already had — the touch
+     floor is a phone concern and raising it here would only stretch the rail. */
+  @media (min-width: 768px) {
+    .sectionnav {
+      position: sticky;
+      top: 80px;
+      flex-direction: column;
+      overflow-x: visible;
+      margin: 0;
+      padding: 0;
+      scroll-padding-left: 0;
+      scroll-padding-right: 0;
+    }
+    .sectionnav > * {
+      min-height: 0;
+      display: block;
     }
   }
 
@@ -3112,6 +3648,268 @@ video {
     opacity: 0.5;
   }
 
+  /* ---------- mods editor line ----------
+     Desktop is a ledger row, and that is the right instrument for it: group,
+     brand, product, part number, category and the release/remove actions read
+     across one line, where a control's COLUMN POSITION is its label. That is
+     why the field labels are screen-reader-only — sighted users read the
+     column, not a caption.
+
+     A phone has no columns. The row wrapped rather than overflowed, so nothing
+     was clipped, but the spatial contract that carried the meaning was gone:
+     three selects and two text fields stacked with nothing saying which was
+     which. Under `sm` the line becomes a RECORD instead — sheet index and
+     group in a ruled header, every field's label unhidden (the same element,
+     not a second copy, so there is one set of controls and one set of state),
+     and the release/remove actions moved onto their own footer rule so
+     "edit this line" and "dispose of this line" stop reading as one sequence.
+
+     `display: contents` is what makes that possible without duplicating any
+     markup: the header and footer wrappers vanish on desktop and their
+     children become flex items of the row directly. */
+  .modrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .modrow__head,
+  .modrow__foot {
+    display: contents;
+  }
+  /* The record index and the "Remove" word are phone-only furniture. */
+  .modrow__n,
+  .modrow__rmtext {
+    display: none;
+  }
+  /* Field captions: hidden on desktop exactly as `sr-only` was, because the
+     column says it instead. Same rule, kept local so the phone override below
+     has something to switch off. */
+  .modrow__lab {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .modrow__rm {
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .modrow__rm:hover {
+    color: var(--live);
+  }
+
+  /* Matches Tailwind's `sm` boundary exactly (`sm:` is min-width 640px), so
+     the markup's `w-full sm:w-[130px]` widths and these rules change over on
+     the same pixel rather than fighting for one width in between. */
+  @media (max-width: 639.98px) {
+    .modrow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+      padding: 16px 0;
+      border-top: 1px solid var(--rule-mid);
+    }
+    .modrow:first-child {
+      border-top: 0;
+      padding-top: 4px;
+    }
+    /* "01  [ Suspension ▾ ]" — the sheet index beside the group the line files
+       under, which is the record's own heading. The group stays a live select:
+       it is a heading that can be corrected. */
+    .modrow__head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .modrow__n {
+      display: block;
+      flex: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .modrow__head .ctl {
+      flex: 1 1 auto;
+    }
+    /* The group's own caption stays hidden — the heading already reads as the
+       group, and a "GROUP" label above it would caption the obvious. */
+    .modrow__head .modrow__lab {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    .modrow__lab {
+      position: static;
+      width: auto;
+      height: auto;
+      margin: 8px 0 0;
+      overflow: visible;
+      clip-path: none;
+      /* The `.microlabel` voice one step down: it captions a field, not a
+         section, so it must not compete with the record heading above it. */
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    /* `.ctl` caps itself at 320px for the desktop sheet. In a stacked record
+       that cap lands mid-column on a large phone — four fields stopping at
+       320px beside a `max-w-none` Product running to 356px, which reads as a
+       ragged edge rather than a form. The record owns its own width. */
+    .modrow .ctl {
+      max-width: none;
+    }
+    .modrow__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--rule-soft);
+    }
+    /* The disposal actions get real targets once they are the only things on
+       their line — on the desktop row they are inline text among controls. */
+    .modrow__foot > *,
+    .modrow__foot .relbtn,
+    .modrow__rm {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .modrow__rm {
+      gap: 8px;
+    }
+    .modrow__rmtext {
+      display: inline;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+  }
+
+  /* ---------- compact order summary ----------
+     The phone stand-in for checkout's desktop aside. A native `<details>`, so
+     it works with no JS, is a real disclosure to assistive tech, and costs
+     nothing when closed. Closed it states the one fact that must never leave
+     the screen — the total — plus how many parts it covers; open it gives the
+     full contents without the customer leaving the checkout column. */
+  .ordersum__line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    cursor: pointer;
+    /* Both spellings: the marker is furniture from another design system. */
+    list-style: none;
+  }
+  .ordersum__line::-webkit-details-marker {
+    display: none;
+  }
+  .ordersum__total {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+    display: block;
+    margin-top: 2px;
+  }
+  .ordersum__meta {
+    flex: none;
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  /* The disclosure's own affordance, in the jumplink voice the sheet already
+     uses for "there is more this way". */
+  .ordersum__toggle {
+    display: block;
+    margin-top: 4px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--dimline);
+    padding-bottom: 1px;
+  }
+  .ordersum__toggle::after {
+    content: " ▾";
+    opacity: 0.5;
+  }
+  .ordersum[open] .ordersum__toggle::after {
+    content: " ▴";
+  }
+  /* The label has to be true in both states, so the disclosure carries both
+     and shows the one that applies — "View order details" still reading as
+     the invitation while the list is already open would be a lie. */
+  .ordersum__less,
+  .ordersum[open] .ordersum__more {
+    display: none;
+  }
+  .ordersum[open] .ordersum__less {
+    display: inline;
+  }
+  .ordersum__body {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  /* ---------- commit row ----------
+     The bottom of an editing surface: an optional auxiliary action on the
+     left, then status, then the one button that files the work. On a phone
+     "PREFERENCES SAVED" beside "[ SAVE PREFERENCES ]" is two pieces of 12px
+     tracked-out mono fighting over ~340px, so both get hard to read and the
+     button gets hard to hit. Under 520px they stack and the commit action
+     takes the full width — the same width at which `.sheet__actions` already
+     gives up its horizontal arrangement, so the two agree. */
+  .saverow {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  /* Anchors the left while status + commit stay together on the right. */
+  .saverow__aux {
+    margin-right: auto;
+  }
+  @media (max-width: 520px) {
+    .saverow {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .saverow__aux {
+      margin-right: 0;
+      align-self: flex-start;
+    }
+    /* Status reads as a line of its own rather than a chip wedged beside the
+       button; the button becomes the full-width commit it deserves to be. */
+    .saverow__status {
+      align-self: flex-start;
+    }
+    .saverow .btn {
+      width: 100%;
+      min-height: 44px;
+    }
+  }
+
   /* sticky save bar */
   .savebar {
     position: sticky;
@@ -3366,6 +4164,21 @@ video {
     color: var(--dim);
     line-height: 1.5;
   }
+  /* Label row with a live character counter on the right — only on fields
+     with a real server-enforced limit ("12 of 160"). */
+  .field__labelrow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .field__count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
   /* Renders on presence: if the markup emits an error, it shows. This used to
      default to display:none and be revealed only by .field.is-invalid, which
      meant every server-action error site had to force it open with an inline
@@ -3504,6 +4317,40 @@ video {
     content: "";
     position: absolute;
     inset: -10px;
+  }
+  /* The overlay control bars on an editable photo tile. Their gap and vertical
+     offset live here rather than in utilities so the coarse-pointer rule below
+     has something to raise — a `gap-1` utility would outrank it. */
+  .thumb__ctl {
+    gap: 4px;
+  }
+  .thumb__ctl--second {
+    top: 32px;
+  }
+  /* Touch pointers get a bigger cell and real separation between controls.
+     The 84px cell is a mouse instrument: at 375px it packs three columns of
+     ~96px, and six 44px hit areas over a 96px tile cannot help but collide —
+     measured at twelve overlapping pairs before this. The badges stay 24px;
+     the icons were never the problem. What changes is the room around them, so
+     `.thumb__x`'s existing ±10px hit extender has somewhere to go without
+     meeting its neighbour: 20px between badges is the least that keeps two
+     44px targets apart, and the second bar drops to clear the first bar's hit
+     area (4px top + 24px badge + 20px) rather than merely its badge. */
+  @media (pointer: coarse) {
+    .thumbs--edit {
+      /* 140px, not 148: the extra 8px is what keeps two columns at 375px
+         (2×140 + 12 = 292 into a 303px content box) instead of collapsing to
+         one enormous tile per photo. A 145px cell still seats the left pair
+         and the star with 20px between them. */
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .thumbs--edit .thumb__ctl {
+      gap: 20px;
+    }
+    .thumbs--edit .thumb__ctl--second {
+      top: 48px;
+    }
   }
   .thumb__tag {
     position: absolute;
@@ -3762,6 +4609,23 @@ video {
     flex-wrap: wrap;
     align-items: center;
   }
+  /* Measured, not guessed. The row survives on one line all the way down to
+     320px — it never overflowed — but the field it leaves behind shrinks with
+     the viewport: 281px at 430, 229px at 375, 214px at 360, and 174px at 320,
+     which is about ten characters of 16px mono to write a message in. 360px is
+     the last width where the inline arrangement still pays for itself, so
+     below it the field takes the full column and Send becomes a full-width
+     action rather than a 106px chip crowding it. */
+  @media (max-width: 359.98px) {
+    .composer__row > .ctl,
+    .composer__row > .btn {
+      flex: 1 0 100%;
+      width: 100%;
+    }
+    .composer__row > .btn {
+      min-height: 44px;
+    }
+  }
 
   /* ---------- email / transactional preview ---------- */
   .mail {
@@ -3936,6 +4800,28 @@ video {
     max-width: 420px;
     margin: 0 auto;
     padding: clamp(24px, 6vh, 60px) 0;
+    position: relative;
+    z-index: 1;
+  }
+  /* Live-marketplace backdrop behind the auth card (read.cv gate pattern:
+     the product itself is the pitch behind the dialog). Inert and
+     aria-hidden in markup; the scrim is the same token the sheets use. */
+  .authstage {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .authstage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--scrim);
+  }
+  .authcard {
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: clamp(20px, 4vw, 28px);
   }
   .authswap {
     display: flex;
@@ -4179,7 +5065,9 @@ video {
     margin-left: auto;
   }
 
-  /* Collapsed: the labels go, the numbers stay. */
+  /* Collapsed: the labels go, the icons stay — a glyph rail that still says
+     what each row is (with the title tooltip naming it), where the old bare
+     register numbers said nothing. */
   .shell[data-rail="closed"] .railrow,
   .shell[data-rail="closed"] .railtoggle {
     grid-template-columns: minmax(0, 1fr);
@@ -4190,20 +5078,16 @@ video {
   .shell[data-rail="closed"] .railrow__label {
     display: none;
   }
-  /* Collapsed the rail is numbers only, so the family heading swaps its word
-     for a three-letter mark and the children keep their margin rule — four
-     unexplained digits would say nothing about what they belong to. */
-  .shell[data-rail="closed"] .railgroup {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    gap: 2px;
-    padding: 14px 0 4px;
-  }
-  .shell[data-rail="closed"] .railgroup__label {
+  /* At 68px there are no labels for the fold to quiet, so the disclosure
+     disappears and the whole family always shows as icons. */
+  .shell[data-rail="closed"] .railfam__toggle {
     display: none;
   }
-  .shell[data-rail="closed"] .railgroup__mark {
-    display: block;
+  .shell[data-rail="closed"] .railfam__link {
+    padding-right: 0;
+  }
+  .shell[data-rail="closed"] .railkids.is-folded {
+    grid-template-rows: 1fr;
   }
   .shell[data-rail="closed"] .railrow--child {
     padding-left: 0;
@@ -4211,7 +5095,7 @@ video {
   .shell[data-rail="closed"] .railrow--child::after {
     left: 12px;
     /* Stronger than the expanded rail's hairline: at 68px the rule is the
-       only thing left saying these four numbers belong to MKT. */
+       only thing left saying these four icons belong to Marketplace. */
     background: var(--rule-mid);
   }
   /* Collapsed the head stacks: mark over the toggle, both centred. */
@@ -4373,11 +5257,16 @@ video {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .railrow:hover .railrow__ico {
+    transform: none;
+    transition: none;
+  }
   .pagehead h1 .live-word::after {
     transform: none;
     transition: none;
   }
-  .sheet {
+  .sheet,
+  .bsheet__panel {
     transition: none;
   }
   .rv,

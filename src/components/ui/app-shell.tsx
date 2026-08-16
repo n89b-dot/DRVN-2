@@ -7,30 +7,48 @@ import { useState, type ReactNode } from "react";
 import { cx } from "@/lib/format";
 import { Icon } from "./icons";
 import { LivesheetBar } from "./livesheet-bar";
-import { FAMILY_HREFS, isMarketplaceFamily, matchesFamily, PRIMARY_NAV } from "./nav-routes";
+import {
+  FAMILY_HREFS,
+  isMarketplaceFamily,
+  matchesFamily,
+  PRIMARY_NAV,
+  type NavEntry,
+} from "./nav-routes";
 
 /**
  * The register rail — the drawing's left margin. Signed-in desktop only;
- * below 1081px the index (in the bar) carries navigation instead.
- * Collapsed it keeps the register numbers, which is how a drawing indexes
- * itself when there's no room for words.
+ * below 1081px the index (in the bar) carries navigation instead. Collapsed
+ * it keeps the stroke icons, which is how the margin indexes itself when
+ * there's no room for words.
  *
- * Marketplace is a *section heading*, not a link and not a disclosure: its
- * four children (Marketplace, Listings, Offers, Orders) sit indented beneath
- * it and each is one click from anywhere, so nobody has to pass through
- * Marketplace to reach Orders.
+ * Marketplace is a collapsible *section*: the parent row is a real link to
+ * /marketplace, styled like every other top-level page, with a disclosure
+ * beside it for the three management children (Listings, Offers, Orders).
+ * Open by default and remembered per browser, so the disclosure is a way to
+ * quiet the rail — never a gate a child hides behind: /listings, /offers and
+ * /orders stay one click away via the family subnav on every family surface,
+ * and reopening is one tap here.
  */
 function AppRail({
   open,
   onToggle,
+  initialMktOpen = true,
   offersCount = 0,
 }: {
   open: boolean;
   onToggle: () => void;
+  /** Whether the Marketplace section starts expanded (cookie-backed). */
+  initialMktOpen?: boolean;
   /** Offers waiting on this user — shown next to the Offers row so the rail
    *  keeps saying what the old inline /orders microlabel used to. */
   offersCount?: number;
 }) {
+  const [mktOpen, setMktOpen] = useState(initialMktOpen);
+  const toggleMkt = () => {
+    const next = !mktOpen;
+    setMktOpen(next);
+    document.cookie = `ls-mkt=${next ? "open" : "closed"}; path=/; max-age=31536000; SameSite=Lax`;
+  };
   const pathname = usePathname();
   const isActive = (href: string) => {
     // Family members overlap on prefix (/listings vs /listings/<id>), so they
@@ -40,10 +58,6 @@ function AppRail({
     return pathname === href || pathname.startsWith(`${href}/`);
   };
   const familyHere = isMarketplaceFamily(pathname);
-
-  // Register numbers run continuously down the rail, headings included — the
-  // heading is part of the index, not a caption floating beside it.
-  let register = 0;
 
   return (
     <aside className="rail" aria-label="Sections">
@@ -69,46 +83,127 @@ function AppRail({
       </div>
 
       <nav className="rail__rows">
+        {/* Stroke icons carry the margin (they survive the collapsed rail,
+            which bare register numbers never did); the label carries the row;
+            weight belongs to the row you're on, not to every row at once. */}
         {PRIMARY_NAV.map((entry) => {
-          const n = String(++register).padStart(2, "0");
-
+          // The group caption and its /marketplace child fold into one parent
+          // row — a real link at top-level weight, with the disclosure toggle
+          // beside it and the three management children in one container.
           if (entry.kind === "group") {
+            const parentHere = matchesFamily(pathname, "marketplace");
+            // Folding the section must not hide attention: the Offers count
+            // rides on the parent while the children are away.
+            const held = !mktOpen ? offersCount : 0;
+            const kids = PRIMARY_NAV.filter(
+              (e): e is Extract<NavEntry, { kind: "route" }> =>
+                e.kind === "route" && Boolean(e.child) && e.href !== "/marketplace"
+            );
             return (
-              <p
-                key={`group-${entry.label}`}
-                className={cx("railgroup", familyHere && "is-family")}
-                title={open ? undefined : entry.label}
-              >
-                <span className="railrow__n">{n}</span>
-                <span className="railgroup__label">{entry.label}</span>
-                {/* Collapsed, the rail is numbers only — this keeps the family
-                    legible instead of leaving four unexplained digits. */}
-                <span className="railgroup__mark" aria-hidden="true">
-                  {entry.short}
-                </span>
-              </p>
+              <div key="family-marketplace" className="railfamily">
+                <div className="railfam">
+                  <Link
+                    href="/marketplace"
+                    className={cx(
+                      "railrow railfam__link",
+                      parentHere && "is-here",
+                      !mktOpen && familyHere && !parentHere && "is-holding"
+                    )}
+                    aria-current={parentHere ? "page" : undefined}
+                    title={open ? undefined : "Marketplace"}
+                  >
+                    <span className="railrow__ico" aria-hidden="true">
+                      <Icon name="market" className="h-[17px] w-[17px]" />
+                      {held > 0 && <span className="railrow__dot" />}
+                    </span>
+                    <span className="railrow__label flex items-center justify-between gap-2">
+                      Marketplace
+                      {held > 0 && (
+                        <span className="chip chip--live shrink-0" aria-hidden="true">
+                          {held > 9 ? "9+" : held}
+                        </span>
+                      )}
+                    </span>
+                  </Link>
+                  <button
+                    type="button"
+                    className={cx("railfam__toggle", mktOpen && "is-open")}
+                    onClick={toggleMkt}
+                    aria-expanded={mktOpen}
+                    aria-controls="rail-marketplace-kids"
+                    aria-label={
+                      mktOpen
+                        ? "Collapse the Marketplace section"
+                        : "Expand the Marketplace section"
+                    }
+                  >
+                    <Icon name="back" className="h-[13px] w-[13px]" />
+                  </button>
+                </div>
+
+                {/* Folded children stay mounted: the 68px icon rail has no
+                    labels to declutter, so it always shows the whole family
+                    (CSS overrides the fold below 1081px/collapsed). */}
+                <div
+                  id="rail-marketplace-kids"
+                  className={cx("railkids", !mktOpen && "is-folded")}
+                >
+                  <div className="railkids__in">
+                  {kids.map((kid) => {
+                    const here = isActive(kid.href);
+                    const badge = kid.href === "/offers" ? offersCount : 0;
+                    return (
+                      <Link
+                        key={kid.href}
+                        href={kid.href}
+                        className={cx("railrow railrow--child", here && "is-here")}
+                        aria-current={here ? "page" : undefined}
+                        title={
+                          open ? undefined : badge > 0 ? `${kid.label} (${badge})` : kid.label
+                        }
+                        aria-label={
+                          badge > 0 ? `${kid.label}, ${badge} needing your attention` : undefined
+                        }
+                        tabIndex={mktOpen ? undefined : -1}
+                      >
+                        <span className="railrow__ico" aria-hidden="true">
+                          <Icon name={kid.icon} className="h-[17px] w-[17px]" />
+                          {badge > 0 && <span className="railrow__dot" />}
+                        </span>
+                        <span className="railrow__label flex items-center justify-between gap-2">
+                          {kid.label}
+                          {badge > 0 && (
+                            <span className="chip chip--live shrink-0" aria-hidden="true">
+                              {badge > 9 ? "9+" : badge}
+                            </span>
+                          )}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                  </div>
+                </div>
+              </div>
             );
           }
 
+          // Family children render inside the disclosure above.
+          if (entry.child) return null;
+
           const here = isActive(entry.href);
-          const badge = entry.href === "/offers" ? offersCount : 0;
           return (
             <Link
               key={entry.href}
               href={entry.href}
-              className={cx("railrow", entry.child && "railrow--child", here && "is-here")}
+              className={cx("railrow", here && "is-here")}
               aria-current={here ? "page" : undefined}
-              title={open ? undefined : badge > 0 ? `${entry.label} (${badge})` : entry.label}
-              aria-label={badge > 0 ? `${entry.label}, ${badge} needing your attention` : undefined}
+              title={open ? undefined : entry.label}
             >
-              <span className="railrow__n">{n}</span>
+              <span className="railrow__ico" aria-hidden="true">
+                <Icon name={entry.icon} className="h-[17px] w-[17px]" />
+              </span>
               <span className="railrow__label flex items-center justify-between gap-2">
                 {entry.label}
-                {badge > 0 && (
-                  <span className="chip chip--live shrink-0" aria-hidden="true">
-                    {badge > 9 ? "9+" : badge}
-                  </span>
-                )}
               </span>
             </Link>
           );
@@ -131,6 +226,7 @@ export function AppShell({
   signedIn,
   initialNight,
   initialRailOpen,
+  initialMktOpen = true,
   cartCount = 0,
   unreadCount = 0,
   offersCount = 0,
@@ -139,6 +235,8 @@ export function AppShell({
   signedIn: boolean;
   initialNight: boolean;
   initialRailOpen: boolean;
+  /** Whether the rail's Marketplace section starts expanded (cookie-backed). */
+  initialMktOpen?: boolean;
   cartCount?: number;
   unreadCount?: number;
   /** Offers waiting on this user — badges the Offers row in the rail and index. */
@@ -163,7 +261,14 @@ export function AppShell({
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      {signedIn && <AppRail open={railOpen} onToggle={toggleRail} offersCount={offersCount} />}
+      {signedIn && (
+        <AppRail
+          open={railOpen}
+          onToggle={toggleRail}
+          initialMktOpen={initialMktOpen}
+          offersCount={offersCount}
+        />
+      )}
       <div className="shell__body">
         <LivesheetBar
           initialNight={initialNight}

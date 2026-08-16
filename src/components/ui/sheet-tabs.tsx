@@ -64,7 +64,14 @@ export function SheetTabs({
       url.hash = "";
       window.history.replaceState(null, "", url);
 
-      if (focus) tabRefs.current[key]?.focus();
+      const el = tabRefs.current[key];
+      if (focus) el?.focus();
+      // On a phone the strip is one scrolling line, so arrowing past the
+      // visible edge would otherwise select a tab the user can't see. `nearest`
+      // is a no-op when the tab is already in view — which is every click, and
+      // every width wide enough not to scroll. Left at the default instant
+      // behaviour deliberately: a motion-reduced user still needs the tab.
+      el?.scrollIntoView({ block: "nearest", inline: "nearest" });
     },
     [fallback, paramName]
   );

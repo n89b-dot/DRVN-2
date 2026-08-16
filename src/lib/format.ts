@@ -22,6 +22,16 @@ export function cx(...classes: (false | null | string | undefined)[]): string {
   return classes.filter(Boolean).join(" ");
 }
 
+/** Monogram initials for the Avatar plate — first letters of up to two words. */
+export function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 /**
  * Human label for a person, never a bare UUID: display name, then @username,
  * then a "User a1b2c3d4" stub as the last resort for profiles with neither.

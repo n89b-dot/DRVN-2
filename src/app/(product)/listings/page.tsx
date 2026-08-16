@@ -250,17 +250,17 @@ export default async function SellerListingsPage({
       {/* The seller's working state, in four numbers. Each one is a filter or
           a queue — nothing here is a metric for its own sake. */}
       <div className="tally" role="group" aria-label="Listing summary">
-        <Link href={href({ register: "live" })} className="tally__cell">
+        <Link href={href({ register: "live" })} scroll={false} className="tally__cell">
           <span className="tally__n">{tally("live")}</span>
           <span className="tally__label">Live</span>
         </Link>
-        <Link href={href({ register: "offer" })} className="tally__cell">
+        <Link href={href({ register: "offer" })} scroll={false} className="tally__cell">
           <span className={`tally__n ${tally("offer") > 0 ? "tally__n--live" : ""}`}>
             {tally("offer")}
           </span>
           <span className="tally__label">Under offer</span>
         </Link>
-        <Link href={href({ register: "draft" })} className="tally__cell">
+        <Link href={href({ register: "draft" })} scroll={false} className="tally__cell">
           <span className="tally__n">{tally("draft")}</span>
           <span className="tally__label">Drafts</span>
         </Link>
@@ -291,6 +291,7 @@ export default async function SellerListingsPage({
           <Link
             key={r.key}
             href={href({ register: r.key })}
+            scroll={false}
             className={`fbtn ${r.key === register ? "is-on" : ""}`}
             aria-current={r.key === register ? "page" : undefined}
           >
@@ -309,6 +310,7 @@ export default async function SellerListingsPage({
           <Link
             key={r.key}
             href={href({ register: r.key })}
+            scroll={false}
             className={`fbtn ${r.key === register ? "is-on" : ""}`}
             aria-current={r.key === register ? "page" : undefined}
           >
@@ -318,7 +320,7 @@ export default async function SellerListingsPage({
       </div>
 
       {rows.length === 0 ? (
-        <Rv className="undrawn undrawn--hero">
+        <div className="undrawn undrawn--hero">
           <span className="undrawn__mark" aria-hidden="true">
             ✎
           </span>
@@ -331,36 +333,36 @@ export default async function SellerListingsPage({
           <Link href={register === "all" ? "/sell" : "/listings"} className="btn btn--live">
             {register === "all" ? "List a part" : "Show all listings"}
           </Link>
-        </Rv>
+        </div>
       ) : (
         <section className="deck">
-          <Rv className="tile">
+          {/* Plain tile, deliberately outside the reveal system: sorting and
+              filtering re-render this region on every click, and replaying an
+              entrance spring each time read as the page dropping and
+              re-settling. Working surfaces hold still. */}
+          <div className="tile">
             <div className="tile__head">
               <span className="microlabel microlabel--ink">
-                Your listings · click a row for its offers
+                {total === 1 ? "1 listing" : `${total} listings`}
                 {total > PAGE_SIZE && (
                   <>
                     {" · "}
-                    {pageFrom + 1}–{pageFrom + rows.length} of {total}
+                    showing {pageFrom + 1}–{pageFrom + rows.length}
                   </>
                 )}
               </span>
-              <span className="flex flex-wrap items-baseline gap-3">
-                <span className="microlabel">Sort</span>
-                {SORTS.map((s) => (
-                  <Link
-                    key={s.key}
-                    href={href({ sort: s.key })}
-                    className={`jumplink ${s.key === sort ? "!border-live !text-live" : ""}`}
-                    aria-current={s.key === sort ? "true" : undefined}
-                  >
-                    {s.label}
-                    {s.key === sort ? " ↓" : ""}
-                  </Link>
-                ))}
-              </span>
             </div>
-            <ListingsLedger rows={rows} />
+            {/* Sort lives in the column headers, like every product table
+                that works — not in a second row repeating the same words. */}
+            <ListingsLedger
+              rows={rows}
+              sorts={SORTS.map((s) => ({
+                key: s.key,
+                label: s.label,
+                href: href({ sort: s.key }),
+                active: s.key === sort,
+              }))}
+            />
 
             {(clampedPage > 1 || hasMore) && (
               <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
@@ -381,7 +383,7 @@ export default async function SellerListingsPage({
                 )}
               </nav>
             )}
-          </Rv>
+          </div>
         </section>
       )}
 

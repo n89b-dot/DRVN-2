@@ -2,8 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, NarrowColumn } from "@/components/ui";
+import { FilterGroup, FilterLink, Foot, NarrowColumn, Pagination } from "@/components/ui";
 import { prefEnabled, prefKeyForKind } from "@/lib/notification-prefs";
+import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
 
 import { MarkAllRead } from "./mark-all-read";
@@ -30,12 +31,7 @@ function withParams(
   params: Record<string, string | undefined>,
   overrides: Record<string, string | undefined>
 ) {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...params, ...overrides })) {
-    if (value) search.set(key, value);
-  }
-  const query = search.toString();
-  return query ? `/notifications?${query}` : "/notifications";
+  return buildParams("/notifications", params, overrides);
 }
 
 function Section({
@@ -202,47 +198,48 @@ export default async function NotificationsPage({
         )}
       </Rv>
 
-      <div className="filters" role="group" aria-label="Filter notifications">
-        <span className="microlabel filters__label">Show</span>
-        <Link
+      {/* Two independent filter axes, not one five-way choice. Run together in
+          a single wrapping row — separated only by a middot — a phone breaks
+          them at whatever width runs out, and "Unread" can end up sitting
+          beside "Marketplace" as though picking one replaced the other. They
+          combine (`?filter=unread&section=marketplace`), so they are drawn as
+          two labelled groups: the primary register on top, the quieter
+          refinement beneath, using the `filters--stack` / `filters--sub` pair
+          the system already has for exactly this relationship. */}
+      <FilterGroup label="Read state" ariaLabel="Filter by read state" stack>
+        <FilterLink
           href={withParams(params, { filter: undefined, page: undefined })}
-          className={`fbtn ${!unreadOnly ? "is-on" : ""}`}
-          aria-current={!unreadOnly ? "true" : undefined}
+          selected={!unreadOnly}
         >
           All
-        </Link>
-        <Link
+        </FilterLink>
+        <FilterLink
           href={withParams(params, { filter: "unread", page: undefined })}
-          className={`fbtn ${unreadOnly ? "is-on" : ""}`}
-          aria-current={unreadOnly ? "true" : undefined}
+          selected={unreadOnly}
         >
           Unread
-        </Link>
-        <span className="mx-1 text-dim" aria-hidden="true">
-          ·
-        </span>
-        <Link
+        </FilterLink>
+      </FilterGroup>
+      <FilterGroup label="Type" ariaLabel="Filter by type" sub scroll>
+        <FilterLink
           href={withParams(params, { section: undefined, page: undefined })}
-          className={`fbtn ${!section ? "is-on" : ""}`}
-          aria-current={!section ? "true" : undefined}
+          selected={!section}
         >
           Both
-        </Link>
-        <Link
+        </FilterLink>
+        <FilterLink
           href={withParams(params, { section: "engagement", page: undefined })}
-          className={`fbtn ${section === "engagement" ? "is-on" : ""}`}
-          aria-current={section === "engagement" ? "true" : undefined}
+          selected={section === "engagement"}
         >
           Your builds
-        </Link>
-        <Link
+        </FilterLink>
+        <FilterLink
           href={withParams(params, { section: "marketplace", page: undefined })}
-          className={`fbtn ${section === "marketplace" ? "is-on" : ""}`}
-          aria-current={section === "marketplace" ? "true" : undefined}
+          selected={section === "marketplace"}
         >
           Marketplace
-        </Link>
-      </div>
+        </FilterLink>
+      </FilterGroup>
 
       <div className="deck">
         {(!section || section === "engagement") && (
@@ -269,33 +266,11 @@ export default async function NotificationsPage({
         )}
       </div>
 
-      {(page > 1 || hasMore) && (
-        <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
-          {page > 1 ? (
-            <Link
-              href={withParams(params, { page: page - 1 === 1 ? undefined : String(page - 1) })}
-              className="btn btn--ghost"
-              rel="prev"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="microlabel">Page {page}</span>
-          {hasMore ? (
-            <Link
-              href={withParams(params, { page: String(page + 1) })}
-              className="btn btn--ghost"
-              rel="next"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pagination
+        page={page}
+        hasMore={hasMore}
+        hrefFor={(p) => withParams(params, { page: p === 1 ? undefined : String(p) })}
+      />
 
       <Foot
         left="DRVN — notifications"

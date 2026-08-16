@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { mapModCategoryToListing } from "@/lib/mods/category-map";
+import { sellerCanPublish } from "@/lib/payments/connect";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
@@ -27,9 +28,13 @@ export default async function SellPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: cars, error }, makes] = await Promise.all([
+  const [{ data: cars, error }, makes, canPublish] = await Promise.all([
     supabase.from("cars").select("id, name").eq("owner_id", user.id).order("created_at"),
     getVehicleMakes(createAdminClient()),
+    // Fail open for the UI gate only: a payments misconfig must not 500 the
+    // sell page (resolvePaymentsMode throws by design). The server action
+    // re-checks on publish either way.
+    sellerCanPublish(user.id).catch(() => true),
   ]);
 
   if (error) reportError("[sell] failed to load cars", error);
@@ -106,6 +111,7 @@ export default async function SellPage({
         makes={makes.map((m) => m.name)}
         userId={user.id}
         prefill={prefill}
+        canPublish={canPublish}
       />
 
       <div className="mt-8">

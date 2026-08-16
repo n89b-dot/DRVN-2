@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useState } from "react";
 
 import { Countdown } from "@/components/livesheet";
-import { Media } from "@/components/ui";
+import { Icon, Media } from "@/components/ui";
 import type { ListingStatus } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 import { formatPrice } from "@/lib/payments/fee";
@@ -39,6 +39,9 @@ export type LedgerRow = {
   unansweredQuestions: number;
 };
 
+/** A sortable column, resolved to a URL by the page (URL-addressable sort). */
+export type LedgerSort = { key: string; label: string; href: string; active: boolean };
+
 function StatusCell({ row }: { row: LedgerRow }) {
   const underOffer = row.topOfferCents !== null;
   const chip =
@@ -58,8 +61,8 @@ function StatusCell({ row }: { row: LedgerRow }) {
       {/* C2 — the offer window is the thing that forces a decision, so it
           rides in the row rather than making the seller open the order. */}
       {row.expiresAt && (
-        <span className="mt-1 block font-mono text-micro uppercase tracking-[0.1em] text-live">
-          Offer expires <Countdown expiresAt={row.expiresAt} className="cd" />
+        <span className="ledger__sub text-live">
+          Expires <Countdown expiresAt={row.expiresAt} className="cd" />
         </span>
       )}
     </>
@@ -72,11 +75,8 @@ const PREVIEW_LIMIT = 2;
 /**
  * The offer *situation* on a listing — not the offer product.
  *
- * This row used to render the full negotiation history inline: every offer
- * ever made, its counter, its clock, and a stale "Answer offers in Orders"
- * link, which meant a seller could read offers in three places and act on
- * them in none of them. Offers have one canonical home (/offers), so the
- * ledger says what needs deciding and hands over.
+ * The ledger says what needs deciding and hands over to /offers, which is the
+ * negotiation's only home.
  */
 function OfferSummary({ row }: { row: LedgerRow }) {
   const live = row.offers.filter((o) => o.status === "open" || o.status === "countered");
@@ -144,140 +144,247 @@ function OfferSummary({ row }: { row: LedgerRow }) {
   );
 }
 
+/** Sortable column header — the sort lives where the number lives. */
+function SortableTh({
+  sort,
+  className,
+}: {
+  sort: LedgerSort;
+  className?: string;
+}) {
+  return (
+    <th scope="col" className={className} aria-sort={sort.active ? "descending" : undefined}>
+      <Link
+        href={sort.href}
+        scroll={false}
+        className={cx("ledger__th", sort.active && "is-on")}
+        aria-current={sort.active ? "true" : undefined}
+      >
+        {sort.label}
+        <span className="ledger__tharrow" aria-hidden="true">
+          ↓
+        </span>
+      </Link>
+    </th>
+  );
+}
+
 /**
  * The seller's ledger (Werkbank C1). A part list is the one genuinely tabular
  * surface in the app — a seller scans down views, watchers, asking and top
- * offer to decide what needs attention. Rows expand in place to the offer
- * situation rather than navigating away and losing the scan position; the
- * negotiation itself lives on /offers, which is its only home.
+ * offer to decide what needs attention.
+ *
+ * Reference grammar (Shopify / Square / Fresha product tables):
+ *   · one register per row — the title is a handle, actions appear on
+ *     hover/focus rather than sitting in every row as permanent furniture;
+ *   · the whole row is the disclosure — clicking anywhere that isn't a link
+ *     opens the offer situation in place, so the caret is a signpost, not a
+ *     14px target carrying the entire interaction;
+ *   · sort lives in the column headers, where every product table keeps it,
+ *     instead of a second row of the same words above the table.
  */
-export function ListingsLedger({ rows }: { rows: LedgerRow[] }) {
+export function ListingsLedger({
+  rows,
+  sorts = [],
+}: {
+  rows: LedgerRow[];
+  /** Sortable columns by key — views/watch/asking/top_offer. */
+  sorts?: LedgerSort[];
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const sortFor = (key: string) => sorts.find((s) => s.key === key);
+  const th = (key: string, fallback: string, className?: string) => {
+    const sort = sortFor(key);
+    return sort ? (
+      <SortableTh sort={sort} className={className} />
+    ) : (
+      <th scope="col" className={className}>
+        {fallback}
+      </th>
+    );
+  };
+
+  // Row click = disclosure. Links and buttons inside the row keep their own
+  // meaning; the caret button remains the keyboard/AT toggle.
+  const onRowClick = (event: React.MouseEvent, id: string) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, input")) return;
+    setOpenId(openId === id ? null : id);
+  };
+
   return (
-    <table className="ledger">
-      <thead>
-        <tr>
-          <th scope="col">
-            <span className="sr-only">Expand</span>
-          </th>
-          <th scope="col" className="ledger__part">
-            Part
-          </th>
-          <th scope="col">Source car</th>
-          <th scope="col" className="text-right">
-            Views
-          </th>
-          <th scope="col" className="text-right">
-            Watch
-          </th>
-          <th scope="col" className="text-right">
-            Asking
-          </th>
-          <th scope="col" className="text-right">
-            Top offer
-          </th>
-          <th scope="col">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => {
-          const open = openId === row.id;
-          return (
-            <Fragment key={row.id}>
-              <tr className={cx(open && "is-open")}>
-                <td>
-                  <button
-                    type="button"
-                    onClick={() => setOpenId(open ? null : row.id)}
-                    className={cx("ledger__toggle", open && "is-on")}
-                    aria-expanded={open}
-                    aria-controls={`offers-${row.id}`}
-                    aria-label={`${open ? "Hide" : "Show"} the offer situation on ${row.title}`}
-                  >
-                    ▸
-                  </button>
-                </td>
+    <>
+      {/* The table head disappears below 861px, and the column sort with it —
+          a compact sort row stands in at those widths only. */}
+      {sorts.length > 0 && (
+        <div className="ledger__sortbar" role="group" aria-label="Sort listings">
+          <span className="microlabel">Sort</span>
+          {sorts.map((s) => (
+            <Link
+              key={s.key}
+              href={s.href}
+              scroll={false}
+              className={cx("jumplink", s.active && "!border-live !text-live")}
+              aria-current={s.active ? "true" : undefined}
+            >
+              {s.label}
+            </Link>
+          ))}
+        </div>
+      )}
 
-                <td className="ledger__part">
-                  <span className="flex items-start gap-3">
-                    <span className="order__img hidden sm:block">
-                      <Media src={row.cover ?? undefined} alt={row.title} className="h-full w-full" role="row" />
-                    </span>
-                    <span className="min-w-0">
-                      <Link
-                        href={`/listings/${row.id}`}
-                        className="order__name ledger__title transition-colors hover:text-live"
-                        title={row.title}
-                      >
-                        {row.title}
-                      </Link>
-                      <span className="order__meta block">
-                        {row.partNumber ? `Part no. ${row.partNumber}` : "No part number"}
-                      </span>
-                      <span className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <Link href={`/listings/${row.id}/edit`} className="relbtn !static">
-                          Edit
-                        </Link>
-                        <ListingStatusActions id={row.id} status={row.status} />
-                        {row.unansweredQuestions > 0 && (
-                          <Link href={`/listings/${row.id}#qa`} className="chip chip--live">
-                            {row.unansweredQuestions} question
-                            {row.unansweredQuestions === 1 ? "" : "s"}
-                          </Link>
-                        )}
-                      </span>
-                    </span>
-                  </span>
-                </td>
-
-                <td>
-                  {row.sourceCar ? (
-                    <Link href={`/cars/${row.sourceCar.slug}`} className="jumplink whitespace-nowrap">
-                      {row.sourceCar.name}
-                    </Link>
-                  ) : (
-                    <span className="order__meta">Not linked to a car</span>
-                  )}
-                </td>
-
-                <td className="ledger__num" data-label="Views">
-                  {row.views > 0 ? row.views : "—"}
-                </td>
-                <td className="ledger__num" data-label="Watch">
-                  {row.watchers > 0 ? row.watchers : "—"}
-                </td>
-                <td className="ledger__num" data-label="Asking">
-                  {formatPrice(row.priceCents)}
-                </td>
-                <td
-                  className={cx("ledger__num", row.topOfferCents !== null && "text-live")}
-                  data-label="Top offer"
+      <table className="ledger ledger--expand">
+        <thead>
+          <tr>
+            <th scope="col">
+              <span className="sr-only">Offers</span>
+            </th>
+            <th scope="col" className="ledger__part">
+              Part
+            </th>
+            <th scope="col">Source car</th>
+            {th("views", "Views", "text-right")}
+            {th("watch", "Watch", "text-right")}
+            {th("asking", "Asking", "text-right")}
+            {th("top_offer", "Top offer", "text-right")}
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const open = openId === row.id;
+            const liveOffers = row.offers.filter(
+              (o) => o.status === "open" || o.status === "countered"
+            ).length;
+            return (
+              <Fragment key={row.id}>
+                <tr
+                  className={cx("ledger__row", open && "is-open")}
+                  onClick={(event) => onRowClick(event, row.id)}
                 >
-                  {row.topOfferCents !== null ? formatPrice(row.topOfferCents) : "—"}
-                </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(open ? null : row.id)}
+                      className={cx("ledger__toggle", open && "is-on")}
+                      aria-expanded={open}
+                      aria-controls={`offers-${row.id}`}
+                      aria-label={`${open ? "Hide" : "Show"} offers on ${row.title}`}
+                    >
+                      {/* The same chevron the rail's section disclosure uses —
+                          one disclosure grammar across the app, and an SVG
+                          scales to a size you can actually see (the ▸ glyph
+                          stayed tiny however much font-size it was given). */}
+                      <Icon name="back" className="h-[14px] w-[14px]" />
+                    </button>
+                  </td>
 
-                <td>
-                  <StatusCell row={row} />
-                </td>
-              </tr>
+                  <td className="ledger__part">
+                    <span className="flex items-center gap-3">
+                      <span className="order__img hidden sm:block">
+                        <Media
+                          src={row.cover ?? undefined}
+                          alt={row.title}
+                          className="h-full w-full"
+                          role="row"
+                        />
+                      </span>
+                      <span className="min-w-0">
+                        <Link
+                          href={`/listings/${row.id}`}
+                          className="order__name ledger__title transition-colors hover:text-live"
+                          title={row.title}
+                        >
+                          {row.title}
+                        </Link>
+                        {/* Second line only when it says something: an absent
+                            part number is not information. */}
+                        {row.partNumber && (
+                          <span className="order__meta block">Part no. {row.partNumber}</span>
+                        )}
+                        {/* Working controls appear when the row is engaged —
+                            hover, keyboard focus, or open — and stay put on
+                            touch layouts, where there is no hover to reveal
+                            them. */}
+                        <span className="ledger__acts mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <Link href={`/listings/${row.id}/edit`} className="relbtn !static">
+                            Edit
+                          </Link>
+                          <ListingStatusActions id={row.id} status={row.status} />
+                          {row.unansweredQuestions > 0 && (
+                            <Link href={`/listings/${row.id}#qa`} className="chip chip--live">
+                              {row.unansweredQuestions} question
+                              {row.unansweredQuestions === 1 ? "" : "s"}
+                            </Link>
+                          )}
+                        </span>
+                      </span>
+                    </span>
+                  </td>
 
-              <tr
-                id={`offers-${row.id}`}
-                hidden={!open}
-                className={cx("ledger__detail", open && "is-open")}
-              >
-                <td colSpan={8}>
-                  <div className="pb-2 pl-[18px]">
-                    <span className="microlabel">Offers on this listing</span>
-                    <OfferSummary row={row} />
-                  </div>
-                </td>
-              </tr>
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
+                  <td>
+                    {row.sourceCar ? (
+                      <Link
+                        href={`/cars/${row.sourceCar.slug}`}
+                        className="jumplink whitespace-nowrap"
+                      >
+                        {row.sourceCar.name}
+                      </Link>
+                    ) : (
+                      <span className="order__meta" aria-label="Not linked to a car">
+                        —
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="ledger__num" data-label="Views">
+                    <span className="ledger__figure">{row.views > 0 ? row.views : "—"}</span>
+                  </td>
+                  <td className="ledger__num" data-label="Watch">
+                    <span className="ledger__figure">{row.watchers > 0 ? row.watchers : "—"}</span>
+                  </td>
+                  <td className="ledger__num" data-label="Asking">
+                    <span className="ledger__figure">{formatPrice(row.priceCents)}</span>
+                  </td>
+                  <td
+                    className={cx("ledger__num", row.topOfferCents !== null && "text-live")}
+                    data-label="Top offer"
+                  >
+                    <span className="ledger__figure">
+                      {row.topOfferCents !== null ? formatPrice(row.topOfferCents) : "—"}
+                    </span>
+                    {/* The disclosure's own signpost: the row that has offers
+                        says so where the money is. */}
+                    {liveOffers > 0 && (
+                      <span className="ledger__sub ledger__offershint">
+                        {liveOffers} offer{liveOffers === 1 ? "" : "s"} ▸
+                      </span>
+                    )}
+                  </td>
+
+                  <td>
+                    <StatusCell row={row} />
+                  </td>
+                </tr>
+
+                <tr
+                  id={`offers-${row.id}`}
+                  hidden={!open}
+                  className={cx("ledger__detail", open && "is-open")}
+                >
+                  <td colSpan={8}>
+                    <div className="pb-2 pl-[18px]">
+                      <span className="microlabel">Offers on this listing</span>
+                      <OfferSummary row={row} />
+                    </div>
+                  </td>
+                </tr>
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }

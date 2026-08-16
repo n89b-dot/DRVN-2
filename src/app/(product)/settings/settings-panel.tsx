@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useCallback, useState, useSyncExternalStore } from "react";
 
+import { ActionFooter, Button } from "@/components/ui";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 import type { SavedCard } from "@/lib/payments/customers";
 
@@ -98,12 +99,11 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
           {state.error}
         </p>
       )}
-      <div className="mt-4 flex items-center justify-end gap-3">
-        {saved && <span className="chip chip--ok">Preferences saved</span>}
-        <button type="submit" disabled={pending} className="btn">
-          {pending ? "Saving…" : "Save preferences"}
-        </button>
-      </div>
+      <ActionFooter status={saved ? { kind: "ok", message: "Preferences saved" } : null}>
+        <Button type="submit" loading={pending} pendingLabel="Saving…">
+          Save preferences
+        </Button>
+      </ActionFooter>
     </form>
   );
 }
@@ -160,15 +160,13 @@ function PayoutSetup({ connect }: { connect: ConnectSummary }) {
           : "Selling needs somewhere for the money to go. Stripe verifies your details and holds your bank account — DRVN never sees either. Until this is done, listings can't be published."}
       </p>
       <form action={action} className="mt-3">
-        <button type="submit" disabled={pending} className="btn btn--live">
-          {pending
-            ? "Opening Stripe…"
-            : connect.payoutsEnabled
-              ? "Update payout details"
-              : connect.hasAccount
-                ? "Finish payout setup"
-                : "Set up payouts"}
-        </button>
+        <Button type="submit" variant="live" loading={pending} pendingLabel="Opening Stripe…">
+          {connect.payoutsEnabled
+            ? "Update payout details"
+            : connect.hasAccount
+              ? "Finish payout setup"
+              : "Set up payouts"}
+        </Button>
       </form>
       {state.error && (
         <p role="alert" aria-live="polite" className="field__err mt-3">
@@ -226,7 +224,7 @@ export function SettingsPanel({
       <div className="grid items-start gap-6 md:grid-cols-[200px_1fr]">
         <nav
           aria-label="Settings sections"
-          className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:sticky md:top-20 md:flex-col"
+          className="sectionnav"
         >
           {SETTINGS_SECTIONS.map((x, index) => (
             <button
@@ -266,9 +264,9 @@ export function SettingsPanel({
             <PasswordSection currentEmail={profile.email} />
           </div>
           <form action={logout} className="mt-6">
-            <button type="submit" className="btn btn--ghost">
+            <Button type="submit" variant="ghost">
               Log out
-            </button>
+            </Button>
           </form>
         </section>
         )}
@@ -313,12 +311,13 @@ export function SettingsPanel({
                 {state.error}
               </p>
             )}
-            <div className="mt-4 flex items-center justify-end gap-3">
-              {saved && !pending && !state.error && <span className="chip chip--ok">Profile saved</span>}
-              <button type="submit" disabled={pending} className="btn btn--live">
-                {pending ? "Saving…" : "Save profile"}
-              </button>
-            </div>
+            <ActionFooter
+              status={saved && !pending && !state.error ? { kind: "ok", message: "Profile saved" } : null}
+            >
+              <Button type="submit" variant="live" loading={pending} pendingLabel="Saving…">
+                Save profile
+              </Button>
+            </ActionFooter>
           </form>
         </section>
         )}

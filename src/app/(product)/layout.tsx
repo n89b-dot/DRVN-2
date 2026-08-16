@@ -21,6 +21,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
   const jar = await cookies();
   const night = jar.get("ls-theme")?.value === "night";
   const railOpen = jar.get("ls-rail")?.value !== "closed";
+  const mktOpen = jar.get("ls-mkt")?.value !== "closed";
 
   const { cartCount, unreadCount, offersCount } = await loadShellCounts(supabase, user.id);
 
@@ -29,6 +30,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       signedIn
       initialNight={night}
       initialRailOpen={railOpen}
+      initialMktOpen={mktOpen}
       cartCount={cartCount}
       unreadCount={unreadCount}
       offersCount={offersCount}

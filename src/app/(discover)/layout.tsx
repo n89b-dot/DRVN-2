@@ -17,6 +17,7 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
   const jar = await cookies();
   const night = jar.get("ls-theme")?.value === "night";
   const railOpen = jar.get("ls-rail")?.value !== "closed";
+  const mktOpen = jar.get("ls-mkt")?.value !== "closed";
 
   // `offersCount` used to be discarded here, so a signed-in visitor browsing
   // the public marketplace saw an unbadged Offers row while the same rail on
@@ -33,6 +34,7 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
       signedIn={Boolean(user)}
       initialNight={night}
       initialRailOpen={railOpen}
+      initialMktOpen={mktOpen}
       cartCount={cartCount}
       unreadCount={unreadCount}
       offersCount={offersCount}

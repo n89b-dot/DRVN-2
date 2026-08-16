@@ -170,17 +170,11 @@ export function LivesheetBar({
           href: "/login",
           label: "Sign in",
           note: "Back to your garage and listings",
+          icon: "user" as const,
         },
       ];
   const familyHere = isMarketplaceFamily(pathname);
-  // Register numbers count routes only — a heading is a caption on the rows
-  // beneath it, so numbering it would leave a gap in the sequence.
-  let indexRegister = 0;
-  const indexRows = indexEntries.map((entry) => ({
-    entry,
-    n: entry.kind === "route" ? String(++indexRegister).padStart(2, "0") : null,
-  }));
-  const indexRouteCount = indexRegister;
+  const indexRouteCount = indexEntries.filter((e) => e.kind === "route").length;
 
   return (
     <>
@@ -289,7 +283,7 @@ export function LivesheetBar({
             <div className="dimline-h" aria-hidden="true" />
 
             <nav className="index__rows" aria-label="All sections">
-              {indexRows.map(({ entry, n }, i) => {
+              {indexEntries.map((entry, i) => {
                 if (entry.kind === "group") {
                   return (
                     <p
@@ -314,7 +308,9 @@ export function LivesheetBar({
                     aria-current={here ? "page" : undefined}
                     tabIndex={open ? undefined : -1}
                   >
-                    <span className="indexrow__n">{n}</span>
+                    <span className="indexrow__ico" aria-hidden="true">
+                      <Icon name={entry.icon} className="h-[18px] w-[18px]" />
+                    </span>
                     <span className="indexrow__label">{entry.label}</span>
                     <span className="indexrow__note">{entry.note}</span>
                     {here ? (

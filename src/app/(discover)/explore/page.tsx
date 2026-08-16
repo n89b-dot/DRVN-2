@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MasonryFeed } from "@/components/ui";
+import { FilterGroup, FilterLink, Foot, MasonryFeed, Pagination } from "@/components/ui";
+import { withParams } from "@/lib/url-params";
 import { fetchFeed, type FeedTab } from "@/lib/feed";
 import { createClient } from "@/lib/supabase/server";
 
@@ -48,62 +49,44 @@ export default async function ExplorePage({
           .fbtn reserved for exactly this meaning. (Not SheetTabs — these are
           server-filtered links, and client tab panels would force fetching all
           three feeds per view.) */}
-      <div className="filters" role="group" aria-label="Filter the feed">
-        <span className="microlabel filters__label">Show</span>
+      <FilterGroup label="Show" ariaLabel="Filter the feed" stack>
         {visibleTabs.map((t) => (
-          <Link
+          <FilterLink
             key={t.key}
             href={t.key === "all" ? "/explore" : `/explore?tab=${t.key}`}
-            className={`fbtn ${tab === t.key ? "is-on" : ""}`}
-            aria-current={tab === t.key ? "true" : undefined}
+            selected={tab === t.key}
           >
             {t.label}
-          </Link>
+          </FilterLink>
         ))}
-        {/* Navigation, not a filter — a ref-link, not a chip, so "changes this
-            page" and "leaves this page" stop sharing a costume. */}
-        <Link href="/marketplace" className="relbtn !static self-center sm:ml-auto">
+      </FilterGroup>
+
+      {/* Navigation, not a filter — a ref-link on its own line, outside the
+          group, so "changes this page" and "leaves this page" stop sharing a
+          costume. Inside the chip row it wrapped in among the chips on mobile
+          and read as a fourth option. */}
+      <p className="mb-7">
+        {/* `.relbtn` is a text link with no height of its own; on a phone it
+            still has to be a 44px thing to hit. */}
+        <Link
+          href="/marketplace"
+          className="relbtn !static inline-flex min-h-11 items-center sm:min-h-0"
+        >
           Go to the marketplace
         </Link>
-      </div>
+      </p>
 
       <section className="deck">
         <MasonryFeed items={items} />
       </section>
 
-      {(page > 1 || feed.hasMore) && (
-        <nav className="mb-8 flex items-center justify-between gap-3" aria-label="Pagination">
-          {page > 1 ? (
-            <Link
-              href={`/explore?${new URLSearchParams({
-                ...(tab !== "all" ? { tab } : {}),
-                ...(page - 1 > 1 ? { page: String(page - 1) } : {}),
-              }).toString()}`}
-              className="btn btn--ghost"
-              rel="prev"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="microlabel">Page {page}</span>
-          {feed.hasMore ? (
-            <Link
-              href={`/explore?${new URLSearchParams({
-                ...(tab !== "all" ? { tab } : {}),
-                page: String(page + 1),
-              }).toString()}`}
-              className="btn btn--ghost"
-              rel="next"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pagination
+        page={page}
+        hasMore={feed.hasMore}
+        hrefFor={(p) =>
+          withParams("/explore", { tab: tab !== "all" ? tab : undefined }, { page: p > 1 ? String(p) : undefined })
+        }
+      />
 
       <Foot
         left="DRVN — builds and parts from the community"

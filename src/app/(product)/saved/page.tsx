@@ -2,8 +2,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Avatar, Foot, ListingCard, Media } from "@/components/ui";
+import {
+  Avatar,
+  ButtonLink,
+  FilterGroup,
+  FilterLink,
+  Finder,
+  FinderClear,
+  FinderLabel,
+  Foot,
+  ListingCard,
+  Media,
+  Pagination,
+} from "@/components/ui";
 import { removeFollow, removeSave } from "@/features/social/actions";
+import { initialsOf } from "@/lib/format";
+import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -30,25 +44,11 @@ const PAGE_SIZE = 24;
 // counts rarely approach it in practice.
 const SECONDARY_CAP = 100;
 
-function initialsOf(name: string) {
-  return name
-    .split(" ")
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 function withParams(
   params: Record<string, string | undefined>,
   overrides: Record<string, string | undefined>
 ) {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...params, ...overrides })) {
-    if (value) search.set(key, value);
-  }
-  const query = search.toString();
-  return query ? `/saved?${query}` : "/saved";
+  return buildParams("/saved", params, overrides);
 }
 
 /**
@@ -233,22 +233,20 @@ export default async function SavedPage({
         </p>
       </Rv>
 
-      <div className="filters" role="group" aria-label="Saved vs following">
-        <Link
+      <FilterGroup ariaLabel="Saved vs following">
+        <FilterLink
           href={withParams(tabParams, { tab: undefined, page: undefined })}
-          className={`fbtn ${tab === "saved" ? "is-on" : ""}`}
-          aria-current={tab === "saved" ? "true" : undefined}
+          selected={tab === "saved"}
         >
           Saved
-        </Link>
-        <Link
+        </FilterLink>
+        <FilterLink
           href={withParams(tabParams, { tab: "following", page: undefined })}
-          className={`fbtn ${tab === "following" ? "is-on" : ""}`}
-          aria-current={tab === "following" ? "true" : undefined}
+          selected={tab === "following"}
         >
           Following
-        </Link>
-      </div>
+        </FilterLink>
+      </FilterGroup>
 
       {isEmpty && (
         <section className="deck">
@@ -260,9 +258,9 @@ export default async function SavedPage({
             <p>
               Save parts and follow builds and sellers as you browse — they all collect here.
             </p>
-            <Link href="/marketplace" className="btn btn--ghost">
+            <ButtonLink href="/marketplace" variant="ghost">
               Browse the marketplace
-            </Link>
+            </ButtonLink>
           </Rv>
         </section>
       )}
@@ -275,38 +273,46 @@ export default async function SavedPage({
               <span className="chip">{totalListingSaves}</span>
             </div>
 
-            <form action="/saved" method="get" className="filters !mt-3">
-              <input type="hidden" name="tab" value="saved" />
-              <span className="microlabel filters__label">Search</span>
-              <input
-                type="search"
-                name="q"
-                defaultValue={query}
-                placeholder="Title…"
-                className="ctl !max-w-xs"
-              />
-              <span className="microlabel filters__label ml-2">Sort</span>
-              <Link
-                href={withParams({ q: query || undefined }, { sort: undefined, tab: undefined, page: undefined })}
-                className={`fbtn ${sort === "newest" ? "is-on" : ""}`}
-              >
-                Newest
-              </Link>
-              <Link
-                href={withParams({ q: query || undefined }, { sort: "price", tab: undefined, page: undefined })}
-                className={`fbtn ${sort === "price" ? "is-on" : ""}`}
-              >
-                Price ↑
-              </Link>
-              <button type="submit" className="fbtn">
-                Search
-              </button>
-              {query && (
-                <Link href={withParams({ sort: sort === "price" ? "price" : undefined }, { q: undefined, page: undefined })} className="fbtn">
-                  Clear
-                </Link>
-              )}
-            </form>
+            {/* Searching and sorting are two different operations, and as one
+                wrapping `.filters` row they collapsed into a single blob of
+                controls on a phone. The `.finder` plate is the house idiom for
+                exactly this: the query line on top, refinements on their own
+                row beneath, so the two read as two. Desktop stays compact —
+                that is what every `sm:` here buys. */}
+            <Finder
+              action="/saved"
+              className="!mt-3"
+              searchLabel="Search"
+              inputLabel="Search saved parts"
+              defaultValue={query}
+              placeholder="Search saved parts…"
+              /* Carries tab and the chosen sort through a search, the way the
+                 marketplace finder does. Without it, searching silently threw
+                 the sort back to newest. */
+              hidden={{ tab: "saved", sort: sort === "price" ? "price" : undefined }}
+              refine={
+                <>
+                  <FinderLabel>Sort</FinderLabel>
+                  <FilterLink
+                    href={withParams({ q: query || undefined }, { sort: undefined, tab: undefined, page: undefined })}
+                    selected={sort === "newest"}
+                  >
+                    Newest
+                  </FilterLink>
+                  <FilterLink
+                    href={withParams({ q: query || undefined }, { sort: "price", tab: undefined, page: undefined })}
+                    selected={sort === "price"}
+                  >
+                    Price ↑
+                  </FilterLink>
+                  {query && (
+                    <FinderClear
+                      href={withParams({ sort: sort === "price" ? "price" : undefined }, { q: undefined, page: undefined })}
+                    />
+                  )}
+                </>
+              }
+            />
 
             {(listings ?? []).length > 0 ? (
               <div className="mkt mt-4">
@@ -339,29 +345,11 @@ export default async function SavedPage({
               </p>
             )}
 
-            {(page > 1 || hasMoreListings) && (
-              <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
-                {page > 1 ? (
-                  <Link
-                    href={withParams(tabParams, { page: page - 1 === 1 ? undefined : String(page - 1) })}
-                    className="btn btn--ghost"
-                    rel="prev"
-                  >
-                    ← Previous
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                <span className="microlabel">Page {page}</span>
-                {hasMoreListings ? (
-                  <Link href={withParams(tabParams, { page: String(page + 1) })} className="btn btn--ghost" rel="next">
-                    Next →
-                  </Link>
-                ) : (
-                  <span />
-                )}
-              </nav>
-            )}
+            <Pagination
+              page={page}
+              hasMore={hasMoreListings}
+              hrefFor={(p) => withParams(tabParams, { page: p === 1 ? undefined : String(p) })}
+            />
           </div>
         </section>
       )}

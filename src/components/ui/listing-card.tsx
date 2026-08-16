@@ -58,13 +58,21 @@ function initialsOf(name: string): string {
  *
  *  Fitment is seller-stated, not verified, so the caveat rides along for
  *  screen readers instead of a mouse-only title tooltip. */
-export function ListingCard({ listing }: { listing: ListingCardData }) {
+export function ListingCard({
+  listing,
+  prefetch,
+}: {
+  listing: ListingCardData;
+  /** Pass false for decorative renders (e.g. the inert auth backdrop) so the
+   *  viewport prefetcher doesn't fetch six unreachable routes. */
+  prefetch?: boolean;
+}) {
   const watching = listing.watch_count ?? 0;
   const metaParts = [conditionLabel(listing.condition), listing.location].filter(Boolean);
   const seller = listing.seller;
 
   return (
-    <Link href={`/listings/${listing.id}`} className="tile">
+    <Link href={`/listings/${listing.id}`} prefetch={prefetch} className="tile">
       {listing.part_number && (
         <span className="microlabel block truncate">Part no. {listing.part_number}</span>
       )}

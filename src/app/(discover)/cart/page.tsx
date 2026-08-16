@@ -1,7 +1,14 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media, PaymentModeNotice } from "@/components/ui";
+import {
+  Button,
+  ButtonLink,
+  Foot,
+  Media,
+  MobileActionBar,
+  PaymentModeNotice,
+} from "@/components/ui";
 import { getCartIds } from "@/lib/cart";
 import { formatPrice, platformFeeCents } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -130,9 +137,9 @@ export default async function CartPage() {
           </span>
           <h3>Nothing in the cart</h3>
           <p>Parts you add from the marketplace collect here until you check out.</p>
-          <Link href="/marketplace" className="btn btn--ghost">
+          <ButtonLink href="/marketplace" variant="ghost">
             Browse the marketplace
-          </Link>
+          </ButtonLink>
         </Rv>
       ) : (
         <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -154,9 +161,9 @@ export default async function CartPage() {
                     <span className="order__actions">
                       <form action={removeFromCart}>
                         <input type="hidden" name="listing_id" value={line.id} />
-                        <button type="submit" className="relbtn !static">
+                        <Button type="submit" variant="quiet">
                           Remove
-                        </button>
+                        </Button>
                       </form>
                     </span>
                   </div>
@@ -186,9 +193,9 @@ export default async function CartPage() {
             <Rv className="undrawn">
               <h3>Nothing left to buy</h3>
               <p>Remove the lines above, or add something else from the marketplace.</p>
-              <Link href="/marketplace" className="btn btn--ghost">
+              <ButtonLink href="/marketplace" variant="ghost">
                 Browse the marketplace
-              </Link>
+              </ButtonLink>
             </Rv>
           )}
 
@@ -232,9 +239,9 @@ export default async function CartPage() {
                       <span className="order__actions">
                         <form action={removeFromCart}>
                           <input type="hidden" name="listing_id" value={listing.id} />
-                          <button type="submit" className="relbtn !static">
+                          <Button type="submit" variant="quiet">
                             Remove
-                          </button>
+                          </Button>
                         </form>
                       </span>
                     </div>
@@ -282,9 +289,9 @@ export default async function CartPage() {
             </p>
 
             {active.length > 0 ? (
-              <Link href="/checkout" className="btn btn--live mt-4 w-full">
+              <ButtonLink href="/checkout" variant="live" className="mt-4 w-full">
                 Proceed to checkout
-              </Link>
+              </ButtonLink>
             ) : (
               <p className="field__hint mt-4">Remove the unavailable lines above to check out.</p>
             )}
@@ -292,6 +299,24 @@ export default async function CartPage() {
           </Rv>
           </aside>
         </section>
+      )}
+
+      {/* Persistent phone/tablet checkout action. The summary above is the
+          authoritative one and stays exactly as it is — but it lives at the
+          bottom of a column that grows with every seller, unavailable line and
+          fulfilment notice, so on a stacked layout the highest-value action on
+          the page can sit several screens down. This is the PDP's own buybar
+          recipe (fixed, safe-area padded, with matching body clearance so the
+          last content stays reachable), widened to the 1024px breakpoint where
+          the cart actually regains its side column. Rendered only when there
+          is something buyable — an all-unavailable cart has no action to
+          offer, and the in-page summary says so instead. */}
+      {active.length > 0 && (
+        <MobileActionBar label="Checkout" total={formatPrice(total)} wide>
+          <ButtonLink href="/checkout" variant="live" className="min-w-0 flex-1">
+            Proceed to checkout
+          </ButtonLink>
+        </MobileActionBar>
       )}
 
       <Foot

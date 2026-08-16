@@ -2,6 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 
+import { CountedField } from "@/components/ui";
+import { DISPLAY_NAME_MAX } from "@/lib/limits";
+
 import { completeOnboarding, type AuthState } from "../actions";
 
 type Availability = "idle" | "checking" | "available" | "taken" | "invalid" | "unknown";
@@ -94,13 +97,17 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
             </span>
           )}
         </div>
-        <div className="field">
-          <label htmlFor="onb-display-name" className="microlabel">
-            Display name
-          </label>
-          <input id="onb-display-name" name="display_name" required placeholder="Dana Rossi" autoComplete="name" className="ctl max-w-none" />
-        </div>
-        <button type="submit" disabled={pending} className="btn btn--live w-full">
+        <CountedField
+          id="onb-display-name"
+          name="display_name"
+          label="Display name"
+          max={DISPLAY_NAME_MAX}
+          required
+          placeholder="Dana Rossi"
+          autoComplete="name"
+          hint="You can change this any time in settings."
+        />
+        <button type="submit" disabled={pending} className="btn btn--live mt-4 w-full">
           {pending ? "Saving…" : "Let's go"}
         </button>
       </form>

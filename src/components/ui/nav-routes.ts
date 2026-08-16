@@ -8,14 +8,16 @@
  * links. The family is a grouping in the navigation, not a tab component.
  */
 
-export type NavRoute = { href: string; label: string; note: string };
+import type { IconName } from "./icons";
+
+export type NavRoute = { href: string; label: string; note: string; icon: IconName };
 
 /** The Marketplace family, in transaction order. */
 export const MARKETPLACE_FAMILY: NavRoute[] = [
-  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
-  { href: "/listings", label: "Listings", note: "Views, watchers and offers on what you're selling" },
-  { href: "/offers", label: "Offers", note: "Offers you've received and made, and their threads" },
-  { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery" },
+  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
+  { href: "/listings", label: "Listings", note: "Views, watchers and offers on what you're selling", icon: "sell" },
+  { href: "/offers", label: "Offers", note: "Offers you've received and made, and their threads", icon: "scale" },
+  { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery", icon: "box" },
 ];
 
 export type FamilyKey = "marketplace" | "listings" | "offers" | "orders";
@@ -65,23 +67,22 @@ export function isMarketplaceFamily(pathname: string): boolean {
  */
 export type NavEntry =
   | ({ kind: "route" } & NavRoute & { child?: boolean })
-  | { kind: "group"; label: string; short: string; note: string };
+  | { kind: "group"; label: string; note: string };
 
 /** Signed-in register, in rail/index order. */
 export const PRIMARY_NAV: NavEntry[] = [
-  { kind: "route", href: "/home", label: "Home", note: "What's moved since you looked" },
-  { kind: "route", href: "/explore", label: "Explore", note: "Builds from the community" },
+  { kind: "route", href: "/home", label: "Home", note: "What's moved since you looked", icon: "home" },
+  { kind: "route", href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
   {
     kind: "group",
     label: "Marketplace",
-    short: "MKT",
     note: "Buying and selling, end to end",
   },
   ...MARKETPLACE_FAMILY.map((route) => ({ kind: "route" as const, ...route, child: true })),
-  { kind: "route", href: "/garage", label: "Garage", note: "Your cars and their builds" },
-  { kind: "route", href: "/messages", label: "Messages", note: "Every order and offer thread, in one list" },
-  { kind: "route", href: "/profile", label: "Profile", note: "How buyers and sellers see you" },
-  { kind: "route", href: "/settings", label: "Settings", note: "Account, notifications and payments" },
+  { kind: "route", href: "/garage", label: "Garage", note: "Your cars and their builds", icon: "garage" },
+  { kind: "route", href: "/messages", label: "Messages", note: "Every order and offer thread, in one list", icon: "comment" },
+  { kind: "route", href: "/profile", label: "Profile", note: "How buyers and sellers see you", icon: "user" },
+  { kind: "route", href: "/settings", label: "Settings", note: "Account, notifications and payments", icon: "settings" },
 ];
 
 /**
@@ -98,6 +99,6 @@ export const BAR_ROUTES: NavRoute[] = PRIMARY_NAV.filter(
  * are never advertised here.
  */
 export const PUBLIC_ROUTES: NavRoute[] = [
-  { href: "/explore", label: "Explore", note: "Builds from the community" },
-  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars" },
+  { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
+  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
 ];

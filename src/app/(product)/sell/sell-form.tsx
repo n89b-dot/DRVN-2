@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 
-import { Media } from "@/components/ui";
+import { Media, Select, TextField } from "@/components/ui";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
 import { deleteStagedIfUnconsumed, recordStagedUpload } from "@/lib/media-staging";
@@ -72,11 +73,15 @@ export function SellForm({
   userId,
   listing,
   prefill,
+  canPublish = true,
 }: {
   cars: { id: string; name: string }[];
   /** Canonical make names for the fitment picker's suggestions. */
   makes: string[];
   userId: string;
+  /** Payouts ready? When false, publishing is gated (drafts still save) and
+   *  the checklist says so up front instead of the server refusing on submit. */
+  canPublish?: boolean;
   /** Present when editing an existing listing. */
   listing?: ListingDraft;
   /** Pre-fill from "release a part off this car". */
@@ -286,111 +291,97 @@ export function SellForm({
       </div>
 
       <Section step={1} title="The part — what you're releasing">
-        <div className="field !mb-0">
-          <label htmlFor="sell-title" className="microlabel">Title</label>
-          <input id="sell-title"
-            name="title"
-            required
-            maxLength={140}
-            defaultValue={listing?.title ?? prefill?.title ?? ""}
-            placeholder="e.g. 034 High-Flow Downpipe for B9 S4"
-            className="ctl max-w-none"
-            aria-describedby={fieldErrors.title ? "sell-title-error" : undefined}
-            aria-invalid={fieldErrors.title ? true : undefined}
-          />
-          {fieldErrors.title && (
-            <p id="sell-title-error" className="field__err">
-              {fieldErrors.title}
-            </p>
-          )}
-          <span className="field__hint">
-            Clear titles sell faster — brand, model, then the car it fits.
-          </span>
-        </div>
+        <TextField
+          id="sell-title"
+          name="title"
+          label="Title"
+          required
+          maxLength={140}
+          defaultValue={listing?.title ?? prefill?.title ?? ""}
+          placeholder="e.g. 034 High-Flow Downpipe for B9 S4"
+          className="max-w-none"
+          fieldClassName="!mb-0"
+          error={fieldErrors.title}
+          hint="Clear titles sell faster — brand, model, then the car it fits."
+        />
         {/* .field--row collapses to one column on small screens; a bare
             grid-cols-2 kept these side by side at 375px. */}
         <div className="field--row">
-          <div className="field !mb-0">
-            <label htmlFor="sell-category" className="microlabel">Category</label>
-            <select id="sell-category"
-              name="category"
-              required
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="ctl max-w-none"
-              aria-describedby={fieldErrors.category ? "sell-category-error" : undefined}
-              aria-invalid={fieldErrors.category ? true : undefined}
-            >
-              <option value="" disabled>
-                Choose…
-              </option>
-              {CATEGORIES.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            {fieldErrors.category && (
-              <p id="sell-category-error" className="field__err">
-                {fieldErrors.category}
-              </p>
-            )}
-            {!listing &&
+          <Select
+            id="sell-category"
+            name="category"
+            label="Category"
+            required
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="max-w-none"
+            fieldClassName="!mb-0"
+            error={fieldErrors.category}
+            hint={
+              !listing &&
               prefill?.modConfidence !== undefined &&
               prefill?.modConfidence !== null &&
-              isLowConfidence(prefill.modConfidence) && (
-                <span className="field__hint">
-                  Guessed from a low-confidence parse of the build line — check it.
-                </span>
-              )}
-          </div>
-          <div className="field !mb-0">
-            <label htmlFor="sell-subcategory" className="microlabel">Subcategory — optional</label>
-            <select id="sell-subcategory"
-              name="subcategory"
-              value={subcategory}
-              onChange={(e) => setSubcategory(e.target.value)}
-              className="ctl max-w-none"
-              disabled={!subcategories.length}
-            >
-              <option value="">—</option>
-              {subcategories.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              isLowConfidence(prefill.modConfidence)
+                ? "Guessed from a low-confidence parse of the build line — check it."
+                : undefined
+            }
+          >
+            <option value="" disabled>
+              Choose…
+            </option>
+            {CATEGORIES.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            id="sell-subcategory"
+            name="subcategory"
+            label="Subcategory"
+            optional
+            value={subcategory}
+            onChange={(e) => setSubcategory(e.target.value)}
+            className="max-w-none"
+            fieldClassName="!mb-0"
+            disabled={!subcategories.length}
+          >
+            <option value="">—</option>
+            {subcategories.map((s) => (
+              <option key={s.slug} value={s.slug}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="field--row">
-          <div className="field !mb-0">
-            <label htmlFor="sell-condition" className="microlabel">Condition</label>
-            <select id="sell-condition"
-              name="condition"
-              value={condition}
-              onChange={(e) => setCondition(e.target.value)}
-              className="ctl max-w-none"
-            >
-              {CONDITIONS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field !mb-0">
-            <label htmlFor="sell-part_number" className="microlabel">Part number — optional</label>
-            <input id="sell-part_number"
-              name="part_number"
-              maxLength={120}
-              defaultValue={listing?.part_number ?? prefill?.partNumber ?? ""}
-              placeholder="e.g. CP9660-2S4"
-              className="ctl max-w-none"
-            />
-            <span className="field__hint">
-              What a buyer cross-references. Seller-entered, not verified.
-            </span>
-          </div>
+          <Select
+            id="sell-condition"
+            name="condition"
+            label="Condition"
+            value={condition}
+            onChange={(e) => setCondition(e.target.value)}
+            className="max-w-none"
+            fieldClassName="!mb-0"
+          >
+            {CONDITIONS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+          <TextField
+            id="sell-part_number"
+            name="part_number"
+            label="Part number"
+            optional
+            maxLength={120}
+            defaultValue={listing?.part_number ?? prefill?.partNumber ?? ""}
+            placeholder="e.g. CP9660-2S4"
+            className="max-w-none"
+            fieldClassName="!mb-0"
+            hint="What a buyer cross-references. Seller-entered, not verified."
+          />
         </div>
         {/* Grade + checklist: dispute prevention (0024). Only for used parts —
             "new" already says everything a grade would. The checklist follows
@@ -701,17 +692,28 @@ export function SellForm({
           if (images.length === 0) warnings.push("No photos yet — listings with photos sell faster.");
           if (usedNeedsGrade && !grade) warnings.push("No grade set for a used part — buyers weight this heavily.");
           if (!shipping.trim() || Number(shipping) === 0) warnings.push("Shipping is $0 — confirm that's intentional, not just unset.");
-          if (!warnings.length) return null;
+          if (!warnings.length && canPublish) return null;
           return (
-            <div role="status" aria-live="polite" className="tile !mb-0">
+            <div role="status" aria-live="polite" id="publish-checklist" className="tile !mb-0">
               <p className="microlabel microlabel--ink">Before you publish</p>
               <ul className="mt-1 list-disc pl-5 text-micro text-dim">
+                {/* The one real blocker leads: money needs somewhere to go. */}
+                {!canPublish && (
+                  <li>
+                    <b className="text-ink">Payouts aren&apos;t set up — required to publish.</b>{" "}
+                    <Link href="/settings#payments" className="jumplink">
+                      Set up payouts →
+                    </Link>
+                  </li>
+                )}
                 {warnings.map((w) => (
                   <li key={w}>{w}</li>
                 ))}
               </ul>
               <p className="field__hint mt-1">
-                These are nudges, not blockers — you can still publish or save a draft as-is.
+                {canPublish
+                  ? "These are nudges, not blockers — you can still publish or save a draft as-is."
+                  : "Drafts save any time — publishing unlocks once payouts are ready."}
               </p>
             </div>
           );
@@ -748,7 +750,19 @@ export function SellForm({
               Save draft
             </button>
           )}
-          <button type="submit" disabled={pending || uploading} className="btn btn--live">
+          {/* Gated publish stays focusable (a `disabled` button vanishes from
+              the tab order, so its checklist reference would never be
+              announced) — aria-disabled + a guarded click instead. */}
+          <button
+            type="submit"
+            disabled={pending || uploading}
+            aria-disabled={!isEdit && !canPublish ? true : undefined}
+            aria-describedby={!isEdit && !canPublish ? "publish-checklist" : undefined}
+            onClick={(e) => {
+              if (!isEdit && !canPublish) e.preventDefault();
+            }}
+            className={`btn btn--live ${!isEdit && !canPublish ? "opacity-55 cursor-not-allowed" : ""}`}
+          >
             {pending
               ? isEdit
                 ? "Saving…"

@@ -2,7 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Avatar, Foot, Media, NarrowColumn } from "@/components/ui";
+import { Avatar, Finder, Foot, Media, NarrowColumn, Pagination } from "@/components/ui";
+import { initialsOf } from "@/lib/format";
+import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -18,15 +20,6 @@ const MESSAGE_SCAN_LIMIT = 1200;
 
 /** Search results are capped by the search_user_messages RPC (0031). */
 const SEARCH_LIMIT = 50;
-
-function initialsOf(name: string) {
-  return name
-    .split(" ")
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 type ThreadRow = {
   key: string;
@@ -61,12 +54,7 @@ type InboxData = {
 };
 
 function withParams(params: Record<string, string | undefined>, overrides: Record<string, string | undefined>) {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...params, ...overrides })) {
-    if (value) search.set(key, value);
-  }
-  const query = search.toString();
-  return query ? `/messages?${query}` : "/messages";
+  return buildParams("/messages", params, overrides);
 }
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -356,7 +344,7 @@ export default async function MessagesPage({
 
   return (
     <NarrowColumn>
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--tight">
         <span className="microlabel">
           Messages
           {totalUnread > 0 && (
@@ -377,24 +365,18 @@ export default async function MessagesPage({
         </p>
       </Rv>
 
-      <form action="/messages" method="get" className="filters" role="search">
-        <span className="microlabel filters__label">Search your conversations</span>
-        <input
-          type="search"
-          name="q"
-          defaultValue={query}
-          placeholder="Listing, person or message…"
-          className="ctl !max-w-xs"
-        />
-        <button type="submit" className="fbtn">
-          Search
-        </button>
-        {query && (
-          <Link href="/messages" className="fbtn">
-            Clear
-          </Link>
-        )}
-      </form>
+      {/* The house search idiom, now the canonical Finder component: one
+          plate, the query owning the row, submit beside it. The old `.filters`
+          row let the label, field and both actions wrap into a blob — the
+          narrowness was accidental, not designed. */}
+      <Finder
+        action="/messages"
+        className="mb-5"
+        inputLabel="Search your conversations"
+        defaultValue={query}
+        placeholder="Listing, person or message…"
+        clearHref={query ? "/messages" : undefined}
+      />
 
       <Rv className="tile" stagger={1}>
         <div className="tile__head">
@@ -475,28 +457,12 @@ export default async function MessagesPage({
           </div>
         )}
 
-        {!query && (clampedPage > 1 || hasMore) && (
-          <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
-            {clampedPage > 1 ? (
-              <Link
-                href={withParams(params, { page: clampedPage - 1 === 1 ? undefined : String(clampedPage - 1) })}
-                className="btn btn--ghost"
-                rel="prev"
-              >
-                ← Previous
-              </Link>
-            ) : (
-              <span />
-            )}
-            <span className="microlabel">Page {clampedPage}</span>
-            {hasMore ? (
-              <Link href={withParams(params, { page: String(clampedPage + 1) })} className="btn btn--ghost" rel="next">
-                Next →
-              </Link>
-            ) : (
-              <span />
-            )}
-          </nav>
+        {!query && (
+          <Pagination
+            page={clampedPage}
+            hasMore={hasMore}
+            hrefFor={(p) => withParams(params, { page: p === 1 ? undefined : String(p) })}
+          />
         )}
       </Rv>
 

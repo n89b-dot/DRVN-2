@@ -28,7 +28,12 @@ export default async function SettingsPage() {
   const savedCards = await listSavedCards(user!.id).catch(() => []);
 
   return (
-    <div className="mx-auto w-full max-w-[900px] px-6 pb-10">
+    // `--gutter` is the variable `.wrap` publishes so a full-bleed child can
+    // cancel exactly the page padding rather than guessing at it. This column
+    // is a hand-rolled wrapper rather than a `.wrap`, so it has to declare its
+    // own — without it the section register scrolls with no bleed and stops
+    // dead at the column edge, saying nothing about the sections to its right.
+    <div className="mx-auto w-full max-w-[900px] px-6 pb-10 [--gutter:24px]">
       <SettingsPanel
         paymentsLive={paymentsAreLive()}
         savedCards={savedCards}

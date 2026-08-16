@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
 import { recordStagedUpload } from "@/lib/media-staging";
 import { createClient } from "@/lib/supabase/client";
-import { ConfirmDialog, Media } from "@/components/ui";
+import { ConfirmDialog, DropZone, Media } from "@/components/ui";
 
 import { addCarImage, deleteCarImage, moveCarImage, setCoverImage, updateCarImageAlt } from "../../actions";
 
@@ -20,7 +20,6 @@ export function GalleryManager({
   images: CarImage[];
   coverImageUrl: string | null;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -37,6 +36,14 @@ export function GalleryManager({
 
     try {
       for (const file of Array.from(files)) {
+        // The picker filters via accept="image/*", but drag-and-drop hands us
+        // anything — without this a dropped PDF reaches the bucket's mime
+        // allowlist and comes back as a raw storage error with a Retry that
+        // can never succeed.
+        if (!file.type.startsWith("image/")) {
+          setError(`Photos only — ${file.name} isn't an image.`);
+          continue;
+        }
         if (file.size > 10 * 1024 * 1024) {
           setError(`${file.name} is over 10MB.`);
           failed.push(file);
@@ -67,7 +74,6 @@ export function GalleryManager({
     } finally {
       setUploading(false);
       setFailedFiles(failed);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -82,35 +88,19 @@ export function GalleryManager({
     <section className="tile">
       <div className="tile__head">
         <span className="microlabel microlabel--ink">Photos — use ↑↓ to reorder, ★ to set the cover</span>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="btn btn--ghost pointer-coarse:min-h-10"
-        >
-          {uploading ? "Uploading…" : "Upload photos"}
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(e) => handleFiles(e.target.files)}
-        />
       </div>
       {error && (
         <div role="alert" aria-live="polite" className="field__err mt-3 flex items-center gap-3">
           <span>{error}</span>
           {failedFiles.length > 0 && (
-            <button type="button" onClick={retryFailed} className="jumplink">
+            <button type="button" onClick={retryFailed} className="jumplink pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
               Retry
             </button>
           )}
         </div>
       )}
       {images.length > 0 ? (
-        <ul className="thumbs list-none p-0 m-0">
+        <ul className="thumbs thumbs--edit list-none p-0 m-0">
           {images.map((image, index) => {
             const isCover = coverImageUrl === image.url;
             return (
@@ -128,9 +118,9 @@ export function GalleryManager({
                     pointer:coarse fallback keeps them visible on touch devices
                     that have no hover state at all. */}
                 <div
-                  className="absolute inset-x-0 top-1 z-10 flex items-start justify-between gap-1 px-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+                  className="thumb__ctl absolute inset-x-0 top-1 z-10 flex items-start justify-between px-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
                 >
-                  <div className="flex gap-1">
+                  <div className="thumb__ctl flex">
                     <button
                       type="button"
                       onClick={() =>
@@ -144,7 +134,7 @@ export function GalleryManager({
                       }
                       disabled={index === 0}
                       aria-label={`Move photo ${index + 1} earlier`}
-                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30 pointer-coarse:!h-10 pointer-coarse:!w-10"
+                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
                     >
                       ↑
                     </button>
@@ -161,7 +151,7 @@ export function GalleryManager({
                       }
                       disabled={index === images.length - 1}
                       aria-label={`Move photo ${index + 1} later`}
-                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30 pointer-coarse:!h-10 pointer-coarse:!w-10"
+                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
                     >
                       ↓
                     </button>
@@ -176,18 +166,18 @@ export function GalleryManager({
                     }}
                     disabled={isCover}
                     aria-label={isCover ? `Photo ${index + 1} is the cover` : `Set photo ${index + 1} as cover`}
-                    className="thumb__x !static !top-0 !right-0 disabled:opacity-30 pointer-coarse:!h-10 pointer-coarse:!w-10"
+                    className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
                   >
                     ★
                   </button>
                 </div>
 
-                <div className="absolute right-1 top-8 z-10 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
+                <div className="thumb__ctl thumb__ctl--second absolute right-1 z-10 flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
                   <button
                     type="button"
                     onClick={() => setEditingAlt(editingAlt === image.id ? null : image.id)}
                     aria-label={`Edit description for photo ${index + 1}`}
-                    className="thumb__x !static !top-0 !right-0 pointer-coarse:!h-10 pointer-coarse:!w-10"
+                    className="thumb__x !static !top-0 !right-0"
                   >
                     ✎
                   </button>
@@ -203,7 +193,7 @@ export function GalleryManager({
                     destructive
                     formAction={(fd) => startTransition(() => deleteCarImage(fd))}
                     hidden={{ image_id: image.id, car_id: carId }}
-                    triggerClassName="thumb__x !static !top-0 !right-0 pointer-coarse:!h-10 pointer-coarse:!w-10"
+                    triggerClassName="thumb__x !static !top-0 !right-0"
                   >
                     ✕
                   </ConfirmDialog>
@@ -224,15 +214,19 @@ export function GalleryManager({
                     <label htmlFor={`alt-${image.id}`} className="sr-only">
                       Photo description
                     </label>
+                    {/* 12px suits the mouse-sized tile, but a sub-16px input
+                        makes iOS zoom the whole page on focus — so touch gets
+                        the 16px `.ctl` default back. The tile is 145px+ on a
+                        coarse pointer now, which has room for it. */}
                     <input
                       id={`alt-${image.id}`}
                       name="alt"
                       defaultValue={image.alt ?? ""}
                       placeholder="Describe this photo"
-                      className="ctl max-w-none text-xs pointer-coarse:min-h-10"
+                      className="ctl max-w-none text-xs pointer-coarse:min-h-11 pointer-coarse:text-base"
                       autoFocus
                     />
-                    <button type="submit" className="jumplink text-xs pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:min-w-10 pointer-coarse:items-center pointer-coarse:justify-center">
+                    <button type="submit" className="jumplink text-xs pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:items-center pointer-coarse:justify-center">
                       Save
                     </button>
                   </form>
@@ -241,15 +235,21 @@ export function GalleryManager({
             );
           })}
         </ul>
-      ) : (
-        <div className="undrawn mt-4">
-          <span className="undrawn__mark" aria-hidden="true">
-            ✎
-          </span>
-          <h3>No photos yet</h3>
-          <p>The first upload becomes the cover.</p>
-        </div>
-      )}
+      ) : null}
+
+      {/* The documented `.drop` pattern is the upload control — it doubles
+          as the section's empty-state invitation. */}
+      <DropZone
+        onFiles={handleFiles}
+        busy={uploading}
+        className="mt-4"
+        title={images.length ? "Add more photos" : "Add the first photos"}
+        body={
+          images.length
+            ? "Drop images here, or click to choose. 10MB max each."
+            : "Drop images here, or click to choose. The first upload becomes the cover."
+        }
+      />
     </section>
   );
 }
