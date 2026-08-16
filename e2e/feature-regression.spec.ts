@@ -61,11 +61,13 @@ test.describe.serial("feature regressions", () => {
     await page.goto(`/marketplace?q=${encodeURIComponent(pnTitle)}`);
     const paidCard = page.locator(".mkt a", { hasText: pnTitle }).first();
     // formatPrice drops trailing .00 for whole dollars — accept either form.
-    await expect(paidCard.locator(".mkt__ship")).toHaveText(/\+ \$25(\.00)? shipping/);
+    // The card says "ship", not "shipping": the line truncates in a card
+    // footer, so the copy is deliberately terse.
+    await expect(paidCard.locator(".mkt__ship")).toHaveText(/\+ \$25(\.00)? ship/);
 
     await page.goto(`/marketplace?q=${encodeURIComponent(freeShipTitle)}`);
     const freeCard = page.locator(".mkt a", { hasText: freeShipTitle }).first();
-    await expect(freeCard.locator(".mkt__ship")).toHaveText(/shipping included/i);
+    await expect(freeCard.locator(".mkt__ship")).toHaveText(/ships free/i);
   });
 
   test("messages footer links to offers", async ({ page }) => {

@@ -30,6 +30,11 @@ async function settle(page: Page, path: string) {
       "*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }",
       // Next dev-tools overlay is not the product.
       "nextjs-portal { display: none !important; }",
+      // The auth pages' live-listing backdrop is data-driven decoration
+      // (inert, scrimmed); left visible, its .mkt grid would be masked
+      // magenta across the page center — swallowing the auth card the
+      // screenshot exists to test.
+      ".authstage { display: none !important; }",
     ].join("\n"),
   });
   await page.evaluate(() => document.fonts.ready);

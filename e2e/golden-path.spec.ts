@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { enableSellerPayouts } from "./helpers";
+
 /**
  * The golden path, end to end: a seller lists a part off a car they own, a buyer
  * buys it, the seller dispatches it, the buyer confirms receipt and reviews.
@@ -71,6 +73,11 @@ test.describe.serial("golden path", () => {
 
   test("seller lists a part off that car", async ({ page }) => {
     await signIn(page, seller);
+    // Publishing is gated on payouts whenever the app runs against Stripe
+    // (src/app/(product)/sell): a seller with nowhere to be paid cannot list.
+    // Real accounts earn the flag through Connect onboarding, which can't be
+    // automated (hCaptcha); test accounts get it set with the service role.
+    await enableSellerPayouts(seller.username);
     await page.goto("/sell");
 
     await page.getByLabel(/title/i).fill(partTitle);
@@ -103,7 +110,10 @@ test.describe.serial("golden path", () => {
     await signUp(page, buyer);
 
     await page.goto(`/marketplace?q=${encodeURIComponent(partTitle)}`);
-    await page.getByText(partTitle).first().click();
+    // The card, not the active-filter readout: the query echo renders above
+    // the grid and carries the same text, so a bare getByText picks that and
+    // clicking it goes nowhere.
+    await page.locator(".mkt a", { hasText: partTitle }).first().click();
     await expect(page).toHaveURL(/\/listings\/[\w-]+/);
 
     // Add-to-cart stays on the listing (in-place confirmation, badge update);
@@ -122,10 +132,12 @@ test.describe.serial("golden path", () => {
     // Country is a structured select storing ISO codes (0028).
     await page.getByLabel(/country/i).selectOption({ label: "United Kingdom" });
     // Stub mode settles inline: the address submit completes the purchase and
-    // lands on the order. (Stripe mode would surface the payment element.)
+    // lands on the order. Against Stripe this step stops at the Payment
+    // Element instead — see e2e/README.md, which is why the money-completing
+    // specs are run with PAYMENTS_MODE=stub.
     await page.getByRole("button", { name: /continue to payment|confirm and pay/i }).click();
 
-    await expect(page).toHaveURL(/\/orders/);
+    await page.waitForURL(/\/orders/, { timeout: 60_000 });
     await expect(page.getByText(/order placed/i).first()).toBeVisible();
   });
 
@@ -135,9 +147,13 @@ test.describe.serial("golden path", () => {
 
     // Sold parts leave the active market — scoped to the results grid, since
     // shell chrome (e.g. recently-viewed/notification previews) may still
-    // reference the title without it being buyable.
+    // reference the title without it being buyable. The active-filter chip
+    // also carries the search text in its accessible name, so "no listing
+    // links" is asserted by destination, not by name.
     await expect(page.locator(".mkt").getByText(partTitle)).toHaveCount(0);
-    await expect(page.getByRole("link", { name: partTitle })).toHaveCount(0);
+    await expect(
+      page.locator('a[href^="/listings/"]', { hasText: partTitle })
+    ).toHaveCount(0);
   });
 
   test("seller dispatches with tracking", async ({ page }) => {
