@@ -1,3 +1,16 @@
+import {
+  ActionFooter,
+  Button,
+  Checkbox,
+  FilterButton,
+  FilterGroup,
+  FilterLink,
+  Pagination,
+  SearchField,
+  Select,
+  TextField,
+} from "@/components/ui";
+
 import { DocsJumprow, DocsPagehead, Specimen, SpecimenGroup } from "../../_components/docs-page";
 
 export const metadata = { title: "Components" };
@@ -54,7 +67,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Index rows"
           klass=".indexrow"
-          note="The menu is a second sheet unrolled over the page — numbered rows with a note; the current row chips 'Here'. Same numbering language as the signed-in rail."
+          note="The menu is a second sheet unrolled over the page — margin-marked rows with a note; the current row chips 'Here'. The product rail and index carry stroke icons in the margin; the numbered form survives in the admin console."
         >
           <div>
             <div className="indexrow !animate-none !opacity-100">
@@ -244,23 +257,44 @@ export default function ComponentsPage() {
       <SpecimenGroup id="actions" index="04" title="Actions">
         <Specimen
           name="Button"
-          klass=".btn / --live / --ghost"
-          note="Mono uppercase in drafting brackets ([ ]) drawn by pseudos; press scales to .97. One --live per surface. No spinner variant — pending states resolve to a chip."
+          klass="Button / variant · loading"
+          note="The production component (src/components/ui/button.tsx), rendered here directly. Semantic variants map to the .btn recipes — default, live (one per surface), ghost, destructive, quiet (.relbtn). loading disables, sets aria-busy and swaps to pendingLabel, so async work always narrates itself. ButtonLink is the same contract as a navigation."
         >
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className="btn">
-              Counter
-            </button>
-            <button type="button" className="btn btn--live">
-              Accept $240
-            </button>
-            <button type="button" className="btn btn--ghost">
-              Pass
-            </button>
-            <button type="button" className="btn" disabled>
-              Disabled
-            </button>
+            <Button>Counter</Button>
+            <Button variant="live">Accept $240</Button>
+            <Button variant="ghost">Pass</Button>
+            <Button variant="destructive">Withdraw listing</Button>
+            <Button variant="quiet">Release</Button>
+            <Button disabled>Disabled</Button>
+            <Button loading pendingLabel="Saving…">
+              Save
+            </Button>
           </div>
+        </Specimen>
+        <Specimen
+          name="Action footer"
+          klass="ActionFooter / .saverow"
+          note="The commit row of an editing surface: aux anchored left, status + primary right. ≤520px it stacks deliberately — aux, status as its own line, then a full-width 44px commit. Status is part of the contract: ok renders the chip (role=status), error the live line (role=alert)."
+        >
+          <ActionFooter
+            aux={
+              <button type="button" className="jumplink">
+                + Add a line manually
+              </button>
+            }
+            status={{ kind: "ok", message: "Saved ✓" }}
+            className="!mt-0"
+          >
+            <Button variant="live">Save the build</Button>
+          </ActionFooter>
+        </Specimen>
+        <Specimen
+          name="Pagination"
+          klass="Pagination"
+          note="Ghost prev/next with the mono page marker between; placeholders keep the row balanced at either edge. Renders nothing on a single first page. One component where four pages each hand-rolled the same nav."
+        >
+          <Pagination page={2} hasMore hrefFor={(p) => `#page-${p}`} />
         </Specimen>
         <Specimen
           name="Chip"
@@ -293,23 +327,17 @@ export default function ComponentsPage() {
         </Specimen>
         <Specimen
           name="Filters & search"
-          klass=".filters / .fbtn / .search"
-          note=".is-on takes the ink ground; the fitment switch uses [aria-pressed=true] in live. All chips meet the 44px touch floor."
+          klass="FilterGroup / FilterLink / FilterButton / SearchField"
+          note="Production components. A filter axis is one labelled group: link mode carries aria-current for URL-backed selection (.is-on ink ground), button mode carries aria-pressed (live fill). Axis grammar — stack for the primary axis, sub for the quieter one beneath, scroll to ride the gutter sideways ≤760px. Every target keeps the 44px floor."
         >
-          <div className="filters mb-3">
-            <button type="button" className="fbtn is-on">
+          <FilterGroup label="Category" className="mb-3">
+            <FilterLink href="#suspension" selected>
               Suspension
-            </button>
-            <button type="button" className="fbtn">
-              Brakes
-            </button>
-            <button type="button" className="fbtn" aria-pressed="true">
-              Fits my car
-            </button>
-          </div>
-          <label className="search w-full">
-            <input type="text" defaultValue="dogleg gearbox" aria-label="Search parts" readOnly />
-          </label>
+            </FilterLink>
+            <FilterLink href="#brakes">Brakes</FilterLink>
+            <FilterButton pressed>Fits my car</FilterButton>
+          </FilterGroup>
+          <SearchField label="Search parts" defaultValue="dogleg gearbox" className="w-full" />
         </Specimen>
       </SpecimenGroup>
 
@@ -501,6 +529,34 @@ export default function ComponentsPage() {
       {/* ============ 06 FORMS ============ */}
       <SpecimenGroup id="forms" index="06" title="Forms">
         <Specimen
+          name="Field components"
+          klass="TextField / TextArea / Select / Checkbox / FormField"
+          note="The production field family (src/components/ui/form.tsx) — label, control, hint, error and success in one contract, with aria-describedby / aria-invalid wired automatically. Native elements throughout; error presence paints the control via .is-invalid. prefix joins a mono unit into the control plate."
+        >
+          <div>
+            <TextField
+              id="doc-part"
+              name="doc-part"
+              label="Part number"
+              prefix="PN"
+              defaultValue="CP9660-2S4"
+              hint="What a buyer cross-references."
+            />
+            <TextField
+              id="doc-title"
+              name="doc-title"
+              label="Title"
+              defaultValue=""
+              error="A part needs a name before it can list."
+            />
+            <Select id="doc-cond" name="doc-cond" label="Condition" defaultValue="used" fieldClassName="!mb-0">
+              <option value="new">New</option>
+              <option value="used">Used</option>
+            </Select>
+            <Checkbox label="Attach provenance" defaultChecked className="mt-2" />
+          </div>
+        </Specimen>
+        <Specimen
           name="Field"
           klass=".field / .ctl / states"
           note="Microlabel + mono control on paper-deep + hint line. .ctl keeps a transparent 1px border at rest so invalid/ok borders paint without layout shift. Inline errors appear after blur, marked ▸."
@@ -528,9 +584,29 @@ export default function ComponentsPage() {
           </div>
         </Specimen>
         <Specimen
+          name="Counted field"
+          klass="CountedField / .field__labelrow / .field__count"
+          note="Labeled control with a live counter in the label row — only for fields with a real server-enforced limit (the max and the server check share a constant in src/lib/limits.ts). Controlled, so React 19 form resets can't desync counter and value."
+        >
+          <div className="field !mb-0">
+            <span className="field__labelrow">
+              <span className="microlabel">Title</span>
+              <span aria-hidden="true" className="field__count">
+                24 of 160
+              </span>
+            </span>
+            <input
+              className="ctl ctl--block"
+              defaultValue="Downpipe + tune installed"
+              aria-label="Title"
+              readOnly
+            />
+          </div>
+        </Specimen>
+        <Specimen
           name="Checkbox & dropzone"
           klass="input.sq / .drop / .thumbs"
-          note="16px square checks with live accent. The dropzone is the dashed r16 plate — live tint on dragover; thumbs grid at 84px with remove badges."
+          note="16px square checks with live accent. The dropzone is the dashed r16 plate — live tint on dragover; thumbs grid at 84px with remove badges. Behavior (picker, drag-drop, busy state) ships as the DropZone component in src/components/ui."
         >
           <label className="mb-4 flex items-center gap-2">
             <input className="sq" type="checkbox" defaultChecked readOnly />{" "}
@@ -650,6 +726,21 @@ export default function ComponentsPage() {
           </div>
         </Specimen>
         <Specimen
+          name="Mobile action bar"
+          klass="MobileActionBar / .buybar / --wide"
+          note="The persistent compact-screen action: fixed to the bottom edge, safe-area padded, with body clearance reserved by the stylesheet and the bar retiring exactly where the page's real controls regain a column (981px plain, 1024px wide — cart, checkout). For the highest-value action on a transaction surface only. Drawn static here; live on any PDP or the cart at phone width."
+        >
+          <div className="flex items-center gap-3 rounded-ctl border-t border-[color:var(--rule-mid)] bg-paper-deep px-4 py-3">
+            <span className="buybar__total">
+              <span className="microlabel">Total</span>
+              <span className="buybar__price">$1,300.00</span>
+            </span>
+            <Button variant="live" className="min-w-0 flex-1">
+              Proceed to checkout
+            </Button>
+          </div>
+        </Specimen>
+        <Specimen
           name="Undrawn cover"
           klass=".plate-undrawn"
           note="A photoless listing cover takes the drafting-absence language scaled into a card: dashed construction rule, cross-hair. Declared unlayered in globals.css so it outranks the utility fallback."
@@ -660,6 +751,19 @@ export default function ComponentsPage() {
 
       {/* ============ 08 COMMUNICATION & FEEDBACK ============ */}
       <SpecimenGroup id="comms" index="08" title="Communication & feedback">
+        <Specimen
+          name="Bottom sheet"
+          klass="BottomSheet / .bsheet"
+          note="The compact-screen sheet: the dialog plate risen from the bottom edge — full width, top corners at r16, safe-area padding, scrim behind, Esc/trap/restore like Dialog. Children stay mounted while closed so form fields keep submitting; with inlineFrom the chrome dissolves ≥640px and the children flow back inline. First consumer: the marketplace finder's refinements behind one Refine control. Drawn static here."
+        >
+          <div className="bsheet is-open !static rounded-ctl p-4">
+            <div className="bsheet__panel !max-h-none">
+              <span className="microlabel">Refine</span>
+              <SearchField label="Location" name="doc-loc" placeholder="Location" className="w-full" />
+              <Button className="w-full">Done</Button>
+            </div>
+          </div>
+        </Specimen>
         <Specimen
           name="Alert"
           klass=".alert / --live / --ok"
@@ -855,6 +959,52 @@ export default function ComponentsPage() {
                   LinkedTitle · TimelineRow · WebsitePill · ProfileHeader · VehicleGallery ·
                   KeyValueTable · EmbeddedVideo · SectionHeading
                 </td>
+              </tr>
+              <tr>
+                <td>button.tsx</td>
+                <td>
+                  Button · ButtonLink — the .btn recipes as a semantic contract (variant:
+                  default | live | ghost | destructive | quiet; loading + pendingLabel)
+                </td>
+              </tr>
+              <tr>
+                <td>form.tsx</td>
+                <td>
+                  FormField · TextField · TextArea · Select · Checkbox · Radio — the .field /
+                  .ctl family with aria wiring built in
+                </td>
+              </tr>
+              <tr>
+                <td>filters.tsx</td>
+                <td>
+                  FilterGroup · FilterLink · FilterButton · ActiveFilterChip — the .filters /
+                  .fbtn axes (stack · sub · scroll)
+                </td>
+              </tr>
+              <tr>
+                <td>finder.tsx</td>
+                <td>
+                  Finder · SearchField · FinderLabel · FinderClear — the .finder search plate
+                  (GET form; every search is an address)
+                </td>
+              </tr>
+              <tr>
+                <td>action-footer.tsx / mobile-action-bar.tsx</td>
+                <td>
+                  ActionFooter (.saverow commit row) · MobileActionBar (.buybar persistent
+                  compact action)
+                </td>
+              </tr>
+              <tr>
+                <td>bottom-sheet.tsx / finder-refine-sheet.tsx</td>
+                <td>
+                  BottomSheet (compact sheet, keeps children mounted, dissolves inline ≥640px) ·
+                  FinderRefineSheet (dense refinements behind one Refine control)
+                </td>
+              </tr>
+              <tr>
+                <td>pagination.tsx</td>
+                <td>Pagination — ghost prev/next + mono page marker (with lib/url-params withParams)</td>
               </tr>
               <tr>
                 <td>dialog.tsx</td>

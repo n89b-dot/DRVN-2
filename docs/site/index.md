@@ -24,6 +24,7 @@ This index page renders at `/docs` itself — there is no `/docs/index` route.
 | Components | `/docs/components` | `/docs/md/components` | The complete categorized component catalog |
 | Patterns | `/docs/patterns` | `/docs/md/patterns` | Route map, commerce flows, empty and form states |
 | Rules | `/docs/rules` | `/docs/md/rules` | The do/don't contract, accessibility, engineering conventions |
+| Material reference | `/docs/material` | `/docs/md/material` | What the component library borrows from Material 3 (behavior only) and the Compact / Medium / Expanded adaptive model |
 
 ## Reference library (raw markdown)
 

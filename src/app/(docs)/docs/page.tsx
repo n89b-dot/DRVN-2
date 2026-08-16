@@ -43,6 +43,12 @@ const SECTION_CARDS = [
     title: "Rules",
     note: "The do/don't contract, accessibility, content and engineering rules.",
   },
+  {
+    href: "/docs/material",
+    n: "07",
+    title: "Material reference",
+    note: "What the components borrow from Material 3 — behavior only — and the adaptive model.",
+  },
 ];
 
 export default function DocsHome() {

@@ -44,12 +44,14 @@ Format: **class — shape — key rules.**
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.btn` | Mono 12 uppercase, 13×20 pad, r10, ink bg, `[` `]` bracket pseudos | Press scale(.97); `--live` (one per surface), `--ghost` (paper-deep), `--destructive` (reads serious without competing with the one filled-red `--live`); no spinner variant |
+| `.btn` | Mono 12 uppercase, 13×20 pad, r10, ink bg, `[` `]` bracket pseudos | Press scale(.97); `--live` (one per surface), `--ghost` (paper-deep), `--destructive` (reads serious without competing with the one filled-red `--live`); no spinner — async buttons use `Button loading` + `pendingLabel` ("Saving…", aria-busy) |
 | `.chip` | Mono 11 uppercase, 4×10, r6 | `--live`, `--ok`, `--warn`, `--ink`, `--spent`, `--danger`, `--info`, `--x` (removable filter chip); status, never navigation |
 | `.capsule` | Ink band r10, 10×16, mono; `.dot` pulse + `.cd` countdown | `--paper` (+1px baseline shadow-rule), `--quiet` |
 | `.relbtn` | Small release button in `.bline--own` rows | Owner "release this part" affordance |
-| `.fbtn` / `.filters` | Mono 11 filter buttons, r10, paper-deep | `.is-on` ink; `[aria-pressed=true]` live (fitment switch); 44px touch target |
-| `.search` | Tile-framed label + borderless input | |
+| `.fbtn` / `.filters` | Mono 11 filter buttons, r10, paper-deep | `.is-on` ink; `[aria-pressed=true]` live (fitment switch); 44px touch target at every width. Consumed via `FilterGroup` (axis grammar: `stack` primary / `sub` quieter / `scroll` gutter-rides ≤760px) with `FilterLink` (aria-current) and `FilterButton` (aria-pressed) |
+| `.search` | Tile-framed label + borderless input | Consumed via `SearchField` (accessible name required) and `Finder` (query row + refinement row, GET form — every search is an address) |
+| `.saverow` | Commit row: aux left, status + commit right | Consumed via `ActionFooter`; ≤520px stacks aux / status / full-width 44px commit |
+| `.buybar` | Fixed bottom action bar, safe-area padded | Consumed via `MobileActionBar`; body clearance reserved by the stylesheet; retires at 981px (plain) / 1024px (`--wide`, cart + checkout) |
 
 ## 05 Data display
 
@@ -72,10 +74,11 @@ Format: **class — shape — key rules.**
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.field` / `.ctl` | Grid gap 7: microlabel + control (mono, paper-deep, r10) + hint/err/ok | `.ctl` keeps `border: 1px solid transparent` so invalid/ok borders paint without layout shift; `.field--row` 2-col |
+| `.field` / `.ctl` | Grid gap 7: microlabel + control (mono, paper-deep, r10) + hint/err/ok | `.ctl` keeps `border: 1px solid transparent` so invalid/ok borders paint without layout shift; `.field--row` 2-col. Consumed via `FormField` / `TextField` / `TextArea` / `Select` — label, hint, error, success and `aria-describedby`/`aria-invalid` wired automatically |
 | `.ctl__prefix` | Framed prefix ("$") input | |
 | `input.sq` | 16px square checkbox, accent live | |
 | `.drop` / `.thumbs` / `.thumb` | Dashed r16 dropzone (live tint on hover/dragover); 84px thumb grid with `__x`, `__tag`, `--ghost` | |
+| `.field__labelrow` / `.field__count` | Label row with right-aligned live counter ("12 of 160"), mono 12 dim tabular | Only on fields with a real server-enforced limit; counter is aria-hidden |
 | `.steps` / `.step` | Counter rows 01/02/… grid 34/1fr/auto, ruled | `.is-now` live number; `.is-done` dim |
 | `.savebar` | Sticky bottom tile r16 + baseline shadow-rule | Fixed full-width ≤720px; appears on dirty settings |
 | `.authwrap` | 420px centered auth column | |
@@ -120,7 +123,18 @@ Format: **class — shape — key rules.**
 | `FeedCard`, `MasonryFeed` | feed-card.tsx | Explore feed cards + masonry |
 | `NarrowColumn`, `Avatar`, `Media`, `MetadataTags`, `SectionLabel`, `HorizontalGallery`, `TabNav` | primitives.tsx | Layout + media primitives (Media takes `fallbackClassName` for undrawn covers) |
 | `LinkedTitle`, `TimelineRow`, `WebsitePill`, `ProfileHeader`, `VehicleGallery`, `KeyValueTable`, `EmbeddedVideo`, `SectionHeading` | patterns.tsx | Profile/build-log patterns |
+| `Button`, `ButtonLink`, `buttonClass` | button.tsx | The `.btn` recipes as a semantic contract — `variant`: default \| live \| ghost \| destructive \| quiet (`.relbtn`); `loading` + `pendingLabel` (disables, aria-busy, narrates); `ButtonLink` for CTA navigations |
+| `FormField`, `TextField`, `TextArea`, `Select`, `Checkbox`, `Radio` | form.tsx | The `.field`/`.ctl` family with aria wiring built in; `prefix` joins a mono unit into the control plate; native elements throughout |
+| `FilterGroup`, `FilterLink`, `FilterButton`, `ActiveFilterChip` | filters.tsx | The `.filters`/`.fbtn` axes — one labelled group per filter dimension; link mode for URL-backed selection, button mode for client toggles; `.chip--x` removable chips |
+| `Finder`, `SearchField`, `FinderLabel`, `FinderClear` | finder.tsx | The `.finder` search plate — query row + refinement row, GET form, hidden params carried through |
+| `ActionFooter` | action-footer.tsx | The `.saverow` commit row — aux, status (`ok` chip role=status / `error` line role=alert), primary action |
+| `MobileActionBar` | mobile-action-bar.tsx | The `.buybar` persistent compact action — total block + one live action; `wide` for cart/checkout |
+| `BottomSheet` | bottom-sheet.tsx | Compact sheet on Dialog semantics (`.bsheet`): children stay mounted while closed (form fields keep submitting); `inlineFrom="sm"` dissolves the chrome ≥640px |
+| `FinderRefineSheet` | finder-refine-sheet.tsx | A Finder's dense refinements behind one 44px "Refine" control on compact — first BottomSheet consumer (marketplace) |
+| `Pagination` | pagination.tsx | Ghost prev/next + mono page marker; pairs with `withParams` (src/lib/url-params.ts) |
 | `Dialog` | dialog.tsx | Modal on the sheet idiom |
+| `CountedField` | counted-field.tsx | Labeled input/textarea with a live counter (`.field__labelrow`); controlled so React 19 form resets can't desync counter and value; `max` must come from the same constant the server checks (`src/lib/limits.ts`) |
+| `DropZone` | drop-zone.tsx | The `.drop` pattern with behavior: click/keyboard opens the picker, drag-and-drop hands files to `onFiles`, `busy` refuses activation with `aria-disabled`/`aria-busy` |
 | `AuthIntentDialog` | auth-intent-dialog.tsx | The one place DRVN asks a signed-out visitor for an account — contextual copy per intent (offer/buy/save/follow/sell), carrying `?next=` back to the action |
 | `ConfirmDialog` | confirm-dialog.tsx | Two-step destructive confirm on the dialog idiom |
 | `Gallery`, `GalleryLightbox` (+ `GalleryPhoto` type) | gallery.tsx | Interactive gallery (hero + thumbs) and lightbox |
@@ -144,7 +158,11 @@ Previously undocumented class families, one line each:
 
 | Family | Purpose |
 | --- | --- |
-| `.buybar` | Sticky phone purchase bar fixed to the bottom edge while the real purchase controls are off-screen (desktop keeps the full rail) |
+| `.buybar` | Sticky phone purchase bar fixed to the bottom edge while the real purchase controls are off-screen (desktop keeps the full rail). `.buybar--wide` carries it to 1024px for the cart, whose side column arrives at Tailwind's `lg` rather than the PDP's 981px |
+| `.modrow` | The mods-editor line: a dense ledger row on desktop, recomposed under `sm` into a labelled record (`__head` / `__n` / `__lab` / `__foot`) via `display: contents`, so one set of controls serves both |
+| `.saverow` | An editing surface's commit row — optional `__aux` action, `__status`, then the button; stacks and goes full-width under 520px |
+| `.ordersum` | Checkout's phone-only compact order summary: a native `<details>` stating the total, standing in for the desktop aside |
+| `.sectionnav` | Settings' section register — sideways-scrolling with gutter bleed on a phone, the sticky vertical rail from `md` up |
 | `.pdp` | Listing detail two-column layout: 1.35fr/1fr grid ≥981px, `.pdp__media` / `.pdp__more` column flow |
 | `.finder` | The one search/filter recipe (tile plate) serving the marketplace, category sheets and console queues |
 | `.gallery` / `.lightbox` | Interactive gallery hero + thumb strip (`.gallery__hero/__thumbs/__thumb`) and full-screen lightbox — backs `Gallery`/`GalleryLightbox` |
