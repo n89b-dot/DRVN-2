@@ -66,6 +66,7 @@ for (const vp of VIEWPORTS) {
             page.locator(".tile__img"),
             page.locator(".tile"),
             page.locator(".mkt"),
+            page.locator(".mosaic"),
           ],
           maxDiffPixelRatio: 0.02,
         });

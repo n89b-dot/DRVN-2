@@ -98,15 +98,39 @@ test.describe.serial("mobile layout @ 375x812", () => {
     expect(box!.width).toBeGreaterThanOrEqual(104);
   });
 
-  test("garage: card image is generous and Manage is present", async ({ page }) => {
+  test("garage: build sheet — full-width plate, folded details, three-tool rail", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/garage");
-    const card = page.locator(".vehicle--card").first();
-    await expect(card).toBeVisible();
-    const box = await card.locator(".vehicle__img").boundingBox();
-    // Single-column stacked below 640px — the image runs the card's width.
-    expect(box!.width).toBeGreaterThanOrEqual(300);
-    await expect(card.getByRole("link", { name: /manage/i })).toBeVisible();
+    const sheet = page.locator(".gsheet").first();
+    await expect(sheet).toBeVisible();
+    // On phones the cover plate runs the sheet's full inner width above the
+    // identity — the car leads, then what's measured about it.
+    const plate = await sheet.locator(".gsheet__plate").boundingBox();
+    const sheetBox = await sheet.boundingBox();
+    expect(plate!.width).toBeGreaterThanOrEqual(sheetBox!.width - 40);
+    // The measured half is folded behind a digest on phones; the tool rail
+    // stays visible regardless, three equal 44px tools.
+    const toggle = sheet.getByRole("button", { expanded: false });
+    await expect(toggle).toBeVisible();
+    await expect(sheet.locator(".gsheet__dims")).toBeHidden();
+    const rail = sheet.locator(".gsheet__rail a");
+    await expect(rail).toHaveCount(3);
+    for (const tool of await rail.all()) {
+      await expect(tool).toBeVisible();
+      const box = await tool.boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+    // Unfold: five dimensions, each label on one line.
+    await toggle.click();
+    const dims = sheet.locator(".gsheet__dims .livedim");
+    await expect(dims).toHaveCount(5);
+    for (const label of await dims.locator(".microlabel").all()) {
+      const box = await label.boundingBox();
+      expect(box!.height).toBeLessThanOrEqual(18);
+    }
+    // The car's name is the way to its build page.
+    await sheet.locator(".gsheet__namelink").click();
+    await expect(page).toHaveURL(/\/cars\/[\w-]+/);
   });
 
   test("marketplace: filter chips only when filters are applied", async ({ page }) => {
@@ -127,18 +151,18 @@ test.describe.serial("mobile layout @ 375x812", () => {
     await expect(page.locator(".filterchips")).toHaveCount(0);
   });
 
-  test("explore: packed masonry columns, single column on phones", async ({ page }) => {
-    // Design decision (revised per review): the feed is column-packed masonry
-    // (.feedcols — the Read.cv/Cosmos pattern). Chronological DOM order,
-    // natural card heights, one column at phone width.
+  test("explore: mosaic wall, two columns on phones", async ({ page }) => {
+    // Design decision (revised 22 Aug 2026): the feed is a dense photo
+    // mosaic (.mosaic — Best Buy customer-images pattern). Kinds are
+    // interleaved across the page, two columns at phone width, 2-wide and
+    // 2×2 cells only on phones.
     await page.goto("/explore");
-    const feed = page.locator(".feedcols").first();
-    await expect(feed, "explore feed (needs at least one feed item)").toBeVisible();
-    const style = await feed.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { columnCount: cs.columnCount };
-    });
-    expect(Number(style.columnCount)).toBe(1);
+    const wall = page.locator(".mosaic").first();
+    await expect(wall, "explore wall (needs at least one feed item)").toBeVisible();
+    const cols = await wall.evaluate(
+      (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length
+    );
+    expect(cols).toBe(2);
   });
 });
 

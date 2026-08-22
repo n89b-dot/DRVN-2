@@ -43,9 +43,11 @@ test.describe.serial("feature regressions", () => {
   test("marketplace search matches the raw part number", async ({ page }) => {
     // Anonymous: search must work without an account.
     await page.goto(`/marketplace?q=${encodeURIComponent(PART_NUMBER)}`);
-    await expect(page.locator(".mkt").getByText(pnTitle)).toBeVisible();
-    // The card surfaces the part number itself.
-    await expect(page.locator(".mkt").getByText(`Part no. ${PART_NUMBER}`)).toBeVisible();
+    await expect(page.locator(".mosaic").getByText(pnTitle)).toBeVisible();
+    // The card no longer prints the part number (22 Aug 2026: the mosaic
+    // card's top line is the source car); the listing page still does.
+    await page.locator(".mosaic a.mcell", { hasText: pnTitle }).first().click();
+    await expect(page.getByText(PART_NUMBER).first()).toBeVisible();
   });
 
   test("marketplace search matches the compact part number", async ({ page }) => {
@@ -54,20 +56,20 @@ test.describe.serial("feature regressions", () => {
     // like "11427566327" matches via the stored generated column
     // part_number_compact (migration 0033) — both sides normalised.
     await page.goto(`/marketplace?q=${PART_NUMBER_COMPACT}`);
-    await expect(page.locator(".mkt").getByText(pnTitle)).toBeVisible();
+    await expect(page.locator(".mosaic").getByText(pnTitle)).toBeVisible();
   });
 
   test("marketplace cards state the shipping cost", async ({ page }) => {
     await page.goto(`/marketplace?q=${encodeURIComponent(pnTitle)}`);
-    const paidCard = page.locator(".mkt a", { hasText: pnTitle }).first();
+    const paidCard = page.locator(".mosaic a.mcell", { hasText: pnTitle }).first();
     // formatPrice drops trailing .00 for whole dollars — accept either form.
     // The card says "ship", not "shipping": the line truncates in a card
     // footer, so the copy is deliberately terse.
-    await expect(paidCard.locator(".mkt__ship")).toHaveText(/\+ \$25(\.00)? ship/);
+    await expect(paidCard.locator(".mcell__ship")).toHaveText(/\+ \$25(\.00)? ship/);
 
     await page.goto(`/marketplace?q=${encodeURIComponent(freeShipTitle)}`);
-    const freeCard = page.locator(".mkt a", { hasText: freeShipTitle }).first();
-    await expect(freeCard.locator(".mkt__ship")).toHaveText(/ships free/i);
+    const freeCard = page.locator(".mosaic a.mcell", { hasText: freeShipTitle }).first();
+    await expect(freeCard.locator(".mcell__ship")).toHaveText(/ships free/i);
   });
 
   test("messages footer links to offers", async ({ page }) => {

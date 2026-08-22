@@ -97,7 +97,8 @@ test.describe.serial("golden path", () => {
   test("the part appears on the car sheet's For sale tab", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/garage");
-    await page.getByRole("link", { name: /view build|public sheet/i }).first().click();
+    // The sheet's name (and its plate) is the link to the build page.
+    await page.locator(".gsheet__namelink").first().click();
 
     await page.getByRole("tab", { name: /for sale/i }).click();
     await expect(page.getByText(partTitle)).toBeVisible();
@@ -113,7 +114,7 @@ test.describe.serial("golden path", () => {
     // The card, not the active-filter readout: the query echo renders above
     // the grid and carries the same text, so a bare getByText picks that and
     // clicking it goes nowhere.
-    await page.locator(".mkt a", { hasText: partTitle }).first().click();
+    await page.locator(".mosaic a.mcell", { hasText: partTitle }).first().click();
     await expect(page).toHaveURL(/\/listings\/[\w-]+/);
 
     // Add-to-cart stays on the listing (in-place confirmation, badge update);
@@ -150,7 +151,7 @@ test.describe.serial("golden path", () => {
     // reference the title without it being buyable. The active-filter chip
     // also carries the search text in its accessible name, so "no listing
     // links" is asserted by destination, not by name.
-    await expect(page.locator(".mkt").getByText(partTitle)).toHaveCount(0);
+    await expect(page.locator(".mosaic").getByText(partTitle)).toHaveCount(0);
     await expect(
       page.locator('a[href^="/listings/"]', { hasText: partTitle })
     ).toHaveCount(0);
