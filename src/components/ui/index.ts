@@ -27,6 +27,7 @@ export {
   type GalleryImage,
 } from "./patterns";
 export { FeedCard, MasonryFeed } from "./feed-card";
+export { Mosaic, MosaicCell, FeedMosaicCell, ListingMosaicCell, mosaicSize, type MosaicSize } from "./mosaic";
 export {
   NarrowColumn,
   Avatar,
@@ -66,3 +67,4 @@ export { Gallery, GalleryLightbox, type GalleryImage as GalleryPhoto } from "./g
 export { SheetTabs, resolveTab, type SheetTab } from "./sheet-tabs";
 export { Toast } from "./toast";
 export { PaymentModeNotice } from "./payment-mode-notice";
+export { ScrollActiveIntoView } from "./scroll-active";

@@ -113,9 +113,14 @@ export default async function SavedPage({
     .filter((f) => f.target_type === "profile")
     .map((f) => f.target_id)
     .slice(0, SECONDARY_CAP);
+  const savedPostIds = (saves ?? [])
+    .filter((s) => s.target_type === "post")
+    .map((s) => s.target_id)
+    .slice(0, SECONDARY_CAP);
 
   const totalListingSaves = listingIds.length;
   const totalCarSaves = (saves ?? []).filter((s) => s.target_type === "car").length;
+  const totalPostSaves = (saves ?? []).filter((s) => s.target_type === "post").length;
   const totalFollowedCars = (follows ?? []).filter((f) => f.target_type === "car").length;
   const totalFollowedProfiles = (follows ?? []).filter((f) => f.target_type === "profile").length;
 
@@ -157,6 +162,41 @@ export default async function SavedPage({
             .in("id", followedProfileIds)
         : Promise.resolve({ data: [] }),
     ]);
+
+  // Saved build updates (0037): the post, its car (for the deep link), and
+  // its first photo. Bounded by SECONDARY_CAP like the other side sections.
+  const { data: savedPosts } =
+    tab === "saved" && savedPostIds.length
+      ? await supabase
+          .from("activity_posts")
+          .select("id, title, intro, car_id, published_at")
+          .in("id", savedPostIds)
+          .not("published_at", "is", null)
+      : { data: [] };
+  const savedPostCarIds = [...new Set((savedPosts ?? []).map((p) => p.car_id))];
+  const [{ data: savedPostCars }, { data: savedPostImages }] = await Promise.all([
+    savedPostCarIds.length
+      ? supabase.from("cars").select("id, slug, name").in("id", savedPostCarIds)
+      : Promise.resolve({ data: [] }),
+    (savedPosts ?? []).length
+      ? supabase
+          .from("activity_images")
+          .select("post_id, url, position")
+          .in("post_id", (savedPosts ?? []).map((p) => p.id))
+          .order("position")
+      : Promise.resolve({ data: [] }),
+  ]);
+  const savedPostCarById = new Map((savedPostCars ?? []).map((c) => [c.id, c]));
+  const savedPostCover = new Map<string, string>();
+  for (const img of savedPostImages ?? []) {
+    if (!savedPostCover.has(img.post_id)) savedPostCover.set(img.post_id, img.url);
+  }
+  // Keep the save-order (newest first), and drop posts on private cars.
+  const savedUpdates = savedPostIds
+    .map((id) => (savedPosts ?? []).find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    .map((p) => ({ ...p, car: savedPostCarById.get(p.car_id) }))
+    .filter((p) => p.car);
 
   const pageListingIds = (listings ?? []).map((l) => l.id);
   const { data: listingImages } = pageListingIds.length
@@ -217,7 +257,7 @@ export default async function SavedPage({
 
   return (
     <div className="wrap">
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Saved · {totalListingSaves} part{totalListingSaves === 1 ? "" : "s"} · {buildCount}{" "}
           build{buildCount === 1 ? "" : "s"} · {sellerCount} seller{sellerCount === 1 ? "" : "s"}
@@ -351,6 +391,60 @@ export default async function SavedPage({
               hrefFor={(p) => withParams(tabParams, { page: p === 1 ? undefined : String(p) })}
             />
           </div>
+        </section>
+      )}
+
+      {tab === "saved" && savedUpdates.length > 0 && (
+        <section className="deck">
+          <Rv className="tile">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Saved updates</span>
+              <span className="chip">{totalPostSaves}</span>
+            </div>
+            <div className="rowlist">
+              {savedUpdates.map((post) => (
+                <div key={post.id} className="order">
+                  {savedPostCover.get(post.id) && (
+                    <Link
+                      href={`/cars/${post.car!.slug}/activity/${post.id}`}
+                      className="order__img"
+                    >
+                      <Media
+                        src={savedPostCover.get(post.id)}
+                        alt={post.title}
+                        className="h-full w-full"
+                        role="row"
+                      />
+                    </Link>
+                  )}
+                  <span className="min-w-0">
+                    <Link
+                      href={`/cars/${post.car!.slug}/activity/${post.id}`}
+                      className="order__name block truncate transition-colors hover:text-live"
+                    >
+                      {post.title}
+                    </Link>
+                    <span className="order__meta block truncate">
+                      {post.car!.name}
+                      {post.intro ? ` — ${post.intro}` : ""}
+                    </span>
+                  </span>
+                  <span className="order__actions">
+                    <form action={removeSave}>
+                      <input type="hidden" name="target_type" value="post" />
+                      <input type="hidden" name="target_id" value={post.id} />
+                      <button type="submit" className="relbtn !static">
+                        Unsave
+                      </button>
+                    </form>
+                  </span>
+                </div>
+              ))}
+            </div>
+            {totalPostSaves > savedUpdates.length && (
+              <p className="field__hint mt-2">Showing your {savedUpdates.length} most recent.</p>
+            )}
+          </Rv>
         </section>
       )}
 

@@ -174,7 +174,7 @@ export default async function NotificationsPage({
 
   return (
     <NarrowColumn>
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Notifications
           {unreadTotal > 0 && (

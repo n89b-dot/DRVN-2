@@ -304,21 +304,56 @@ export async function fetchListings(
   // Covers, watch counts and seller trust hydrate in parallel with the
   // fitment lookups below.
   const cardsPromise = hydrateListingCards(supabase, listings);
+  // The viewer's saves and likes over this page plus public like/question
+  // counts, so each card's engagement strip renders pre-fired. All bounded
+  // by the page's ids.
+  const viewerSavesPromise = viewerId
+    ? supabase
+        .from("saves")
+        .select("target_id")
+        .eq("user_id", viewerId)
+        .eq("target_type", "listing")
+        .in("target_id", ids)
+    : Promise.resolve({ data: [] as { target_id: string }[] });
+  const likesPromise = supabase
+    .from("likes")
+    .select("target_id")
+    .eq("target_type", "listing")
+    .in("target_id", ids);
+  const viewerLikesPromise = viewerId
+    ? supabase
+        .from("likes")
+        .select("target_id")
+        .eq("user_id", viewerId)
+        .eq("target_type", "listing")
+        .in("target_id", ids)
+    : Promise.resolve({ data: [] as { target_id: string }[] });
+  const questionsPromise = supabase
+    .from("listing_questions")
+    .select("listing_id")
+    .in("listing_id", ids);
 
   // Fitment hint for the rows on this page — declared rows (0025) first,
   // source-car match as the fallback, mirroring the listing page's order.
   const fitByListing = new Map<string, string>();
   const sourceCarIds = listings.map((l) => l.source_car_id).filter(Boolean) as string[];
+  // The source car is always loaded: every card's eyebrow names the car the
+  // part came off ("2003 BMW M3"), which is the marketplace's whole premise.
+  const { data: sourceCars } = sourceCarIds.length
+    ? await supabase.from("cars").select("id, make, model, year").in("id", sourceCarIds)
+    : { data: [] as { id: string; make: string | null; model: string | null; year: number | null }[] };
+  const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
+  const sourceCarName = new Map<string, string>();
+  for (const listing of listings) {
+    const source = listing.source_car_id ? sourceById.get(listing.source_car_id) : null;
+    const name = source ? [source.year, source.make, source.model].filter(Boolean).join(" ") : "";
+    if (name) sourceCarName.set(listing.id, name);
+  }
   if (viewerId && garageByKey.size) {
-    const [{ data: sourceCars }, { data: pageClaims }] = await Promise.all([
-      sourceCarIds.length
-        ? supabase.from("cars").select("id, make, model").in("id", sourceCarIds)
-        : Promise.resolve({ data: [] }),
-      supabase
-        .from("listing_fitments")
-        .select("listing_id, make, model, year_start, year_end")
-        .in("listing_id", ids),
-    ]);
+    const { data: pageClaims } = await supabase
+      .from("listing_fitments")
+      .select("listing_id, make, model, year_start, year_end")
+      .in("listing_id", ids);
 
     const claimsByListing = new Map<string, NonNullable<typeof pageClaims>>();
     for (const claim of pageClaims ?? []) {
@@ -326,7 +361,6 @@ export async function fetchListings(
       bucket.push(claim);
       claimsByListing.set(claim.listing_id, bucket);
     }
-    const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
     for (const listing of listings) {
       const declared = matchFitmentClaims(garageCars, claimsByListing.get(listing.id) ?? []);
       const source = listing.source_car_id ? sourceById.get(listing.source_car_id) : null;
@@ -337,12 +371,28 @@ export async function fetchListings(
   }
 
   const total = count ?? listings.length;
-  const cards = await cardsPromise;
+  const [cards, { data: viewerSaves }, { data: likeRows }, { data: viewerLikes }, { data: questionRows }] =
+    await Promise.all([cardsPromise, viewerSavesPromise, likesPromise, viewerLikesPromise, questionsPromise]);
+  const savedIds = new Set((viewerSaves ?? []).map((s) => s.target_id));
+  const likedIds = new Set((viewerLikes ?? []).map((l) => l.target_id));
+  const likeCounts = new Map<string, number>();
+  for (const row of likeRows ?? []) {
+    likeCounts.set(row.target_id, (likeCounts.get(row.target_id) ?? 0) + 1);
+  }
+  const questionCounts = new Map<string, number>();
+  for (const row of questionRows ?? []) {
+    questionCounts.set(row.listing_id, (questionCounts.get(row.listing_id) ?? 0) + 1);
+  }
 
   return {
     results: cards.map((card) => ({
       ...card,
       fits_car_name: fitByListing.get(card.id) ?? null,
+      source_car_name: sourceCarName.get(card.id) ?? null,
+      viewer_saved: savedIds.has(card.id),
+      viewer_liked: likedIds.has(card.id),
+      like_count: likeCounts.get(card.id) ?? 0,
+      question_count: questionCounts.get(card.id) ?? 0,
     })),
     total,
     page,

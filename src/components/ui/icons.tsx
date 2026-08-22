@@ -26,6 +26,7 @@ export type IconName =
   | "box"
   | "flag"
   | "card"
+  | "share"
   | "book";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
@@ -118,6 +119,8 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
         <path d="M3 10h18M7 15h4" />
       </>
     ),
+    /* An arrow leaving the tray — send it somewhere else. */
+    share: <path d="M12 14V3.5M12 3.5 7.8 7.7M12 3.5l4.2 4.2M5 12.5v6A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-6" />,
     book: <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4ZM5 17a3 3 0 0 1 3-3h11M9 8h6" />,
   };
 

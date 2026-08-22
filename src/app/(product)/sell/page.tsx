@@ -91,7 +91,7 @@ export default async function SellPage({
 
   return (
     <div className="mx-auto w-full max-w-[860px] px-5 pb-10">
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           {prefill?.modItemId
             ? `Listing a part off your ${sourceCar?.name}`

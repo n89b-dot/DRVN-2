@@ -127,36 +127,55 @@ export function CheckoutSteps({
 
       {paymentStep ? (
         <>
-          <div className="tile">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="min-w-0">
-                <span className="microlabel microlabel--ink block">Shipping</span>
-                <span className="order__meta block truncate">
-                  {collection
-                    ? "Collecting in person"
-                    : saved
-                      ? [address.name, address.line1, address.city].filter(Boolean).join(", ")
-                      : "Address saved"}
-                </span>
-              </span>
+          {/* Review is two conceptual blocks, each with exactly ONE edit
+              affordance (SYS-11): Delivery & contact → Edit reopens the
+              address form (every field retained); Items → Edit cart. The
+              previous anatomy scattered four identical "Change" controls,
+              three of which did the same thing. */}
+          <div className="tile grid gap-3">
+            <div className="tile__head">
+              <span className="microlabel microlabel--ink">Delivery &amp; contact</span>
               <button
                 type="button"
                 onClick={() => setEditingAddress(true)}
                 className="jumplink shrink-0"
               >
-                Change
+                Edit
               </button>
             </div>
+            <div>
+              <span className="field__label block">
+                {collection ? "Collection" : "Delivery address"}
+              </span>
+              <span className="order__meta block">
+                {collection ? (
+                  "Collecting in person — no delivery address needed"
+                ) : saved && addressLines.length ? (
+                  <>
+                    {address.name}
+                    <br />
+                    {addressLines.join(", ")}
+                  </>
+                ) : (
+                  "Address saved"
+                )}
+              </span>
+            </div>
+            {needsEmail && email && (
+              <div>
+                <span className="field__label block">Confirmation to</span>
+                <span className="order__meta block truncate">{email}</span>
+              </div>
+            )}
           </div>
 
-          {/* Final review — items, fulfilment, full address, and the total
-              breakdown together, immediately before the payment element, so
+          {/* Items + the money, immediately before the payment element, so
               the buyer sees the whole commitment in one place before paying. */}
           <div className="tile grid gap-3">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">Review your order</span>
+              <span className="microlabel microlabel--ink">Items</span>
               <Link href="/cart" className="jumplink shrink-0">
-                Change
+                Edit cart
               </Link>
             </div>
 
@@ -170,50 +189,6 @@ export function CheckoutSteps({
                 ))}
               </div>
             )}
-
-            {needsEmail && email && (
-              <div className="flex items-start justify-between gap-3">
-                <span className="min-w-0">
-                  <span className="field__label block">Confirmation to</span>
-                  <span className="order__meta block truncate">{email}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingAddress(true)}
-                  className="jumplink shrink-0"
-                >
-                  Change
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-start justify-between gap-3">
-              <span className="min-w-0">
-                <span className="field__label block">
-                  {collection ? "Collection" : "Delivery address"}
-                </span>
-                <span className="order__meta block">
-                  {collection ? (
-                    "Collecting in person — no delivery address needed"
-                  ) : saved && addressLines.length ? (
-                    <>
-                      {address.name}
-                      <br />
-                      {addressLines.join(", ")}
-                    </>
-                  ) : (
-                    "Address saved"
-                  )}
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setEditingAddress(true)}
-                className="jumplink shrink-0"
-              >
-                Change
-              </button>
-            </div>
 
             {(subtotalLabel || shippingLabel) && (
               <div>

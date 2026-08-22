@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cx } from "@/lib/format";
 
 import { MARKETPLACE_FAMILY, type FamilyKey } from "./nav-routes";
+import { ScrollActiveIntoView } from "./scroll-active";
 
 const KEY_FOR_HREF: Record<string, FamilyKey> = {
   "/marketplace": "marketplace",
@@ -62,6 +63,7 @@ export function MarketplaceNav({
             </Link>
           );
         })}
+        <ScrollActiveIntoView selector=".is-here" />
       </div>
     </nav>
   );

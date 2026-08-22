@@ -159,7 +159,7 @@ export default async function OfferThreadPage({
           saying so, and the breadcrumb underneath names the way back. */}
       <MarketplaceNav current="offers" offersCount={offersCount} />
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/offers" className="jumplink">
             Offers

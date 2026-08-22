@@ -324,23 +324,6 @@ export default async function ListingPage({
                 Offers accepted from {formatPrice(listing.offer_floor_cents)}.
               </p>
             )}
-            {listing.status === "active" && (
-              <p className="spec-note mt-2">
-                Sellers are expected to dispatch within 3 working days of a sale.
-              </p>
-            )}
-            {/* What the sheet has seen of this part — watchers are live, views
-                are cumulative, so only the watcher line carries the live dot. */}
-            <LiveDim
-              label="Watching"
-              value={watchCount > 0 ? `${watchCount} watching` : "—"}
-              live={watchCount > 0}
-              blank={watchCount === 0}
-            />
-            {listing.part_number && (
-              <LiveDim label="Part number" value={listing.part_number} />
-            )}
-
             <PurchaseActions
               listingId={listing.id}
               isLoggedIn={Boolean(user)}
@@ -362,17 +345,6 @@ export default async function ListingPage({
                 />
               </div>
             )}
-            {user?.id !== listing.seller_id && (
-              <div className="mt-3">
-                <ReportButton
-                  subjectType="listing"
-                  subjectId={listing.id}
-                  subjectLabel={listing.title}
-                  isLoggedIn={Boolean(user)}
-                />
-              </div>
-            )}
-
             {seller && (
               <Link href={`/u/${seller.username}`} className="mt-5 flex items-center gap-3 border-t border-[color:var(--rule-soft)] pt-5">
                 <span className="monogram monogram--sm">{sellerInitials}</span>
@@ -386,6 +358,40 @@ export default async function ListingPage({
                 </span>
               </Link>
             )}
+
+            {/* The record, after the decision: watchers, part number, dispatch
+                policy and the report path are evidence and process — on a
+                short phone viewport none of them belongs between the price
+                and Buy/Offer (SYS-09). */}
+            <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-3">
+              {/* What the sheet has seen of this part — watchers are live,
+                  views are cumulative, so only the watcher line carries the
+                  live dot. */}
+              <LiveDim
+                label="Watching"
+                value={watchCount > 0 ? `${watchCount} watching` : "—"}
+                live={watchCount > 0}
+                blank={watchCount === 0}
+              />
+              {listing.part_number && (
+                <LiveDim label="Part number" value={listing.part_number} />
+              )}
+              {listing.status === "active" && (
+                <p className="spec-note mt-2">
+                  Sellers are expected to dispatch within 3 working days of a sale.
+                </p>
+              )}
+              {user?.id !== listing.seller_id && (
+                <div className="mt-3">
+                  <ReportButton
+                    subjectType="listing"
+                    subjectId={listing.id}
+                    subjectLabel={listing.title}
+                    isLoggedIn={Boolean(user)}
+                  />
+                </div>
+              )}
+            </div>
           </Rv>
 
           {/* Fitment: computable against the seller's structured fitment rows

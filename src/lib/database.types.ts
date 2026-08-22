@@ -194,7 +194,17 @@ export type ActivityComment = {
 
 export type Save = {
   user_id: string;
-  target_type: "listing" | "car" | "profile";
+  /** 'post' since 0037 — a bookmarked build update. */
+  target_type: "listing" | "car" | "profile" | "post";
+  target_id: string;
+  created_at: string;
+};
+
+/** Public "this is great" signal on listings/cars (migration 0037). Posts
+ *  express the same gesture through activity_reactions instead. */
+export type Like = {
+  user_id: string;
+  target_type: "listing" | "car";
   target_id: string;
   created_at: string;
 };
@@ -728,6 +738,7 @@ export type Database = {
       listing_images: Table<ListingImage, "listing_id" | "url">;
       mod_items: Table<ModItem, "car_id">;
       saves: Table<Save, "user_id" | "target_type" | "target_id">;
+      likes: Table<Like, "user_id" | "target_type" | "target_id">;
       follows: Table<Follow, "follower_id" | "target_type" | "target_id">;
       orders: Table<Order, "buyer_id" | "seller_id">;
       order_items: Table<OrderItem, "order_id" | "price_cents">;

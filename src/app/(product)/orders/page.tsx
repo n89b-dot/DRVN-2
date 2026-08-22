@@ -184,6 +184,14 @@ export default async function OrdersPage({
               : formatPrice(order.total_cents)}
           </span>
         </div>
+        {/* What this order wants next LEADS the row (SYS — orders triage by
+            next action, not by record): state, then the ask, then the item. */}
+        {action && (
+          <p className="ordernext !mt-2">
+            <span className="ordernext__mark" aria-hidden="true" />
+            {action}
+          </p>
+        )}
         <ul className="mt-2">
           {(items ?? [])
             .filter((i) => i.order_id === order.id)
@@ -202,15 +210,6 @@ export default async function OrdersPage({
             : `Seller — ${name(order.seller_id, order.seller_label)}`}
           {latest && ` · ${latest.label} ${latest.date}`}
         </p>
-        {/* What this order wants next, said once and said loudly — the row
-            used to lay every milestone out flat and ask the reader to work
-            out which one mattered. */}
-        {action && (
-          <p className="ordernext">
-            <span className="ordernext__mark" aria-hidden="true" />
-            {action}
-          </p>
-        )}
       </Link>
     );
   };
@@ -219,7 +218,7 @@ export default async function OrdersPage({
     <div className="wrap">
       <MarketplaceNav current="orders" offersCount={offersCount} />
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Transactions
           {(needsDispatchCount ?? 0) > 0 && (

@@ -97,7 +97,7 @@ export default async function OrderThreadPage({
 
   return (
     <NarrowColumn>
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/messages" className="hover:text-live">
             Messages
@@ -106,7 +106,9 @@ export default async function OrderThreadPage({
           {items?.[0]?.title ?? "Order"}
         </span>
         <h1>{counterpartyName}</h1>
-        <p className="sub">
+        {/* Order linkage + status is thread context, not runway — it stays on
+            compact (sub--keep). */}
+        <p className="sub sub--keep">
           About{" "}
           <Link href={`/orders/${orderId}`} className="jumplink">
             order {orderId.slice(0, 8)}

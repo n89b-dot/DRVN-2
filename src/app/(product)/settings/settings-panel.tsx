@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useCallback, useState, useSyncExternalStore } from "react";
 
-import { ActionFooter, Button } from "@/components/ui";
+import { ActionFooter, Button, ScrollActiveIntoView } from "@/components/ui";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 import type { SavedCard } from "@/lib/payments/customers";
 
@@ -212,7 +212,7 @@ export function SettingsPanel({
 
   return (
     <div>
-      <header className="pagehead">
+      <header className="pagehead pagehead--task">
         <span className="microlabel">Settings</span>
         <h1>Settings.</h1>
         <p className="sub">
@@ -247,6 +247,7 @@ export function SettingsPanel({
               {x.label}
             </button>
           ))}
+          <ScrollActiveIntoView selector="[aria-current]" />
         </nav>
 
         <div className="deck !mt-0">

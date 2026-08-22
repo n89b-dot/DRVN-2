@@ -36,7 +36,7 @@ export default async function ProfilePage({
 
   return (
     <NarrowColumn>
-      <div className="pagehead !pb-4">
+      <div className="pagehead pagehead--task !pb-4">
         <span className="microlabel">
           Your profile ·{" "}
           <Link href={`/u/${profile?.username}`} className="hover:text-live">

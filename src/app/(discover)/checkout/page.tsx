@@ -44,7 +44,7 @@ export default async function CheckoutPage() {
 
   return (
     <div className="wrap wrap--wide pb-10">
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">Secure checkout · {cart.lines.length} part{cart.lines.length === 1 ? "" : "s"}</span>
         <h1>Nearly yours.</h1>
       </Rv>

@@ -74,7 +74,7 @@ export default async function PayoutsPage({
 
   return (
     <div className="wrap">
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">Payouts · ledger</span>
         <h1>
           What you&apos;ve <span className="live-word">earned.</span>

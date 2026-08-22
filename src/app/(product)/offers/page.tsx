@@ -235,7 +235,7 @@ export default async function OffersPage({
     <div className="wrap">
       <MarketplaceNav current="offers" offersCount={attentionCount} />
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Negotiations
           {(receivedOpenCount ?? 0) > 0 && (

@@ -413,7 +413,10 @@ export async function deleteListing(
 
   revalidatePath("/sell");
   revalidatePath("/marketplace");
-  redirect("/sell?deleted=1");
+  revalidatePath("/listings");
+  // The seller ledger is where "Listing deleted" actually renders — the old
+  // /sell?deleted=1 landing had no handler for the param.
+  redirect("/listings?deleted=1");
 }
 
 /**

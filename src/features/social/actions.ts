@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
-export type SaveTargetType = "listing" | "car" | "profile";
+export type SaveTargetType = "listing" | "car" | "profile" | "post";
+export type LikeTargetType = "listing" | "car";
 export type FollowTargetType = "car" | "profile";
 
 /**
@@ -70,6 +71,47 @@ export async function toggleSave(
   return { saved: true };
 }
 
+/** Public like on a listing or car (0037). Posts like through
+ *  activity/actions' toggleReaction instead — same gesture, existing row. */
+export async function toggleLike(
+  targetType: LikeTargetType,
+  targetId: string,
+  path: string
+): Promise<{ liked: boolean } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "login" };
+
+  const { data: existing } = await supabase
+    .from("likes")
+    .select("target_id")
+    .eq("user_id", user.id)
+    .eq("target_type", targetType)
+    .eq("target_id", targetId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("likes")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("target_type", targetType)
+      .eq("target_id", targetId);
+    if (error) return { error: error.message };
+    revalidateIfAllowed(path);
+    return { liked: false };
+  }
+
+  const { error } = await supabase
+    .from("likes")
+    .insert({ user_id: user.id, target_type: targetType, target_id: targetId });
+  if (error) return { error: error.message };
+  revalidateIfAllowed(path);
+  return { liked: true };
+}
+
 export async function toggleFollow(
   targetType: FollowTargetType,
   targetId: string,
@@ -119,7 +161,7 @@ export async function removeSave(formData: FormData) {
 
   const targetType = String(formData.get("target_type") ?? "") as SaveTargetType;
   const targetId = String(formData.get("target_id") ?? "");
-  if (!targetId || !["listing", "car", "profile"].includes(targetType)) return;
+  if (!targetId || !["listing", "car", "profile", "post"].includes(targetType)) return;
 
   const { error } = await supabase
     .from("saves")

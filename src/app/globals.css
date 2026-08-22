@@ -147,6 +147,14 @@
 
   --maxw: 1200px;
 
+  /* Bottom-surface contract — one number every fixed bottom bar (buybar,
+     savebar, thread composer) and every page-clearance rule agree on: the
+     bar's own box is ≤64px tall, and content reserves 76px (bar + 12px of
+     air) plus the device safe-area. Only ONE bottom surface may own the
+     bottom edge on a route at a time. z-index ladder (bottom-relevant):
+     toast 120 > sheets 90 > savebar 50 > buybar/composer 40. */
+  --bottom-surface-h: 76px;
+
   /* Legacy token aliases (pre-Livesheet product code) */
   --bg-app: var(--paper);
   --bg-surface: var(--tile-2);
@@ -1122,15 +1130,6 @@ video {
   .pagehead--tight {
     padding: clamp(20px, 2.4vw, 28px) 0 clamp(14px, 1.8vw, 20px);
   }
-  .pagehead--tight h1 {
-    font-size: clamp(26px, 2.6vw, 34px);
-    margin-top: 10px;
-  }
-  .pagehead--tight .sub {
-    font-size: 15px;
-    max-width: 60ch;
-    margin-top: 8px;
-  }
   .pagehead h1 {
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.02em;
@@ -1163,6 +1162,57 @@ video {
     color: var(--dim);
     max-width: 52ch;
     margin-top: 14px;
+  }
+  /* Variant scales live BELOW the base h1/.sub rules on purpose: the variant
+     selectors tie with the base on specificity (one class + element), so
+     source order is what lets them win. */
+  .pagehead--tight h1 {
+    font-size: clamp(26px, 2.6vw, 34px);
+    margin-top: 10px;
+  }
+  .pagehead--tight .sub {
+    font-size: 15px;
+    max-width: 60ch;
+    margin-top: 8px;
+  }
+  /* Task heads — the management and transaction surfaces (Home, Marketplace,
+     Garage, Listings, Offers, Orders, Messages, Notifications, Saved,
+     Settings, Payouts, Cart, Checkout, Sell) are instruments: the user
+     arrives mid-job and the first row of real content has to land inside the
+     first half of a phone viewport. Editorial surfaces (landing, Explore,
+     build sheets, public profiles) keep the display head. */
+  .pagehead--task {
+    padding: clamp(16px, 2.2vw, 26px) 0 clamp(12px, 1.8vw, 20px);
+  }
+  .pagehead--task h1 {
+    font-size: clamp(24px, 2.6vw, 34px);
+    line-height: 1.15;
+    margin-top: 8px;
+  }
+  .pagehead--task .sub {
+    font-size: 15px;
+    max-width: 60ch;
+    margin-top: 8px;
+  }
+  /* On compact the standfirst is runway, not information. A head that must
+     keep its prose on a phone (state it can't show elsewhere) opts back in
+     with `.sub--keep`. */
+  @media (max-width: 640px) {
+    .pagehead--task .sub:not(.sub--keep) {
+      display: none;
+    }
+  }
+  /* Title row with a right-aligned primary action; wraps when the title is
+     long, so the action never crushes the h1. */
+  .pagehead__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px 16px;
+  }
+  .pagehead__row > div {
+    min-width: 0;
   }
   /* Console pages are worked, not read. The product's display headings
      (44px, tight tracking, 1.05 line-height) read as squished in a tool —
@@ -1863,6 +1913,25 @@ video {
     align-items: flex-start;
     gap: 10px;
   }
+  /* Management rows (Garage) — the garage's job is choosing a car to work
+     on, so on phones the car keeps a real 3:2 thumbnail (112px — bigger than
+     an order thumbnail, smaller than a spread) beside identity, state and
+     Manage, and at least two complete rows fit a phone viewport. ≥640px the
+     expressive card anatomy returns. */
+  .vehicle--manage {
+    grid-template-columns: minmax(240px, 340px) 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .vehicle--manage .vehicle__img {
+    aspect-ratio: 16 / 10;
+  }
+  /* Inline state flag beside the name — public/private is identity-level
+     information on a management row, not an action. */
+  .vehicle__flag {
+    margin-left: 8px;
+    vertical-align: 3px;
+  }
   /* Ruled vehicle list — like .rowlist but for the larger vehicle rows. */
   .vlist {
     display: flex;
@@ -1882,6 +1951,25 @@ video {
     }
     .vehicle--row {
       grid-template-columns: minmax(104px, 34%) 1fr auto;
+    }
+    .vehicle--manage {
+      grid-template-columns: 112px 1fr;
+      gap: 14px;
+    }
+    .vehicle--manage .vehicle__img {
+      aspect-ratio: 3 / 2;
+    }
+    .vehicle--manage .vehicle__name--lg {
+      font-size: 17px;
+      line-height: 1.3;
+    }
+    .vehicle--manage .vehicle__meta {
+      font-size: 14px;
+      margin-top: 2px;
+    }
+    .vehicle--manage .vehicle__actions {
+      margin-top: 10px;
+      gap: 8px;
     }
   }
 
@@ -2661,14 +2749,656 @@ video {
   }
   /* Keep the page's last content reachable above the fixed bar. Keyed per
      variant so each stops reserving the space exactly when its bar goes. */
-  @media (max-width: 980px) {
+  /* ---------- mosaic (unlayered: sits above the utility layer, so the
+   cell's own spans win) ----------
+   The photo wall: a dense grid on one unit. 1×1 tiles, plus 2×2 features
+   and 2×1 wides on phones; `dense` back-fills holes so the wall closes flush.
+   The unit is a column wide and 1.25 columns tall — a 1×1 is a portrait
+   card, so even the smallest tile keeps a real photo above its caption.
+   Every cell is the same card the deck already uses (tile surface, padding,
+   ink text): eyebrow row → photo plate → headline → value → meta → actions. */
+.mosaicwrap {
+  container-type: inline-size;
+}
+.mosaic {
+  --mcols: 4;
+  --mgap: 12px;
+  display: grid;
+  grid-template-columns: repeat(var(--mcols), minmax(0, 1fr));
+  --mratio: 1.25;
+  grid-auto-rows: calc(((100cqw - (var(--mcols) - 1) * var(--mgap)) / var(--mcols)) * var(--mratio));
+  grid-auto-flow: dense;
+  gap: var(--mgap);
+}
+@container (max-width: 900px) {
+  .mosaic {
+    --mcols: 3;
+  }
+}
+@container (max-width: 600px) {
+  /* A phone column is ~170px: the caption is a fixed cost, so the unit
+     grows taller to keep the photo near 4:3 rather than a letterbox. */
+  .mosaic {
+    --mcols: 2;
+    --mgap: 8px;
+    --mratio: 1.5;
+  }
+}
+.mcell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--r);
+  background: var(--tile);
+  padding: 10px 10px 8px;
+  color: var(--ink);
+  container-type: inline-size;
+  transition:
+    transform var(--t-move) var(--spring),
+    background var(--t-fast) ease;
+}
+.mcell:hover {
+  transform: translateY(-2px) scale(1.005);
+}
+.mcell--deep {
+  background: var(--tile-2);
+}
+/* The larger shapes exist only on the phone wall (2 columns), where a
+   2-wide cell is still no bigger than one desktop card. At 3–4 columns every
+   cell is one card, so no photo is ever wider or taller than its 4-column
+   size. */
+@container (max-width: 600px) {
+  .mcell--wide,
+  .mcell--xl {
+    grid-column: span 2;
+  }
+  .mcell--xl {
+    grid-row: span 2;
+  }
+}
+/* Eyebrow row — mono kind label left, annotation right; the card's first
+   line, same as the deck. */
+.mcell__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+  min-width: 0;
+}
+.mcell__eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* Kind pills — the one place the wall says what a thing is, so the three
+   kinds get three clearly different paints: a part for sale is filled ink
+   (the market's normal state, same demotion as the feed list), a build is
+   outlined, an update is the ok tint — fresh activity, not a state. */
+.mcell__eyebrow--part,
+.mcell__eyebrow--car,
+.mcell__eyebrow--update {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: var(--r-chip);
+  line-height: 11px;
+}
+.mcell__eyebrow--part {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.mcell__eyebrow--car {
+  box-shadow: inset 0 0 0 1px var(--ink);
+  color: var(--ink);
+}
+.mcell__eyebrow--update {
+  background: var(--ok-tint);
+  color: var(--ok-text);
+}
+.mcell__eyebrow--corner {
+  flex: none;
+}
+.mcell__flag {
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--on-ink);
+  background: var(--ink);
+  padding: 0 6px;
+  border-radius: var(--r-chip);
+}
+/* Photo plate — takes whatever height the caption leaves. */
+.mcell__img {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 8px;
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--img-fallback);
+}
+.mcell__img > * {
+  position: absolute;
+  inset: 0;
+}
+.mcell__img img,
+.mcell__img video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Caption — ink on the tile, pinned under the plate. */
+.mcell__cap {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
+  padding-top: 8px;
+}
+.mcell__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.008em;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.mcell__value {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mcell__sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  opacity: 0.85;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Photo plate starts at the card's top edge when there's no eyebrow row. */
+.mcell__top + .mcell__img {
+  margin-top: 8px;
+}
+.mcell__img {
+  margin-top: 0;
+}
+.mcell__ship {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--dim);
+}
+.mcell__meta {
+  display: none;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--dim);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Wider cells earn a second headline line and the meta line. */
+@container (min-width: 240px) {
+  .mcell {
+    padding: 14px 14px 10px;
+  }
+  .mcell__title {
+    -webkit-line-clamp: 2;
+    font-size: 15px;
+  }
+  .mcell__value {
+    font-size: 15px;
+    margin-top: 6px;
+  }
+  .mcell__meta {
+    display: block;
+    margin-top: 5px;
+  }
+  .mcell__cap {
+    padding-top: 12px;
+  }
+}
+/* Engagement strip — the deck's, tightened. */
+.mcell .cardeng {
+  margin-top: 10px;
+  padding-top: 6px;
+  gap: 0;
+}
+.mcell .cardeng__act {
+  min-height: 28px;
+  padding: 0 5px;
+}
+.mcell .cardeng__act:first-child {
+  margin-left: -5px;
+}
+.mcell .cardeng__act--end {
+  margin-right: -5px;
+}
+.mcell .cardeng__ico {
+  width: 14px;
+  height: 14px;
+}
+/* No photo: the caption rises to fill, headline allowed three lines. */
+.mcell--bare .mcell__cap {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+.mcell--bare .mcell__title {
+  -webkit-line-clamp: 3;
+}
+
+/* ---------- garage build sheets (unlayered, see mosaic note) ----------
+   One sheet per car: cover plate with a sheet number, identity, five
+   dimension lines, the latest entry and the open work orders. The plate
+   leads on the left the way a drawing's title block carries its figure;
+   everything measured sits to its right. */
+.gsheets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.gsheet {
+  display: grid;
+  grid-template-columns: minmax(280px, 5fr) 7fr;
+  gap: 24px;
+  padding: 20px;
+  background: var(--tile);
+  border-radius: var(--r);
+  min-width: 0;
+}
+.gsheet__plate {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--img-fallback);
+  align-self: start;
+}
+.gsheet__plate img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.7s var(--spring);
+}
+.gsheet__plate:hover img {
+  transform: scale(1.03);
+}
+/* Sheet number — a title-block stamp on the plate's corner. */
+.gsheet__no {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  padding: 4px 8px;
+  border-radius: var(--r-chip);
+}
+.gsheet__no--ledger {
+  left: auto;
+  right: 10px;
+  color: var(--on-ink);
+  background: var(--ink);
+  backdrop-filter: none;
+}
+.gsheet__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gsheet__head .microlabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gsheet__flag {
+  font-size: 10px;
+  padding: 2px 7px;
+}
+.gsheet__name {
+  font-size: clamp(22px, 2.2vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin-top: 6px;
+}
+.gsheet__meta {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--dim);
+  margin-top: 4px;
+}
+/* Five dimensions in one row; each keeps the livedim's own spine. */
+.gsheet__dims {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 6px;
+}
+.gsheet__dims .livedim {
+  margin-top: 14px;
+  padding-left: 14px;
+}
+.gsheet__dims .livedim .val {
+  font-size: 16px;
+  font-weight: 500;
+  display: block;
+  margin-top: 2px;
+}
+.gsheet__dims .livedim .microlabel {
+  white-space: nowrap;
+}
+/* The sheet draws itself: each dimension's spine scales in from the top
+   and its ticks follow, staggered left to right as the sheet reveals — the
+   same draw-in the horizontal dimlines already do. Reduced motion: drawn. */
+@media (prefers-reduced-motion: no-preference) {
+  .gsheet .livedim::before {
+    transform-origin: top;
+    transform: scaleY(0);
+    transition: transform var(--t-draw) var(--spring);
+  }
+  .gsheet .livedim::after,
+  .gsheet .livedim .livedim__tick {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .gsheet.is-in .livedim::before {
+    transform: scaleY(1);
+  }
+  .gsheet.is-in .livedim::after,
+  .gsheet.is-in .livedim .livedim__tick {
+    opacity: 1;
+  }
+  .gsheet .livedim:nth-child(1)::before { transition-delay: 120ms; }
+  .gsheet .livedim:nth-child(2)::before { transition-delay: 200ms; }
+  .gsheet .livedim:nth-child(3)::before { transition-delay: 280ms; }
+  .gsheet .livedim:nth-child(4)::before { transition-delay: 360ms; }
+  .gsheet .livedim:nth-child(5)::before { transition-delay: 440ms; }
+  .gsheet .livedim:nth-child(1) .livedim__tick, .gsheet .livedim:nth-child(1)::after { transition-delay: 420ms; }
+  .gsheet .livedim:nth-child(2) .livedim__tick, .gsheet .livedim:nth-child(2)::after { transition-delay: 500ms; }
+  .gsheet .livedim:nth-child(3) .livedim__tick, .gsheet .livedim:nth-child(3)::after { transition-delay: 580ms; }
+  .gsheet .livedim:nth-child(4) .livedim__tick, .gsheet .livedim:nth-child(4)::after { transition-delay: 660ms; }
+  .gsheet .livedim:nth-child(5) .livedim__tick, .gsheet .livedim:nth-child(5)::after { transition-delay: 740ms; }
+}
+/* Latest + Next — two annotation columns under the dimensions. */
+.gsheet__notes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule-soft);
+}
+.gsheet__note {
+  min-width: 0;
+}
+.gsheet__latest {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+.gsheet__latest:hover .gsheet__latesttitle {
+  color: var(--live);
+}
+.gsheet__thumb {
+  width: 56px;
+  height: 42px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--img-fallback);
+  display: block;
+}
+.gsheet__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gsheet__latesttitle {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  transition: color var(--t-fast) ease;
+}
+.gsheet__latestwhen {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-top: 3px;
+}
+.gsheet__empty {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+  margin-top: 8px;
+}
+/* Work orders — checkbox-ruled lines, the way a job card lists tasks. */
+.gsheet__orders {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.gsheet__order {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: color var(--t-fast) ease;
+}
+.gsheet__order:hover {
+  color: var(--live);
+}
+.gsheet__box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--dimline);
+  border-radius: 3px;
+}
+.gsheet__order--live {
+  color: var(--live);
+}
+.gsheet__order--live .gsheet__box {
+  border-color: var(--live);
+  box-shadow: inset 0 0 0 2px var(--tile), inset 0 0 0 6px var(--live);
+}
+/* Name → build page. The arrow is the nav cue; the plate is the same link
+   (tabindex -1, so the keyboard meets it once). */
+.gsheet__namelink {
+  color: inherit;
+  transition: color var(--t-fast) ease;
+}
+.gsheet__namelink:hover {
+  color: var(--live);
+}
+.gsheet__go {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 0.8em;
+  color: var(--dim);
+  margin-left: 10px;
+  transition: transform var(--t-fast) var(--spring), color var(--t-fast) ease;
+  display: inline-block;
+}
+.gsheet__namelink:hover .gsheet__go {
+  color: var(--live);
+  transform: translateX(4px);
+}
+/* Tool rail — three equal tools, pinned to the sheet's foot. */
+.gsheet__rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+  max-width: 440px;
+}
+.gsheet__rail .btn {
+  padding-left: 10px;
+  padding-right: 10px;
+  white-space: nowrap;
+}
+/* The fold. Desktop: no toggle, always open. Phones: a digest line you
+   tap to unfold the dimensions and notes. */
+.gsheet__toggle {
+  display: none;
+}
+.gsheet__more {
+  display: block;
+}
+@media (max-width: 640px) {
+  .gsheet__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 10px;
+    padding: 0 2px;
+    border-top: 1px solid var(--rule-soft);
+    color: var(--ink);
+    text-align: left;
+  }
+  .gsheet__digest {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--dim);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gsheet__toggle[aria-expanded="true"] .gsheet__digest {
+    color: var(--ink);
+  }
+  .gsheet__chev {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 16px;
+    line-height: 1;
+    color: var(--dim);
+  }
+  .gsheet__more {
+    display: none;
+  }
+  .gsheet__more.is-open {
+    display: block;
+  }
+  .gsheet__more .gsheet__dims {
+    margin-top: 0;
+  }
+  .gsheet__more .gsheet__notes {
+    border-top: 0;
+    padding-top: 4px;
+  }
+  .gsheet__rail {
+    max-width: none;
+    gap: 6px;
+    padding-top: 12px;
+  }
+  .gsheet__rail .btn {
+    padding: 13px 6px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+  }
+  /* Three tools in 343px: the bracket decorations spill, so the rail's
+     buttons drop them — the grid cell is the bracket. */
+  .gsheet__rail .btn::before,
+  .gsheet__rail .btn::after {
+    content: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .gsheet {
+    grid-template-columns: minmax(220px, 2fr) 3fr;
+    gap: 18px;
+  }
+  .gsheet__dims {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .gsheet {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 12px 12px 14px;
+  }
+  .gsheet__plate {
+    aspect-ratio: 16 / 10;
+  }
+  .gsheet__dims {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .gsheet__dims .livedim .val {
+    font-size: 14px;
+  }
+  .gsheet__dims .livedim .microlabel {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+  .gsheet__notes {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 980px) {
     body:has(.buybar) {
-      padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(var(--bottom-surface-h, 76px) + env(safe-area-inset-bottom, 0px));
     }
   }
   @media (min-width: 981px) and (max-width: 1023px) {
     body:has(.buybar--wide) {
-      padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(var(--bottom-surface-h, 76px) + env(safe-area-inset-bottom, 0px));
     }
   }
   /* A cart line is a total and one action, not a price/shipping pair, so the
@@ -2691,7 +3421,7 @@ video {
      chronological; visual order runs down each column — the accepted trade
      of every packed feed. Gutter matches the .mkt grid. */
   .feedcols {
-    columns: 1;
+    columns: 2;
     column-gap: 16px;
   }
   .feedcols > * {
@@ -2699,16 +3429,162 @@ video {
     break-inside: avoid;
     margin-bottom: 16px;
   }
-  @media (min-width: 640px) {
-    .feedcols {
-      columns: 2;
-    }
-  }
-  @media (min-width: 1024px) {
+  @media (min-width: 981px) {
     .feedcols {
       columns: 3;
     }
   }
+  @media (min-width: 1200px) {
+    .feedcols {
+      columns: 4;
+    }
+  }
+  /* The engagement strip — like · comment · share · save at the foot of a
+     card, above its own hairline. Rest state is dim; a fired toggle reads
+     live and fills, the same grammar as every toggle in the sheet. Counts
+     ride beside their icon in mono, small enough to be a notation. */
+  .cardeng {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .cardeng--compact {
+    margin-top: 10px;
+    padding-top: 8px;
+  }
+  .cardeng__act {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 30px;
+    padding: 0 8px;
+    border-radius: var(--r-ctl);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .cardeng__act:first-child {
+    margin-left: -8px; /* icons align with the card's text edge */
+  }
+  .cardeng__act:hover {
+    color: var(--ink);
+    background: var(--ghost);
+  }
+  .cardeng__act.is-on {
+    color: var(--live);
+  }
+  .cardeng__act.is-on .cardeng__ico {
+    fill: currentColor;
+  }
+  .cardeng__act--end {
+    margin-left: auto;
+    margin-right: -8px;
+  }
+  .cardeng__ico {
+    width: 16px;
+    height: 16px;
+  }
+  .cardeng__count {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Compact ledger row — Home's discovery line as a masonry plate: thumb,
+     words, one chip. The short beat between posters. */
+  /* ---------- feed card type scale ----------
+     One scale for every card in the deck, whatever the format: mono eyebrow
+     (microlabel) → title → price → meta. Sizes sit close on purpose — the
+     hierarchy comes from weight and ink, not shouting. */
+  .feedtitle {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.008em;
+    line-height: 1.35;
+    color: var(--ink);
+    margin-top: 12px; /* after an image plate; text-stack contexts override */
+  }
+  .feedtitle--lg {
+    font-size: 17px;
+    letter-spacing: -0.012em;
+  }
+  .feedmeta {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--dim);
+  }
+  .feedprice {
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .feedprice--lead {
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+  .feedprice__ship {
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--dim);
+  }
+
+  .tile--row {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 16px;
+    padding: 16px 18px 12px;
+  }
+  .tile__thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+    display: block;
+  }
+  .tile__thumb img,
+  .tile__thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .tile--row .feedtitle {
+    font-size: 14.5px;
+    margin-top: 0;
+  }
+  /* The engagement strip runs the card's full width, under thumb and text. */
+  .tile__rowfoot {
+    grid-column: 1 / -1;
+    display: block;
+    min-width: 0;
+  }
+
+  /* Horizontal split plate — photo beside the note, inside the columns. */
+  .tile--split {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-rows: auto auto;
+    column-gap: 16px;
+    align-items: stretch;
+  }
+  .tile__img--side {
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+    /* Fill the text's height, but keep a floor so a two-line note still
+       gets a photo, not a sliver. */
+    min-height: 116px;
+    height: 100%;
+  }
+
   /* Plates draw onto the sheet — same voice as the Rv reveal used elsewhere. */
   @keyframes plate-in {
     from {
@@ -2731,8 +3607,14 @@ video {
   /* ---------- market grid ---------- */
   .mkt {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px; /* unified card gutter — matches .deck */
+  }
+  /* 4 → 3 → 2 → 2: four 3:2 plates need ~1200px; below that, three. */
+  @media (max-width: 1199px) {
+    .mkt {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
   .mkt .tile__img {
     aspect-ratio: 3 / 2;
@@ -3427,9 +4309,19 @@ video {
      offers. */
   .finder .search {
     background: var(--paper-deep);
-    flex: 1 1 240px;
+    /* 170px basis keeps the submit on the same row down to 375px viewports
+       (finder content at 375 is ~307px: 170 + 8 gap + ~123 button). At 240px
+       the button wrapped to its own full row on every phone; at 320 it still
+       does, which is acceptable. min-width: 0 lets the field actually shrink
+       to the basis: the input's intrinsic min-content otherwise holds the
+       label at ~235px and forces the wrap anyway. */
+    flex: 1 1 170px;
+    min-width: 0;
     width: auto;
     max-width: none;
+  }
+  .finder .search input {
+    min-width: 0;
   }
   .finder__refine {
     display: flex;
@@ -3507,7 +4399,9 @@ video {
   .toast {
     position: fixed;
     left: 50%;
-    bottom: 24px;
+    /* Clear the home-indicator safe area — at bottom: 24px flat, a toast on a
+       notched phone sat half behind the indicator. */
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     z-index: 120;
     transform: translate(-50%, 12px);
     opacity: 0;
@@ -4603,6 +5497,23 @@ video {
     border-top: 1px solid var(--rule-soft);
     padding-top: 14px;
   }
+  /* Conversation-native composer (message thread, handheld widths): the
+     reply row pins to the bottom of the viewport while the thread scrolls,
+     bleeding to its tile's edges so pinned messages pass behind an opaque
+     plate, with home-indicator clearance. Part of the bottom-surface
+     contract — a thread route must not also mount a buybar/savebar. ≥769px
+     the thread reads as a document again and the composer returns to flow. */
+  @media (max-width: 768px) {
+    .composer--pin {
+      position: sticky;
+      bottom: 0;
+      z-index: 40;
+      background: var(--tile);
+      margin: 0 -20px -20px;
+      padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid var(--rule-soft);
+    }
+  }
   .composer__row {
     display: flex;
     gap: 8px;
@@ -4838,6 +5749,12 @@ video {
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+  .clamp3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
   .trunc {
     white-space: nowrap;
     overflow: hidden;
@@ -4848,6 +5765,53 @@ video {
   .mkt__name,
   .bline__val {
     overflow-wrap: anywhere;
+  }
+}
+
+/* ---------- horizontal-rail edge fades (outside @layer: @property and
+   keyframes are top-level at-rules) ----------
+   A one-line scroller can look complete while more chips/tabs sit off-screen.
+   Where the browser supports scroll-driven animations, the rail's clipped
+   edge gets a 28px fade that exists only while content actually continues in
+   that direction: at rest only the right edge fades; fully scrolled, only
+   the left. Both custom properties start at 0, so a rail that doesn't
+   overflow (inactive timeline) — or a browser without support — shows no
+   mask at all. Purely decorative: gutter-bleed item cut-off remains the
+   baseline affordance everywhere. */
+@property --railfade-l {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+@property --railfade-r {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+@keyframes rail-edges {
+  0% {
+    --railfade-l: 0;
+    --railfade-r: 1;
+  }
+  100% {
+    --railfade-l: 1;
+    --railfade-r: 0;
+  }
+}
+@supports (animation-timeline: scroll(self inline)) {
+  .familynav__rows,
+  .sectionnav,
+  .filters--scroll,
+  .tabstrip {
+    mask-image: linear-gradient(
+      to right,
+      rgb(0 0 0 / calc(1 - var(--railfade-l))) 0,
+      rgb(0 0 0 / 1) 28px,
+      rgb(0 0 0 / 1) calc(100% - 28px),
+      rgb(0 0 0 / calc(1 - var(--railfade-r))) 100%
+    );
+    animation: rail-edges linear both;
+    animation-timeline: scroll(self inline);
   }
 }
 
@@ -4979,10 +5943,12 @@ video {
     bottom: 0;
     border-radius: 0;
     margin: 0;
-    padding: 12px 16px;
+    /* Bottom-surface contract: safe-area on the bar itself… */
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   }
   .has-savebar {
-    padding-bottom: 88px;
+    /* …and matching clearance (bar + air + safe area) on the page. */
+    padding-bottom: calc(var(--bottom-surface-h, 76px) + 12px + env(safe-area-inset-bottom, 0px));
   }
   .band__stats {
     grid-template-columns: 1fr;
@@ -5138,8 +6104,124 @@ video {
    reaches for (bell, saved, lighting) keeps its place; settings folds into
    the index, where it's already a register. */
 @media (max-width: 640px) {
+  /* Phones stay 2-up (Best Buy / PayPal / Vestiaire idiom): a single
+     full-width card per row read as a stack of posters, not a grid. The
+     gutter tightens with the plate so two photos still get real width. */
   .mkt {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .feedcols {
+    column-gap: 10px;
+  }
+  .feedcols > * {
+    margin-bottom: 10px;
+  }
+  /* Compact plate: ~170px of column means the desktop padding and scale
+     would leave the photo a stamp. Everything steps down one notch; the
+     anatomy (eyebrow → media → title → price → meta → engagement) holds. */
+  .feedcols .tile,
+  .mkt .tile {
+    padding: 10px 10px 8px;
+  }
+  .feedcols .tile .microlabel,
+  .mkt .tile .microlabel {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+  .feedcols .feedtitle,
+  .mkt .mkt__name {
+    font-size: 13.5px;
+    line-height: 1.3;
+    margin-top: 8px;
+  }
+  .feedcols .feedtitle--lg {
+    font-size: 14.5px;
+  }
+  .feedcols .feedmeta,
+  .feedcols .feedprice__ship,
+  .mkt .mkt__ship,
+  .mkt .mkt__seller {
+    font-size: 11.5px;
+  }
+  .feedcols .feedprice {
+    font-size: 14px;
+  }
+  .feedcols .feedprice--lead {
+    font-size: 22px;
+  }
+  .mkt .mkt__price {
+    font-size: 16px;
+    margin-top: 3px;
+  }
+  .mkt .mkt__metaline {
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    margin-top: 5px;
+  }
+  /* Watch count and seller rating don't fit beside a price at this width. */
+  .mkt .mkt__price .microlabel {
+    display: none;
+  }
+  /* Square plates on phones: at half-width a 3:2 photo is a letterbox.
+     (Unlayered, so it outranks the card's aspect utility.) */
+  .mkt .tile__img {
+    aspect-ratio: 1;
+  }
+  .mkt .mkt__seller {
+    margin-top: 8px;
+    padding-top: 6px;
+  }
+  /* Row and split formats are desktop-width ideas; in a half-width column
+     they fold into the plain photo-over-text stack every neighbour uses. */
+  .feedcols .tile--row {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+    padding: 10px 10px 8px;
+  }
+  .feedcols .tile__thumb {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    margin-bottom: 8px;
+  }
+  .feedcols .tile--split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .feedcols .tile__img--side {
+    min-height: 0;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    margin-bottom: 8px;
+  }
+  .feedcols .cardeng,
+  .mkt .cardeng {
+    margin-top: 8px;
+    padding-top: 6px;
+    gap: 0;
+  }
+  .feedcols .cardeng__act,
+  .mkt .cardeng__act {
+    min-height: 28px;
+    padding: 0 5px;
+    gap: 3px;
+  }
+  .feedcols .cardeng__act:first-child,
+  .mkt .cardeng__act:first-child {
+    margin-left: -5px;
+  }
+  .feedcols .cardeng__act--end,
+  .mkt .cardeng__act--end {
+    margin-right: -5px;
+  }
+  .feedcols .cardeng__ico,
+  .mkt .cardeng__ico {
+    width: 14px;
+    height: 14px;
+  }
+  .feedcols .cardeng__count,
+  .mkt .cardeng__count {
+    font-size: 10px;
   }
   /* (fbtn's 44px floor now lives on the base rule — every width.) */
   .bar__inner {
@@ -5253,6 +6335,21 @@ video {
 @media (max-width: 420px) {
   .deck--kpi {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Compact KPI scale (SYS-10): on a phone the seller stats are a glance, not
+   a dashboard spread — smaller figures and tighter plates so a quiet
+   account's metrics don't push the garage a full viewport down. A metric
+   that needs action still carries its live styling. */
+@media (max-width: 640px) {
+  .deck--kpi .tile {
+    padding: 14px 16px;
+  }
+  .deck--kpi .num-giant {
+    font-size: 28px;
+    line-height: 1.1;
+    margin: 4px 0 2px;
   }
 }
 

@@ -123,7 +123,7 @@ export default async function CartPage() {
 
   return (
     <div className="wrap wrap--wide pb-10">
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Cart · {active.length} part{active.length === 1 ? "" : "s"}
         </span>

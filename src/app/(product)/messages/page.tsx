@@ -344,7 +344,7 @@ export default async function MessagesPage({
 
   return (
     <NarrowColumn>
-      <Rv as="header" className="pagehead pagehead--tight">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Messages
           {totalUnread > 0 && (

@@ -78,49 +78,18 @@ export function OfferThread({
 
   const live = status === "open" || status === "countered";
 
+  const hasDecision = Boolean(
+    (incoming && live) || (!incoming && status === "countered" && counterAmountCents) || (!incoming && live)
+  );
+
   return (
     <>
-      {messages.length > 0 && (
-        <div className="thread mt-4">
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`msg ${m.sender_id === currentUserId ? "msg--me" : ""}`}
-            >
-              <span className="msg__who">
-                {m.sender_id === currentUserId ? "You" : m.sender_name}
-                {" · "}
-                {new Date(m.created_at).toLocaleString(undefined, {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              <p className="msg__body">{m.body}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--rule-soft)] pt-4">
-        {/* Messaging survives the offer closing — a declined thread should
-            still read back, not vanish. */}
-        <form action={sendMessage} className="composer__row">
-          <input type="hidden" name="offer_id" value={offerId} />
-          <input
-            name="body"
-            required
-            maxLength={4000}
-            placeholder="Message…"
-            className="ctl max-w-none flex-1 !py-2"
-          />
-          <button type="submit" disabled={sendingMessage} className="btn btn--ghost !py-2.5">
-            {sendingMessage ? "Sending…" : "Send"}
-          </button>
-        </form>
-        <Result state={messageState} />
-
+      {/* The decision leads (SYS — "who acts next"): Accept/Counter/Pass or
+          the buyer's counter-acceptance sit ABOVE the thread, so on a phone
+          the expected action never hides below a long conversation. The
+          composer stays at the bottom, conversation-native. */}
+      {hasDecision && (
+        <div className="mt-4 flex flex-col gap-2">
         {incoming && live && (
           <>
             <div className="flex flex-wrap gap-2">
@@ -190,6 +159,49 @@ export function OfferThread({
         <Result state={respondState} />
         <Result state={withdrawState} />
         <Result state={counterState} />
+        </div>
+      )}
+
+      {messages.length > 0 && (
+        <div className="thread mt-4">
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={`msg ${m.sender_id === currentUserId ? "msg--me" : ""}`}
+            >
+              <span className="msg__who">
+                {m.sender_id === currentUserId ? "You" : m.sender_name}
+                {" · "}
+                {new Date(m.created_at).toLocaleString(undefined, {
+                  day: "numeric",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              <p className="msg__body">{m.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--rule-soft)] pt-4">
+        {/* Messaging survives the offer closing — a declined thread should
+            still read back, not vanish. */}
+        <form action={sendMessage} className="composer__row">
+          <input type="hidden" name="offer_id" value={offerId} />
+          <input
+            name="body"
+            required
+            maxLength={4000}
+            placeholder="Message…"
+            className="ctl max-w-none flex-1 !py-2"
+          />
+          <button type="submit" disabled={sendingMessage} className="btn btn--ghost !py-2.5">
+            {sendingMessage ? "Sending…" : "Send"}
+          </button>
+        </form>
+        <Result state={messageState} />
       </div>
     </>
   );

@@ -233,7 +233,7 @@ export default async function SellerListingsPage({
     <div className="wrap">
       <MarketplaceNav current="listings" offersCount={offersCount} />
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">Your inventory</span>
         <h1>
           Every part you&apos;ve <span className="live-word">listed.</span>

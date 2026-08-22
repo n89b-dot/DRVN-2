@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CardEngagement } from "@/features/social/card-actions";
 import { conditionLabel, formatPrice } from "@/lib/marketplace/taxonomy";
 
 import { Media } from "./primitives";
@@ -24,6 +25,8 @@ export type ListingCardData = {
   location: string | null;
   cover_url: string | null;
   fits_car_name?: string | null;
+  /** The car this part came off — "2003 BMW M3". The mosaic card's eyebrow. */
+  source_car_name?: string | null;
   /** Manufacturer part number — what a buyer cross-references against. */
   part_number?: string | null;
   /** How many people are watching. Omitted (not 0) when unknown. */
@@ -35,6 +38,13 @@ export type ListingCardData = {
   status_flag?: string | null;
   /** Why this card was recommended, e.g. "Fits your BMW E46". Recommendations only. */
   reason?: string | null;
+  /** Whether the viewer has saved (is watching) this listing. */
+  viewer_saved?: boolean;
+  /** Public likes (0037). */
+  like_count?: number;
+  viewer_liked?: boolean;
+  /** Buyer questions on the listing — the card's comment count. */
+  question_count?: number;
 };
 
 function initialsOf(name: string): string {
@@ -61,11 +71,15 @@ function initialsOf(name: string): string {
 export function ListingCard({
   listing,
   prefetch,
+  save,
 }: {
   listing: ListingCardData;
   /** Pass false for decorative renders (e.g. the inert auth backdrop) so the
    *  viewport prefetcher doesn't fetch six unreachable routes. */
   prefetch?: boolean;
+  /** Renders the engagement strip (like · comment · share · save). Omitted →
+   *  a quiet card (decorative grids, surfaces with their own SaveButton). */
+  save?: { isLoggedIn: boolean; path: string };
 }) {
   const watching = listing.watch_count ?? 0;
   const metaParts = [conditionLabel(listing.condition), listing.location].filter(Boolean);
@@ -130,6 +144,19 @@ export function ListingCard({
         </span>
       )}
       {listing.reason && <span className="microlabel block mt-2">{listing.reason}</span>}
+      {save && (
+        <CardEngagement
+          target={{ kind: "listing", id: listing.id }}
+          path={save.path}
+          isLoggedIn={save.isLoggedIn}
+          initialLiked={Boolean(listing.viewer_liked)}
+          likeCount={listing.like_count ?? 0}
+          commentHref={`/listings/${listing.id}`}
+          commentCount={listing.question_count ?? 0}
+          shareUrl={`/listings/${listing.id}`}
+          initialSaved={Boolean(listing.viewer_saved)}
+        />
+      )}
     </Link>
   );
 }

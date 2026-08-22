@@ -7,7 +7,15 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0001–0036 applied
+## Status: 0001–0038 applied
+
+0037 (card engagement: public `likes` on listings/cars, `saves.target_type`
+learns 'post') and 0038 (notify_on_save handles 'post' — the 0009 trigger's
+profile catch-all fed a post id into notifications.user_id, an FK violation
+that rolled back the save) applied 16 August 2026 via node-postgres, each
+applied twice (idempotency check); self-checks pass. Verified end-to-end from
+the browser: card like → `likes` row, post save → `saves` row + /saved
+"Saved updates" section.
 
 0036 (account_emails) applied 15 August 2026 via node-postgres, applied twice
 (idempotency check); self-checks pass, 6 addresses backfilled. It exists so

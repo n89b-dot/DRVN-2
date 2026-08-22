@@ -7,6 +7,7 @@ import { fetchFeed, fetchFollowedFeed, type FeedItem } from "@/lib/feed";
 import { recommendListings } from "@/lib/recommendations";
 import { createClient } from "@/lib/supabase/server";
 
+import { Attention } from "./attention";
 import { Greeting } from "./greeting";
 import { PostUpdatePrompt } from "./post-update-prompt";
 import { SellerKpis } from "./seller-kpis";
@@ -70,7 +71,7 @@ export default async function HomePage({
   return (
     <div className="wrap">
       {/* Page head — what's happened since you were last here */}
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">Home</span>
         <h1>
           <Greeting />
@@ -83,22 +84,12 @@ export default async function HomePage({
             ? "Follow a build or a seller and their updates land here first — until then, this is a mix of what's new across DRVN."
             : "The latest from the builds and people you follow, first — with a Discovery mix underneath once that runs out."}
         </p>
-        <div className="jumprow">
-          <span className="microlabel">Jump to</span>
-          <Link className="jumplink" href="/saved">
-            Saved · {savedCount ?? 0}
-          </Link>
-          <Link className="jumplink" href="/orders">
-            Orders
-          </Link>
-          <Link className="jumplink" href="/notifications">
-            Notifications
-          </Link>
-          <Link className="jumplink" href="/marketplace">
-            Marketplace →
-          </Link>
-        </div>
       </Rv>
+
+      {/* Actionable state first: anything that needs the viewer beats
+          metrics, the garage and every feed below (SYS-10). Renders nothing
+          when nothing needs them. */}
+      <Attention supabase={supabase} userId={user!.id} />
 
       {/* Seller stats — only for people who have listed something */}
       <SellerKpis supabase={supabase} userId={user!.id} />

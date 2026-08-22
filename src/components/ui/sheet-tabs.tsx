@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type SheetTab = {
   key: string;
@@ -75,6 +75,14 @@ export function SheetTabs({
     },
     [fallback, paramName]
   );
+
+  // Initial render can land with the active tab past the strip's clipped
+  // edge (deep-linked ?view=…) — bring it into view once on mount, same
+  // `nearest` no-op behaviour as selection.
+  useEffect(() => {
+    tabRefs.current[active]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
     const index = keys.indexOf(active);

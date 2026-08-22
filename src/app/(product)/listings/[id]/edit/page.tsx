@@ -9,7 +9,7 @@ import { getVehicleMakes } from "@/lib/vehicles/vpic";
 import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
-import { DeleteListing } from "./delete-listing";
+import { DeleteListing } from "../../delete-listing";
 import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Edit listing - DRVN" };

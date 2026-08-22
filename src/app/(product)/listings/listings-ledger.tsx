@@ -9,6 +9,7 @@ import type { ListingStatus } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 import { formatPrice } from "@/lib/payments/fee";
 
+import { DeleteListing } from "./delete-listing";
 import { ListingStatusActions } from "./status-actions";
 
 export type LedgerOffer = {
@@ -312,6 +313,14 @@ export function ListingsLedger({
                             Edit
                           </Link>
                           <ListingStatusActions id={row.id} status={row.status} />
+                          {/* Full deletion, not just archiving — for any row
+                              the DB delete guard allows. Reserved/sold rows
+                              keep their history and can only be archived. */}
+                          {row.status !== "reserved" &&
+                            row.status !== "sold" &&
+                            row.status !== "removed" && (
+                              <DeleteListing listingId={row.id} triggerLabel="Delete" />
+                            )}
                           {row.unansweredQuestions > 0 && (
                             <Link href={`/listings/${row.id}#qa`} className="chip chip--live">
                               {row.unansweredQuestions} question

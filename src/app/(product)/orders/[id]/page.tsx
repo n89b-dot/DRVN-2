@@ -203,7 +203,7 @@ export default async function OrderDetailPage({
           the breadcrumb underneath names the way back to the list. */}
       <MarketplaceNav current="orders" offersCount={offersCount} />
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/orders" className="jumplink">
             Orders

@@ -37,6 +37,13 @@ export function FeedList({ items }: { items: FeedItem[] }) {
               href={`/cars/${item.carSlug}/activity/${item.id}`}
               className="order"
             >
+              {/* A post with photos leads with one, same as cars and parts —
+                  text-only updates keep the bare annotation row. */}
+              {item.cover_url && (
+                <span className="order__img">
+                  <Media src={item.cover_url} alt={item.title} className="h-full w-full" role="row" />
+                </span>
+              )}
               <span>
                 <span className="order__name block">{item.title}</span>
                 <span className="order__meta block">

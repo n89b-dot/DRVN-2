@@ -81,7 +81,18 @@ export function ThreadView({
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
   const [state, action, pending] = useActionState<CommerceState, FormData>(sendThreadMessage, {});
+
+  // Opening the live thread lands the reader at the newest message, the way
+  // any conversation surface does — not at a months-old first page. History
+  // mode (?before=) is the explicit request for the past, so it stays put.
+  const latestId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  useEffect(() => {
+    if (!viewingHistory && latestId) {
+      endRef.current?.scrollIntoView({ block: "end" });
+    }
+  }, [viewingHistory, latestId]);
 
   // A send that lands doesn't otherwise refresh this route (the action
   // revalidates the order page, not this one) — refresh explicitly so the new
@@ -145,22 +156,35 @@ export function ThreadView({
         </p>
       )}
 
-      {!viewingHistory && (
-        <form ref={formRef} action={action} className="composer__row">
-          <input type="hidden" name="order_id" value={orderId} />
-          <input
-            name="body"
-            required
-            maxLength={4000}
-            placeholder="Message the other party…"
-            className="ctl max-w-none flex-1 !py-2"
-          />
-          <button type="submit" disabled={pending} className="btn btn--ghost !py-2.5">
-            {pending ? "Sending…" : "Send"}
-          </button>
-        </form>
+      {viewingHistory && (
+        <div className="flex justify-center border-t border-[color:var(--rule-soft)] pt-3">
+          {/* A composer here would suggest replying from an old point in the
+              record — the only reply path is the latest window. */}
+          <Link href={`/messages/${orderId}`} className="btn btn--ghost">
+            Back to latest to reply
+          </Link>
+        </div>
       )}
-      <Result state={state} />
+
+      {!viewingHistory && (
+        <div className="composer--pin grid gap-2" ref={endRef}>
+          <form ref={formRef} action={action} className="composer__row">
+            <input type="hidden" name="order_id" value={orderId} />
+            <input
+              name="body"
+              required
+              maxLength={4000}
+              placeholder="Message the other party…"
+              className="ctl max-w-none flex-1 !py-2"
+            />
+            <button type="submit" disabled={pending} className="btn btn--ghost !py-2.5">
+              {pending ? "Sending…" : "Send"}
+            </button>
+          </form>
+          <Result state={state} />
+        </div>
+      )}
+      {viewingHistory && <Result state={state} />}
     </div>
   );
 }

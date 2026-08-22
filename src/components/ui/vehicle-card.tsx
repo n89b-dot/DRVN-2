@@ -21,18 +21,24 @@ export type VehicleSummary = {
  *
  * - `row` (Home): compact dashboard rhythm — a medium 3:2 image leading a
  *   whole-row link to the build page.
- * - `card` (Garage): the car is the page's content — a generous leading
- *   image beside (stacked above, on phones) the identity and actions.
+ * - `card` (public/editorial): the car is the page's content — a generous
+ *   leading image beside (stacked above, on phones) the identity and actions.
+ * - `manage` (Garage): a management row. ≥640px it keeps the card's generous
+ *   side-by-side anatomy; on phones it recomposes to a 112px 3:2 thumbnail
+ *   beside identity + state + Manage, so several cars fit one viewport.
  */
 export function VehicleCard({
   vehicle,
   variant = "row",
   actions,
+  flag,
 }: {
   vehicle: VehicleSummary;
-  variant?: "row" | "card";
-  /** Card variant only — the action cluster (Manage, View build, …). */
+  variant?: "row" | "card" | "manage";
+  /** Card/manage variants — the action cluster (Manage, View build, …). */
   actions?: ReactNode;
+  /** Inline state chip beside the name (e.g. Private). */
+  flag?: ReactNode;
 }) {
   const meta = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
   const media = (
@@ -63,10 +69,13 @@ export function VehicleCard({
   }
 
   return (
-    <div className="vehicle vehicle--card">
+    <div className={`vehicle ${variant === "manage" ? "vehicle--manage" : "vehicle--card"}`}>
       {media}
       <div className="vehicle__body min-w-0">
-        <span className="vehicle__name vehicle__name--lg block">{vehicle.name}</span>
+        <span className="vehicle__name vehicle__name--lg block">
+          {vehicle.name}
+          {flag && <span className="vehicle__flag">{flag}</span>}
+        </span>
         <span className="vehicle__meta block">{meta || "No details yet"}</span>
         {actions}
       </div>

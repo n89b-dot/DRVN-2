@@ -20,6 +20,12 @@ export type FeedItem =
       reactions: number;
       /** How many photos the post carries — the card's gallery cue. */
       imageCount: number;
+      /** Whether the viewer already fired the card's like (🔥 reaction). */
+      viewerLiked?: boolean;
+      /** Whether the viewer bookmarked this update (saves, 0037). */
+      viewerSaved?: boolean;
+      /** Replies on the post — the card's comment count. */
+      commentCount?: number;
     }
   | {
       kind: "car";
@@ -36,6 +42,11 @@ export type FeedItem =
       lastActivityAt: string | null;
       /** Active listings sourced from this car. */
       forSaleCount: number;
+      /** Whether the viewer has this build saved. */
+      viewerSaved?: boolean;
+      /** Public likes on this build (0037). */
+      likeCount?: number;
+      viewerLiked?: boolean;
     }
   | {
       kind: "part";
@@ -55,9 +66,16 @@ export type FeedItem =
       watchCount: number | null;
       /** Garage make+model match for the viewer, when they have one. */
       fitsCarName?: string | null;
+      /** Whether the viewer is watching (has saved) this listing. */
+      viewerSaved?: boolean;
+      /** Public likes on this listing (0037). */
+      likeCount?: number;
+      viewerLiked?: boolean;
+      /** Buyer questions on the listing — the card's comment count. */
+      questionCount?: number;
     };
 
-export type FeedTab = "all" | "cars" | "parts";
+export type FeedTab = "all" | "cars" | "updates" | "parts";
 
 export type FeedPage = {
   items: FeedItem[];
@@ -148,6 +166,12 @@ async function hydrateFeedItems(
     { data: carListings },
     { data: sourceCars },
     watchCounts,
+    { data: viewerSaves },
+    { data: viewerReactions },
+    { data: likeRows },
+    { data: viewerLikes },
+    { data: commentRows },
+    { data: questionRows },
   ] = await Promise.all([
     postCarIds.length
       ? supabase.from("cars").select("id, slug, name, is_public, cover_image_url").in("id", postCarIds)
@@ -193,7 +217,68 @@ async function hydrateFeedItems(
       ? supabase.from("cars").select("id, make, model").in("id", sourceCarIds)
       : Promise.resolve({ data: [] }),
     listingIds.length ? fetchWatchCounts(supabase, listingIds) : Promise.resolve(new Map<string, number>()),
+    // The viewer's own marks, so every card renders its toggles pre-fired:
+    // saves over this page's listings+cars+posts, 🔥 reactions over posts.
+    viewerId && rows.length
+      ? supabase
+          .from("saves")
+          .select("target_type, target_id")
+          .eq("user_id", viewerId)
+          .in("target_id", [...listingIds, ...carIds, ...postIds])
+      : Promise.resolve({ data: [] }),
+    viewerId && postIds.length
+      ? supabase
+          .from("activity_reactions")
+          .select("post_id")
+          .eq("user_id", viewerId)
+          .in("post_id", postIds)
+      : Promise.resolve({ data: [] }),
+    // Public like counts over the page's listings+cars (0037).
+    listingIds.length || carIds.length
+      ? supabase
+          .from("likes")
+          .select("target_type, target_id")
+          .in("target_id", [...listingIds, ...carIds])
+      : Promise.resolve({ data: [] }),
+    viewerId && (listingIds.length || carIds.length)
+      ? supabase
+          .from("likes")
+          .select("target_type, target_id")
+          .eq("user_id", viewerId)
+          .in("target_id", [...listingIds, ...carIds])
+      : Promise.resolve({ data: [] }),
+    // Comment counts: post replies and listing questions.
+    postIds.length
+      ? supabase.from("activity_comments").select("post_id").in("post_id", postIds)
+      : Promise.resolve({ data: [] }),
+    listingIds.length
+      ? supabase.from("listing_questions").select("listing_id").in("listing_id", listingIds)
+      : Promise.resolve({ data: [] }),
   ]);
+
+  const viewerSavedKeys = new Set(
+    (viewerSaves ?? []).map((s) => `${s.target_type}:${s.target_id}`)
+  );
+  const viewerLikedPosts = new Set((viewerReactions ?? []).map((r) => r.post_id));
+  const likeCountByKey = new Map<string, number>();
+  for (const row of likeRows ?? []) {
+    const key = `${row.target_type}:${row.target_id}`;
+    likeCountByKey.set(key, (likeCountByKey.get(key) ?? 0) + 1);
+  }
+  const viewerLikedKeys = new Set(
+    (viewerLikes ?? []).map((l) => `${l.target_type}:${l.target_id}`)
+  );
+  const commentCountByPost = new Map<string, number>();
+  for (const row of commentRows ?? []) {
+    commentCountByPost.set(row.post_id, (commentCountByPost.get(row.post_id) ?? 0) + 1);
+  }
+  const questionCountByListing = new Map<string, number>();
+  for (const row of questionRows ?? []) {
+    questionCountByListing.set(
+      row.listing_id,
+      (questionCountByListing.get(row.listing_id) ?? 0) + 1
+    );
+  }
 
   const postById = new Map(posts.map((p) => [p.id, p]));
   const carItemById = new Map(cars.map((c) => [c.id, c]));
@@ -255,6 +340,9 @@ async function hydrateFeedItems(
         avatar_url: car.cover_image_url ?? null,
         reactions: reactionCount.get(p.id) ?? 0,
         imageCount: postImageCount.get(p.id) ?? 0,
+        viewerLiked: viewerLikedPosts.has(p.id),
+        viewerSaved: viewerSavedKeys.has(`post:${p.id}`),
+        commentCount: commentCountByPost.get(p.id) ?? 0,
       });
     } else if (row.kind === "car") {
       const c = carItemById.get(row.id);
@@ -271,6 +359,9 @@ async function hydrateFeedItems(
         updateCount: carUpdateCount.get(c.id) ?? 0,
         lastActivityAt: carLastActivity.get(c.id) ?? null,
         forSaleCount: carForSaleCount.get(c.id) ?? 0,
+        viewerSaved: viewerSavedKeys.has(`car:${c.id}`),
+        likeCount: likeCountByKey.get(`car:${c.id}`) ?? 0,
+        viewerLiked: viewerLikedKeys.has(`car:${c.id}`),
       });
     } else {
       const l = listingById.get(row.id);
@@ -293,6 +384,10 @@ async function hydrateFeedItems(
         fitsCarName: sourceCar
           ? matchGarageFitment(garageIndex, sourceCar.make, sourceCar.model)
           : null,
+        viewerSaved: viewerSavedKeys.has(`listing:${l.id}`),
+        likeCount: likeCountByKey.get(`listing:${l.id}`) ?? 0,
+        viewerLiked: viewerLikedKeys.has(`listing:${l.id}`),
+        questionCount: questionCountByListing.get(l.id) ?? 0,
       });
     }
   }
@@ -301,7 +396,8 @@ async function hydrateFeedItems(
 
 function kindsForTab(tab: FeedTab, isLoggedIn: boolean): FeedKind[] {
   const kinds: FeedKind[] = [];
-  if (tab === "all" || tab === "cars") kinds.push("car", "update");
+  if (tab === "all" || tab === "cars") kinds.push("car");
+  if (tab === "all" || tab === "updates") kinds.push("update");
   if ((tab === "all" || tab === "parts") && isLoggedIn) kinds.push("part");
   return kinds;
 }
@@ -351,7 +447,31 @@ export async function fetchFeed(
   const hasMore = data.length > pageSize;
   const windowRows = data.slice(0, pageSize) as FeedEventRow[];
   const items = await hydrateFeedItems(supabase, windowRows, opts.viewerId);
-  return { items, page, pageSize, hasMore };
+  return { items: tab === "all" ? interleaveKinds(items) : items, page, pageSize, hasMore };
+}
+
+/**
+ * Spread the kinds evenly across a page. Strict recency clumps the wall —
+ * three updates from one busy weekend, then five listings from a parts
+ * purge — so the "All" wall reads as one person's feed, not a community.
+ * Each item keeps its position *within its kind* (still newest-first) and
+ * is given a fractional slot (i + 0.5) / count; sorting by slot spreads a
+ * kind with 10 items every other cell and a kind with 2 items at a quarter
+ * and three-quarters of the page. Deterministic, no reshuffle on re-render.
+ */
+export function interleaveKinds(items: FeedItem[]): FeedItem[] {
+  const counts = new Map<FeedItem["kind"], number>();
+  for (const it of items) counts.set(it.kind, (counts.get(it.kind) ?? 0) + 1);
+  if (counts.size < 2) return items;
+  const seen = new Map<FeedItem["kind"], number>();
+  return items
+    .map((item, index) => {
+      const i = seen.get(item.kind) ?? 0;
+      seen.set(item.kind, i + 1);
+      return { item, index, slot: (i + 0.5) / (counts.get(item.kind) ?? 1) };
+    })
+    .sort((a, b) => a.slot - b.slot || a.index - b.index)
+    .map((x) => x.item);
 }
 
 /**
@@ -372,6 +492,7 @@ async function _legacyFetchFeed(
   const fetchLimit = Math.min(LEGACY_MAX_FETCH_PER_TABLE, page * pageSize + 1);
 
   const wantCars = tab === "all" || tab === "cars";
+  const wantUpdates = tab === "all" || tab === "updates";
   const wantParts = (tab === "all" || tab === "parts") && isLoggedIn;
 
   const [carsRes, postsRes, listingsRes] = await Promise.all([
@@ -383,7 +504,7 @@ async function _legacyFetchFeed(
           .order("created_at", { ascending: false })
           .limit(fetchLimit)
       : Promise.resolve({ data: [] }),
-    wantCars
+    wantUpdates
       ? supabase
           .from("activity_posts")
           .select("id, published_at")
