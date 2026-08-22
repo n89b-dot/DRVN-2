@@ -40,6 +40,38 @@ uses (Material's window-size classes informed the model, not the numbers):
 A component answers "how do I behave in each mode" once, in its own
 contract, instead of every page re-deciding with flex-wrap.
 
+### Semantic roles and their thresholds
+
+The modes above resolve into four named roles. New responsive work binds to
+one of these (or documents a route exception below) — it does not invent a
+fresh number:
+
+| Role | Threshold | Meaning |
+| --- | --- | --- |
+| `compact` | ≤640px | Phone anatomy: sheeted refinements, stacked commits, task pageheads drop their standfirst, garage manage-rows, pinned thread composer (to 768). |
+| `handheld` | ≤768px | One-column task composition; tabstrips/filter rails scroll (760); sectionnav is a horizontal rail; thread composer pins. |
+| `collapsed-shell` | ≤1080px | No register rail; the Index owns navigation; the bar collapses progressively (text links go at 1080, labels at 640). |
+| `split-capable` | ≥981px (route-decided) | A route may return its secondary pane when both panes meet minimum widths — the route, not the viewport alone, decides. |
+
+**Documented route exceptions** (legitimate, component-owned):
+
+- **PDP split + buybar** — the listing page splits media/rail at **981px**,
+  and the buybar retires at the same width; the split is gated on both
+  columns having workable minimums, not on a shell breakpoint.
+- **Cart/checkout wide buybar** — the summary rail returns at Tailwind `lg`
+  (**1024px**), so `.buybar--wide` carries the checkout action through
+  981–1023px where the one-column layout persists.
+- **Ledgers** — tables linearize into labelled records at **860px**
+  (`.ledger`) because that is where the column set stops fitting, not at a
+  shell threshold.
+- **Register rail** — exists only ≥**1081px**; measured ("the last width
+  that fits the full register"), not themed.
+
+Bottom-surface contract: `--bottom-surface-h` (76px) is the one clearance
+number; every fixed bottom bar pads `env(safe-area-inset-bottom)` and only
+one surface may own the bottom edge of a route at a time (buybar, savebar,
+or the thread composer — never two).
+
 ## 3. Concept → contract → Livesheet
 
 | Material concept | Behavioral contract | Livesheet implementation | Borrowed |
