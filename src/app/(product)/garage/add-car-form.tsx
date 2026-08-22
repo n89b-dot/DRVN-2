@@ -8,14 +8,20 @@ import { createCar, type ActionState } from "./actions";
 
 /** Now on the shared Dialog primitive: dialog role, Escape, focus trap and
  *  scroll lock — the hand-rolled sheetwrap had none of the four. */
-export function AddCarForm() {
+/** `quiet` — ghost button, for a garage that already has cars: adding another
+ *  is a real action but not the page's job. */
+export function AddCarForm({ quiet = false }: { quiet?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<ActionState, FormData>(createCar, {});
   const idBase = useId();
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="btn btn--live">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={quiet ? "btn btn--ghost" : "btn btn--live"}
+      >
         Add a car
       </button>
 
