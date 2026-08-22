@@ -1,25 +1,27 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { FilterGroup, FilterLink, Foot, MasonryFeed, Pagination } from "@/components/ui";
-import { withParams } from "@/lib/url-params";
+import { FilterGroup, FilterLink, Foot } from "@/components/ui";
 import { fetchFeed, type FeedTab } from "@/lib/feed";
 import { createClient } from "@/lib/supabase/server";
+
+import { ExploreWall } from "./explore-wall";
 
 export const metadata = { title: "Explore - DRVN" };
 
 const TABS: { key: FeedTab; label: string; loggedInOnly?: boolean }[] = [
   { key: "all", label: "All" },
   { key: "cars", label: "Builds" },
+  { key: "updates", label: "Updates" },
   { key: "parts", label: "Parts", loggedInOnly: true },
 ];
 
 export default async function ExplorePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
-  const { tab: tabParam, page: pageParam } = await searchParams;
+  const { tab: tabParam } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -27,10 +29,9 @@ export default async function ExplorePage({
 
   const visibleTabs = TABS.filter((t) => !t.loggedInOnly || user);
   const tab = (visibleTabs.find((t) => t.key === tabParam)?.key ?? "all") as FeedTab;
-  const page = Math.max(1, Number(pageParam) || 1);
   // viewerId powers per-viewer signals on cards (garage fitment hints).
-  const feed = await fetchFeed(supabase, tab, Boolean(user), { page, viewerId: user?.id ?? null });
-  const items = feed.items;
+  // Page one renders here; the wall pulls the rest as you scroll.
+  const feed = await fetchFeed(supabase, tab, Boolean(user), { page: 1, viewerId: user?.id ?? null });
 
   return (
     <div className="wrap">
@@ -76,16 +77,12 @@ export default async function ExplorePage({
         </Link>
       </p>
 
-      <section className="deck">
-        <MasonryFeed items={items} />
-      </section>
-
-      <Pagination
-        page={page}
-        hasMore={feed.hasMore}
-        hrefFor={(p) =>
-          withParams("/explore", { tab: tab !== "all" ? tab : undefined }, { page: p > 1 ? String(p) : undefined })
-        }
+      <ExploreWall
+        key={tab}
+        tab={tab}
+        initialItems={feed.items}
+        initialHasMore={feed.hasMore}
+        isLoggedIn={Boolean(user)}
       />
 
       <Foot
