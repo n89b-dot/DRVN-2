@@ -43,7 +43,7 @@ export default async function SubcategoryPage({
     <div className="wrap">
       {user && <MarketplaceNav current="marketplace" offersCount={offersCount} />}
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
             Marketplace
@@ -87,6 +87,7 @@ export default async function SubcategoryPage({
 
       <section className="deck">
         <MarketplaceResults
+          isLoggedIn={Boolean(user)}
           page={page}
           basePath={`/marketplace/${category.slug}/${subcategory.slug}`}
           params={filters as Record<string, string | undefined>}

@@ -45,29 +45,30 @@ export default async function MarketplacePage({
           opens listings without ever being shown Listings/Offers/Orders. */}
       {user && <MarketplaceNav current="marketplace" offersCount={offersCount} />}
 
-      <Rv as="header" className="pagehead">
+      <Rv as="header" className="pagehead pagehead--task">
         {/* Selling lives where every marketplace keeps it: the top corner of
             the page head, beside the headline — not stranded among the
-            search controls. */}
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+            search controls, and never a full-width interruption above the
+            inventory. */}
+        <div className="pagehead__row">
           <div className="min-w-0">
             <span className="microlabel">
               Marketplace · {page.total} part{page.total === 1 ? "" : "s"} listed
             </span>
             <h1>
-              Find the part.
-              <br />
-              See the car it <span className="live-word">came off.</span>
+              Find the part. See the car it <span className="live-word">came off.</span>
             </h1>
-            <p className="sub">
-              Every part here came off someone&apos;s build — open a listing and you can see
-              exactly which one. Search what you need, or browse by category.
-            </p>
           </div>
           {/* Signed out this explains why an account is needed rather than
               dropping the visitor on /login mid-thought. */}
-          <SellCta isLoggedIn={Boolean(user)} className="w-full shrink-0 sm:w-auto" />
+          <SellCta isLoggedIn={Boolean(user)} className="shrink-0" />
         </div>
+        {/* The standfirst is desktop runway — the task head retires it on
+            compact so inventory starts inside the first viewport. */}
+        <p className="sub">
+          Every part here came off someone&apos;s build — open a listing and you can see
+          exactly which one. Search what you need, or browse by category.
+        </p>
       </Rv>
 
       <FilterBar action="/marketplace" filters={filters} showFitToggle={Boolean(user)} />
@@ -93,6 +94,7 @@ export default async function MarketplacePage({
 
       <section className="deck">
         <MarketplaceResults
+          isLoggedIn={Boolean(user)}
           page={page}
           basePath="/marketplace"
           params={filters as Record<string, string | undefined>}

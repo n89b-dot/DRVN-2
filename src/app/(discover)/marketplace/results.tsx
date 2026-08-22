@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ListingCard } from "@/components/ui";
+import { ListingMosaicCell, Mosaic } from "@/components/ui";
 import type { ListingPage } from "@/lib/marketplace/query";
 
 const SORTS = [
@@ -31,6 +31,7 @@ export function MarketplaceResults({
   params,
   emptyTitle = "Nothing matches yet",
   emptyBody = "Try widening the filters, or check back — parts arrive as people pull them off.",
+  isLoggedIn = false,
 }: {
   page: ListingPage;
   basePath: string;
@@ -38,6 +39,8 @@ export function MarketplaceResults({
   params: Record<string, string | undefined>;
   emptyTitle?: string;
   emptyBody?: string;
+  /** Powers each card's corner bookmark (auth prompt when signed out). */
+  isLoggedIn?: boolean;
 }) {
   const { results, total, page: current, pageSize, hasMore } = page;
   const activeSort = params.sort ?? "newest";
@@ -79,7 +82,9 @@ export function MarketplaceResults({
             </>
           )}
         </span>
-        <div className="filters !my-0" role="group" aria-label="Sort results">
+        {/* Compact widths sort from the toolbar's Sort select instead — two
+            sort controls on one phone screen would be one too many. */}
+        <div className="filters !my-0 hidden sm:flex" role="group" aria-label="Sort results">
           <span className="microlabel filters__label">Sort</span>
           {SORTS.map((sort) => {
             const isOn = sort.key === activeSort;
@@ -100,11 +105,15 @@ export function MarketplaceResults({
         </div>
       </div>
 
-      <div className="mkt">
+      <Mosaic>
         {results.map((listing) => (
-          <ListingCard key={listing.id} listing={listing} />
+          <ListingMosaicCell
+            key={listing.id}
+            listing={listing}
+            save={{ isLoggedIn, path: basePath }}
+          />
         ))}
-      </div>
+      </Mosaic>
 
       {(current > 1 || hasMore) && (
         <nav className="mt-8 flex items-center justify-between gap-3" aria-label="Pagination">

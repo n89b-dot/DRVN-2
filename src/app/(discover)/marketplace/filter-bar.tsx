@@ -2,6 +2,8 @@ import { CONDITIONS } from "@/lib/marketplace/taxonomy";
 import { FinderRefineSheet } from "@/components/ui";
 import { SlashFocus } from "@/components/ui/slash-focus";
 
+import { SortSelect } from "./sort-select";
+
 /**
  * GET-form filter bar — server-rendered, no client JS needed.
  * Submits back to the current path with query params.
@@ -28,7 +30,8 @@ export function FilterBar({
 }) {
   return (
     <form action={action} method="get" className="finder" role="search">
-      {filters.sort && <input type="hidden" name="sort" value={filters.sort} />}
+      {/* Sort travels with every search via the SortSelect below — visible in
+          the compact toolbar, display:none (but still submitting) ≥640px. */}
 
       <div className="finder__main">
         <label className="search">
@@ -48,7 +51,9 @@ export function FilterBar({
           </kbd>
         </label>
         <SlashFocus />
-        <button type="submit" className="btn w-full sm:w-auto">
+        {/* Inline beside the query at every width — a full-width Search row
+            was costing the compact viewport ~54px before any inventory. */}
+        <button type="submit" className="btn">
           Search
         </button>
       </div>
@@ -64,6 +69,7 @@ export function FilterBar({
             Boolean
           ).length
         }
+        aside={<SortSelect value={filters.sort} />}
       >
         <select
           name="condition"
