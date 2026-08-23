@@ -120,10 +120,10 @@ test.describe.serial("mobile layout @ 375x812", () => {
       const box = await tool.boundingBox();
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
-    // Unfold: five dimensions, each label on one line.
+    // Unfold: four dimensions (Earned retired 22 Aug 2026), each label on one line.
     await toggle.click();
     const dims = sheet.locator(".gsheet__dims .livedim");
-    await expect(dims).toHaveCount(5);
+    await expect(dims).toHaveCount(4);
     for (const label of await dims.locator(".microlabel").all()) {
       const box = await label.boundingBox();
       expect(box!.height).toBeLessThanOrEqual(18);

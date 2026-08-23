@@ -114,7 +114,7 @@ test.describe.serial("golden path", () => {
     // The card, not the active-filter readout: the query echo renders above
     // the grid and carries the same text, so a bare getByText picks that and
     // clicking it goes nowhere.
-    await page.locator(".mosaic a.mcell", { hasText: partTitle }).first().click();
+    await page.locator(".mosaic a.mcell__link", { hasText: partTitle }).first().click();
     await expect(page).toHaveURL(/\/listings\/[\w-]+/);
 
     // Add-to-cart stays on the listing (in-place confirmation, badge update);

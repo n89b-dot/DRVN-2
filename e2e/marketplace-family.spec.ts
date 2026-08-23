@@ -10,7 +10,7 @@ import {
 } from "./helpers";
 
 /**
- * The Marketplace family — Marketplace | Listings | Offers | Orders — as one
+ * The Marketplace family — Marketplace | My Listings | Offers | Orders — as one
  * navigational group across four independent routes, plus the auth-intent
  * path a signed-out visitor takes to make an offer.
  *
@@ -103,8 +103,8 @@ test.describe.serial("Marketplace family", () => {
       familyNav(page).getByRole("link", { name: "Orders" })
     ).toHaveAttribute("aria-current", "page");
 
-    // Orders → Listings, still one click.
-    await familyNav(page).getByRole("link", { name: "Listings" }).click();
+    // Orders → My Listings, still one click.
+    await familyNav(page).getByRole("link", { name: "My Listings" }).click();
     await expect(page).toHaveURL(/\/listings$/);
 
     // Listings → Offers.
@@ -135,13 +135,13 @@ test.describe.serial("Marketplace family", () => {
     await expect(page).toHaveURL(/\/orders/);
   });
 
-  test("signed in: a public listing sheet reads as Marketplace, the seller's register as Listings", async ({
+  test("signed in: a public listing sheet reads as Marketplace, the seller's register as My Listings", async ({
     page,
   }) => {
     await signIn(page, seller);
 
     await page.goto("/listings");
-    await expect(familyNav(page).getByRole("link", { name: "Listings" })).toHaveAttribute(
+    await expect(familyNav(page).getByRole("link", { name: "My Listings" })).toHaveAttribute(
       "aria-current",
       "page"
     );
