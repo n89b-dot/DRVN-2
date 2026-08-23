@@ -116,10 +116,14 @@ Format: **class — shape — key rules.**
 | `LivesheetBar`, `Foot` | livesheet-bar.tsx | Product top bar (signed in/out), index sheet, theme toggle; page footer |
 | `AppShell` | app-shell.tsx | Signed-in shell: rail + content |
 | `BAR_ROUTES`, `PRIMARY_NAV`, `MARKETPLACE_FAMILY`, `PUBLIC_ROUTES`, `matchesFamily`, `isMarketplaceFamily` | nav-routes.tsx | The register, read by the rail, the index and the family subnav. Marketplace/Listings/Offers/Orders are one group; the family matchers keep `/listings` (seller register) and `/listings/<id>` (public part sheet) apart |
-| `MarketplaceNav` | marketplace-nav.tsx | Marketplace \| Listings \| Offers \| Orders — the family's local register, on every family surface for signed-in users only |
+| `MarketplaceNav` | marketplace-nav.tsx | Marketplace \| My Listings \| Offers \| Orders — the family's local register (a contained plate), on every family surface for signed-in users only |
 | `Icon` (`IconName`) | icons.tsx | The stroke icon set |
 | `CategoryIcon` | category-icon.tsx | Part-category glyphs |
-| `ListingCard` | listing-card.tsx | Market card (`.mkt` tile) from `ListingCardData` |
+| `ListingCard` | listing-card.tsx | The canonical listing card — renders `ListingMosaicCell` from `ListingCardData`; `save` → engagement strip, `actions` → context-owned controls (quick commerce, Unsave) |
+| `Mosaic`, `MosaicCell`, `FeedMosaicCell`, `ListingMosaicCell` | mosaic.tsx | The photo wall and its `<article>` cell: link region (eyebrow · photo · caption) → provenance link → trust → actions → engagement; `commerce` grows the unit for an action row |
+| `ListingQuickCommerce` | features/commerce/quick-commerce.tsx | Buy now · Add to cart on a Marketplace card over the existing `buyNow`/`addToCart` actions — Marketplace only |
+| `CategoryNav`, `CategorySheet` | app/(discover)/marketplace/category-nav.tsx, category-sheet.tsx | Category destinations: tile grid ≥640px, Browse sheet on compact, sibling row at the leaf |
+| `vehicleLabel`, `platformLabel`, `provenanceLine` | lib/vehicles/label.ts | The one way a vehicle is named in text; pair with `.vref` |
 | `FeedCard`, `MasonryFeed` | feed-card.tsx | Explore feed cards + masonry |
 | `NarrowColumn`, `Avatar`, `Media`, `MetadataTags`, `SectionLabel`, `HorizontalGallery`, `TabNav` | primitives.tsx | Layout + media primitives (Media takes `fallbackClassName` for undrawn covers) |
 | `LinkedTitle`, `TimelineRow`, `WebsitePill`, `ProfileHeader`, `VehicleGallery`, `KeyValueTable`, `EmbeddedVideo`, `SectionHeading` | patterns.tsx | Profile/build-log patterns |
