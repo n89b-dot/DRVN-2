@@ -2,11 +2,12 @@ import Link from "next/link";
 
 import { LiveDim, Rv } from "@/components/livesheet";
 import { Media } from "@/components/ui";
-import { formatPrice } from "@/lib/marketplace/taxonomy";
 
 import type { GarageSheet } from "./garage-data";
+import { PlateSwiper } from "./plate-swiper";
 import { SheetActions } from "./sheet-actions";
 import { SheetDetails } from "./sheet-details";
+import { vehicleLabel } from "@/lib/vehicles/label";
 
 const DAY = 864e5;
 
@@ -80,7 +81,7 @@ export function GarageSheetCard({
   stagger: number;
 }) {
   const s = sheet;
-  const meta = [s.year, s.make, s.model].filter(Boolean).join(" ");
+  const meta = vehicleLabel(s);
   const orders = workOrders(s);
   const sheetNo = String(s.index).padStart(2, "0");
 
@@ -91,29 +92,9 @@ export function GarageSheetCard({
       stagger={stagger}
       aria-labelledby={`gsheet-${s.id}`}
     >
-      <Link
-        href={`/cars/${s.slug}`}
-        className="gsheet__plate"
-        aria-label={`${s.name} — view build page`}
-      >
-        <Media
-          src={s.cover_image_url ?? undefined}
-          alt=""
-          className="h-full w-full"
-          fallbackClassName="plate-undrawn"
-          role="vehicle"
-        />
-        <span className="gsheet__no" aria-hidden="true">
-          Sheet {sheetNo}
-        </span>
-        {/* The ledger stamp — what this car has paid back, as a fact on the
-            plate. Earned only by real sales; absent otherwise. */}
-        {s.earnedCents > 0 && (
-          <span className="gsheet__no gsheet__no--ledger" aria-hidden="true">
-            {formatPrice(s.earnedCents)} off it
-          </span>
-        )}
-      </Link>
+      {/* The plate: swipe through the car's photos in place (PlateSwiper);
+          the plate itself still opens the build page. */}
+      <PlateSwiper photos={s.photoUrls} href={`/cars/${s.slug}`} name={s.name} sheetNo={sheetNo} />
 
       <div className="gsheet__body">
         <header className="gsheet__head">
@@ -129,21 +110,23 @@ export function GarageSheetCard({
               </span>
             </Link>
           </h2>
-          <p className="gsheet__meta">{meta || "No details yet"}</p>
+          <p className="gsheet__meta vref vref--lg">{meta || "No details yet"}</p>
         </header>
 
-        {/* On phones the measured half folds behind this digest. */}
+        {/* The measured half folds behind this digest — closed by default on
+            phones, open on desktop, toggleable everywhere; the tool rail
+            stays out when it's folded. */}
         <SheetDetails
           digest={[
             `${s.updates} update${s.updates === 1 ? "" : "s"}`,
             `${s.partsLive} live`,
-            s.earnedCents > 0 ? `${formatPrice(s.earnedCents)} earned` : null,
+            s.partsSold > 0 ? `${s.partsSold} sold` : null,
             orders.length ? `${orders.length} to do` : "in order",
           ]
             .filter(Boolean)
             .join(" · ")}
         >
-          {/* The measured car — five dimensions, drawn the way the sheet
+          {/* The measured car — four dimensions, drawn the way the sheet
             dimensions anything. Blank spines for zero: nothing to measure
             is a fact, not a failure. */}
           <div className="gsheet__dims">
@@ -162,11 +145,6 @@ export function GarageSheetCard({
               label="Sold"
               value={s.partsSold}
               blank={s.partsSold === 0}
-            />
-            <LiveDim
-              label="Earned"
-              value={formatPrice(s.earnedCents)}
-              blank={s.earnedCents === 0}
             />
             <LiveDim
               label="Following"

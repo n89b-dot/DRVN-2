@@ -1,9 +1,11 @@
 import { listSavedCards } from "@/lib/payments/customers";
+import { getSellerLedger } from "@/lib/payments/ledger";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { logout } from "@/app/(auth)/actions";
 
+import { PayoutsSection } from "./payouts-section";
 import { SettingsPanel } from "./settings-panel";
 
 export const metadata = { title: "Settings - DRVN" };
@@ -25,7 +27,10 @@ export default async function SettingsPage() {
     .single();
 
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
-  const savedCards = await listSavedCards(user!.id).catch(() => []);
+  const [savedCards, ledger] = await Promise.all([
+    listSavedCards(user!.id).catch(() => []),
+    getSellerLedger(supabase, user!.id),
+  ]);
 
   return (
     // `--gutter` is the variable `.wrap` publishes so a full-bleed child can
@@ -53,6 +58,7 @@ export default async function SettingsPage() {
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
+        payoutsSection={<PayoutsSection ledger={ledger} paymentsLive={paymentsAreLive()} />}
       />
     </div>
   );

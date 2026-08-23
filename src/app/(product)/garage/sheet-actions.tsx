@@ -1,21 +1,20 @@
 import Link from "next/link";
 
 /**
- * The sheet's tool rail — three equal tools, one grammar. Manage is the
- * ink-filled one (where photos, mods and the build page are edited); the
- * other two are the sheet's verbs. Nothing here says "view build": the
- * plate and the car's name already go there.
+ * The sheet's tool rail — three tools, one grammar. Post update carries the
+ * live fill (the sheet's one red control: the thing that moves a build
+ * forward); Manage and List a part are ghosts.
  */
 export function SheetActions({ carId }: { carId: string }) {
   return (
     <div className="gsheet__rail">
-      <Link href={`/garage/${carId}/edit`} className="btn">
+      <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
         Manage
       </Link>
       <Link href={`/sell?car=${carId}`} className="btn btn--ghost">
         List a part
       </Link>
-      <Link href={`/garage/${carId}/update/new`} className="btn btn--ghost">
+      <Link href={`/garage/${carId}/update/new`} className="btn btn--live">
         Post update
       </Link>
     </div>

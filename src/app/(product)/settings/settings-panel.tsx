@@ -118,6 +118,7 @@ const SETTINGS_SECTIONS = [
   { id: "keeper", label: "Profile" },
   { id: "signals", label: "Notifications" },
   { id: "payments", label: "Payments" },
+  { id: "payouts", label: "Payouts" },
   { id: "danger", label: "Danger zone" },
 ] as const;
 type SectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
@@ -183,12 +184,15 @@ export function SettingsPanel({
   savedCards,
   connect,
   paymentsLive,
+  payoutsSection,
 }: {
   profile: SettingsProfile;
   logout: () => Promise<void>;
   savedCards: SavedCard[];
   connect: ConnectSummary;
   paymentsLive: boolean;
+  /** Settings → Payouts, server-rendered (the ledger needs server data). */
+  payoutsSection?: React.ReactNode;
 }) {
   // One section at a time (Mobbin pass: Contra / Cloudflare / Perplexity —
   // a rail plus a single active panel is what makes settings navigable).
@@ -373,6 +377,8 @@ export function SettingsPanel({
           <PaymentMethods cards={savedCards} />
         </section>
         )}
+
+        {active === "payouts" && payoutsSection}
 
         {active === "danger" && (
         <section id="danger" className="tile">

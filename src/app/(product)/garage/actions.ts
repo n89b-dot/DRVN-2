@@ -442,11 +442,29 @@ export async function createRichActivityPost(
   }
   if (blocks.length === 0) return { error: "Add at least one block." };
 
-  const { data: post, error } = await supabase
+  // Publishing converts the car's draft when one exists (one draft per car),
+  // so a draft never survives as a second copy of the post it became.
+  const { data: draft } = await supabase
     .from("activity_posts")
-    .insert({ car_id: carId, author_id: user.id, title, intro: null, body: blocks })
     .select("id")
-    .single();
+    .eq("car_id", carId)
+    .eq("author_id", user.id)
+    .is("published_at", null)
+    .maybeSingle();
+
+  const publishedAt = new Date().toISOString();
+  const { data: post, error } = draft
+    ? await supabase
+        .from("activity_posts")
+        .update({ title, body: blocks, published_at: publishedAt })
+        .eq("id", draft.id)
+        .select("id")
+        .single()
+    : await supabase
+        .from("activity_posts")
+        .insert({ car_id: carId, author_id: user.id, title, intro: null, body: blocks, published_at: publishedAt })
+        .select("id")
+        .single();
   if (error) return { error: error.message };
 
   // Mirror image URLs into activity_images so feeds/profile strips get covers.
@@ -462,6 +480,67 @@ export async function createRichActivityPost(
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
   redirect(`/cars/${car.slug}/activity/${post.id}`);
+}
+
+/**
+ * Saves the composer's state as the car's draft — one draft per car, by
+ * design (the composer reopens it, publishing converts it). A second save
+ * overwrites the first: the draft is "where I left off", not a stack.
+ * Unlike publishing, a draft doesn't need blocks yet — a title alone is a
+ * thought worth keeping.
+ */
+export async function saveActivityDraft(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const { supabase, user } = await requireUser();
+
+  const carId = String(formData.get("car_id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  if (!carId || !title) return { error: "A title is required to save a draft." };
+
+  const { data: car } = await supabase
+    .from("cars")
+    .select("id, owner_id")
+    .eq("id", carId)
+    .single();
+  if (!car || car.owner_id !== user.id) return { error: "Car not found." };
+
+  const { normalizeBlocks } = await import("@/lib/activity-blocks");
+  let blocks;
+  try {
+    blocks = sanitizeActivityBlocks(
+      normalizeBlocks(JSON.parse(String(formData.get("blocks") ?? "[]"))),
+      user.id
+    );
+  } catch {
+    return { error: "Could not read the post content." };
+  }
+
+  const { data: existing } = await supabase
+    .from("activity_posts")
+    .select("id")
+    .eq("car_id", carId)
+    .eq("author_id", user.id)
+    .is("published_at", null)
+    .maybeSingle();
+
+  const { error } = existing
+    ? await supabase
+        .from("activity_posts")
+        .update({ title, body: blocks })
+        .eq("id", existing.id)
+    : await supabase
+        .from("activity_posts")
+        .insert({ car_id: carId, author_id: user.id, title, intro: null, body: blocks, published_at: null });
+  if (error) return { error: error.message };
+
+  // Draft images are referenced content now — release them from the
+  // staged-upload GC so a draft that sits for a week keeps its photos.
+  const imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
+  if (imageUrls.length) await finalizeMediaUrls(supabase, imageUrls);
+
+  return { ok: "Draft saved" };
 }
 
 /**

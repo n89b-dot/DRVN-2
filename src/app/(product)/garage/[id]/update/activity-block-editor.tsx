@@ -22,20 +22,21 @@ function newBlock(type: "text" | "images" | "embed"): BlockDraft {
   return { key, type, provider: "youtube", url: "", videoId: "" };
 }
 
-/** Hover/click affordance between blocks (read.cv "Insert block"). */
+/**
+ * The one block-insert affordance: a full-width "Add a block" row at the
+ * end of the draft. New blocks always start at the bottom; the ↑↓ controls
+ * place them. One way in — the per-seam inserts multiplied "add" costumes
+ * on screen until no single one read as the way.
+ */
 function InsertBlock({ onInsert }: { onInsert: (type: "text" | "images" | "embed") => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="relative py-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`relbtn mx-auto block ${open ? "!text-ink" : "opacity-40 hover:opacity-100"}`}
-      >
-        + Insert block
+    <div className="relative mt-1">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="btn btn--ghost w-full">
+        + Add a block — text, photos or YouTube
       </button>
       {open && (
-        <div className="tile absolute left-1/2 z-20 mt-1.5 w-64 -translate-x-1/2 !p-1.5" style={{ boxShadow: "0 1px 0 var(--dimline)" }}>
+        <div className="tile absolute bottom-full left-1/2 z-20 mb-1.5 w-64 -translate-x-1/2 !p-1.5" style={{ boxShadow: "0 1px 0 var(--dimline)" }}>
           {BLOCK_MENU.map((option) => (
             <button
               key={option.type}
@@ -157,22 +158,24 @@ export function ActivityBlockEditor({
     <div>
       <input type="hidden" name={name} value={serializedBlocks()} />
 
-      <div>
+      {/* gap, not per-seam spacers — the seams are gone. */}
+      <div className="flex flex-col gap-3">
         {blocks.map((block, index) => (
           <div key={block.key}>
-            <InsertBlock onInsert={(type) => insertAt(index, type)} />
-            <div className="group relative rounded-r border border-transparent p-2 transition hover:border-[color:var(--rule-mid)] focus-within:border-[color:var(--rule-mid)]">
-              {/* Block controls — hover-only left keyboard and touch users
-                  unable to move or delete a block at all. focus-within keeps
-                  them reachable via Tab; pointer-coarse keeps them visible on
-                  touch devices, which have no hover state. */}
-              <div className="absolute -top-3 right-3 z-10 hidden gap-1 rounded-chip bg-paper-deep px-1.5 py-0.5 font-mono text-xs text-dim group-hover:flex group-focus-within:flex pointer-coarse:flex">
-                <button type="button" onClick={() => move(block.key, -1)} className="px-1 hover:text-ink pointer-coarse:min-h-10 pointer-coarse:min-w-10" aria-label="Move up">↑</button>
-                <button type="button" onClick={() => move(block.key, 1)} className="px-1 hover:text-ink pointer-coarse:min-h-10 pointer-coarse:min-w-10" aria-label="Move down">↓</button>
+            {/* The block's edge is always drawn — a writing area you have to
+                hover to find isn't a writing area — and it sharpens on
+                focus so the active block reads apart from its neighbours. */}
+            <div className="group relative rounded-r border border-[color:var(--rule-mid)] p-3 transition focus-within:border-[color:var(--dimline)]">
+              {/* Block controls — revealed on hover (and via focus-within
+                  for keyboards, pointer-coarse for touch, which has no
+                  hover), sized to be seen and hit: real 32px targets. */}
+              <div className="absolute -top-4 right-3 z-10 hidden gap-0.5 rounded-chip bg-paper-deep px-1.5 py-0.5 font-mono text-base text-dim group-hover:flex group-focus-within:flex pointer-coarse:flex">
+                <button type="button" onClick={() => move(block.key, -1)} className="flex min-h-8 min-w-8 items-center justify-center hover:text-ink" aria-label="Move up">↑</button>
+                <button type="button" onClick={() => move(block.key, 1)} className="flex min-h-8 min-w-8 items-center justify-center hover:text-ink" aria-label="Move down">↓</button>
                 <button
                   type="button"
                   onClick={() => setBlocks((all) => all.filter((b) => b.key !== block.key))}
-                  className="px-1 hover:text-live pointer-coarse:min-h-10 pointer-coarse:min-w-10"
+                  className="flex min-h-8 min-w-8 items-center justify-center hover:text-live"
                   aria-label="Delete block"
                 >
                   ✕
@@ -199,8 +202,8 @@ export function ActivityBlockEditor({
                       patch(block.key, (b) => (b.type === "text" ? { ...b, text: e.target.value } : b))
                     }
                     rows={block.style === "heading" ? 1 : 4}
-                    placeholder={block.style === "heading" ? "Heading…" : "Write something…"}
-                    className={`w-full resize-y bg-transparent outline-none placeholder:text-dim/50 ${
+                    placeholder={block.style === "heading" ? "Heading…" : "Write what happened — the work, the parts, the result…"}
+                    className={`w-full resize-y bg-transparent outline-none placeholder:text-dim ${
                       block.style === "heading"
                         ? "text-lg font-[600]"
                         : "text-body leading-7"

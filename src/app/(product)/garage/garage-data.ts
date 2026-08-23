@@ -20,6 +20,8 @@ export type GarageSheet = {
   /** Sheet number in the garage — order the cars were added. */
   index: number;
   photos: number;
+  /** Every photo on the car, cover first — the plate swipes through them. */
+  photoUrls: string[];
   mods: number;
   updates: number;
   latestUpdate: { id: string; title: string; published_at: string; cover_url: string | null } | null;
@@ -51,7 +53,7 @@ export async function loadGarageSheets(
     { data: follows },
     { data: likes },
   ] = await Promise.all([
-    supabase.from("car_images").select("car_id").in("car_id", ids),
+    supabase.from("car_images").select("car_id, url, position").in("car_id", ids).order("position"),
     supabase.from("mod_items").select("car_id").in("car_id", ids),
     supabase
       .from("activity_posts")
@@ -95,6 +97,12 @@ export async function loadGarageSheets(
     return m;
   };
   const photosBy = count(images, "car_id");
+  const photoUrlsBy = new Map<string, string[]>();
+  for (const img of images ?? []) {
+    const list = photoUrlsBy.get(img.car_id) ?? [];
+    list.push(img.url);
+    photoUrlsBy.set(img.car_id, list);
+  }
   const modsBy = count(mods, "car_id");
   const followsBy = count(follows, "target_id");
   const likesBy = count(likes, "target_id");
@@ -124,6 +132,10 @@ export async function loadGarageSheets(
       created_at: car.created_at,
       index: index + 1,
       photos: photosBy.get(car.id) ?? 0,
+      photoUrls: (() => {
+        const rest = (photoUrlsBy.get(car.id) ?? []).filter((u) => u !== car.cover_image_url);
+        return car.cover_image_url ? [car.cover_image_url, ...rest] : rest;
+      })(),
       mods: modsBy.get(car.id) ?? 0,
       updates: carPosts.length,
       latestUpdate: latest
