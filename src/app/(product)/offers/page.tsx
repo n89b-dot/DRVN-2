@@ -12,7 +12,14 @@ export const metadata = { title: "Offers - DRVN" };
 
 const PAGE_SIZE = 25;
 
-const STATUSES = ["open", "countered", "accepted", "declined", "withdrawn", "expired"] as const;
+const STATUSES = [
+  "open",
+  "countered",
+  "accepted",
+  "declined",
+  "withdrawn",
+  "expired",
+] as const;
 type StatusFilter = (typeof STATUSES)[number];
 
 function isStatus(value: string | undefined): value is StatusFilter {
@@ -22,7 +29,7 @@ function isStatus(value: string | undefined): value is StatusFilter {
 function withParams(
   base: string,
   params: Record<string, string | undefined>,
-  overrides: Record<string, string | undefined>
+  overrides: Record<string, string | undefined>,
 ) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries({ ...params, ...overrides })) {
@@ -33,7 +40,8 @@ function withParams(
 }
 
 /** A UUID, and nothing else — the listing filter goes straight into a query. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The canonical negotiation surface, for both sides of the marketplace.
@@ -72,7 +80,8 @@ export default async function OffersPage({
   const status = isStatus(statusParam) ? statusParam : undefined;
   // `?listing=<id>` is how the seller's ledger hands a listing over to its
   // canonical offers surface. Ignored unless it's a well-formed id.
-  const listingFilter = listingParam && UUID_RE.test(listingParam) ? listingParam : undefined;
+  const listingFilter =
+    listingParam && UUID_RE.test(listingParam) ? listingParam : undefined;
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
@@ -82,22 +91,39 @@ export default async function OffersPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: myListings } = await supabase
-    .from("listings")
-    .select("id")
-    .eq("seller_id", user.id)
-    .limit(2000);
-  const myListingIds = (myListings ?? []).map((l) => l.id);
-
-  // Cheap counts for the tab labels — head-only queries, no rows fetched.
-  const [{ count: receivedOpenCount }, { count: madeCounteredCount }] = await Promise.all([
-    myListingIds.length
+  // The listing rides along on the offer row via a join — for "received"
+  // that join is also the scope (offers on listings this user sells), which
+  // used to cost a separate fetch of up to 2000 listing ids before anything
+  // else could run. With it gone, the page list and both tab counts are one
+  // parallel round instead of three serial ones.
+  let query =
+    role === "received"
       ? supabase
           .from("offers")
-          .select("id", { count: "exact", head: true })
-          .in("listing_id", myListingIds)
-          .eq("status", "open")
-      : Promise.resolve({ count: 0 }),
+          .select("*, listings!inner(id, title, seller_id)", { count: "exact" })
+          .eq("listings.seller_id", user.id)
+      : supabase
+          .from("offers")
+          .select("*, listings!inner(id, title, seller_id)", { count: "exact" })
+          .eq("buyer_id", user.id);
+
+  if (status) query = query.eq("status", status);
+  // Narrowing to a listing composes with role and status rather than
+  // replacing them — and it can't widen access: `received` is still bounded
+  // by the seller's own listings via the join, `made` by their buyer_id.
+  if (listingFilter) query = query.eq("listing_id", listingFilter);
+
+  const [
+    { data: offers, count, error },
+    { count: receivedOpenCount },
+    { count: madeCounteredCount },
+  ] = await Promise.all([
+    query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1),
+    supabase
+      .from("offers")
+      .select("id, listings!inner(id)", { count: "exact", head: true })
+      .eq("listings.seller_id", user.id)
+      .eq("status", "open"),
     supabase
       .from("offers")
       .select("id", { count: "exact", head: true })
@@ -105,65 +131,56 @@ export default async function OffersPage({
       .eq("status", "countered"),
   ]);
 
-  let query =
-    role === "received"
-      ? supabase.from("offers").select("*", { count: "exact" }).in("listing_id", myListingIds.length ? myListingIds : ["00000000-0000-0000-0000-000000000000"])
-      : supabase.from("offers").select("*", { count: "exact" }).eq("buyer_id", user.id);
-
-  if (status) query = query.eq("status", status);
-  // Narrowing to a listing composes with role and status rather than
-  // replacing them — and it can't widen access: `received` is still bounded
-  // by the seller's own listing ids, `made` by their buyer_id.
-  if (listingFilter) query = query.eq("listing_id", listingFilter);
-
-  const { data: offers, count, error } = await query
-    .order("created_at", { ascending: false })
-    .range(from, from + PAGE_SIZE - 1);
-
   if (error) reportError("[offers] failed to load offers", error);
 
   const rows = offers ?? [];
   const offerIds = rows.map((o) => o.id);
   const listingIds = [...new Set(rows.map((o) => o.listing_id))];
-
-  // Listings are fetched first — for "made" offers, the counterparty is the
-  // listing's seller, which we don't know until this comes back.
-  const [{ data: listings }, { data: images }] = await Promise.all([
-    listingIds.length
-      ? supabase.from("listings").select("id, title, seller_id").in("id", listingIds)
-      : Promise.resolve({ data: [] }),
-    listingIds.length
-      ? supabase.from("listing_images").select("listing_id, url, position").in("listing_id", listingIds).order("position")
-      : Promise.resolve({ data: [] }),
-  ]);
+  const listingById = new Map(rows.map((o) => [o.listing_id, o.listings]));
 
   const counterpartyIds = [
     ...new Set(
       role === "received"
         ? rows.map((o) => o.buyer_id)
-        : rows.map((o) => (listings ?? []).find((l) => l.id === o.listing_id)?.seller_id ?? null)
+        : rows.map((o) => o.listings?.seller_id ?? null),
     ),
   ].filter((x): x is string => Boolean(x) && x !== user.id);
 
-  const [{ data: people }, { data: unreadRows }] = await Promise.all([
-    counterpartyIds.length
-      ? supabase.from("profiles").select("id, display_name, username").in("id", counterpartyIds)
-      : Promise.resolve({ data: [] }),
-    offerIds.length
-      ? supabase
-          .from("messages")
-          .select("offer_id")
-          .in("offer_id", offerIds)
-          .eq("recipient_id", user.id)
-          .is("read_at", null)
-      : Promise.resolve({ data: [] }),
-  ]);
+  // Everything left depends only on the rows above, so it's one round:
+  // covers, counterparty names, unread flags.
+  const [{ data: images }, { data: people }, { data: unreadRows }] =
+    await Promise.all([
+      listingIds.length
+        ? supabase
+            .from("listing_images")
+            .select("listing_id, url, position")
+            .in("listing_id", listingIds)
+            .order("position")
+        : Promise.resolve({ data: [] }),
+      counterpartyIds.length
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, username")
+            .in("id", counterpartyIds)
+        : Promise.resolve({ data: [] }),
+      offerIds.length
+        ? supabase
+            .from("messages")
+            .select("offer_id")
+            .in("offer_id", offerIds)
+            .eq("recipient_id", user.id)
+            .is("read_at", null)
+        : Promise.resolve({ data: [] }),
+    ]);
 
   const coverByListing = new Map<string, string>();
   for (const image of images ?? []) {
-    if (!coverByListing.has(image.listing_id)) coverByListing.set(image.listing_id, image.url);
+    if (!coverByListing.has(image.listing_id))
+      coverByListing.set(image.listing_id, image.url);
   }
-  const unreadOffers = new Set((unreadRows ?? []).map((m) => m.offer_id).filter(Boolean));
+  const unreadOffers = new Set(
+    (unreadRows ?? []).map((m) => m.offer_id).filter(Boolean),
+  );
 
   const nameFor = (pid: string | null) => {
     if (!pid) return "DRVN member";
@@ -182,13 +199,16 @@ export default async function OffersPage({
   };
 
   const items: OfferListItem[] = rows.map((o) => {
-    const listing = (listings ?? []).find((l) => l.id === o.listing_id);
+    const listing = o.listings;
     return {
       id: o.id,
       listing_id: o.listing_id,
       listing_title: listing?.title ?? "Listing",
       listing_cover_url: coverByListing.get(o.listing_id) ?? null,
-      counterparty_name: role === "received" ? nameFor(o.buyer_id) : nameFor(listing?.seller_id ?? null),
+      counterparty_name:
+        role === "received"
+          ? nameFor(o.buyer_id)
+          : nameFor(listing?.seller_id ?? null),
       amount_cents: o.amount_cents,
       counter_amount_cents: o.counter_amount_cents,
       status: o.status,
@@ -213,7 +233,7 @@ export default async function OffersPage({
   // filter that matches nothing) still has to be able to name itself.
   let scopedListingTitle: string | null = null;
   if (listingFilter) {
-    scopedListingTitle = (listings ?? []).find((l) => l.id === listingFilter)?.title ?? null;
+    scopedListingTitle = listingById.get(listingFilter)?.title ?? null;
     if (!scopedListingTitle) {
       const { data: scoped } = await supabase
         .from("listings")
@@ -234,7 +254,6 @@ export default async function OffersPage({
   return (
     <div className="wrap">
       <MarketplaceNav current="offers" offersCount={attentionCount} />
-
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Negotiations
@@ -249,16 +268,20 @@ export default async function OffersPage({
           {(madeCounteredCount ?? 0) > 0 && (
             <>
               {" · "}
-              <span className="microlabel--live">{madeCounteredCount} countered on you</span>
+              <span className="microlabel--live">
+                {madeCounteredCount} countered on you
+              </span>
             </>
           )}
         </span>
         <h1>
           Every offer, <span className="live-word">in one place.</span>
         </h1>
-        <p className="sub">Answer what&apos;s come in, track what you&apos;ve sent, and open any thread.</p>
+        <p className="sub">
+          Answer what&apos;s come in, track what you&apos;ve sent, and open any
+          thread.
+        </p>
       </Rv>
-
       {/* Arrived from a listing in the ledger: name the scope and give it an
           obvious way out, so a filtered list never reads as an empty inbox. */}
       {listingFilter && (
@@ -274,7 +297,10 @@ export default async function OffersPage({
               Open the listing →
             </Link>
             <Link
-              href={withParams("/offers", params, { listing: undefined, page: undefined })}
+              href={withParams("/offers", params, {
+                listing: undefined,
+                page: undefined,
+              })}
               className="jumplink"
             >
               Clear filter ×
@@ -285,17 +311,28 @@ export default async function OffersPage({
 
       {/* Role leads, status refines — the same two-tier shape Listings and
           Orders use, so the family's filter rows read identically. */}
-      <div className="filters filters--stack filters--scroll" role="group" aria-label="Offer role">
+      <div
+        className="filters filters--stack filters--scroll"
+        role="group"
+        aria-label="Offer role"
+      >
         <span className="microlabel filters__label">Show</span>
         <Link
-          href={withParams("/offers", params, { role: undefined, page: undefined })}
+          href={withParams("/offers", params, {
+            role: undefined,
+            page: undefined,
+          })}
           className={`fbtn ${role === "received" ? "is-on" : ""}`}
           aria-current={role === "received" ? "true" : undefined}
         >
-          Received{(receivedOpenCount ?? 0) > 0 ? ` (${receivedOpenCount})` : ""}
+          Received
+          {(receivedOpenCount ?? 0) > 0 ? ` (${receivedOpenCount})` : ""}
         </Link>
         <Link
-          href={withParams("/offers", params, { role: "made", page: undefined })}
+          href={withParams("/offers", params, {
+            role: "made",
+            page: undefined,
+          })}
           className={`fbtn ${role === "made" ? "is-on" : ""}`}
           aria-current={role === "made" ? "true" : undefined}
         >
@@ -310,7 +347,10 @@ export default async function OffersPage({
       >
         <span className="microlabel filters__label">Status</span>
         <Link
-          href={withParams("/offers", params, { status: undefined, page: undefined })}
+          href={withParams("/offers", params, {
+            status: undefined,
+            page: undefined,
+          })}
           className={`fbtn ${!status ? "is-on" : ""}`}
           aria-current={!status ? "true" : undefined}
         >
@@ -348,7 +388,11 @@ export default async function OffersPage({
           </div>
           <div className="rowlist">
             {items.map((offer) => (
-              <OfferListRow key={offer.id} offer={offer} incoming={role === "received"} />
+              <OfferListRow
+                key={offer.id}
+                offer={offer}
+                incoming={role === "received"}
+              />
             ))}
           </div>
         </Rv>
@@ -367,7 +411,10 @@ export default async function OffersPage({
           </p>
           {listingFilter ? (
             <Link
-              href={withParams("/offers", params, { listing: undefined, page: undefined })}
+              href={withParams("/offers", params, {
+                listing: undefined,
+                page: undefined,
+              })}
               className="btn btn--ghost"
             >
               Show all offers
@@ -381,10 +428,15 @@ export default async function OffersPage({
       )}
 
       {(page > 1 || hasMore) && (
-        <nav className="mt-8 flex items-center justify-between gap-3" aria-label="Pagination">
+        <nav
+          className="mt-8 flex items-center justify-between gap-3"
+          aria-label="Pagination"
+        >
           {page > 1 ? (
             <Link
-              href={withParams("/offers", params, { page: page - 1 === 1 ? undefined : String(page - 1) })}
+              href={withParams("/offers", params, {
+                page: page - 1 === 1 ? undefined : String(page - 1),
+              })}
               className="btn btn--ghost"
               rel="prev"
             >

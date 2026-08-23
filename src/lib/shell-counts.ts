@@ -44,9 +44,10 @@ export async function loadShellCounts(
 /**
  * Offers "needing you": open offers on your listings (you're the seller and
  * haven't responded) plus offers you made that came back countered (the
- * seller answered and it's your turn). Two head-only counts — cheap even
- * with a large listing catalog since the second query only ever touches
- * offers, never listings.
+ * seller answered and it's your turn). Two head-only counts in one parallel
+ * round — the seller side is scoped by a join on the listing's owner rather
+ * than by first ferrying up to 2000 listing ids over the wire, so this never
+ * costs a second round trip whatever the catalog size.
  *
  * Exported because the Marketplace-family subnav badges the same number as
  * the rail and the index; every surface says "needs you", never "exists".
@@ -55,27 +56,12 @@ export async function loadOffersNeedingAttention(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<number> {
-  const { data: myListings, error: listingsError } = await supabase
-    .from("listings")
-    .select("id")
-    .eq("seller_id", userId)
-    .limit(2000);
-
-  if (listingsError) {
-    reportError("[shell] offers count: listings lookup failed", listingsError);
-    return 0;
-  }
-
-  const myListingIds = (myListings ?? []).map((l) => l.id);
-
   const [received, made] = await Promise.all([
-    myListingIds.length
-      ? supabase
-          .from("offers")
-          .select("id", { count: "exact", head: true })
-          .in("listing_id", myListingIds)
-          .eq("status", "open")
-      : Promise.resolve({ count: 0, error: null }),
+    supabase
+      .from("offers")
+      .select("id, listings!inner(id)", { count: "exact", head: true })
+      .eq("listings.seller_id", userId)
+      .eq("status", "open"),
     supabase
       .from("offers")
       .select("id", { count: "exact", head: true })

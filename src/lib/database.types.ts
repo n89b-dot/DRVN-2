@@ -3,11 +3,22 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-type Table<Row, Required extends keyof Row = never> = {
+type Relationship = {
+  foreignKeyName: string;
+  columns: string[];
+  isOneToOne: boolean;
+  referencedRelation: string;
+  referencedColumns: string[];
+};
+
+/* Relationships drive supabase-js embed typing (`select("*, listings(...)")`).
+   Declared per-table only where an embed is actually used — the DB has the
+   real FK either way; this is purely for the type layer. */
+type Table<Row, Required extends keyof Row = never, Rels extends Relationship[] = []> = {
   Row: Row;
   Insert: Partial<Row> & Pick<Row, Required>;
   Update: Partial<Row>;
-  Relationships: [];
+  Relationships: Rels;
 };
 
 export type Profile = {
@@ -741,9 +752,33 @@ export type Database = {
       likes: Table<Like, "user_id" | "target_type" | "target_id">;
       follows: Table<Follow, "follower_id" | "target_type" | "target_id">;
       orders: Table<Order, "buyer_id" | "seller_id">;
-      order_items: Table<OrderItem, "order_id" | "price_cents">;
+      order_items: Table<
+        OrderItem,
+        "order_id" | "price_cents",
+        [
+          {
+            foreignKeyName: "order_items_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ]
+      >;
       payments: Table<Payment, "order_id" | "amount_cents">;
-      offers: Table<Offer, "listing_id" | "buyer_id" | "amount_cents">;
+      offers: Table<
+        Offer,
+        "listing_id" | "buyer_id" | "amount_cents",
+        [
+          {
+            foreignKeyName: "offers_listing_id_fkey";
+            columns: ["listing_id"];
+            isOneToOne: false;
+            referencedRelation: "listings";
+            referencedColumns: ["id"];
+          },
+        ]
+      >;
       reviews: Table<Review, "order_id" | "reviewer_id" | "reviewee_id" | "rating">;
       listing_questions: Table<ListingQuestion, "listing_id" | "author_id" | "body">;
       messages: Table<Message, "sender_id" | "recipient_id" | "body">;

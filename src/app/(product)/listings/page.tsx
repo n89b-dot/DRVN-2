@@ -3,14 +3,21 @@ import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot, MarketplaceNav } from "@/components/ui";
-import type { SellerListingStat, SellerRegisterTally } from "@/lib/database.types";
+import type {
+  SellerListingStat,
+  SellerRegisterTally,
+} from "@/lib/database.types";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
-import { ListingsLedger, type LedgerOffer, type LedgerRow } from "./listings-ledger";
+import {
+  ListingsLedger,
+  type LedgerOffer,
+  type LedgerRow,
+} from "./listings-ledger";
 import { reportError } from "@/lib/monitoring";
 
-export const metadata = { title: "Your listings - DRVN" };
+export const metadata = { title: "My Listings - DRVN" };
 
 /**
  * Werkbank's registers: everything, live, under offer, and each of the
@@ -18,7 +25,15 @@ export const metadata = { title: "Your listings - DRVN" };
  * used to have nowhere to be filtered into — they were only reachable by
  * scrolling "All" — so each status gets its own chip.
  */
-type Register = "all" | "live" | "offer" | "draft" | "paused" | "reserved" | "archived" | "sold";
+type Register =
+  | "all"
+  | "live"
+  | "offer"
+  | "draft"
+  | "paused"
+  | "reserved"
+  | "archived"
+  | "sold";
 
 /**
  * Eight equally-loud chips made the phone layout a wall and gave "Archived"
@@ -89,12 +104,23 @@ const TALLY_FIELD: Record<Register, keyof SellerRegisterTally> = {
 export default async function SellerListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ register?: string; sort?: string; deleted?: string; page?: string }>;
+  searchParams: Promise<{
+    register?: string;
+    sort?: string;
+    deleted?: string;
+    page?: string;
+  }>;
 }) {
-  const { register: registerParam, sort: sortParam, deleted, page: pageParam } = await searchParams;
+  const {
+    register: registerParam,
+    sort: sortParam,
+    deleted,
+    page: pageParam,
+  } = await searchParams;
   const register: Register =
     REGISTERS.find((r) => r.key === registerParam)?.key ?? "all";
-  const sort: SortKey = SORTS.find((s) => s.key === sortParam)?.key ?? "top_offer";
+  const sort: SortKey =
+    SORTS.find((s) => s.key === sortParam)?.key ?? "top_offer";
   const page = Math.max(1, Number(pageParam) || 1);
 
   const supabase = await createClient();
@@ -121,8 +147,10 @@ export default async function SellerListingsPage({
 
   // Fail soft when 0030 hasn't been applied yet (or the RPC errors): the
   // ledger renders empty rather than crashing, and the error is on record.
-  if (statsRes.error) reportError("[listings] seller_listing_stats failed", statsRes.error);
-  if (tallyRes.error) reportError("[listings] seller_register_tally failed", tallyRes.error);
+  if (statsRes.error)
+    reportError("[listings] seller_listing_stats failed", statsRes.error);
+  if (tallyRes.error)
+    reportError("[listings] seller_register_tally failed", tallyRes.error);
   // 0035 — a missing function must not take the ledger down with it.
   if (questionsRes.error)
     reportError("[listings] seller_open_questions failed", questionsRes.error);
@@ -140,13 +168,16 @@ export default async function SellerListingsPage({
     // A stale page number pointing past the end of the filtered set: refetch
     // the real last page instead of showing an empty table.
     const retry = await fetchStats(clampedPage);
-    if (retry.error) reportError("[listings] seller_listing_stats failed", retry.error);
+    if (retry.error)
+      reportError("[listings] seller_listing_stats failed", retry.error);
     stats = retry.data ?? [];
     total = stats[0]?.total_count ?? total;
   }
 
   const listingIds = stats.map((s) => s.id);
-  const carIds = [...new Set(stats.map((s) => s.source_car_id).filter(Boolean))] as string[];
+  const carIds = [
+    ...new Set(stats.map((s) => s.source_car_id).filter(Boolean)),
+  ] as string[];
 
   // Offer history only for the rows on screen — the expandable detail is the
   // one thing the RPC doesn't aggregate.
@@ -154,7 +185,9 @@ export default async function SellerListingsPage({
     listingIds.length
       ? supabase
           .from("offers")
-          .select("id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at, created_at")
+          .select(
+            "id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at, created_at",
+          )
           .in("listing_id", listingIds)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
@@ -162,13 +195,18 @@ export default async function SellerListingsPage({
       ? supabase.from("cars").select("id, name, slug").in("id", carIds)
       : Promise.resolve({ data: [], error: null }),
   ]);
-  if (offersRes.error) reportError("[listings] offers failed to load", offersRes.error);
-  if (carsRes.error) reportError("[listings] cars failed to load", carsRes.error);
+  if (offersRes.error)
+    reportError("[listings] offers failed to load", offersRes.error);
+  if (carsRes.error)
+    reportError("[listings] cars failed to load", carsRes.error);
   const offers = offersRes.data ?? [];
 
   const buyerIds = [...new Set(offers.map((o) => o.buyer_id))];
   const { data: buyers } = buyerIds.length
-    ? await supabase.from("profiles").select("id, display_name, username").in("id", buyerIds)
+    ? await supabase
+        .from("profiles")
+        .select("id, display_name, username")
+        .in("id", buyerIds)
     : { data: [] };
   const buyerById = new Map((buyers ?? []).map((b) => [b.id, b]));
   const buyerName = (id: string) => {
@@ -214,7 +252,9 @@ export default async function SellerListingsPage({
   const pageFrom = (clampedPage - 1) * PAGE_SIZE;
   const hasMore = pageFrom + rows.length < total;
 
-  const href = (next: Partial<{ register: Register; sort: SortKey; page: number }>) => {
+  const href = (
+    next: Partial<{ register: Register; sort: SortKey; page: number }>,
+  ) => {
     const params = new URLSearchParams();
     const r = next.register ?? register;
     const s = next.sort ?? sort;
@@ -232,40 +272,54 @@ export default async function SellerListingsPage({
   return (
     <div className="wrap">
       <MarketplaceNav current="listings" offersCount={offersCount} />
-
       <Rv as="header" className="pagehead pagehead--task">
-        <span className="microlabel">Your inventory</span>
+        <span className="microlabel">My Listings · your inventory</span>
         <h1>
           Every part you&apos;ve <span className="live-word">listed.</span>
         </h1>
         <p className="sub">
-          Who&apos;s looking, who&apos;s watching, and the best offer on the table — with the
-          clock running on each one.
+          Who&apos;s looking, who&apos;s watching, and the best offer on the
+          table — with the clock running on each one.
         </p>
-        <Link href="/payouts" className="jumplink mt-2 inline-flex">
-          View your payout ledger →
+        <Link href="/settings#payouts" className="jumplink mt-2 inline-flex">
+          View your payouts →
         </Link>
       </Rv>
-
       {/* The seller's working state, in four numbers. Each one is a filter or
           a queue — nothing here is a metric for its own sake. */}
       <div className="tally" role="group" aria-label="Listing summary">
-        <Link href={href({ register: "live" })} scroll={false} className="tally__cell">
+        <Link
+          href={href({ register: "live" })}
+          scroll={false}
+          className="tally__cell"
+        >
           <span className="tally__n">{tally("live")}</span>
           <span className="tally__label">Live</span>
         </Link>
-        <Link href={href({ register: "offer" })} scroll={false} className="tally__cell">
-          <span className={`tally__n ${tally("offer") > 0 ? "tally__n--live" : ""}`}>
+        <Link
+          href={href({ register: "offer" })}
+          scroll={false}
+          className="tally__cell"
+        >
+          <span
+            className={`tally__n ${tally("offer") > 0 ? "tally__n--live" : ""}`}
+          >
             {tally("offer")}
           </span>
           <span className="tally__label">Under offer</span>
         </Link>
-        <Link href={href({ register: "draft" })} scroll={false} className="tally__cell">
+        <Link
+          href={href({ register: "draft" })}
+          scroll={false}
+          className="tally__cell"
+        >
           <span className="tally__n">{tally("draft")}</span>
           <span className="tally__label">Drafts</span>
         </Link>
         <span className="tally__cell">
-          <span className={`tally__n ${openQuestions > 0 ? "tally__n--live" : ""}`}>
+          <span
+            className={`tally__n ${openQuestions > 0 ? "tally__n--live" : ""}`}
+          >
             {openQuestions}
           </span>
           <span className="tally__label">Questions to answer</span>
@@ -324,13 +378,20 @@ export default async function SellerListingsPage({
           <span className="undrawn__mark" aria-hidden="true">
             ✎
           </span>
-          <h3>{register === "all" ? "Nothing listed yet" : `Nothing ${EMPTY_REGISTER_PHRASE[register]}`}</h3>
+          <h3>
+            {register === "all"
+              ? "Nothing listed yet"
+              : `Nothing ${EMPTY_REGISTER_PHRASE[register]}`}
+          </h3>
           <p>
             {register === "all"
               ? "List your first part and it appears here with its views, watchers and offers."
               : "No listings match this filter right now."}
           </p>
-          <Link href={register === "all" ? "/sell" : "/listings"} className="btn btn--live">
+          <Link
+            href={register === "all" ? "/sell" : "/listings"}
+            className="btn btn--live"
+          >
             {register === "all" ? "List a part" : "Show all listings"}
           </Link>
         </div>
@@ -365,9 +426,16 @@ export default async function SellerListingsPage({
             />
 
             {(clampedPage > 1 || hasMore) && (
-              <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
+              <nav
+                className="mt-6 flex items-center justify-between gap-3"
+                aria-label="Pagination"
+              >
                 {clampedPage > 1 ? (
-                  <Link href={href({ page: clampedPage - 1 })} className="btn btn--ghost" rel="prev">
+                  <Link
+                    href={href({ page: clampedPage - 1 })}
+                    className="btn btn--ghost"
+                    rel="prev"
+                  >
                     ← Previous
                   </Link>
                 ) : (
@@ -375,7 +443,11 @@ export default async function SellerListingsPage({
                 )}
                 <span className="microlabel">Page {clampedPage}</span>
                 {hasMore ? (
-                  <Link href={href({ page: clampedPage + 1 })} className="btn btn--ghost" rel="next">
+                  <Link
+                    href={href({ page: clampedPage + 1 })}
+                    className="btn btn--ghost"
+                    rel="next"
+                  >
                     Next →
                   </Link>
                 ) : (

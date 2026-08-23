@@ -1123,6 +1123,14 @@ video {
     padding-top: clamp(6px, 1.5vw, 14px);
     padding-bottom: clamp(20px, 2.5vw, 28px);
   }
+  /* The family nav now sits under the head (every page's name starts at
+     the same height, with or without a family); the head closes up to it
+     and the nav keeps the gap to the content below. */
+  /* The family nav is the first thing on the page — the register reads
+     before the headline, so the head beneath it opens with less runway. */
+  .familynav + .pagehead--task {
+    padding-top: clamp(18px, 2vw, 26px);
+  }
   /* Working surfaces — an inbox, a short ledger — are glanced at, not
      introduced. The display head spent ~290px of a 900px viewport before the
      first row, which pushed a list of five conversations under the fold. Same
@@ -1133,7 +1141,9 @@ video {
   .pagehead h1 {
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
     letter-spacing: -0.02em;
-    line-height: 1.05;
+    /* 1.05 set two-line headlines almost touching — display heads keep a
+       visible channel of air between their lines. */
+    line-height: 1.14;
     font-size: clamp(32px, 4vw, 48px);
     margin-top: 14px;
   }
@@ -1182,22 +1192,30 @@ video {
      first half of a phone viewport. Editorial surfaces (landing, Explore,
      build sheets, public profiles) keep the display head. */
   .pagehead--task {
-    padding: clamp(16px, 2.2vw, 26px) 0 clamp(12px, 1.8vw, 20px);
+    /* The bottom runway matches the page's own section rhythm — at 20px the
+       standfirst sat closer to the first deck than any two sections sit to
+       each other, and the head read as part of the first tile row. */
+    padding: clamp(16px, 2.2vw, 26px) 0 clamp(26px, 3.5vw, 44px);
   }
   .pagehead--task h1 {
     font-size: clamp(24px, 2.6vw, 34px);
-    line-height: 1.15;
-    margin-top: 8px;
+    line-height: 1.22;
+    margin-top: 10px;
   }
   .pagehead--task .sub {
     font-size: 15px;
     max-width: 60ch;
-    margin-top: 8px;
+    margin-top: 12px;
   }
   /* On compact the standfirst is runway, not information. A head that must
      keep its prose on a phone (state it can't show elsewhere) opts back in
      with `.sub--keep`. */
   @media (max-width: 640px) {
+    /* With the standfirst retired the headline was 12px off the first
+       plate; the head keeps a real margin below it instead. */
+    .pagehead--task {
+      padding-bottom: 28px;
+    }
     .pagehead--task .sub:not(.sub--keep) {
       display: none;
     }
@@ -1722,6 +1740,10 @@ video {
     text-align: center;
     font-family: var(--mono);
     font-size: 12px;
+    /* CTAs carry the "do this" ask, so they get one weight step over the
+       ambient mono (tabs, chips, labels stay 400) — at 12px uppercase the
+       regular cut reads faint against filled ink/red fills. */
+    font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     padding: 13px 20px;
@@ -1886,6 +1908,28 @@ video {
     margin-top: 4px;
     line-height: 1.55;
   }
+  /* The build's pulse on a row — updates posted and followers, drawn as a
+     quiet mono readout beneath the identity, not a badge cluster. Flex so a
+     narrow column wraps between the two facts, never mid-fact. */
+  .vehicle__stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 7px;
+    row-gap: 2px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-top: 8px;
+  }
+  .vehicle__stat {
+    white-space: nowrap;
+  }
+  .vehicle__statdot {
+    opacity: 0.55;
+  }
   .vehicle--row {
     grid-template-columns: clamp(120px, 36%, 176px) 1fr auto;
     align-items: center;
@@ -1949,8 +1993,36 @@ video {
       grid-template-columns: 1fr;
       gap: 12px;
     }
+    /* Phone rows: the photo is a spine, not a thumbnail — it runs the full
+       height of the identity block beside it, however many lines the meta
+       takes, so the row reads as one drawn unit. Type steps down so the
+       meta and stats hold one line each in the narrow column. */
     .vehicle--row {
-      grid-template-columns: minmax(104px, 34%) 1fr auto;
+      grid-template-columns: 96px 1fr auto;
+      gap: 12px;
+      align-items: stretch;
+    }
+    .vehicle--row .vehicle__img {
+      aspect-ratio: auto;
+      height: 100%;
+      min-height: 88px;
+    }
+    .vehicle--row .vehicle__body,
+    .vehicle--row .vehicle__go {
+      align-self: center;
+    }
+    .vehicle--row .vehicle__name {
+      font-size: 15px;
+    }
+    .vehicle--row .vehicle__meta {
+      font-size: 13.5px;
+      line-height: 1.45;
+      margin-top: 2px;
+    }
+    .vehicle--row .vehicle__stats {
+      font-size: 10.5px;
+      letter-spacing: 0.06em;
+      margin-top: 6px;
     }
     .vehicle--manage {
       grid-template-columns: 112px 1fr;
@@ -3050,6 +3122,117 @@ video {
 .gsheet__plate:hover img {
   transform: scale(1.03);
 }
+/* Swipeable plate: a scroll-snapped track of the car's photos. The link
+   to the build page lies beneath the track (it only receives the pointer
+   where there's one photo and no track) and is reached by the name link
+   for keyboards. */
+.gsheet__track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  z-index: 1;
+}
+.gsheet__track::-webkit-scrollbar {
+  display: none;
+}
+.gsheet__track:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: -3px;
+}
+.gsheet__slide {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.gsheet__track img {
+  transition: none;
+}
+.gsheet__platelink {
+  position: absolute;
+  inset: 0;
+}
+.gsheet__plate .gsheet__no {
+  z-index: 2;
+}
+/* The controls — one compact cluster in the corner: ‹ pips 1/6 ›. Dark
+   glass so it reads on any photo without covering it. */
+.gsheet__ctl {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+}
+.gsheet__arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 18px;
+  line-height: 1;
+  color: #fff;
+  transition: background var(--t-fast) ease;
+}
+.gsheet__arrow:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.gsheet__arrow:focus-visible,
+.gsheet__pips button:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 1px;
+}
+.gsheet__pips {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 2px;
+}
+.gsheet__pips button {
+  width: 14px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
+.gsheet__pips button::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition: background var(--t-fast) ease, transform var(--t-fast) var(--spring);
+}
+.gsheet__pips button.is-on::before {
+  background: #fff;
+  transform: scale(1.4);
+}
+.gsheet__count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .gsheet__pips {
+    display: none;
+  }
+}
 /* Sheet number — a title-block stamp on the plate's corner. */
 .gsheet__no {
   position: absolute;
@@ -3077,6 +3260,53 @@ video {
   flex-direction: column;
   min-width: 0;
 }
+/* ≥641px the plate sits beside the body. Folding the details must not
+   change the sheet's height or move the tool rail, so a folded pane keeps
+   its box and only hides its content (the pane fades and settles; the sheet
+   is always as tall as its open state). Phones collapse the pane's height;
+   there the fold exists to save height. The hide/show mechanics live with
+   the fold rules further down. */
+@media (min-width: 641px) {
+  .gsheet__more {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .gsheet__rail {
+    flex: none;
+  }
+}
+/* Sheet number — a title-block stamp on the plate's corner. */
+.gsheet__no {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  padding: 4px 8px;
+  border-radius: var(--r-chip);
+}
+.gsheet__no--ledger {
+  left: auto;
+  right: 10px;
+  color: var(--on-ink);
+  background: var(--ink);
+  backdrop-filter: none;
+}
+.gsheet__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* ≥641px the plate sits beside the body and the sheet's height is the
+   plate's (4:3 of its column), so folding or unfolding the details never
+   moves the tool rail — the details pane scrolls inside itself if it runs
+   long. The plate column is 5/12 (desktop) or 2/5 (tablet) of the sheet's
+   inner width. */
 .gsheet__head .microlabel {
   display: flex;
   align-items: center;
@@ -3102,7 +3332,7 @@ video {
 /* Five dimensions in one row; each keeps the livedim's own spine. */
 .gsheet__dims {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 6px;
 }
@@ -3116,8 +3346,11 @@ video {
   display: block;
   margin-top: 2px;
 }
+/* Labels wrap at the word, never clip mid-word ("FOLLOW…"). */
 .gsheet__dims .livedim .microlabel {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: normal;
+  line-height: 1.3;
 }
 /* The sheet draws itself: each dimension's spine scales in from the top
    and its ticks follow, staggered left to right as the sheet reveals — the
@@ -3212,6 +3445,13 @@ video {
   line-height: 1.45;
   color: var(--dim);
   margin-top: 8px;
+  max-width: 34ch;
+}
+.gsheet__latest {
+  max-width: 40ch;
+}
+.gsheet__orders {
+  max-width: 44ch;
 }
 /* Work orders — checkbox-ruled lines, the way a job card lists tasks. */
 .gsheet__orders {
@@ -3270,66 +3510,180 @@ video {
 /* Tool rail — three equal tools, pinned to the sheet's foot. */
 .gsheet__rail {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
   gap: 8px;
   margin-top: auto;
   padding-top: 18px;
-  max-width: 440px;
+  max-width: 460px;
 }
 .gsheet__rail .btn {
   padding-left: 10px;
   padding-right: 10px;
+  min-width: 0;
   white-space: nowrap;
+}
+/* The column a sheet gives its rail can drop under 200px between the
+   desktop and phone layouts; the bracket decorations were what spilled, so
+   they go before the words ever wrap. */
+@media (max-width: 1180px) {
+  .gsheet__rail .btn::before,
+  .gsheet__rail .btn::after {
+    content: none;
+  }
 }
 /* The fold. Desktop: no toggle, always open. Phones: a digest line you
    tap to unfold the dimensions and notes. */
 .gsheet__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 6px 0 6px 2px;
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.gsheet__digest {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The control says what it does — a small recessed pill, not a glyph. */
+.gsheet__togglebtn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px 0 12px;
+  border-radius: var(--r-chip);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background var(--t-fast) ease;
+}
+.gsheet__togglebtn:hover {
+  background: var(--ghost-hover);
+}
+.gsheet__chevico {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--t-fast) var(--spring);
+}
+.gsheet__chev-closed,
+.gsheet__toggle.is-open .gsheet__chev-closed {
   display: none;
 }
-.gsheet__more {
-  display: block;
+.gsheet__toggle.is-open .gsheet__chev-open {
+  display: inline;
+}
+.gsheet__toggle.is-open .gsheet__chevico {
+  transform: rotate(180deg);
+}
+.gsheet__toggle.is-closed .gsheet__chev-open {
+  display: none;
+}
+.gsheet__toggle.is-closed .gsheet__chev-closed {
+  display: inline;
+}
+@media (min-width: 641px) {
+  .gsheet__toggle:not(.is-closed) .gsheet__chevico {
+    transform: rotate(180deg);
+  }
 }
 @media (max-width: 640px) {
-  .gsheet__toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    width: 100%;
-    min-height: 44px;
-    margin-top: 10px;
-    padding: 0 2px;
-    border-top: 1px solid var(--rule-soft);
-    color: var(--ink);
-    text-align: left;
-  }
-  .gsheet__digest {
-    font-family: var(--mono);
-    font-size: 11.5px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--dim);
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .gsheet__toggle[aria-expanded="true"] .gsheet__digest {
-    color: var(--ink);
-  }
-  .gsheet__chev {
-    flex: none;
-    font-family: var(--mono);
-    font-size: 16px;
-    line-height: 1;
-    color: var(--dim);
-  }
-  .gsheet__more {
+  .gsheet__toggle:not(.is-open) .gsheet__chev-open {
     display: none;
   }
-  .gsheet__more.is-open {
-    display: block;
+  .gsheet__toggle:not(.is-open) .gsheet__chev-closed {
+    display: inline;
   }
+}
+/* Untouched: open on desktop, folded on phones. Toggled: the class wins.
+   The fold is drawn, not cut: the pane is a single grid row that animates
+   1fr → 0fr on phones (a real unfold), while the content fades and rises.
+   Desktop never collapses the row — the sheet keeps its open height so the
+   tool rail never moves — so there the fold is the content settling in and
+   out of an otherwise steady box. */
+.gsheet__more {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.gsheet__morepane {
+  min-height: 0;
+}
+@media (min-width: 641px) {
+  .gsheet__morepane {
+    transition:
+      opacity 220ms ease,
+      translate 380ms var(--spring),
+      visibility 0s;
+  }
+  .gsheet__more.is-closed .gsheet__morepane {
+    opacity: 0;
+    translate: 0 10px;
+    visibility: hidden;
+    /* Hiding waits for the fade; showing (the base rule) is immediate. */
+    transition:
+      opacity 220ms ease,
+      translate 380ms var(--spring),
+      visibility 0s linear 220ms;
+  }
+  /* The plate runs the full height of the body beside it — its bottom edge
+     lands on the rail's bottom edge, whatever the sheet's content — instead
+     of a fixed 4:3 that left the rail hanging below the photo. */
+  .gsheet__plate {
+    align-self: stretch;
+    aspect-ratio: auto;
+    min-height: 240px;
+  }
+}
+@media (max-width: 640px) {
+  .gsheet__more {
+    transition:
+      grid-template-rows 380ms var(--spring),
+      visibility 0s;
+  }
+  .gsheet__morepane {
+    overflow: clip;
+    transition:
+      opacity 200ms ease 140ms,
+      translate 380ms var(--spring);
+  }
+  .gsheet__more.is-closed,
+  .gsheet__more:not(.is-open) {
+    grid-template-rows: 0fr;
+    visibility: hidden;
+    /* Hiding waits for the collapse; unfolding shows immediately. */
+    transition:
+      grid-template-rows 380ms var(--spring),
+      visibility 0s linear 380ms;
+  }
+  .gsheet__more.is-closed .gsheet__morepane,
+  .gsheet__more:not(.is-open) .gsheet__morepane {
+    opacity: 0;
+    translate: 0 -8px;
+    transition:
+      opacity 160ms ease,
+      translate 380ms var(--spring);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gsheet__more,
+  .gsheet__morepane {
+    transition: none;
+  }
+}
+@media (max-width: 640px) {
   .gsheet__more .gsheet__dims {
     margin-top: 0;
   }
@@ -3338,6 +3692,7 @@ video {
     padding-top: 4px;
   }
   .gsheet__rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     max-width: none;
     gap: 6px;
     padding-top: 12px;
@@ -3362,7 +3717,7 @@ video {
     gap: 18px;
   }
   .gsheet__dims {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 640px) {
@@ -3375,7 +3730,7 @@ video {
     aspect-ratio: 16 / 10;
   }
   .gsheet__dims {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
   .gsheet__dims .livedim .val {
@@ -3948,6 +4303,105 @@ video {
   .filters--stack {
     margin-bottom: 10px;
   }
+  /* Home's composer entry — avatar + prompt field top-aligned under the
+     tile head, car chips on tap when there's a choice, one ruled note. */
+  .composerlite {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .composerlite__cars {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .composerlite__cars .btn {
+    padding: 9px 14px;
+    font-size: 11px;
+  }
+  /* Car chips are destinations wearing their own names — never the [ ]
+     action brackets (same suppression the garage rail uses when the
+     decoration would outweigh the word). */
+  .composerlite__cars .btn::before,
+  .composerlite__cars .btn::after {
+    content: none;
+  }
+  /* The chips arrive like the sheet drew them in — the same spring the
+     garage fold uses. */
+  @media (prefers-reduced-motion: no-preference) {
+    .composerlite__cars {
+      animation: composerlite-in 300ms var(--spring);
+    }
+  }
+  @keyframes composerlite-in {
+    from {
+      opacity: 0;
+      translate: 0 -6px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+  .composerlite__hint {
+    margin: 0;
+  }
+  @media (max-width: 640px) {
+    .composerlite__cars .btn {
+      min-height: 44px;
+      flex: 1 1 auto;
+    }
+  }
+  /* The field is an invitation, not an input — it lifts a shade under the
+     hand so the whole row reads as touchable. */
+  .composerlite__field {
+    transition: background var(--t-fast) ease;
+  }
+  .composerlite__ask:hover .composerlite__field {
+    background: var(--ghost-hover);
+  }
+  /* Explore's control band: filters left, the marketplace exit right — one
+     row on desktop so the CTA never interrupts the flow down to the feed.
+     On phones the chips keep their edge-bleed scroll and the CTA drops to a
+     full-width row of its own beneath them. */
+  .explorebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    margin: 26px 0 30px;
+  }
+  /* Straight under a page head the bar drops its own top margin — the head's
+     bottom padding is the spacing, and stacking the two (28 + 20 on phones)
+     pushed the control ~50px off the headline. */
+  .pagehead + .explorebar {
+    margin-top: 0;
+  }
+  .explorebar .filters {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+  }
+  .explorebar__cta {
+    flex: none;
+    background: var(--ink);
+    color: var(--paper-deep);
+  }
+  .explorebar__cta:hover {
+    background: var(--ink-hover);
+    color: var(--paper-deep);
+  }
+  @media (max-width: 640px) {
+    .explorebar {
+      margin: 20px 0 26px;
+    }
+    /* Hidden on phones — the full-width row crowded the cards below, and the
+       marketplace is one tap away in the nav anyway. */
+    .explorebar__cta {
+      display: none;
+    }
+  }
   /* Secondary refinements — quieter than the primary register above them. */
   .filters--sub {
     gap: 6px;
@@ -4294,9 +4748,14 @@ video {
   .finder {
     background: var(--tile);
     border-radius: var(--r);
-    padding: 16px 18px;
+    padding: clamp(14px, 1.6vw, 22px) clamp(16px, 1.8vw, 24px);
     display: grid;
-    gap: 12px;
+    gap: clamp(10px, 1.2vw, 16px);
+    /* The plate always clears whatever follows it. On compact the catnav
+       (whose top margin used to supply this air) is hidden and the results
+       deck started at 0px off the plate; the same clamp here collapses with
+       the catnav's margin where it is shown, so wide widths don't double up. */
+    margin-bottom: clamp(22px, 2.6vw, 34px);
   }
   .finder__main {
     display: flex;
@@ -4326,7 +4785,7 @@ video {
   .finder__refine {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 8px 10px;
     align-items: center;
   }
   /* Chip rows ride inside the plate without their canvas margins. */
@@ -6332,24 +6791,58 @@ video {
   }
 }
 
-@media (max-width: 420px) {
-  .deck--kpi {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Compact KPI scale (SYS-10): on a phone the seller stats are a glance, not
-   a dashboard spread — smaller figures and tighter plates so a quiet
-   account's metrics don't push the garage a full viewport down. A metric
-   that needs action still carries its live styling. */
+/* Compact KPI scale (SYS-10, revised 22 Aug 2026): on a phone the seller
+   stats are a glance, not a dashboard spread. Four tiles stay a 2×2 grid
+   all the way down to 320px (a single column stacked them a whole viewport
+   deep); each plate is set at a smaller, clearly stepped scale — 10px label
+   → 26px figure → 10/11px dimension — with the room between them kept, so
+   the grid reads as four facts rather than a dense panel. Action metrics
+   keep their live styling. */
 @media (max-width: 640px) {
+  .deck--kpi {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
   .deck--kpi .tile {
-    padding: 14px 16px;
+    padding: 14px 14px 12px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .deck--kpi .tile > .microlabel {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    line-height: 1.35;
+    min-height: calc(2 * 1.35em);
+    overflow-wrap: anywhere;
   }
   .deck--kpi .num-giant {
-    font-size: 28px;
+    font-size: 26px;
     line-height: 1.1;
-    margin: 4px 0 2px;
+    margin: 6px 0 4px;
+  }
+  .deck--kpi .livedim {
+    margin-top: 8px;
+    padding-left: 12px;
+  }
+  .deck--kpi .livedim .microlabel {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .deck--kpi .livedim .val {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .deck--kpi .jumplink {
+    font-size: 10.5px;
+    margin-top: auto;
+    padding-top: 8px;
+  }
+  .deck--kpi .alert {
+    padding: 12px 14px;
   }
 }
 
@@ -6402,6 +6895,613 @@ video {
   }
   .indexbtn__rules i {
     transition: none;
+  }
+}
+
+/* ============================================================
+   DISCOVERY + MARKETPLACE REMEDIATION (22 Aug 2026) — unlayered so these
+   registers outrank the component layer they refine.
+   ============================================================ */
+
+/* ---------- vehicle reference text ----------
+   The one voice for a vehicle named in running text: year · make · model,
+   mono, dim, and — deliberately — no text-transform and no tracking, because
+   BMW / GTI / 911 GT3 / GR Corolla carry their own casing. Size follows the
+   context; the tone never does. */
+.vref {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+}
+.vref--value {
+  font-size: 13px;
+}
+.vref--lg {
+  font-size: 14px;
+  line-height: 20px;
+}
+.vref--xl {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* ---------- tooltip — name an icon on hover and on keyboard focus ----------
+   `data-tip` is the visible name; the control keeps its aria-label. Drawn as
+   a pseudo-element above the control so it never takes layout room, and only
+   on hover-capable pointers — a thumb can't hover and the 44px target already
+   carries the name for assistive tech. Focus shows it everywhere. */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translate(-50%, 3px);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 6px 8px;
+  border-radius: var(--r-chip);
+  background: var(--ink);
+  color: var(--on-ink);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition:
+    opacity var(--t-fast) ease,
+    transform var(--t-fast) var(--spring);
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-tip]:hover::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 160ms;
+  }
+}
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* The card clips its own box, so the strip's end actions pin to their edge
+   instead of centring off it. */
+.cardeng__act:first-child[data-tip]::after {
+  left: 0;
+  transform: translate(0, 3px);
+}
+.cardeng__act--end[data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, 3px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cardeng__act:first-child[data-tip]:hover::after,
+  .cardeng__act--end[data-tip]:hover::after {
+    transform: translate(0, 0);
+  }
+}
+.cardeng__act:first-child[data-tip]:focus-visible::after,
+.cardeng__act--end[data-tip]:focus-visible::after {
+  transform: translate(0, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-tip]::after {
+    transition: none;
+  }
+}
+
+/* ---------- listing card — interaction architecture ----------
+   The cell is an <article>; `.mcell__link` is the one large target (eyebrow,
+   photo, caption) and everything after it is its own control. Nothing
+   interactive nests, so the DOM validates and keyboard order is link →
+   provenance → actions → engagement. */
+.mcell__link {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  color: inherit;
+  border-radius: var(--r-ctl);
+}
+/* The card clips at its edge, so the ring draws inside it. */
+.mcell__link:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: -3px;
+}
+.mcell__link .mcell__img {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Provenance — "Off a 2019 Golf R →" — its own link beneath the caption,
+   a quiet mono line that never competes with the price. */
+.mcell__prov {
+  display: block;
+  align-self: flex-start;
+  max-width: 100%;
+  line-height: 28px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--dim);
+  transition: color var(--t-fast) ease;
+}
+.mcell__prov:hover,
+.mcell__prov:focus-visible {
+  color: var(--ink);
+}
+/* Seller trust — wide cells only, like the meta line. */
+.mcell__trust {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+@container (min-width: 240px) {
+  .mcell__trust {
+    display: flex;
+  }
+}
+.mcell__actions {
+  margin-top: 10px;
+}
+/* A wall whose cells carry an action row grows its unit so the photo keeps
+   its share of the card. `.mcell` clips its overflow, so this has to cover
+   the *tallest* action block — now two stacked 38–40px controls rather than
+   one 34px row (see `.qcom`). */
+.mosaic--commerce {
+  --mratio: 1.76;
+}
+@container (max-width: 900px) {
+  .mosaic--commerce {
+    --mratio: 1.95;
+  }
+}
+@container (max-width: 600px) {
+  .mosaic--commerce {
+    --mratio: 2.18;
+  }
+}
+
+/* ---------- quick commerce — Buy now · Add to cart on a marketplace card ----------
+   Drawn the way the marketplaces that own this pattern draw it (Amazon's
+   card pill, eBay's fill-then-outline pair, Depop's stacked item actions):
+   two full-width controls, one under the other, primary filled and
+   secondary outlined in the *same* neutral — not a loud fill beside a
+   mystery icon square.
+
+   Three things the old pair got wrong, and why this is built the way it is:
+
+   · Filled red on every card. `--live` is the system's one-accent-per-surface
+     colour (see `.btn--destructive`); fifteen red Buy nows on one wall spent
+     it, and left the page's real accents — the headline's live word, List a
+     part — competing with the inventory. Ink fill is the neutral primary;
+     red stays owned by the listing sheet, where Buy now *is* the page.
+   · The cart label was behind `@container (min-width: 300px)`, and a card on
+     the marketplace wall is ~245px — so the label never rendered at any
+     width and the control shipped as an unlabelled square. Both buttons now
+     carry their words at every width.
+   · Two half-width controls can't hold `ADD TO CART` in 10.5px mono at a
+     two-column phone width. Stacked, each one gets the whole card and a
+     40px thumb target. No bracket decoration — the card is too small for
+     the btn's stage directions. */
+.qcom {
+  display: grid;
+  gap: 6px;
+}
+.qcom__row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.qcom .btn {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 10.5px;
+  /* 500 is Plex Mono's heaviest loaded cut — 600+ would faux-bold. */
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  border-radius: var(--r-ctl);
+}
+.qcom .btn::before,
+.qcom .btn::after {
+  display: none;
+}
+.qcom__buy {
+  min-width: 0;
+  white-space: nowrap;
+}
+/* The references rank their two actions as fill-then-outline (eBay's blue
+   pair, Depop's black-then-bordered). DRVN ranks them the same way but in
+   its own grammar: the system separates *tonally* — "no borders, no shadows"
+   (design-system §4) — so the secondary is a tonal step down onto
+   `--paper-deep` rather than a ruled outline. Same hierarchy, no new
+   material. */
+.qcom__cart {
+  gap: 7px;
+}
+.qcom__ico {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.qcom__label {
+  display: inline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: none), (pointer: coarse) {
+  .qcom .btn {
+    min-height: 40px;
+  }
+}
+@media (max-width: 640px) {
+  .qcom .btn {
+    min-height: 40px;
+  }
+}
+.qcom__err {
+  display: block;
+  margin: 0;
+}
+
+/* ---------- marketplace family nav — a contained local plate ----------
+   Marketplace · My Listings · Offers · Orders on one recessed bar; the sheet
+   you're reading is raised onto the tile surface with the live tick. One
+   contiguous plate, never ink-filled chips, so it can't be mistaken for a
+   filter row — and quieter than the global bar above it. */
+.familynav {
+  border-bottom: 0;
+  margin: clamp(4px, 1vw, 10px) 0 0;
+  /* Centered on the page — a register strip hugs the margin, but a plate is
+     a navigational instrument and sits on the page's axis. */
+  justify-content: center;
+}
+.familynav__rows {
+  background: var(--paper-deep);
+  border-radius: var(--r-ctl);
+  /* Enough inset that the raised sheet floats inside the plate instead of
+     touching its border, and enough air between members that neighbouring
+     labels never read as one run of text. */
+  padding: 6px;
+  gap: 10px;
+  margin: 0;
+}
+.familynav__item,
+.familynav__item:first-child {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: calc(var(--r-ctl) - 4px);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  transition:
+    color var(--t-fast) ease,
+    background var(--t-fast) ease;
+}
+.familynav__item.is-here {
+  background: var(--tile);
+  color: var(--ink);
+}
+.familynav__item.is-here::after,
+.familynav__item:first-child.is-here::after {
+  left: 18px;
+  right: 18px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 1px;
+}
+@media (max-width: 640px) {
+  /* Sticky under the 72px top bar: local navigation should hold its place
+     while the page scrolls, not scroll away with the content. The nav bleeds
+     to the page edge and carries the bar's frosted backdrop so content
+     sliding beneath never peeks around the plate. */
+  .familynav {
+    position: sticky;
+    top: 72px;
+    z-index: 40;
+    margin: 0 calc(var(--gutter) * -1);
+    padding: 6px var(--gutter) 10px;
+    background: color-mix(in srgb, var(--paper) 86%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  /* All four members fit a 375px phone — no sideways scroll, no clipped
+     "ORDERS" — but not as rigid equal cells: equal cells left "MARKETPLACE"
+     filling its cell wall-to-wall while "ORDERS" swam in slack. Flex-grow
+     hands every member the same share of spare width on top of its label,
+     so the gaps between labels even out. */
+  .familynav__rows {
+    display: flex;
+    flex: 1 1 100%;
+    overflow: visible;
+    padding: 8px;
+    gap: 4px;
+  }
+  .familynav__item,
+  .familynav__item:first-child {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+    min-height: 42px;
+    padding: 0 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+  .familynav__item.is-here::after,
+  .familynav__item:first-child.is-here::after {
+    left: 8px;
+    right: 8px;
+  }
+}
+
+/* ---------- category navigation — destinations, not refinements ----------
+   Desktop: a tile grid (icon · label · subcategory hint). Compact: the same
+   set as a browse sheet's ruled rows. Both are links to the real
+   /marketplace/[category] routes; the current one is inked. */
+.catnav {
+  margin: clamp(22px, 2.6vw, 34px) 0 clamp(26px, 3vw, 38px);
+}
+.catnav__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.catgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 12px;
+}
+.cattile {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--tile);
+  color: var(--ink);
+  transition:
+    transform var(--t-move) var(--spring),
+    background var(--t-fast) ease;
+}
+.cattile:hover {
+  transform: translateY(-2px);
+}
+.cattile__ico {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-chip);
+  background: var(--paper-deep);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.cattile__ico svg {
+  width: 20px;
+  height: 20px;
+}
+.cattile__label {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cattile__hint {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cattile.is-here {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.cattile.is-here .cattile__ico {
+  background: var(--ghost-strong);
+  color: var(--on-ink);
+}
+.cattile.is-here .cattile__hint {
+  color: var(--on-ink);
+  opacity: 0.7;
+}
+/* The browse sheet's rows (compact). */
+.catlist {
+  display: grid;
+  gap: 4px;
+}
+.catrow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 6px 8px;
+  border-radius: var(--r-ctl);
+  color: var(--ink);
+  transition: background var(--t-fast) ease;
+}
+.catrow:hover {
+  background: var(--ghost);
+}
+.catrow.is-here {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.catrow.is-here .cattile__ico {
+  background: var(--ghost-strong);
+  color: var(--on-ink);
+}
+.catrow.is-here .cattile__hint {
+  color: var(--on-ink);
+  opacity: 0.7;
+}
+.catrow__go {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+.catrow.is-here .catrow__go {
+  color: var(--on-ink);
+}
+.catsheet__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+/* Subcategory tiles and rows carry no icon — the category above them
+   already said what kind of part this is. */
+.cattile--sub {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 52px;
+}
+.cattile--sub > * {
+  grid-column: 1 / -1;
+}
+.catlist--sub {
+  margin: 2px 0 8px 24px;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule-soft);
+}
+.catrow--sub {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 44px;
+}
+.catrow--sub .cattile__label {
+  font-weight: 500;
+}
+
+/* ---------- home feed rows ----------
+   The Discovery / followed list on Home. A ruled row, but set like a feed,
+   not a ledger: a plate you can actually read (112×84), a 15px headline, one
+   13px sans line of context, an intro clamped to two lines, the kind chip
+   quiet at the end. Overrides the `.order` ledger metrics it sits on. */
+.feedrows .feedrow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 2px;
+}
+.feedrows .feedrow:first-child {
+  padding-top: 6px;
+}
+.feedrow__img {
+  flex: none;
+  width: 112px;
+  height: 84px;
+  border-radius: var(--r-ctl);
+}
+.feedrow__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.feedrow__name {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.008em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  transition: color var(--t-fast) ease;
+}
+.feedrows a.feedrow:hover .feedrow__name {
+  color: var(--live);
+}
+.feedrow__meta {
+  display: block;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+  max-width: 60ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.feedrow__meta .vref {
+  font-size: 12.5px;
+}
+.feedrow__price {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.feedrow__intro {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+  max-width: 60ch;
+}
+.feedrow__end {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+}
+.feedrow__kind {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+}
+@media (max-width: 640px) {
+  .feedrows .feedrow {
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .feedrow__img {
+    width: 84px;
+    height: 64px;
+  }
+  .feedrow__name {
+    font-size: 14.5px;
+  }
+  .feedrow__meta,
+  .feedrow__intro {
+    font-size: 12.5px;
+  }
+  /* The chip tucks under the text on a phone; the row stays one line of
+     thumb + words. */
+  .feedrow__end {
+    display: none;
   }
 }
 

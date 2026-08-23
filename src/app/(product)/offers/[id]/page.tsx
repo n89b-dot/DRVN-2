@@ -12,7 +12,11 @@ import { markThreadMessagesRead } from "@/features/commerce/actions";
 import { StatusChip } from "../../orders/order-pipeline";
 import { CheckoutLink, OfferThread, type ThreadMessage } from "./offer-thread";
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   return { title: `Offer ${id.slice(0, 8)} - DRVN` };
 }
@@ -43,7 +47,8 @@ export default async function OfferThreadPage({
     .eq("id", id)
     .maybeSingle();
 
-  if (offerError) reportError("[offers] failed to load offer", { id, offerError });
+  if (offerError)
+    reportError("[offers] failed to load offer", { id, offerError });
   if (!offer) notFound();
 
   const { data: listing } = await supabase
@@ -61,23 +66,28 @@ export default async function OfferThreadPage({
 
   const counterpartyId = incoming ? offer.buyer_id : listing.seller_id;
 
-  const [{ data: image }, { data: counterparty }, { data: rawMessages }] = await Promise.all([
-    supabase
-      .from("listing_images")
-      .select("url")
-      .eq("listing_id", listing.id)
-      .order("position")
-      .limit(1)
-      .maybeSingle(),
-    counterpartyId
-      ? supabase.from("profiles").select("id, display_name, username").eq("id", counterpartyId).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("messages")
-      .select("id, sender_id, body, created_at")
-      .eq("offer_id", id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [{ data: image }, { data: counterparty }, { data: rawMessages }] =
+    await Promise.all([
+      supabase
+        .from("listing_images")
+        .select("url")
+        .eq("listing_id", listing.id)
+        .order("position")
+        .limit(1)
+        .maybeSingle(),
+      counterpartyId
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, username")
+            .eq("id", counterpartyId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from("messages")
+        .select("id, sender_id, body, created_at")
+        .eq("offer_id", id)
+        .order("created_at", { ascending: true }),
+    ]);
 
   // This viewer's read receipt for the thread — scoped to messages
   // addressed to them, safe to call unconditionally on every render.
@@ -108,7 +118,8 @@ export default async function OfferThreadPage({
   const offersCount = await loadOffersNeedingAttention(supabase, user.id);
 
   const counterpartyName =
-    counterparty?.display_name ?? (counterparty?.username ? `@${counterparty.username}` : "DRVN member");
+    counterparty?.display_name ??
+    (counterparty?.username ? `@${counterparty.username}` : "DRVN member");
 
   const messages: ThreadMessage[] = (rawMessages ?? []).map((m) => ({
     id: m.id,
@@ -121,7 +132,13 @@ export default async function OfferThreadPage({
   // Derived history, oldest first — every column already on the offer row
   // is a timestamped state change, just never assembled into a timeline.
   const history: HistoryEntry[] = [
-    { label: incoming ? `${counterpartyName} made an offer` : "You made an offer", at: offer.created_at, amount: offer.amount_cents },
+    {
+      label: incoming
+        ? `${counterpartyName} made an offer`
+        : "You made an offer",
+      at: offer.created_at,
+      amount: offer.amount_cents,
+    },
   ];
   if (offer.countered_at && offer.counter_amount_cents) {
     history.push({
@@ -131,21 +148,34 @@ export default async function OfferThreadPage({
     });
   }
   if (offer.status === "accepted" && offer.responded_at) {
-    history.push({ label: incoming ? "You accepted" : `${counterpartyName} accepted`, at: offer.responded_at });
+    history.push({
+      label: incoming ? "You accepted" : `${counterpartyName} accepted`,
+      at: offer.responded_at,
+    });
   }
   if (offer.status === "declined" && offer.responded_at) {
-    history.push({ label: incoming ? "You declined" : `${counterpartyName} declined`, at: offer.responded_at });
+    history.push({
+      label: incoming ? "You declined" : `${counterpartyName} declined`,
+      at: offer.responded_at,
+    });
   }
   if (offer.status === "expired" && offer.responded_at) {
     history.push({ label: "Offer expired unanswered", at: offer.responded_at });
   }
   if (offer.status === "withdrawn") {
-    history.push({ label: isBuyer ? "You withdrew the offer" : `${counterpartyName} withdrew the offer`, at: offer.updated_at });
+    history.push({
+      label: isBuyer
+        ? "You withdrew the offer"
+        : `${counterpartyName} withdrew the offer`,
+      at: offer.updated_at,
+    });
   }
 
   const live = offer.status === "open" || offer.status === "countered";
   const expiresLabel = offer.expires_at
-    ? `${live ? "Expires" : "Expired"} ${new Date(offer.expires_at).toLocaleString(undefined, {
+    ? `${live ? "Expires" : "Expired"} ${new Date(
+        offer.expires_at,
+      ).toLocaleString(undefined, {
         day: "numeric",
         month: "short",
         hour: "2-digit",
@@ -157,8 +187,8 @@ export default async function OfferThreadPage({
     <div className="wrap">
       {/* A thread is still inside the Offers surface — the family nav keeps
           saying so, and the breadcrumb underneath names the way back. */}
-      <MarketplaceNav current="offers" offersCount={offersCount} />
 
+      <MarketplaceNav current="offers" offersCount={offersCount} />
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/offers" className="jumplink">
@@ -167,12 +197,15 @@ export default async function OfferThreadPage({
           / {listing.title}
         </span>
         <h1>
-          {incoming ? "Offer on your listing" : "Your offer"} <span className="live-word">{formatPrice(offer.amount_cents)}</span>
+          {incoming ? "Offer on your listing" : "Your offer"}{" "}
+          <span className="live-word">{formatPrice(offer.amount_cents)}</span>
         </h1>
       </Rv>
-
       <Rv className="tile mb-4">
-        <Link href={`/listings/${listing.id}`} className="flex items-center gap-3">
+        <Link
+          href={`/listings/${listing.id}`}
+          className="flex items-center gap-3"
+        >
           <span className="tile__img block h-16 w-16 shrink-0 overflow-hidden rounded-[2px]">
             <Media
               src={image?.url ?? undefined}
@@ -184,7 +217,9 @@ export default async function OfferThreadPage({
           </span>
           <span className="min-w-0">
             <span className="order__name block truncate">{listing.title}</span>
-            <span className="order__meta">{formatPrice(listing.price_cents)} asking</span>
+            <span className="order__meta">
+              {formatPrice(listing.price_cents)} asking
+            </span>
           </span>
         </Link>
 
@@ -226,7 +261,10 @@ export default async function OfferThreadPage({
         </div>
         <ol className="rowlist">
           {history.map((entry, i) => (
-            <li key={i} className="jobrow flex items-center justify-between gap-3 !py-2">
+            <li
+              key={i}
+              className="jobrow flex items-center justify-between gap-3 !py-2"
+            >
               <span className="order__name !text-body">{entry.label}</span>
               <span className="kv shrink-0 text-dim">
                 {entry.amount != null && `${formatPrice(entry.amount)} · `}

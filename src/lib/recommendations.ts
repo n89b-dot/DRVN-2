@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { ListingCardData } from "@/components/ui";
+import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { platformLabel } from "@/lib/vehicles/label";
 
 const CANDIDATE_CAP = 50;
 
@@ -61,7 +63,7 @@ export async function recommendListings(
         c.make && c.model && platformKeys.has(`${c.make.toLowerCase()}|${c.model.toLowerCase()}`)
     );
     const matchedCarIds = matchedCars.map((c) => c.id);
-    const nameByCarId = new Map(matchedCars.map((c) => [c.id, `${c.make} ${c.model}`]));
+    const nameByCarId = new Map(matchedCars.map((c) => [c.id, platformLabel(c)]));
 
     if (matchedCarIds.length) {
       const { data: platformListings } = await admin
@@ -132,39 +134,26 @@ export async function recommendListings(
 
   const ranked = [...picks.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
 
-  // Hydrate, keeping only active listings not sold by the user themselves.
+  // Keep only active listings not sold by the user themselves, in rank
+  // order, then hydrate through the same path as the Marketplace grid so a
+  // recommendation carries the identical card data — cover, source car,
+  // seller trust, watch count — plus its reason.
   const { data: listings } = await admin
     .from("listings")
-    .select("id, title, price_cents, shipping_cents, condition, location, seller_id, status")
+    .select(
+      "id, title, price_cents, shipping_cents, condition, location, part_number, seller_id, source_car_id, status"
+    )
     .in("id", ranked.slice(0, limit * 3));
-  const { data: images } = listings?.length
-    ? await admin
-        .from("listing_images")
-        .select("listing_id, url, position")
-        .in("listing_id", listings.map((l) => l.id))
-        .order("position")
-    : { data: [] };
-  const cover = new Map<string, string>();
-  for (const img of images ?? []) {
-    if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
-  }
-
   const byId = new Map((listings ?? []).map((l) => [l.id, l]));
-  const results: ListingCardData[] = [];
+  const chosen: NonNullable<typeof listings> = [];
   for (const id of ranked) {
     const listing = byId.get(id);
     if (!listing || listing.status !== "active" || listing.seller_id === userId) continue;
-    results.push({
-      id: listing.id,
-      title: listing.title,
-      price_cents: listing.price_cents,
-      shipping_cents: listing.shipping_cents,
-      condition: listing.condition,
-      location: listing.location,
-      cover_url: cover.get(listing.id) ?? null,
-      reason: reasons.get(listing.id) ?? null,
-    });
-    if (results.length >= limit) break;
+    chosen.push(listing);
+    if (chosen.length >= limit) break;
   }
-  return results;
+  if (!chosen.length) return [];
+
+  const cards = await hydrateListingCards(admin, chosen);
+  return cards.map((card): ListingCardData => ({ ...card, reason: reasons.get(card.id) ?? null }));
 }

@@ -2,7 +2,7 @@
  * The register — one description of DRVN's navigation, read by the desktop
  * rail, the mobile index and the Marketplace-family subnav.
  *
- * Marketplace, Listings, Offers and Orders are one *family* (public storefront
+ * Marketplace, My Listings, Offers and Orders are one *family* (public storefront
  * → what I'm selling → what's being negotiated → what actually sold) but four
  * distinct product surfaces with their own routes, server loading and deep
  * links. The family is a grouping in the navigation, not a tab component.
@@ -15,7 +15,10 @@ export type NavRoute = { href: string; label: string; note: string; icon: IconNa
 /** The Marketplace family, in transaction order. */
 export const MARKETPLACE_FAMILY: NavRoute[] = [
   { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
-  { href: "/listings", label: "Listings", note: "Views, watchers and offers on what you're selling", icon: "sell" },
+  // "My Listings", not "Listings": the register sits beside a public
+  // Marketplace full of listings, and the possessive is what tells a seller
+  // this is *their* stock. The route stays /listings.
+  { href: "/listings", label: "My Listings", note: "Views, watchers and offers on what you're selling", icon: "sell" },
   { href: "/offers", label: "Offers", note: "Offers you've received and made, and their threads", icon: "scale" },
   { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery", icon: "box" },
 ];

@@ -25,7 +25,7 @@ const PAGE_SIZE = 25;
 function withParams(
   base: string,
   params: Record<string, string | undefined>,
-  overrides: Record<string, string | undefined>
+  overrides: Record<string, string | undefined>,
 ) {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries({ ...params, ...overrides })) {
@@ -46,11 +46,19 @@ function milestones(order: {
   completed_at: string | null;
 }) {
   const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-  const stamps: { label: string; date: string }[] = [{ label: "Placed", date: fmt(order.created_at) }];
-  if (order.shipped_at) stamps.push({ label: "Shipped", date: fmt(order.shipped_at) });
-  if (order.delivered_at) stamps.push({ label: "Delivered", date: fmt(order.delivered_at) });
-  if (order.completed_at) stamps.push({ label: "Completed", date: fmt(order.completed_at) });
+    new Date(iso).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+    });
+  const stamps: { label: string; date: string }[] = [
+    { label: "Placed", date: fmt(order.created_at) },
+  ];
+  if (order.shipped_at)
+    stamps.push({ label: "Shipped", date: fmt(order.shipped_at) });
+  if (order.delivered_at)
+    stamps.push({ label: "Delivered", date: fmt(order.delivered_at) });
+  if (order.completed_at)
+    stamps.push({ label: "Completed", date: fmt(order.completed_at) });
   return stamps;
 }
 
@@ -97,30 +105,29 @@ export default async function OrdersPage({
 
   const roleColumn = view === "purchases" ? "buyer_id" : "seller_id";
 
+  // Line items ride along on each order via a join, and the two badge counts
+  // don't depend on the page rows at all — so the whole first read is one
+  // parallel round instead of orders → items → counts in series.
   let ordersQuery = supabase
     .from("orders")
-    .select("*", { count: "exact" })
+    .select("*, order_items(*)", { count: "exact" })
     .eq(roleColumn, user.id);
   if (rawStatus) ordersQuery = ordersQuery.eq("status", rawStatus);
-  else if (state) ordersQuery = ordersQuery.in("status", [...STATE_GROUPS[state]]);
-
-  const { data: orders, count, error: ordersError } = await ordersQuery
-    .order("created_at", { ascending: false })
-    .range(from, from + PAGE_SIZE - 1);
-
-  if (ordersError) reportError("[orders] failed to load orders", ordersError);
-
-  const rows = orders ?? [];
-  const orderIds = rows.map((o) => o.id);
+  else if (state)
+    ordersQuery = ordersQuery.in("status", [...STATE_GROUPS[state]]);
 
   // The offers counts that fed the promo card are gone — the family nav puts
   // Offers one click away on every surface, so a card duplicating navigation
   // inside page content had nothing left to do. The attention count is still
   // read, but now only to badge the nav.
-  const [{ data: items }, offersCount, { count: needsDispatchCount }] = await Promise.all([
-    orderIds.length
-      ? supabase.from("order_items").select("*").in("order_id", orderIds)
-      : Promise.resolve({ data: [] }),
+  const [
+    { data: orders, count, error: ordersError },
+    offersCount,
+    { count: needsDispatchCount },
+  ] = await Promise.all([
+    ordersQuery
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1),
     loadOffersNeedingAttention(supabase, user.id),
     supabase
       .from("orders")
@@ -129,14 +136,28 @@ export default async function OrdersPage({
       .eq("status", "paid"),
   ]);
 
-  const listingIds = [...new Set((items ?? []).map((i) => i.listing_id).filter((x): x is string => Boolean(x)))];
+  if (ordersError) reportError("[orders] failed to load orders", ordersError);
+
+  const rows = orders ?? [];
+  const items = rows.flatMap((o) => o.order_items ?? []);
+
+  const listingIds = [
+    ...new Set(
+      (items ?? [])
+        .map((i) => i.listing_id)
+        .filter((x): x is string => Boolean(x)),
+    ),
+  ];
   const counterpartyIds = [
     ...new Set(rows.flatMap((o) => [o.buyer_id, o.seller_id])),
   ].filter((x): x is string => Boolean(x) && x !== user.id);
 
   const [{ data: people }, { data: listingTitles }] = await Promise.all([
     counterpartyIds.length
-      ? supabase.from("profiles").select("id, display_name, username").in("id", counterpartyIds)
+      ? supabase
+          .from("profiles")
+          .select("id, display_name, username")
+          .in("id", counterpartyIds)
       : Promise.resolve({ data: [] }),
     listingIds.length
       ? supabase.from("listings").select("id, title").in("id", listingIds)
@@ -147,7 +168,10 @@ export default async function OrdersPage({
     if (!pid) return fallback ?? "DRVN member";
     if (pid === user.id) return "You";
     const p = (people ?? []).find((x) => x.id === pid);
-    return p?.display_name ?? (p?.username ? `@${p.username}` : fallback ?? "DRVN member");
+    return (
+      p?.display_name ??
+      (p?.username ? `@${p.username}` : (fallback ?? "DRVN member"))
+    );
   };
   const listingTitle = (lid: string | null) =>
     (listingTitles ?? []).find((l) => l.id === lid)?.title ?? "Listing";
@@ -177,7 +201,10 @@ export default async function OrdersPage({
         className="jobrow block transition-colors hover:bg-[color:var(--paper-deep)]"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <OrderPipeline status={order.status} progressStatus={order.pre_dispute_status} />
+          <OrderPipeline
+            status={order.status}
+            progressStatus={order.pre_dispute_status}
+          />
           <span className="kv font-medium">
             {isSale
               ? `${formatPrice(order.total_cents - order.platform_fee_cents)} payout`
@@ -200,7 +227,9 @@ export default async function OrdersPage({
                 <span className="order__name min-w-0 truncate !text-body">
                   {i.title ?? listingTitle(i.listing_id)}
                 </span>
-                <span className="kv shrink-0 text-dim">{formatPrice(i.price_cents)}</span>
+                <span className="kv shrink-0 text-dim">
+                  {formatPrice(i.price_cents)}
+                </span>
               </li>
             ))}
         </ul>
@@ -217,7 +246,6 @@ export default async function OrdersPage({
   return (
     <div className="wrap">
       <MarketplaceNav current="orders" offersCount={offersCount} />
-
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Transactions
@@ -241,9 +269,10 @@ export default async function OrdersPage({
         <h1>
           Track what&apos;s <span className="live-word">in flight.</span>
         </h1>
-        <p className="sub">Purchases and sales, with dispatch and delivery dates as they land.</p>
+        <p className="sub">
+          Purchases and sales, with dispatch and delivery dates as they land.
+        </p>
       </Rv>
-
       {placed && (
         <div className="alert alert--ok mb-6">
           <span className="alert__ico" aria-hidden="true">
@@ -263,17 +292,27 @@ export default async function OrdersPage({
           badge, and duplicating navigation inside page content only made the
           two disagree. */}
 
-      <div className="filters filters--stack filters--scroll" role="group" aria-label="Order view">
+      <div
+        className="filters filters--stack filters--scroll"
+        role="group"
+        aria-label="Order view"
+      >
         <span className="microlabel filters__label">Show</span>
         <Link
-          href={withParams("/orders", params, { view: undefined, page: undefined })}
+          href={withParams("/orders", params, {
+            view: undefined,
+            page: undefined,
+          })}
           className={`fbtn ${view === "purchases" ? "is-on" : ""}`}
           aria-current={view === "purchases" ? "true" : undefined}
         >
           Purchases
         </Link>
         <Link
-          href={withParams("/orders", params, { view: "sales", page: undefined })}
+          href={withParams("/orders", params, {
+            view: "sales",
+            page: undefined,
+          })}
           className={`fbtn ${view === "sales" ? "is-on" : ""}`}
           aria-current={view === "sales" ? "true" : undefined}
         >
@@ -319,7 +358,10 @@ export default async function OrdersPage({
           STATE_GROUPS[state].map((s) => (
             <Link
               key={s}
-              href={withParams("/orders", params, { status: s, page: undefined })}
+              href={withParams("/orders", params, {
+                status: s,
+                page: undefined,
+              })}
               className={`fbtn ${rawStatus === s ? "is-on" : ""}`}
               aria-current={rawStatus === s ? "true" : undefined}
             >
@@ -391,7 +433,10 @@ export default async function OrdersPage({
               Show all orders
             </Link>
           ) : (
-            <Link href={view === "purchases" ? "/marketplace" : "/sell"} className="btn btn--ghost">
+            <Link
+              href={view === "purchases" ? "/marketplace" : "/sell"}
+              className="btn btn--ghost"
+            >
               {view === "purchases" ? "Browse the marketplace" : "List a part"}
             </Link>
           )}
@@ -399,10 +444,15 @@ export default async function OrdersPage({
       )}
 
       {(page > 1 || hasMore) && (
-        <nav className="mt-8 flex items-center justify-between gap-3" aria-label="Pagination">
+        <nav
+          className="mt-8 flex items-center justify-between gap-3"
+          aria-label="Pagination"
+        >
           {page > 1 ? (
             <Link
-              href={withParams("/orders", params, { page: page - 1 === 1 ? undefined : String(page - 1) })}
+              href={withParams("/orders", params, {
+                page: page - 1 === 1 ? undefined : String(page - 1),
+              })}
               className="btn btn--ghost"
               rel="prev"
             >

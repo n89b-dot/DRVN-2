@@ -4,6 +4,7 @@ import type { Database } from "@/lib/database.types";
 import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
 import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { reportError } from "@/lib/monitoring";
+import { vehicleLabel } from "@/lib/vehicles/label";
 
 export type FeedItem =
   | {
@@ -66,6 +67,10 @@ export type FeedItem =
       watchCount: number | null;
       /** Garage make+model match for the viewer, when they have one. */
       fitsCarName?: string | null;
+      /** The car this part came off — the provenance line. */
+      sourceCarName?: string | null;
+      /** Its public build-sheet slug, when the build is public. */
+      sourceCarSlug?: string | null;
       /** Whether the viewer is watching (has saved) this listing. */
       viewerSaved?: boolean;
       /** Public likes on this listing (0037). */
@@ -76,6 +81,37 @@ export type FeedItem =
     };
 
 export type FeedTab = "all" | "cars" | "updates" | "parts";
+
+/**
+ * The feed's segmentation — one description read by Explore's filter row
+ * and Home's Discovery segments, so the two surfaces can't drift apart on
+ * what the kinds are called or who may see them.
+ *
+ * "Parts" *is* parts for sale: `kindsForTab` maps it to active listings and
+ * nothing else, so a separate "For sale" segment would be the same set twice.
+ * Listings are a signed-in view (PRD §8.2), hence `loggedInOnly`.
+ */
+export const FEED_TABS: { key: FeedTab; label: string; loggedInOnly?: boolean }[] = [
+  { key: "all", label: "All" },
+  { key: "cars", label: "Builds" },
+  { key: "updates", label: "Updates" },
+  { key: "parts", label: "Parts", loggedInOnly: true },
+];
+
+/** The tabs this viewer may select. */
+export function visibleFeedTabs(isLoggedIn: boolean) {
+  return FEED_TABS.filter((t) => !t.loggedInOnly || isLoggedIn);
+}
+
+/**
+ * Validates a `?tab=` / `?discover=` value server-side. Anything unknown — or
+ * a signed-in-only tab requested while signed out — falls back to "all", so a
+ * pasted link never renders an empty or forbidden segment.
+ */
+export function resolveFeedTab(value: unknown, isLoggedIn: boolean): FeedTab {
+  const allowed = visibleFeedTabs(isLoggedIn);
+  return allowed.find((t) => t.key === value)?.key ?? "all";
+}
 
 export type FeedPage = {
   items: FeedItem[];
@@ -212,9 +248,10 @@ async function hydrateFeedItems(
           .eq("status", "active")
           .in("source_car_id", carIds)
       : Promise.resolve({ data: [] }),
-    // Fitment source: the make/model of each listing's source car.
-    sourceCarIds.length && garageIndex.size
-      ? supabase.from("cars").select("id, make, model").in("id", sourceCarIds)
+    // The source car of each listing: names the provenance line on every
+    // part card, and is the fitment source for a viewer with a garage.
+    sourceCarIds.length
+      ? supabase.from("cars").select("id, year, make, model, slug, is_public").in("id", sourceCarIds)
       : Promise.resolve({ data: [] }),
     listingIds.length ? fetchWatchCounts(supabase, listingIds) : Promise.resolve(new Map<string, number>()),
     // The viewer's own marks, so every card renders its toggles pre-fired:
@@ -353,7 +390,7 @@ async function hydrateFeedItems(
         created_at: c.created_at,
         name: c.name,
         slug: c.slug,
-        meta: [c.year, c.make, c.model].filter(Boolean).join(" "),
+        meta: vehicleLabel(c),
         cover_url: c.cover_image_url,
         ownerName: ownerById.get(c.owner_id) ?? null,
         updateCount: carUpdateCount.get(c.id) ?? 0,
@@ -384,6 +421,8 @@ async function hydrateFeedItems(
         fitsCarName: sourceCar
           ? matchGarageFitment(garageIndex, sourceCar.make, sourceCar.model)
           : null,
+        sourceCarName: sourceCar ? vehicleLabel(sourceCar) || null : null,
+        sourceCarSlug: sourceCar?.is_public && vehicleLabel(sourceCar) ? sourceCar.slug : null,
         viewerSaved: viewerSavedKeys.has(`listing:${l.id}`),
         likeCount: likeCountByKey.get(`listing:${l.id}`) ?? 0,
         viewerLiked: viewerLikedKeys.has(`listing:${l.id}`),

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Foot, Gallery, ListingCard } from "@/components/ui";
+import { Foot, Gallery, ListingCard, Mosaic } from "@/components/ui";
 import { DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
 import { SaveButton } from "@/features/social/buttons";
 import { parseAuthIntent } from "@/lib/auth-intent";
@@ -124,7 +124,7 @@ export default async function ListingPage({
       : Promise.resolve({ data: null }),
     supabase
       .from("listings")
-      .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id")
+      .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id, source_car_id, status")
       .eq("seller_id", listing.seller_id)
       .eq("status", "active")
       .neq("id", id)
@@ -571,11 +571,11 @@ export default async function ListingPage({
             <div className="tile__head">
               <span className="microlabel microlabel--ink">More from this seller</span>
             </div>
-            <div className="mkt">
+            <Mosaic label="More from this seller">
               {moreFromSellerCards.map((card) => (
                 <ListingCard key={card.id} listing={card} />
               ))}
-            </div>
+            </Mosaic>
           </div>
         </section>
       )}
@@ -599,7 +599,7 @@ async function SimilarInCategory({
 }) {
   const { data: similar } = await supabase
     .from("listings")
-    .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id")
+    .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id, source_car_id, status")
     .eq("status", "active")
     .eq("category", category)
     .neq("id", excludeId)
@@ -617,11 +617,11 @@ async function SimilarInCategory({
         <div className="tile__head">
           <span className="microlabel microlabel--ink">Similar in this category</span>
         </div>
-        <div className="mkt">
+        <Mosaic label="Similar in this category">
           {cards.map((card) => (
             <ListingCard key={card.id} listing={card} />
           ))}
-        </div>
+        </Mosaic>
       </div>
     </section>
   );

@@ -66,6 +66,13 @@ describe("Marketplace family membership", () => {
 });
 
 describe("the register", () => {
+  it("calls the seller's register 'My Listings' so it can't be read as the public Marketplace", () => {
+    const listings = MARKETPLACE_FAMILY.find((r) => r.href === "/listings");
+    expect(listings?.label).toBe("My Listings");
+    // The public storefront keeps its plain name — the possessive is the distinction.
+    expect(MARKETPLACE_FAMILY.find((r) => r.href === "/marketplace")?.label).toBe("Marketplace");
+  });
+
   it("exposes the family's children directly, not behind Marketplace", () => {
     const hrefs = BAR_ROUTES.map((r) => r.href);
     for (const route of MARKETPLACE_FAMILY) {

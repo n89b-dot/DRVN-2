@@ -9,6 +9,7 @@ import {
   type GarageCar,
 } from "@/lib/marketplace/fitment";
 import { reportError } from "@/lib/monitoring";
+import { vehicleLabel } from "@/lib/vehicles/label";
 
 export type ListingSort = "newest" | "price_asc" | "price_desc";
 
@@ -75,6 +76,10 @@ type HydratableListingRow = {
   location: string | null;
   part_number?: string | null;
   seller_id?: string | null;
+  /** The build the part came off — hydrates the provenance line. */
+  source_car_id?: string | null;
+  /** Non-active rows render their state as the card's ink flag. */
+  status?: string | null;
 };
 
 /**
@@ -91,9 +96,15 @@ export async function hydrateListingCards(
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const sellerIds = [...new Set(rows.map((r) => r.seller_id).filter(Boolean))] as string[];
+  const sourceCarIds = [...new Set(rows.map((r) => r.source_car_id).filter(Boolean))] as string[];
 
-  const [{ data: images }, watchCounts, { data: sellerProfiles }, { data: sellerReviews }] =
-    await Promise.all([
+  const [
+    { data: images },
+    watchCounts,
+    { data: sellerProfiles },
+    { data: sellerReviews },
+    { data: sourceCars },
+  ] = await Promise.all([
       supabase
         .from("listing_images")
         .select("listing_id, url, position")
@@ -105,6 +116,12 @@ export async function hydrateListingCards(
         : Promise.resolve({ data: [] }),
       sellerIds.length
         ? supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", sellerIds)
+        : Promise.resolve({ data: [] }),
+      // The source car is always loaded: every card names the car the part
+      // came off, which is the marketplace's whole premise — and links to
+      // the build when it's public.
+      sourceCarIds.length
+        ? supabase.from("cars").select("id, year, make, model, slug, is_public").in("id", sourceCarIds)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -134,18 +151,28 @@ export async function hydrateListingCards(
     })
   );
 
-  return rows.map((r) => ({
-    id: r.id,
-    title: r.title,
-    price_cents: r.price_cents,
-    shipping_cents: r.shipping_cents,
-    condition: r.condition,
-    location: r.location,
-    cover_url: coverByListing.get(r.id) ?? null,
-    part_number: r.part_number,
-    watch_count: watchCounts.get(r.id) ?? 0,
-    seller: r.seller_id ? (sellerById.get(r.seller_id) ?? null) : null,
-  }));
+  const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
+
+  return rows.map((r) => {
+    const source = r.source_car_id ? sourceById.get(r.source_car_id) : null;
+    const sourceName = vehicleLabel(source);
+    return {
+      id: r.id,
+      title: r.title,
+      price_cents: r.price_cents,
+      shipping_cents: r.shipping_cents,
+      condition: r.condition,
+      location: r.location,
+      cover_url: coverByListing.get(r.id) ?? null,
+      part_number: r.part_number,
+      watch_count: watchCounts.get(r.id) ?? 0,
+      seller: r.seller_id ? (sellerById.get(r.seller_id) ?? null) : null,
+      seller_id: r.seller_id ?? null,
+      source_car_name: sourceName || null,
+      source_car_slug: source?.is_public && sourceName ? source.slug : null,
+      status_flag: r.status && r.status !== "active" ? r.status : null,
+    };
+  });
 }
 
 function parseSort(value: string | undefined): ListingSort {
@@ -335,25 +362,20 @@ export async function fetchListings(
 
   // Fitment hint for the rows on this page — declared rows (0025) first,
   // source-car match as the fallback, mirroring the listing page's order.
+  // (The provenance line itself comes from hydrateListingCards.)
   const fitByListing = new Map<string, string>();
-  const sourceCarIds = listings.map((l) => l.source_car_id).filter(Boolean) as string[];
-  // The source car is always loaded: every card's eyebrow names the car the
-  // part came off ("2003 BMW M3"), which is the marketplace's whole premise.
-  const { data: sourceCars } = sourceCarIds.length
-    ? await supabase.from("cars").select("id, make, model, year").in("id", sourceCarIds)
-    : { data: [] as { id: string; make: string | null; model: string | null; year: number | null }[] };
-  const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
-  const sourceCarName = new Map<string, string>();
-  for (const listing of listings) {
-    const source = listing.source_car_id ? sourceById.get(listing.source_car_id) : null;
-    const name = source ? [source.year, source.make, source.model].filter(Boolean).join(" ") : "";
-    if (name) sourceCarName.set(listing.id, name);
-  }
   if (viewerId && garageByKey.size) {
-    const { data: pageClaims } = await supabase
-      .from("listing_fitments")
-      .select("listing_id, make, model, year_start, year_end")
-      .in("listing_id", ids);
+    const sourceCarIds = listings.map((l) => l.source_car_id).filter(Boolean) as string[];
+    const [{ data: pageClaims }, { data: sourceCars }] = await Promise.all([
+      supabase
+        .from("listing_fitments")
+        .select("listing_id, make, model, year_start, year_end")
+        .in("listing_id", ids),
+      sourceCarIds.length
+        ? supabase.from("cars").select("id, make, model").in("id", sourceCarIds)
+        : Promise.resolve({ data: [] as { id: string; make: string | null; model: string | null }[] }),
+    ]);
+    const sourceById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
 
     const claimsByListing = new Map<string, NonNullable<typeof pageClaims>>();
     for (const claim of pageClaims ?? []) {
@@ -388,7 +410,6 @@ export async function fetchListings(
     results: cards.map((card) => ({
       ...card,
       fits_car_name: fitByListing.get(card.id) ?? null,
-      source_car_name: sourceCarName.get(card.id) ?? null,
       viewer_saved: savedIds.has(card.id),
       viewer_liked: likedIds.has(card.id),
       like_count: likeCounts.get(card.id) ?? 0,

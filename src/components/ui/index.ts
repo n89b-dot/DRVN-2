@@ -61,7 +61,6 @@ export { Dialog } from "./dialog";
 export { CountedField } from "./counted-field";
 export { DropZone } from "./drop-zone";
 export { AuthIntentDialog } from "./auth-intent-dialog";
-export { SellCta } from "./sell-cta";
 export { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
 export { Gallery, GalleryLightbox, type GalleryImage as GalleryPhoto } from "./gallery";
 export { SheetTabs, resolveTab, type SheetTab } from "./sheet-tabs";

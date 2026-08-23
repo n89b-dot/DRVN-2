@@ -1,9 +1,6 @@
-import Link from "next/link";
+import type { ReactNode } from "react";
 
-import { CardEngagement } from "@/features/social/card-actions";
-import { conditionLabel, formatPrice } from "@/lib/marketplace/taxonomy";
-
-import { Media } from "./primitives";
+import { ListingMosaicCell } from "./mosaic";
 
 export type ListingCardSeller = {
   name: string;
@@ -13,6 +10,11 @@ export type ListingCardSeller = {
   review_count?: number;
 };
 
+/**
+ * The one shape every listing card renders from — Marketplace results, Home
+ * recommendations, PDP rails, Saved. `hydrateListingCards` (lib/marketplace/
+ * query.ts) fills it; surfaces only add per-viewer signals on top.
+ */
 export type ListingCardData = {
   id: string;
   title: string;
@@ -24,15 +26,22 @@ export type ListingCardData = {
   condition: string | null;
   location: string | null;
   cover_url: string | null;
+  /** Seller-stated garage match for the viewer ("Fits your E46"). */
   fits_car_name?: string | null;
-  /** The car this part came off — "2003 BMW M3". The mosaic card's eyebrow. */
+  /** The car this part came off — "2003 BMW M3". The provenance line. */
   source_car_name?: string | null;
+  /** The source car's public build-sheet slug, when the build is public —
+   *  the provenance line links to it. Null for private or unlinked cars. */
+  source_car_slug?: string | null;
   /** Manufacturer part number — what a buyer cross-references against. */
   part_number?: string | null;
   /** How many people are watching. Omitted (not 0) when unknown. */
   watch_count?: number;
   /** Seller trust line. Omitted when the caller didn't load it. */
   seller?: ListingCardSeller | null;
+  /** Who is selling — lets a surface hide purchase controls on the
+   *  viewer's own listing without another round trip. */
+  seller_id?: string | null;
   /** Non-active state ("sold", "reserved") — rendered as an ink flag on the
    *  image corner, reference-marketplace style, never in the text stack. */
   status_flag?: string | null;
@@ -47,116 +56,30 @@ export type ListingCardData = {
   question_count?: number;
 };
 
-function initialsOf(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]!.toUpperCase())
-      .join("") || "?"
-  );
-}
-
-/** Market card — an `a.tile` for the `.mkt` grid.
+/**
+ * The canonical listing card. Previously a separate `.mkt` tile anatomy
+ * lived here while the Marketplace rendered a different `.mcell` cell from
+ * the same data — two cards for one object. This is now the mosaic cell
+ * under a stable name; drop it into a `<Mosaic>`.
  *
- *  Stack: part-number annotation, image plate, title (leads), price line
- *  (the single loudest element — one size step up, shipping docked as a quiet
- *  annotation, watch count set against it), one dot-separated meta line
- *  (fitment · condition · location — plain text, not chips), and a
- *  hairline-divided seller trust footer.
- *
- *  Fitment is seller-stated, not verified, so the caveat rides along for
- *  screen readers instead of a mouse-only title tooltip. */
+ * Contextual slots:
+ *   - `save`    → the engagement strip (like · comment · share · save)
+ *   - `actions` → context-owned controls (quick commerce on the Marketplace,
+ *                 Unsave on Saved). Home and the PDP rails pass none — a
+ *                 shared anatomy does not mean shared actions.
+ */
 export function ListingCard({
   listing,
   prefetch,
   save,
+  actions,
 }: {
   listing: ListingCardData;
   /** Pass false for decorative renders (e.g. the inert auth backdrop) so the
    *  viewport prefetcher doesn't fetch six unreachable routes. */
   prefetch?: boolean;
-  /** Renders the engagement strip (like · comment · share · save). Omitted →
-   *  a quiet card (decorative grids, surfaces with their own SaveButton). */
   save?: { isLoggedIn: boolean; path: string };
+  actions?: ReactNode;
 }) {
-  const watching = listing.watch_count ?? 0;
-  const metaParts = [conditionLabel(listing.condition), listing.location].filter(Boolean);
-  const seller = listing.seller;
-
-  return (
-    <Link href={`/listings/${listing.id}`} prefetch={prefetch} className="tile">
-      {listing.part_number && (
-        <span className="microlabel block truncate">Part no. {listing.part_number}</span>
-      )}
-      <span className="tile__img mt-2 block aspect-[3/2]">
-        <Media
-          src={listing.cover_url ?? undefined}
-          alt={listing.title}
-          className="h-full w-full"
-          fallbackClassName="plate-undrawn"
-          role="card"
-        />
-        {listing.status_flag && <span className="mkt__flag">{listing.status_flag}</span>}
-      </span>
-      <p className="mkt__name clamp2">{listing.title}</p>
-      <p className="mkt__price flex items-baseline justify-between gap-3">
-        <span className="flex min-w-0 items-baseline gap-2">
-          <span>{formatPrice(listing.price_cents)}</span>
-          {/* A $450 part with $100 shipping must not read like one shipped
-              free — the delivered cost is part of the price, so it sits with
-              the price. Silent when shipping wasn't loaded. */}
-          {typeof listing.shipping_cents === "number" && (
-            <span className="mkt__ship truncate">
-              {listing.shipping_cents > 0
-                ? `+ ${formatPrice(listing.shipping_cents)} ship`
-                : "ships free"}
-            </span>
-          )}
-        </span>
-        {watching > 0 && <span className="microlabel tabular-nums">Watch {watching}</span>}
-      </p>
-      {(listing.fits_car_name || metaParts.length > 0) && (
-        <p className="mkt__metaline">
-          {listing.fits_car_name && (
-            <>
-              Fits {listing.fits_car_name}
-              <span className="sr-only"> (seller-stated fitment — verify before you buy)</span>
-              {metaParts.length > 0 && " · "}
-            </>
-          )}
-          {metaParts.join(" · ")}
-        </p>
-      )}
-      {seller && (
-        <span className="mkt__seller">
-          <span className="monogram monogram--xs" aria-hidden="true">
-            {initialsOf(seller.name)}
-          </span>
-          <span className="truncate">
-            {seller.name}
-            {seller.rating &&
-              ` · ${seller.rating} ★ · ${seller.review_count ?? 0} review${
-                (seller.review_count ?? 0) === 1 ? "" : "s"
-              }`}
-          </span>
-        </span>
-      )}
-      {listing.reason && <span className="microlabel block mt-2">{listing.reason}</span>}
-      {save && (
-        <CardEngagement
-          target={{ kind: "listing", id: listing.id }}
-          path={save.path}
-          isLoggedIn={save.isLoggedIn}
-          initialLiked={Boolean(listing.viewer_liked)}
-          likeCount={listing.like_count ?? 0}
-          commentHref={`/listings/${listing.id}`}
-          commentCount={listing.question_count ?? 0}
-          shareUrl={`/listings/${listing.id}`}
-          initialSaved={Boolean(listing.viewer_saved)}
-        />
-      )}
-    </Link>
-  );
+  return <ListingMosaicCell listing={listing} prefetch={prefetch} save={save} actions={actions} />;
 }

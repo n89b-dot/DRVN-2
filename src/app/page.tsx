@@ -5,6 +5,7 @@ import { Rv } from "@/components/livesheet";
 import { Foot, LivesheetBar, Media } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { money } from "@/lib/format";
+import { vehicleLabel } from "@/lib/vehicles/label";
 
 export const metadata = {
   title: "DRVN — Buy and sell parts off modified cars",
@@ -167,7 +168,7 @@ export default async function LandingPage() {
                     </span>
                     <p className="mkt__name">{car.name}</p>
                     <p className="kv mt-0.5 text-dim">
-                      {[car.year, car.make, car.model].filter(Boolean).join(" ")}
+                      {vehicleLabel(car)}
                     </p>
                   </Link>
                 </Rv>

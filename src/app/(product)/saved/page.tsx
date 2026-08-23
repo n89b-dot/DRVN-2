@@ -12,14 +12,17 @@ import {
   FinderLabel,
   Foot,
   ListingCard,
+  Mosaic,
   Media,
   Pagination,
 } from "@/components/ui";
 import { removeFollow, removeSave } from "@/features/social/actions";
 import { initialsOf } from "@/lib/format";
 import { withParams as buildParams } from "@/lib/url-params";
+import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { vehicleLabel } from "@/lib/vehicles/label";
 
 export const metadata = { title: "Saved - DRVN" };
 
@@ -132,7 +135,7 @@ export default async function SavedPage({
   let listingsQuery = tab === "saved" && listingIds.length
     ? supabase
         .from("listings")
-        .select("id, title, price_cents, condition, location, status", { count: "exact" })
+        .select("id, title, price_cents, shipping_cents, condition, location, status, part_number, seller_id, source_car_id", { count: "exact" })
         .in("id", listingIds)
     : null;
   if (listingsQuery && query) {
@@ -198,19 +201,9 @@ export default async function SavedPage({
     .map((p) => ({ ...p, car: savedPostCarById.get(p.car_id) }))
     .filter((p) => p.car);
 
-  const pageListingIds = (listings ?? []).map((l) => l.id);
-  const { data: listingImages } = pageListingIds.length
-    ? await supabase
-        .from("listing_images")
-        .select("listing_id, url, position")
-        .in("listing_id", pageListingIds)
-        .order("position")
-    : { data: [] };
-
-  const cover = new Map<string, string>();
-  for (const img of listingImages ?? []) {
-    if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
-  }
+  // Same hydration as the Marketplace grid, so a saved part is the same card
+  // it was when it was saved — cover, source car, seller trust, state flag.
+  const savedCards = await hydrateListingCards(supabase, listings ?? []);
 
   const carById = new Map<string, CarRowData>((cars ?? []).map((c) => [c.id, c]));
   const savedCars = savedCarIds
@@ -238,7 +231,7 @@ export default async function SavedPage({
           {car.name}
         </Link>
         <span className="order__meta block">
-          {[car.year, car.make, car.model].filter(Boolean).join(" ") || "build page"}
+          {vehicleLabel(car) || "build page"}
         </span>
       </span>
       <span className="order__actions">
@@ -354,30 +347,25 @@ export default async function SavedPage({
               }
             />
 
-            {(listings ?? []).length > 0 ? (
-              <div className="mkt mt-4">
-                {(listings ?? []).map((l) => (
-                  <div key={l.id}>
+            {savedCards.length > 0 ? (
+              <div className="mt-4">
+                <Mosaic label="Saved parts">
+                  {savedCards.map((card) => (
                     <ListingCard
-                      listing={{
-                        id: l.id,
-                        title: l.title,
-                        price_cents: l.price_cents,
-                        condition: l.condition,
-                        location: l.location,
-                        cover_url: cover.get(l.id) ?? null,
-                        status_flag: l.status === "active" ? null : l.status,
-                      }}
+                      key={card.id}
+                      listing={card}
+                      actions={
+                        <form action={removeSave}>
+                          <input type="hidden" name="target_type" value="listing" />
+                          <input type="hidden" name="target_id" value={card.id} />
+                          <button type="submit" className="relbtn !static inline-flex min-h-11 items-center">
+                            Unsave
+                          </button>
+                        </form>
+                      }
                     />
-                    <form action={removeSave} className="mt-2">
-                      <input type="hidden" name="target_type" value="listing" />
-                      <input type="hidden" name="target_id" value={l.id} />
-                      <button type="submit" className="relbtn !static">
-                        Unsave
-                      </button>
-                    </form>
-                  </div>
-                ))}
+                  ))}
+                </Mosaic>
               </div>
             ) : (
               <p className="py-4 font-mono text-micro uppercase tracking-[0.1em] text-dim">

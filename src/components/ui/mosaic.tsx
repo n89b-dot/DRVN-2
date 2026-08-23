@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 
 import { CardEngagement } from "@/features/social/card-actions";
 import type { FeedItem } from "@/lib/feed";
+import { cx } from "@/lib/format";
 import { conditionLabel, formatPrice } from "@/lib/marketplace/taxonomy";
+import { provenanceLine } from "@/lib/vehicles/label";
 
 import type { ListingCardData } from "./listing-card";
 import { Media } from "./primitives";
@@ -16,16 +18,27 @@ import { Media } from "./primitives";
  *
  * Every cell shares one anatomy, whatever its size or kind:
  *
- *   eyebrow row                  mono kind label · annotation (time, watching)
- *   photo plate                  takes whatever height the caption leaves
- *   caption                      headline → value line → meta, ink on the tile
- *   engagement strip             like · comment · share · save
+ *   ┌ link region ──────────────────────────────────────────────┐
+ *   │ eyebrow row      mono kind label · annotation (time, watch)│
+ *   │ photo plate      takes whatever height the caption leaves  │
+ *   │ caption          headline → value line → meta              │
+ *   └────────────────────────────────────────────────────────────┘
+ *   provenance        "Off a 2019 Golf R →" — a link to the build
+ *   trust             seller · rating (wide cells)
+ *   actions           Buy now · Add to cart (Marketplace only)
+ *   engagement        like · comment · share · save
  *
- * It is the deck's card (tile surface, padding, type scale) on a fixed
- * unit. The caption grows with the cell — a phone 1×1 shows headline and
- * value; a desktop card or a phone wide/feature adds the meta line and a second headline line
- * (container queries on the cell, see .mcell in globals.css). Size is a
- * stable hash of the id, so the wall never reshuffles between renders.
+ * The cell is an <article>, not one big <a>: the link region (everything
+ * a buyer reads) is one large target, and every control underneath is its
+ * own valid interactive element. Nothing interactive is nested, so keyboard
+ * order is link → provenance → actions → engagement, and activating a
+ * button never opens the listing.
+ *
+ * Size is a stable hash of the id, so the wall never reshuffles between
+ * renders. The caption grows with the cell — a phone 1×1 shows headline and
+ * value; a desktop card or a phone wide/feature adds the meta line, the
+ * seller line and a second headline line (container queries on the cell,
+ * see .mcell in globals.css).
  */
 
 export type MosaicSize = "sq" | "wide" | "xl";
@@ -48,10 +61,23 @@ export function mosaicSize(id: string, hasPhoto: boolean): MosaicSize {
   return "sq";
 }
 
-export function Mosaic({ children }: { children: ReactNode }) {
+export function Mosaic({
+  children,
+  commerce = false,
+  label,
+}: {
+  children: ReactNode;
+  /** Cells carry an action row (Buy now · Add to cart) — the unit grows so
+   *  the photo keeps its share of the card. */
+  commerce?: boolean;
+  /** Accessible name for the wall as a list of cards. */
+  label?: string;
+}) {
   return (
     <div className="mosaicwrap">
-      <div className="mosaic">{children}</div>
+      <div className={cx("mosaic", commerce && "mosaic--commerce")} role="list" aria-label={label}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -76,7 +102,10 @@ export function MosaicCell({
   headline,
   value,
   sub,
+  subHref,
   meta,
+  trust,
+  actions,
   engagement,
   tone = "photo",
   prefetch,
@@ -99,55 +128,81 @@ export function MosaicCell({
   headline: string;
   /** Price line, or a subline for non-priced kinds. */
   value?: ReactNode;
-  /** Quiet mono line under the value — the car a part came off. Sits a step
-   *  below the price so it never competes with it. */
+  /** Quiet vehicle line under the value — the car a part came off. Sits a
+   *  step below the price so it never competes with it. Pass `null` to
+   *  reserve the line (rows stay aligned), `undefined` to omit it. */
   sub?: string | null;
+  /** Where the source car's build sheet lives. When present the sub line
+   *  becomes its own link beneath the card's main link. */
+  subHref?: string | null;
   /** Dim meta — only shown once the cell is wide enough. */
   meta?: string | null;
+  /** Seller trust line — wide cells only. */
+  trust?: ReactNode;
+  /** Context-owned action row (quick commerce, Unsave…). Never nested in
+   *  the link. */
+  actions?: ReactNode;
   engagement?: ReactNode;
   /** `deep` = recessed annotation tone for updates without a photo. */
   tone?: "photo" | "deep";
   prefetch?: boolean;
 }) {
   const bare = !src;
-  const cls = [
+  const cls = cx(
     "mcell",
     size !== "sq" && `mcell--${size}`,
     bare && "mcell--bare",
-    tone === "deep" && "mcell--deep",
-  ]
-    .filter(Boolean)
-    .join(" ");
+    tone === "deep" && "mcell--deep"
+  );
+  const provenanceIsLink = Boolean(sub && subHref);
 
   return (
-    <Link href={href} prefetch={prefetch} className={cls}>
-      {(eyebrow || flag || corner) && (
-        <span className="mcell__top">
-          {flag ? (
-            <span className="mcell__flag">{flag}</span>
-          ) : (
-            eyebrow && <span className={kind ? KIND_PILL[kind] : "mcell__eyebrow"}>{eyebrow}</span>
+    <article className={cls} role="listitem">
+      <Link href={href} prefetch={prefetch} className="mcell__link">
+        {(eyebrow || flag || corner) && (
+          <span className="mcell__top">
+            {flag ? (
+              <span className="mcell__flag">{flag}</span>
+            ) : (
+              eyebrow && <span className={kind ? KIND_PILL[kind] : "mcell__eyebrow"}>{eyebrow}</span>
+            )}
+            {corner && <span className="mcell__eyebrow mcell__eyebrow--corner">{corner}</span>}
+          </span>
+        )}
+        {src && (
+          <span className="mcell__img" aria-hidden="true">
+            <Media src={src} alt="" className="h-full w-full" role="card" />
+          </span>
+        )}
+        <span className="mcell__cap">
+          <span className="mcell__title">{headline}</span>
+          {value && <span className="mcell__value">{value}</span>}
+          {sub !== undefined && !provenanceIsLink && (
+            <span className="mcell__sub vref">{sub ?? " "}</span>
           )}
-          {corner && <span className="mcell__eyebrow mcell__eyebrow--corner">{corner}</span>}
+          {/* Always rendered on photo cells so every card in a row shares one
+              caption height — a card without meta would otherwise push its
+              photo taller and its title off the row's baseline. */}
+          {(meta || !bare) && <span className="mcell__meta">{meta ?? " "}</span>}
         </span>
+        {/* The headline is the link's name; only say the alt when it adds
+            something (an update card whose headline is a quote, etc.). */}
+        {alt !== headline && <span className="sr-only">{alt}</span>}
+      </Link>
+      {provenanceIsLink && (
+        // Provenance is the marketplace's whole premise, so the car is one
+        // tap from the part — but it stays a quiet mono line under the
+        // price, never the headline.
+        <Link href={subHref!} className="mcell__prov vref" prefetch={false}>
+          {sub}
+          <span aria-hidden="true">{" "}→</span>
+          <span className="sr-only"> — open the build it came off</span>
+        </Link>
       )}
-      {src && (
-        <span className="mcell__img" aria-hidden="true">
-          <Media src={src} alt="" className="h-full w-full" role="card" />
-        </span>
-      )}
-      <span className="mcell__cap">
-        <span className="mcell__title">{headline}</span>
-        {value && <span className="mcell__value">{value}</span>}
-        {sub !== undefined && <span className="mcell__sub">{sub ?? "\u00a0"}</span>}
-        {/* Always rendered on photo cells so every card in a row shares one
-            caption height — a card without meta would otherwise push its
-            photo taller and its title off the row's baseline. */}
-        {(meta || !bare) && <span className="mcell__meta">{meta ?? "\u00a0"}</span>}
-        {engagement}
-      </span>
-      <span className="sr-only">{alt}</span>
-    </Link>
+      {trust && <span className="mcell__trust">{trust}</span>}
+      {actions && <div className="mcell__actions">{actions}</div>}
+      {engagement}
+    </article>
   );
 }
 
@@ -175,7 +230,8 @@ function shipLine(cents: number | null | undefined): string | null {
   return cents > 0 ? `+ ${formatPrice(cents)} ship` : "ships free";
 }
 
-/** One Explore item as a mosaic cell. */
+/** One Explore item as a mosaic cell. Discovery cards: no commerce row —
+ *  Explore is where you find things, the marketplace is where you buy them. */
 export function FeedMosaicCell({
   item,
   isLoggedIn = false,
@@ -201,6 +257,8 @@ export function FeedMosaicCell({
             {ship && <span className="mcell__ship"> {ship}</span>}
           </>
         }
+        sub={provenanceLine(item.sourceCarName)}
+        subHref={item.sourceCarSlug ? `/cars/${item.sourceCarSlug}` : null}
         meta={
           [
             conditionLabel(item.condition),
@@ -253,7 +311,7 @@ export function FeedMosaicCell({
         kind="car"
         corner={item.lastActivityAt ? relativeTime(item.lastActivityAt) : null}
         headline={headline}
-        value={subline}
+        value={subline ? <span className="vref vref--value">{subline}</span> : undefined}
         meta={activity || null}
         engagement={
           <CardEngagement
@@ -278,7 +336,8 @@ export function FeedMosaicCell({
       size={mosaicSize(item.id, Boolean(item.cover_url))}
       src={item.cover_url}
       alt={item.title}
-      tone="deep"
+      // Same plate as builds and parts — the kind pill is the only thing
+      // that says "update"; a darker tile read as a different card.
       eyebrow={item.imageCount > 1 && item.cover_url ? `Update · ${item.imageCount} photos` : "Update"}
       kind="update"
       corner={relativeTime(item.created_at)}
@@ -303,14 +362,35 @@ export function FeedMosaicCell({
   );
 }
 
-/** One marketplace listing as a mosaic cell. */
+function initialsOf(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join("") || "?"
+  );
+}
+
+/**
+ * One marketplace listing as a mosaic cell — the canonical listing card.
+ * Home recommendations, Marketplace results, the PDP rails and Saved all
+ * render this; what differs per context is the action row, never the
+ * anatomy.
+ */
 export function ListingMosaicCell({
   listing,
   save,
+  actions,
   prefetch,
 }: {
   listing: ListingCardData;
+  /** Renders the engagement strip (like · comment · share · save). */
   save?: { isLoggedIn: boolean; path: string };
+  /** Context-owned controls under the card — quick commerce on the
+   *  Marketplace, Unsave on Saved. Omitted elsewhere. */
+  actions?: ReactNode;
   prefetch?: boolean;
 }) {
   const href = `/listings/${listing.id}`;
@@ -323,6 +403,7 @@ export function ListingMosaicCell({
     ]
       .filter(Boolean)
       .join(" · ") || null;
+  const seller = listing.seller;
   return (
     <MosaicCell
       href={href}
@@ -331,7 +412,8 @@ export function ListingMosaicCell({
       src={listing.cover_url}
       alt={listing.title}
       flag={listing.status_flag}
-      sub={listing.source_car_name ?? null}
+      sub={provenanceLine(listing.source_car_name)}
+      subHref={listing.source_car_slug ? `/cars/${listing.source_car_slug}` : null}
       headline={listing.title}
       value={
         <>
@@ -339,7 +421,24 @@ export function ListingMosaicCell({
           {ship && <span className="mcell__ship"> {ship}</span>}
         </>
       }
-      meta={listing.reason ?? meta}
+      meta={meta}
+      trust={
+        seller ? (
+          <>
+            <span className="monogram monogram--xs" aria-hidden="true">
+              {initialsOf(seller.name)}
+            </span>
+            <span className="truncate">
+              {seller.name}
+              {seller.rating &&
+                ` · ${seller.rating} ★ · ${seller.review_count ?? 0} review${
+                  (seller.review_count ?? 0) === 1 ? "" : "s"
+                }`}
+            </span>
+          </>
+        ) : undefined
+      }
+      actions={actions}
       engagement={
         save && (
           <CardEngagement

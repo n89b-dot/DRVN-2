@@ -2,7 +2,7 @@ import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import { Suspense, type ReactNode } from "react";
 
-import { ListingCard } from "@/components/ui";
+import { ListingCard, Mosaic } from "@/components/ui";
 import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -20,7 +20,7 @@ const getBackdropCards = unstable_cache(
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("listings")
-      .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id")
+      .select("id, title, price_cents, shipping_cents, condition, location, part_number, seller_id, source_car_id")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(6);
@@ -49,11 +49,11 @@ async function LiveBackdrop() {
   return (
     <div aria-hidden="true" inert className="authstage">
       <div className="wrap pt-8">
-        <div className="mkt">
+        <Mosaic>
           {cards.map((card) => (
             <ListingCard key={card.id} listing={card} prefetch={false} />
           ))}
-        </div>
+        </Mosaic>
       </div>
     </div>
   );

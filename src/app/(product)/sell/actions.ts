@@ -203,7 +203,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   if (imagesFailed) {
     return {
       error:
-        "Listing created, but the photos couldn't be saved. Open it from Listings and re-add them from Edit.",
+        "Listing created, but the photos couldn't be saved. Open it from My Listings and re-add them from Edit.",
     };
   }
   if (fitmentError) {

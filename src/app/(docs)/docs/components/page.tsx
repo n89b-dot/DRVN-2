@@ -924,7 +924,7 @@ export default function ComponentsPage() {
               </tr>
               <tr>
                 <td>marketplace-nav.tsx</td>
-                <td>MarketplaceNav — Marketplace | Listings | Offers | Orders, signed in only</td>
+                <td>MarketplaceNav — Marketplace | My Listings | Offers | Orders, signed in only</td>
               </tr>
               <tr>
                 <td>app-shell.tsx</td>

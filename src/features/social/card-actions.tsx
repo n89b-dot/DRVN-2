@@ -23,9 +23,16 @@ import { toggleLike, toggleSave, type SaveTargetType } from "./actions";
  *   share   — navigator.share where it exists, clipboard elsewhere.
  *   save    — the private bookmark (`saves`); posts joined the family in 0037.
  *
- * The cards are one big <Link>, so every control stops the event before it
- * navigates. Signed out, the shared auth-intent dialog explains and carries
+ * Each control is its own interactive element beside the card's link (never
+ * inside it); `stop()` stays as belt-and-braces against any ancestor
+ * handler. Signed out, the shared auth-intent dialog explains and carries
  * the return path — never a silent no-op.
+ *
+ * The icons are ambiguous cold, so every action names itself on hover and
+ * on keyboard focus through the stylesheet's `data-tip` tooltip — above the
+ * control, no layout shift, and off on touch, where the accessible name and
+ * the 44px target do the job. (Native `title` is gone: it doubled the
+ * tooltip and never showed for keyboard users.)
  */
 
 export type EngagementTarget =
@@ -141,7 +148,7 @@ export function CardEngagement({
         className={cx("cardeng__act", liked && "is-on")}
         aria-pressed={liked}
         aria-label={liked ? "Liked — tap to remove" : "Like"}
-        title={liked ? "Liked" : "Like"}
+        data-tip={liked ? "Liked" : "Like"}
       >
         <Icon name="heart" className="cardeng__ico" />
         {likes > 0 && <span className="cardeng__count">{likes}</span>}
@@ -152,7 +159,7 @@ export function CardEngagement({
           onClick={onComment}
           className="cardeng__act"
           aria-label={commentCount > 0 ? `Comments (${commentCount})` : "Comment"}
-          title="Comment"
+          data-tip="Comment"
         >
           <Icon name="comment" className="cardeng__ico" />
           {commentCount > 0 && <span className="cardeng__count">{commentCount}</span>}
@@ -163,7 +170,7 @@ export function CardEngagement({
         onClick={onShare}
         className={cx("cardeng__act", shared && "is-on")}
         aria-label="Share"
-        title={shared ? "Link copied" : "Share"}
+        data-tip={shared ? "Link copied" : "Share"}
       >
         <Icon name="share" className="cardeng__ico" />
         {shared && <span className="cardeng__count">Copied</span>}
@@ -174,7 +181,7 @@ export function CardEngagement({
         className={cx("cardeng__act", "cardeng__act--end", saved && "is-on")}
         aria-pressed={saved}
         aria-label={saved ? "Saved — tap to remove" : "Save"}
-        title={saved ? "Saved" : "Save"}
+        data-tip={saved ? "Saved" : "Save"}
       >
         <Icon name="bookmark" className="cardeng__ico" />
       </button>

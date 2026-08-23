@@ -4,68 +4,27 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Countdown, LiveDim, Rv } from "@/components/livesheet";
 import type { Database } from "@/lib/database.types";
 import { getConnectStatus } from "@/lib/payments/connect";
-import { formatPrice } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
 
-const DAYS = 30;
-
-/**
- * KPI money is rounded to whole units. A num-giant is 40–64px, and
- * "$1,499.60" simply does not fit a quarter-width tile — the cents are noise
- * at this scale anyway. The exact figure lives on the order and the ledger.
- */
-function compactMoney(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
-
-/**
- * A 30-day sales sparkline drawn as an inline SVG polyline.
- *
- * Deliberately not a chart library: this is one series of daily totals with no
- * axes, no tooltip and no legend — a dimension line that happens to wander.
- * Rendered server-side from real orders; if there are no sales the caller shows
- * the blank state rather than a flat line pretending to be data.
- */
-function Sparkline({ series, label }: { series: number[]; label: string }) {
-  const w = 132;
-  const h = 30;
-  const max = Math.max(...series, 1);
-  const step = series.length > 1 ? w / (series.length - 1) : w;
-  const points = series
-    .map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * h).toFixed(1)}`)
-    .join(" ");
-  const lastX = ((series.length - 1) * step).toFixed(1);
-  const lastY = (h - (series[series.length - 1] / max) * h).toFixed(1);
-
-  return (
-    <svg
-      viewBox={`0 0 ${w} ${h + 4}`}
-      className="mt-2 h-[34px] w-full"
-      role="img"
-      aria-label={label}
-      preserveAspectRatio="none"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--dimline)"
-        strokeWidth="1"
-        vectorEffect="non-scaling-stroke"
-      />
-      {/* the head of the line is the only live thing on it */}
-      <circle cx={lastX} cy={lastY} r="2.5" fill="var(--live)" />
-    </svg>
-  );
+/** "today" / "3d ago" / "2w ago" — the same feel-dates the garage sheets use. */
+function ago(iso: string, nowMs: number): string {
+  const d = Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000));
+  if (d === 0) return "today";
+  if (d < 7) return `${d}d ago`;
+  if (d < 35) return `${Math.floor(d / 7)}w ago`;
+  if (d < 365) return `${Math.floor(d / 30)}mo ago`;
+  return `${Math.floor(d / 365)}y ago`;
 }
 
 /**
  * The seller's KPI deck (Werkbank C4). Four measured facts with a live
- * dimension line under each: what's listed, what needs an answer, what sold,
- * and how many buyers' garages your parts actually fit.
+ * dimension line under each: what's listed, what needs an answer, how your
+ * last update landed, and how many eyes are on your parts.
+ *
+ * The old takings and fitment tiles are gone — at this stage of the platform
+ * both sat blank for almost everyone, and a deck of dashes teaches people the
+ * page is dead. Views and update responses are alive from day one. The exact
+ * money story still lives on the ledger, one link away.
  *
  * Renders nothing at all for someone who has never listed — an empty dashboard
  * of zeroes is worse than no dashboard.
@@ -80,11 +39,10 @@ export async function SellerKpis({
   // Read the clock once, through `new Date()` — the purity lint rightly flags
   // bare `Date.now()` calls in a render path.
   const nowMs = new Date().getTime();
-  const since = new Date(nowMs - DAYS * 24 * 3600 * 1000);
 
   const { data: listings } = await supabase
     .from("listings")
-    .select("id, status, source_car_id")
+    .select("id, status, view_count")
     .eq("seller_id", userId);
 
   const mine = listings ?? [];
@@ -92,35 +50,55 @@ export async function SellerKpis({
 
   const listingIds = mine.map((l) => l.id);
   const activeIds = mine.filter((l) => l.status === "active").map((l) => l.id);
+  const views = mine.reduce((sum, l) => sum + (l.view_count ?? 0), 0);
 
-  const [{ data: offers }, { data: orders }] = await Promise.all([
-    listingIds.length
-      ? supabase
-          .from("offers")
-          .select("id, expires_at, status")
-          .in("listing_id", listingIds)
-          .in("status", ["open", "countered"])
-      : Promise.resolve({ data: [] }),
+  const [{ data: offers }, { data: watchRows }, { data: latestPost }] = await Promise.all([
     supabase
-      .from("orders")
-      .select("total_cents, platform_fee_cents, created_at, status")
-      .eq("seller_id", userId)
-      .gte("created_at", since.toISOString()),
+      .from("offers")
+      .select("id, expires_at, status")
+      .in("listing_id", listingIds)
+      .in("status", ["open", "countered"]),
+    supabase
+      .from("saves")
+      .select("user_id")
+      .eq("target_type", "listing")
+      .in("target_id", listingIds),
+    supabase
+      .from("activity_posts")
+      .select("id, car_id, title, published_at")
+      .eq("author_id", userId)
+      .not("published_at", "is", null)
+      .order("published_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
-  // Sales that actually happened — a cancelled order is not revenue.
-  const sales = (orders ?? []).filter(
-    (o) => !["cancelled", "refunded", "payment_failed", "pending"].includes(o.status)
-  );
-  const salesTotal = sales.reduce((sum, o) => sum + (o.total_cents - o.platform_fee_cents), 0);
+  // Watchers are people, not saves — one buyer watching three of your parts
+  // is still one buyer.
+  const watchers = new Set((watchRows ?? []).map((s) => s.user_id)).size;
 
-  const series = Array.from({ length: DAYS }, () => 0);
-  for (const order of sales) {
-    const dayIndex =
-      DAYS - 1 - Math.floor((nowMs - new Date(order.created_at).getTime()) / 86_400_000);
-    if (dayIndex >= 0 && dayIndex < DAYS) {
-      series[dayIndex] += order.total_cents - order.platform_fee_cents;
-    }
+  // How the latest update landed: reactions + comments on it, and where it
+  // lives so the tile can open it.
+  let responses = 0;
+  let reactions = 0;
+  let comments = 0;
+  let postHref: string | null = null;
+  if (latestPost) {
+    const [{ count: reactionCount }, { count: commentCount }, { data: car }] = await Promise.all([
+      supabase
+        .from("activity_reactions")
+        .select("post_id", { count: "exact", head: true })
+        .eq("post_id", latestPost.id),
+      supabase
+        .from("activity_comments")
+        .select("id", { count: "exact", head: true })
+        .eq("post_id", latestPost.id),
+      supabase.from("cars").select("slug").eq("id", latestPost.car_id).maybeSingle(),
+    ]);
+    reactions = reactionCount ?? 0;
+    comments = commentCount ?? 0;
+    responses = reactions + comments;
+    postHref = car?.slug ? `/cars/${car.slug}/activity/${latestPost.id}` : null;
   }
 
   const openOffers = offers ?? [];
@@ -128,46 +106,6 @@ export async function SellerKpis({
     .map((o) => o.expires_at)
     .filter(Boolean)
     .sort()[0] as string | undefined;
-
-  // Fitment matches: buyers whose garage shares make+model with a source car
-  // behind one of your live parts. Metadata only — never seller notes.
-  let fitmentMatches = 0;
-  const sourceCarIds = mine
-    .filter((l) => activeIds.includes(l.id))
-    .map((l) => l.source_car_id)
-    .filter(Boolean) as string[];
-
-  if (sourceCarIds.length) {
-    const { data: sourceCars } = await supabase
-      .from("cars")
-      .select("make, model")
-      .in("id", [...new Set(sourceCarIds)]);
-
-    const keys = new Set(
-      (sourceCars ?? [])
-        .filter((c) => c.make && c.model)
-        .map((c) => `${c.make!.toLowerCase()}|${c.model!.toLowerCase()}`)
-    );
-
-    if (keys.size) {
-      const makes = [...new Set((sourceCars ?? []).map((c) => c.make).filter(Boolean))] as string[];
-      const { data: theirCars } = await supabase
-        .from("cars")
-        .select("owner_id, make, model")
-        .in("make", makes)
-        .neq("owner_id", userId);
-
-      const owners = new Set(
-        (theirCars ?? [])
-          .filter(
-            (c) => c.make && c.model && keys.has(`${c.make.toLowerCase()}|${c.model.toLowerCase()}`)
-          )
-          .map((c) => c.owner_id)
-      );
-      fitmentMatches = owners.size;
-    }
-  }
-
   const underOffer = openOffers.length;
 
   // Payout onboarding surfaced where the seller already is (Rev E item 9) —
@@ -184,27 +122,31 @@ export async function SellerKpis({
           </span>
           <h4>Payouts aren&apos;t set up yet</h4>
           <p>
-            {salesTotal > 0
-              ? "You have takings that can't reach you until this is done. "
-              : "Publishing needs somewhere to send the money when a part sells. "}
+            Publishing needs somewhere to send the money when a part sells.{" "}
             <Link href="/settings#payments" className="jumplink !inline-flex">
               Finish payout setup →
             </Link>
           </p>
         </div>
       )}
-      <Rv className="tile" stagger={0}>
+      {/* CTA tiles are columns with the jumplink pinned to the floor
+          (mt-auto), so "Manage" and "Read it" share one baseline across the
+          deck regardless of how tall each tile's facts run. */}
+      <Rv className="tile flex flex-col" stagger={0}>
         <span className="microlabel">Active listings</span>
         <p className="num-giant mt-1">{activeIds.length}</p>
         <LiveDim
           label="On the marketplace"
           value={`${activeIds.length} live · ${mine.length} total`}
         />
+        <Link href="/listings" className="jumplink mt-auto pt-2 self-start inline-flex">
+          Manage your listings →
+        </Link>
       </Rv>
 
       <Rv className="tile" stagger={1}>
         <span className={`microlabel ${underOffer ? "microlabel--live" : ""}`}>
-          Offers awaiting reply
+          Offers
         </span>
         <p className={`num-giant mt-1 ${underOffer ? "text-live" : "num-giant--blank"}`}>
           {underOffer || "—"}
@@ -220,47 +162,56 @@ export async function SellerKpis({
         )}
       </Rv>
 
-      <Rv className="tile" stagger={2}>
-        <span className="microlabel">30-day takings</span>
-        <p className={`num-giant mt-1 ${salesTotal ? "" : "num-giant--blank"}`}>
-          {compactMoney(salesTotal)}
+      {/* The latest update, measured by what came back — the tile quotes the
+          post's own title, so it reads as being about the work, not metrics. */}
+      <Rv className="tile flex flex-col" stagger={2}>
+        <span className={`microlabel ${responses ? "microlabel--live" : ""}`}>Latest update</span>
+        <p className={`num-giant mt-1 ${responses ? "" : "num-giant--blank"}`}>
+          {responses || "—"}
         </p>
-        {salesTotal > 0 ? (
-          <>
-            <Sparkline
-              series={series}
-              label={`Daily payouts over the last ${DAYS} days, totalling ${formatPrice(salesTotal)}`}
-            />
-            <LiveDim
-              label="After fees"
-              value={`${sales.length} sale${sales.length === 1 ? "" : "s"} · ${DAYS} days`}
-            />
-          </>
+        {latestPost ? (
+          <LiveDim
+            label={`“${latestPost.title}” · ${ago(latestPost.published_at as string, nowMs)}`}
+            value={
+              responses
+                ? [
+                    reactions ? `${reactions} reaction${reactions === 1 ? "" : "s"}` : null,
+                    comments ? `${comments} comment${comments === 1 ? "" : "s"}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "No responses yet"
+            }
+            live={responses > 0}
+            blank={!responses}
+          />
         ) : (
-          <LiveDim label="First payout lands here" value="—" blank />
+          <LiveDim label="Nothing posted yet" value="—" blank />
         )}
-        <Link href="/payouts" className="jumplink mt-2 inline-flex">
-          View ledger →
-        </Link>
+        {postHref && (
+          <Link href={postHref} className="jumplink mt-auto pt-2 self-start inline-flex">
+            Read it →
+          </Link>
+        )}
       </Rv>
 
       <Rv className="tile" stagger={3}>
-        <span className="microlabel">Garage fitment matches</span>
-        <p className={`num-giant mt-1 ${fitmentMatches ? "" : "num-giant--blank"}`}>
-          {fitmentMatches || "—"}
-        </p>
+        <span className="microlabel">Eyes on your parts</span>
+        <p className={`num-giant mt-1 ${views ? "" : "num-giant--blank"}`}>{views || "—"}</p>
         <LiveDim
-          label={fitmentMatches ? "Owners whose cars fit your parts" : "No matching garages yet"}
-          value={fitmentMatches ? `${fitmentMatches} owner${fitmentMatches === 1 ? "" : "s"}` : "—"}
-          blank={!fitmentMatches}
+          label={views ? "Part-sheet views, all time" : "Views land as buyers browse"}
+          value={
+            watchers
+              ? `${watchers} watching closely`
+              : views
+                ? `${views} view${views === 1 ? "" : "s"}`
+                : "—"
+          }
+          live={watchers > 0}
+          blank={!views}
         />
       </Rv>
 
-      <div className="col-span-full -mt-1">
-        <Link href="/listings" className="jumplink">
-          Manage your listings →
-        </Link>
-      </div>
     </section>
   );
 }

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { vehicleLabel } from "@/lib/vehicles/label";
+
 import { Media } from "./primitives";
 
 export type VehicleSummary = {
@@ -32,6 +34,7 @@ export function VehicleCard({
   variant = "row",
   actions,
   flag,
+  stats,
 }: {
   vehicle: VehicleSummary;
   variant?: "row" | "card" | "manage";
@@ -39,8 +42,10 @@ export function VehicleCard({
   actions?: ReactNode;
   /** Inline state chip beside the name (e.g. Private). */
   flag?: ReactNode;
+  /** Row variant — the build's pulse: updates posted and followers. */
+  stats?: { updates: number; followers: number };
 }) {
-  const meta = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ");
+  const meta = vehicleLabel(vehicle);
   const media = (
     <span className="vehicle__img">
       <Media
@@ -59,7 +64,18 @@ export function VehicleCard({
         {media}
         <span className="vehicle__body min-w-0">
           <span className="vehicle__name block">{vehicle.name}</span>
-          <span className="vehicle__meta block">{meta || "View the build page"}</span>
+          <span className="vehicle__meta vref vref--lg block">{meta || "View the build page"}</span>
+          {stats && (
+            <span className="vehicle__stats">
+              <span className="vehicle__stat">
+                {stats.updates} update{stats.updates === 1 ? "" : "s"}
+              </span>
+              <span className="vehicle__statdot" aria-hidden="true">
+                ·
+              </span>
+              <span className="vehicle__stat">{stats.followers} following</span>
+            </span>
+          )}
         </span>
         <span className="vehicle__go" aria-hidden="true">
           →
@@ -76,7 +92,7 @@ export function VehicleCard({
           {vehicle.name}
           {flag && <span className="vehicle__flag">{flag}</span>}
         </span>
-        <span className="vehicle__meta block">{meta || "No details yet"}</span>
+        <span className="vehicle__meta vref vref--xl block">{meta || "No details yet"}</span>
         {actions}
       </div>
     </div>

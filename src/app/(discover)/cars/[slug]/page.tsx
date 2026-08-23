@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { CarTabs, type ForSaleItem, type ModLine } from "./car-tabs";
 import { reportError } from "@/lib/monitoring";
+import { platformLabel } from "@/lib/vehicles/label";
 
 const TAB_KEYS = ["build", "forsale", "activity", "gallery"];
 
@@ -47,7 +48,7 @@ export async function generateMetadata({
 
   if (!car) return { title: "Car not found - DRVN" };
 
-  const spec = [car.year && String(car.year), [car.make, car.model].filter(Boolean).join(" ")]
+  const spec = [car.year && String(car.year), platformLabel(car)]
     .filter(Boolean)
     .join(" ");
   const description =
@@ -254,7 +255,7 @@ export default async function CarPage({
   }));
 
   const ownerName = owner?.display_name ?? (owner?.username ? `@${owner.username}` : "");
-  const carMeta = [car.year && String(car.year), [car.make, car.model].filter(Boolean).join(" "), car.color]
+  const carMeta = [car.year && String(car.year), platformLabel(car), car.color]
     .filter(Boolean)
     .join(" · ");
 

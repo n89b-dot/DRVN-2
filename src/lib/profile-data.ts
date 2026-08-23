@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
 import type { GalleryImage } from "@/components/ui";
+import { platformLabel } from "@/lib/vehicles/label";
 
 export type ProfileVehicle = {
   id: string;
@@ -154,7 +155,7 @@ export async function loadProfileView(
     slug: c.slug,
     name: c.name,
     year: c.year ? String(c.year) : "—",
-    colorLabel: c.color ?? [c.make, c.model].filter(Boolean).join(" "),
+    colorLabel: c.color ?? platformLabel(c),
     tags: c.tags ?? [],
     gallery: galleryByCar.get(c.id) ?? [],
   }));
