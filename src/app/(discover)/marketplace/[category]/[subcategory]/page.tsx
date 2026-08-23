@@ -9,6 +9,7 @@ import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 import { ActiveFilters } from "../../active-filters";
+import { CategoryNav, CategorySheet } from "../../category-nav";
 import { MarketplaceResults } from "../../results";
 import { FilterBar } from "../../filter-bar";
 
@@ -34,60 +35,57 @@ export default async function SubcategoryPage({
     fetchListings(
       supabase,
       { ...filters, category: category.slug, subcategory: subcategory.slug },
-      user?.id
+      user?.id,
     ),
     user ? loadOffersNeedingAttention(supabase, user.id) : Promise.resolve(0),
   ]);
 
   return (
     <div className="wrap">
-      {user && <MarketplaceNav current="marketplace" offersCount={offersCount} />}
-
+      {user && (
+        <MarketplaceNav current="marketplace" offersCount={offersCount} />
+      )}
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
             Marketplace
           </Link>{" "}
           /{" "}
-          <Link href={`/marketplace/${category.slug}`} className="hover:text-live">
+          <Link
+            href={`/marketplace/${category.slug}`}
+            className="hover:text-live"
+          >
             {category.label}
           </Link>{" "}
-          / {subcategory.label} · {page.total} listed
+          / {subcategory.label}
         </span>
         <h1>{subcategory.label}</h1>
       </Rv>
-
       <FilterBar
         action={`/marketplace/${category.slug}/${subcategory.slug}`}
         filters={filters}
         showFitToggle={Boolean(user)}
+        browse={
+          <CategorySheet
+            currentCategory={category.slug}
+            currentSubcategory={subcategory.slug}
+          />
+        }
       />
       <ActiveFilters
         basePath={`/marketplace/${category.slug}/${subcategory.slug}`}
         filters={filters as Record<string, string | undefined>}
       />
 
-      {/* Sibling subcategories stay one tap away — the sheet you're on is
-          inked, the rest are a hop sideways, matching the category page. */}
-      <div className="filters filters--roomy filters--scroll">
-        <span className="microlabel filters__label">Narrow it down</span>
-        <Link href={`/marketplace/${category.slug}`} className="fbtn">
-          All
-        </Link>
-        {category.subcategories.map((sub) => (
-          <Link
-            key={sub.slug}
-            href={`/marketplace/${category.slug}/${sub.slug}`}
-            className={`fbtn ${sub.slug === subcategory.slug ? "is-on" : ""}`}
-          >
-            {sub.label}
-          </Link>
-        ))}
-      </div>
+      {/* Leaf of the taxonomy: sibling subcategories stay one tap away as a
+          quiet row — the sheet you're on is inked, the rest are a hop
+          sideways. No tiles here; there is nothing further down. */}
+      <CategoryNav category={category} subcategory={subcategory.slug} />
 
       <section className="deck">
         <MarketplaceResults
           isLoggedIn={Boolean(user)}
+          viewerId={user?.id ?? null}
           page={page}
           basePath={`/marketplace/${category.slug}/${subcategory.slug}`}
           params={filters as Record<string, string | undefined>}
@@ -98,7 +96,9 @@ export default async function SubcategoryPage({
 
       <Foot
         left={`DRVN — marketplace / ${subcategory.label.toLowerCase()}`}
-        right={<Link href={`/marketplace/${category.slug}`}>← {category.label}</Link>}
+        right={
+          <Link href={`/marketplace/${category.slug}`}>← {category.label}</Link>
+        }
       />
     </div>
   );

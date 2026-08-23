@@ -1,7 +1,9 @@
 import Link from "next/link";
 
-import { ListingMosaicCell, Mosaic } from "@/components/ui";
+import { ListingCard, Mosaic } from "@/components/ui";
+import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import type { ListingPage } from "@/lib/marketplace/query";
+import { withParams } from "@/lib/url-params";
 
 const SORTS = [
   { key: "newest", label: "Newest" },
@@ -9,21 +11,13 @@ const SORTS = [
   { key: "price_desc", label: "Price ↓" },
 ] as const;
 
-function withParams(base: string, params: Record<string, string | undefined>, overrides: Record<string, string | undefined>) {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries({ ...params, ...overrides })) {
-    if (value) search.set(key, value);
-  }
-  const query = search.toString();
-  return query ? `${base}?${query}` : base;
-}
-
 /**
- * Shared results block: sort control, grid, and pagination.
+ * Shared results block: count · sort, the card wall, and pagination —
+ * one implementation for /marketplace and every category route.
  *
- * Previously each marketplace surface rendered a bare grid and labelled it
- * "Results (48)" — a hard cap presented as a complete count, with no way to
- * reach anything beyond it and no sort at all.
+ * The card decides per listing whether Buy now / Add to cart may appear
+ * (active, and not the viewer's own part). Home's recommendations render
+ * the identical card with quick commerce; Explore stays action-free.
  */
 export function MarketplaceResults({
   page,
@@ -32,6 +26,7 @@ export function MarketplaceResults({
   emptyTitle = "Nothing matches yet",
   emptyBody = "Try widening the filters, or check back — parts arrive as people pull them off.",
   isLoggedIn = false,
+  viewerId = null,
 }: {
   page: ListingPage;
   basePath: string;
@@ -39,8 +34,10 @@ export function MarketplaceResults({
   params: Record<string, string | undefined>;
   emptyTitle?: string;
   emptyBody?: string;
-  /** Powers each card's corner bookmark (auth prompt when signed out). */
+  /** Powers each card's engagement strip (auth prompt when signed out). */
   isLoggedIn?: boolean;
+  /** Lets a card hide purchase controls on the viewer's own listing. */
+  viewerId?: string | null;
 }) {
   const { results, total, page: current, pageSize, hasMore } = page;
   const activeSort = params.sort ?? "newest";
@@ -72,19 +69,12 @@ export function MarketplaceResults({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
-        <span className="microlabel">
-          {total === 1 ? "1 part" : `${total} parts`}
-          {total > pageSize && (
-            <>
-              {" · "}
-              showing {firstOnPage}–{lastOnPage}
-            </>
-          )}
-        </span>
-        {/* Compact widths sort from the toolbar's Sort select instead — two
-            sort controls on one phone screen would be one too many. */}
-        <div className="filters !my-0 hidden sm:flex" role="group" aria-label="Sort results">
+      {/* No results-count line: "15 parts" is inventory bookkeeping, not
+          something a buyer asked. The row exists only for the desktop sort;
+          compact widths sort from the toolbar's Sort select instead — two
+          sort controls on one phone screen would be one too many. */}
+      <div className="mb-4 hidden flex-wrap items-baseline justify-end gap-3 sm:flex">
+        <div className="filters !my-0" role="group" aria-label="Sort results">
           <span className="microlabel filters__label">Sort</span>
           {SORTS.map((sort) => {
             const isOn = sort.key === activeSort;
@@ -105,14 +95,28 @@ export function MarketplaceResults({
         </div>
       </div>
 
-      <Mosaic>
-        {results.map((listing) => (
-          <ListingMosaicCell
-            key={listing.id}
-            listing={listing}
-            save={{ isLoggedIn, path: basePath }}
-          />
-        ))}
+      <Mosaic commerce label="Parts for sale">
+        {results.map((listing) => {
+          // Purchasable = on sale and not the viewer's own. `addToCart` and
+          // `purchase_begin` enforce both again server-side; this only keeps
+          // a misleading Buy button off a card that can't be bought.
+          const isOwn = Boolean(viewerId && listing.seller_id === viewerId);
+          const purchasable = !listing.status_flag && !isOwn;
+          return (
+            <ListingCard
+              key={listing.id}
+              listing={listing}
+              save={{ isLoggedIn, path: basePath }}
+              actions={
+                purchasable ? (
+                  <ListingQuickCommerce listingId={listing.id} title={listing.title} />
+                ) : isOwn ? (
+                  <span className="microlabel block">Your listing</span>
+                ) : undefined
+              }
+            />
+          );
+        })}
       </Mosaic>
 
       {(current > 1 || hasMore) && (

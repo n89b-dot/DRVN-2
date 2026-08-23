@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
 import { FinderRefineSheet } from "@/components/ui";
 import { SlashFocus } from "@/components/ui/slash-focus";
@@ -8,31 +10,44 @@ import { SortSelect } from "./sort-select";
  * GET-form filter bar — server-rendered, no client JS needed.
  * Submits back to the current path with query params.
  *
- * Rendered as a `.finder` plate: the query line runs full-width with the
- * submit beside it, refinements sit on their own row beneath, so the whole
- * thing reads as one instrument instead of loose controls on the canvas.
+ * The Marketplace's control hierarchy, top to bottom:
  *
- * Carries `sort` through as a hidden field so choosing a sort and then
- * searching doesn't silently reset it. `page` is deliberately *not*
- * carried: a new search should start at page one.
+ *   Search   — the query line: find something by text (this plate's top row)
+ *   Category — where you are in the taxonomy (CategoryNav / the Browse
+ *              sheet — navigation, deliberately not inside this form)
+ *   Refine   — narrow the current set: condition · location · price · garage
+ *              fit (inline ≥640px, sheeted behind "Refine" on compact)
+ *   Sort     — one control per width (chips in the results head on desktop,
+ *              the select in the compact toolbar)
+ *   Active   — the removable chips under the plate (ActiveFilters)
+ *   Results  — the wall
+ *
+ * Carries `sort` through as a field so choosing a sort and then searching
+ * doesn't silently reset it. `page` is deliberately *not* carried: a new
+ * search should start at page one.
  */
 export function FilterBar({
   action,
   filters,
   showFitToggle,
   fitCarLabel,
+  browse,
 }: {
   action: string;
   filters: Record<string, string | undefined>;
   showFitToggle: boolean;
   /** Names the garage car the fit filter refers to, when there's just one. */
   fitCarLabel?: string | null;
+  /** The compact-width category browser (CategorySheet), placed in the
+   *  toolbar beside Refine and Sort so browsing is one tap on a phone. */
+  browse?: ReactNode;
 }) {
+  const activeCount = [filters.condition, filters.location, filters.min, filters.max, filters.fit].filter(
+    Boolean
+  ).length;
+
   return (
     <form action={action} method="get" className="finder" role="search">
-      {/* Sort travels with every search via the SortSelect below — visible in
-          the compact toolbar, display:none (but still submitting) ≥640px. */}
-
       <div className="finder__main">
         <label className="search">
           <span aria-hidden="true">⌕</span>
@@ -62,15 +77,20 @@ export function FilterBar({
           control (see FinderRefineSheet) — five stacked controls were pushing
           the results below the fold. ≥640px this renders the same inline
           `.finder__refine` row as before; the fields stay mounted either way,
-          so they always submit with the search. */}
+          so they always submit with the search. The Browse sheet rides in the
+          same toolbar so the three compact controls read as one row:
+          Browse · Refine · Sort. */}
       <FinderRefineSheet
-        activeCount={
-          [filters.condition, filters.location, filters.min, filters.max, filters.fit].filter(
-            Boolean
-          ).length
+        activeCount={activeCount}
+        aside={
+          <>
+            {browse}
+            <SortSelect value={filters.sort} />
+          </>
         }
-        aside={<SortSelect value={filters.sort} />}
       >
+        {/* Desktop: a labelled register, so the row says what it is. */}
+        <span className="microlabel filters__label hidden sm:inline">Refine</span>
         <select
           name="condition"
           defaultValue={filters.condition ?? ""}
@@ -124,6 +144,11 @@ export function FilterBar({
             {fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for your garage"}
           </label>
         )}
+        {/* Inside the sheet the refinements apply with the search — say so,
+            instead of leaving a phone user to guess whether "Done" submits. */}
+        <button type="submit" className="btn w-full sm:hidden">
+          Apply refinements
+        </button>
       </FinderRefineSheet>
     </form>
   );
