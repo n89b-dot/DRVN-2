@@ -2,11 +2,13 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import {
+  Alert,
   Button,
   ButtonLink,
+  EmptyState,
   Foot,
-  Media,
   MobileActionBar,
+  ObjectRow,
   PaymentModeNotice,
 } from "@/components/ui";
 import { getCartIds } from "@/lib/cart";
@@ -131,15 +133,19 @@ export default async function CartPage() {
       </Rv>
 
       {ids.length === 0 ? (
-        <Rv className="undrawn undrawn--hero">
-          <span className="undrawn__mark" aria-hidden="true">
-            ⌕
-          </span>
-          <h3>Nothing in the cart</h3>
-          <p>Parts you add from the marketplace collect here until you check out.</p>
-          <ButtonLink href="/marketplace" variant="ghost">
-            Browse the marketplace
-          </ButtonLink>
+        <Rv>
+          <EmptyState
+            mark="⌕"
+            className="undrawn--hero"
+            title="Nothing in the cart"
+            action={
+              <ButtonLink href="/marketplace" variant="ghost">
+                Browse the marketplace
+              </ButtonLink>
+            }
+          >
+            Parts you add from the marketplace collect here until you check out.
+          </EmptyState>
         </Rv>
       ) : (
         <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -153,42 +159,41 @@ export default async function CartPage() {
               </div>
               <div className="rowlist">
                 {invalid.map((line) => (
-                  <div key={line.id} className="order is-invalid">
-                    <span className="min-w-0">
-                      <span className="order__name block truncate">{line.title}</span>
-                      <span className="order__meta block">{line.reason}</span>
-                    </span>
-                    <span className="order__actions">
+                  <ObjectRow
+                    key={line.id}
+                    state="invalid"
+                    actions={
                       <form action={removeFromCart}>
                         <input type="hidden" name="listing_id" value={line.id} />
                         <Button type="submit" variant="quiet">
                           Remove
                         </Button>
                       </form>
+                    }
+                  >
+                    <span className="min-w-0">
+                      <span className="order__name block truncate">{line.title}</span>
+                      <span className="order__meta block">{line.reason}</span>
                     </span>
-                  </div>
+                  </ObjectRow>
                 ))}
               </div>
             </Rv>
           )}
 
           {mixedFulfilment && (
-            <Rv className="alert">
-              {/* .alert is a grid of [icon | content] — without the icon cell
-                  the heading lands in the narrow auto column and the body
-                  renders beside it instead of beneath. */}
-              <span className="alert__ico" aria-hidden="true">
-                ⚠
-              </span>
-              <h4>Collection isn&apos;t offered for this basket</h4>
-              <p>
+            <Rv>
+              <Alert ico="⚠" title={<>Collection isn&apos;t offered for this basket</>}>
                 Some parts here support collection and some don&apos;t — a basket can only check
                 out one way. Buy the collection-only parts separately if you&apos;d rather pick
                 them up.
-              </p>
+              </Alert>
             </Rv>
           )}
 
+          {/* Left hand-rolled: EmptyState always renders the dashed
+              `.undrawn__mark` badge, and this plate deliberately has none —
+              converting would add a visible mark. */}
           {active.length === 0 && invalid.length > 0 && (
             <Rv className="undrawn">
               <h3>Nothing left to buy</h3>
@@ -213,15 +218,18 @@ export default async function CartPage() {
                 </div>
                 <div className="rowlist">
                   {lines.map((listing) => (
-                    <div key={listing.id} className="order">
-                      <span className="order__img">
-                        <Media
-                          src={cover.get(listing.id) ?? undefined}
-                          alt={listing.title}
-                          className="h-full w-full"
-                          role="row"
-                        />
-                      </span>
+                    <ObjectRow
+                      key={listing.id}
+                      media={{ src: cover.get(listing.id) ?? undefined, alt: listing.title }}
+                      actions={
+                        <form action={removeFromCart}>
+                          <input type="hidden" name="listing_id" value={listing.id} />
+                          <Button type="submit" variant="quiet">
+                            Remove
+                          </Button>
+                        </form>
+                      }
+                    >
                       <span className="min-w-0">
                         <Link
                           href={`/listings/${listing.id}`}
@@ -236,15 +244,7 @@ export default async function CartPage() {
                             : " · free shipping"}
                         </span>
                       </span>
-                      <span className="order__actions">
-                        <form action={removeFromCart}>
-                          <input type="hidden" name="listing_id" value={listing.id} />
-                          <Button type="submit" variant="quiet">
-                            Remove
-                          </Button>
-                        </form>
-                      </span>
-                    </div>
+                    </ObjectRow>
                   ))}
                 </div>
                 <p className="spec-note">

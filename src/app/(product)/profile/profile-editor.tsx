@@ -4,8 +4,7 @@ import { useActionState, useId, useRef, useState } from "react";
 
 import { Avatar, Dialog, Media } from "@/components/ui";
 import { initialsFrom } from "@/components/profile/helpers";
-import { recordStagedUpload } from "@/lib/media-staging";
-import { createClient } from "@/lib/supabase/client";
+import { uploadImages } from "@/lib/media-upload";
 
 import { updateProfile, type ActionState } from "../garage/actions";
 
@@ -40,29 +39,19 @@ export function ProfileEditor({
     const file = files?.[0];
     if (!file) return;
     setAvatarError(null);
-    if (file.size > 2 * 1024 * 1024) {
-      setAvatarError("Image is over 2MB.");
-      return;
-    }
     setUploadingAvatar(true);
     try {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(path, file, { contentType: file.type });
-      if (uploadError) {
-        setAvatarError(uploadError.message);
+      const { uploaded, failed } = await uploadImages({
+        files: [file],
+        bucket: "avatars",
+        pathPrefix: userId,
+        maxBytes: 2 * 1024 * 1024,
+      });
+      if (failed.length) {
+        setAvatarError(failed[0].reason);
         return;
       }
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("avatars").getPublicUrl(path);
-      // Ledger the upload for GC (0029) — if the profile is never saved, the
-      // 48h sweep reclaims the object. Fire-and-forget.
-      void recordStagedUpload("avatars", path, publicUrl).catch(() => {});
-      setAvatarUrl(publicUrl);
+      if (uploaded[0]) setAvatarUrl(uploaded[0].url);
     } finally {
       setUploadingAvatar(false);
       if (avatarFileRef.current) avatarFileRef.current.value = "";

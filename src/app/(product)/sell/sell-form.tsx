@@ -3,44 +3,15 @@
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 
-import { Media, Select, TextField } from "@/components/ui";
+import { Button, FormSection, Media, Select, TextArea, TextField, ValidationSummary } from "@/components/ui";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
-import { deleteStagedIfUnconsumed, recordStagedUpload } from "@/lib/media-staging";
+import { uploadImages } from "@/lib/media-upload";
+import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
 import { isLowConfidence } from "@/lib/mods/parse";
-import { createClient } from "@/lib/supabase/client";
 
 import { createListing, updateListing, type SellState } from "./actions";
 import { FitmentPicker, type FitmentRow } from "./fitment-picker";
-
-function Section({
-  step,
-  title,
-  hint,
-  children,
-}: {
-  step: number;
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="tile">
-      <div className="flex items-baseline gap-3">
-        {/* Step numerals are structure, not live state — signal red is reserved
-            for things happening now. */}
-        <span className="font-mono text-xs tracking-[0.1em] text-dim">
-          {String(step).padStart(2, "0")}
-        </span>
-        <div>
-          <h2 className="text-body font-semibold tracking-[-0.01em]">{title}</h2>
-          {hint && <p className="field__hint mt-0.5">{hint}</p>}
-        </div>
-      </div>
-      <div className="mt-4 flex flex-col gap-3">{children}</div>
-    </section>
-  );
-}
 
 /** A gallery photo, in save order — index 0 is always the cover. */
 export type GalleryImage = { url: string; alt: string | null };
@@ -170,34 +141,17 @@ export function SellForm({
     if (!files?.length) return;
     setUploadError(null);
     setUploading(true);
-    const supabase = createClient();
     try {
-      for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`${file.name} is over 10MB.`);
-          continue;
-        }
-        if (!file.type.startsWith("image/")) {
-          setUploadError(`${file.name} isn't an image.`);
-          continue;
-        }
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage
-          .from("listing-images")
-          .upload(path, file, { contentType: file.type });
-        if (error) {
-          setUploadError(error.message);
-          continue;
-        }
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("listing-images").getPublicUrl(path);
-        // Ledger the upload for GC (0029) — fire-and-forget: a miss only
-        // means the 48h sweep re-checks it, never a blocked photo flow.
-        void recordStagedUpload("listing-images", path, publicUrl).catch(() => {});
-        setImages((u) => [...u, { url: publicUrl, alt: null }]);
+      const { uploaded, failed } = await uploadImages({
+        files,
+        bucket: "listing-images",
+        pathPrefix: userId,
+        maxBytes: 10 * 1024 * 1024,
+      });
+      if (uploaded.length) {
+        setImages((u) => [...u, ...uploaded.map(({ url }) => ({ url, alt: null }))]);
       }
+      if (failed.length) setUploadError(failed[failed.length - 1].reason);
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -260,22 +214,13 @@ export function SellForm({
         <input type="hidden" name="mod_item_id" value={prefill.modItemId} />
       )}
 
-      {errorEntries.length > 0 && (
-        <div role="alert" aria-live="assertive" className="tile !mb-0 text-live">
-          <p className="font-semibold">Fix these before submitting:</p>
-          <ul className="mt-1 list-disc pl-5 text-micro">
-            {errorEntries.map(([field, message]) => (
-              <li key={field}>
-                <a href={`#${fieldAnchors[field] ?? field}`} className="jumplink underline">
-                  {fieldLabels[field] ?? field}
-                </a>
-                {" — "}
-                {message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ValidationSummary
+        entries={errorEntries.map(([field, message]) => ({
+          anchor: fieldAnchors[field] ?? field,
+          label: fieldLabels[field] ?? field,
+          message,
+        }))}
+      />
 
       {/* Completeness checklist — a lightweight, live-updating nudge toward a
           strong listing. Nothing here blocks submit; the hard requirements
@@ -290,7 +235,7 @@ export function SellForm({
         <span>Shipping {shipping.trim() !== "" ? "✓" : "—"}</span>
       </div>
 
-      <Section step={1} title="The part — what you're releasing">
+      <FormSection step={1} title="The part — what you're releasing">
         <TextField
           id="sell-title"
           name="title"
@@ -390,22 +335,22 @@ export function SellForm({
             onto the order as the contract. */}
         {condition !== "new" && (
           <>
-            <div className="field !mb-0">
-              <label htmlFor="sell-grade" className="microlabel">Grade — how honest sellers price</label>
-              <select id="sell-grade"
-                name="grade"
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                className="ctl max-w-none"
-              >
-                <option value="">Not graded</option>
-                {GRADES.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label} — {g.meaning}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              id="sell-grade"
+              name="grade"
+              label="Grade — how honest sellers price"
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              className="max-w-none"
+              fieldClassName="!mb-0"
+            >
+              <option value="">Not graded</option>
+              {GRADES.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label} — {g.meaning}
+                </option>
+              ))}
+            </Select>
             {category && (
               <fieldset className="field !mb-0">
                 <legend className="microlabel">
@@ -459,20 +404,20 @@ export function SellForm({
             )}
           </>
         )}
-        <div className="field !mb-0">
-          <label htmlFor="sell-description" className="microlabel">Description</label>
-          <textarea id="sell-description"
-            name="description"
-            rows={4}
-            maxLength={8000}
-            defaultValue={listing?.description ?? ""}
-            placeholder="What is it, why is it coming off, anything a buyer should know."
-            className="ctl !max-w-none"
-          />
-        </div>
-      </Section>
+        <TextArea
+          id="sell-description"
+          name="description"
+          label="Description"
+          rows={4}
+          maxLength={8000}
+          defaultValue={listing?.description ?? ""}
+          placeholder="What is it, why is it coming off, anything a buyer should know."
+          className="!max-w-none"
+          fieldClassName="!mb-0"
+        />
+      </FormSection>
 
-      <Section
+      <FormSection
         step={2}
         title="Photos"
         hint="Up to 12 — the first frame is the cover. Reorder, set a cover, or add alt text below."
@@ -558,9 +503,9 @@ export function SellForm({
             {uploadError}
           </p>
         )}
-      </Section>
+      </FormSection>
 
-      <Section
+      <FormSection
         step={3}
         title="Where it came from"
         hint="Optional — linking a car in your garage attaches the sheet's context to the listing."
@@ -582,9 +527,9 @@ export function SellForm({
             Released off a build line — the listing will show on that line of the car sheet.
           </p>
         )}
-      </Section>
+      </FormSection>
 
-      <Section
+      <FormSection
         step={4}
         title="Fitment — what it fits"
         hint="Seller-stated, shown as informational. Never a guarantee."
@@ -608,63 +553,49 @@ export function SellForm({
             className="ctl !max-w-none"
           />
         </div>
-      </Section>
+      </FormSection>
 
-      <Section step={5} title="Price, shipping & location">
+      <FormSection step={5} title="Price, shipping & location">
         <div className="field--row">
-          <div className="field !mb-0">
-            <label htmlFor="sell-price" className="microlabel">Asking price</label>
-            <div className="ctl__prefix">
-              <span>$</span>
-              <input id="sell-price"
-                name="price"
-                required
-                inputMode="decimal"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0"
-                className="ctl"
-                aria-describedby={fieldErrors.price ? "sell-price-error" : undefined}
-                aria-invalid={fieldErrors.price ? true : undefined}
-              />
-            </div>
-            {fieldErrors.price && (
-              <p id="sell-price-error" className="field__err">
-                {fieldErrors.price}
-              </p>
-            )}
-          </div>
-          <div className="field !mb-0">
-            <label htmlFor="sell-shipping" className="microlabel">Shipping — flat rate</label>
-            <div className="ctl__prefix">
-              <span>$</span>
-              <input id="sell-shipping"
-                name="shipping"
-                inputMode="decimal"
-                value={shipping}
-                onChange={(e) => setShipping(e.target.value)}
-                placeholder="0"
-                className="ctl"
-              />
-            </div>
-            <span className="field__hint">Leave at 0 for free shipping.</span>
-          </div>
+          <TextField
+            id="sell-price"
+            name="price"
+            label="Asking price"
+            required
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="0"
+            prefix="$"
+            fieldClassName="!mb-0"
+            error={fieldErrors.price}
+          />
+          <TextField
+            id="sell-shipping"
+            name="shipping"
+            label="Shipping — flat rate"
+            inputMode="decimal"
+            value={shipping}
+            onChange={(e) => setShipping(e.target.value)}
+            placeholder="0"
+            prefix="$"
+            fieldClassName="!mb-0"
+            hint="Leave at 0 for free shipping."
+          />
         </div>
         <div className="field--row">
-          <div className="field !mb-0">
-            <label htmlFor="sell-offer_floor" className="microlabel">Lowest offer you&apos;d read — optional</label>
-            <div className="ctl__prefix">
-              <span>$</span>
-              <input id="sell-offer_floor"
-                name="offer_floor"
-                inputMode="decimal"
-                defaultValue={money(listing?.offer_floor_cents)}
-                placeholder="—"
-                className="ctl"
-              />
-            </div>
-            <span className="field__hint">Offers below this are declined automatically.</span>
-          </div>
+          <TextField
+            id="sell-offer_floor"
+            name="offer_floor"
+            label="Lowest offer you'd read"
+            optional
+            inputMode="decimal"
+            defaultValue={money(listing?.offer_floor_cents)}
+            placeholder="—"
+            prefix="$"
+            fieldClassName="!mb-0"
+            hint="Offers below this are declined automatically."
+          />
           <div className="field !mb-0">
             <label htmlFor="sell-location" className="microlabel">Location</label>
             <input id="sell-location"
@@ -684,7 +615,7 @@ export function SellForm({
           />
           Buyers may collect in person
         </label>
-      </Section>
+      </FormSection>
 
       {!isEdit &&
         (() => {
@@ -740,28 +671,29 @@ export function SellForm({
         </span>
         <span className="flex flex-wrap gap-2">
           {!isEdit && (
-            <button
+            <Button
               type="submit"
+              variant="ghost"
               name="save_draft"
               value="1"
               disabled={pending || uploading}
-              className="btn btn--ghost"
             >
               Save draft
-            </button>
+            </Button>
           )}
           {/* Gated publish stays focusable (a `disabled` button vanishes from
               the tab order, so its checklist reference would never be
               announced) — aria-disabled + a guarded click instead. */}
-          <button
+          <Button
             type="submit"
+            variant="live"
             disabled={pending || uploading}
             aria-disabled={!isEdit && !canPublish ? true : undefined}
             aria-describedby={!isEdit && !canPublish ? "publish-checklist" : undefined}
             onClick={(e) => {
               if (!isEdit && !canPublish) e.preventDefault();
             }}
-            className={`btn btn--live ${!isEdit && !canPublish ? "opacity-55 cursor-not-allowed" : ""}`}
+            className={!isEdit && !canPublish ? "opacity-55 cursor-not-allowed" : undefined}
           >
             {pending
               ? isEdit
@@ -770,7 +702,7 @@ export function SellForm({
               : isEdit
                 ? "Save changes"
                 : "Publish to market"}
-          </button>
+          </Button>
         </span>
       </div>
     </form>

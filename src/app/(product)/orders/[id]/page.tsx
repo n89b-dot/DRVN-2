@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav, Media } from "@/components/ui";
+import { Alert, Foot, MarketplaceNav, Media, ObjectRow, RatingStars } from "@/components/ui";
 import {
   ConditionSummary,
   type ConditionSnapshot,
@@ -22,7 +22,7 @@ import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 
 import { ReviewForm } from "../review-form";
 import { nextAction } from "../next-action";
-import { OrderPipeline, StatusChip } from "../order-pipeline";
+import { OrderPipeline, StatusChip } from "@/components/commerce";
 import {
   AcceptRefundButton,
   CloseDisputeButton,
@@ -292,17 +292,11 @@ export default async function OrderDetailPage({
       )}
 
       {placed && (
-        <div className="alert alert--ok mb-6">
-          <span className="alert__ico" aria-hidden="true">
-            ✓
-          </span>
-          <h4>Order placed</h4>
-          <p>
-            {skipped
-              ? `Some lines couldn't be included: ${skipped}. Everything else is confirmed below.`
-              : "Your order went through — everything about it lives on this page."}
-          </p>
-        </div>
+        <Alert tone="ok" ico="✓" title="Order placed" className="mb-6">
+          {skipped
+            ? `Some lines couldn't be included: ${skipped}. Everything else is confirmed below.`
+            : "Your order went through — everything about it lives on this page."}
+        </Alert>
       )}
 
       <section className="deck deck--two !items-start">
@@ -313,17 +307,13 @@ export default async function OrderDetailPage({
             </span>
             <div className="rowlist mt-2">
               {(items ?? []).map((item) => (
-                <div key={item.id} className="order">
-                  <span className="order__img">
-                    <Media
-                      src={
-                        item.listing_id ? cover.get(item.listing_id) : undefined
-                      }
-                      alt={item.title ?? "Part"}
-                      className="h-full w-full"
-                      role="row"
-                    />
-                  </span>
+                <ObjectRow
+                  key={item.id}
+                  media={{
+                    src: item.listing_id ? cover.get(item.listing_id) : undefined,
+                    alt: item.title ?? "Part",
+                  }}
+                >
                   <span className="min-w-0">
                     {item.listing_id ? (
                       <Link
@@ -342,7 +332,7 @@ export default async function OrderDetailPage({
                       {formatPrice(item.price_cents)}
                     </span>
                   </span>
-                </div>
+                </ObjectRow>
               ))}
             </div>
           </Rv>
@@ -414,15 +404,7 @@ export default async function OrderDetailPage({
             <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Your review</span>
               <p className="mt-2">
-                <span
-                  className="review__stars !ml-0"
-                  aria-label={`${myReview.rating} out of 5`}
-                >
-                  {"★".repeat(myReview.rating)}
-                  <span className="text-dim">
-                    {"★".repeat(5 - myReview.rating)}
-                  </span>
-                </span>
+                <RatingStars rating={myReview.rating} className="!ml-0" />
               </p>
             </Rv>
           )}

@@ -2,6 +2,7 @@
 
 import { useActionState, useId } from "react";
 
+import { Button, TextField } from "@/components/ui";
 import { requestPasswordReset, type AuthState } from "@/app/(auth)/actions";
 
 export function ForgotForm() {
@@ -9,27 +10,24 @@ export function ForgotForm() {
     requestPasswordReset,
     {}
   );
-  const emailId = useId();
   const statusId = useId();
 
   return (
     <form action={formAction} className="mt-5 grid gap-3">
-      <label className="field" htmlFor={emailId}>
-        <span className="field__label">Email</span>
-        <input
-          id={emailId}
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          className="ctl !max-w-none"
-          aria-describedby={statusId}
-        />
-      </label>
+      <TextField
+        id="forgot-email"
+        label="Email"
+        name="email"
+        type="email"
+        required
+        autoComplete="email"
+        className="!max-w-none"
+        aria-describedby={statusId}
+      />
 
-      <button type="submit" disabled={pending} className="btn btn--live">
+      <Button type="submit" variant="live" disabled={pending}>
         {pending ? "Sending…" : "Send the link"}
-      </button>
+      </Button>
 
       {/* One live region for both outcomes: the success copy is deliberately
           identical whether or not the address exists, so this never becomes a

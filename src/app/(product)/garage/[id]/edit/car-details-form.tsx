@@ -2,18 +2,10 @@
 
 import { useActionState } from "react";
 
+import { Button, TextArea, TextField } from "@/components/ui";
 import type { Car } from "@/lib/database.types";
 
 import { updateCar, type ActionState } from "../../actions";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="field !mb-0">
-      <span className="microlabel">{label}</span>
-      {children}
-    </label>
-  );
-}
 
 export function CarDetailsForm({ car }: { car: Car }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateCar, {});
@@ -25,21 +17,44 @@ export function CarDetailsForm({ car }: { car: Car }) {
       </div>
       <form action={action} className="flex flex-col gap-4">
         <input type="hidden" name="id" value={car.id} />
-        <Field label="Name">
-          <input name="name" defaultValue={car.name} required className="ctl max-w-none" />
-        </Field>
+        <TextField
+          id="car-name"
+          label="Name"
+          name="name"
+          defaultValue={car.name}
+          required
+          className="max-w-none"
+          fieldClassName="!mb-0"
+        />
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Year">
-            <input name="year" defaultValue={car.year ?? ""} inputMode="numeric" className="ctl" />
-          </Field>
-          <Field label="Make">
-            <input name="make" defaultValue={car.make ?? ""} className="ctl" />
-          </Field>
-          <Field label="Model">
-            <input name="model" defaultValue={car.model ?? ""} className="ctl" />
-          </Field>
+          <TextField
+            id="car-year"
+            label="Year"
+            name="year"
+            defaultValue={car.year ?? ""}
+            inputMode="numeric"
+            fieldClassName="!mb-0"
+          />
+          <TextField
+            id="car-make"
+            label="Make"
+            name="make"
+            defaultValue={car.make ?? ""}
+            fieldClassName="!mb-0"
+          />
+          <TextField
+            id="car-model"
+            label="Model"
+            name="model"
+            defaultValue={car.model ?? ""}
+            fieldClassName="!mb-0"
+          />
         </div>
-        <Field label="VIN — optional, verifies the fields above">
+        {/* Left manual: TextField renders a single hint slot, and this field
+            carries two — the decode explainer plus the conditional "✓ Decoded"
+            line. */}
+        <label className="field !mb-0">
+          <span className="microlabel">VIN — optional, verifies the fields above</span>
           <input
             name="vin"
             defaultValue={car.vin ?? ""}
@@ -61,29 +76,34 @@ export function CarDetailsForm({ car }: { car: Car }) {
               {car.drivetrain ? ` · ${car.drivetrain}` : ""}
             </span>
           )}
-        </Field>
+        </label>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Color">
-            <input name="color" defaultValue={car.color ?? ""} className="ctl" />
-          </Field>
-          <Field label="Tags — comma separated">
-            <input
-              name="tags"
-              defaultValue={car.tags.join(", ")}
-              placeholder="Bagged, FBO, Show car"
-              className="ctl max-w-none"
-            />
-          </Field>
-        </div>
-        <Field label="About">
-          <textarea
-            name="about"
-            defaultValue={car.about ?? ""}
-            rows={4}
-            className="ctl"
-            placeholder="What's the story with this car?"
+          <TextField
+            id="car-color"
+            label="Color"
+            name="color"
+            defaultValue={car.color ?? ""}
+            fieldClassName="!mb-0"
           />
-        </Field>
+          <TextField
+            id="car-tags"
+            label="Tags — comma separated"
+            name="tags"
+            defaultValue={car.tags.join(", ")}
+            placeholder="Bagged, FBO, Show car"
+            className="max-w-none"
+            fieldClassName="!mb-0"
+          />
+        </div>
+        <TextArea
+          id="car-about"
+          label="About"
+          name="about"
+          defaultValue={car.about ?? ""}
+          rows={4}
+          placeholder="What's the story with this car?"
+          fieldClassName="!mb-0"
+        />
         <label className="flex items-center gap-2 font-mono text-micro uppercase tracking-[0.1em] text-dim">
           <input type="checkbox" name="is_public" defaultChecked={car.is_public} className="sq" />
           Public sheet — anyone can read it
@@ -94,9 +114,9 @@ export function CarDetailsForm({ car }: { car: Car }) {
           </p>
         )}
         <div className="flex justify-end">
-          <button type="submit" disabled={pending} className="btn btn--live">
-            {pending ? "Saving…" : "Save changes"}
-          </button>
+          <Button type="submit" variant="live" loading={pending} pendingLabel="Saving…">
+            Save changes
+          </Button>
         </div>
       </form>
     </section>

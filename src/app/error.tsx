@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { Alert } from "@/components/ui";
+
 /**
  * Route-level error boundary. Previously any thrown error landed on Next's
  * unstyled default page — off-brand and with no way back into the product.
@@ -31,21 +33,15 @@ export default function RouteError({
 
   return (
     <div className="wrap">
-      <div className="alert" role="alert">
-        <span className="alert__ico" aria-hidden="true">
-          ⚠
-        </span>
-        <h4>Something went wrong</h4>
-        <p>
-          This page failed to load. It&apos;s been logged — trying again usually sorts it.
-          {error.digest && (
-            <>
-              {" "}
-              <span className="mono text-dim">ref {error.digest}</span>
-            </>
-          )}
-        </p>
-      </div>
+      <Alert ico="⚠" title="Something went wrong" role="alert">
+        This page failed to load. It&apos;s been logged — trying again usually sorts it.
+        {error.digest && (
+          <>
+            {" "}
+            <span className="mono text-dim">ref {error.digest}</span>
+          </>
+        )}
+      </Alert>
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="button" onClick={reset} className="btn btn--live">
           Try again

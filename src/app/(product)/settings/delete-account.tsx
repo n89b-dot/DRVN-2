@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 
+import { TextField } from "@/components/ui";
+
 import { deleteAccount, type ActionState } from "../garage/actions";
 
 /**
@@ -23,18 +25,19 @@ export function DeleteAccount() {
 
   return (
     <form action={action} className="grid gap-3">
-      <label className="field">
-        <span className="field__label">
-          Type <b>DELETE</b> to confirm
-        </span>
-        <input
-          name="confirm"
-          required
-          autoComplete="off"
-          placeholder="DELETE"
-          className="ctl !max-w-none"
-        />
-      </label>
+      <TextField
+        id="delete-account-confirm"
+        label={
+          <>
+            Type <b>DELETE</b> to confirm
+          </>
+        }
+        name="confirm"
+        required
+        autoComplete="off"
+        placeholder="DELETE"
+        className="!max-w-none"
+      />
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
           Keep my account

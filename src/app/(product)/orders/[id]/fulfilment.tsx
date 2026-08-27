@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { ConfirmDialog } from "@/components/ui";
+import { ConfirmDialog, Message, MessageThread, ResultNote } from "@/components/ui";
 import {
   markReceived,
   markShipped,
@@ -10,15 +10,6 @@ import {
   sendThreadMessage,
   type CommerceState,
 } from "@/features/commerce/actions";
-
-function Result({ state }: { state: CommerceState }) {
-  if (!state.error && !state.ok) return null;
-  return (
-    <p role="alert" aria-live="polite" className={state.error ? "field__err" : "chip chip--ok"}>
-      {state.error ?? state.ok}
-    </p>
-  );
-}
 
 /** Seller dispatch. Tracking is required for posted goods — without it the
  *  buyer has no visibility, which is the entire point of the step. */
@@ -138,19 +129,16 @@ export function OrderThread({
   return (
     <div className="grid gap-3">
       {messages.length > 0 ? (
-        <div className="thread">
+        <MessageThread>
           {messages.map((m) => (
-            <div
+            <Message
               key={m.id}
-              className={`msg ${m.sender_id === currentUserId ? "msg--me" : ""}`}
-            >
-              <span className="msg__who">
-                {m.sender_id === currentUserId ? "You" : m.sender_name}
-              </span>
-              <p className="msg__body">{m.body}</p>
-            </div>
+              me={m.sender_id === currentUserId}
+              who={m.sender_id === currentUserId ? "You" : m.sender_name}
+              body={m.body}
+            />
           ))}
-        </div>
+        </MessageThread>
       ) : (
         <p className="spec-note">
           No messages yet. Anything about delivery, fitment or condition belongs here — it stays
@@ -171,7 +159,7 @@ export function OrderThread({
           {pending ? "Sending…" : "Send"}
         </button>
       </form>
-      <Result state={state} />
+      <ResultNote error={state.error} ok={state.ok} />
     </div>
   );
 }

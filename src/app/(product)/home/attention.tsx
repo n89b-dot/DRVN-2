@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Rv } from "@/components/livesheet";
+import { ObjectRow } from "@/components/ui";
 import type { Database } from "@/lib/database.types";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 
@@ -80,7 +80,7 @@ export async function Attention({
         </div>
         <div className="rowlist mt-2">
           {rows.map((row) => (
-            <Link key={row.href} href={row.href} className="order">
+            <ObjectRow key={row.href} href={row.href}>
               <span className="min-w-0 flex-1">
                 <span className="order__name block">{row.label}</span>
                 <span className="order__meta block">{row.hint}</span>
@@ -88,7 +88,7 @@ export async function Attention({
               <span className="order__actions" aria-hidden="true">
                 <span className="mono text-dim">→</span>
               </span>
-            </Link>
+            </ObjectRow>
           ))}
         </div>
       </Rv>

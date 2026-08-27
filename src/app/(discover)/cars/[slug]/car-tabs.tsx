@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { ListingRow } from "@/components/commerce";
 import {
+  EmptyState,
   GalleryLightbox,
   KeyValueTable,
   SheetTabs,
@@ -132,22 +134,21 @@ export function CarTabs({
         </section>
       ) : (
         !about && (
-          <div className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ✎
-            </span>
-            <h3>No mods listed yet</h3>
-            <p>
-              {isOwner
-                ? "The build sheet starts with the first mod you record."
-                : "This build sheet is still blank — the owner hasn't recorded any mods."}
-            </p>
-            {isOwner && (
-              <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
-                Record a mod
-              </Link>
-            )}
-          </div>
+          <EmptyState
+            mark="✎"
+            title="No mods listed yet"
+            action={
+              isOwner && (
+                <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
+                  Record a mod
+                </Link>
+              )
+            }
+          >
+            {isOwner
+              ? "The build sheet starts with the first mod you record."
+              : "This build sheet is still blank — the owner hasn't recorded any mods."}
+          </EmptyState>
         )
       )}
     </div>
@@ -165,23 +166,7 @@ export function CarTabs({
           </div>
           <div className="rowlist mt-2">
             {forSale.map((item) => (
-              <Link key={item.id} href={`/listings/${item.id}`} className="order">
-                <span className="order__img">
-                  {item.cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.cover} alt={item.title} className="h-full w-full object-cover" />
-                  ) : null}
-                </span>
-                <span className="min-w-0">
-                  <span className="order__name block truncate">{item.title}</span>
-                  <span className="order__meta block">{item.price}</span>
-                </span>
-                <span className="order__actions">
-                  <span className={`chip ${item.status === "sold" ? "chip--spent" : "chip--live"}`}>
-                    {item.status === "sold" ? "Sold" : "Live"}
-                  </span>
-                </span>
-              </Link>
+              <ListingRow key={item.id} listing={item} />
             ))}
           </div>
           <div className="mt-4">
@@ -191,22 +176,21 @@ export function CarTabs({
           </div>
         </>
       ) : (
-        <div className="undrawn">
-          <span className="undrawn__mark" aria-hidden="true">
-            ⌕
-          </span>
-          <h3>Nothing for sale from this car</h3>
-          <p>
-            {isOwner
-              ? "When you take a part off this car, list it from the build and it shows up here — with the car attached."
-              : "No parts from this car are for sale right now."}
-          </p>
-          {isOwner && (
-            <Link href={`/sell?car=${carId}`} className="btn btn--live">
-              List a part
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          mark="⌕"
+          title="Nothing for sale from this car"
+          action={
+            isOwner && (
+              <Link href={`/sell?car=${carId}`} className="btn btn--live">
+                List a part
+              </Link>
+            )
+          }
+        >
+          {isOwner
+            ? "When you take a part off this car, list it from the build and it shows up here — with the car attached."
+            : "No parts from this car are for sale right now."}
+        </EmptyState>
       )}
     </div>
   );
@@ -241,22 +225,21 @@ export function CarTabs({
           ))}
         </ul>
       ) : (
-        <div className="undrawn">
-          <span className="undrawn__mark" aria-hidden="true">
-            ✎
-          </span>
-          <h3>No updates yet</h3>
-          <p>
-            {isOwner
-              ? "Post an update from your garage and the build log starts here."
-              : "The owner hasn't posted any updates for this car yet."}
-          </p>
-          {isOwner && (
-            <Link href={`/garage/${carId}/update/new`} className="btn btn--ghost">
-              Post an update
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          mark="✎"
+          title="No updates yet"
+          action={
+            isOwner && (
+              <Link href={`/garage/${carId}/update/new`} className="btn btn--ghost">
+                Post an update
+              </Link>
+            )
+          }
+        >
+          {isOwner
+            ? "Post an update from your garage and the build log starts here."
+            : "The owner hasn't posted any updates for this car yet."}
+        </EmptyState>
       )}
     </div>
   );
@@ -266,22 +249,21 @@ export function CarTabs({
       {gallery.length > 0 ? (
         <VehicleGallery images={gallery} onSelect={(i) => setLightbox(i)} />
       ) : (
-        <div className="undrawn">
-          <span className="undrawn__mark" aria-hidden="true">
-            ✎
-          </span>
-          <h3>No photos yet</h3>
-          <p>
-            {isOwner
-              ? "Photos give the build sheet its face — add the first one."
-              : "The owner hasn't photographed this car yet."}
-          </p>
-          {isOwner && (
-            <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
-              Add photos
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          mark="✎"
+          title="No photos yet"
+          action={
+            isOwner && (
+              <Link href={`/garage/${carId}/edit`} className="btn btn--ghost">
+                Add photos
+              </Link>
+            )
+          }
+        >
+          {isOwner
+            ? "Photos give the build sheet its face — add the first one."
+            : "The owner hasn't photographed this car yet."}
+        </EmptyState>
       )}
     </div>
   );

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { Countdown, LiveDim, Rv } from "@/components/livesheet";
+import { Countdown, LiveDim } from "@/components/livesheet";
+import { Alert, MetricCard } from "@/components/ui";
 import type { Database } from "@/lib/database.types";
 import { getConnectStatus } from "@/lib/payments/connect";
 import { paymentsAreLive } from "@/lib/payments/provider";
@@ -116,41 +117,40 @@ export async function SellerKpis({
   return (
     <section className="deck deck--kpi">
       {needsOnboarding && (
-        <div className="alert alert--live col-span-full">
-          <span className="alert__ico" aria-hidden="true">
-            ●
-          </span>
-          <h4>Payouts aren&apos;t set up yet</h4>
-          <p>
-            Publishing needs somewhere to send the money when a part sells.{" "}
-            <Link href="/settings#payments" className="jumplink !inline-flex">
-              Finish payout setup →
-            </Link>
-          </p>
-        </div>
+        <Alert tone="live" className="col-span-full" title="Payouts aren't set up yet">
+          Publishing needs somewhere to send the money when a part sells.{" "}
+          <Link href="/settings#payments" className="jumplink !inline-flex">
+            Finish payout setup →
+          </Link>
+        </Alert>
       )}
       {/* CTA tiles are columns with the jumplink pinned to the floor
           (mt-auto), so "Manage" and "Read it" share one baseline across the
           deck regardless of how tall each tile's facts run. */}
-      <Rv className="tile flex flex-col" stagger={0}>
-        <span className="microlabel">Active listings</span>
-        <p className="num-giant mt-1">{activeIds.length}</p>
+      <MetricCard
+        label="Active listings"
+        value={activeIds.length}
+        stagger={0}
+        footer={
+          <Link href="/listings" className="jumplink mt-auto pt-2 self-start inline-flex">
+            Manage your listings →
+          </Link>
+        }
+      >
         <LiveDim
           label="On the marketplace"
           value={`${activeIds.length} live · ${mine.length} total`}
         />
-        <Link href="/listings" className="jumplink mt-auto pt-2 self-start inline-flex">
-          Manage your listings →
-        </Link>
-      </Rv>
+      </MetricCard>
 
-      <Rv className="tile" stagger={1}>
-        <span className={`microlabel ${underOffer ? "microlabel--live" : ""}`}>
-          Offers
-        </span>
-        <p className={`num-giant mt-1 ${underOffer ? "text-live" : "num-giant--blank"}`}>
-          {underOffer || "—"}
-        </p>
+      <MetricCard
+        label="Offers"
+        live={underOffer > 0}
+        value={underOffer || "—"}
+        valueLive={underOffer > 0}
+        blank={!underOffer}
+        stagger={1}
+      >
         {underOffer > 0 ? (
           <LiveDim
             label="Oldest lapses in"
@@ -160,15 +160,28 @@ export async function SellerKpis({
         ) : (
           <LiveDim label="Nothing waiting on you" value="—" blank />
         )}
-      </Rv>
+      </MetricCard>
 
       {/* The latest update, measured by what came back — the tile quotes the
           post's own title, so it reads as being about the work, not metrics. */}
-      <Rv className="tile flex flex-col" stagger={2}>
-        <span className={`microlabel ${responses ? "microlabel--live" : ""}`}>Latest update</span>
-        <p className={`num-giant mt-1 ${responses ? "" : "num-giant--blank"}`}>
-          {responses || "—"}
-        </p>
+      <MetricCard
+        label="Latest update"
+        live={responses > 0}
+        value={responses || "—"}
+        blank={!responses}
+        stagger={2}
+        // The original tile is a flex column whether or not the jumplink is
+        // present; MetricCard only adds it with a footer, so restore it when
+        // there's no post to link.
+        className={postHref ? undefined : "flex flex-col"}
+        footer={
+          postHref && (
+            <Link href={postHref} className="jumplink mt-auto pt-2 self-start inline-flex">
+              Read it →
+            </Link>
+          )
+        }
+      >
         {latestPost ? (
           <LiveDim
             label={`“${latestPost.title}” · ${ago(latestPost.published_at as string, nowMs)}`}
@@ -188,16 +201,9 @@ export async function SellerKpis({
         ) : (
           <LiveDim label="Nothing posted yet" value="—" blank />
         )}
-        {postHref && (
-          <Link href={postHref} className="jumplink mt-auto pt-2 self-start inline-flex">
-            Read it →
-          </Link>
-        )}
-      </Rv>
+      </MetricCard>
 
-      <Rv className="tile" stagger={3}>
-        <span className="microlabel">Eyes on your parts</span>
-        <p className={`num-giant mt-1 ${views ? "" : "num-giant--blank"}`}>{views || "—"}</p>
+      <MetricCard label="Eyes on your parts" value={views || "—"} blank={!views} stagger={3}>
         <LiveDim
           label={views ? "Part-sheet views, all time" : "Views land as buyers browse"}
           value={
@@ -210,7 +216,7 @@ export async function SellerKpis({
           live={watchers > 0}
           blank={!views}
         />
-      </Rv>
+      </MetricCard>
 
     </section>
   );

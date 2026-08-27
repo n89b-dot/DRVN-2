@@ -11,7 +11,7 @@ import {
 } from "@/features/commerce/payment-methods";
 import type { CommerceState } from "@/features/commerce/actions";
 import type { SavedCard } from "@/lib/payments/customers";
-import { Dialog, Toast } from "@/components/ui";
+import { Dialog, ObjectRow, Toast } from "@/components/ui";
 
 /**
  * P22 — saved cards in Settings. Reference pass: Preply (concise section),
@@ -51,7 +51,17 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
       ) : (
         <div className="rowlist mt-2">
           {cards.map((card) => (
-            <div key={card.id} className="order">
+            <ObjectRow
+              key={card.id}
+              actions={
+                <form action={removeAction}>
+                  <input type="hidden" name="payment_method_id" value={card.id} />
+                  <button type="submit" disabled={removing} className="relbtn !static">
+                    Remove
+                  </button>
+                </form>
+              }
+            >
               <span className="min-w-0">
                 <span className="order__name block uppercase">
                   {card.kind === "link" ? "Link" : `${card.brand} •••• ${card.last4}`}
@@ -62,15 +72,7 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
                     : `Expires ${String(card.expMonth).padStart(2, "0")}/${String(card.expYear).slice(-2)}`}
                 </span>
               </span>
-              <span className="order__actions">
-                <form action={removeAction}>
-                  <input type="hidden" name="payment_method_id" value={card.id} />
-                  <button type="submit" disabled={removing} className="relbtn !static">
-                    Remove
-                  </button>
-                </form>
-              </span>
-            </div>
+            </ObjectRow>
           ))}
         </div>
       )}

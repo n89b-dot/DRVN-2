@@ -6,7 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { CheckoutSteps } from "@/app/(discover)/checkout/checkout-steps";
 import { listSavedCards } from "@/lib/payments/customers";
 import { Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Foot, ObjectRow } from "@/components/ui";
 import { completeReservedOrder } from "@/features/commerce/actions";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/server";
@@ -135,15 +135,13 @@ export default async function CompleteOrderPage({
             <span className="microlabel microlabel--ink">What you&apos;re buying</span>
             <div className="rowlist mt-2">
               {(items ?? []).map((item) => (
-                <div key={item.id} className="order">
-                  <span className="order__img">
-                    <Media
-                      src={item.listing_id ? cover.get(item.listing_id) : undefined}
-                      alt={item.title ?? "Part"}
-                      className="h-full w-full"
-                      role="row"
-                    />
-                  </span>
+                <ObjectRow
+                  key={item.id}
+                  media={{
+                    src: item.listing_id ? cover.get(item.listing_id) : undefined,
+                    alt: item.title ?? "Part",
+                  }}
+                >
                   <span className="min-w-0">
                     {item.listing_id ? (
                       <Link
@@ -157,7 +155,7 @@ export default async function CompleteOrderPage({
                     )}
                     <span className="order__meta block">{formatPrice(item.price_cents)}</span>
                   </span>
-                </div>
+                </ObjectRow>
               ))}
             </div>
           </Rv>

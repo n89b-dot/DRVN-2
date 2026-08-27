@@ -9,6 +9,7 @@ import { provenanceLine } from "@/lib/vehicles/label";
 
 import type { ListingCardData } from "./listing-card";
 import { Media } from "./primitives";
+import { ratingLine } from "./rating";
 
 /**
  * Mosaic — the photo-wall grid (Best Buy customer images). Cells sit on one
@@ -404,6 +405,11 @@ export function ListingMosaicCell({
       .filter(Boolean)
       .join(" · ") || null;
   const seller = listing.seller;
+  // `rating` is already a display string ("4.8"); ratingLine only ever
+  // interpolates it, so the cast is safe and keeps "4.0"-style strings intact.
+  const sellerRating = seller?.rating
+    ? ratingLine(seller.rating, seller.review_count ?? 0)
+    : null;
   return (
     <MosaicCell
       href={href}
@@ -430,10 +436,7 @@ export function ListingMosaicCell({
             </span>
             <span className="truncate">
               {seller.name}
-              {seller.rating &&
-                ` · ${seller.rating} ★ · ${seller.review_count ?? 0} review${
-                  (seller.review_count ?? 0) === 1 ? "" : "s"
-                }`}
+              {sellerRating && ` · ${sellerRating}`}
             </span>
           </>
         ) : undefined

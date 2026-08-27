@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 
 import { vehicleLabel } from "@/lib/vehicles/label";
 
@@ -16,85 +15,54 @@ export type VehicleSummary = {
 };
 
 /**
- * The vehicle presentation shared by Home and Garage. A user's car is a
+ * The vehicle-as-a-row presentation (Home dashboard). A user's car is a
  * primary object — it gets prominent section media (large enough to read
- * body shape, stance and colour), never an order-thumbnail and never a page
- * hero.
+ * body shape, stance and colour), never an order-thumbnail: a medium 3:2
+ * image leading a whole-row link to the build page.
  *
- * - `row` (Home): compact dashboard rhythm — a medium 3:2 image leading a
- *   whole-row link to the build page.
- * - `card` (public/editorial): the car is the page's content — a generous
- *   leading image beside (stacked above, on phones) the identity and actions.
- * - `manage` (Garage): a management row. ≥640px it keeps the card's generous
- *   side-by-side anatomy; on phones it recomposes to a 112px 3:2 thumbnail
- *   beside identity + state + Manage, so several cars fit one viewport.
+ * The Garage's management card is deliberately NOT this component — it's the
+ * feature-level `GarageSheetCard` (`.gsheet`), which carries dims, notes,
+ * latest-update and order anatomy no other surface needs. (The old unused
+ * `card`/`manage` variants that claimed that job were removed.)
  */
 export function VehicleCard({
   vehicle,
-  variant = "row",
-  actions,
-  flag,
   stats,
 }: {
   vehicle: VehicleSummary;
-  variant?: "row" | "card" | "manage";
-  /** Card/manage variants — the action cluster (Manage, View build, …). */
-  actions?: ReactNode;
-  /** Inline state chip beside the name (e.g. Private). */
-  flag?: ReactNode;
-  /** Row variant — the build's pulse: updates posted and followers. */
+  /** The build's pulse: updates posted and followers. */
   stats?: { updates: number; followers: number };
 }) {
   const meta = vehicleLabel(vehicle);
-  const media = (
-    <span className="vehicle__img">
-      <Media
-        src={vehicle.cover_image_url ?? undefined}
-        alt={vehicle.name}
-        className="h-full w-full"
-        fallbackClassName="plate-undrawn"
-        role="vehicle"
-      />
-    </span>
-  );
-
-  if (variant === "row") {
-    return (
-      <Link href={`/cars/${vehicle.slug}`} className="vehicle vehicle--row">
-        {media}
-        <span className="vehicle__body min-w-0">
-          <span className="vehicle__name block">{vehicle.name}</span>
-          <span className="vehicle__meta vref vref--lg block">{meta || "View the build page"}</span>
-          {stats && (
-            <span className="vehicle__stats">
-              <span className="vehicle__stat">
-                {stats.updates} update{stats.updates === 1 ? "" : "s"}
-              </span>
-              <span className="vehicle__statdot" aria-hidden="true">
-                ·
-              </span>
-              <span className="vehicle__stat">{stats.followers} following</span>
-            </span>
-          )}
-        </span>
-        <span className="vehicle__go" aria-hidden="true">
-          →
-        </span>
-      </Link>
-    );
-  }
-
   return (
-    <div className={`vehicle ${variant === "manage" ? "vehicle--manage" : "vehicle--card"}`}>
-      {media}
-      <div className="vehicle__body min-w-0">
-        <span className="vehicle__name vehicle__name--lg block">
-          {vehicle.name}
-          {flag && <span className="vehicle__flag">{flag}</span>}
-        </span>
-        <span className="vehicle__meta vref vref--xl block">{meta || "No details yet"}</span>
-        {actions}
-      </div>
-    </div>
+    <Link href={`/cars/${vehicle.slug}`} className="vehicle vehicle--row">
+      <span className="vehicle__img">
+        <Media
+          src={vehicle.cover_image_url ?? undefined}
+          alt={vehicle.name}
+          className="h-full w-full"
+          fallbackClassName="plate-undrawn"
+          role="vehicle"
+        />
+      </span>
+      <span className="vehicle__body min-w-0">
+        <span className="vehicle__name block">{vehicle.name}</span>
+        <span className="vehicle__meta vref vref--lg block">{meta || "View the build page"}</span>
+        {stats && (
+          <span className="vehicle__stats">
+            <span className="vehicle__stat">
+              {stats.updates} update{stats.updates === 1 ? "" : "s"}
+            </span>
+            <span className="vehicle__statdot" aria-hidden="true">
+              ·
+            </span>
+            <span className="vehicle__stat">{stats.followers} following</span>
+          </span>
+        )}
+      </span>
+      <span className="vehicle__go" aria-hidden="true">
+        →
+      </span>
+    </Link>
   );
 }

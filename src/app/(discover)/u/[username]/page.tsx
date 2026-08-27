@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { NarrowColumn, ProfileHeader } from "@/components/ui";
+import { NarrowColumn, ProfileHeader, ratingLine } from "@/components/ui";
 import { ProfileBody } from "@/components/profile/profile-body";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
@@ -98,16 +98,17 @@ export default async function PublicProfilePage({
   });
   const { website, rest } = splitLinks(profile.links);
   const name = profile.display_name ?? `@${profile.username}`;
+  const trustLine = ratingLine(view.rating, view.reviewCount);
 
   return (
     <NarrowColumn>
       <div className="pagehead !pb-4">
         <span className="microlabel">
           Seller profile
-          {view.rating !== null && (
+          {trustLine && (
             <>
               {" · "}
-              {view.rating}★ from {view.reviewCount} review{view.reviewCount === 1 ? "" : "s"}
+              {trustLine}
             </>
           )}
           {view.salesCount > 0 && <> · {view.salesCount} sold</>}

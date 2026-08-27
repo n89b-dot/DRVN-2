@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
+import { TextArea, TextField } from "@/components/ui";
 import type { ActivityBlock } from "@/lib/activity-blocks";
 
 import {
@@ -48,21 +49,26 @@ export function PostEditor({
       <form action={action} className="tile flex flex-col gap-3">
         <input type="hidden" name="post_id" value={postId} />
 
-        <label className="field !mb-0">
-          <span className="microlabel">Title</span>
-          <input
-            name="title"
-            required
-            maxLength={160}
-            defaultValue={title}
-            className="ctl max-w-none"
-          />
-        </label>
+        <TextField
+          id="edit-title"
+          label="Title"
+          name="title"
+          required
+          maxLength={160}
+          defaultValue={title}
+          className="max-w-none"
+          fieldClassName="!mb-0"
+        />
 
-        <label className="field !mb-0">
-          <span className="microlabel">Standfirst — optional</span>
-          <input name="intro" maxLength={2000} defaultValue={intro} className="ctl max-w-none" />
-        </label>
+        <TextField
+          id="edit-intro"
+          label="Standfirst — optional"
+          name="intro"
+          maxLength={2000}
+          defaultValue={intro}
+          className="max-w-none"
+          fieldClassName="!mb-0"
+        />
 
         {isRich ? (
           <div className="field !mb-0">
@@ -72,23 +78,28 @@ export function PostEditor({
             </div>
           </div>
         ) : (
-          <label className="field !mb-0">
-            <span className="microlabel">What happened</span>
-            <textarea name="body" rows={5} defaultValue={plainText} className="ctl !max-w-none" />
-          </label>
+          <TextArea
+            id="edit-body"
+            label="What happened"
+            name="body"
+            rows={5}
+            defaultValue={plainText}
+            className="!max-w-none"
+            fieldClassName="!mb-0"
+          />
         )}
 
-        <label className="field !mb-0">
-          <span className="microlabel">Video — optional</span>
-          <input
-            name="video_url"
-            type="url"
-            defaultValue={videoUrl}
-            placeholder="https://youtube.com/…"
-            className="ctl max-w-none"
-          />
-          <span className="field__hint">YouTube links only.</span>
-        </label>
+        <TextField
+          id="edit-video"
+          label="Video — optional"
+          name="video_url"
+          type="url"
+          defaultValue={videoUrl}
+          placeholder="https://youtube.com/…"
+          className="max-w-none"
+          fieldClassName="!mb-0"
+          hint="YouTube links only."
+        />
 
         {state.error && (
           <p role="alert" aria-live="polite" className="field__err">

@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { markThreadMessagesRead } from "@/features/commerce/actions";
 
-import { StatusChip } from "../../orders/order-pipeline";
+import { StatusChip } from "@/components/commerce";
 import { CheckoutLink, OfferThread, type ThreadMessage } from "./offer-thread";
 
 export async function generateMetadata({

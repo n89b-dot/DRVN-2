@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { TextField } from "@/components/ui";
+
 import { changeEmail, changePassword, type AccountState } from "./account-actions";
 
 function Feedback({ state }: { state: AccountState }) {
@@ -31,20 +33,18 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
   return (
     <div className="grid gap-6">
       <form action={emailAction} className="grid gap-3">
-        <label className="field !mb-0">
-          <span className="field__label">Sign-in email</span>
-          <input
-            name="email"
-            type="email"
-            defaultValue={currentEmail}
-            required
-            autoComplete="email"
-            className="ctl !max-w-none"
-          />
-          <span className="field__hint">
-            We&apos;ll email the new address to confirm before anything changes.
-          </span>
-        </label>
+        <TextField
+          id="account-email"
+          label="Sign-in email"
+          name="email"
+          type="email"
+          defaultValue={currentEmail}
+          required
+          autoComplete="email"
+          className="!max-w-none"
+          fieldClassName="!mb-0"
+          hint="We'll email the new address to confirm before anything changes."
+        />
         <div>
           <button type="submit" disabled={emailPending} className="btn btn--ghost">
             {emailPending ? "Sending…" : "Update email"}
@@ -54,39 +54,39 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
       </form>
 
       <form action={passwordAction} className="grid gap-3">
-        <label className="field !mb-0">
-          <span className="field__label">Current password</span>
-          <input
-            name="current_password"
+        <TextField
+          id="account-current-password"
+          label="Current password"
+          name="current_password"
+          type="password"
+          required
+          autoComplete="current-password"
+          className="!max-w-none"
+          fieldClassName="!mb-0"
+        />
+        <div className="field--row">
+          <TextField
+            id="account-new-password"
+            label="New password"
+            name="password"
             type="password"
             required
-            autoComplete="current-password"
-            className="ctl !max-w-none"
+            minLength={8}
+            autoComplete="new-password"
+            className="!max-w-none"
+            fieldClassName="!mb-0"
           />
-        </label>
-        <div className="field--row">
-          <label className="field !mb-0">
-            <span className="field__label">New password</span>
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              className="ctl !max-w-none"
-            />
-          </label>
-          <label className="field !mb-0">
-            <span className="field__label">Confirm new password</span>
-            <input
-              name="confirm"
-              type="password"
-              required
-              minLength={8}
-              autoComplete="new-password"
-              className="ctl !max-w-none"
-            />
-          </label>
+          <TextField
+            id="account-confirm-password"
+            label="Confirm new password"
+            name="confirm"
+            type="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            className="!max-w-none"
+            fieldClassName="!mb-0"
+          />
         </div>
         <div>
           <button type="submit" disabled={passwordPending} className="btn btn--ghost">

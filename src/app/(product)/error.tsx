@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { Alert } from "@/components/ui";
+
 export default function GroupError({
   error,
   reset,
@@ -27,21 +29,15 @@ export default function GroupError({
 
   return (
     <div className="wrap">
-      <div className="alert" role="alert">
-        <span className="alert__ico" aria-hidden="true">
-          ⚠
-        </span>
-        <h4>Something went wrong</h4>
-        <p>
-          This page failed to load. It&apos;s been logged.
-          {error.digest && (
-            <>
-              {" "}
-              <span className="mono text-dim">ref {error.digest}</span>
-            </>
-          )}
-        </p>
-      </div>
+      <Alert ico="⚠" title="Something went wrong" role="alert">
+        This page failed to load. It&apos;s been logged.
+        {error.digest && (
+          <>
+            {" "}
+            <span className="mono text-dim">ref {error.digest}</span>
+          </>
+        )}
+      </Alert>
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="button" onClick={reset} className="btn btn--live">
           Try again

@@ -9,7 +9,14 @@ import {
   makeOffer,
   type CommerceState,
 } from "@/features/commerce/actions";
-import { AuthIntentDialog, Dialog, PaymentModeNotice, Toast } from "@/components/ui";
+import {
+  AuthIntentDialog,
+  Button,
+  Dialog,
+  PaymentModeNotice,
+  TextField,
+  Toast,
+} from "@/components/ui";
 import type { AuthIntent } from "@/lib/auth-intent";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 
@@ -109,29 +116,24 @@ export function PurchaseActions({
   return (
     <div ref={actionsRef} className="mt-5 flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={runBuyNow}
-          className="btn btn--live flex-1"
-        >
+        <Button variant="live" disabled={pending} onClick={runBuyNow} className="flex-1">
           {pending ? "Processing…" : "Buy now"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={() => guard("offer", () => setOfferOpen(true))}
-          className="btn btn--ghost flex-1"
+          className="flex-1"
         >
           Make an offer
-        </button>
+        </Button>
       </div>
       {cartState?.ok ? (
         <a href="/cart" className="btn btn--ghost">
           In cart ✓ — view cart
         </a>
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           disabled={pending || cartPending}
           onClick={() =>
             startCartTransition(async () => {
@@ -143,10 +145,9 @@ export function PurchaseActions({
               if (result.ok) router.refresh();
             })
           }
-          className="btn btn--ghost"
         >
           {cartPending ? "Adding…" : "Add to cart"}
-        </button>
+        </Button>
       )}
       {cartState?.error && (
         <p role="alert" aria-live="polite" className="field__err">
@@ -172,28 +173,22 @@ export function PurchaseActions({
           <span className="microlabel microlabel--ink">Make an offer</span>
           <form action={offerAction} className="mt-4 flex flex-col gap-3">
             <input type="hidden" name="listing_id" value={listingId} />
-            {/* Wire the field-state classes so a rejected amount paints the
-                control itself (tinted border), not just the error line. */}
-            <div className={`field ${offerState.error ? "is-invalid" : offerState.ok ? "is-ok" : ""}`}>
-              <label htmlFor={`${idBase}-amount`} className="microlabel">
-                Your offer
-              </label>
-              <div className="ctl__prefix">
-                <span aria-hidden="true">$</span>
-                <input
-                  id={`${idBase}-amount`}
-                  name="amount"
-                  required
-                  inputMode="decimal"
-                  placeholder="0"
-                  className="ctl"
-                />
-              </div>
-              <span className="field__hint">
-                The seller can accept, counter once, or let it lapse. Offers expire after 72
-                hours.
-              </span>
-            </div>
+            {/* TextField wires the field-state classes so a rejected amount
+                paints the control itself (tinted border), not just the error
+                line — and `.field.is-ok .field__ok` shows the success line
+                without the old inline display override. */}
+            <TextField
+              id={`${idBase}-amount`}
+              label="Your offer"
+              prefix="$"
+              name="amount"
+              required
+              inputMode="decimal"
+              placeholder="0"
+              hint="The seller can accept, counter once, or let it lapse. Offers expire after 72 hours."
+              error={offerState.error}
+              ok={offerState.ok}
+            />
             <div className="field">
               <label htmlFor={`${idBase}-message`} className="microlabel">
                 Message — optional
@@ -206,19 +201,13 @@ export function PurchaseActions({
                 className="ctl"
               />
             </div>
-            {offerState.error && (
-              <p role="alert" aria-live="polite" className="field__err">
-                {offerState.error}
-              </p>
-            )}
-            {offerState.ok && <p className="field__ok" style={{ display: "block" }}>{offerState.ok}</p>}
             <div className="sheet__actions">
-              <button type="submit" disabled={offerPending} className="btn btn--live flex-1">
+              <Button type="submit" variant="live" disabled={offerPending} className="flex-1">
                 {offerPending ? "Sending…" : "Send offer"}
-              </button>
-              <button type="button" onClick={() => setOfferOpen(false)} className="btn btn--ghost">
+              </Button>
+              <Button variant="ghost" onClick={() => setOfferOpen(false)}>
                 Close
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -239,21 +228,16 @@ export function PurchaseActions({
             {shippingCents > 0 ? `+ ${formatPrice(shippingCents)} ship` : "Ship incl."}
           </span>
         </span>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={runBuyNow}
-          className="btn btn--live min-w-0 flex-1"
-        >
+        <Button variant="live" disabled={pending} onClick={runBuyNow} className="min-w-0 flex-1">
           {pending ? "Processing…" : "Buy now"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={() => guard("offer", () => setOfferOpen(true))}
-          className="btn btn--ghost min-w-0 flex-1"
+          className="min-w-0 flex-1"
         >
           Offer
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
+import { Alert } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
@@ -71,13 +72,9 @@ export default async function EditListingPage({
       </Rv>
 
       {saved === "draft" && (
-        <div className="alert alert--ok mb-6">
-          <span className="alert__ico" aria-hidden="true">
-            ✓
-          </span>
-          <h4>Draft saved</h4>
-          <p>Nothing is public yet. Publish it from here or from your listings.</p>
-        </div>
+        <Alert tone="ok" ico="✓" title="Draft saved" className="mb-6">
+          Nothing is public yet. Publish it from here or from your listings.
+        </Alert>
       )}
 
       {locked ? (

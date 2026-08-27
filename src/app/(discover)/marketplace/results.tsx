@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ListingCard, Mosaic } from "@/components/ui";
+import { EmptyState, ListingCard, Mosaic, Pagination } from "@/components/ui";
 import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import type { ListingPage } from "@/lib/marketplace/query";
 import { withParams } from "@/lib/url-params";
@@ -52,18 +52,20 @@ export function MarketplaceResults({
 
   if (results.length === 0) {
     return (
-      <div className="undrawn undrawn--hero">
-        <span className="undrawn__mark" aria-hidden="true">
-          ⌕
-        </span>
-        <h3>{emptyTitle}</h3>
-        <p>{emptyBody}</p>
-        {hasFilters && (
-          <Link href={basePath} className="btn btn--ghost">
-            Clear the filters
-          </Link>
-        )}
-      </div>
+      <EmptyState
+        mark="⌕"
+        title={emptyTitle}
+        className="undrawn--hero"
+        action={
+          hasFilters && (
+            <Link href={basePath} className="btn btn--ghost">
+              Clear the filters
+            </Link>
+          )
+        }
+      >
+        {emptyBody}
+      </EmptyState>
     );
   }
 
@@ -119,35 +121,16 @@ export function MarketplaceResults({
         })}
       </Mosaic>
 
-      {(current > 1 || hasMore) && (
-        <nav className="mt-8 flex items-center justify-between gap-3" aria-label="Pagination">
-          {current > 1 ? (
-            <Link
-              href={withParams(basePath, params, {
-                page: current - 1 === 1 ? undefined : String(current - 1),
-              })}
-              className="btn btn--ghost"
-              rel="prev"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="microlabel">Page {current}</span>
-          {hasMore ? (
-            <Link
-              href={withParams(basePath, params, { page: String(current + 1) })}
-              className="btn btn--ghost"
-              rel="next"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pagination
+        page={current}
+        hasMore={hasMore}
+        hrefFor={(p) =>
+          withParams(basePath, params, {
+            page: p === 1 ? undefined : String(p),
+          })
+        }
+        className="!mt-8"
+      />
     </>
   );
 }

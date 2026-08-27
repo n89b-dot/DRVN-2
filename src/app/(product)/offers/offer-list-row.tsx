@@ -4,7 +4,7 @@ import { Media } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 
-import { StatusChip } from "../orders/order-pipeline";
+import { StatusChip } from "@/components/commerce";
 
 export type OfferListItem = {
   id: string;

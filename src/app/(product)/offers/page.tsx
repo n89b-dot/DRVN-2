@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav } from "@/components/ui";
+import { Foot, MarketplaceNav, Pagination, TileHead } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -375,17 +375,19 @@ export default async function OffersPage({
         </div>
       ) : items.length > 0 ? (
         <Rv className="tile">
-          <div className="tile__head">
-            <span className="microlabel microlabel--ink">
-              {total === 1 ? "1 offer" : `${total} offers`}
-              {total > PAGE_SIZE && (
-                <>
-                  {" · "}
-                  showing {firstOnPage}–{lastOnPage}
-                </>
-              )}
-            </span>
-          </div>
+          <TileHead
+            label={
+              <>
+                {total === 1 ? "1 offer" : `${total} offers`}
+                {total > PAGE_SIZE && (
+                  <>
+                    {" · "}
+                    showing {firstOnPage}–{lastOnPage}
+                  </>
+                )}
+              </>
+            }
+          />
           <div className="rowlist">
             {items.map((offer) => (
               <OfferListRow
@@ -427,38 +429,16 @@ export default async function OffersPage({
         </Rv>
       )}
 
-      {(page > 1 || hasMore) && (
-        <nav
-          className="mt-8 flex items-center justify-between gap-3"
-          aria-label="Pagination"
-        >
-          {page > 1 ? (
-            <Link
-              href={withParams("/offers", params, {
-                page: page - 1 === 1 ? undefined : String(page - 1),
-              })}
-              className="btn btn--ghost"
-              rel="prev"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="microlabel">Page {page}</span>
-          {hasMore ? (
-            <Link
-              href={withParams("/offers", params, { page: String(page + 1) })}
-              className="btn btn--ghost"
-              rel="next"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pagination
+        page={page}
+        hasMore={hasMore}
+        hrefFor={(p) =>
+          withParams("/offers", params, {
+            page: p === 1 ? undefined : String(p),
+          })
+        }
+        className="!mt-8"
+      />
 
       {/* The expiry rule belongs here — this is the offers surface. It used
           to be footed on /orders too, where it explained nothing. */}

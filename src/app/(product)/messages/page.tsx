@@ -2,7 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Avatar, Finder, Foot, Media, NarrowColumn, Pagination } from "@/components/ui";
+import {
+  Avatar,
+  EmptyState,
+  Finder,
+  Foot,
+  Media,
+  NarrowColumn,
+  ObjectRow,
+  Pagination,
+} from "@/components/ui";
 import { initialsOf } from "@/lib/format";
 import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
@@ -404,14 +413,34 @@ export default async function MessagesPage({
         {rows.length > 0 ? (
           <div className="rowlist mt-2">
             {rows.map((row) => (
-              <Link key={row.key} href={row.href} className="order">
-                {row.counterpartyAvatar ? (
-                  <span className="h-11 w-11 shrink-0 overflow-hidden rounded-ctl bg-img-fallback">
-                    <Media src={row.counterpartyAvatar} alt={row.counterpartyName} className="h-full w-full" role="avatar" />
-                  </span>
-                ) : (
-                  <Avatar size="sm" initials={initialsOf(row.counterpartyName)} />
-                )}
+              <ObjectRow
+                key={row.key}
+                href={row.href}
+                leading={
+                  row.counterpartyAvatar ? (
+                    <span className="h-11 w-11 shrink-0 overflow-hidden rounded-ctl bg-img-fallback">
+                      <Media src={row.counterpartyAvatar} alt={row.counterpartyName} className="h-full w-full" role="avatar" />
+                    </span>
+                  ) : (
+                    <Avatar size="sm" initials={initialsOf(row.counterpartyName)} />
+                  )
+                }
+                actions={
+                  <>
+                    <span className="microlabel">
+                      {row.lastAt
+                        ? new Date(row.lastAt).toLocaleString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </span>
+                    {row.unread > 0 && <span className="chip chip--live">{row.unread} new</span>}
+                  </>
+                }
+              >
                 <span className="min-w-0">
                   <span className={row.unread > 0 ? "order__name block truncate font-medium" : "order__name block truncate"}>
                     {row.counterpartyName}
@@ -425,36 +454,17 @@ export default async function MessagesPage({
                     {row.listingTitle} — {row.preview}
                   </span>
                 </span>
-                <span className="order__actions">
-                  <span className="microlabel">
-                    {row.lastAt
-                      ? new Date(row.lastAt).toLocaleString(undefined, {
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
-                  </span>
-                  {row.unread > 0 && <span className="chip chip--live">{row.unread} new</span>}
-                </span>
-              </Link>
+              </ObjectRow>
             ))}
           </div>
         ) : (
-          <div className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ✎
-            </span>
-            <h3>{query ? "No matches" : "Nothing here yet"}</h3>
-            <p>
-              {query
-                ? search?.scope === "page"
-                  ? "Try another page, or clear the search to see every recent conversation."
-                  : "Nothing in your conversations matches that — try a different word, or clear the search."
-                : "Questions on your listings and chats about your orders will collect here — reply from either place and it shows up in this list."}
-            </p>
-          </div>
+          <EmptyState mark="✎" title={query ? "No matches" : "Nothing here yet"}>
+            {query
+              ? search?.scope === "page"
+                ? "Try another page, or clear the search to see every recent conversation."
+                : "Nothing in your conversations matches that — try a different word, or clear the search."
+              : "Questions on your listings and chats about your orders will collect here — reply from either place and it shows up in this list."}
+          </EmptyState>
         )}
 
         {!query && (

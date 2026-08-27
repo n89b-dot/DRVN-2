@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 
+import { ListingRow } from "@/components/commerce";
 import {
+  EmptyState,
   HorizontalGallery,
   LinkedTitle,
+  RatingStars,
   SectionHeading,
   SheetTabs,
   TimelineRow,
@@ -64,36 +67,16 @@ function ActivityRows({ view }: { view: ProfileView }) {
 function ListingRows({ view, basePath }: { view: ProfileView; basePath: string }) {
   if (view.listings.length === 0) {
     return (
-      <div className="undrawn mt-5">
-        <span className="undrawn__mark" aria-hidden="true">
-          ⌕
-        </span>
-        <h3>Nothing for sale right now</h3>
-        <p>Parts listed off these cars show up here.</p>
-      </div>
+      <EmptyState mark="⌕" title="Nothing for sale right now" className="mt-5">
+        Parts listed off these cars show up here.
+      </EmptyState>
     );
   }
 
   return (
     <div className="rowlist mt-4">
       {view.listings.map((listing) => (
-        <Link key={listing.id} href={`/listings/${listing.id}`} className="order">
-          <span className="order__img">
-            {listing.cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={listing.cover} alt={listing.title} className="h-full w-full object-cover" />
-            ) : null}
-          </span>
-          <span className="min-w-0">
-            <span className="order__name block truncate">{listing.title}</span>
-            <span className="order__meta block">{listing.price}</span>
-          </span>
-          <span className="order__actions">
-            <span className={`chip ${listing.status === "active" ? "chip--live" : "chip--spent"}`}>
-              {listing.status === "active" ? "Live" : listing.status}
-            </span>
-          </span>
-        </Link>
+        <ListingRow key={listing.id} listing={listing} />
       ))}
       {view.listingsHasMore && (
         <div className="pt-2">
@@ -113,13 +96,9 @@ function ListingRows({ view, basePath }: { view: ProfileView; basePath: string }
 function ReviewRows({ view, basePath }: { view: ProfileView; basePath: string }) {
   if (view.reviews.length === 0) {
     return (
-      <div className="undrawn mt-5">
-        <span className="undrawn__mark" aria-hidden="true">
-          ✎
-        </span>
-        <h3>No reviews yet</h3>
-        <p>Reviews appear once a sale completes and the buyer confirms delivery.</p>
-      </div>
+      <EmptyState mark="✎" title="No reviews yet" className="mt-5">
+        Reviews appear once a sale completes and the buyer confirms delivery.
+      </EmptyState>
     );
   }
 
@@ -128,10 +107,7 @@ function ReviewRows({ view, basePath }: { view: ProfileView; basePath: string })
       {view.reviews.map((review) => (
         <article key={review.id} className="review">
           <div className="review__head">
-            <span className="review__stars" aria-label={`${review.rating} out of 5`}>
-              {"★".repeat(review.rating)}
-              <span className="text-dim">{"★".repeat(5 - review.rating)}</span>
-            </span>
+            <RatingStars rating={review.rating} />
             <span className="microlabel">
               {review.reviewerUsername ? (
                 <Link href={`/u/${review.reviewerUsername}`} className="hover:text-live">

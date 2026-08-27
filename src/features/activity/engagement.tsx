@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useActionState, useOptimistic, useRef, useState, useTransition } from "react";
 
 
+import { Message } from "@/components/ui";
+
 import { addComment, toggleReaction, type CommentState } from "./actions";
 import { ACTIVITY_EMOJIS } from "./constants";
 
@@ -73,12 +75,17 @@ export function ActivityEngagement({
       {comments.length > 0 && (
         <div className="mb-6 grid gap-4">
           {comments.map((comment) => (
-            <div key={comment.id} className="msg !py-2">
-              <span className="msg__who">
-                {comment.authorName} <span className="normal-case tracking-normal">· {comment.date}</span>
-              </span>
-              <p className="msg__body">{comment.body}</p>
-            </div>
+            <Message
+              key={comment.id}
+              className="!py-2"
+              who={
+                <>
+                  {comment.authorName}{" "}
+                  <span className="normal-case tracking-normal">· {comment.date}</span>
+                </>
+              }
+              body={comment.body}
+            />
           ))}
         </div>
       )}

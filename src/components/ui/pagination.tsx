@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { cx } from "@/lib/format";
+
 /**
  * The pagination idiom that was hand-rolled identically on Saved, Messages,
  * Notifications and Explore: ghost prev/next with a mono page marker between,
@@ -13,6 +15,7 @@ export function Pagination({
   hasMore,
   hrefFor,
   label = "Pagination",
+  className,
 }: {
   page: number;
   hasMore: boolean;
@@ -20,11 +23,16 @@ export function Pagination({
    *  page override (page 1 should drop the param entirely). */
   hrefFor: (page: number) => string;
   label?: string;
+  /** Spacing overrides only (e.g. `!mt-8`, `!mb-8`) — never restyle the links. */
+  className?: string;
 }) {
   if (page <= 1 && !hasMore) return null;
 
   return (
-    <nav className="mt-6 flex items-center justify-between gap-3" aria-label={label}>
+    <nav
+      className={cx("mt-6 flex items-center justify-between gap-3", className)}
+      aria-label={label}
+    >
       {page > 1 ? (
         <Link href={hrefFor(page - 1)} className="btn btn--ghost" rel="prev">
           ← Previous

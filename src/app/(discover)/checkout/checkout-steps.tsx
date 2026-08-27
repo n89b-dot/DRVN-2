@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
+import { Button, Select, Stepper, TextField } from "@/components/ui";
 import { checkoutCart, type CommerceState } from "@/features/commerce/actions";
 import type { SavedCard } from "@/lib/payments/customers";
 import { COUNTRIES, DEFAULT_COUNTRY_CODE, countryLabel } from "@/lib/geo/countries";
@@ -110,20 +111,17 @@ export function CheckoutSteps({
       {/* The system's documented step recipe (auto-numbered 01/02, live
           numeral on the current step) — checkout previously hand-rolled a
           dot-separated microlabel list while `.steps` had zero call sites. */}
-      <ol className="steps list-none p-0 m-0" aria-label="Checkout progress">
-        <li
-          className={`step ${paymentStep ? "is-done" : "is-now"}`}
-          aria-current={paymentStep ? undefined : "step"}
-        >
-          <span className="step__n" aria-hidden="true" />
-          <span className="step__t">Shipping</span>
-          {paymentStep && <span className="chip chip--ok">Done</span>}
-        </li>
-        <li className={`step ${paymentStep ? "is-now" : ""}`} aria-current={paymentStep ? "step" : undefined}>
-          <span className="step__n" aria-hidden="true" />
-          <span className="step__t">Payment</span>
-        </li>
-      </ol>
+      <Stepper
+        label="Checkout progress"
+        steps={[
+          {
+            label: "Shipping",
+            state: paymentStep ? "done" : "now",
+            end: paymentStep ? <span className="chip chip--ok">Done</span> : undefined,
+          },
+          { label: "Payment", state: paymentStep ? "now" : "todo" },
+        ]}
+      />
 
       {paymentStep ? (
         <>
@@ -264,29 +262,34 @@ export function CheckoutSteps({
           {needsEmail && (
             <fieldset className="grid gap-3 border-0 p-0">
               <legend className="microlabel microlabel--ink mb-1">Where to send it</legend>
-              <label className="field">
-                <span className="field__label">Email</span>
-                <input
-                  name="email"
-                  type="email"
-                  className="ctl !max-w-none"
-                  required
-                  autoComplete="email"
-                  placeholder="you@somewhere"
-                  defaultValue={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-                <span className="field__hint">
-                  Your receipt, dispatch updates and a link to track the order. No password
-                  needed — and no account to create first.{" "}
-                  <Link href={`/login?next=${encodeURIComponent("/checkout")}`} className="jumplink">
-                    Already have an account?
-                  </Link>
-                </span>
-              </label>
+              <TextField
+                id="checkout-email"
+                label="Email"
+                name="email"
+                type="email"
+                className="!max-w-none"
+                required
+                autoComplete="email"
+                placeholder="you@somewhere"
+                defaultValue={email}
+                onChange={(event) => setEmail(event.target.value)}
+                hint={
+                  <>
+                    Your receipt, dispatch updates and a link to track the order. No password
+                    needed — and no account to create first.{" "}
+                    <Link href={`/login?next=${encodeURIComponent("/checkout")}`} className="jumplink">
+                      Already have an account?
+                    </Link>
+                  </>
+                }
+              />
             </fieldset>
           )}
 
+          {/* Kept manual: the shared Checkbox renders its label at text-body
+              inside a min-h-11 block target — this one is deliberately a
+              compact text-micro inline row, so converting would change the
+              rendered label size and hit-target. */}
           {allowsCollection && (
             <label className="flex items-center gap-2 text-micro">
               <input
@@ -312,115 +315,105 @@ export function CheckoutSteps({
               {collection ? "Who's collecting" : "Where it ships"}
             </legend>
 
-            <label className="field">
-              <span className="field__label">Name</span>
-              <input
-                name="ship_name"
-                className="ctl !max-w-none"
-                required
-                autoComplete="name"
-                defaultValue={address.name}
-              />
-            </label>
+            <TextField
+              id="checkout-ship-name"
+              label="Name"
+              name="ship_name"
+              className="!max-w-none"
+              required
+              autoComplete="name"
+              defaultValue={address.name}
+            />
 
             {!collection && (
               <>
-                <label className="field">
-                  <span className="field__label">Address</span>
-                  <input
-                    name="ship_line1"
-                    className="ctl !max-w-none"
-                    required
-                    autoComplete="address-line1"
-                    defaultValue={address.line1}
-                  />
-                </label>
-                <label className="field">
-                  <span className="field__label">Address line 2 (optional)</span>
-                  <input
-                    name="ship_line2"
-                    className="ctl !max-w-none"
-                    autoComplete="address-line2"
-                    defaultValue={address.line2}
-                  />
-                </label>
+                <TextField
+                  id="checkout-ship-line1"
+                  label="Address"
+                  name="ship_line1"
+                  className="!max-w-none"
+                  required
+                  autoComplete="address-line1"
+                  defaultValue={address.line1}
+                />
+                <TextField
+                  id="checkout-ship-line2"
+                  label="Address line 2 (optional)"
+                  name="ship_line2"
+                  className="!max-w-none"
+                  autoComplete="address-line2"
+                  defaultValue={address.line2}
+                />
                 <div className="field--row">
-                  <label className="field">
-                    <span className="field__label">City</span>
-                    <input
-                      name="ship_city"
-                      className="ctl !max-w-none"
-                      required
-                      autoComplete="address-level2"
-                      defaultValue={address.city}
-                    />
-                  </label>
-                  <label className="field">
-                    <span className="field__label">Postcode</span>
-                    <input
-                      name="ship_postcode"
-                      className="ctl !max-w-none"
-                      required
-                      autoComplete="postal-code"
-                      defaultValue={address.postcode}
-                    />
-                  </label>
+                  <TextField
+                    id="checkout-ship-city"
+                    label="City"
+                    name="ship_city"
+                    className="!max-w-none"
+                    required
+                    autoComplete="address-level2"
+                    defaultValue={address.city}
+                  />
+                  <TextField
+                    id="checkout-ship-postcode"
+                    label="Postcode"
+                    name="ship_postcode"
+                    className="!max-w-none"
+                    required
+                    autoComplete="postal-code"
+                    defaultValue={address.postcode}
+                  />
                 </div>
                 <div className="field--row">
-                  <label className="field">
-                    <span className="field__label">Country</span>
-                    <select
-                      name="ship_country"
-                      className="ctl !max-w-none"
-                      required
-                      autoComplete="country"
-                      value={address.country}
-                      onChange={(event) =>
-                        setAddress((prev) => ({ ...prev, country: event.target.value }))
-                      }
-                    >
-                      {COUNTRIES.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span className="field__label">
-                      State / province / region{stateRequired ? "" : " (optional)"}
-                    </span>
-                    <input
-                      name="ship_state"
-                      className="ctl !max-w-none"
-                      required={stateRequired}
-                      autoComplete="address-level1"
-                      defaultValue={address.state}
-                    />
-                    <span className="field__hint">
-                      {stateRequired
+                  <Select
+                    id="checkout-ship-country"
+                    label="Country"
+                    name="ship_country"
+                    className="!max-w-none"
+                    required
+                    autoComplete="country"
+                    value={address.country}
+                    onChange={(event) =>
+                      setAddress((prev) => ({ ...prev, country: event.target.value }))
+                    }
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <TextField
+                    id="checkout-ship-state"
+                    label={`State / province / region${stateRequired ? "" : " (optional)"}`}
+                    name="ship_state"
+                    className="!max-w-none"
+                    required={stateRequired}
+                    autoComplete="address-level1"
+                    defaultValue={address.state}
+                    hint={
+                      stateRequired
                         ? "Required for delivery to this country."
-                        : "Add it if your address uses one."}
-                    </span>
-                  </label>
+                        : "Add it if your address uses one."
+                    }
+                  />
                 </div>
               </>
             )}
 
-            <label className="field">
-              <span className="field__label">Phone (optional)</span>
-              <input
-                name="ship_phone"
-                className="ctl !max-w-none"
-                autoComplete="tel"
-                defaultValue={address.phone}
-              />
-            </label>
+            <TextField
+              id="checkout-ship-phone"
+              label="Phone (optional)"
+              name="ship_phone"
+              className="!max-w-none"
+              autoComplete="tel"
+              defaultValue={address.phone}
+            />
           </fieldset>
 
-          <button type="submit" disabled={pending} className="btn btn--live w-full">
+          <Button type="submit" variant="live" disabled={pending} className="w-full">
             {pending ? "Saving…" : "Continue to payment"}
-          </button>
+          </Button>
 
           <p
             id={errorId}

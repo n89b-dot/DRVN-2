@@ -1,7 +1,17 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { FilterGroup, FilterLink, Foot, ListingCard, Mosaic, VehicleCard } from "@/components/ui";
+import {
+  EmptyState,
+  FilterGroup,
+  FilterLink,
+  Foot,
+  ListingCard,
+  Mosaic,
+  Pagination,
+  TileHead,
+  VehicleCard,
+} from "@/components/ui";
 import { FeedList } from "@/components/ui/feed-list";
 import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import {
@@ -167,19 +177,20 @@ export default async function HomePage({
           share with one ask-row per car, not with padding. */}
       <section className="deck deck--two">
         <Rv className="tile" stagger={0}>
-          <div className="tile__head">
-            <span className="microlabel microlabel--ink">Your garage</span>
-            <span className="chip">
-              {carCount ? `${carCount} car${carCount === 1 ? "" : "s"}` : "Empty"}
-            </span>
-          </div>
+          <TileHead
+            label="Your garage"
+            end={
+              <span className="chip">
+                {carCount ? `${carCount} car${carCount === 1 ? "" : "s"}` : "Empty"}
+              </span>
+            }
+          />
           {shownCars.length > 0 ? (
             <div className="vlist mt-2">
               {shownCars.map((car) => (
                 <VehicleCard
                   key={car.id}
                   vehicle={car}
-                  variant="row"
                   stats={{
                     updates: updatesBy.get(car.id) ?? 0,
                     followers: followersBy.get(car.id) ?? 0,
@@ -188,19 +199,18 @@ export default async function HomePage({
               ))}
             </div>
           ) : (
-            <div className="undrawn">
-              <span className="undrawn__mark" aria-hidden="true">
-                +
-              </span>
-              <h3>Your car goes here</h3>
-              <p>
-                Add the car you&apos;re building. Photos, the full mod list, and every part you
-                sell off it all live on one build page.
-              </p>
-              <Link href="/garage" className="btn btn--live">
-                Add your car
-              </Link>
-            </div>
+            <EmptyState
+              mark="+"
+              title="Your car goes here"
+              action={
+                <Link href="/garage" className="btn btn--live">
+                  Add your car
+                </Link>
+              }
+            >
+              Add the car you&apos;re building. Photos, the full mod list, and every part you
+              sell off it all live on one build page.
+            </EmptyState>
           )}
           {shownCars.length > 0 && (
             <div className="mt-3">
@@ -216,9 +226,7 @@ export default async function HomePage({
         </Rv>
 
         <Rv className="tile tile--deep" stagger={1}>
-          <div className="tile__head">
-            <span className="microlabel microlabel--ink">Post an update</span>
-          </div>
+          <TileHead label="Post an update" />
           {/* Just the composer — the stat dims that used to pad this tile
               ("cars in your garage" beside the garage card that lists them)
               said nothing the page didn't already say. */}
@@ -240,9 +248,7 @@ export default async function HomePage({
       {recommended.length > 0 && (
         <section className="deck">
           <Rv>
-            <div className="tile__head">
-              <span className="microlabel microlabel--ink">Parts that fit your garage</span>
-            </div>
+            <TileHead label="Parts that fit your garage" />
             <Mosaic commerce label="Parts that fit your garage">
               {recommended.map((listing) => (
                 <ListingCard
@@ -265,9 +271,7 @@ export default async function HomePage({
       {(followed.items.length > 0 || page > 1) && (
         <section className="deck">
           <Rv className="tile">
-            <div className="tile__head">
-              <span className="microlabel microlabel--ink">From builds you follow</span>
-            </div>
+            <TileHead label="From builds you follow" />
             <FeedList items={followed.items} />
           </Rv>
         </section>
@@ -307,42 +311,30 @@ export default async function HomePage({
             {discoveryItems.length > 0 ? (
               <FeedList items={discoveryItems} />
             ) : (
-              <div className="undrawn">
-                <span className="undrawn__mark" aria-hidden="true">
-                  ✎
-                </span>
-                <h3>{DISCOVERY_EMPTY[discover].title}</h3>
-                <p>{DISCOVERY_EMPTY[discover].body}</p>
-                {discover === "parts" && (
-                  <Link href="/marketplace" className="btn btn--ghost">
-                    Browse the marketplace
-                  </Link>
-                )}
-              </div>
+              <EmptyState
+                mark="✎"
+                title={DISCOVERY_EMPTY[discover].title}
+                action={
+                  discover === "parts" && (
+                    <Link href="/marketplace" className="btn btn--ghost">
+                      Browse the marketplace
+                    </Link>
+                  )
+                }
+              >
+                {DISCOVERY_EMPTY[discover].body}
+              </EmptyState>
             )}
           </Rv>
         </section>
       )}
 
-      {(page > 1 || followed.hasMore) && (
-        <nav className="mb-8 flex items-center justify-between gap-3" aria-label="Pagination">
-          {page > 1 ? (
-            <Link href={page - 1 === 1 ? "/home" : `/home?page=${page - 1}`} className="btn btn--ghost" rel="prev">
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="microlabel">Page {page}</span>
-          {followed.hasMore ? (
-            <Link href={`/home?page=${page + 1}`} className="btn btn--ghost" rel="next">
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pagination
+        page={page}
+        hasMore={followed.hasMore}
+        hrefFor={(p) => (p === 1 ? "/home" : `/home?page=${p}`)}
+        className="!mt-0 mb-8"
+      />
 
       <Foot left="DRVN — home" right={<Link href="/explore">See everything on Explore →</Link>} />
     </div>

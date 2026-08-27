@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav } from "@/components/ui";
+import { Alert, EmptyState, Foot, MarketplaceNav, Pagination, TileHead } from "@/components/ui";
 import type {
   SellerListingStat,
   SellerRegisterTally,
@@ -327,13 +327,9 @@ export default async function SellerListingsPage({
       </div>
 
       {deleted && (
-        <div className="alert alert--ok mb-6">
-          <span className="alert__ico" aria-hidden="true">
-            ✓
-          </span>
-          <h4>Listing deleted</h4>
-          <p>Any past orders for it keep their record.</p>
-        </div>
+        <Alert tone="ok" ico="✓" title="Listing deleted" className="mb-6">
+          Any past orders for it keep their record.
+        </Alert>
       )}
 
       <div
@@ -374,27 +370,27 @@ export default async function SellerListingsPage({
       </div>
 
       {rows.length === 0 ? (
-        <div className="undrawn undrawn--hero">
-          <span className="undrawn__mark" aria-hidden="true">
-            ✎
-          </span>
-          <h3>
-            {register === "all"
+        <EmptyState
+          className="undrawn--hero"
+          mark="✎"
+          title={
+            register === "all"
               ? "Nothing listed yet"
-              : `Nothing ${EMPTY_REGISTER_PHRASE[register]}`}
-          </h3>
-          <p>
-            {register === "all"
-              ? "List your first part and it appears here with its views, watchers and offers."
-              : "No listings match this filter right now."}
-          </p>
-          <Link
-            href={register === "all" ? "/sell" : "/listings"}
-            className="btn btn--live"
-          >
-            {register === "all" ? "List a part" : "Show all listings"}
-          </Link>
-        </div>
+              : `Nothing ${EMPTY_REGISTER_PHRASE[register]}`
+          }
+          action={
+            <Link
+              href={register === "all" ? "/sell" : "/listings"}
+              className="btn btn--live"
+            >
+              {register === "all" ? "List a part" : "Show all listings"}
+            </Link>
+          }
+        >
+          {register === "all"
+            ? "List your first part and it appears here with its views, watchers and offers."
+            : "No listings match this filter right now."}
+        </EmptyState>
       ) : (
         <section className="deck">
           {/* Plain tile, deliberately outside the reveal system: sorting and
@@ -402,17 +398,19 @@ export default async function SellerListingsPage({
               entrance spring each time read as the page dropping and
               re-settling. Working surfaces hold still. */}
           <div className="tile">
-            <div className="tile__head">
-              <span className="microlabel microlabel--ink">
-                {total === 1 ? "1 listing" : `${total} listings`}
-                {total > PAGE_SIZE && (
-                  <>
-                    {" · "}
-                    showing {pageFrom + 1}–{pageFrom + rows.length}
-                  </>
-                )}
-              </span>
-            </div>
+            <TileHead
+              label={
+                <>
+                  {total === 1 ? "1 listing" : `${total} listings`}
+                  {total > PAGE_SIZE && (
+                    <>
+                      {" · "}
+                      showing {pageFrom + 1}–{pageFrom + rows.length}
+                    </>
+                  )}
+                </>
+              }
+            />
             {/* Sort lives in the column headers, like every product table
                 that works — not in a second row repeating the same words. */}
             <ListingsLedger
@@ -425,36 +423,11 @@ export default async function SellerListingsPage({
               }))}
             />
 
-            {(clampedPage > 1 || hasMore) && (
-              <nav
-                className="mt-6 flex items-center justify-between gap-3"
-                aria-label="Pagination"
-              >
-                {clampedPage > 1 ? (
-                  <Link
-                    href={href({ page: clampedPage - 1 })}
-                    className="btn btn--ghost"
-                    rel="prev"
-                  >
-                    ← Previous
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                <span className="microlabel">Page {clampedPage}</span>
-                {hasMore ? (
-                  <Link
-                    href={href({ page: clampedPage + 1 })}
-                    className="btn btn--ghost"
-                    rel="next"
-                  >
-                    Next →
-                  </Link>
-                ) : (
-                  <span />
-                )}
-              </nav>
-            )}
+            <Pagination
+              page={clampedPage}
+              hasMore={hasMore}
+              hrefFor={(p) => href({ page: p })}
+            />
           </div>
         </section>
       )}

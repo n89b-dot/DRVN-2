@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { Alert, Button, TextField } from "@/components/ui";
+
 import { login, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
 
@@ -24,58 +26,44 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
       </p>
 
       {message === "check-email" && (
-        <div className="alert alert--ok mt-5">
-          <span className="alert__ico" aria-hidden="true">
-            ✓
-          </span>
-          <h4>Confirmation sent</h4>
-          <p>Check your email to confirm your account, then sign in.</p>
-        </div>
+        <Alert tone="ok" ico="✓" className="mt-5" title="Confirmation sent">
+          Check your email to confirm your account, then sign in.
+        </Alert>
       )}
 
       <form action={action} className="mt-6">
         <input type="hidden" name="next" value={next ?? "/home"} />
-        <div className="field">
-          <label htmlFor="login-email" className="microlabel">
-            Email
-          </label>
-          <input
-            id="login-email"
-            name="email"
-            type="email"
-            required
-            placeholder="you@somewhere"
-            autoComplete="email"
-            className="ctl max-w-none"
-          />
-        </div>
-        <div className={`field ${state.error ? "is-invalid" : ""}`}>
-          <span className="microlabel flex items-baseline justify-between gap-3">
-            <label htmlFor="login-password">Password</label>
-            {/* The only route into account recovery — the reset actions existed
-                with nothing linking to them. */}
+        <TextField
+          id="login-email"
+          label="Email"
+          name="email"
+          type="email"
+          required
+          placeholder="you@somewhere"
+          autoComplete="email"
+          className="max-w-none"
+        />
+        <TextField
+          id="login-password"
+          label="Password"
+          labelEnd={
+            /* The only route into account recovery — the reset actions existed
+               with nothing linking to them. */
             <Link href="/login/forgot" className="jumplink">
               Forgot?
             </Link>
-          </span>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            className="ctl max-w-none"
-          />
-          <span className="field__hint">Case matters. Nothing else does.</span>
-          {state.error && (
-            <span role="alert" aria-live="polite" className="field__err">
-              {state.error}
-            </span>
-          )}
-        </div>
-        <button type="submit" disabled={pending} className="btn btn--live w-full">
+          }
+          name="password"
+          type="password"
+          required
+          autoComplete="current-password"
+          className="max-w-none"
+          hint="Case matters. Nothing else does."
+          error={state.error}
+        />
+        <Button type="submit" variant="live" disabled={pending} className="w-full">
           {pending ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
 
       <div className="authswap">

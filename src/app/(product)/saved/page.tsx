@@ -13,7 +13,7 @@ import {
   Foot,
   ListingCard,
   Mosaic,
-  Media,
+  ObjectRow,
   Pagination,
 } from "@/components/ui";
 import { removeFollow, removeSave } from "@/features/social/actions";
@@ -219,10 +219,19 @@ export default async function SavedPage({
   const hasMoreListings = tab === "saved" && (listingsTotal ?? 0) > from + PAGE_SIZE;
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
-    <div className="order">
-      <Link href={`/cars/${car.slug}`} className="order__img">
-        <Media src={car.cover_image_url ?? undefined} alt={car.name} className="h-full w-full" role="row" />
-      </Link>
+    <ObjectRow
+      media={{ src: car.cover_image_url ?? undefined, alt: car.name }}
+      mediaHref={`/cars/${car.slug}`}
+      actions={
+        <form action={kind === "save" ? removeSave : removeFollow}>
+          <input type="hidden" name="target_type" value="car" />
+          <input type="hidden" name="target_id" value={car.id} />
+          <button type="submit" className="relbtn !static">
+            {kind === "save" ? "Unsave" : "Unfollow"}
+          </button>
+        </form>
+      }
+    >
       <span className="min-w-0">
         <Link
           href={`/cars/${car.slug}`}
@@ -234,16 +243,7 @@ export default async function SavedPage({
           {vehicleLabel(car) || "build page"}
         </span>
       </span>
-      <span className="order__actions">
-        <form action={kind === "save" ? removeSave : removeFollow}>
-          <input type="hidden" name="target_type" value="car" />
-          <input type="hidden" name="target_id" value={car.id} />
-          <button type="submit" className="relbtn !static">
-            {kind === "save" ? "Unsave" : "Unfollow"}
-          </button>
-        </form>
-      </span>
-    </div>
+    </ObjectRow>
   );
 
   const tabParams = { q: query || undefined, sort: sort === "price" ? "price" : undefined };
@@ -391,20 +391,28 @@ export default async function SavedPage({
             </div>
             <div className="rowlist">
               {savedUpdates.map((post) => (
-                <div key={post.id} className="order">
-                  {savedPostCover.get(post.id) && (
-                    <Link
-                      href={`/cars/${post.car!.slug}/activity/${post.id}`}
-                      className="order__img"
-                    >
-                      <Media
-                        src={savedPostCover.get(post.id)}
-                        alt={post.title}
-                        className="h-full w-full"
-                        role="row"
-                      />
-                    </Link>
-                  )}
+                <ObjectRow
+                  key={post.id}
+                  media={
+                    savedPostCover.get(post.id)
+                      ? { src: savedPostCover.get(post.id), alt: post.title }
+                      : undefined
+                  }
+                  mediaHref={
+                    savedPostCover.get(post.id)
+                      ? `/cars/${post.car!.slug}/activity/${post.id}`
+                      : undefined
+                  }
+                  actions={
+                    <form action={removeSave}>
+                      <input type="hidden" name="target_type" value="post" />
+                      <input type="hidden" name="target_id" value={post.id} />
+                      <button type="submit" className="relbtn !static">
+                        Unsave
+                      </button>
+                    </form>
+                  }
+                >
                   <span className="min-w-0">
                     <Link
                       href={`/cars/${post.car!.slug}/activity/${post.id}`}
@@ -417,16 +425,7 @@ export default async function SavedPage({
                       {post.intro ? ` — ${post.intro}` : ""}
                     </span>
                   </span>
-                  <span className="order__actions">
-                    <form action={removeSave}>
-                      <input type="hidden" name="target_type" value="post" />
-                      <input type="hidden" name="target_id" value={post.id} />
-                      <button type="submit" className="relbtn !static">
-                        Unsave
-                      </button>
-                    </form>
-                  </span>
-                </div>
+                </ObjectRow>
               ))}
             </div>
             {totalPostSaves > savedUpdates.length && (
@@ -483,11 +482,24 @@ export default async function SavedPage({
             </div>
             <div className="rowlist">
               {(profiles ?? []).map((p) => (
-                <div key={p.id} className="order">
-                  <Avatar
-                    size="sm"
-                    initials={initialsOf(p.display_name ?? p.username ?? "?")}
-                  />
+                <ObjectRow
+                  key={p.id}
+                  leading={
+                    <Avatar
+                      size="sm"
+                      initials={initialsOf(p.display_name ?? p.username ?? "?")}
+                    />
+                  }
+                  actions={
+                    <form action={removeFollow}>
+                      <input type="hidden" name="target_type" value="profile" />
+                      <input type="hidden" name="target_id" value={p.id} />
+                      <button type="submit" className="relbtn !static">
+                        Unfollow
+                      </button>
+                    </form>
+                  }
+                >
                   <span className="min-w-0">
                     <Link
                       href={`/u/${p.username}`}
@@ -497,16 +509,7 @@ export default async function SavedPage({
                     </Link>
                     <span className="order__meta block">view profile →</span>
                   </span>
-                  <span className="order__actions">
-                    <form action={removeFollow}>
-                      <input type="hidden" name="target_type" value="profile" />
-                      <input type="hidden" name="target_id" value={p.id} />
-                      <button type="submit" className="relbtn !static">
-                        Unfollow
-                      </button>
-                    </form>
-                  </span>
-                </div>
+                </ObjectRow>
               ))}
             </div>
           </Rv>

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { CountedField } from "@/components/ui";
+import { Button, CountedField } from "@/components/ui";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 
 import { completeOnboarding, type AuthState } from "../actions";
@@ -63,6 +63,8 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
       <form action={action} className="mt-6">
         {/* Where this account was headed before it had to pick a handle. */}
         {next && <input type="hidden" name="next" value={next} />}
+        {/* Kept manual: the live role="status" availability line (with its own
+            stable describedby id) has no TextField equivalent. */}
         <div className={`field ${state.error ? "is-invalid" : ""}`}>
           <label htmlFor="onb-username" className="microlabel">
             Handle
@@ -107,9 +109,9 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
           autoComplete="name"
           hint="You can change this any time in settings."
         />
-        <button type="submit" disabled={pending} className="btn btn--live mt-4 w-full">
+        <Button type="submit" variant="live" disabled={pending} className="mt-4 w-full">
           {pending ? "Saving…" : "Let's go"}
-        </button>
+        </Button>
       </form>
     </div>
   );

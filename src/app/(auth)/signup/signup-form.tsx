@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { Button, TextField } from "@/components/ui";
+
 import { signup, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
 
@@ -22,47 +24,33 @@ export function SignupForm({ next }: { next?: string }) {
 
       <form action={action} className="mt-6">
         {next && <input type="hidden" name="next" value={next} />}
-        <div className="field">
-          <label htmlFor="signup-email" className="microlabel">
-            Email
-          </label>
-          <input
-            id="signup-email"
-            name="email"
-            type="email"
-            required
-            placeholder="you@somewhere"
-            autoComplete="email"
-            className="ctl max-w-none"
-          />
-          <span className="field__hint">
-            Used for offers, orders and payouts. Never shown publicly.
-          </span>
-        </div>
-        <div className={`field ${state.error ? "is-invalid" : ""}`}>
-          <label htmlFor="signup-password" className="microlabel">
-            Password
-          </label>
-          <input
-            id="signup-password"
-            name="password"
-            type="password"
-            required
-            minLength={8}
-            placeholder="At least 8 characters"
-            autoComplete="new-password"
-            className="ctl max-w-none"
-          />
-          <span className="field__hint">8+ characters. Length is what really counts.</span>
-          {state.error && (
-            <span role="alert" aria-live="polite" className="field__err">
-              {state.error}
-            </span>
-          )}
-        </div>
-        <button type="submit" disabled={pending} className="btn btn--live w-full">
+        <TextField
+          id="signup-email"
+          label="Email"
+          name="email"
+          type="email"
+          required
+          placeholder="you@somewhere"
+          autoComplete="email"
+          className="max-w-none"
+          hint="Used for offers, orders and payouts. Never shown publicly."
+        />
+        <TextField
+          id="signup-password"
+          label="Password"
+          name="password"
+          type="password"
+          required
+          minLength={8}
+          placeholder="At least 8 characters"
+          autoComplete="new-password"
+          className="max-w-none"
+          hint="8+ characters. Length is what really counts."
+          error={state.error}
+        />
+        <Button type="submit" variant="live" disabled={pending} className="w-full">
           {pending ? "Creating…" : "Create account"}
-        </button>
+        </Button>
         <p className="field__hint mt-3 text-center">
           By creating an account you agree to the{" "}
           <Link href="/terms" className="jumplink">

@@ -2,7 +2,7 @@
 
 import { useActionState, useId, useState } from "react";
 
-import { Dialog } from "@/components/ui";
+import { Button, Dialog, TextField } from "@/components/ui";
 
 import { createCar, type ActionState } from "./actions";
 
@@ -32,18 +32,14 @@ export function AddCarForm({ quiet = false }: { quiet?: boolean } = {}) {
             Just the basics for now — photos, mods and updates come next.
           </p>
           <form action={action} className="mt-4">
-            <div className="field">
-              <label htmlFor={`${idBase}-name`} className="microlabel">
-                Name
-              </label>
-              <input
-                id={`${idBase}-name`}
-                name="name"
-                required
-                placeholder='e.g. "Neil&apos;s Audi S4"'
-                className="ctl max-w-none"
-              />
-            </div>
+            <TextField
+              id={`${idBase}-name`}
+              label="Name"
+              name="name"
+              required
+              placeholder={`e.g. "Neil's Audi S4"`}
+              className="max-w-none"
+            />
             <div className="field field--row !grid-cols-3">
               <label htmlFor={`${idBase}-year`} className="sr-only">
                 Year
@@ -70,12 +66,18 @@ export function AddCarForm({ quiet = false }: { quiet?: boolean } = {}) {
               </p>
             )}
             <div className="sheet__actions">
-              <button type="submit" disabled={pending} className="btn btn--live flex-1">
-                {pending ? "Adding…" : "Add the car"}
-              </button>
-              <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
+              <Button
+                type="submit"
+                variant="live"
+                className="flex-1"
+                loading={pending}
+                pendingLabel="Adding…"
+              >
+                Add the car
+              </Button>
+              <Button variant="ghost" onClick={() => setOpen(false)}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         </div>

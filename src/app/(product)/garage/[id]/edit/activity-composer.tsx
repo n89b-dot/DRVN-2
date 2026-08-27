@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 
-import { CountedField } from "@/components/ui";
+import { Button, CountedField, TextArea, TextField } from "@/components/ui";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
 
 import { createActivityPost, type ActionState } from "../../actions";
@@ -31,16 +31,15 @@ export function ActivityComposer({
       <div className="tile__head">
         <span className="microlabel microlabel--ink">Build updates</span>
         {!composing && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => {
               setOpenCount((n) => n + 1);
               setComposing(true);
             }}
-            className="btn btn--ghost"
           >
             Post an update
-          </button>
+          </Button>
         )}
       </div>
 
@@ -96,30 +95,23 @@ function ComposerForm({ carId, onDone }: { carId: string; onDone: () => void }) 
         autoFocus
         placeholder="Downpipe + tune installed"
       />
-      <div className="field !mb-0">
-        <label htmlFor="post-body" className="microlabel">
-          What happened
-        </label>
-        <textarea
-          id="post-body"
-          name="body"
-          rows={4}
-          className="ctl"
-          placeholder="The story — parts, numbers, what's next."
-        />
-      </div>
-      <div className="field !mb-0">
-        <label htmlFor="post-video" className="microlabel">
-          Video URL — optional
-        </label>
-        <input
-          id="post-video"
-          name="video_url"
-          type="url"
-          placeholder="https://youtube.com/…"
-          className="ctl max-w-none"
-        />
-      </div>
+      <TextArea
+        id="post-body"
+        label="What happened"
+        name="body"
+        rows={4}
+        placeholder="The story — parts, numbers, what's next."
+        fieldClassName="!mb-0"
+      />
+      <TextField
+        id="post-video"
+        label="Video URL — optional"
+        name="video_url"
+        type="url"
+        placeholder="https://youtube.com/…"
+        className="max-w-none"
+        fieldClassName="!mb-0"
+      />
       {state.error && (
         <p role="alert" aria-live="polite" className="field__err">
           {state.error}
@@ -133,9 +125,9 @@ function ComposerForm({ carId, onDone }: { carId: string; onDone: () => void }) 
           <button type="button" onClick={onDone} className="jumplink">
             Cancel
           </button>
-          <button type="submit" disabled={pending} className="btn btn--live">
-            {pending ? "Publishing…" : "Publish update"}
-          </button>
+          <Button type="submit" variant="live" loading={pending} pendingLabel="Publishing…">
+            Publish update
+          </Button>
         </div>
       </div>
     </form>

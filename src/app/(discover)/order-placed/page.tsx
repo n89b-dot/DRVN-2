@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media } from "@/components/ui";
+import { Alert, Foot, ObjectRow } from "@/components/ui";
 import { readGuestOrders } from "@/lib/guest-checkout";
 import { formatPrice } from "@/lib/payments/fee";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -111,10 +111,9 @@ export default async function OrderPlacedPage({
       </div>
 
       {skipped && (
-        <div className="alert alert--live mb-6">
-          <h4>Some parts couldn&apos;t be included</h4>
-          <p>{skipped} — those weren&apos;t charged for.</p>
-        </div>
+        <Alert tone="live" className="mb-6" title={<>Some parts couldn&apos;t be included</>}>
+          {skipped} — those weren&apos;t charged for.
+        </Alert>
       )}
 
       <Rv className="tile">
@@ -126,20 +125,18 @@ export default async function OrderPlacedPage({
         </div>
         <div className="rowlist">
           {(items ?? []).map((item) => (
-            <div key={item.id} className="order">
-              <span className="order__img">
-                <Media
-                  src={item.listing_id ? cover.get(item.listing_id) : undefined}
-                  alt={item.title ?? "Part"}
-                  className="h-full w-full"
-                  role="row"
-                />
-              </span>
+            <ObjectRow
+              key={item.id}
+              media={{
+                src: item.listing_id ? cover.get(item.listing_id) : undefined,
+                alt: item.title ?? "Part",
+              }}
+            >
               <span className="min-w-0">
                 <span className="order__name block truncate">{item.title ?? "Part"}</span>
                 <span className="order__meta block">{formatPrice(item.price_cents)}</span>
               </span>
-            </div>
+            </ObjectRow>
           ))}
         </div>
         <div className="mt-3">

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useCallback, useState, useSyncExternalStore } from "react";
 
-import { ActionFooter, Button, ScrollActiveIntoView } from "@/components/ui";
+import { ActionFooter, Button, DataRow, ScrollActiveIntoView } from "@/components/ui";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 import type { SavedCard } from "@/lib/payments/customers";
 
@@ -24,34 +24,6 @@ export type SettingsProfile = {
   links: ProfileLink[];
   notification_prefs: unknown;
 };
-
-/** Ruled control row — label column, control in the value column. */
-function CtlLine({
-  label,
-  children,
-  hint,
-}: {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <label className="bline bline--ctl">
-      <span className="bline__label">{label}</span>
-      {children}
-      {hint && <span className="bline__note">{hint}</span>}
-    </label>
-  );
-}
-
-function ReadOnlyLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bline">
-      <span className="bline__label">{label}</span>
-      <span className="bline__val !text-body">{value}</span>
-    </div>
-  );
-}
 
 function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(
@@ -260,11 +232,11 @@ export function SettingsPanel({
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Account — your sign-in identity</span>
           </div>
-          <ReadOnlyLine
+          <DataRow
             label="Username"
             value={profile.username ? `@${profile.username}` : "Not set"}
           />
-          <ReadOnlyLine label="Display name" value={profile.display_name || "Not set"} />
+          <DataRow label="Display name" value={profile.display_name || "Not set"} />
           <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
             <PasswordSection currentEmail={profile.email} />
           </div>
@@ -290,27 +262,27 @@ export function SettingsPanel({
               action(fd);
             }}
           >
-            <CtlLine label="Display name">
+            <DataRow label="Display name">
               <input name="display_name" defaultValue={profile.display_name} required className="ctl" />
-            </CtlLine>
-            <CtlLine label="Headline">
+            </DataRow>
+            <DataRow label="Headline">
               <input name="headline" defaultValue={profile.headline} placeholder="e.g. B9 S4 owner, slowly going single-turbo" className="ctl" />
-            </CtlLine>
-            <CtlLine label="Location">
+            </DataRow>
+            <DataRow label="Location">
               <input name="location" defaultValue={profile.location} className="ctl" />
-            </CtlLine>
-            <CtlLine label="Bio">
+            </DataRow>
+            <DataRow label="Bio">
               <textarea name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
-            </CtlLine>
-            <CtlLine label="Website">
+            </DataRow>
+            <DataRow label="Website">
               <input name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="ctl" />
-            </CtlLine>
-            <CtlLine label="Instagram">
+            </DataRow>
+            <DataRow label="Instagram">
               <input name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="ctl" />
-            </CtlLine>
-            <CtlLine label="YouTube">
+            </DataRow>
+            <DataRow label="YouTube">
               <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl" />
-            </CtlLine>
+            </DataRow>
             {state.error && (
               <p role="alert" aria-live="polite" className="field__err mt-3">
                 {state.error}

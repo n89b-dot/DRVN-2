@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Foot, Gallery, ListingCard, Mosaic } from "@/components/ui";
+import { EmptyState, Foot, Gallery, ListingCard, Mosaic, ratingLine } from "@/components/ui";
 import { DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
 import { SaveButton } from "@/features/social/buttons";
 import { parseAuthIntent } from "@/lib/auth-intent";
@@ -281,13 +281,9 @@ export default async function ListingPage({
               />
             </Rv>
           ) : (
-            <div className="undrawn undrawn--hero">
-              <span className="undrawn__mark" aria-hidden="true">
-                ✎
-              </span>
-              <h3>No photos yet</h3>
-              <p>The seller hasn&apos;t photographed this part yet. Ask them below.</p>
-            </div>
+            <EmptyState mark="✎" title="No photos yet" className="undrawn--hero">
+              The seller hasn&apos;t photographed this part yet. Ask them below.
+            </EmptyState>
           )}
         </div>
 
@@ -352,7 +348,9 @@ export default async function ListingPage({
                   <span className="order__name block">{seller.display_name ?? (seller.username ? `@${seller.username}` : "Seller on DRVN")}</span>
                   <span className="order__meta block">
                     {avgRating
-                      ? `${avgRating} ★ · ${(reviews ?? []).length} review${(reviews ?? []).length === 1 ? "" : "s"}`
+                      ? // avgRating is already a display string ("4.8") —
+                        // ratingLine only interpolates it, so the cast is safe.
+                        ratingLine(avgRating, (reviews ?? []).length)
                       : (seller.location ?? "Seller on DRVN")}
                   </span>
                 </span>

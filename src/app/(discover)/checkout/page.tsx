@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media, PaymentModeNotice } from "@/components/ui";
+import { Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
 import { loadCartSummary, loadInFlightCheckout } from "@/lib/checkout-data";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
@@ -77,15 +77,12 @@ export default async function CheckoutPage() {
               <div className="ordersum__body">
                 <div className="rowlist">
                   {cart.lines.map((line) => (
-                    <div key={line.id} className="order">
+                    <ObjectRow key={line.id} actions={<b>{formatPrice(line.priceCents)}</b>}>
                       <span className="min-w-0">
                         <span className="order__name block truncate">{line.title}</span>
                         <span className="order__meta block">From {line.sellerName}</span>
                       </span>
-                      <span className="order__actions">
-                        <b>{formatPrice(line.priceCents)}</b>
-                      </span>
-                    </div>
+                    </ObjectRow>
                   ))}
                 </div>
                 <div className="mt-3">
@@ -155,18 +152,16 @@ export default async function CheckoutPage() {
             </div>
             <div className="rowlist">
               {cart.lines.map((line) => (
-                <div key={line.id} className="order">
-                  <span className="order__img">
-                    <Media src={line.coverUrl ?? undefined} alt={line.title} className="h-full w-full" role="row" />
-                  </span>
+                <ObjectRow
+                  key={line.id}
+                  media={{ src: line.coverUrl ?? undefined, alt: line.title }}
+                  actions={<b>{formatPrice(line.priceCents)}</b>}
+                >
                   <span className="min-w-0">
                     <span className="order__name block truncate">{line.title}</span>
                     <span className="order__meta block">From {line.sellerName}</span>
                   </span>
-                  <span className="order__actions">
-                    <b>{formatPrice(line.priceCents)}</b>
-                  </span>
-                </div>
+                </ObjectRow>
               ))}
             </div>
             <div className="mt-3">

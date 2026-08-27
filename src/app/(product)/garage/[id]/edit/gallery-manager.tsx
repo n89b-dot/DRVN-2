@@ -3,8 +3,7 @@
 import { useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
-import { recordStagedUpload } from "@/lib/media-staging";
-import { createClient } from "@/lib/supabase/client";
+import { uploadImages } from "@/lib/media-upload";
 import { ConfirmDialog, DropZone, Media } from "@/components/ui";
 
 import { addCarImage, deleteCarImage, moveCarImage, setCoverImage, updateCarImageAlt } from "../../actions";
@@ -31,43 +30,24 @@ export function GalleryManager({
     setError(null);
     setFailedFiles([]);
     setUploading(true);
-    const supabase = createClient();
     const failed: File[] = [];
 
     try {
-      for (const file of Array.from(files)) {
-        // The picker filters via accept="image/*", but drag-and-drop hands us
-        // anything — without this a dropped PDF reaches the bucket's mime
-        // allowlist and comes back as a raw storage error with a Retry that
-        // can never succeed.
-        if (!file.type.startsWith("image/")) {
-          setError(`Photos only — ${file.name} isn't an image.`);
-          continue;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          setError(`${file.name} is over 10MB.`);
-          failed.push(file);
-          continue;
-        }
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `${userId}/${carId}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("car-images")
-          .upload(path, file, { contentType: file.type });
-        if (uploadError) {
-          setError(uploadError.message);
-          failed.push(file);
-          continue;
-        }
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("car-images").getPublicUrl(path);
-        // Ledger the upload for GC (0029) before the DB row exists — if
-        // addCarImage fails below, the 48h sweep reclaims the object.
-        void recordStagedUpload("car-images", path, publicUrl).catch(() => {});
-        const result = await addCarImage(carId, publicUrl);
-        if (result.error) {
-          setError(result.error);
+      const result = await uploadImages({
+        files,
+        bucket: "car-images",
+        pathPrefix: `${userId}/${carId}`,
+      });
+      for (const failure of result.failed) {
+        setError(failure.reason);
+        // Only failures a retry could actually fix feed the Retry list —
+        // an oversize or non-image file will fail again identically.
+        if (failure.retryable) failed.push(failure.file);
+      }
+      for (const { url, file } of result.uploaded) {
+        const saved = await addCarImage(carId, url);
+        if (saved.error) {
+          setError(saved.error);
           failed.push(file);
         }
       }

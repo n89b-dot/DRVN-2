@@ -2,12 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav } from "@/components/ui";
+import { Alert, Foot, MarketplaceNav, Pagination, TileHead } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
-import { OrderPipeline } from "./order-pipeline";
+import { OrderPipeline } from "@/components/commerce";
 import {
   GROUP_LABELS,
   isRawStatus,
@@ -274,17 +274,11 @@ export default async function OrdersPage({
         </p>
       </Rv>
       {placed && (
-        <div className="alert alert--ok mb-6">
-          <span className="alert__ico" aria-hidden="true">
-            ✓
-          </span>
-          <h4>Order placed</h4>
-          <p>
-            {skipped
-              ? `Some parts couldn't be included: ${skipped}.`
-              : "Open it to follow dispatch and delivery."}
-          </p>
-        </div>
+        <Alert tone="ok" ico="✓" title="Order placed" className="mb-6">
+          {skipped
+            ? `Some parts couldn't be included: ${skipped}.`
+            : "Open it to follow dispatch and delivery."}
+        </Alert>
       )}
 
       {/* The Offers promo card that used to sit here is gone: the family nav
@@ -377,17 +371,19 @@ export default async function OrdersPage({
 
       {rows.length > 0 ? (
         <Rv className="tile tile--deep" stagger={1}>
-          <div className="tile__head">
-            <span className="microlabel microlabel--ink">
-              {total === 1 ? "1 order" : `${total} orders`}
-              {total > PAGE_SIZE && (
-                <>
-                  {" · "}
-                  showing {firstOnPage}–{lastOnPage}
-                </>
-              )}
-            </span>
-          </div>
+          <TileHead
+            label={
+              <>
+                {total === 1 ? "1 order" : `${total} orders`}
+                {total > PAGE_SIZE && (
+                  <>
+                    {" · "}
+                    showing {firstOnPage}–{lastOnPage}
+                  </>
+                )}
+              </>
+            }
+          />
           <div className="rowlist">
             {rows.map((o) => (
               <div key={o.id}>
@@ -443,38 +439,16 @@ export default async function OrdersPage({
         </Rv>
       )}
 
-      {(page > 1 || hasMore) && (
-        <nav
-          className="mt-8 flex items-center justify-between gap-3"
-          aria-label="Pagination"
-        >
-          {page > 1 ? (
-            <Link
-              href={withParams("/orders", params, {
-                page: page - 1 === 1 ? undefined : String(page - 1),
-              })}
-              className="btn btn--ghost"
-              rel="prev"
-            >
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="microlabel">Page {page}</span>
-          {hasMore ? (
-            <Link
-              href={withParams("/orders", params, { page: String(page + 1) })}
-              className="btn btn--ghost"
-              rel="next"
-            >
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
-      )}
+      <Pagination
+        page={page}
+        hasMore={hasMore}
+        hrefFor={(p) =>
+          withParams("/orders", params, {
+            page: p === 1 ? undefined : String(p),
+          })
+        }
+        className="!mt-8"
+      />
 
       {/* Order-specific guidance. The old footer explained the 72-hour offer
           expiry, which is a rule about a surface this page no longer holds. */}

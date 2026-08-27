@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 
+import { Message, MessageThread, ResultNote } from "@/components/ui";
+
 import {
   acceptCounter,
   respondToOffer,
@@ -13,17 +15,6 @@ import {
 
 function money(cents: number) {
   return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-}
-
-/** Feedback line shared by every action here — same voice as the old
- *  offer-row.tsx composer/response pair. */
-function Result({ state }: { state: CommerceState }) {
-  if (!state.error && !state.ok) return null;
-  return (
-    <p role="alert" aria-live="polite" className={state.error ? "field__err" : "chip chip--ok"}>
-      {state.error ?? state.ok}
-    </p>
-  );
 }
 
 export type ThreadMessage = {
@@ -156,33 +147,34 @@ export function OfferThread({
           </form>
         )}
 
-        <Result state={respondState} />
-        <Result state={withdrawState} />
-        <Result state={counterState} />
+        <ResultNote error={respondState.error} ok={respondState.ok} />
+        <ResultNote error={withdrawState.error} ok={withdrawState.ok} />
+        <ResultNote error={counterState.error} ok={counterState.ok} />
         </div>
       )}
 
       {messages.length > 0 && (
-        <div className="thread mt-4">
+        <MessageThread className="mt-4">
           {messages.map((m) => (
-            <div
+            <Message
               key={m.id}
-              className={`msg ${m.sender_id === currentUserId ? "msg--me" : ""}`}
-            >
-              <span className="msg__who">
-                {m.sender_id === currentUserId ? "You" : m.sender_name}
-                {" · "}
-                {new Date(m.created_at).toLocaleString(undefined, {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              <p className="msg__body">{m.body}</p>
-            </div>
+              me={m.sender_id === currentUserId}
+              who={
+                <>
+                  {m.sender_id === currentUserId ? "You" : m.sender_name}
+                  {" · "}
+                  {new Date(m.created_at).toLocaleString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </>
+              }
+              body={m.body}
+            />
           ))}
-        </div>
+        </MessageThread>
       )}
 
       <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--rule-soft)] pt-4">
@@ -201,7 +193,7 @@ export function OfferThread({
             {sendingMessage ? "Sending…" : "Send"}
           </button>
         </form>
-        <Result state={messageState} />
+        <ResultNote error={messageState.error} ok={messageState.ok} />
       </div>
     </>
   );

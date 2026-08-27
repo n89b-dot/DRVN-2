@@ -2,47 +2,42 @@
 
 import { useActionState, useId } from "react";
 
+import { Button, TextField } from "@/components/ui";
 import { updatePassword, type AuthState } from "@/app/(auth)/actions";
 
 export function ResetForm() {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(updatePassword, {});
-  const passwordId = useId();
-  const confirmId = useId();
   const errorId = useId();
 
   return (
     <form action={formAction} className="mt-5 grid gap-3">
-      <label className="field" htmlFor={passwordId}>
-        <span className="field__label">New password</span>
-        <input
-          id={passwordId}
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className="ctl !max-w-none"
-          aria-describedby={errorId}
-        />
-      </label>
+      <TextField
+        id="reset-password"
+        label="New password"
+        name="password"
+        type="password"
+        required
+        minLength={8}
+        autoComplete="new-password"
+        className="!max-w-none"
+        aria-describedby={errorId}
+      />
 
-      <label className="field" htmlFor={confirmId}>
-        <span className="field__label">Confirm it</span>
-        <input
-          id={confirmId}
-          name="confirm"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className="ctl !max-w-none"
-          aria-describedby={errorId}
-        />
-      </label>
+      <TextField
+        id="reset-confirm"
+        label="Confirm it"
+        name="confirm"
+        type="password"
+        required
+        minLength={8}
+        autoComplete="new-password"
+        className="!max-w-none"
+        aria-describedby={errorId}
+      />
 
-      <button type="submit" disabled={pending} className="btn btn--live">
+      <Button type="submit" variant="live" disabled={pending}>
         {pending ? "Saving…" : "Save and sign in"}
-      </button>
+      </Button>
 
       <p
         id={errorId}

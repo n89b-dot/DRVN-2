@@ -4,8 +4,8 @@ import { useRef, useState } from "react";
 
 import { Media } from "@/components/ui";
 import { youtubeId, type ActivityBlock } from "@/lib/activity-blocks";
-import { deleteStagedIfUnconsumed, recordStagedUpload } from "@/lib/media-staging";
-import { createClient } from "@/lib/supabase/client";
+import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
+import { uploadImages as uploadImagesToStorage } from "@/lib/media-upload";
 
 export type BlockDraft = { key: string } & ActivityBlock;
 
@@ -110,29 +110,15 @@ export function ActivityBlockEditor({
     if (!files?.length) return;
     setUploadError(null);
     setUploadingKey(key);
-    const supabase = createClient();
     try {
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`${file.name} is over 10MB.`);
-          continue;
-        }
-        const ext = file.name.split(".").pop() ?? "jpg";
-        const path = `${userId}/${carId}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage
-          .from("activity-images")
-          .upload(path, file, { contentType: file.type });
-        if (error) {
-          setUploadError(error.message);
-          continue;
-        }
-        const { publicUrl } = supabase.storage.from("activity-images").getPublicUrl(path).data;
-        // Ledger the upload for GC (0029) — fire-and-forget, never blocking.
-        void recordStagedUpload("activity-images", path, publicUrl).catch(() => {});
-        urls.push(publicUrl);
-      }
-      if (urls.length) {
+      const { uploaded, failed } = await uploadImagesToStorage({
+        files,
+        bucket: "activity-images",
+        pathPrefix: `${userId}/${carId}`,
+      });
+      if (failed.length) setUploadError(failed[failed.length - 1].reason);
+      if (uploaded.length) {
+        const urls = uploaded.map(({ url }) => url);
         patch(key, (b) => (b.type === "images" ? { ...b, urls: [...b.urls, ...urls] } : b));
       }
     } finally {

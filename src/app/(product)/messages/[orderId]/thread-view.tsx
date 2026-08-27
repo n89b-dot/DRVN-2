@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef } from "react";
 
+import { Message, MessageThread, ResultNote, ThreadDivider } from "@/components/ui";
 import { sendThreadMessage, type CommerceState } from "@/features/commerce/actions";
 
 type ThreadMessage = {
@@ -45,15 +46,6 @@ function groupByDay(messages: ThreadMessage[]): { label: string; items: ThreadMe
     else groups.push({ label, items: [m] });
   }
   return groups;
-}
-
-function Result({ state }: { state: CommerceState }) {
-  if (!state.error && !state.ok) return null;
-  return (
-    <p role="alert" aria-live="polite" className={state.error ? "field__err" : "chip chip--ok"}>
-      {state.error ?? state.ok}
-    </p>
-  );
 }
 
 /**
@@ -119,7 +111,7 @@ export function ThreadView({
       )}
 
       {messages.length > 0 ? (
-        <div className="thread">
+        <MessageThread>
           {hasEarlier && earliestInWindow && (
             <div className="flex justify-center pb-2">
               <Link
@@ -132,23 +124,20 @@ export function ThreadView({
           )}
           {groups.map((group) => (
             <div key={group.label}>
-              <div className="my-2 flex justify-center">
-                <span className="microlabel">{group.label}</span>
-              </div>
+              <ThreadDivider>{group.label}</ThreadDivider>
               {group.items.map((m) => (
-                <div key={m.id} className={`msg ${m.sender_id === currentUserId ? "msg--me" : ""}`}>
-                  <span className="msg__who">
-                    {m.sender_id === currentUserId ? "You" : m.sender_name}
-                    <time dateTime={m.created_at} className="ml-2 text-dim">
-                      {timeLabel(m.created_at)}
-                    </time>
-                  </span>
-                  <p className="msg__body">{m.body}</p>
-                </div>
+                <Message
+                  key={m.id}
+                  me={m.sender_id === currentUserId}
+                  who={m.sender_id === currentUserId ? "You" : m.sender_name}
+                  when={m.created_at}
+                  whenLabel={timeLabel(m.created_at)}
+                  body={m.body}
+                />
               ))}
             </div>
           ))}
-        </div>
+        </MessageThread>
       ) : (
         <p className="spec-note">
           No messages yet. Anything about delivery, fitment or condition belongs here — it stays
@@ -181,10 +170,10 @@ export function ThreadView({
               {pending ? "Sending…" : "Send"}
             </button>
           </form>
-          <Result state={state} />
+          <ResultNote error={state.error} ok={state.ok} />
         </div>
       )}
-      {viewingHistory && <Result state={state} />}
+      {viewingHistory && <ResultNote error={state.error} ok={state.ok} />}
     </div>
   );
 }

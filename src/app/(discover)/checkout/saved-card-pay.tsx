@@ -4,6 +4,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
+import { ObjectRow } from "@/components/ui";
 import { payWithSavedCard, type SavedCardPayState } from "@/features/commerce/payment-methods";
 import type { SavedCard } from "@/lib/payments/customers";
 
@@ -72,7 +73,7 @@ export function SavedCardPay({
 
       <div className="rowlist">
         {savedCards.map((card) => (
-          <label key={card.id} className="order cursor-pointer">
+          <ObjectRow key={card.id} as="label" className="cursor-pointer">
             <input
               type="radio"
               name="card_choice"
@@ -90,7 +91,7 @@ export function SavedCardPay({
                   : `Expires ${String(card.expMonth).padStart(2, "0")}/${String(card.expYear).slice(-2)}`}
               </span>
             </span>
-          </label>
+          </ObjectRow>
         ))}
       </div>
 

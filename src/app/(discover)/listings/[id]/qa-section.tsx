@@ -2,6 +2,7 @@
 
 import { useActionState, useOptimistic, useState } from "react";
 
+import { EmptyState, Message, MessageComposer, MessageThread, TileHead } from "@/components/ui";
 import { askQuestion, type CommerceState } from "@/features/commerce/actions";
 
 export type QAItem = {
@@ -47,15 +48,13 @@ function Thread({
 
   return (
     <div id={`q-${item.id}`} style={depth > 0 ? { marginLeft: 16 } : undefined}>
-      <div className={`msg ${item.isSeller ? "msg--me" : ""}`}>
-        <span className="msg__who">
-          {item.authorName}
-          {item.isSeller && <span className="chip chip--ok ml-2 normal-case">Seller</span>}
-        </span>
-        <p className="msg__body">{item.body}</p>
-        <span className="msg__meta">
-          {item.id.startsWith("optimistic-") ? "Posting…" : formatTimestamp(item.created_at)}
-        </span>
+      <Message
+        me={item.isSeller}
+        who={item.authorName}
+        whoEnd={item.isSeller && <span className="chip chip--ok ml-2 normal-case">Seller</span>}
+        body={item.body}
+        meta={item.id.startsWith("optimistic-") ? "Posting…" : formatTimestamp(item.created_at)}
+      >
         {isLoggedIn && !replying && (
           <button
             type="button"
@@ -91,7 +90,7 @@ function Thread({
             </button>
           </form>
         )}
-      </div>
+      </Message>
       {replies.map((child) => (
         <Thread
           key={child.id}
@@ -160,10 +159,10 @@ export function QASection({
 
   return (
     <div className="mt-10">
-      <div className="tile__head">
-        <span className="microlabel microlabel--ink">Questions for the seller</span>
-        {topLevel.length > 0 && <span className="chip">{topLevel.length}</span>}
-      </div>
+      <TileHead
+        label="Questions for the seller"
+        end={topLevel.length > 0 ? <span className="chip">{topLevel.length}</span> : undefined}
+      />
       <p className="spec-note !mt-1">
         Public — anyone viewing this listing can read these questions and answers.{" "}
         {isSeller
@@ -171,7 +170,7 @@ export function QASection({
           : "Private, order-specific messaging opens once you buy — use this thread for anything the next buyer would want to know too."}
       </p>
 
-      <div className="thread mt-3">
+      <MessageThread className="mt-3">
         {topLevel.map((q) => (
           <Thread
             key={q.id}
@@ -185,26 +184,24 @@ export function QASection({
           />
         ))}
         {topLevel.length === 0 && (
-          <div className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ?
-            </span>
-            <h3>No questions yet</h3>
-            <p>Ask the seller anything — answers appear here for everyone.</p>
-          </div>
+          <EmptyState mark="?" title="No questions yet">
+            Ask the seller anything — answers appear here for everyone.
+          </EmptyState>
         )}
-      </div>
+      </MessageThread>
 
       {isLoggedIn && !isSeller && (
-        <form action={submit} className="composer">
-          <div className="composer__row">
-            <input type="hidden" name="listing_id" value={listingId} />
-            <input name="body" required aria-label="Ask the seller a question" placeholder="Ask the seller a question…" className="ctl max-w-none flex-1" />
-            <button type="submit" disabled={pending} className="btn">
-              Ask
-            </button>
-          </div>
-        </form>
+        <MessageComposer
+          block
+          action={submit}
+          hidden={{ listing_id: listingId }}
+          inputLabel="Ask the seller a question"
+          placeholder="Ask the seller a question…"
+          pending={pending}
+          sendLabel="Ask"
+          pendingLabel="Ask"
+          ghost={false}
+        />
       )}
       {state.error && (
         <p role="alert" aria-live="polite" className="field__err mt-2">
