@@ -1,5 +1,12 @@
 # Livesheet — Component & Page Inventory (Phase 1 contract)
 
+> **📜 HISTORICAL — the Phase 1 porting contract, frozen as of 2026-07-26.**
+> It maps CSS recipes to *mockup markup shapes*, not to React components, and
+> predates the component library (Button, the form family, Pagination, the
+> messaging/row/card contracts…). For what exists **now**, use `/docs/components`
+> and `src/components/registry.ts`; some details below (e.g. ".btn has no
+> spinner variant", `.savebar`) no longer match production.
+
 Derived 2026-07-26 from `design-mockups/livesheet/` — shipped CSS (`livesheet.css`)
 treated as source of truth, cross-checked against `design.md` (frontmatter matches CSS)
 and `design.html`. Full-page captures of all 26 pages × day/night × desktop/mobile in

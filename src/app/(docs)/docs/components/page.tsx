@@ -1,14 +1,32 @@
+import { OrderPipeline, StatusChip } from "@/components/commerce";
+import { LiveDim } from "@/components/livesheet";
+import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
 import {
   ActionFooter,
+  Alert,
   Button,
   Checkbox,
+  DataRow,
+  EmptyState,
   FilterButton,
   FilterGroup,
   FilterLink,
+  FormSection,
+  Message,
+  MessageThread,
+  MetricCard,
+  ObjectRow,
+  PageHead,
   Pagination,
+  RatingStars,
+  ResultNote,
   SearchField,
   Select,
+  Stepper,
   TextField,
+  TileHead,
+  ThreadDivider,
+  ValidationSummary,
 } from "@/components/ui";
 
 import { DocsJumprow, DocsPagehead, Specimen, SpecimenGroup } from "../../_components/docs-page";
@@ -43,7 +61,8 @@ export default function ComponentsPage() {
           { href: "#commerce", label: "07 Commerce" },
           { href: "#comms", label: "08 Comms" },
           { href: "#states", label: "09 States" },
-          { href: "#react", label: "10 React" },
+          { href: "#contracts", label: "10 Contracts" },
+          { href: "#react", label: "11 Registry" },
         ]}
       />
 
@@ -899,140 +918,224 @@ export default function ComponentsPage() {
         </Specimen>
       </SpecimenGroup>
 
-      {/* ============ 10 REACT COMPONENTS ============ */}
+      {/* ============ 10 EXTRACTED CONTRACTS ============ */}
+      <SpecimenGroup id="contracts" index="10" title="Extracted contracts — production components, rendered live">
+        <Specimen
+          name="PageHead"
+          klass="PageHead → .pagehead"
+          note="The page header as a contract — eyebrow, h1, sub. reveal defaults on; the specimen renders it static."
+        >
+          <PageHead reveal={false} className="!p-0" eyebrow="Sheet 01 — Your desk" title={<>Your sheet is <span className="live-word">moving</span></>} sub="Three offers open, one payout booked." />
+        </Specimen>
+        <Specimen
+          name="TileHead"
+          klass="TileHead → .tile__head"
+          note="Ink microlabel left, chip/jumplink right — the rule line every tile opens with."
+        >
+          <div className="tile !p-4">
+            <TileHead label="Your garage" end={<span className="chip">3 cars</span>} />
+          </div>
+        </Specimen>
+        <Specimen
+          name="EmptyState"
+          klass="EmptyState → .undrawn"
+          note="Every empty collection speaks through one component: dashed mark, title, body, optional action."
+        >
+          <EmptyState mark="⌕" title="Nothing for sale right now">
+            Parts listed off these cars show up here.
+          </EmptyState>
+        </Specimen>
+        <Specimen
+          name="Alert"
+          klass="Alert → .alert / --live / --ok"
+          note="tone=live when the reader must act now, ok for confirmation. role=alert only when raised by an action."
+        >
+          <div className="grid gap-3">
+            <Alert ico="✓" tone="ok" title="Draft saved">Your listing is safe — publish when ready.</Alert>
+            <Alert tone="live" title="Payouts aren&rsquo;t set up yet">Publishing needs somewhere to send the money.</Alert>
+          </div>
+        </Specimen>
+        <Specimen
+          name="Stepper"
+          klass="Stepper → .steps"
+          note="Auto-numbered workflow rail; aria-current lands on the now step. Workflow state stays with the feature."
+        >
+          <Stepper
+            label="Checkout progress"
+            steps={[
+              { label: "Shipping", state: "done", end: <span className="chip chip--ok">Done</span> },
+              { label: "Payment", state: "now" },
+              { label: "Confirm", state: "todo" },
+            ]}
+          />
+        </Specimen>
+        <Specimen
+          name="DataRow"
+          klass="DataRow → .bline / .bline--ctl"
+          note="One component, two shapes: read-only value row, or a labelled control row when children carry a .ctl."
+        >
+          <div>
+            <DataRow label="Email" value="nb@drvn.test" />
+            <DataRow label="Display name" note="Shown on your public profile">
+              <input className="ctl" defaultValue="Neil B" readOnly />
+            </DataRow>
+          </div>
+        </Specimen>
+        <Specimen
+          name="MetricCard"
+          klass="MetricCard → .tile + .num-giant"
+          note="KPI tile: microlabel, giant numeral, a LiveDim underneath, floor-pinned footer link. Calculations stay feature-local."
+        >
+          <div className="deck deck--kpi">
+            <MetricCard label="Active listings" value={7} stagger={0}>
+              <LiveDim label="On the marketplace" value="7 live · 12 total" />
+            </MetricCard>
+            <MetricCard label="Offers" live valueLive value={3} stagger={1}>
+              <LiveDim label="Oldest lapses in" value="2:14:09" live />
+            </MetricCard>
+            <MetricCard label="Watchers" blank value="—" stagger={2}>
+              <LiveDim label="Nothing measured yet" value="—" blank />
+            </MetricCard>
+          </div>
+        </Specimen>
+        <Specimen
+          name="RatingStars"
+          klass="RatingStars → .review__stars"
+          note="Read-only display with sr-only value; the compact string comes from ratingLine(). The interactive picker stays the review form&rsquo;s .star-pick."
+        >
+          <div className="flex items-center gap-4">
+            <RatingStars rating={4} />
+            <span className="kv text-dim">4.8 ★ · 12 reviews</span>
+          </div>
+        </Specimen>
+        <Specimen
+          name="ObjectRow"
+          klass="ObjectRow → .order in .rowlist"
+          note="The structural dense row — media plate, name, meta, trailing actions. Domain rows (ListingRow, offer rows) compose it; it never knows business meaning."
+        >
+          <div className="rowlist">
+            <ObjectRow
+              title="BBS RS 16x8 et24 — pair"
+              meta="$1,450 · Off a 1991 E30 318is"
+              actions={<span className="chip chip--live">Live</span>}
+            />
+            <ObjectRow
+              state="done"
+              title="Recaro SR3 — driver&rsquo;s seat"
+              meta="Delivered 14 Aug"
+              actions={<span className="chip chip--ok">Done</span>}
+            />
+          </div>
+        </Specimen>
+        <Specimen
+          name="Message thread"
+          klass="MessageThread / Message / ThreadDivider → .thread / .msg"
+          note="The conversation grammar shared by order messages, offer threads, Q&A and comments. Features decide what me means (current user, or the seller in Q&A). The send row is MessageComposer (.composer__row) — it needs a live action, so it isn&rsquo;t mounted here."
+        >
+          <MessageThread>
+            <ThreadDivider>Today</ThreadDivider>
+            <Message who="Kaito" when="2026-08-23T10:00:00Z" whenLabel="10:00" body="Does the diff include the output flanges?" />
+            <Message me who="You" when="2026-08-23T10:04:00Z" whenLabel="10:04" body="Yes — flanges and fresh crush washers." />
+            <Message who="Kaito" whoEnd={<span className="chip chip--ok ml-2 normal-case">Seller</span>} body="Marked as answered." meta="Aug 23, 10:06 AM" />
+          </MessageThread>
+        </Specimen>
+        <Specimen
+          name="ResultNote"
+          klass="ResultNote → chip--ok / .field__err"
+          note="The action-outcome line every commerce form used to hand-roll: ok chip or error text, role=alert."
+        >
+          <div className="flex flex-wrap items-center gap-4">
+            <ResultNote ok="Message sent." />
+            <ResultNote error="That didn&rsquo;t send — try again." />
+          </div>
+        </Specimen>
+        <Specimen
+          name="FormSection + ValidationSummary"
+          klass="FormSection / ValidationSummary"
+          note="Long workflows are numbered sections; failed submits get an assertive summary with per-field jump links while fields keep their inline errors."
+        >
+          <div className="grid gap-3">
+            <ValidationSummary entries={[{ anchor: "spec-title", label: "Title", message: "Give the part a name." }]} />
+            <FormSection step={1} title="The part — what you&rsquo;re releasing" hint="Name it the way a buyer would search.">
+              <TextField id="spec-title" label="Title" placeholder="BBS RS 16x8 et24" />
+            </FormSection>
+          </div>
+        </Specimen>
+        <Specimen
+          name="Order status"
+          klass="StatusChip / OrderPipeline → @/components/commerce"
+          note="Commerce domain patterns — the lifecycle chip shared by Orders and Offers (it used to live inside the Orders route), and the .pipe stage rail."
+        >
+          <div className="flex flex-wrap items-center gap-5">
+            <StatusChip status="paid" />
+            <StatusChip status="pending" />
+            <StatusChip status="cancelled" />
+            <OrderPipeline status="shipped" />
+          </div>
+        </Specimen>
+      </SpecimenGroup>
+
+      {/* ============ 11 COMPONENT REGISTRY ============ */}
       <section id="react" className="scroll-mt-24 pb-8">
         <div className="mb-3 mt-8 flex items-baseline gap-3">
-          <span className="microlabel microlabel--ink !mb-0">10</span>
-          <span className="microlabel !mb-0">React components — src/components/ui</span>
+          <span className="microlabel microlabel--ink !mb-0">11</span>
+          <span className="microlabel !mb-0">
+            Component registry — rendered from src/components/registry.ts
+          </span>
         </div>
         <div className="is-in mb-4" aria-hidden="true">
           <div className="dimline-h" />
         </div>
-        <div className="tile">
-          <table className="spec w-full">
-            <tbody>
-              <tr>
-                <td>livesheet-bar.tsx</td>
-                <td>LivesheetBar (product chrome, index sheet, theme toggle) · Foot</td>
-              </tr>
-              <tr>
-                <td>nav-routes.ts</td>
-                <td>
-                  The register — PRIMARY_NAV · BAR_ROUTES · MARKETPLACE_FAMILY ·
-                  PUBLIC_ROUTES · matchesFamily
-                </td>
-              </tr>
-              <tr>
-                <td>marketplace-nav.tsx</td>
-                <td>MarketplaceNav — Marketplace | My Listings | Offers | Orders, signed in only</td>
-              </tr>
-              <tr>
-                <td>app-shell.tsx</td>
-                <td>AppShell — signed-in rail + content</td>
-              </tr>
-              <tr>
-                <td>icons.tsx</td>
-                <td>Icon — the stroke icon set (IconName union)</td>
-              </tr>
-              <tr>
-                <td>category-icon.tsx</td>
-                <td>CategoryIcon — part-category glyphs</td>
-              </tr>
-              <tr>
-                <td>listing-card.tsx</td>
-                <td>ListingCard — the .mkt tile from ListingCardData</td>
-              </tr>
-              <tr>
-                <td>feed-card.tsx</td>
-                <td>FeedCard · MasonryFeed — explore cards + masonry</td>
-              </tr>
-              <tr>
-                <td>primitives.tsx</td>
-                <td>
-                  NarrowColumn · Avatar · Media (fallbackClassName for undrawn covers) ·
-                  MetadataTags · SectionLabel · HorizontalGallery · TabNav
-                </td>
-              </tr>
-              <tr>
-                <td>patterns.tsx</td>
-                <td>
-                  LinkedTitle · TimelineRow · WebsitePill · ProfileHeader · VehicleGallery ·
-                  KeyValueTable · EmbeddedVideo · SectionHeading
-                </td>
-              </tr>
-              <tr>
-                <td>button.tsx</td>
-                <td>
-                  Button · ButtonLink — the .btn recipes as a semantic contract (variant:
-                  default | live | ghost | destructive | quiet; loading + pendingLabel)
-                </td>
-              </tr>
-              <tr>
-                <td>form.tsx</td>
-                <td>
-                  FormField · TextField · TextArea · Select · Checkbox · Radio — the .field /
-                  .ctl family with aria wiring built in
-                </td>
-              </tr>
-              <tr>
-                <td>filters.tsx</td>
-                <td>
-                  FilterGroup · FilterLink · FilterButton · ActiveFilterChip — the .filters /
-                  .fbtn axes (stack · sub · scroll)
-                </td>
-              </tr>
-              <tr>
-                <td>finder.tsx</td>
-                <td>
-                  Finder · SearchField · FinderLabel · FinderClear — the .finder search plate
-                  (GET form; every search is an address)
-                </td>
-              </tr>
-              <tr>
-                <td>action-footer.tsx / mobile-action-bar.tsx</td>
-                <td>
-                  ActionFooter (.saverow commit row) · MobileActionBar (.buybar persistent
-                  compact action)
-                </td>
-              </tr>
-              <tr>
-                <td>bottom-sheet.tsx / finder-refine-sheet.tsx</td>
-                <td>
-                  BottomSheet (compact sheet, keeps children mounted, dissolves inline ≥640px) ·
-                  FinderRefineSheet (dense refinements behind one Refine control)
-                </td>
-              </tr>
-              <tr>
-                <td>pagination.tsx</td>
-                <td>Pagination — ghost prev/next + mono page marker (with lib/url-params withParams)</td>
-              </tr>
-              <tr>
-                <td>dialog.tsx</td>
-                <td>Dialog — modal on the sheet idiom</td>
-              </tr>
-              <tr>
-                <td>auth-intent-dialog.tsx</td>
-                <td>
-                  AuthIntentDialog — why an account is needed, per intent
-                  (offer/buy/save/follow/sell), carrying ?next= back to the action
-                </td>
-              </tr>
-              <tr>
-                <td>sheet-tabs.tsx</td>
-                <td>SheetTabs · resolveTab — URL-driven jumprow tabs</td>
-              </tr>
-              <tr>
-                <td>toast.tsx / skeleton.tsx</td>
-                <td>Toast (role=status) · Skeleton ghost blocks</td>
-              </tr>
-            </tbody>
-          </table>
-          <p className="mt-3 text-micro leading-relaxed text-dim">
-            Rule: product pages and this board import the same source. A new component lands in
-            src/components/ui, gets a class in globals.css if it needs one, a row in this table,
-            and a specimen above.
-          </p>
-        </div>
+        {(["primitive", "pattern", "feature"] as const).map((layer) => (
+          <div key={layer} className="tile mb-4">
+            <TileHead
+              label={
+                layer === "primitive"
+                  ? "Primitives — generic Livesheet contracts"
+                  : layer === "pattern"
+                    ? "Product patterns — DRVN object representations"
+                    : "Features — workflows, documented for discoverability"
+              }
+              end={
+                <span className="chip">
+                  {COMPONENT_REGISTRY.filter((e) => e.layer === layer).length}
+                </span>
+              }
+            />
+            <table className="spec w-full">
+              <tbody>
+                {COMPONENT_REGISTRY.filter((e: RegistryEntry) => e.layer === layer)
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((entry) => (
+                    <tr key={entry.name}>
+                      <td>
+                        {entry.name}
+                        {entry.status !== "active" && (
+                          <span className="chip chip--spent ml-2">{entry.status}</span>
+                        )}
+                        <span className="block text-dim">{entry.importPath}</span>
+                      </td>
+                      <td>
+                        {entry.description}
+                        <span className="block text-dim">
+                          Use: {entry.use}
+                          {entry.avoid ? ` — Not for: ${entry.avoid}` : ""}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+        <p className="mt-3 text-micro leading-relaxed text-dim">
+          Rule: a new reusable component lands in src/components/ui (primitive) or
+          src/components/commerce (domain pattern), gets a class in globals.css if it needs
+          one, an entry in src/components/registry.ts, and a specimen above.
+          registry.test.ts fails the build when a public export has no entry (or an entry
+          points nowhere); npm run docs:components regenerates the markdown twin.
+        </p>
       </section>
     </>
   );

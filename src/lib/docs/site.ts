@@ -95,17 +95,17 @@ export const REFERENCE_DOCS: DocEntry[] = [
   },
   {
     slug: "livesheet-inventory",
-    title: "Livesheet component & page inventory",
+    title: "Livesheet component & page inventory (historical)",
     description:
-      "Class-by-class component inventory and the mockup-to-route map used for the port.",
+      "HISTORICAL Phase-1 porting contract (2026-07) — for the current system use /docs/components and src/components/registry.ts.",
     file: "docs/livesheet-inventory.md",
     kind: "reference",
   },
   {
     slug: "component-design-doc",
-    title: "Component design doc (profile network surfaces)",
+    title: "Component design doc (DEPRECATED — pre-Livesheet)",
     description:
-      "Developer-facing spec for profile/vehicle/activity components, plus iteration reports.",
+      "DEPRECATED: describes the replaced dark/Read.cv-era system; kept only for its historical iteration reports. Do not build from it.",
     file: "docs/component-design-doc.md",
     kind: "reference",
   },

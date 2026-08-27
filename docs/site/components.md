@@ -1,9 +1,11 @@
 # Component catalog
 
 The complete Livesheet component inventory, categorized. Class names are the
-production CSS in `src/app/globals.css`; React wrappers live in
-`src/components/ui/`. The live rendered version of this catalog is at
-`/docs/components`.
+production CSS in `src/app/globals.css`; React contracts live in
+`src/components/ui/` (primitives + card patterns) and `src/components/commerce/`
+(domain patterns), indexed by the machine-readable registry
+`src/components/registry.ts`. The live rendered version of this catalog is at
+`/docs/components`; §12 is the "which component do I use?" taxonomy.
 
 Format: **class — shape — key rules.**
 
@@ -109,52 +111,137 @@ Format: **class — shape — key rules.**
 | `.num-giant--blank` | `—` numeral | Blank KPI |
 | `.clamp2` / `.trunc` | Truncation utilities | Edge-case text |
 
-## 10 React components (`src/components/ui`)
+## 10 React component registry
 
-| Export | File | Purpose |
-| --- | --- | --- |
-| `LivesheetBar`, `Foot` | livesheet-bar.tsx | Product top bar (signed in/out), index sheet, theme toggle; page footer |
-| `AppShell` | app-shell.tsx | Signed-in shell: rail + content |
-| `BAR_ROUTES`, `PRIMARY_NAV`, `MARKETPLACE_FAMILY`, `PUBLIC_ROUTES`, `matchesFamily`, `isMarketplaceFamily` | nav-routes.tsx | The register, read by the rail, the index and the family subnav. Marketplace/Listings/Offers/Orders are one group; the family matchers keep `/listings` (seller register) and `/listings/<id>` (public part sheet) apart |
-| `MarketplaceNav` | marketplace-nav.tsx | Marketplace \| My Listings \| Offers \| Orders — the family's local register (a contained plate), on every family surface for signed-in users only |
-| `Icon` (`IconName`) | icons.tsx | The stroke icon set |
-| `CategoryIcon` | category-icon.tsx | Part-category glyphs |
-| `ListingCard` | listing-card.tsx | The canonical listing card — renders `ListingMosaicCell` from `ListingCardData`; `save` → engagement strip, `actions` → context-owned controls (quick commerce, Unsave) |
-| `Mosaic`, `MosaicCell`, `FeedMosaicCell`, `ListingMosaicCell` | mosaic.tsx | The photo wall and its `<article>` cell: link region (eyebrow · photo · caption) → provenance link → trust → actions → engagement; `commerce` grows the unit for an action row |
-| `ListingQuickCommerce` | features/commerce/quick-commerce.tsx | Buy now · Add to cart on a Marketplace card over the existing `buyNow`/`addToCart` actions — Marketplace only |
-| `CategoryNav`, `CategorySheet` | app/(discover)/marketplace/category-nav.tsx, category-sheet.tsx | Category destinations: tile grid ≥640px, Browse sheet on compact, sibling row at the leaf |
-| `vehicleLabel`, `platformLabel`, `provenanceLine` | lib/vehicles/label.ts | The one way a vehicle is named in text; pair with `.vref` |
-| `FeedCard`, `MasonryFeed` | feed-card.tsx | Explore feed cards + masonry |
-| `NarrowColumn`, `Avatar`, `Media`, `MetadataTags`, `SectionLabel`, `HorizontalGallery`, `TabNav` | primitives.tsx | Layout + media primitives (Media takes `fallbackClassName` for undrawn covers) |
-| `LinkedTitle`, `TimelineRow`, `WebsitePill`, `ProfileHeader`, `VehicleGallery`, `KeyValueTable`, `EmbeddedVideo`, `SectionHeading` | patterns.tsx | Profile/build-log patterns |
-| `Button`, `ButtonLink`, `buttonClass` | button.tsx | The `.btn` recipes as a semantic contract — `variant`: default \| live \| ghost \| destructive \| quiet (`.relbtn`); `loading` + `pendingLabel` (disables, aria-busy, narrates); `ButtonLink` for CTA navigations |
-| `FormField`, `TextField`, `TextArea`, `Select`, `Checkbox`, `Radio` | form.tsx | The `.field`/`.ctl` family with aria wiring built in; `prefix` joins a mono unit into the control plate; native elements throughout |
-| `FilterGroup`, `FilterLink`, `FilterButton`, `ActiveFilterChip` | filters.tsx | The `.filters`/`.fbtn` axes — one labelled group per filter dimension; link mode for URL-backed selection, button mode for client toggles; `.chip--x` removable chips |
-| `Finder`, `SearchField`, `FinderLabel`, `FinderClear` | finder.tsx | The `.finder` search plate — query row + refinement row, GET form, hidden params carried through |
-| `ActionFooter` | action-footer.tsx | The `.saverow` commit row — aux, status (`ok` chip role=status / `error` line role=alert), primary action |
-| `MobileActionBar` | mobile-action-bar.tsx | The `.buybar` persistent compact action — total block + one live action; `wide` for cart/checkout |
-| `BottomSheet` | bottom-sheet.tsx | Compact sheet on Dialog semantics (`.bsheet`): children stay mounted while closed (form fields keep submitting); `inlineFrom="sm"` dissolves the chrome ≥640px |
-| `FinderRefineSheet` | finder-refine-sheet.tsx | A Finder's dense refinements behind one 44px "Refine" control on compact — first BottomSheet consumer (marketplace) |
-| `Pagination` | pagination.tsx | Ghost prev/next + mono page marker; pairs with `withParams` (src/lib/url-params.ts) |
-| `Dialog` | dialog.tsx | Modal on the sheet idiom |
-| `CountedField` | counted-field.tsx | Labeled input/textarea with a live counter (`.field__labelrow`); controlled so React 19 form resets can't desync counter and value; `max` must come from the same constant the server checks (`src/lib/limits.ts`) |
-| `DropZone` | drop-zone.tsx | The `.drop` pattern with behavior: click/keyboard opens the picker, drag-and-drop hands files to `onFiles`, `busy` refuses activation with `aria-disabled`/`aria-busy` |
-| `AuthIntentDialog` | auth-intent-dialog.tsx | The one place DRVN asks a signed-out visitor for an account — contextual copy per intent (offer/buy/save/follow/sell), carrying `?next=` back to the action |
-| `ConfirmDialog` | confirm-dialog.tsx | Two-step destructive confirm on the dialog idiom |
-| `Gallery`, `GalleryLightbox` (+ `GalleryPhoto` type) | gallery.tsx | Interactive gallery (hero + thumbs) and lightbox |
-| `SheetTabs`, `resolveTab` | sheet-tabs.tsx | URL-driven jumprow tabs |
-| `Toast` | toast.tsx | Status toast |
-| `PaymentModeNotice` | payment-mode-notice.tsx | Test/live Stripe mode banner |
-| `SkeletonRows`, `SkeletonPage` | skeleton.tsx | Ghost loading blocks — **not** exported from `ui/index.ts`; import from the file directly |
+The reusable React layer, generated from the machine-readable registry.
 
-Components living outside the `ui/index.ts` barrel:
+Non-component helpers worth knowing (not in the table): `nav-routes.ts`
+(`BAR_ROUTES`, `PRIMARY_NAV`, family matchers), `buttonClass`, `fieldDescribedBy`,
+`ratingLine` (the canonical "4.8 ★ · 12 reviews" string), `mosaicSize`,
+`resolveTab`, `withParams` (src/lib/url-params.ts), `vehicleLabel`/`provenanceLine`
+(src/lib/vehicles/label.ts), and `uploadImages` (src/lib/media-upload.ts — the one
+image upload loop: validation, storage placement, GC staging).
 
-| Export | File | Purpose |
-| --- | --- | --- |
-| `FeedList` | src/components/ui/feed-list.tsx | Activity feed list (`.feed` rows) — in `ui/` but not the barrel |
-| `Rv`, `LiveDim`, `Countdown` | src/components/livesheet.tsx | Behavior components: reveal wrapper, signature measured value, server-authoritative countdown |
-| `ConditionSummary` | src/components/condition-summary.tsx | Part condition snapshot summary |
-| `ProfileBody` | src/components/profile/profile-body.tsx | Profile page body composition |
+<!-- BEGIN GENERATED: component-registry (npm run docs:components) -->
+
+Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
+
+### Primitives (71)
+
+| Component | Layer | Import from | What it is | Use it for |
+| --- | --- | --- | --- | --- |
+| `ActionFooter` | Primitive | `@/components/ui` | The save row — aux slot, status chip/error, actions. — `.saverow` | Form commit rows. |
+| `ActiveFilterChip` | Primitive | `@/components/ui` | Removable applied-filter chip. — `.chip--x` | Active filter rows. |
+| `Alert` | Primitive | `@/components/ui` | Notice plate — icon column, bold head, body. — `.alert` | Inline notices; `live` when the reader must act, `ok` for confirmation. *Not for:* Action results inside forms — that's ResultNote. |
+| `AppShell` | Primitive | `@/components/ui` | The signed-in application frame: bar, content column, foot. | Product route-group layouts. *Not for:* Docs and marketing surfaces, which own their chrome. |
+| `Avatar` | Primitive | `@/components/ui` | Monogram identity plate (soft square, never a circle). — `.monogram` | People without photos; photo avatars go through Media. |
+| `BottomSheet` | Primitive | `@/components/ui` | Compact bottom sheet; keeps children mounted; dissolves inline ≥ its breakpoint. — `.bsheet` | Compact-width pickers and refinements. |
+| `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. — `.btn / .relbtn` | Every button. One `live` action per surface. |
+| `ButtonLink` | Primitive | `@/components/ui` | The action contract as a real link. — `.btn` | CTAs that navigate — keeps middle-click/new-tab semantics. |
+| `Checkbox` | Primitive | `@/components/ui` | Live-accent square checkbox with its label as one touch target. — `.sq` | Boolean options. |
+| `ConfirmDialog` | Primitive | `@/components/ui` | Destructive confirmation with optional type-to-confirm gate. | Deletes and irreversible actions. |
+| `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
+| `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |
+| `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row. — `.bline` | Settings-style label/value and label/control lines. *Not for:* Full form fields with hints/errors — that's the `.field` family. |
+| `Dialog` | Primitive | `@/components/ui` | The sheet dialog — focus management, escape/backdrop dismissal. | Modal editing/confirmation surfaces. |
+| `DropZone` | Primitive | `@/components/ui` | Click/drag file target with busy state and keyboard support. — `.drop` | Every upload entry point (pair with lib/media-upload's uploadImages). |
+| `EmbeddedVideo` | Primitive | `@/components/ui` | External video as an ink plate with a play mark. | Video links in updates. |
+| `EmptyState` | Primitive | `@/components/ui` | The undrawn plate — dashed mark badge, title, body, optional action. — `.undrawn` | Every empty collection or missing object. |
+| `FilterButton` | Primitive | `@/components/ui` | Filter as a button. — `.fbtn` | Client-side filters. |
+| `FilterGroup` | Primitive | `@/components/ui` | Labelled filter cluster. — `.filters` | Filter bars. |
+| `FilterLink` | Primitive | `@/components/ui` | GET filter as a link. — `.fbtn` | Stateless filters. |
+| `Finder` | Primitive | `@/components/ui` | The find-in-sheet search band. — `.finder` | List filtering headers. |
+| `FinderClear` | Primitive | `@/components/ui` | Finder's clear control. | Inside Finder. |
+| `FinderLabel` | Primitive | `@/components/ui` | Finder's mono label. | Inside Finder. |
+| `Foot` | Primitive | `@/components/ui` | The ruled page foot. — `.foot` | Bottom of full pages. |
+| `FormField` | Primitive | `@/components/ui` | Labelled field wrapper — label, hint, error (role=alert), ok, aria wiring. — `.field` | Custom controls the family doesn't cover (wire aria via fieldDescribedBy). |
+| `FormSection` | Primitive | `@/components/ui` | Numbered form section tile — mono step numeral, heading, hint. | Long editing workflows (Sell, editors). |
+| `Gallery` | Primitive | `@/components/ui` | PDP media gallery. — `.gallery` | Listing detail media. |
+| `GalleryLightbox` | Primitive | `@/components/ui` | Full-screen lightbox with keyboard navigation. | Expanding gallery/vehicle media. |
+| `HorizontalGallery` | Primitive | `@/components/ui` | Scrollable thumbnail strip. | Inline media rows in feeds/timelines. |
+| `Icon` | Primitive | `@/components/ui` | The stroke icon set. | Any inline icon; never ad-hoc SVGs. |
+| `KeyValueTable` | Primitive | `@/components/ui` | Ruled key/value spec table. — `.spec` | Spec sheets (wheels & tires, dimensions). |
+| `LinkedTitle` | Primitive | `@/components/ui` | Linked title with the drafting-office arrow. | Row/section titles that navigate. |
+| `LiveDim` | Primitive | `@/components/livesheet` | The drafting leader line with a measured value; live and blank variants. — `.livedim` | Measured facts on tiles and sheets. |
+| `LivesheetBar` | Primitive | `@/components/ui` | The top bar — wordmark, primary nav, counts, account. — `.bar` | Via AppShell / group layouts only. |
+| `Media` | Primitive | `@/components/ui` | Optimized image plate with role-based `sizes` presets and the undrawn no-photo fallback. | Every product image. Pick a `role` (hero/card/row/thumb/avatar…). *Not for:* Raw <img> tags anywhere. |
+| `Message` | Primitive | `@/components/ui` | One message — sender line, body, meta; `me` right-tones the row. — `.msg` | Order messages, offer threads, Q&A, comments. Features decide what `me` means. |
+| `MessageComposer` | Primitive | `@/components/ui` | The send row — hidden fields, `.ctl` input, submit; block variant for the Q&A ask box. — `.composer__row / .composer` | Thread reply rows. The owning feature supplies action + pending. |
+| `MessageThread` | Primitive | `@/components/ui` | Conversation container (`.thread`). — `.thread` | Wrapping Message runs on any discussion surface. |
+| `MetadataTags` | Primitive | `@/components/ui` | Wrapping row of plain chips. — `.chip` | Tag lists. |
+| `MetricCard` | Primitive | `@/components/ui` | KPI tile — microlabel, giant numeral, measured LiveDim line, floor-pinned footer link. — `.tile + .num-giant` | KPI decks (`.deck--kpi`); calculations stay with the feature. |
+| `MobileActionBar` | Primitive | `@/components/ui` | Pinned bottom action bar (buybar) for compact widths. — `.buybar` | Primary commerce actions on PDP-like pages. One bottom surface per route. |
+| `NarrowColumn` | Primitive | `@/components/ui` | Constrained page column (narrow 720 / medium / wide). — `.wrap--*` | Reading and list surfaces that shouldn't span the full 1200px wrap. |
+| `ObjectRow` | Primitive | `@/components/ui` | The `.order` dense row — leading media plate, name, dim meta, trailing actions — inside `.rowlist`. — `.order / .rowlist` | Any object in a dense collection (saved items, cart lines, inbox rows, task rows). *Not for:* Marketplace browsing — that's the mosaic card family. Sortable tables — that's `.ledger`. |
+| `PageHead` | Primitive | `@/components/ui` | Page header: mono eyebrow, display h1, dim sub line, revealed on entry. — `.pagehead` | The head of every page instead of hand-assembling `.pagehead` markup. |
+| `Pagination` | Primitive | `@/components/ui` | Ghost prev/next with mono page marker; renders nothing on a lone first page. | Every paginated list. (Admin's jumplink Pager is a deliberate console variant.) |
+| `Radio` | Primitive | `@/components/ui` | Radio in the square-mark language. — `.sq` | Exclusive options. |
+| `RatingStars` | Primitive | `@/components/ui` | Read-only five-star display with sr-only value. — `.review__stars` | Displaying a rating. (The interactive picker is the review form's `.star-pick`.) |
+| `ResultNote` | Primitive | `@/components/ui` | Action outcome line — ok chip or error text, role=alert. | useActionState results next to a form. |
+| `Rv` | Primitive | `@/components/livesheet` | Livesheet spring reveal (`.rv → .is-in`), staggered per index, reduced-motion safe. — `.rv` | Entry reveal on page heads, tiles, cards. |
+| `ScrollActiveIntoView` **[internal]** | Primitive | `@/components/ui` | Scrolls the active nav item into view on mount. | Inside scrolling nav strips. |
+| `SearchField` | Primitive | `@/components/ui` | The `.search` input band. — `.search` | Search inputs. |
+| `SectionHeading` | Primitive | `@/components/ui` | Mono microlabel section heading. — `.microlabel` | Section labels inside sheets/profiles. |
+| `SectionLabel` | Primitive | `@/components/ui` | Ink microlabel paragraph. — `.microlabel--ink` | Ink-toned section labels. |
+| `Select` | Primitive | `@/components/ui` | Native select in the field contract (platform picker on compact). — `.ctl` | Enumerated choices. |
+| `SheetTabs` | Primitive | `@/components/ui` | URL-backed sheet tabs. | Profile/car sheet sections. |
+| `SkeletonCardGrid` | Primitive | `@/components/ui` | Card-grid placeholder matching the marketplace 3→2→1 grid. | loading.tsx for card-grid routes. |
+| `SkeletonLedger` | Primitive | `@/components/ui` | Console placeholder — pagehead + ledger ghost rows, no wrap. | Admin console loading. |
+| `SkeletonMasonry` | Primitive | `@/components/ui` | Masonry placeholder with varied plate heights. | loading.tsx for feed walls (Explore). |
+| `SkeletonPage` | Primitive | `@/components/ui` | Generic page placeholder — pagehead + rows. | loading.tsx when no closer geometry exists; pass a label naming the surface. |
+| `SkeletonPdp` | Primitive | `@/components/ui` | Two-column PDP placeholder (media + purchase rail). | loading.tsx for listing detail. |
+| `SkeletonRows` | Primitive | `@/components/ui` | N ghost ledger rows. — `.ghostrow` | Inside larger skeletons / list regions. |
+| `Stepper` | Primitive | `@/components/ui` | Auto-numbered workflow progress rail; live numeral on the current step. — `.steps` | Multi-step workflows (checkout). Workflow state stays with the feature. |
+| `TabNav` | Primitive | `@/components/ui` | The system's tab replacement — a quiet jumprow of mono links. — `.jumprow` | On-page section switching. |
+| `TextArea` | Primitive | `@/components/ui` | Textarea in the field contract. — `.ctl` | Multi-line input. |
+| `TextField` | Primitive | `@/components/ui` | Text input in the field contract; mono prefix support ($, PN). — `.field / .ctl` | Every text input. |
+| `ThreadDivider` | Primitive | `@/components/ui` | Centered mono divider (day buckets). | Grouped threads. |
+| `TileHead` | Primitive | `@/components/ui` | Tile rule line — ink microlabel left, optional chip/jumplink right. — `.tile__head` | The head of any `.tile` section. *Not for:* Heads with bespoke inner structure — keep those raw. |
+| `TimelineRow` | Primitive | `@/components/ui` | Date-rail timeline row — mono date column beside content. | Activity/history feeds on profiles and sheets. |
+| `Toast` | Primitive | `@/components/ui` | Bottom-center transient confirmation, portalled to <body>. — `.toast` | Post-action confirmations that need no reply. |
+| `ValidationSummary` | Primitive | `@/components/ui` | Assertive submit-blocking error list with per-field jump links. | Above long forms on failed submit; fields keep their inline errors. |
+| `WebsitePill` | Primitive | `@/components/ui` | Quiet mono external-link pill. | Profile websites. |
+
+### Product patterns (19)
+
+| Component | Layer | Import from | What it is | Use it for |
+| --- | --- | --- | --- | --- |
+| `AuthIntentDialog` | Product pattern | `@/components/ui` | Signed-out interception — explains the action and routes to login with intent. | Any engagement control a guest can press. |
+| `CategoryIcon` | Product pattern | `@/components/ui` | Marketplace taxonomy category mark. | Category navigation and headers. |
+| `ConditionSummary` | Product pattern | `@/components/commerce` | Structured part-condition grid (grade + checklist). | PDP and sell preview condition blocks. |
+| `FeedList` | Product pattern | `@/components/ui/feed-list` | Feed items as dense `.order`-based rows (Home's list-shaped feed). — `.feedrow on .order` | Home feeds where the wall would be too loud. *Not for:* Browse surfaces — that's the mosaic family. |
+| `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card. | Explore and mixed feeds, via MasonryFeed. |
+| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder's compact refine sheet. | Marketplace filtering on compact widths. |
+| `ListingCard` | Product pattern | `@/components/ui` | THE listing card — canonical marketplace/browse representation (delegates to ListingMosaicCell). | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
+| `ListingMosaicCell` | Product pattern | `@/components/ui` | A listing as a mosaic card (price, shipping, provenance, seller trust). | Via ListingCard. |
+| `ListingRow` | Product pattern | `@/components/commerce` | A seller's listing as a dense ledger row — cover, title, price, Live/Sold chip. — `.order` | Seller-scoped lists (profile shopfront, car sheet parts). *Not for:* Marketplace browsing — that's ListingCard. |
+| `MarketplaceNav` | Product pattern | `@/components/ui` | The marketplace-family console nav. | Marketplace-family pages. |
+| `MasonryFeed` | Product pattern | `@/components/ui` | The Explore wall — FeedMosaicCells in a dense Mosaic, with its empty state. | Mixed-kind feed walls. |
+| `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. — `.mosaic` | Container for MosaicCell families on browse surfaces. |
+| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind, media, title, value, provenance, trust, engagement slots. — `.mcell` | Underlying anatomy for every card; compose, don't fork. |
+| `OrderPipeline` | Product pattern | `@/components/commerce` | The order lifecycle as a `.pipe` stage rail, terminal states included. — `.pipe` | Order rows and order detail. |
+| `PaymentModeNotice` | Product pattern | `@/components/ui` | Test-mode payments banner. | Payment surfaces while Stripe runs in test mode. |
+| `ProfileHeader` | Product pattern | `@/components/ui` | Identity block — avatar plate, name, handle, tagline, website, action slot. | Profile and car sheet heads. |
+| `StatusChip` | Product pattern | `@/components/commerce` | Order/offer lifecycle state as a toned chip (ok / live / spent). — `.chip--ok/--live/--spent` | Orders, offers, and anywhere an order-family status appears. *Not for:* Non-lifecycle chips — use `.chip` variants directly. |
+| `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity, pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
+| `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
+
+### Features (10)
+
+| Component | Layer | Import from | What it is | Use it for |
+| --- | --- | --- | --- | --- |
+| `CardEngagement` | Feature | `@/features/social/card-actions` | Like · comment · share · save strip on cards; optimistic with rollback; guest → AuthIntentDialog. — `.cardeng` | Via the mosaic card family's engagement slot. |
+| `CheckoutSteps` | Feature | `@/app/(discover)/checkout/checkout-steps` | The checkout workflow (shipping → payment), shared by cart and order checkout. | Feature-owned; the Stepper and field primitives inside it are the reusable parts. |
+| `FollowButton` | Feature | `@/features/social/buttons` | Follow toggle with configurable labels. | Profiles and car sheets. |
+| `GarageSheetCard` | Feature | `@/app/(product)/garage/garage-sheet` | The Garage management sheet card (`.gsheet`) — dims, notes, latest update, orders. | Garage only. The public vehicle row is VehicleCard. |
+| `ListingQuickCommerce` | Feature | `@/features/commerce/quick-commerce` | Card-level quick buy/offer actions. | Commerce mosaic walls. |
+| `ProfileBody` | Feature | `@/components/profile/profile-body` | The public profile's tabbed body (vehicles, activity, listings, reviews). | Profile routes. |
+| `SaveButton` | Feature | `@/features/social/buttons` | Full-size save toggle for detail pages. | PDP / car sheet headers. |
+| `SellerKpis` | Feature | `@/app/(product)/home/seller-kpis` | Seller KPI deck on Home — data fetching + MetricCard composition. | Home only. |
+| `SellForm` | Feature | `@/app/(product)/sell/sell-form` | The listing create/edit workflow (also used by Edit Listing). | Feature-owned; compose FormSection/ValidationSummary/fields from it, don't fork it. |
+| `ThreadView` | Feature | `@/app/(product)/messages/[orderId]/thread-view` | The order-messages surface: day buckets, windowed history, pinned composer. | Feature-owned; its grammar is Message/MessageThread/MessageComposer. |
+
+<!-- END GENERATED: component-registry -->
 
 ## 11 Further CSS families (globals.css)
 
@@ -184,3 +271,66 @@ Previously undocumented class families, one line each:
 | `.indexlight` | The lighting (theme) switch spelled out inside the index sheet — the bar's version is icon-only |
 | `.railtoggle` | Collapse/expand control for the register rail |
 | `.console-nav` / `.console-main` | Admin console layer: console nav (a `.filters` compound, hidden ≤640px for the index button) and the console content column with its calmer display/stat scale |
+
+## 12 Taxonomy — which component do I use?
+
+Layers: **CSS recipes** (globals.css) define the visual foundations ·
+**primitives** (`@/components/ui`) are the generic React contracts ·
+**product patterns** (`@/components/ui` cards + `@/components/commerce`) represent
+DRVN objects · **features** (routes, `src/features`) own business logic and
+compose the rest. Registry: `src/components/registry.ts`.
+
+### Cards (browsing an object)
+
+One family, built on `MosaicCell` (`.mcell`):
+
+- **`ListingCard`** — a listing anywhere it is browsed (Marketplace, Home recs, PDP rails, Saved grid). Delegates to `ListingMosaicCell`.
+- **`MasonryFeed` → `FeedMosaicCell`** — mixed feed items (part / build / update) on Explore-style walls.
+- **`VehicleCard`** — a vehicle as a dashboard row (Home). The Garage management card is the feature-level `GarageSheetCard` (`.gsheet`) — deliberately not shared.
+- The old `FeedCard` tile deck is **gone** (no call sites); the landing page's `.mkt` tiles are an intentional marketing-surface exception.
+
+### Rows (dense collections)
+
+- **`ObjectRow`** (primitive, `.order`/`.rowlist`) — any object in a dense list: saved items, cart/checkout lines, inbox rows, task rows, payment methods.
+- **`ListingRow`** (`@/components/commerce`) — a seller's listing in a seller-scoped list (profile shopfront, car sheet parts).
+- **`FeedList`** — feed items as rows on Home.
+- **`.ledger`** — the seller register's sortable table; genuinely tabular, stays feature-local. `TimelineRow` for dated activity.
+
+### Messages
+
+- **`MessageThread` / `Message` / `ThreadDivider` / `MessageComposer`** carry the whole `.thread`/`.msg`/`.composer` grammar. Features decide semantics: `me` = current user in order/offer threads, = seller in listing Q&A. Day grouping, pagination, send actions, optimistic state stay feature-local (`ThreadView`, `OfferThread`, `QASection`, activity comments).
+- **`ResultNote`** — the ok-chip/error outcome line beside any action form.
+
+### Status & chips
+
+- **`.chip` variants** (raw or `MetadataTags`) — generic labels; `ActiveFilterChip` for removable filters.
+- **`StatusChip`** (`@/components/commerce`) — order/offer lifecycle states; `OrderPipeline` for the stage rail. Payout/admin state maps are deliberate feature-local variants (different state vocabularies).
+
+### Forms
+
+- **Primitives**: `TextField` / `TextArea` / `Select` / `Checkbox` / `Radio` / `CountedField` (+ `FormField` for custom controls) — never hand-write `.field`/`.ctl`.
+- **Composition**: `FormSection` (numbered sections), `ValidationSummary` (submit-blocking error list), `ActionFooter` (commit row), `Stepper` (workflow rail), `DataRow` (settings `.bline` lines), `DropZone` + `uploadImages` (media in).
+- **Workflows stay features**: `SellForm`, `CheckoutSteps`, garage editors — compose primitives inside them, never generalize the workflow itself.
+
+## 13 Contributing a component (and how drift is blocked)
+
+Adding UI? The workflow is: **look it up** (registry / §12) → **compose** from
+`@/components/ui` + `@/components/commerce` → only if nothing covers it, build
+the new piece from existing primitives and recipes, export it from the barrel,
+add a `registry.ts` entry, run `npm run docs:components`, and add a specimen to
+`/docs/components` if it is visual.
+
+Four vitest gates enforce this (`npm test`):
+
+1. **Registry sync** — every public export has a registry entry and every entry
+   resolves (`src/components/registry.test.ts`).
+2. **Docs sync** — the §10 table above is generated from the registry and fails
+   when stale (`src/lib/docs/registry-docs.test.ts`).
+3. **Route boundaries** — routes may not import other routes' components;
+   shared pieces move to `src/components` (`src/components/architecture.test.ts`).
+4. **Recipe ratchet** — raw usage of component-backed recipe classes
+   (`.btn`, `.field__label`, `.pagehead`, `.undrawn`, `.msg`…) in feature code
+   is counted against `src/components/recipe-baseline.json` and may only
+   decrease (`src/components/recipe-ratchet.test.ts`). After migrating old
+   markup, lock in the lower counts with
+   `UPDATE_RECIPE_BASELINE=1 npx vitest run src/components/recipe-ratchet.test.ts`.

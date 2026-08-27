@@ -1,5 +1,22 @@
 # DRVN Component Design Doc
 
+> **⚠️ DEPRECATED — HISTORICAL DOCUMENT. DO NOT BUILD FROM THIS.**
+>
+> This spec describes the **pre-Livesheet** system: a dark Read.cv-style UI with a
+> blue accent, Rubik/DM Sans/Poppins type, and pill radii. Every one of those
+> decisions was **replaced** by the Livesheet design system (IBM Plex, paper/ink
+> day-night tokens, live red, radii 16/10/6/3, no pills). The `/design-system`
+> route it references no longer exists.
+>
+> Current, authoritative sources:
+> - `/docs` (the docs microsite) and its markdown twins under `docs/site/`
+> - `src/components/registry.ts` — the machine-readable component registry
+> - `src/components/ui` + `src/components/commerce` — the production components
+> - `src/app/globals.css` — the Livesheet stylesheet
+>
+> Kept only for its historical iteration reports (appendices). Everything above
+> those appendices is obsolete.
+
 A developer-facing specification for the DRVN product and marketing UI. It explains
 **what each component is, where it is used, how it behaves, and the concrete specs**
 (dimensions, colors, typography, data shape) needed to start building.
