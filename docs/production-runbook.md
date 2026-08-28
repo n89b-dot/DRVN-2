@@ -215,3 +215,13 @@ JSON
 
 The `e2e` job stays unrequired — it self-skips without secrets and must not
 block merges. Revisit once E2E secrets are permanent.
+
+## 9. Saved-search alert worker
+
+Schedule `POST /api/jobs/saved-searches` with `Authorization: Bearer
+$CRON_SECRET` every ~30 minutes (same pattern as `/api/jobs/transfers` —
+pg_cron + pg_net, or any external cron). One pass checks every alert-enabled
+saved search for listings created since its last check and raises at most one
+in-app notification per search per pass. A search's first pass after opt-in
+only stamps the baseline — nobody is alerted about inventory that predates
+their opt-in. `/api/jobs/media-gc` shares the same scheduling posture.

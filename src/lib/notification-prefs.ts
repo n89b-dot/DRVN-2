@@ -63,6 +63,12 @@ export const NOTIFICATION_PREFS = [
     label: "Messages",
     hint: "Someone messages you about an offer or an order",
   },
+  {
+    key: "saved_searches",
+    group: "Marketplace",
+    label: "Saved-search matches",
+    hint: "New inventory matching a search you asked to be told about",
+  },
 ] as const;
 
 export const NOTIFICATION_PREF_GROUPS = ["Profile", "Marketplace"] as const;
@@ -97,6 +103,8 @@ export function prefKeyForKind(kind: string): NotificationPrefKey | null {
     if (kind.startsWith("offer")) return "offers_sales";
     if (kind === "order_sold" || kind === "order_paid") return "offers_sales";
     if (kind.startsWith("order")) return "order_updates";
+    if (kind.startsWith("dispute")) return "order_updates";
+    if (kind === "saved_search") return "saved_searches";
     return null;
   })();
 

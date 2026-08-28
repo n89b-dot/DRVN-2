@@ -284,6 +284,18 @@ export function ModChangeView(props: NodeViewProps) {
           />
         </label>
       </div>
+      {action === "removed" && modItemId && (
+        // The Build → Marketplace bridge (brief §I): everything DRVN knows
+        // about this part prefills the listing. Quiet link, never a prompt.
+        <a
+          className="jumplink mt-2 inline-block"
+          href={`/sell?car=${ctx(props).carId}&mod=${modItemId}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Sell this part →
+        </a>
+      )}
     </BlockShell>
   );
 }

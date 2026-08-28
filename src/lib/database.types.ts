@@ -176,6 +176,8 @@ export type Listing = {
   condition: "new" | "like_new" | "used" | "for_parts" | null;
   /** Manufacturer part number, seller-entered. Not platform-verified. */
   part_number: string | null;
+  /** Generated (0033): lowercase, separators stripped — the searchable form. */
+  part_number_compact: string | null;
   price_cents: number;
   /** Seller-set flat shipping, charged on top of the asking price. */
   shipping_cents: number;
@@ -447,6 +449,19 @@ export type PartNumberLink = {
     | "interchange"
     | "same_product";
   source: string;
+  created_at: string;
+};
+
+/** A kept marketplace state (migration 0044). `params` mirrors the
+ *  /marketplace query string; `alert` is the separate, explicit opt-in. */
+export type SavedSearch = {
+  id: string;
+  user_id: string;
+  name: string;
+  params: Record<string, string>;
+  alert: boolean;
+  last_checked_at: string | null;
+  last_matched_at: string | null;
   created_at: string;
 };
 
@@ -876,6 +891,7 @@ export type Database = {
       catalog_models: Table<CatalogModel, "make_id" | "name">;
       listing_fitments: Table<ListingFitment, "listing_id" | "make" | "model">;
       listing_part_numbers: Table<ListingPartNumber, "listing_id" | "number">;
+      saved_searches: Table<SavedSearch, "user_id" | "name">;
       part_number_links: Table<PartNumberLink, "from_compact" | "to_compact" | "kind">;
       staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
     };

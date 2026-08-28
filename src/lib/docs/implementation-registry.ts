@@ -201,7 +201,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "search-architecture",
     name: "Automotive search architecture",
     group: "discovery",
-    status: "planned",
+    status: "validated",
     brief: "B1–B2",
     existsToday:
       "Marketplace search is Postgres `ilike` over title/description/compatibility/part_number, with a separator-insensitive `part_number_compact` column (0033) and a pg_trgm helper (0008).",
@@ -213,13 +213,20 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Provider interface + Postgres FTS/trigram implementation now; Typesense evaluated as the optional engine (alphanumeric typo control fits part numbers); indexing contract + reindex tooling shipped regardless of engine availability.",
     uxRules: ["Search UI stays one box + existing filters — engine complexity is never exposed."],
-    validation: "Not yet validated.",
+    decisions: [
+      "Two lanes share one pure classifier: single-token digit-bearing terms are identifiers (exact compact substring, one interchange-graph hop, never fuzzy); everything else rides the pg_trgm RPC with title-first ranking.",
+      "Typesense chosen over Meilisearch for per-field alphanumeric typo control (num_typos=0 on part_numbers); reached over plain fetch — no client dependency, optional env config, every failure falls back to Postgres.",
+      "Providers only produce candidate id sets; the canonical Postgres query still applies every filter and sort — no commerce decision touches an index.",
+      "Per-listing index sync is fire-and-forget on publish/edit/status; full rebuilds via scripts/reindex-search.mjs.",
+    ],
+    validation:
+      "Query classifier unit-tested against the brief's example queries; feature-regression e2e green through the provider (part-number search included) on the dev server; typecheck/lint/unit green. Typesense adapter + reindex tooling ship configured-off.",
   },
   {
     id: "saved-searches",
     name: "Saved searches & alerts",
     group: "discovery",
-    status: "planned",
+    status: "validated",
     brief: "C",
     existsToday: "No saved-search model exists anywhere; /saved covers listings, cars, sellers and posts only.",
     changing:
@@ -235,13 +242,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Saving is silent; alerts are a separate explicit opt-in, easy to disable.",
       "New matches surface through existing home/notification patterns — no disruptive messaging.",
     ],
-    validation: "Not yet validated.",
+    decisions: [
+      "Saving and alerting are separate columns and separate gestures; duplicate saves quietly succeed; 50-search cap enforced by a DB trigger.",
+      "The worker (/api/jobs/saved-searches, CRON_SECRET) raises at most one notification per search per pass — a summary, never a per-listing flood; 'fits my garage' searches reuse the marketplace's exact fitment matcher.",
+    ],
+    validation:
+      "Full loop verified live: silent save from the marketplace UI (toast receipt), row + alert toggle on /saved, worker baseline pass, a new matching listing produced exactly one summary notification with a deep link; first-pass baseline prevents pre-opt-in alerts. RLS guard (cross-user invisibility, forge refusal) executed green live; 0044 applied twice.",
   },
   {
     id: "part-aliases",
     name: "Part aliases, supersessions & interchange (groundwork)",
     group: "discovery",
-    status: "in-progress",
+    status: "validated",
     brief: "H",
     existsToday: "A listing has one part_number plus its compact variant; no alias or interchange relationships exist.",
     changing:
@@ -257,7 +269,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "0042: listing_part_numbers (seller-supplied 'also known as', RLS mirrors fitment) + part_number_links (internal typed graph, service-role only). Sell form gained one optional comma-separated field.",
     ],
     validation:
-      "Migration applied twice (self-checks pass); sell-form persistence code-complete. Search-lane consumption lands with search-architecture (Group 5).",
+      "Identifier-lane expansion through part_number_links live in the provider; seller 'also known as' numbers persist from the sell form and match in search; migration applied twice; covered by the provider path the regression e2e exercises.",
   },
 
   // ── 03 · Vehicle identity & fitment ─────────────────────────────────────
@@ -363,7 +375,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "remove-to-sell",
     name: "Remove from Build → Sell this part",
     group: "selling",
-    status: "planned",
+    status: "validated",
     brief: "I",
     existsToday:
       "Build lines can deep-link to /sell?car=&mod= and mod_items carry linked_listing_id, but removing a mod and selling it are unconnected acts.",
@@ -375,7 +387,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Extend the existing ?car=&mod= prefill contract to carry the full mod context; contextual action on the mods editor and the removed-part composer block. No provenance ledger.",
     uxRules: ["A useful connection, not a ledger — ordinary relational data only."],
-    validation: "Not yet validated.",
+    validation:
+      "Three bridges live: build-line 'Sell it' (pre-existing), ?car=&mod= prefill carrying title/category/part number + inferred fitment row, and the composer's removed-mod block linking 'Sell this part →'. Exercised via the sell-form fitment prefill path; no ledger machinery anywhere.",
   },
 
   // ── 05 · Build Story Composer ───────────────────────────────────────────
@@ -649,7 +662,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "notification-domain",
     name: "Notification domain & delivery boundary",
     group: "notifications",
-    status: "planned",
+    status: "validated",
     brief: "D",
     existsToday:
       "A notifications table with kind/section, nine SQL triggers, per-user prefs, unread badges and an open-and-redirect route — in-app only, delivery logic scattered in triggers.",
@@ -661,7 +674,11 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Typed kind registry + provider seam; Novu evaluated pragmatically and the decision recorded; in-app remains the working default.",
     uxRules: ["Alerts only ever arrive by explicit opt-in for non-transactional kinds."],
-    validation: "Not yet validated.",
+    decisions: [
+      "Novu evaluated and not adopted: one in-app channel needs no workflow orchestration and DRVN must not depend on a hosted notification service; deliver.ts is the documented seam where email/push/Novu would fan out.",
+    ],
+    validation:
+      "Typed kinds registry consistent with prefKeyForKind (unit-tested — caught and fixed ungoverned dispute kinds); deliverNotification enforces preferences at write time for app-sourced kinds and delivered the live saved-search alert; Novu decision recorded at the seam.",
   },
 
   // ── 09 · Admin operations ───────────────────────────────────────────────

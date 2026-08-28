@@ -15,6 +15,7 @@ import {
   Mosaic,
   ObjectRow,
   Pagination,
+  TileHead,
 } from "@/components/ui";
 import { removeFollow, removeSave } from "@/features/social/actions";
 import { initialsOf } from "@/lib/format";
@@ -22,6 +23,7 @@ import { withParams as buildParams } from "@/lib/url-params";
 import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { SavedSearchList } from "@/features/marketplace/saved-search-list";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
 export const metadata = { title: "Saved - DRVN" };
@@ -86,18 +88,24 @@ export default async function SavedPage({
   // Cheap either way — just the id columns — so both are fetched unbounded
   // to know the true shape of what a user has saved/followed, even though
   // only one tab's worth gets fully hydrated below.
-  const [{ data: saves, error: savesError }, { data: follows }] = await Promise.all([
-    supabase
-      .from("saves")
-      .select("target_type, target_id, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("follows")
-      .select("target_type, target_id, created_at")
-      .eq("follower_id", user.id)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [{ data: saves, error: savesError }, { data: follows }, { data: savedSearches }] =
+    await Promise.all([
+      supabase
+        .from("saves")
+        .select("target_type, target_id, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("follows")
+        .select("target_type, target_id, created_at")
+        .eq("follower_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("saved_searches")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+    ]);
 
   if (savesError) reportError("[saved] failed to load saves", savesError);
 
@@ -431,6 +439,19 @@ export default async function SavedPage({
             {totalPostSaves > savedUpdates.length && (
               <p className="field__hint mt-2">Showing your {savedUpdates.length} most recent.</p>
             )}
+          </Rv>
+        </section>
+      )}
+
+      {tab === "saved" && (savedSearches ?? []).length > 0 && (
+        <section className="deck">
+          <Rv className="tile">
+            <TileHead label="Saved searches" end={<span className="chip">{(savedSearches ?? []).length}</span>} />
+            <SavedSearchList searches={savedSearches ?? []} />
+            <p className="field__hint mt-2">
+              Alerts are off unless you turn them on — matching inventory then lands in
+              Notifications, never your inbox.
+            </p>
           </Rv>
         </section>
       )}

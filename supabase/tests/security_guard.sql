@@ -530,6 +530,26 @@ begin
     raise notice 'PASS 15b: seller cannot set status=sold directly — that is checkout''s job';
   end;
 
+  -- ---------- saved searches (0044): strictly private ----------
+  perform pg_temp.impersonate(v_buyer);
+  insert into public.saved_searches (user_id, name, params)
+  values (v_buyer, 'guard search', '{"q":"turbo"}'::jsonb);
+  raise notice 'PASS: user can save a search';
+
+  begin
+    insert into public.saved_searches (user_id, name, params)
+    values (v_seller, 'forged', '{}'::jsonb);
+    raise exception 'FAIL: saved a search as someone else';
+  exception when insufficient_privilege or check_violation then
+    raise notice 'PASS: cannot save a search for another user';
+  end;
+
+  perform pg_temp.impersonate(v_seller);
+  if exists (select 1 from public.saved_searches where user_id = v_buyer) then
+    raise exception 'FAIL: saved searches visible to another user';
+  end if;
+  raise notice 'PASS: saved searches invisible to other users';
+
   perform pg_temp.back_to_admin();
   raise notice '--- all security-guard checks passed ---';
 end $$;

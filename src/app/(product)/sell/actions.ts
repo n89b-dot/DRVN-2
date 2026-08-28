@@ -10,6 +10,7 @@ import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecy
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { syncListingToSearch } from "@/lib/marketplace/search/indexing";
 import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
 
@@ -195,6 +196,9 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
       .eq("car_id", parsed.fields.source_car_id);
   }
 
+  // Search follows the listing (§B1) — fire-and-forget, no-op without an engine.
+  void syncListingToSearch(listing.id);
+
   revalidatePath("/marketplace");
   revalidatePath("/sell");
   if (parsed.fields.source_car_id) revalidatePath(`/garage/${parsed.fields.source_car_id}/edit`);
@@ -302,6 +306,8 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   const { error: fitmentError } = await saveFitments(supabase, id, parsed.fitments);
   await saveAltPartNumbers(supabase, id, parsed.altNumbers);
 
+  void syncListingToSearch(id);
+
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/marketplace");
@@ -380,6 +386,8 @@ export async function setListingStatus(
     .eq("seller_id", user.id);
   if (error) return { error: error.message };
 
+  void syncListingToSearch(id);
+
   revalidatePath("/sell");
   revalidatePath("/listings");
   revalidatePath(`/listings/${id}`);
@@ -413,6 +421,8 @@ export async function deleteListing(
         : error.message,
     };
   }
+
+  void syncListingToSearch(id);
 
   revalidatePath("/sell");
   revalidatePath("/marketplace");

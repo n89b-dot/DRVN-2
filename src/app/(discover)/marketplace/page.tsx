@@ -7,6 +7,7 @@ import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 import { ActiveFilters } from "./active-filters";
+import { SaveSearchButton } from "@/features/marketplace/save-search-button";
 import { CategoryNav, CategorySheet } from "./category-nav";
 import { FilterBar } from "./filter-bar";
 import { MarketplaceResults } from "./results";
@@ -78,6 +79,21 @@ export default async function MarketplacePage({
         basePath="/marketplace"
         filters={filters as Record<string, string | undefined>}
       />
+
+      {/* Quiet, opt-in persistence (§C): appears only once a state exists;
+          saving is silent, alerts are a later decision in Saved. */}
+      <div className="mt-1">
+        <SaveSearchButton
+          signedIn={Boolean(user)}
+          params={Object.fromEntries(
+            Object.entries(filters as Record<string, string | undefined>).filter(
+              (entry): entry is [string, string] =>
+                ["q", "category", "subcategory", "condition", "min", "max", "location", "fit"].includes(entry[0]) &&
+                Boolean(entry[1]),
+            ),
+          )}
+        />
+      </div>
 
       {/* Categories are destinations (real routes), drawn as tiles so they
           can't be mistaken for another refinement row. Hidden while a text

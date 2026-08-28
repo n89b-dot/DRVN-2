@@ -9,6 +9,7 @@ import {
   type GarageCar,
 } from "@/lib/marketplace/fitment";
 import { reportError } from "@/lib/monitoring";
+import { getSearchProvider } from "@/lib/marketplace/search/provider";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
 export type ListingSort = "newest" | "price_asc" | "price_desc";
@@ -270,24 +271,37 @@ export async function fetchListings(
   if (filters.location) query = query.ilike("location", `%${filters.location}%`);
 
   if (filters.q) {
-    // Escape the PostgREST `or` separators before interpolating user input.
+    // The search seam (§B1): a provider produces ranked candidate ids — two
+    // lanes, fuzzy human discovery vs exact identifier matching (see
+    // src/lib/marketplace/search/) — and this canonical Postgres query then
+    // applies every other filter and the sort on top. null = provider
+    // couldn't answer → the legacy ilike clause below keeps search working.
     const term = filters.q.replace(/[,()]/g, " ").trim();
     if (term) {
-      const clauses = [
-        `title.ilike.%${term}%`,
-        `description.ilike.%${term}%`,
-        `compatibility_notes.ilike.%${term}%`,
-        `part_number.ilike.%${term}%`,
-      ];
-      // Part numbers are typed with or without separators ("11-42-7-566-327"
-      // vs "11427566327"). Both sides normalise: the query strips separators
-      // here, the listing side is the stored generated column
-      // part_number_compact (0033) — an exact-substring match, not fuzzy.
-      const compact = term.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-      if (compact.length >= 4 && /\d/.test(compact)) {
-        clauses.push(`part_number_compact.ilike.%${compact}%`);
+      const ids = await getSearchProvider()
+        .searchIds(term, { limit: 300 })
+        .catch(() => null);
+      if (ids !== null) {
+        if (ids.length === 0) {
+          // A definitive empty answer — force an empty page without a
+          // degenerate `in ()` clause.
+          query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+        } else {
+          query = query.in("id", ids);
+        }
+      } else {
+        const clauses = [
+          `title.ilike.%${term}%`,
+          `description.ilike.%${term}%`,
+          `compatibility_notes.ilike.%${term}%`,
+          `part_number.ilike.%${term}%`,
+        ];
+        const compact = term.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+        if (compact.length >= 4 && /\d/.test(compact)) {
+          clauses.push(`part_number_compact.ilike.%${compact}%`);
+        }
+        query = query.or(clauses.join(","));
       }
-      query = query.or(clauses.join(","));
     }
   }
 
