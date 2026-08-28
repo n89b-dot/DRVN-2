@@ -711,7 +711,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "ops-cases",
     name: "Operations case model",
     group: "admin",
-    status: "planned",
+    status: "validated",
     brief: "K1",
     existsToday:
       "Disputes, reports, recoveries and audit exist as separate queues; nothing aggregates a problem into one assignable unit of work.",
@@ -720,13 +720,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     surfaces: ["/admin", "supabase/migrations/", "src/lib/admin/"],
     benefit: "Admin work becomes claimable and trackable instead of re-derived from queues each session.",
     approach: "Case table referencing existing objects; audited actions; module-boundary refactor where domains grew large.",
-    validation: "Not yet validated.",
+    decisions: [
+      "Cases are a WORK wrapper, not a CRM: kind/status/priority/assignment/labels over the existing dispute/report objects; creation and resolution ride database triggers on the domain events so the ledger stays true no matter which path acted.",
+      "Case reads use the admin console's normal read layer; mutations go through auditedAction under the pre-registered 'case.' capability family and the 0040 actor assertion.",
+    ],
+    validation:
+      "0046 applied twice; backfill created cases from existing disputes/reports; live run as the console admin: queue renders, Claim → status 'claimed' + assigned_to + audited 'case.claim' row, labels/priority saved and audited. Lifecycle is trigger-owned, so SLA auto-refunds and buyer acceptances resolve cases without app code.",
   },
   {
     id: "dispute-dossier",
     name: "Dispute evidence dossier",
     group: "admin",
-    status: "planned",
+    status: "validated",
     brief: "K2",
     existsToday:
       "Dispute facts are spread across the order sheet, evidence viewer, webhook stream and messages.",
@@ -736,7 +741,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "An admin resolves a dispute from one coherent dossier instead of mentally reconstructing the transaction.",
     approach: "Pure composition of existing data plus the correlation timeline from transaction-diagnostics.",
     dependsOn: ["transaction-diagnostics"],
-    validation: "Not yet validated.",
+    validation:
+      "The admin order sheet now composes everything §K2 lists on one screen: listing snapshot + condition comparison (purchased vs current), photos/evidence via signed URLs, offer/order money state, the §AF transaction timeline (payment, webhook events, transfer lifecycle, refund operations), the thread, both parties with history, and prior admin actions. Timeline builder unit-tested; sheet exercised during the cases run.",
   },
 
   // ── 10 · Design system ──────────────────────────────────────────────────

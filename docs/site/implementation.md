@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 7 planned · 1 in progress · 6 implemented · 21 validated · 7 deferred · 1 blocked externally
+**Progress:** 43 initiatives — 5 planned · 1 in progress · 6 implemented · 23 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -358,7 +358,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 
 ### 09 · Admin operations
 
-#### Operations case model — Planned
+#### Operations case model — Validated
 
 - **Brief:** K1
 - **Exists today:** Disputes, reports, recoveries and audit exist as separate queues; nothing aggregates a problem into one assignable unit of work.
@@ -366,9 +366,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `/admin`, `supabase/migrations/`, `src/lib/admin/`
 - **User benefit:** Admin work becomes claimable and trackable instead of re-derived from queues each session.
 - **Approach:** Case table referencing existing objects; audited actions; module-boundary refactor where domains grew large.
-- **Validation:** Not yet validated.
+- **Decisions:** Cases are a WORK wrapper, not a CRM: kind/status/priority/assignment/labels over the existing dispute/report objects; creation and resolution ride database triggers on the domain events so the ledger stays true no matter which path acted. Case reads use the admin console's normal read layer; mutations go through auditedAction under the pre-registered 'case.' capability family and the 0040 actor assertion.
+- **Validation:** 0046 applied twice; backfill created cases from existing disputes/reports; live run as the console admin: queue renders, Claim → status 'claimed' + assigned_to + audited 'case.claim' row, labels/priority saved and audited. Lifecycle is trigger-owned, so SLA auto-refunds and buyer acceptances resolve cases without app code.
 
-#### Dispute evidence dossier — Planned
+#### Dispute evidence dossier — Validated
 
 - **Brief:** K2
 - **Exists today:** Dispute facts are spread across the order sheet, evidence viewer, webhook stream and messages.
@@ -377,7 +378,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** An admin resolves a dispute from one coherent dossier instead of mentally reconstructing the transaction.
 - **Approach:** Pure composition of existing data plus the correlation timeline from transaction-diagnostics.
 - **Depends on:** transaction-diagnostics
-- **Validation:** Not yet validated.
+- **Validation:** The admin order sheet now composes everything §K2 lists on one screen: listing snapshot + condition comparison (purchased vs current), photos/evidence via signed URLs, offer/order money state, the §AF transaction timeline (payment, webhook events, transfer lifecycle, refund operations), the thread, both parties with history, and prior admin actions. Timeline builder unit-tested; sheet exercised during the cases run.
 
 ### 10 · Design system
 

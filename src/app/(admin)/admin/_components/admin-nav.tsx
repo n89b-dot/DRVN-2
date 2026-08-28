@@ -15,6 +15,7 @@ type ConsoleRoute = { href: string; label: string; note: string; icon: IconName 
 
 const LINKS: ConsoleRoute[] = [
   { href: "/admin", label: "Overview", note: "Queues and the last seven days", icon: "gauge" },
+  { href: "/admin/cases", label: "Cases", note: "Claimable work: disputes & reports", icon: "book" },
   { href: "/admin/disputes", label: "Disputes", note: "Open cases, oldest first", icon: "scale" },
   { href: "/admin/orders", label: "Orders", note: "Search, inspect, intervene", icon: "box" },
   { href: "/admin/listings", label: "Listings", note: "Moderate the stock", icon: "sell" },

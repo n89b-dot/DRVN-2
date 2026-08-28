@@ -452,6 +452,24 @@ export type PartNumberLink = {
   created_at: string;
 };
 
+/** A claimable unit of admin work over a dispute or report (migration 0046).
+ *  Created and resolved by domain triggers; claim/priority/labels are the
+ *  admin-mutable surface. */
+export type OpsCase = {
+  id: string;
+  kind: "dispute" | "report";
+  status: "open" | "claimed" | "resolved";
+  priority: "normal" | "high";
+  assigned_to: string | null;
+  order_id: string | null;
+  report_id: string | null;
+  summary: string;
+  labels: string[];
+  opened_at: string;
+  resolved_at: string | null;
+  updated_at: string;
+};
+
 /** One pin on a car's showcase image (migration 0045). `label` is a display
  *  snapshot; mod_item_id links the real build entry while it exists. */
 export type CarHotspot = {
@@ -906,6 +924,7 @@ export type Database = {
       listing_part_numbers: Table<ListingPartNumber, "listing_id" | "number">;
       saved_searches: Table<SavedSearch, "user_id" | "name">;
       car_hotspots: Table<CarHotspot, "car_id" | "image_url" | "x" | "y" | "label">;
+      ops_cases: Table<OpsCase, "kind">;
       part_number_links: Table<PartNumberLink, "from_compact" | "to_compact" | "kind">;
       staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
     };

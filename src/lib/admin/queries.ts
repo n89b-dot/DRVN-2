@@ -9,6 +9,7 @@ import type {
   OrderStatus,
   Payment,
   PaymentRecovery,
+  OpsCase,
   Report,
   TransferIntent,
   WebhookEvent,
@@ -1404,4 +1405,86 @@ export async function getAdminRoster(): Promise<AdminRosterRow[]> {
     note: r.note,
     addedAt: r.created_at,
   }));
+}
+
+// ---------- Operations cases (0046) ----------
+
+export type OpsCaseRow = {
+  id: string;
+  kind: OpsCase["kind"];
+  status: OpsCase["status"];
+  priority: OpsCase["priority"];
+  assignedTo: string | null;
+  assignedName: string | null;
+  orderId: string | null;
+  reportId: string | null;
+  summary: string;
+  labels: string[];
+  openedAt: string;
+  /** The underlying object's headline (order item title / reported subject). */
+  subject: string;
+  href: string;
+};
+
+/**
+ * The case queue (§K1): claimable work over disputes and reports. Filters are
+ * plain columns; the row links straight to the surface where the work happens
+ * (the order sheet's dossier, or the reports queue).
+ */
+export async function listOpsCases(opts: {
+  status?: "open" | "claimed" | "resolved";
+  kind?: OpsCase["kind"];
+  assignee?: string;
+} = {}): Promise<OpsCaseRow[]> {
+  const a = admin();
+  let query = a
+    .from("ops_cases")
+    .select("*")
+    .order("priority", { ascending: false })
+    .order("opened_at", { ascending: true })
+    .limit(100);
+  if (opts.status) query = query.eq("status", opts.status);
+  else query = query.neq("status", "resolved");
+  if (opts.kind) query = query.eq("kind", opts.kind);
+  if (opts.assignee) query = query.eq("assigned_to", opts.assignee);
+  const { data: cases } = await query;
+
+  const orderIds = (cases ?? []).flatMap((c) => (c.order_id ? [c.order_id] : []));
+  const reportIds = (cases ?? []).flatMap((c) => (c.report_id ? [c.report_id] : []));
+  const assigneeIds = [...new Set((cases ?? []).flatMap((c) => (c.assigned_to ? [c.assigned_to] : [])))];
+  const [{ data: items }, { data: reports }, { data: assignees }] = await Promise.all([
+    orderIds.length
+      ? a.from("order_items").select("order_id, title").in("order_id", orderIds)
+      : Promise.resolve({ data: [] as { order_id: string; title: string | null }[] }),
+    reportIds.length
+      ? a.from("reports").select("id, subject_type, reason").in("id", reportIds)
+      : Promise.resolve({ data: [] as { id: string; subject_type: string; reason: string }[] }),
+    assigneeIds.length
+      ? a.from("profiles").select("id, username, display_name").in("id", assigneeIds)
+      : Promise.resolve({ data: [] as { id: string; username: string | null; display_name: string | null }[] }),
+  ]);
+
+  return (cases ?? []).map((c) => {
+    const orderTitle = (items ?? []).find((i) => i.order_id === c.order_id)?.title;
+    const report = (reports ?? []).find((r) => r.id === c.report_id);
+    const assignee = (assignees ?? []).find((p) => p.id === c.assigned_to);
+    return {
+      id: c.id,
+      kind: c.kind,
+      status: c.status,
+      priority: c.priority,
+      assignedTo: c.assigned_to,
+      assignedName: assignee?.display_name ?? assignee?.username ?? null,
+      orderId: c.order_id,
+      reportId: c.report_id,
+      summary: c.summary,
+      labels: c.labels,
+      openedAt: c.opened_at,
+      subject:
+        c.kind === "dispute"
+          ? (orderTitle ?? "Order")
+          : `${report?.subject_type ?? "report"} · ${report?.reason?.replaceAll("_", " ") ?? ""}`,
+      href: c.kind === "dispute" && c.order_id ? `/admin/orders/${c.order_id}` : "/admin/reports",
+    };
+  });
 }

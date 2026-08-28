@@ -867,3 +867,98 @@ export async function adminSendTestAlert(
   // depend on the messenger) — so "sent" here means handed to the webhook.
   return { ok: "Test alert dispatched — check the channel the webhook feeds." };
 }
+
+// ---------- Operations cases (§K1, 0046) ----------
+
+/** Claim a case (or release your own claim). Audited like every mutation. */
+export async function adminCaseClaim(formData: FormData) {
+  const ctx = await requireAdmin();
+  if (!isCtx(ctx)) return ctx ?? { error: "Not found." };
+  const caseId = field(formData, "case_id");
+  if (!caseId) return { error: "Missing case." };
+
+  const { data: opsCase } = await ctx.admin
+    .from("ops_cases")
+    .select("id, status, assigned_to, kind, order_id, report_id")
+    .eq("id", caseId)
+    .maybeSingle();
+  if (!opsCase || opsCase.status === "resolved") return { error: "Case not open." };
+
+  const releasing = opsCase.assigned_to === ctx.userId;
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: releasing ? "case.release" : "case.claim",
+        subjectType: opsCase.kind === "dispute" ? "order" : "report",
+        subjectId: (opsCase.order_id ?? opsCase.report_id)!,
+        orderId: opsCase.order_id,
+        reason: releasing ? "Released the case" : "Claimed the case",
+      },
+      async () => {
+        const { error } = await ctx.admin
+          .from("ops_cases")
+          .update(
+            releasing
+              ? { assigned_to: null, status: "open", updated_at: new Date().toISOString() }
+              : { assigned_to: ctx.userId, status: "claimed", updated_at: new Date().toISOString() },
+          )
+          .eq("id", caseId);
+        if (error) throw new Error(error.message);
+        return { released: releasing };
+      },
+    );
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Couldn't update the case." };
+  }
+  revalidatePath("/admin/cases");
+  return { ok: releasing ? "Released." : "Claimed — it's yours." };
+}
+
+/** Set labels (comma-separated) and priority on a case. */
+export async function adminCaseUpdate(formData: FormData) {
+  const ctx = await requireAdmin();
+  if (!isCtx(ctx)) return ctx ?? { error: "Not found." };
+  const caseId = field(formData, "case_id");
+  const priority = field(formData, "priority");
+  const labels = field(formData, "labels")
+    .split(",")
+    .map((label) => label.trim().toLowerCase().slice(0, 30))
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!caseId || !["normal", "high"].includes(priority)) return { error: "Bad case update." };
+
+  const { data: opsCase } = await ctx.admin
+    .from("ops_cases")
+    .select("id, kind, order_id, report_id")
+    .eq("id", caseId)
+    .maybeSingle();
+  if (!opsCase) return { error: "Case not found." };
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: "case.update",
+        subjectType: opsCase.kind === "dispute" ? "order" : "report",
+        subjectId: (opsCase.order_id ?? opsCase.report_id)!,
+        orderId: opsCase.order_id,
+        reason: `priority=${priority}; labels=${labels.join(",") || "—"}`,
+      },
+      async () => {
+        const { error } = await ctx.admin
+          .from("ops_cases")
+          .update({ priority: priority as "normal" | "high", labels, updated_at: new Date().toISOString() })
+          .eq("id", caseId);
+        if (error) throw new Error(error.message);
+        return { priority, labels };
+      },
+    );
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Couldn't update the case." };
+  }
+  revalidatePath("/admin/cases");
+  return { ok: "Case updated." };
+}
