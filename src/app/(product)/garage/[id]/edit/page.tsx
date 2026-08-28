@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { CarDetailsForm } from "./car-details-form";
 import { GalleryManager } from "./gallery-manager";
+import { ShowcaseEditor } from "./showcase-editor";
 import { ModsEditor } from "./mods-editor";
 import { ActivityComposer } from "./activity-composer";
 import { DangerZone } from "./danger-zone";
@@ -29,15 +30,17 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
 
   if (!car) notFound();
 
-  const [{ data: images }, { data: mods }, { data: posts }] = await Promise.all([
-    supabase.from("car_images").select("*").eq("car_id", id).order("position"),
-    supabase.from("mod_items").select("*").eq("car_id", id).order("position"),
-    supabase
-      .from("activity_posts")
-      .select("id, title, published_at")
-      .eq("car_id", id)
-      .order("published_at", { ascending: false }),
-  ]);
+  const [{ data: images }, { data: mods }, { data: posts }, { data: hotspots }] =
+    await Promise.all([
+      supabase.from("car_images").select("*").eq("car_id", id).order("position"),
+      supabase.from("mod_items").select("*").eq("car_id", id).order("position"),
+      supabase
+        .from("activity_posts")
+        .select("id, title, published_at")
+        .eq("car_id", id)
+        .order("published_at", { ascending: false }),
+      supabase.from("car_hotspots").select("*").eq("car_id", id).order("created_at"),
+    ]);
 
   return (
     <div className="wrap">
@@ -68,6 +71,12 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
           coverFocal={{ x: car.cover_focal_x, y: car.cover_focal_y }}
         />
         <ModsEditor carId={car.id} initialMods={mods ?? []} />
+        <ShowcaseEditor
+          carId={car.id}
+          images={images ?? []}
+          mods={mods ?? []}
+          initial={hotspots ?? []}
+        />
         <ActivityComposer carId={car.id} posts={posts ?? []} />
         <DangerZone carId={car.id} carName={car.name} />
       </div>

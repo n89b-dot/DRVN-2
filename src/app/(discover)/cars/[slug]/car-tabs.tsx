@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { ListingRow } from "@/components/commerce";
+import { ShowcaseExplorer, type ShowcasePin } from "@/features/garage/showcase";
+import { BuildEvolution, type EvolutionMilestone } from "@/features/garage/build-evolution";
 import {
   EmptyState,
   GalleryLightbox,
@@ -63,6 +65,8 @@ export function CarTabs({
   slug,
   isOwner,
   initialTab,
+  showcase,
+  evolution,
 }: {
   about: string | null;
   gallery: GalleryImage[];
@@ -76,6 +80,10 @@ export function CarTabs({
   slug: string;
   isOwner: boolean;
   initialTab?: string;
+  /** The annotated showcase image (§U) — one photo, pinned parts. */
+  showcase?: { imageUrl: string; pins: ShowcasePin[] } | null;
+  /** Dated update milestones for the Build Evolution strip (§V). */
+  evolution?: EvolutionMilestone[];
 }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
 
@@ -84,6 +92,15 @@ export function CarTabs({
 
   const buildPanel = (
     <div className="mt-2">
+      {showcase && showcase.pins.length > 0 && (
+        <div className="mb-6">
+          <ShowcaseExplorer
+            imageUrl={showcase.imageUrl}
+            alt={`${carName} — showcase`}
+            pins={showcase.pins}
+          />
+        </div>
+      )}
       {about && <p className="max-w-[62ch] text-body leading-7">{about}</p>}
 
       {hasBuild ? (
@@ -197,6 +214,11 @@ export function CarTabs({
 
   const activityPanel = (
     <div className="mt-4">
+      {evolution && evolution.length >= 2 && (
+        <div className="mb-6">
+          <BuildEvolution milestones={evolution} />
+        </div>
+      )}
       {activity.length > 0 ? (
         <ul className="feed">
           {activity.map((post) => (

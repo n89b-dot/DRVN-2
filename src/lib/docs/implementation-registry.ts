@@ -593,7 +593,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "annotated-showcase",
     name: "Annotated showcase image",
     group: "garage",
-    status: "planned",
+    status: "validated",
     brief: "U",
     existsToday: "Car photos are a plain gallery; nothing links an image region to build data.",
     changing:
@@ -603,13 +603,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Percentage-positioned hotspots referencing mod_items, accessible keyboard/touch interaction; explicitly not a post block, never on every photo.",
     uxRules: ["Default photo experience stays clean.", "Not a marketplace navigation system."],
-    validation: "Not yet validated.",
+    decisions: [
+      "Pins snapshot their label and reference mod_items while it exists; a pinned part that's for sale links its live listing ('For sale · $x →'), otherwise the card just names the part.",
+      "Hard bounds by construction: one image, 8 pins, reveal-on-request — the default photo experience stays clean.",
+    ],
+    validation:
+      "0045 applied twice (8-pin trigger cap, visibility-following RLS); live run on a public build: 'Explore this build' toggle → staggered pins → part card with label verified by screenshot; owner editor (photo picker, click-to-pin, mod-linked labels) code-complete under the car edit sheet.",
   },
   {
     id: "build-evolution",
     name: "Build Evolution timeline",
     group: "garage",
-    status: "planned",
+    status: "validated",
     brief: "V",
     existsToday: "Activity is a list; there is no visual chronology of the car.",
     changing:
@@ -617,13 +622,17 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     surfaces: ["/cars/[slug]"],
     benefit: "Visitors can watch a build evolve instead of scrolling a feed backwards.",
     approach: "Derived entirely from existing posts/images; motion respects reduced-motion.",
-    validation: "Not yet validated.",
+    decisions: [
+      "A milestone is simply a published update with a photo — zero new data entry, no snapshots, no diffs (§V/§AJ honored by construction).",
+    ],
+    validation:
+      "Derived-only strip (published, dated, photographed updates → milestones) rendered on the Activity tab when ≥2 exist; verified live with three seeded dated updates; scroll-snap horizontal track with year ticks; hover lift disabled under reduced motion.",
   },
   {
     id: "passive-suggestions",
     name: "Passive creation suggestions",
     group: "garage",
-    status: "planned",
+    status: "validated",
     brief: "W",
     existsToday: "Editing the build or adding photos never connects to posting an update.",
     changing:
@@ -633,13 +642,14 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach: "Inline dismissible row, no modals, no repeat nagging; state remembered so it doesn't re-offer.",
     dependsOn: ["unified-composer"],
     uxRules: ["No popups.", "Ignorable forever without cost."],
-    validation: "Not yet validated.",
+    validation:
+      "Both affordances are inline, dismissible rows — no modals, no repeats: the mods editor diffs labels on save and offers 'Create an update from these changes →'; the gallery offers 'Share these in an update →' after a ≥2-photo batch. The composer seeds visible, editable blocks from the links and never clobbers an in-flight draft. Typecheck/lint/unit green.",
   },
   {
     id: "share-cards",
     name: "Shareable build/update cards",
     group: "garage",
-    status: "planned",
+    status: "validated",
     brief: "AB",
     existsToday: "Car pages have OpenGraph metadata with car imagery; no designed share card exists.",
     changing:
@@ -647,13 +657,17 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     surfaces: ["/cars/[slug]", "activity posts", "OG image generation"],
     benefit: "Sharing a build off-platform looks intentional instead of like a screenshot.",
     approach: "Data-driven OG image route composing existing car/update data.",
-    validation: "Not yet validated.",
+    decisions: [
+      "No manual card workflow anywhere: the card IS the route's opengraph-image, always current.",
+    ],
+    validation:
+      "next/og cards for build pages and update pages, generated from existing data (cover/first photo, identity line, mod/update counts); verified live — 200 image/png, screenshot reviewed. The explicit openGraph.images override was removed so the designed card owns every unfurl.",
   },
   {
     id: "garage-hierarchy",
     name: "Garage hierarchy pass",
     group: "garage",
-    status: "planned",
+    status: "validated",
     brief: "Z",
     existsToday: "The garage sheet works; density and hierarchy have grown organically.",
     changing:
@@ -661,7 +675,11 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     surfaces: ["/garage"],
     benefit: "Owners see what matters about their car first — with nothing new to learn.",
     approach: "Simplify-before-add rule; no intelligence dashboard.",
-    validation: "Not yet validated.",
+    decisions: [
+      "No garage intelligence dashboard (§Z honored): the existing sheet already answers 'what matters about this car right now'.",
+    ],
+    validation:
+      "Reviewed against the simplify-before-add rule: the Aug-2026 garage sheet already leads with the car, its latest update, selling counts and a bounded work-order list — reorganizing further would only move furniture. Preserved deliberately; the passive suggestions (§W) are the only additions, and they live on the edit surfaces, not the sheet.",
   },
 
   // ── 08 · Notifications ──────────────────────────────────────────────────

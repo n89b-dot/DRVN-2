@@ -88,6 +88,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   const [status, setStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);
+  // Passive post-save affordance (brief §W1): when a save meaningfully changed
+  // the build, one quiet inline line offers to turn it into an update. Never a
+  // modal, never repeated — dismissing it (or saving again without changes)
+  // clears it, and ignoring it costs nothing.
+  const [suggestion, setSuggestion] = useState<{ added: string[]; removed: string[] } | null>(null);
 
   function unlink(row: Row) {
     if (!row.id) return;
@@ -132,6 +137,15 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           ? { kind: "error", message: result.error }
           : { kind: "ok", message: "Saved ✓" }
       );
+      if (!result.error) {
+        const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
+          [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
+        const before = new Set(initialMods.map((m) => label(m)).filter(Boolean));
+        const after = new Set(rows.map((r) => label(r)).filter(Boolean));
+        const added = [...after].filter((l) => !before.has(l)).slice(0, 3);
+        const removed = [...before].filter((l) => !after.has(l)).slice(0, 3);
+        setSuggestion(added.length || removed.length ? { added, removed } : null);
+      }
     });
   }
 
@@ -344,6 +358,32 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           Save the build
         </Button>
       </ActionFooter>
+
+      {suggestion && (
+        <p className="mt-3 flex flex-wrap items-center gap-3 text-micro text-dim" role="status">
+          <span>
+            Build updated
+            {suggestion.added.length > 0 && ` — added ${suggestion.added.join(", ")}`}
+            {suggestion.removed.length > 0 &&
+              `${suggestion.added.length ? ";" : " —"} removed ${suggestion.removed.join(", ")}`}
+            .
+          </span>
+          <Link
+            href={`/garage/${carId}/update/new?added=${encodeURIComponent(suggestion.added.join("|"))}&removed=${encodeURIComponent(suggestion.removed.join("|"))}`}
+            className="jumplink"
+          >
+            Create an update from these changes →
+          </Link>
+          <button
+            type="button"
+            className="jumplink"
+            aria-label="Dismiss this suggestion"
+            onClick={() => setSuggestion(null)}
+          >
+            ✕
+          </button>
+        </p>
+      )}
     </section>
   );
 }

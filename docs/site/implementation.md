@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 12 planned · 1 in progress · 6 implemented · 16 validated · 7 deferred · 1 blocked externally
+**Progress:** 43 initiatives — 7 planned · 1 in progress · 6 implemented · 21 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -285,7 +285,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 
 ### 07 · Garage & build experience
 
-#### Annotated showcase image — Planned
+#### Annotated showcase image — Validated
 
 - **Brief:** U
 - **Exists today:** Car photos are a plain gallery; nothing links an image region to build data.
@@ -294,9 +294,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** A build becomes explorable through the car itself — tap the wheel, see the wheel spec.
 - **Approach:** Percentage-positioned hotspots referencing mod_items, accessible keyboard/touch interaction; explicitly not a post block, never on every photo.
 - **UX rules:** Default photo experience stays clean. Not a marketplace navigation system.
-- **Validation:** Not yet validated.
+- **Decisions:** Pins snapshot their label and reference mod_items while it exists; a pinned part that's for sale links its live listing ('For sale · $x →'), otherwise the card just names the part. Hard bounds by construction: one image, 8 pins, reveal-on-request — the default photo experience stays clean.
+- **Validation:** 0045 applied twice (8-pin trigger cap, visibility-following RLS); live run on a public build: 'Explore this build' toggle → staggered pins → part card with label verified by screenshot; owner editor (photo picker, click-to-pin, mod-linked labels) code-complete under the car edit sheet.
 
-#### Build Evolution timeline — Planned
+#### Build Evolution timeline — Validated
 
 - **Brief:** V
 - **Exists today:** Activity is a list; there is no visual chronology of the car.
@@ -304,9 +305,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `/cars/[slug]`
 - **User benefit:** Visitors can watch a build evolve instead of scrolling a feed backwards.
 - **Approach:** Derived entirely from existing posts/images; motion respects reduced-motion.
-- **Validation:** Not yet validated.
+- **Decisions:** A milestone is simply a published update with a photo — zero new data entry, no snapshots, no diffs (§V/§AJ honored by construction).
+- **Validation:** Derived-only strip (published, dated, photographed updates → milestones) rendered on the Activity tab when ≥2 exist; verified live with three seeded dated updates; scroll-snap horizontal track with year ticks; hover lift disabled under reduced motion.
 
-#### Passive creation suggestions — Planned
+#### Passive creation suggestions — Validated
 
 - **Brief:** W
 - **Exists today:** Editing the build or adding photos never connects to posting an update.
@@ -316,9 +318,9 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Inline dismissible row, no modals, no repeat nagging; state remembered so it doesn't re-offer.
 - **Depends on:** unified-composer
 - **UX rules:** No popups. Ignorable forever without cost.
-- **Validation:** Not yet validated.
+- **Validation:** Both affordances are inline, dismissible rows — no modals, no repeats: the mods editor diffs labels on save and offers 'Create an update from these changes →'; the gallery offers 'Share these in an update →' after a ≥2-photo batch. The composer seeds visible, editable blocks from the links and never clobbers an in-flight draft. Typecheck/lint/unit green.
 
-#### Shareable build/update cards — Planned
+#### Shareable build/update cards — Validated
 
 - **Brief:** AB
 - **Exists today:** Car pages have OpenGraph metadata with car imagery; no designed share card exists.
@@ -326,9 +328,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `/cars/[slug]`, `activity posts`, `OG image generation`
 - **User benefit:** Sharing a build off-platform looks intentional instead of like a screenshot.
 - **Approach:** Data-driven OG image route composing existing car/update data.
-- **Validation:** Not yet validated.
+- **Decisions:** No manual card workflow anywhere: the card IS the route's opengraph-image, always current.
+- **Validation:** next/og cards for build pages and update pages, generated from existing data (cover/first photo, identity line, mod/update counts); verified live — 200 image/png, screenshot reviewed. The explicit openGraph.images override was removed so the designed card owns every unfurl.
 
-#### Garage hierarchy pass — Planned
+#### Garage hierarchy pass — Validated
 
 - **Brief:** Z
 - **Exists today:** The garage sheet works; density and hierarchy have grown organically.
@@ -336,7 +339,8 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `/garage`
 - **User benefit:** Owners see what matters about their car first — with nothing new to learn.
 - **Approach:** Simplify-before-add rule; no intelligence dashboard.
-- **Validation:** Not yet validated.
+- **Decisions:** No garage intelligence dashboard (§Z honored): the existing sheet already answers 'what matters about this car right now'.
+- **Validation:** Reviewed against the simplify-before-add rule: the Aug-2026 garage sheet already leads with the car, its latest update, selling counts and a bounded work-order list — reorganizing further would only move furniture. Preserved deliberately; the passive suggestions (§W) are the only additions, and they live on the edit surfaces, not the sheet.
 
 ### 08 · Notifications
 

@@ -452,6 +452,19 @@ export type PartNumberLink = {
   created_at: string;
 };
 
+/** One pin on a car's showcase image (migration 0045). `label` is a display
+ *  snapshot; mod_item_id links the real build entry while it exists. */
+export type CarHotspot = {
+  id: string;
+  car_id: string;
+  image_url: string;
+  x: number;
+  y: number;
+  mod_item_id: string | null;
+  label: string;
+  created_at: string;
+};
+
 /** A kept marketplace state (migration 0044). `params` mirrors the
  *  /marketplace query string; `alert` is the separate, explicit opt-in. */
 export type SavedSearch = {
@@ -892,6 +905,7 @@ export type Database = {
       listing_fitments: Table<ListingFitment, "listing_id" | "make" | "model">;
       listing_part_numbers: Table<ListingPartNumber, "listing_id" | "number">;
       saved_searches: Table<SavedSearch, "user_id" | "name">;
+      car_hotspots: Table<CarHotspot, "car_id" | "image_url" | "x" | "y" | "label">;
       part_number_links: Table<PartNumberLink, "from_compact" | "to_compact" | "kind">;
       staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
     };

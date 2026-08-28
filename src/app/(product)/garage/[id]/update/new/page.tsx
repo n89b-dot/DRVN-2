@@ -9,8 +9,15 @@ import { createRichActivityPost, saveActivityDraft } from "../../../actions";
 
 export const metadata = { title: "New update - DRVN" };
 
-export default async function NewUpdatePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function NewUpdatePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ added?: string; removed?: string; photos?: string }>;
+}) {
   const { id } = await params;
+  const seeds = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -47,6 +54,43 @@ export default async function NewUpdatePage({ params }: { params: Promise<{ id: 
     label: [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry",
   }));
 
+  // Passive-affordance seeds (§W): "Create an update from these changes" /
+  // "Share these in an update" prepopulate the composer — visibly, as normal
+  // editable blocks, and only when there's no draft already in flight.
+  const seededBlocks: import("@/lib/activity-blocks").ActivityBlock[] = [];
+  if (!draftBlocks?.length) {
+    const parseLabels = (raw?: string) =>
+      (raw ?? "")
+        .split("|")
+        .map((label) => label.trim().slice(0, 80))
+        .filter(Boolean)
+        .slice(0, 3);
+    const byLabel = new Map(mods.map((mod) => [mod.label, mod.id]));
+    for (const label of parseLabels(seeds.added)) {
+      seededBlocks.push({
+        type: "mod",
+        action: "installed",
+        modItemId: byLabel.get(label) ?? null,
+        label,
+      });
+    }
+    for (const label of parseLabels(seeds.removed)) {
+      seededBlocks.push({ type: "mod", action: "removed", modItemId: null, label });
+    }
+    const photoCount = Math.min(Number(seeds.photos) || 0, 12);
+    if (photoCount >= 1) {
+      const { data: latest } = await supabase
+        .from("car_images")
+        .select("url, created_at")
+        .eq("car_id", car.id)
+        .order("created_at", { ascending: false })
+        .limit(photoCount);
+      const urls = (latest ?? []).map((image) => image.url);
+      if (urls.length) seededBlocks.push({ type: "images", urls });
+    }
+    if (seededBlocks.length) seededBlocks.push({ type: "text", style: "normal", text: "" });
+  }
+
   return (
     <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
       <header className="pagehead">
@@ -67,7 +111,7 @@ export default async function NewUpdatePage({ params }: { params: Promise<{ id: 
         userId={user.id}
         mods={mods}
         initialTitle={draft?.title ?? ""}
-        initialBlocks={draftBlocks && draftBlocks.length ? draftBlocks : []}
+        initialBlocks={draftBlocks && draftBlocks.length ? draftBlocks : seededBlocks}
         draftSavedAt={draft?.updated_at ?? null}
         publishAction={createRichActivityPost}
         draftAction={saveActivityDraft}

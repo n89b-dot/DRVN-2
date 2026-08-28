@@ -430,6 +430,61 @@ export async function reorderCarImages(carId: string, orderedIds: string[]): Pro
   return { ok: "Order saved" };
 }
 
+export type ShowcasePinInput = {
+  x: number;
+  y: number;
+  modItemId: string | null;
+  label: string;
+};
+
+/**
+ * The annotated showcase (§U): ONE image, up to 8 pins, each snapshotting its
+ * label. Delete-and-reinsert like the gallery/fitment savers; RLS scopes both
+ * statements to the owner, and the image must be one of this car's photos.
+ */
+export async function saveShowcase(
+  carId: string,
+  imageUrl: string,
+  pins: ShowcasePinInput[],
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+  if (!carId) return { error: "Missing car." };
+
+  const clamp = (v: number) => Math.min(1, Math.max(0, Math.round(v * 1000) / 1000));
+  const sane = pins
+    .filter((pin) => Number.isFinite(pin.x) && Number.isFinite(pin.y) && pin.label.trim())
+    .slice(0, 8)
+    .map((pin) => ({
+      x: clamp(pin.x),
+      y: clamp(pin.y),
+      mod_item_id: pin.modItemId,
+      label: pin.label.trim().slice(0, 80),
+    }));
+
+  if (sane.length > 0) {
+    const { data: image } = await supabase
+      .from("car_images")
+      .select("id")
+      .eq("car_id", carId)
+      .eq("url", imageUrl)
+      .maybeSingle();
+    if (!image) return { error: "Pick one of this car's photos for the showcase." };
+  }
+
+  await supabase.from("car_hotspots").delete().eq("car_id", carId);
+  if (sane.length > 0) {
+    const { error } = await supabase
+      .from("car_hotspots")
+      .insert(sane.map((pin) => ({ car_id: carId, image_url: imageUrl, ...pin })));
+    if (error) return { error: "Couldn't save the showcase." };
+  }
+
+  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
+  revalidatePath(`/garage/${carId}/edit`);
+  if (car) revalidatePath(`/cars/${car.slug}`);
+  return { ok: sane.length ? "Showcase saved" : "Showcase cleared" };
+}
+
 /** Cover framing (§S3): stores the 0..1 focal point; the photo is untouched. */
 export async function setCoverFocal(formData: FormData): Promise<ActionState> {
   const { supabase } = await requireUser();

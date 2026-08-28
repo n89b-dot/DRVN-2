@@ -31,6 +31,9 @@ export function GalleryManager({
   coverFocal?: { x: number | null; y: number | null };
 }) {
   const [framing, setFraming] = useState(false);
+  // Passive post-upload affordance (§W2): a quiet inline offer to share a
+  // fresh photo batch as an update. Never a popup; ignoring it costs nothing.
+  const [shareCount, setShareCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -67,17 +70,25 @@ export function GalleryManager({
         // an oversize or non-image file will fail again identically.
         if (failure.retryable) failed.push(failure.file);
       }
+      let savedCount = 0;
       for (const { url, file } of result.uploaded) {
         const saved = await addCarImage(carId, url);
         if (saved.error) {
           setError(saved.error);
           failed.push(file);
+        } else {
+          savedCount += 1;
         }
       }
+      noteUploaded(savedCount);
     } finally {
       setUploading(false);
       setFailedFiles(failed);
     }
+  }
+
+  function noteUploaded(count: number) {
+    if (count >= 2) setShareCount(count);
   }
 
   function retryFailed() {
@@ -274,6 +285,25 @@ export function GalleryManager({
 
       {/* The documented `.drop` pattern is the upload control — it doubles
           as the section's empty-state invitation. */}
+      {shareCount > 0 && (
+        <p className="mt-3 flex flex-wrap items-center gap-3 text-micro text-dim" role="status">
+          <span>
+            {shareCount} photo{shareCount === 1 ? "" : "s"} added.
+          </span>
+          <a href={`/garage/${carId}/update/new?photos=${shareCount}`} className="jumplink">
+            Share these in an update →
+          </a>
+          <button
+            type="button"
+            className="jumplink"
+            aria-label="Dismiss this suggestion"
+            onClick={() => setShareCount(0)}
+          >
+            ✕
+          </button>
+        </p>
+      )}
+
       <DropZone
         onFiles={handleFiles}
         busy={uploading}

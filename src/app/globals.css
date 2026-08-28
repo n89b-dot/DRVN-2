@@ -5233,6 +5233,167 @@ video {
     font-variant-numeric: tabular-nums;
   }
 
+  /* Build Evolution (features/garage/build-evolution.tsx) — the car's story
+     as a horizontal scroll-snap strip: year ticks in the margin, one
+     representative photo per milestone. Derived data only (§V). */
+  .evo__track {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding: 6px 2px 10px;
+    scrollbar-width: thin;
+  }
+  .evo__track:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+    border-radius: var(--r-ctl);
+  }
+  .evo__stop {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    scroll-snap-align: start;
+  }
+  .evo__year {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--live);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    border-left: 1px solid var(--dimline);
+    padding-left: 6px;
+    align-self: stretch;
+    display: flex;
+    align-items: flex-start;
+  }
+  .evo__card {
+    display: block;
+    width: clamp(180px, 26vw, 240px);
+    flex-shrink: 0;
+  }
+  .evo__img {
+    aspect-ratio: 3 / 2;
+    border-radius: var(--r-ctl);
+    transition: transform var(--t-fast) ease;
+  }
+  .evo__card:hover .evo__img,
+  .evo__card:focus-visible .evo__img {
+    transform: translateY(-2px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .evo__card:hover .evo__img,
+    .evo__card:focus-visible .evo__img {
+      transform: none;
+    }
+  }
+  .evo__meta {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 6px;
+    min-width: 0;
+  }
+  .evo__date {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    flex-shrink: 0;
+  }
+  .evo__title {
+    font-size: 13.5px;
+    font-weight: 550;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ShowcaseExplorer (features/garage/showcase.tsx) — the annotated build
+     photo (§U). At rest: a clean photograph. Explored: pins fade in staggered
+     and one card at a time explains a part. Pins are drawn in the sheet's own
+     materials — on-ink dot on scrim ring — so they read on any photograph. */
+  .showcase__frame {
+    position: relative;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .showcase__img {
+    display: block;
+    width: 100%;
+  }
+  .showcase__pin {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--scrim);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    opacity: 0;
+    animation: showcase-pin-in var(--t-move) var(--spring) forwards;
+  }
+  .showcase__pin span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--on-ink);
+    transition: transform var(--t-fast) ease, background var(--t-fast) ease;
+  }
+  .showcase__pin:hover span,
+  .showcase__pin.is-active span {
+    background: var(--live);
+    transform: scale(1.25);
+  }
+  .showcase__pin:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
+  @keyframes showcase-pin-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -30%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .showcase__pin {
+      animation: none;
+      opacity: 1;
+    }
+  }
+  .showcase__card {
+    position: absolute;
+    transform: translateX(-50%);
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    box-shadow: 0 12px 28px var(--scrim);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 240px;
+    z-index: 5;
+  }
+  .showcase__cardlabel {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .showcase__foot {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   /* BeforeAfter — the two-image comparison plate (before-after.tsx). One
      frame, the before layer clipped from the right, a drafting-line divider
      with a mono grip. Corner tags are microcap chips on scrim so they read on

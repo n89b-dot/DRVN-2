@@ -60,15 +60,17 @@ export async function generateMetadata({
     description,
     alternates: { canonical: `/cars/${slug}` },
     robots: car.is_public ? undefined : { index: false, follow: false },
+    // No `images` here: the designed share card (§AB) comes from the
+    // opengraph-image.tsx file convention in this segment, which an explicit
+    // images array would override with the bare cover photo.
     openGraph: {
       title: `${car.name} on DRVN`,
       description,
       url: `/cars/${slug}`,
       type: "article",
-      images: car.cover_image_url ? [{ url: car.cover_image_url }] : undefined,
     },
     twitter: {
-      card: car.cover_image_url ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title: `${car.name} on DRVN`,
       description,
     },
@@ -245,7 +247,47 @@ export default async function CarPage({
   }));
   const soldFrom = forSale.filter((i) => i.status === "sold").length;
 
+  // The annotated showcase (§U): one pinned photo, revealed on request. Each
+  // pin leads to its live listing when the part is for sale, otherwise it just
+  // names the part where it sits.
+  const { data: hotspots } = await supabase
+    .from("car_hotspots")
+    .select("id, image_url, x, y, mod_item_id, label")
+    .eq("car_id", car.id)
+    .order("created_at");
+  const showcase =
+    hotspots && hotspots.length
+      ? {
+          imageUrl: hotspots[0].image_url,
+          pins: hotspots.map((pin) => {
+            const mod = (mods ?? []).find((m) => m.id === pin.mod_item_id);
+            const listing = mod ? listingForMod(mod.linked_listing_id) : null;
+            return {
+              id: pin.id,
+              x: Number(pin.x),
+              y: Number(pin.y),
+              label: pin.label,
+              href: listing && listing.status === "active" ? `/listings/${listing.id}` : null,
+              hrefLabel:
+                listing && listing.status === "active" ? `For sale · ${listing.price} →` : null,
+            };
+          }),
+        }
+      : null;
+
   const gallery = (images ?? []).map((i) => ({ url: i.url, alt: i.alt }));
+  // Build Evolution (§V): a milestone is any dated published update with a
+  // photo — derived, never entered.
+  const evolution = (posts ?? [])
+    .filter((p) => p.published_at && (galleryByPost.get(p.id) ?? []).length > 0)
+    .map((p) => ({
+      id: p.id,
+      publishedAt: p.published_at as string,
+      title: p.title,
+      imageUrl: (galleryByPost.get(p.id) ?? [])[0].url,
+      href: `/cars/${car.slug}/activity/${p.id}`,
+    }));
+
   const activity = (posts ?? []).map((p) => ({
     id: p.id,
     date: formatDate(p.published_at),
@@ -333,6 +375,8 @@ export default async function CarPage({
         slug={car.slug}
         isOwner={user?.id === car.owner_id}
         initialTab={resolveView(view)}
+        showcase={showcase}
+        evolution={evolution}
       />
 
       <Foot
