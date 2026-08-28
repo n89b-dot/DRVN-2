@@ -104,6 +104,7 @@ async function readListingFields(formData: FormData, userId: string) {
 
   return {
     fitments: readFitments(formData),
+    altNumbers: readAltPartNumbers(formData),
     fields: {
       title,
       description: description || null,
@@ -181,6 +182,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   }
 
   const { error: fitmentError } = await saveFitments(supabase, listing.id, parsed.fitments);
+  await saveAltPartNumbers(supabase, listing.id, parsed.altNumbers);
 
   // Close the loop from the build sheet: if this part came off a specific mod
   // line, link them so the car page can show it as listed.
@@ -298,6 +300,7 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   }
 
   const { error: fitmentError } = await saveFitments(supabase, id, parsed.fitments);
+  await saveAltPartNumbers(supabase, id, parsed.altNumbers);
 
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
@@ -511,6 +514,42 @@ async function saveFitments(
     return { error: "Fitment rows couldn't be saved — re-add them from Edit." };
   }
   return {};
+}
+
+/**
+ * Alternate part numbers (0042) — "also known as" identifiers, comma/space
+ * separated in one optional field. Bounded (5 numbers, 2–64 chars each),
+ * deduped on the compact form the search lane matches.
+ */
+function readAltPartNumbers(formData: FormData): string[] {
+  const raw = String(formData.get("alt_part_numbers") ?? "").trim();
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const numbers: string[] = [];
+  for (const piece of raw.split(/[,\n;]+/)) {
+    const number = piece.trim().slice(0, 64);
+    if (number.length < 2) continue;
+    const compact = number.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!compact || seen.has(compact)) continue;
+    seen.add(compact);
+    numbers.push(number);
+    if (numbers.length >= 5) break;
+  }
+  return numbers;
+}
+
+/** Delete-and-reinsert like saveFitments; RLS scopes both to the seller. */
+async function saveAltPartNumbers(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  listingId: string,
+  numbers: string[]
+): Promise<void> {
+  await supabase.from("listing_part_numbers").delete().eq("listing_id", listingId);
+  if (!numbers.length) return;
+  const { error } = await supabase
+    .from("listing_part_numbers")
+    .insert(numbers.map((number) => ({ listing_id: listingId, number })));
+  if (error) reportError("[sell] alt part numbers failed", { listingId, error });
 }
 
 function safeParseJson(value: FormDataEntryValue | null): unknown {

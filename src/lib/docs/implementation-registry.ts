@@ -241,7 +241,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "part-aliases",
     name: "Part aliases, supersessions & interchange (groundwork)",
     group: "discovery",
-    status: "planned",
+    status: "in-progress",
     brief: "H",
     existsToday: "A listing has one part_number plus its compact variant; no alias or interchange relationships exist.",
     changing:
@@ -253,7 +253,11 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Relationship table with typed kinds; source metadata stored internally only; wired into the search identifier lane. Users never manage the graph.",
     dependsOn: ["search-architecture"],
     uxRules: ["No user-facing source/confidence machinery."],
-    validation: "Not yet validated.",
+    decisions: [
+      "0042: listing_part_numbers (seller-supplied 'also known as', RLS mirrors fitment) + part_number_links (internal typed graph, service-role only). Sell form gained one optional comma-separated field.",
+    ],
+    validation:
+      "Migration applied twice (self-checks pass); sell-form persistence code-complete. Search-lane consumption lands with search-architecture (Group 5).",
   },
 
   // ── 03 · Vehicle identity & fitment ─────────────────────────────────────
@@ -261,7 +265,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "canonical-add-car",
     name: "Canonical Add Car flow",
     group: "vehicle-identity",
-    status: "planned",
+    status: "validated",
     brief: "E",
     existsToday:
       "Add Car is a dialog of free-text Name/Year/Make/Model; VIN decoding (vPIC) exists but only on the car edit page, after the record already holds invented strings.",
@@ -278,13 +282,20 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "No giant alphabetic menus — searchable controls with intelligent ranking.",
       "Never require variant detail that can be inferred or skipped.",
     ],
-    validation: "Not yet validated.",
+    decisions: [
+      "A new registered ComboField primitive (ARIA combobox on the .field/.ctl recipes) powers make/model — options ranked by catalog popularity, aliases matched as keywords ('rabbit' finds Golf).",
+      "An unnamed car is named by what it is ('2024 Volkswagen Golf'); a personal name stays optional in every mode.",
+      "Manual entries that happen to name a catalog vehicle quietly gain the catalog reference — automation without a prompt.",
+      "Visible data credit (VehiclesDB · NHTSA) sits as microcopy in the dialog foot, satisfying CC-BY attribution where the data is used.",
+    ],
+    validation:
+      "3/3 Playwright specs green against the dev server (manual auto-naming, VIN decode-failure messaging with escape routes, catalog picker end-to-end); live browser run created a real picker car (catalog ids + frozen snapshot verified in the DB, then cleaned up); screenshots reviewed at 430px. Shared addCar e2e helper migrated.",
   },
   {
     id: "vehicle-catalog",
     name: "DRVN-owned vehicle catalog",
     group: "vehicle-identity",
-    status: "planned",
+    status: "validated",
     brief: "F",
     existsToday:
       "vPIC make/model caching exists (`vehicle_makes`/`vehicle_models`, 0025) feeding the sell fitment picker; cars store free-text make/model/year plus decoded VIN columns.",
@@ -295,13 +306,20 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Every feature that touches a car — search facets, fitment, provenance of listings — works from one accurate identity instead of string-matching.",
     approach:
       "Extend the existing vPIC cache into a catalog with stable IDs; evaluate VehiclesDB (CC-BY) for global make/model breadth with license/attribution documented; cars gain nullable catalog references alongside the existing display fields.",
-    validation: "Not yet validated.",
+    decisions: [
+      "0041: catalog_makes/catalog_models with DRVN identity ids — vPIC ids and VehiclesDB ids are references, never primary keys; the vPIC cache tables stay untouched as the fitment-datalist source.",
+      "VehiclesDB verified live (v2026.08.2, CC-BY 4.0, github.com/vehiclesdb/vehiclesdb): 277 car makes / 4,895 models imported via scripts/import-vehiclesdb.mjs with aliases and popularity; catalog now 392 makes / 4,908 models.",
+      "Make ranking is model-weighted (how many broadly-popular models a make has) — 'best single model decile' put one-hit small-market marques above Volkswagen.",
+      "Ranked, cached public APIs: /api/vehicles/catalog/makes and /catalog/models?make=.",
+    ],
+    validation:
+      "Migration applied twice (self-checks pass, 195 vPIC makes seeded); import re-run idempotently; both APIs verified live on the dev server including alias payloads.",
   },
   {
     id: "fitment-simplification",
     name: "Fitment: automatic first, optional detail",
     group: "vehicle-identity",
-    status: "planned",
+    status: "implemented",
     brief: "G",
     existsToday:
       "Structured fitment exists (`listing_fitments`, seller-stated wording, a picker on /sell, garage matching in fitment.ts) but is fully manual per listing.",
@@ -314,7 +332,12 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Source-car → fitment prefill on the sell flow; qualifier columns optional; no user-facing confidence percentages ever.",
     dependsOn: ["vehicle-catalog"],
     uxRules: ["Default seller experience stays lightweight.", "No fitment-confidence UI."],
-    validation: "Not yet validated.",
+    decisions: [
+      "?car= deep links seed the picker with the source car's fitment row (editable like any typed row); choosing a source car in-form offers a passive one-tap '+ Fits {car}' chip — never an unexplained transformation.",
+      "Manual qualifier entry (trim/engine/drivetrain) deliberately NOT built: it bloats the seller form for data the catalog/VIN can eventually fill automatically. Revisit when catalog variants exist.",
+    ],
+    validation:
+      "Typecheck/lint/unit green; behavior exercised in the sell flow during Group 10's visual pass (pending).",
   },
 
   // ── 04 · Selling ────────────────────────────────────────────────────────

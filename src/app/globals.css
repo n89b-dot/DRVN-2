@@ -4926,6 +4926,68 @@ video {
   [data-theme="dark"] select.ctl {
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238f8c82' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
+  /* ComboField — the searchable single-select (combo-field.tsx). The input
+     is a plain `.ctl`; the popover is a tile floated off its bottom edge,
+     drawn with the sheet's own materials (tile ground, soft rules, mono
+     options) rather than browser chrome. */
+  .combo {
+    position: relative;
+    max-width: 320px;
+  }
+  .combo .ctl {
+    max-width: none;
+  }
+  .combo__pop {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--tile);
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r-ctl);
+    box-shadow: 0 12px 28px var(--scrim);
+    overflow: hidden;
+  }
+  .combo__list {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    max-height: 264px;
+    overflow-y: auto;
+  }
+  .combo__opt {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: calc(var(--r-ctl) - 4px);
+    cursor: pointer;
+  }
+  .combo__opt.is-active {
+    background: var(--ghost-strong);
+  }
+  .combo__opt.is-selected {
+    color: var(--live);
+  }
+  .combo__optnote {
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .combo__note {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    padding: 10px 12px;
+  }
+  .combo__foot {
+    border-top: 1px solid var(--rule-soft);
+    padding: 8px 12px;
+  }
+
   textarea.ctl {
     font-family: var(--sans);
     font-size: 16px;

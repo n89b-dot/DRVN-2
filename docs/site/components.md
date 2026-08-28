@@ -126,7 +126,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (71)
+### Primitives (72)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -139,6 +139,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. — `.btn / .relbtn` | Every button. One `live` action per surface. |
 | `ButtonLink` | Primitive | `@/components/ui` | The action contract as a real link. — `.btn` | CTAs that navigate — keeps middle-click/new-tab semantics. |
 | `Checkbox` | Primitive | `@/components/ui` | Live-accent square checkbox with its label as one touch target. — `.sq` | Boolean options. |
+| `ComboField` | Primitive | `@/components/ui` | Searchable single-select (ARIA combobox) in the field contract: ranked options, keyword matching (aliases), optional footer escape hatch. — `.field / .ctl / .combo` | Choosing one option from a ranked list too long for Select — vehicle makes/models. *Not for:* Short fixed lists (Select) and free-text with suggestions (TextField + datalist). |
 | `ConfirmDialog` | Primitive | `@/components/ui` | Destructive confirmation with optional type-to-confirm gate. | Deletes and irreversible actions. |
 | `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
 | `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |

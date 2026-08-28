@@ -36,6 +36,8 @@ export type ListingDraft = {
   status: string;
   images: GalleryImage[];
   fitments: FitmentRow[];
+  /** "Also known as" identifiers (0042) — search matches these too. */
+  alt_part_numbers?: string[];
 };
 
 export function SellForm({
@@ -46,7 +48,7 @@ export function SellForm({
   prefill,
   canPublish = true,
 }: {
-  cars: { id: string; name: string }[];
+  cars: { id: string; name: string; make?: string | null; model?: string | null; year?: number | null }[];
   /** Canonical make names for the fitment picker's suggestions. */
   makes: string[];
   userId: string;
@@ -66,6 +68,9 @@ export function SellForm({
     /** Parser confidence carried from the mod line, for the guess note below —
      *  listings have no confidence column, so this never reaches the server. */
     modConfidence?: number | null;
+    /** Fitment inferred from the source car (?car= deep link) — seeds the
+     *  picker on a fresh listing, editable like any typed row. */
+    fitment?: FitmentRow[];
   };
 }) {
   const isEdit = Boolean(listing);
@@ -73,6 +78,7 @@ export function SellForm({
     isEdit ? updateListing : createListing,
     {}
   );
+  const [sourceCarId, setSourceCarId] = useState(listing?.source_car_id ?? prefill?.carId ?? "");
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
   const [subcategory, setSubcategory] = useState(
     listing?.subcategory ?? prefill?.subcategory ?? ""
@@ -328,6 +334,17 @@ export function SellForm({
             hint="What a buyer cross-references. Seller-entered, not verified."
           />
         </div>
+        <TextField
+          id="sell-alt_part_numbers"
+          name="alt_part_numbers"
+          label="Other numbers it's known by"
+          optional
+          maxLength={240}
+          defaultValue={listing?.alt_part_numbers?.join(", ") ?? ""}
+          placeholder="OEM, superseded or equivalent numbers — comma-separated"
+          className="max-w-none"
+          hint="Buyers searching any of these find the listing."
+        />
         {/* Grade + checklist: dispute prevention (0024). Only for used parts —
             "new" already says everything a grade would. The checklist follows
             the category, so a turbo gets asked about shaft play and a wheel
@@ -512,7 +529,8 @@ export function SellForm({
       >
         <select
           name="source_car_id"
-          defaultValue={listing?.source_car_id ?? prefill?.carId ?? ""}
+          value={sourceCarId}
+          onChange={(event) => setSourceCarId(event.target.value)}
           className="ctl max-w-none"
         >
           <option value="">Bought spare / never fitted — no car sheet behind it</option>
@@ -536,7 +554,20 @@ export function SellForm({
       >
         <FitmentPicker
           makes={makes}
-          initial={listing?.fitments ?? []}
+          initial={listing?.fitments ?? prefill?.fitment ?? []}
+          suggestion={(() => {
+            // Passive inference from the chosen source car (brief §G): a
+            // one-tap chip, never an unexplained transformation.
+            const car = cars.find((c) => c.id === sourceCarId);
+            return car?.make && car?.model
+              ? {
+                  make: car.make,
+                  model: car.model,
+                  year: car.year ?? null,
+                  label: [car.year, car.make, car.model].filter(Boolean).join(" "),
+                }
+              : null;
+          })()}
           onCountChange={setFitmentCount}
         />
         <div className="field !mb-0">

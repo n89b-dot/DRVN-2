@@ -1,6 +1,7 @@
 import { OrderPipeline, StatusChip } from "@/components/commerce";
 import { LiveDim } from "@/components/livesheet";
 import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
+import { ComboDemo } from "./combo-demo";
 import {
   ActionFooter,
   Alert,
@@ -574,6 +575,13 @@ export default function ComponentsPage() {
             </Select>
             <Checkbox label="Attach provenance" defaultChecked className="mt-2" />
           </div>
+        </Specimen>
+        <Specimen
+          name="ComboField"
+          klass=".field / .ctl / .combo"
+          note="Searchable single-select (ARIA combobox) — ranked options, keyword matching for aliases (try typing 'toyoda'), arrow-key navigation, and an optional footer escape hatch. The Add Car vehicle picker is built from two of these."
+        >
+          <ComboDemo />
         </Specimen>
         <Specimen
           name="Field"

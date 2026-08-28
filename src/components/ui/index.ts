@@ -53,6 +53,7 @@ export {
   Radio,
   fieldDescribedBy,
 } from "./form";
+export { ComboField, type ComboOption } from "./combo-field";
 export { ActionFooter } from "./action-footer";
 export { MobileActionBar } from "./mobile-action-bar";
 export { BottomSheet } from "./bottom-sheet";

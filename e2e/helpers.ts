@@ -50,8 +50,11 @@ export async function addCar(page: Page, carName: string) {
   await page.goto("/garage");
   await page.getByRole("button", { name: /add a car|add car/i }).first().click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel(/name/i).first().fill(carName);
-  await dialog.getByRole("button", { name: /add the car/i }).click();
+  // The picker is the primary flow (0041); tests name their cars, so take the
+  // manual fallback — always visible at the dialog's foot.
+  await dialog.getByRole("button", { name: /enter it manually/i }).last().click();
+  await dialog.getByLabel(/^name/i).first().fill(carName);
+  await dialog.getByRole("button", { name: /add to garage/i }).click();
   await expect(page).toHaveURL(/\/garage\/[\w-]+\/edit/);
 }
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
+import { Button } from "@/components/ui";
+
 /** One seller-stated fitment claim, mirrored to listing_fitments (0025). */
 export type FitmentRow = {
   make: string;
@@ -22,10 +24,15 @@ export const MAX_FITMENT_ROWS = 10;
 export function FitmentPicker({
   makes,
   initial,
+  suggestion,
   onCountChange,
 }: {
   makes: string[];
   initial: FitmentRow[];
+  /** The selected source car's identity (brief §G): when its make+model isn't
+   *  already claimed, a one-tap "+ Fits {car}" chip offers the inference —
+   *  passive, never applied without the tap. */
+  suggestion?: { make: string; model: string; year: number | null; label: string } | null;
   /** Optional bubble-up of the current valid-row count, for a parent-level
    *  completeness indicator. Fires on mount and whenever rows change. */
   onCountChange?: (count: number) => void;
@@ -148,6 +155,32 @@ export function FitmentPicker({
           </div>
         );
       })}
+
+      {suggestion &&
+        rows.length < MAX_FITMENT_ROWS &&
+        !rows.some(
+          (row) =>
+            row.make.trim().toLowerCase() === suggestion.make.trim().toLowerCase() &&
+            row.model.trim().toLowerCase() === suggestion.model.trim().toLowerCase(),
+        ) && (
+          <Button
+            variant="ghost"
+            className="self-start"
+            onClick={() =>
+              setRows((current) => [
+                ...current,
+                {
+                  make: suggestion.make,
+                  model: suggestion.model,
+                  year_start: suggestion.year,
+                  year_end: suggestion.year,
+                },
+              ])
+            }
+          >
+            + Fits {suggestion.label}
+          </Button>
+        )}
 
       {rows.length < MAX_FITMENT_ROWS && (
         <button

@@ -43,20 +43,30 @@ export default async function EditListingPage({
   }
   if (!listing || listing.seller_id !== user.id) notFound();
 
-  const [{ data: cars }, { data: images }, { data: fitments }, makes] = await Promise.all([
-    supabase.from("cars").select("id, name").eq("owner_id", user.id).order("created_at"),
-    supabase
-      .from("listing_images")
-      .select("url, alt, position")
-      .eq("listing_id", id)
-      .order("position"),
-    supabase
-      .from("listing_fitments")
-      .select("make, model, year_start, year_end")
-      .eq("listing_id", id)
-      .order("created_at"),
-    getVehicleMakes(createAdminClient()),
-  ]);
+  const [{ data: cars }, { data: images }, { data: fitments }, { data: altNumbers }, makes] =
+    await Promise.all([
+      supabase
+        .from("cars")
+        .select("id, name, make, model, year")
+        .eq("owner_id", user.id)
+        .order("created_at"),
+      supabase
+        .from("listing_images")
+        .select("url, alt, position")
+        .eq("listing_id", id)
+        .order("position"),
+      supabase
+        .from("listing_fitments")
+        .select("make, model, year_start, year_end")
+        .eq("listing_id", id)
+        .order("created_at"),
+      supabase
+        .from("listing_part_numbers")
+        .select("number")
+        .eq("listing_id", id)
+        .order("created_at"),
+      getVehicleMakes(createAdminClient()),
+    ]);
 
   const locked = ["sold", "reserved"].includes(listing.status);
 
@@ -116,6 +126,7 @@ export default async function EditListingPage({
             status: listing.status,
             images: (images ?? []).map((i) => ({ url: i.url, alt: i.alt })),
             fitments: fitments ?? [],
+            alt_part_numbers: (altNumbers ?? []).map((n) => n.number),
           }}
         />
       )}

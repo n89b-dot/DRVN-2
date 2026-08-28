@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 31 planned · 1 in progress · 1 implemented · 2 validated · 7 deferred · 1 blocked externally
+**Progress:** 43 initiatives — 27 planned · 2 in progress · 2 implemented · 4 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -87,7 +87,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **UX rules:** Never prompt to save a search. Saving is silent; alerts are a separate explicit opt-in, easy to disable. New matches surface through existing home/notification patterns — no disruptive messaging.
 - **Validation:** Not yet validated.
 
-#### Part aliases, supersessions & interchange (groundwork) — Planned
+#### Part aliases, supersessions & interchange (groundwork) — In progress
 
 - **Brief:** H
 - **Exists today:** A listing has one part_number plus its compact variant; no alias or interchange relationships exist.
@@ -97,11 +97,12 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Relationship table with typed kinds; source metadata stored internally only; wired into the search identifier lane. Users never manage the graph.
 - **Depends on:** search-architecture
 - **UX rules:** No user-facing source/confidence machinery.
-- **Validation:** Not yet validated.
+- **Decisions:** 0042: listing_part_numbers (seller-supplied 'also known as', RLS mirrors fitment) + part_number_links (internal typed graph, service-role only). Sell form gained one optional comma-separated field.
+- **Validation:** Migration applied twice (self-checks pass); sell-form persistence code-complete. Search-lane consumption lands with search-architecture (Group 5).
 
 ### 03 · Vehicle identity & fitment
 
-#### Canonical Add Car flow — Planned
+#### Canonical Add Car flow — Validated
 
 - **Brief:** E
 - **Exists today:** Add Car is a dialog of free-text Name/Year/Make/Model; VIN decoding (vPIC) exists but only on the car edit page, after the record already holds invented strings.
@@ -111,9 +112,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Searchable cascading picker over the DRVN vehicle catalog (vPIC cache + catalog work below); VIN path reuses the existing decoder and prefills; wording is `VIN decoded`, never "verified"; VIN stays private.
 - **Depends on:** vehicle-catalog
 - **UX rules:** Picker first, VIN secondary, manual fallback always visible. No giant alphabetic menus — searchable controls with intelligent ranking. Never require variant detail that can be inferred or skipped.
-- **Validation:** Not yet validated.
+- **Decisions:** A new registered ComboField primitive (ARIA combobox on the .field/.ctl recipes) powers make/model — options ranked by catalog popularity, aliases matched as keywords ('rabbit' finds Golf). An unnamed car is named by what it is ('2024 Volkswagen Golf'); a personal name stays optional in every mode. Manual entries that happen to name a catalog vehicle quietly gain the catalog reference — automation without a prompt. Visible data credit (VehiclesDB · NHTSA) sits as microcopy in the dialog foot, satisfying CC-BY attribution where the data is used.
+- **Validation:** 3/3 Playwright specs green against the dev server (manual auto-naming, VIN decode-failure messaging with escape routes, catalog picker end-to-end); live browser run created a real picker car (catalog ids + frozen snapshot verified in the DB, then cleaned up); screenshots reviewed at 430px. Shared addCar e2e helper migrated.
 
-#### DRVN-owned vehicle catalog — Planned
+#### DRVN-owned vehicle catalog — Validated
 
 - **Brief:** F
 - **Exists today:** vPIC make/model caching exists (`vehicle_makes`/`vehicle_models`, 0025) feeding the sell fitment picker; cars store free-text make/model/year plus decoded VIN columns.
@@ -121,9 +123,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `supabase/migrations/`, `src/lib/vehicles/`, `/api/vehicles/*`
 - **User benefit:** Every feature that touches a car — search facets, fitment, provenance of listings — works from one accurate identity instead of string-matching.
 - **Approach:** Extend the existing vPIC cache into a catalog with stable IDs; evaluate VehiclesDB (CC-BY) for global make/model breadth with license/attribution documented; cars gain nullable catalog references alongside the existing display fields.
-- **Validation:** Not yet validated.
+- **Decisions:** 0041: catalog_makes/catalog_models with DRVN identity ids — vPIC ids and VehiclesDB ids are references, never primary keys; the vPIC cache tables stay untouched as the fitment-datalist source. VehiclesDB verified live (v2026.08.2, CC-BY 4.0, github.com/vehiclesdb/vehiclesdb): 277 car makes / 4,895 models imported via scripts/import-vehiclesdb.mjs with aliases and popularity; catalog now 392 makes / 4,908 models. Make ranking is model-weighted (how many broadly-popular models a make has) — 'best single model decile' put one-hit small-market marques above Volkswagen. Ranked, cached public APIs: /api/vehicles/catalog/makes and /catalog/models?make=.
+- **Validation:** Migration applied twice (self-checks pass, 195 vPIC makes seeded); import re-run idempotently; both APIs verified live on the dev server including alias payloads.
 
-#### Fitment: automatic first, optional detail — Planned
+#### Fitment: automatic first, optional detail — Implemented
 
 - **Brief:** G
 - **Exists today:** Structured fitment exists (`listing_fitments`, seller-stated wording, a picker on /sell, garage matching in fitment.ts) but is fully manual per listing.
@@ -133,7 +136,8 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Source-car → fitment prefill on the sell flow; qualifier columns optional; no user-facing confidence percentages ever.
 - **Depends on:** vehicle-catalog
 - **UX rules:** Default seller experience stays lightweight. No fitment-confidence UI.
-- **Validation:** Not yet validated.
+- **Decisions:** ?car= deep links seed the picker with the source car's fitment row (editable like any typed row); choosing a source car in-form offers a passive one-tap '+ Fits {car}' chip — never an unexplained transformation. Manual qualifier entry (trim/engine/drivetrain) deliberately NOT built: it bloats the seller form for data the catalog/VIN can eventually fill automatically. Revisit when catalog variants exist.
+- **Validation:** Typecheck/lint/unit green; behavior exercised in the sell flow during Group 10's visual pass (pending).
 
 ### 04 · Selling
 

@@ -80,6 +80,42 @@ export type Car = {
   drivetrain: string | null;
   body_class: string | null;
   vin_decoded_at: string | null;
+  /** Canonical catalog references (0041). The display strings above are the
+   *  frozen snapshot; these point at the DRVN-owned catalog rows. */
+  catalog_make_id: number | null;
+  catalog_model_id: number | null;
+  /** 'picker' | 'vin' | 'manual' — how the identity was established (0041). */
+  identity_source: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** DRVN-owned vehicle catalog (0041) — identity DRVN controls, with source
+ *  references (vPIC ids, VehiclesDB ids) rather than external primary keys. */
+export type CatalogMake = {
+  id: number;
+  name: string;
+  slug: string;
+  vpic_make_id: number | null;
+  vdb_id: string | null;
+  /** 1 (most common) … 10; null = unknown, ranked last. */
+  popularity_decile: number | null;
+  source: string;
+  source_version: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CatalogModel = {
+  id: number;
+  make_id: number;
+  name: string;
+  vdb_id: string | null;
+  /** Market alternate names ("Golf" ↔ "Rabbit") — searched, never displayed. */
+  aliases: string[] | null;
+  popularity_decile: number | null;
+  source: string;
+  source_version: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -379,6 +415,35 @@ export type ListingFitment = {
   model: string;
   year_start: number | null;
   year_end: number | null;
+  created_at: string;
+};
+
+/** Extra identifiers a seller supplies for one listing ("also known as",
+ *  migration 0042). Discovery-only — search matches these compacts. */
+export type ListingPartNumber = {
+  id: string;
+  listing_id: string;
+  number: string;
+  /** Generated: lowercase, separators stripped — the searchable form. */
+  number_compact: string;
+  created_at: string;
+};
+
+/** INTERNAL interchange graph (0042): relationships between part-number
+ *  compacts, read by the search identifier lane. Service-role only —
+ *  no user manages or sees this. */
+export type PartNumberLink = {
+  id: string;
+  from_compact: string;
+  to_compact: string;
+  kind:
+    | "alternate"
+    | "supersedes"
+    | "superseded_by"
+    | "aftermarket_equivalent"
+    | "interchange"
+    | "same_product";
+  source: string;
   created_at: string;
 };
 
@@ -804,7 +869,11 @@ export type Database = {
       dispute_evidence: Table<DisputeEvidence, "order_id" | "url">;
       vehicle_makes: Table<VehicleMake, "id" | "name">;
       vehicle_models: Table<VehicleModel, "make_id" | "name">;
+      catalog_makes: Table<CatalogMake, "name">;
+      catalog_models: Table<CatalogModel, "make_id" | "name">;
       listing_fitments: Table<ListingFitment, "listing_id" | "make" | "model">;
+      listing_part_numbers: Table<ListingPartNumber, "listing_id" | "number">;
+      part_number_links: Table<PartNumberLink, "from_compact" | "to_compact" | "kind">;
       staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
     };
     Views: {

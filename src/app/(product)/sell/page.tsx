@@ -29,7 +29,11 @@ export default async function SellPage({
   if (!user) redirect("/login");
 
   const [{ data: cars, error }, makes, canPublish] = await Promise.all([
-    supabase.from("cars").select("id, name").eq("owner_id", user.id).order("created_at"),
+    supabase
+      .from("cars")
+      .select("id, name, make, model, year")
+      .eq("owner_id", user.id)
+      .order("created_at"),
     getVehicleMakes(createAdminClient()),
     // Fail open for the UI gate only: a payments misconfig must not 500 the
     // sell page (resolvePaymentsMode throws by design). The server action
@@ -51,6 +55,7 @@ export default async function SellPage({
         modItemId?: string;
         partNumber?: string;
         modConfidence?: number | null;
+        fitment?: { make: string; model: string; year_start: number | null; year_end: number | null }[];
       }
     | undefined;
   if (sourceCar) {
@@ -87,6 +92,19 @@ export default async function SellPage({
         };
       }
     }
+  }
+
+  // Automate before asking (brief §G): a part released off a known car starts
+  // with its fitment inferred — one editable row, not a form to fill.
+  if (prefill && sourceCar?.make && sourceCar?.model) {
+    prefill.fitment = [
+      {
+        make: sourceCar.make,
+        model: sourceCar.model,
+        year_start: sourceCar.year ?? null,
+        year_end: sourceCar.year ?? null,
+      },
+    ];
   }
 
   return (

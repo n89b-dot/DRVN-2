@@ -652,6 +652,20 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     cssRecipe: ".field / .ctl",
   },
   {
+    name: "ComboField",
+    importPath: UI,
+    file: "src/components/ui/combo-field.tsx",
+    layer: "primitive",
+    category: "form",
+    status: "active",
+    description:
+      "Searchable single-select (ARIA combobox) in the field contract: ranked options, keyword matching (aliases), optional footer escape hatch.",
+    use: "Choosing one option from a ranked list too long for Select — vehicle makes/models.",
+    avoid: "Short fixed lists (Select) and free-text with suggestions (TextField + datalist).",
+    states: ["open/closed", "loading", "empty", "error (is-invalid)", "disabled"],
+    cssRecipe: ".field / .ctl / .combo",
+  },
+  {
     name: "TextArea",
     importPath: UI,
     file: "src/components/ui/form.tsx",

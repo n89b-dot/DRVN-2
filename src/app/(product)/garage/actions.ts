@@ -11,6 +11,7 @@ import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
 import { decodeVin } from "@/lib/vehicles/vpic";
+import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
 import type { Car } from "@/lib/database.types";
 
 export type ActionState = { error?: string; ok?: string };
@@ -39,25 +40,103 @@ function sanitizeActivityBlocks(blocks: ActivityBlock[], userId: string): Activi
     .filter((block) => block.type !== "images" || block.urls.length > 0);
 }
 
+/**
+ * Add Car (brief §E): three identity paths into one insert.
+ *
+ * - `picker` (primary): catalog make/model ids from the DRVN vehicle catalog
+ *   (0041) — the car lands as a recognized vehicle, not invented strings.
+ * - `vin` (secondary): one vPIC decode establishes identity; the VIN stays
+ *   private on the row. Wording is "VIN decoded", never "verified".
+ * - `manual` (always available): free text for kit/import/gray-market cars —
+ *   quietly matched against the catalog when the words happen to line up.
+ *
+ * The display strings (make/model/year) are the frozen snapshot; catalog ids
+ * are references. A personal name is optional — absent, the car is named by
+ * what it is ("2024 Volkswagen Golf R").
+ */
 export async function createCar(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const { supabase, user } = await requireUser();
 
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return { error: "Give your car a name." };
-
-  const make = String(formData.get("make") ?? "").trim() || null;
-  const model = String(formData.get("model") ?? "").trim() || null;
+  const mode = String(formData.get("mode") ?? "manual");
+  const nameInput = String(formData.get("name") ?? "").trim();
   const yearRaw = String(formData.get("year") ?? "").trim();
-  const year = yearRaw ? Number(yearRaw) : null;
+  let year = yearRaw ? Number(yearRaw) : null;
   if (year !== null && (!Number.isInteger(year) || year < 1900 || year > 2100)) {
     return { error: "Enter a valid year." };
   }
+
+  let make: string | null = null;
+  let model: string | null = null;
+  let catalogMakeId: number | null = null;
+  let catalogModelId: number | null = null;
+  let identitySource: "picker" | "vin" | "manual" = "manual";
+  let vin: string | null = null;
+  let decoded: Awaited<ReturnType<typeof decodeVin>> = null;
+
+  if (mode === "picker") {
+    catalogMakeId = Number(formData.get("catalog_make_id")) || null;
+    catalogModelId = Number(formData.get("catalog_model_id")) || null;
+    if (!catalogMakeId || !catalogModelId) {
+      return { error: "Pick the make and model — or switch to manual entry." };
+    }
+    const resolved = await resolveCatalogSelection(catalogMakeId, catalogModelId);
+    if (!resolved) return { error: "That vehicle selection didn't resolve — try again." };
+    make = resolved.make;
+    model = resolved.model;
+    identitySource = "picker";
+  } else if (mode === "vin") {
+    vin = String(formData.get("vin") ?? "").trim().toUpperCase() || null;
+    if (!vin || vin.length < 11 || vin.length > 17) {
+      return { error: "That VIN doesn't look right — 17 characters on modern cars." };
+    }
+    decoded = await decodeVin(vin);
+    if (!decoded) {
+      return {
+        error:
+          "That VIN didn't decode. Check it, or choose the vehicle from the list instead.",
+      };
+    }
+    make = decoded.make;
+    model = decoded.model;
+    year = year ?? decoded.year;
+    identitySource = "vin";
+  } else {
+    make = String(formData.get("make") ?? "").trim() || null;
+    model = String(formData.get("model") ?? "").trim() || null;
+  }
+
+  // Manual words that happen to name a catalog vehicle quietly gain the
+  // reference — automation without a prompt (brief principle 3).
+  if (identitySource !== "picker" && make) {
+    const match = await matchCatalogByName(make, model);
+    catalogMakeId = match.makeId;
+    catalogModelId = match.modelId;
+  }
+
+  const label = [year, make, model].filter(Boolean).join(" ").trim();
+  const name = nameInput || label || "My car";
 
   const slug = `${slugify(name)}-${crypto.randomUUID().slice(0, 6)}`;
 
   const { data, error } = await supabase
     .from("cars")
-    .insert({ owner_id: user.id, slug, name, make, model, year })
+    .insert({
+      owner_id: user.id,
+      slug,
+      name,
+      make,
+      model,
+      year,
+      vin,
+      trim: decoded?.trim ?? null,
+      engine: decoded?.engine ?? null,
+      drivetrain: decoded?.drivetrain ?? null,
+      body_class: decoded?.bodyClass ?? null,
+      vin_decoded_at: decoded ? new Date().toISOString() : null,
+      catalog_make_id: catalogMakeId,
+      catalog_model_id: catalogModelId,
+      identity_source: identitySource,
+    })
     .select("id")
     .single();
 
