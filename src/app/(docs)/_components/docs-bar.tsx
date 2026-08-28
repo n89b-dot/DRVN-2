@@ -16,6 +16,7 @@ export const DOCS_SECTIONS = [
   { href: "/docs/patterns", label: "Patterns" },
   { href: "/docs/rules", label: "Rules" },
   { href: "/docs/material", label: "Material" },
+  { href: "/docs/implementation", label: "Progress" },
 ];
 
 /**

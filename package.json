@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "docs:components": "UPDATE_DOCS=1 vitest run src/lib/docs/registry-docs.test.ts",
+    "docs:implementation": "UPDATE_DOCS=1 vitest run src/lib/docs/implementation-docs.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

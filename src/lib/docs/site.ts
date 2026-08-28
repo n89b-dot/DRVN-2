@@ -82,6 +82,14 @@ export const SITE_PAGES: DocEntry[] = [
     file: "docs/site/material.md",
     kind: "site",
   },
+  {
+    slug: "implementation",
+    title: "Implementation — living record",
+    description:
+      "Live status of the platform-evolution workstream: every initiative, its benefit, approach and honest validation state.",
+    file: "docs/site/implementation.md",
+    kind: "site",
+  },
 ];
 
 export const REFERENCE_DOCS: DocEntry[] = [
