@@ -4,26 +4,47 @@ import { useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
 import { uploadImages } from "@/lib/media-upload";
-import { ConfirmDialog, DropZone, Media } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, DropZone, Media, SortableGrid, SortableItem } from "@/components/ui";
 
-import { addCarImage, deleteCarImage, moveCarImage, setCoverImage, updateCarImageAlt } from "../../actions";
+import {
+  addCarImage,
+  deleteCarImage,
+  moveCarImage,
+  reorderCarImages,
+  setCoverFocal,
+  setCoverImage,
+  updateCarImageAlt,
+} from "../../actions";
 
 export function GalleryManager({
   carId,
   userId,
   images,
   coverImageUrl,
+  coverFocal,
 }: {
   carId: string;
   userId: string;
   images: CarImage[];
   coverImageUrl: string | null;
+  /** Current framing focal point (0043), null = centered. */
+  coverFocal?: { x: number | null; y: number | null };
 }) {
+  const [framing, setFraming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [, startTransition] = useTransition();
   const [editingAlt, setEditingAlt] = useState<string | null>(null);
+
+  // Local order for optimistic drag-and-drop; server order wins on refresh
+  // (the render-time "adjust state when props change" pattern).
+  const [ordered, setOrdered] = useState(images);
+  const [prevImages, setPrevImages] = useState(images);
+  if (images !== prevImages) {
+    setPrevImages(images);
+    setOrdered(images);
+  }
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -37,6 +58,8 @@ export function GalleryManager({
         files,
         bucket: "car-images",
         pathPrefix: `${userId}/${carId}`,
+        // Public photography (§S4): orientation, resize, EXIF/GPS strip.
+        normalize: true,
       });
       for (const failure of result.failed) {
         setError(failure.reason);
@@ -67,8 +90,25 @@ export function GalleryManager({
   return (
     <section className="tile">
       <div className="tile__head">
-        <span className="microlabel microlabel--ink">Photos — use ↑↓ to reorder, ★ to set the cover</span>
+        <span className="microlabel microlabel--ink">
+          Photos — drag (or ↑↓) to reorder, ★ to set the cover
+        </span>
+        {coverImageUrl && (
+          <button type="button" className="jumplink" onClick={() => setFraming(true)}>
+            Frame the cover
+          </button>
+        )}
       </div>
+
+      {coverImageUrl && (
+        <FramingDialog
+          open={framing}
+          onClose={() => setFraming(false)}
+          carId={carId}
+          coverUrl={coverImageUrl}
+          initial={coverFocal ?? { x: null, y: null }}
+        />
+      )}
       {error && (
         <div role="alert" aria-live="polite" className="field__err mt-3 flex items-center gap-3">
           <span>{error}</span>
@@ -79,12 +119,27 @@ export function GalleryManager({
           )}
         </div>
       )}
-      {images.length > 0 ? (
-        <ul className="thumbs thumbs--edit list-none p-0 m-0">
-          {images.map((image, index) => {
+      {ordered.length > 0 ? (
+        <SortableGrid
+          ids={ordered.map((image) => image.id)}
+          onReorder={(ids) => {
+            const byId = new Map(ordered.map((image) => [image.id, image]));
+            setOrdered(ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
+            startTransition(() => {
+              void reorderCarImages(carId, ids);
+            });
+          }}
+          className="thumbs thumbs--edit list-none p-0 m-0"
+        >
+          {ordered.map((image, index) => {
             const isCover = coverImageUrl === image.url;
             return (
-              <li key={image.id} className="thumb group">
+              <SortableItem
+                key={image.id}
+                id={image.id}
+                label={`Photo ${index + 1}`}
+                className="thumb group"
+              >
                 <Media src={image.url} alt={image.alt ?? "Car photo"} className="h-full w-full" role="thumb" />
 
                 {isCover && (
@@ -129,7 +184,7 @@ export function GalleryManager({
                           await moveCarImage(fd);
                         })
                       }
-                      disabled={index === images.length - 1}
+                      disabled={index === ordered.length - 1}
                       aria-label={`Move photo ${index + 1} later`}
                       className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
                     >
@@ -211,10 +266,10 @@ export function GalleryManager({
                     </button>
                   </form>
                 )}
-              </li>
+              </SortableItem>
             );
           })}
-        </ul>
+        </SortableGrid>
       ) : null}
 
       {/* The documented `.drop` pattern is the upload control — it doubles
@@ -231,5 +286,104 @@ export function GalleryManager({
         }
       />
     </section>
+  );
+}
+
+  /**
+ * Cover framing (§S3): tap/click where the car is; every crop keeps that
+ * point in frame via object-position. Non-destructive — the photo itself is
+ * never touched.
+ */
+function FramingDialog({
+  open,
+  onClose,
+  carId: framingCarId,
+  coverUrl,
+  initial,
+}: {
+  open: boolean;
+  onClose: () => void;
+  carId: string;
+  coverUrl: string;
+  initial: { x: number | null; y: number | null };
+}) {
+  const [point, setPoint] = useState({ x: initial.x ?? 0.5, y: initial.y ?? 0.5 });
+  const [saving, setSaving] = useState(false);
+const [, startSave] = useTransition();
+  return (
+    <Dialog open={open} onClose={onClose} label="Frame the cover" align="center">
+      <div className="sheet text-left">
+        <span className="microlabel microlabel--ink">Frame the cover</span>
+        <p className="field__hint mt-1">
+          Click where the car is — heroes, cards and thumbnails all keep that point in frame.
+          The photo itself is never cropped.
+        </p>
+        <button
+          type="button"
+          className="relative mt-3 block w-full cursor-crosshair overflow-hidden rounded-ctl p-0"
+          aria-label="Pick the focal point"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setPoint({
+              x: (event.clientX - rect.left) / rect.width,
+              y: (event.clientY - rect.top) / rect.height,
+            });
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={coverUrl} alt="Cover" className="block w-full" draggable={false} />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--on-ink)] shadow-[0_0_0_2px_var(--scrim)]"
+            style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
+          />
+        </button>
+        <div className="mt-3 grid grid-cols-3 gap-2" aria-label="Framing previews">
+          {[
+            ["aspect-[3/1]", "Hero"],
+            ["aspect-[3/2]", "Card"],
+            ["aspect-square", "Thumb"],
+          ].map(([ratio, label]) => (
+            <figure key={label} className="m-0">
+              <span className={`block overflow-hidden rounded-ctl ${ratio}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={coverUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  style={{ objectPosition: `${point.x * 100}% ${point.y * 100}%` }}
+                />
+              </span>
+              <figcaption className="microlabel !mb-0 mt-1">{label}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <div className="sheet__actions">
+          <Button
+            variant="live"
+            className="flex-1"
+            loading={saving}
+            pendingLabel="Saving…"
+            onClick={() => {
+              setSaving(true);
+              const fd = new FormData();
+              fd.set("car_id", framingCarId);
+              fd.set("focal_x", String(point.x));
+              fd.set("focal_y", String(point.y));
+              startSave(async () => {
+                await setCoverFocal(fd);
+                setSaving(false);
+                onClose();
+              });
+            }}
+          >
+            Save framing
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

@@ -304,7 +304,13 @@ export default async function CarPage({
 
       {car.cover_image_url && (
         <Rv className="hero-media mb-6">
-          <Media src={car.cover_image_url} alt={car.name} className="h-full w-full" role="hero" />
+          <Media
+            src={car.cover_image_url}
+            alt={car.name}
+            className="h-full w-full"
+            role="hero"
+            focal={{ x: car.cover_focal_x, y: car.cover_focal_y }}
+          />
         </Rv>
       )}
 

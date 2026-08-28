@@ -3,16 +3,16 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
-import { TextArea, TextField } from "@/components/ui";
 import type { ActivityBlock } from "@/lib/activity-blocks";
+import { BuildStoryComposer, type ComposerServerAction } from "@/features/composer/composer";
 
-import {
-  deleteActivityPost,
-  updateActivityPost,
-  type ActionState,
-} from "../../../../actions";
-import { ActivityBlockEditor } from "../../activity-block-editor";
+import { deleteActivityPost, type ActionState } from "../../../../actions";
 
+/**
+ * Editing a filed build entry — the same Build Story Composer as creation
+ * (one editor, M3), plus the delete section. Legacy intro/video fields ride
+ * through as hidden values so a body edit never silently strips them.
+ */
 export function PostEditor({
   carId,
   userId,
@@ -20,10 +20,10 @@ export function PostEditor({
   title,
   intro,
   videoUrl,
-  plainText,
-  isRich,
   initialBlocks,
   publicHref,
+  mods,
+  publishAction,
 }: {
   carId: string;
   userId: string;
@@ -31,13 +31,11 @@ export function PostEditor({
   title: string;
   intro: string;
   videoUrl: string;
-  plainText: string;
-  /** True when the body holds image/multi-block content — gets the full block editor. */
-  isRich: boolean;
   initialBlocks: ActivityBlock[];
   publicHref: string | null;
+  mods: { id: string; label: string }[];
+  publishAction: ComposerServerAction;
 }) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(updateActivityPost, {});
   const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(
     deleteActivityPost,
     {}
@@ -45,86 +43,23 @@ export function PostEditor({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
-    <div className="deck">
-      <form action={action} className="tile flex flex-col gap-3">
-        <input type="hidden" name="post_id" value={postId} />
+    <div className="grid gap-6">
+      {publicHref && (
+        <Link href={publicHref} className="jumplink justify-self-start">
+          View the public post ↗
+        </Link>
+      )}
 
-        <TextField
-          id="edit-title"
-          label="Title"
-          name="title"
-          required
-          maxLength={160}
-          defaultValue={title}
-          className="max-w-none"
-          fieldClassName="!mb-0"
-        />
-
-        <TextField
-          id="edit-intro"
-          label="Standfirst — optional"
-          name="intro"
-          maxLength={2000}
-          defaultValue={intro}
-          className="max-w-none"
-          fieldClassName="!mb-0"
-        />
-
-        {isRich ? (
-          <div className="field !mb-0">
-            <span className="microlabel">What happened</span>
-            <div className="mt-2">
-              <ActivityBlockEditor carId={carId} userId={userId} initialBlocks={initialBlocks} />
-            </div>
-          </div>
-        ) : (
-          <TextArea
-            id="edit-body"
-            label="What happened"
-            name="body"
-            rows={5}
-            defaultValue={plainText}
-            className="!max-w-none"
-            fieldClassName="!mb-0"
-          />
-        )}
-
-        <TextField
-          id="edit-video"
-          label="Video — optional"
-          name="video_url"
-          type="url"
-          defaultValue={videoUrl}
-          placeholder="https://youtube.com/…"
-          className="max-w-none"
-          fieldClassName="!mb-0"
-          hint="YouTube links only."
-        />
-
-        {state.error && (
-          <p role="alert" aria-live="polite" className="field__err">
-            {state.error}
-          </p>
-        )}
-        {state.ok && (
-          <p role="status" aria-live="polite" className="chip chip--ok">
-            {state.ok}
-          </p>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {publicHref ? (
-            <Link href={publicHref} className="jumplink">
-              View the public entry →
-            </Link>
-          ) : (
-            <span />
-          )}
-          <button type="submit" disabled={pending} className="btn btn--live">
-            {pending ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </form>
+      <BuildStoryComposer
+        carId={carId}
+        userId={userId}
+        mods={mods}
+        postId={postId}
+        initialTitle={title}
+        initialBlocks={initialBlocks}
+        publishAction={publishAction}
+        extraHidden={{ intro, video_url: videoUrl }}
+      />
 
       <section className="tile">
         <span className="microlabel microlabel--ink">Remove this entry</span>

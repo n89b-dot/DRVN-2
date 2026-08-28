@@ -383,7 +383,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "composer-engine",
     name: "Editor engine & DRVN-owned schema",
     group: "composer",
-    status: "planned",
+    status: "validated",
     brief: "M1–M2",
     existsToday:
       "Posts store an ordered block array (text/images/embed) in `activity_posts.body` with `normalizeBlocks()` upgrading the legacy shape; editing is a hand-rolled block form (↑/↓ moves, bottom-only insertion).",
@@ -394,13 +394,19 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Build updates gain a modern, reorderable writing experience without tying DRVN's data to any editor library.",
     approach:
       "Engine chosen after inspecting current code; DRVN block model extended (V2) with serializers both ways; renderer stays DRVN-owned.",
-    validation: "Not yet validated.",
+    decisions: [
+      "Engine: Tiptap v3 (MIT, headless ProseMirror) — full Livesheet styling ownership, atom NodeViews for the automotive set; Yoopta kept as a UX reference only, per M1 one-engine rule.",
+      "The stored format stays the self-describing body array (V0 legacy sections and V1 blocks still normalize on read); no schemaVersion column needed.",
+      "No inline marks in V2 — bold/italic/link deliberately off (brief O: no arbitrary typography); text blocks stay plain.",
+    ],
+    validation:
+      "Serializer round-trip unit-tested (4 tests, every block type); live end-to-end run: typed text + slash-inserted blocks published and the stored body verified as clean DRVN V2 JSON with zero editor state.",
   },
   {
     id: "unified-composer",
     name: "One progressively enhanced composer",
     group: "composer",
-    status: "planned",
+    status: "validated",
     brief: "M3, N",
     existsToday:
       "A simple quick composer (title + text + video) in the Garage editor and a separate full block editor — two products for one job.",
@@ -413,13 +419,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "The engine from composer-engine wrapped in DRVN chrome; quick-composer entry points route into the same surface.",
     dependsOn: ["composer-engine"],
     uxRules: ["Typing must work before any block/template decision.", "No mandatory template screen."],
-    validation: "Not yet validated.",
+    decisions: [
+      "The quick/full split is gone: one BuildStoryComposer serves create and edit; server actions ride in as props so features/ never imports route code.",
+      "Legacy intro/video fields ride through edits as hidden values — a body edit can never silently strip them.",
+    ],
+    validation:
+      "Live browser run: title + typed paragraph + / menu + + menu + publish landed on the public page; the garage editor's quick form is retired — 'Post an update' opens the one composer. Console clean.",
   },
   {
     id: "automotive-blocks",
     name: "Automotive blocks",
     group: "composer",
-    status: "planned",
+    status: "validated",
     brief: "O",
     existsToday: "Blocks are text (normal/heading), images and YouTube embeds only.",
     changing:
@@ -431,13 +442,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Each block is a DRVN document node + renderer + editor node; mod blocks reference existing mod_items rather than duplicating data; performance data clearly labeled owner-reported.",
     dependsOn: ["composer-engine"],
     uxRules: ["No arbitrary typography/layout controls.", "Block library stays small."],
-    validation: "Not yet validated.",
+    decisions: [
+      "One Mod block covers installed/removed/replaced/updated — 'removed' doubles as the Sell-this-part bridge; no separate removed-part block.",
+      "BeforeAfter is a registered ui primitive (keyboard slider); ActivityBlocksView is the one renderer for every post version, publicly and in previews.",
+    ],
+    validation:
+      "normalizeBlocks V2 coverage unit-tested (malformed-field defense included); performance + mod blocks exercised live end-to-end; renderer verified on the public page (owner-reported label, INSTALLED chip). Before/after upload path pending photo-based visual pass (Group 10).",
   },
   {
     id: "composer-templates",
     name: "Optional update templates",
     group: "composer",
-    status: "planned",
+    status: "implemented",
     brief: "Q",
     existsToday: "No templates; every update starts blank.",
     changing:
@@ -447,13 +463,14 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach: "Inline chips above the empty surface; applying one is explained, obvious and undoable.",
     dependsOn: ["unified-composer"],
     uxRules: ["Empty composer is already usable.", "No unexplained transformations."],
-    validation: "Not yet validated.",
+    validation:
+      "Starter chips render only on the empty composer with explanatory tooltips; application is one undo away. Interactive template pass rides with Group 10 visual validation.",
   },
   {
     id: "composer-autosave",
     name: "Drafts & autosave",
     group: "composer",
-    status: "planned",
+    status: "validated",
     brief: "R",
     existsToday: "The full editor relies on an explicit Save draft action.",
     changing:
@@ -462,13 +479,14 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "A ten-photo update survives a mobile browser reload instead of vanishing.",
     approach: "Debounced draft mutation + localStorage recovery buffer; no save spam.",
     dependsOn: ["unified-composer"],
-    validation: "Not yet validated.",
+    validation:
+      "Live run: 1.6s-debounced draft save fired with the quiet 'Saved — only you can see it' status; localStorage recovery buffer written per keystroke and cleared on publish; publish stays explicit.",
   },
   {
     id: "composer-motion",
     name: "Composer motion & polish",
     group: "composer",
-    status: "planned",
+    status: "implemented",
     brief: "P",
     existsToday: "The current editor has no motion language.",
     changing:
@@ -478,7 +496,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Livesheet-consistent transitions (Higgsfield references where useful); `prefers-reduced-motion` respected everywhere.",
     dependsOn: ["unified-composer"],
-    validation: "Not yet validated.",
+    validation:
+      "Block rise-in on insert, hover-revealed tool rails (always-on for coarse pointers), live dropcursor, transition tokens from Livesheet; prefers-reduced-motion disables the entrance animation. Visual pass in Group 10.",
   },
 
   // ── 06 · Media & galleries ──────────────────────────────────────────────
@@ -486,7 +505,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "upload-queue",
     name: "Better upload queue",
     group: "media",
-    status: "planned",
+    status: "implemented",
     brief: "S1",
     existsToday:
       "`uploadImages` centralizes validation/storage/staging, but uploads run sequentially with no per-image progress, retry or continued-editing affordance.",
@@ -496,27 +515,32 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "Adding twelve photos feels fast and visible instead of a silent wait that might fail wholesale.",
     approach:
       "A queue layer (Uppy evaluated vs extending the existing helper — decision recorded) beneath a DRVN-designed surface; storage and GC unchanged.",
-    validation: "Not yet validated.",
+    decisions: [
+      "Uppy evaluated and not adopted: byte-level progress would require switching to TUS resumable uploads; after §S4 normalization files are small, so an honest queued/uploading/done/failed ladder beats a simulated percent bar.",
+    ],
+    validation:
+      "Queue hook (3-way concurrency, statuses, retry, remove) drives composer galleries, before/after slots and the sell form (instant previews + per-image state); typecheck/lint/unit green. Garage gallery keeps its immediate per-file persist flow with retry — documented decision.",
   },
   {
     id: "media-reorder",
     name: "Drag-and-drop reordering",
     group: "media",
-    status: "planned",
+    status: "validated",
     brief: "S2",
     existsToday: "Photo ordering is ↑/↓ buttons only.",
     changing:
       "Accessible drag-and-drop sorting (dnd-kit or equivalent) for garage photos, listing photos and composer galleries, with keyboard controls retained.",
     surfaces: ["garage gallery", "/sell", "composer"],
     benefit: "Arranging a photo set takes seconds instead of button-mashing.",
-    validation: "Not yet validated.",
+    validation:
+      "SortableGrid/SortableItem (dnd-kit pointer+touch+keyboard) registered and applied to the garage gallery (optimistic order + full-order server action) and sell photos; ↑↓ controls retained as the explicit accessible path. Composer galleries keep ←/→ — in-gallery dnd nested inside a draggable ProseMirror node is conflict-prone (documented).",
     approach: "One sortable primitive registered in the design system, applied consistently.",
   },
   {
     id: "focal-point",
     name: "Cover & focal-point framing",
     group: "media",
-    status: "planned",
+    status: "implemented",
     brief: "S3",
     existsToday: "Cover selection exists; framing does not — crops are whatever the layout happens to do.",
     changing:
@@ -524,13 +548,14 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     surfaces: ["garage gallery", "car pages", "listing cards"],
     benefit: "Owners control how their car appears everywhere it's cropped, without destroying the photo.",
     approach: "react-easy-crop-style percentage focal data stored as technical metadata only.",
-    validation: "Not yet validated.",
+    validation:
+      "0043 applied; the 'Frame the cover' dialog (click-to-set focal point with hero/card/thumb live previews) ships on the garage gallery; Media gained a focal prop applied on the public car hero. Visual pass in Group 10.",
   },
   {
     id: "photo-normalization",
     name: "Client-side photo normalization",
     group: "media",
-    status: "planned",
+    status: "validated",
     brief: "S4",
     existsToday: "Original camera files upload as-is (up to the size limit), EXIF/GPS included.",
     changing:
@@ -539,7 +564,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "Uploads get faster and cheaper, and nobody accidentally publishes their home GPS coordinates.",
     approach: "Canvas-based normalization in the upload helper, bypassed for evidence flows.",
     uxRules: ["Never normalize private dispute evidence destructively."],
-    validation: "Not yet validated.",
+    validation:
+      "normalizePublicPhoto (orientation via createImageBitmap, 2560px cap, JPEG re-encode = EXIF/GPS strip, graceful fallback) wired into garage, sell and composer uploads; dispute evidence untouched by construction (its flow never passes normalize).",
   },
 
   // ── 07 · Garage & build experience ──────────────────────────────────────

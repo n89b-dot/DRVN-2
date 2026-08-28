@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { normalizeBlocks } from "@/lib/activity-blocks";
 import { createClient } from "@/lib/supabase/server";
+import { BuildStoryComposer } from "@/features/composer/composer";
 
-import { UpdateComposer } from "./update-composer";
+import { createRichActivityPost, saveActivityDraft } from "../../../actions";
 
 export const metadata = { title: "New update - DRVN" };
 
@@ -24,16 +26,26 @@ export default async function NewUpdatePage({ params }: { params: Promise<{ id: 
   if (!car) notFound();
 
   // The car's draft, if one exists — the composer reopens it where you left
-  // off. One draft per car: saving again overwrites, publishing converts.
-  const { data: draft } = await supabase
-    .from("activity_posts")
-    .select("title, body, updated_at")
-    .eq("car_id", car.id)
-    .eq("author_id", user.id)
-    .is("published_at", null)
-    .maybeSingle();
-  const { normalizeBlocks } = await import("@/lib/activity-blocks");
+  // off. One draft per car: autosave overwrites, publishing converts.
+  const [{ data: draft }, { data: modRows }] = await Promise.all([
+    supabase
+      .from("activity_posts")
+      .select("title, body, updated_at")
+      .eq("car_id", car.id)
+      .eq("author_id", user.id)
+      .is("published_at", null)
+      .maybeSingle(),
+    supabase
+      .from("mod_items")
+      .select("id, brand, product, raw_text")
+      .eq("car_id", car.id)
+      .order("position"),
+  ]);
   const draftBlocks = draft ? normalizeBlocks(draft.body) : null;
+  const mods = (modRows ?? []).map((mod) => ({
+    id: mod.id,
+    label: [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry",
+  }));
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
@@ -45,19 +57,20 @@ export default async function NewUpdatePage({ params }: { params: Promise<{ id: 
           · new build update
         </span>
         <h1>What happened on {car.name}?</h1>
-        {/* The mild instructions read.cv puts under its section heading —
-            one line that names the moves, then stays out of the way. */}
         <p className="sub">
-          Title it, write it up, and add photos or a video with &ldquo;Add a
-          block&rdquo;. Nothing is public until you publish.
+          Just type — or add photos, a before/after, a result. Nothing is public until you
+          publish; drafts save themselves.
         </p>
       </header>
-      <UpdateComposer
+      <BuildStoryComposer
         carId={car.id}
         userId={user.id}
-        initialTitle={draft?.title}
-        initialBlocks={draftBlocks && draftBlocks.length ? draftBlocks : undefined}
-        draftSavedAt={draft?.updated_at}
+        mods={mods}
+        initialTitle={draft?.title ?? ""}
+        initialBlocks={draftBlocks && draftBlocks.length ? draftBlocks : []}
+        draftSavedAt={draft?.updated_at ?? null}
+        publishAction={createRichActivityPost}
+        draftAction={saveActivityDraft}
       />
     </div>
   );

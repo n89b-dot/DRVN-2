@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Avatar, EmbeddedVideo, Icon, Media, NarrowColumn } from "@/components/ui";
+import { Avatar, EmbeddedVideo, Icon, NarrowColumn } from "@/components/ui";
+import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement, type CommentView, type ReactionState } from "@/features/activity/engagement";
 import { ACTIVITY_EMOJIS } from "@/features/activity/constants";
 import { createClient } from "@/lib/supabase/server";
@@ -91,6 +92,30 @@ export default async function ActivityDetailPage({
   }));
 
   const blocks = normalizeBlocks(post.body);
+
+  // Mod blocks reference real build entries — resolve where each should link
+  // (a live listing when the part is for sale, the build sheet otherwise).
+  const modIds = blocks.flatMap((b) => (b.type === "mod" && b.modItemId ? [b.modItemId] : []));
+  const modLinks: Record<string, { href: string; label: string }> = {};
+  if (modIds.length) {
+    const { data: mods } = await supabase
+      .from("mod_items")
+      .select("id, linked_listing_id")
+      .in("id", modIds)
+      .eq("car_id", car.id);
+    const listingIds = (mods ?? []).flatMap((m) => (m.linked_listing_id ? [m.linked_listing_id] : []));
+    const { data: listings } = listingIds.length
+      ? await supabase.from("listings").select("id, status").in("id", listingIds)
+      : { data: [] };
+    for (const mod of mods ?? []) {
+      const listing = (listings ?? []).find((l) => l.id === mod.linked_listing_id);
+      modLinks[mod.id] =
+        listing?.status === "active"
+          ? { href: `/listings/${listing.id}`, label: "For sale →" }
+          : { href: `/cars/${slug}?view=build`, label: "View build entry →" };
+    }
+  }
+
   const gallery = images ?? [];
   const ownerName = owner?.display_name ?? (owner?.username ? `@${owner.username}` : "");
   const initials = (owner?.display_name ?? owner?.username ?? "?")
@@ -141,49 +166,12 @@ export default async function ActivityDetailPage({
       )}
 
       {blocks.length > 0 && (
-        <div className="mt-8 grid gap-6">
-          {blocks.map((block, index) => {
-            if (block.type === "text") {
-              return block.style === "heading" ? (
-                <h2 key={index} className="text-base font-[600]">
-                  {block.text}
-                </h2>
-              ) : (
-                <p key={index} className="max-w-[62ch] whitespace-pre-line text-body leading-7">
-                  {block.text}
-                </p>
-              );
-            }
-            if (block.type === "images") {
-              return (
-                <div
-                  key={index}
-                  className={`grid gap-3 ${block.urls.length > 1 ? "grid-cols-1 sm:grid-cols-2" : ""}`}
-                >
-                  {block.urls.map((url, i) => (
-                    <Media
-                      key={i}
-                      src={url}
-                      alt={`${post.title} photo ${i + 1}`}
-                      className={`${block.urls.length > 1 ? "h-44" : "h-64"} w-full rounded-ctl`}
-                      role="feature"
-                    />
-                  ))}
-                </div>
-              );
-            }
-            return (
-              <iframe
-                key={index}
-                src={`https://www.youtube-nocookie.com/embed/${block.videoId}`}
-                title="Embedded video"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="aspect-video w-full rounded-r"
-              />
-            );
-          })}
-        </div>
+        <ActivityBlocksView
+          blocks={blocks}
+          title={post.title}
+          modLinks={modLinks}
+          className="mt-8 grid gap-6"
+        />
       )}
 
       {post.video_url && (

@@ -7,6 +7,7 @@ import { normalizeBlocks } from "@/lib/activity-blocks";
 import { createClient } from "@/lib/supabase/server";
 
 import { PostEditor } from "./post-editor";
+import { updateActivityPost } from "../../../../actions";
 import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Edit update - DRVN" };
@@ -47,11 +48,17 @@ export default async function EditActivityPostPage({
     .maybeSingle();
 
   // A post from the rich composer holds image and/or multiple blocks. Those
-  // get the same block editor used to create them — text edited in place,
-  // photos added/removed/reordered — instead of the plain textarea below.
   const blocks = normalizeBlocks(post.body);
-  const isRich = blocks.some((b) => b.type === "images" || b.type === "embed" || blocks.length > 1);
-  const plainText = !isRich ? (blocks[0]?.type === "text" ? blocks[0].text : "") : "";
+
+  const { data: modRows } = await supabase
+    .from("mod_items")
+    .select("id, brand, product, raw_text")
+    .eq("car_id", carId)
+    .order("position");
+  const mods = (modRows ?? []).map((mod) => ({
+    id: mod.id,
+    label: [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry",
+  }));
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-5 pb-10">
@@ -74,10 +81,10 @@ export default async function EditActivityPostPage({
         title={post.title}
         intro={post.intro ?? ""}
         videoUrl={post.video_url ?? ""}
-        plainText={plainText}
-        isRich={isRich}
         initialBlocks={blocks}
         publicHref={car ? `/cars/${car.slug}/activity/${post.id}` : null}
+        mods={mods}
+        publishAction={updateActivityPost}
       />
 
       <Foot

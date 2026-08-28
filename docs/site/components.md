@@ -126,7 +126,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (72)
+### Primitives (75)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -135,6 +135,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Alert` | Primitive | `@/components/ui` | Notice plate — icon column, bold head, body. — `.alert` | Inline notices; `live` when the reader must act, `ok` for confirmation. *Not for:* Action results inside forms — that's ResultNote. |
 | `AppShell` | Primitive | `@/components/ui` | The signed-in application frame: bar, content column, foot. | Product route-group layouts. *Not for:* Docs and marketing surfaces, which own their chrome. |
 | `Avatar` | Primitive | `@/components/ui` | Monogram identity plate (soft square, never a circle). — `.monogram` | People without photos; photo avatars go through Media. |
+| `BeforeAfter` | Primitive | `@/components/ui` | Two-image comparison plate: clip-path reveal on pointer drag/touch, keyboard slider divider, corner label tags. — `.ba` | Before/after photography — suspension drops, wheels, wraps, detailing. *Not for:* Plain image pairs with no comparison story (use Media in a grid). |
 | `BottomSheet` | Primitive | `@/components/ui` | Compact bottom sheet; keeps children mounted; dissolves inline ≥ its breakpoint. — `.bsheet` | Compact-width pickers and refinements. |
 | `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. — `.btn / .relbtn` | Every button. One `live` action per surface. |
 | `ButtonLink` | Primitive | `@/components/ui` | The action contract as a real link. — `.btn` | CTAs that navigate — keeps middle-click/new-tab semantics. |
@@ -192,6 +193,8 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `SkeletonPage` | Primitive | `@/components/ui` | Generic page placeholder — pagehead + rows. | loading.tsx when no closer geometry exists; pass a label naming the surface. |
 | `SkeletonPdp` | Primitive | `@/components/ui` | Two-column PDP placeholder (media + purchase rail). | loading.tsx for listing detail. |
 | `SkeletonRows` | Primitive | `@/components/ui` | N ghost ledger rows. — `.ghostrow` | Inside larger skeletons / list regions. |
+| `SortableGrid` | Primitive | `@/components/ui` | Drag-and-drop ordering for photo strips/tile grids (dnd-kit: pointer, touch, keyboard sensors). — `.sortable--lifted` | Wrap reorderable thumbs; pair with SortableItem per cell. Keep explicit ↑/↓ controls alongside. *Not for:* Single-item or fixed-order sets. |
+| `SortableItem` | Primitive | `@/components/ui` | One draggable cell inside a SortableGrid. | Only inside SortableGrid. |
 | `Stepper` | Primitive | `@/components/ui` | Auto-numbered workflow progress rail; live numeral on the current step. — `.steps` | Multi-step workflows (checkout). Workflow state stays with the feature. |
 | `TabNav` | Primitive | `@/components/ui` | The system's tab replacement — a quiet jumprow of mono links. — `.jumprow` | On-page section switching. |
 | `TextArea` | Primitive | `@/components/ui` | Textarea in the field contract. — `.ctl` | Multi-line input. |
@@ -227,10 +230,12 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity, pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
 
-### Features (10)
+### Features (12)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
+| `ActivityBlocksView` | Feature | `@/features/activity/blocks-view` | The one renderer for DRVN's activity document model (V0–V2): text, images, embeds, divider, mod change, before/after, performance result, mileage. — `.modline / .perfcard / .milestone` | Anywhere a post body renders — feed it normalizeBlocks output. |
+| `BuildStoryComposer` | Feature | `@/features/composer/composer` | The one build-update editor (Tiptap runtime, DRVN-owned document): immediate writing surface, optional starter chips, / and + insert menus, draggable automotive blocks, quiet autosave, explicit publish. — `.bsc / .cblock / .cgal` | Creating and editing build updates — pass the route's server actions as props. *Not for:* Anything that isn't an activity post. Message threads use MessageComposer. |
 | `CardEngagement` | Feature | `@/features/social/card-actions` | Like · comment · share · save strip on cards; optimistic with rollback; guest → AuthIntentDialog. — `.cardeng` | Via the mosaic card family's engagement slot. |
 | `CheckoutSteps` | Feature | `@/app/(discover)/checkout/checkout-steps` | The checkout workflow (shipping → payment), shared by cart and order checkout. | Feature-owned; the Stepper and field primitives inside it are the reusable parts. |
 | `FollowButton` | Feature | `@/features/social/buttons` | Follow toggle with configurable labels. | Profiles and car sheets. |

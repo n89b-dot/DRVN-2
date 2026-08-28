@@ -6,7 +6,8 @@ import { useActionState, useRef, useState } from "react";
 import { Button, FormSection, Media, Select, TextArea, TextField, ValidationSummary } from "@/components/ui";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
-import { uploadImages } from "@/lib/media-upload";
+import { useUploadQueue } from "@/lib/use-upload-queue";
+import { SortableGrid, SortableItem } from "@/components/ui";
 import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
 import { isLowConfidence } from "@/lib/mods/parse";
 
@@ -85,7 +86,6 @@ export function SellForm({
   );
   const [condition, setCondition] = useState(listing?.condition ?? "used");
   const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? []);
-  const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -143,25 +143,24 @@ export function SellForm({
     attest_accurate: "sell-attest",
   };
 
-  async function handleFiles(files: FileList | null) {
+  // Upload queue (§S1): instant local previews, per-image status, retry —
+  // three at a time, form editing uninterrupted. §S4 normalization included.
+  const queue = useUploadQueue({
+    bucket: "listing-images",
+    pathPrefix: userId,
+    maxBytes: 10 * 1024 * 1024,
+    onUploaded: ({ url }) => {
+      setImages((u) => (u.some((img) => img.url === url) ? u : [...u, { url, alt: null }]));
+    },
+  });
+  const uploading = queue.uploading;
+  const pendingUploads = queue.items.filter((item) => item.status !== "done");
+
+  function handleFiles(files: FileList | null) {
     if (!files?.length) return;
     setUploadError(null);
-    setUploading(true);
-    try {
-      const { uploaded, failed } = await uploadImages({
-        files,
-        bucket: "listing-images",
-        pathPrefix: userId,
-        maxBytes: 10 * 1024 * 1024,
-      });
-      if (uploaded.length) {
-        setImages((u) => [...u, ...uploaded.map(({ url }) => ({ url, alt: null }))]);
-      }
-      if (failed.length) setUploadError(failed[failed.length - 1].reason);
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+    queue.addFiles(files);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   /** Reorder is a swap with a neighbour; moving index 0 changes the cover. */
@@ -439,9 +438,21 @@ export function SellForm({
         title="Photos"
         hint="Up to 12 — the first frame is the cover. Reorder, set a cover, or add alt text below."
       >
-        <div className="thumbs !mt-0">
+        <SortableGrid
+          ids={images.map((img) => img.url)}
+          onReorder={(urls) => {
+            const byUrl = new Map(images.map((img) => [img.url, img]));
+            setImages(urls.flatMap((url) => (byUrl.has(url) ? [byUrl.get(url)!] : [])));
+          }}
+          className="thumbs !mt-0"
+        >
           {images.map((img, index) => (
-            <div key={img.url} className="flex flex-col gap-1.5">
+            <SortableItem
+              key={img.url}
+              id={img.url}
+              label={`Photo ${index + 1}`}
+              className="flex flex-col gap-1.5"
+            >
               <span className="thumb">
                 <Media
                   src={img.url}
@@ -496,6 +507,35 @@ export function SellForm({
                 className="ctl max-w-none !py-1 text-micro pointer-coarse:min-h-10"
                 aria-label={`Alt text for photo ${index + 1}`}
               />
+            </SortableItem>
+          ))}
+          {pendingUploads.map((item) => (
+            <div key={item.id} className="flex flex-col gap-1.5">
+              <span className="thumb">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.previewUrl}
+                  alt=""
+                  className="h-full w-full object-cover opacity-75"
+                />
+              </span>
+              {item.status === "failed" ? (
+                <span className="flex flex-wrap items-center gap-2 text-micro text-live">
+                  <span className="truncate">{item.error}</span>
+                  {item.retryable && (
+                    <button type="button" className="jumplink" onClick={() => queue.retry(item.id)}>
+                      Retry
+                    </button>
+                  )}
+                  <button type="button" className="jumplink" onClick={() => queue.remove(item.id)}>
+                    Remove
+                  </button>
+                </span>
+              ) : (
+                <span className="font-mono text-micro uppercase tracking-[0.08em] text-dim">
+                  Uploading…
+                </span>
+              )}
             </div>
           ))}
           <button
@@ -506,7 +546,7 @@ export function SellForm({
           >
             {uploading ? "Uploading…" : "+ Add"}
           </button>
-        </div>
+        </SortableGrid>
         <input
           ref={fileRef}
           type="file"

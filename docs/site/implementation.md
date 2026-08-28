@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 27 planned · 2 in progress · 2 implemented · 4 validated · 7 deferred · 1 blocked externally
+**Progress:** 43 initiatives — 17 planned · 2 in progress · 6 implemented · 10 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -165,7 +165,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 
 ### 05 · Build Story Composer
 
-#### Editor engine & DRVN-owned schema — Planned
+#### Editor engine & DRVN-owned schema — Validated
 
 - **Brief:** M1–M2
 - **Exists today:** Posts store an ordered block array (text/images/embed) in `activity_posts.body` with `normalizeBlocks()` upgrading the legacy shape; editing is a hand-rolled block form (↑/↓ moves, bottom-only insertion).
@@ -173,9 +173,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `src/lib/activity-blocks.ts`, `src/app/(product)/garage/[id]/update/`
 - **User benefit:** Build updates gain a modern, reorderable writing experience without tying DRVN's data to any editor library.
 - **Approach:** Engine chosen after inspecting current code; DRVN block model extended (V2) with serializers both ways; renderer stays DRVN-owned.
-- **Validation:** Not yet validated.
+- **Decisions:** Engine: Tiptap v3 (MIT, headless ProseMirror) — full Livesheet styling ownership, atom NodeViews for the automotive set; Yoopta kept as a UX reference only, per M1 one-engine rule. The stored format stays the self-describing body array (V0 legacy sections and V1 blocks still normalize on read); no schemaVersion column needed. No inline marks in V2 — bold/italic/link deliberately off (brief O: no arbitrary typography); text blocks stay plain.
+- **Validation:** Serializer round-trip unit-tested (4 tests, every block type); live end-to-end run: typed text + slash-inserted blocks published and the stored body verified as clean DRVN V2 JSON with zero editor state.
 
-#### One progressively enhanced composer — Planned
+#### One progressively enhanced composer — Validated
 
 - **Brief:** M3, N
 - **Exists today:** A simple quick composer (title + text + video) in the Garage editor and a separate full block editor — two products for one job.
@@ -185,9 +186,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** The engine from composer-engine wrapped in DRVN chrome; quick-composer entry points route into the same surface.
 - **Depends on:** composer-engine
 - **UX rules:** Typing must work before any block/template decision. No mandatory template screen.
-- **Validation:** Not yet validated.
+- **Decisions:** The quick/full split is gone: one BuildStoryComposer serves create and edit; server actions ride in as props so features/ never imports route code. Legacy intro/video fields ride through edits as hidden values — a body edit can never silently strip them.
+- **Validation:** Live browser run: title + typed paragraph + / menu + + menu + publish landed on the public page; the garage editor's quick form is retired — 'Post an update' opens the one composer. Console clean.
 
-#### Automotive blocks — Planned
+#### Automotive blocks — Validated
 
 - **Brief:** O
 - **Exists today:** Blocks are text (normal/heading), images and YouTube embeds only.
@@ -197,9 +199,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Each block is a DRVN document node + renderer + editor node; mod blocks reference existing mod_items rather than duplicating data; performance data clearly labeled owner-reported.
 - **Depends on:** composer-engine
 - **UX rules:** No arbitrary typography/layout controls. Block library stays small.
-- **Validation:** Not yet validated.
+- **Decisions:** One Mod block covers installed/removed/replaced/updated — 'removed' doubles as the Sell-this-part bridge; no separate removed-part block. BeforeAfter is a registered ui primitive (keyboard slider); ActivityBlocksView is the one renderer for every post version, publicly and in previews.
+- **Validation:** normalizeBlocks V2 coverage unit-tested (malformed-field defense included); performance + mod blocks exercised live end-to-end; renderer verified on the public page (owner-reported label, INSTALLED chip). Before/after upload path pending photo-based visual pass (Group 10).
 
-#### Optional update templates — Planned
+#### Optional update templates — Implemented
 
 - **Brief:** Q
 - **Exists today:** No templates; every update starts blank.
@@ -209,9 +212,9 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Inline chips above the empty surface; applying one is explained, obvious and undoable.
 - **Depends on:** unified-composer
 - **UX rules:** Empty composer is already usable. No unexplained transformations.
-- **Validation:** Not yet validated.
+- **Validation:** Starter chips render only on the empty composer with explanatory tooltips; application is one undo away. Interactive template pass rides with Group 10 visual validation.
 
-#### Drafts & autosave — Planned
+#### Drafts & autosave — Validated
 
 - **Brief:** R
 - **Exists today:** The full editor relies on an explicit Save draft action.
@@ -220,9 +223,9 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** A ten-photo update survives a mobile browser reload instead of vanishing.
 - **Approach:** Debounced draft mutation + localStorage recovery buffer; no save spam.
 - **Depends on:** unified-composer
-- **Validation:** Not yet validated.
+- **Validation:** Live run: 1.6s-debounced draft save fired with the quiet 'Saved — only you can see it' status; localStorage recovery buffer written per keystroke and cleared on publish; publish stays explicit.
 
-#### Composer motion & polish — Planned
+#### Composer motion & polish — Implemented
 
 - **Brief:** P
 - **Exists today:** The current editor has no motion language.
@@ -231,11 +234,11 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** The composer feels premium and unmistakably DRVN rather than like a form.
 - **Approach:** Livesheet-consistent transitions (Higgsfield references where useful); `prefers-reduced-motion` respected everywhere.
 - **Depends on:** unified-composer
-- **Validation:** Not yet validated.
+- **Validation:** Block rise-in on insert, hover-revealed tool rails (always-on for coarse pointers), live dropcursor, transition tokens from Livesheet; prefers-reduced-motion disables the entrance animation. Visual pass in Group 10.
 
 ### 06 · Media & galleries
 
-#### Better upload queue — Planned
+#### Better upload queue — Implemented
 
 - **Brief:** S1
 - **Exists today:** `uploadImages` centralizes validation/storage/staging, but uploads run sequentially with no per-image progress, retry or continued-editing affordance.
@@ -243,9 +246,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `src/lib/media-upload.ts`, `garage gallery`, `/sell`, `composer`
 - **User benefit:** Adding twelve photos feels fast and visible instead of a silent wait that might fail wholesale.
 - **Approach:** A queue layer (Uppy evaluated vs extending the existing helper — decision recorded) beneath a DRVN-designed surface; storage and GC unchanged.
-- **Validation:** Not yet validated.
+- **Decisions:** Uppy evaluated and not adopted: byte-level progress would require switching to TUS resumable uploads; after §S4 normalization files are small, so an honest queued/uploading/done/failed ladder beats a simulated percent bar.
+- **Validation:** Queue hook (3-way concurrency, statuses, retry, remove) drives composer galleries, before/after slots and the sell form (instant previews + per-image state); typecheck/lint/unit green. Garage gallery keeps its immediate per-file persist flow with retry — documented decision.
 
-#### Drag-and-drop reordering — Planned
+#### Drag-and-drop reordering — Validated
 
 - **Brief:** S2
 - **Exists today:** Photo ordering is ↑/↓ buttons only.
@@ -253,9 +257,9 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `garage gallery`, `/sell`, `composer`
 - **User benefit:** Arranging a photo set takes seconds instead of button-mashing.
 - **Approach:** One sortable primitive registered in the design system, applied consistently.
-- **Validation:** Not yet validated.
+- **Validation:** SortableGrid/SortableItem (dnd-kit pointer+touch+keyboard) registered and applied to the garage gallery (optimistic order + full-order server action) and sell photos; ↑↓ controls retained as the explicit accessible path. Composer galleries keep ←/→ — in-gallery dnd nested inside a draggable ProseMirror node is conflict-prone (documented).
 
-#### Cover & focal-point framing — Planned
+#### Cover & focal-point framing — Implemented
 
 - **Brief:** S3
 - **Exists today:** Cover selection exists; framing does not — crops are whatever the layout happens to do.
@@ -263,9 +267,9 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `garage gallery`, `car pages`, `listing cards`
 - **User benefit:** Owners control how their car appears everywhere it's cropped, without destroying the photo.
 - **Approach:** react-easy-crop-style percentage focal data stored as technical metadata only.
-- **Validation:** Not yet validated.
+- **Validation:** 0043 applied; the 'Frame the cover' dialog (click-to-set focal point with hero/card/thumb live previews) ships on the garage gallery; Media gained a focal prop applied on the public car hero. Visual pass in Group 10.
 
-#### Client-side photo normalization — Planned
+#### Client-side photo normalization — Validated
 
 - **Brief:** S4
 - **Exists today:** Original camera files upload as-is (up to the size limit), EXIF/GPS included.
@@ -274,7 +278,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** Uploads get faster and cheaper, and nobody accidentally publishes their home GPS coordinates.
 - **Approach:** Canvas-based normalization in the upload helper, bypassed for evidence flows.
 - **UX rules:** Never normalize private dispute evidence destructively.
-- **Validation:** Not yet validated.
+- **Validation:** normalizePublicPhoto (orientation via createImageBitmap, 2560px cap, JPEG re-encode = EXIF/GPS strip, graceful fallback) wired into garage, sell and composer uploads; dispute evidence untouched by construction (its flow never passes normalize).
 
 ### 07 · Garage & build experience
 

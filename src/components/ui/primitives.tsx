@@ -69,6 +69,7 @@ export function Media({
   fallbackClassName = "",
   role,
   sizes,
+  focal,
 }: {
   src?: string;
   alt: string;
@@ -85,6 +86,9 @@ export function Media({
   /** Raw `sizes` escape hatch for a layout the role presets don't cover.
    *  Wins over `role` when both are passed. */
   sizes?: string;
+  /** Non-destructive framing (0043): 0..1 focal point kept in frame at every
+   *  crop via object-position. Null/undefined = centered as before. */
+  focal?: { x: number | null; y: number | null } | null;
 }) {
   const resolvedSizes = sizes ?? MEDIA_SIZES[role ?? "card"];
   if (!src) {
@@ -114,7 +118,18 @@ export function Media({
     <span className={`relative block overflow-hidden bg-img-fallback ${className}`}>
       {/* Optimization is on: next.config.ts allows the Supabase storage host,
           so these resize and serve AVIF/WebP instead of full-size originals. */}
-      <Image src={src} alt={alt} fill sizes={resolvedSizes} className="object-cover" />
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes={resolvedSizes}
+        className="object-cover"
+        style={
+          focal && focal.x !== null && focal.y !== null
+            ? { objectPosition: `${Math.round(focal.x * 100)}% ${Math.round(focal.y * 100)}%` }
+            : undefined
+        }
+      />
     </span>
   );
 }

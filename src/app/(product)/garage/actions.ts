@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { slugify } from "@/lib/format";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
-import type { ActivityBlock } from "@/lib/activity-blocks";
+import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
 import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
@@ -32,11 +32,19 @@ async function requireUser() {
  */
 function sanitizeActivityBlocks(blocks: ActivityBlock[], userId: string): ActivityBlock[] {
   return blocks
-    .map((block) =>
-      block.type === "images"
-        ? { ...block, urls: keepValidImageUrls(block.urls, 12, userId) }
-        : block
-    )
+    .map((block) => {
+      if (block.type === "images") {
+        return { ...block, urls: keepValidImageUrls(block.urls, 12, userId) };
+      }
+      if (block.type === "before_after") {
+        // Both sides must be this user's own storage or the block drops.
+        const [beforeUrl] = keepValidImageUrls([block.beforeUrl], 1, userId);
+        const [afterUrl] = keepValidImageUrls([block.afterUrl], 1, userId);
+        return beforeUrl && afterUrl ? { ...block, beforeUrl, afterUrl } : null;
+      }
+      return block;
+    })
+    .filter((block): block is ActivityBlock => block !== null)
     .filter((block) => block.type !== "images" || block.urls.length > 0);
 }
 
@@ -402,6 +410,44 @@ export async function setCoverImage(formData: FormData): Promise<void> {
  * previously drag-only in intent but had no implementation at all — this
  * gives keyboard/touch users an equivalent up/down control.
  */
+/**
+ * Full-order rewrite for drag-and-drop (§S2) — the ↑/↓ neighbour swap can't
+ * express a multi-step drag. RLS scopes every update to the owner's rows;
+ * ids not belonging to this car are simply no-ops.
+ */
+export async function reorderCarImages(carId: string, orderedIds: string[]): Promise<ActionState> {
+  const { supabase } = await requireUser();
+  if (!carId || orderedIds.length === 0 || orderedIds.length > 48) return {};
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const { error } = await supabase
+      .from("car_images")
+      .update({ position: index })
+      .eq("id", orderedIds[index])
+      .eq("car_id", carId);
+    if (error) return { error: "Couldn't save the new order." };
+  }
+  revalidatePath(`/garage/${carId}/edit`);
+  return { ok: "Order saved" };
+}
+
+/** Cover framing (§S3): stores the 0..1 focal point; the photo is untouched. */
+export async function setCoverFocal(formData: FormData): Promise<ActionState> {
+  const { supabase } = await requireUser();
+  const carId = String(formData.get("car_id") ?? "");
+  const x = Number(formData.get("focal_x"));
+  const y = Number(formData.get("focal_y"));
+  if (!carId || !Number.isFinite(x) || !Number.isFinite(y)) return { error: "Bad focal point." };
+  const clamp = (v: number) => Math.min(1, Math.max(0, Math.round(v * 1000) / 1000));
+  const { error } = await supabase
+    .from("cars")
+    .update({ cover_focal_x: clamp(x), cover_focal_y: clamp(y) })
+    .eq("id", carId);
+  if (error) return { error: error.message };
+  revalidatePath(`/garage/${carId}/edit`);
+  revalidatePath("/garage");
+  return { ok: "Framing saved" };
+}
+
 export async function moveCarImage(formData: FormData): Promise<void> {
   const { supabase } = await requireUser();
   const carId = String(formData.get("car_id") ?? "");
@@ -446,48 +492,6 @@ export async function updateCarImageAlt(formData: FormData): Promise<ActionState
 
   if (carId) revalidatePath(`/garage/${carId}/edit`);
   return { ok: "Saved" };
-}
-
-export async function createActivityPost(
-  _prev: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const { supabase, user } = await requireUser();
-
-  const carId = String(formData.get("car_id") ?? "");
-  const title = String(formData.get("title") ?? "").trim();
-  const intro = String(formData.get("intro") ?? "").trim();
-  const bodyText = String(formData.get("body") ?? "").trim();
-  const videoUrl = String(formData.get("video_url") ?? "").trim();
-
-  if (!carId || !title) return { error: "A title is required." };
-  if (title.length > ACTIVITY_TITLE_MAX) {
-    // Mirrors the edit path — create used to accept any length, so the same
-    // post could be inserted here and then refuse to save in the editor.
-    return { error: `Keep the title under ${ACTIVITY_TITLE_MAX} characters.` };
-  }
-  if (videoUrl && !/^https?:\/\//.test(videoUrl)) {
-    return { error: "Video URL must start with http(s)://" };
-  }
-
-  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).single();
-
-  const { error } = await supabase.from("activity_posts").insert({
-    car_id: carId,
-    author_id: user.id,
-    title,
-    intro: intro || null,
-    body: bodyText ? [{ heading: null, text: bodyText }] : [],
-    video_url: videoUrl || null,
-  });
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/garage/${carId}/edit`);
-  if (car) revalidatePath(`/cars/${car.slug}`);
-  // A real ok signal — the composer closes on it; the list gaining the row
-  // is the receipt.
-  return { ok: "Published." };
 }
 
 export async function createRichActivityPost(
@@ -546,15 +550,17 @@ export async function createRichActivityPost(
         .single();
   if (error) return { error: error.message };
 
-  // Mirror image URLs into activity_images so feeds/profile strips get covers.
+  // Mirror gallery URLs into activity_images so feeds/profile strips get
+  // covers; finalize EVERY referenced media url (before/after included)
+  // against the staged-upload GC.
   const imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
   if (imageUrls.length) {
     await supabase.from("activity_images").insert(
       imageUrls.map((url, index) => ({ post_id: post.id, url, position: index }))
     );
-    // The URLs are referenced now — release them from the staged-upload GC.
-    await finalizeMediaUrls(supabase, imageUrls);
   }
+  const mediaUrls = blockMediaUrls(blocks);
+  if (mediaUrls.length) await finalizeMediaUrls(supabase, mediaUrls);
 
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
@@ -614,10 +620,10 @@ export async function saveActivityDraft(
         .insert({ car_id: carId, author_id: user.id, title, intro: null, body: blocks, published_at: null });
   if (error) return { error: error.message };
 
-  // Draft images are referenced content now — release them from the
+  // Draft media is referenced content now — release it from the
   // staged-upload GC so a draft that sits for a week keeps its photos.
-  const imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
-  if (imageUrls.length) await finalizeMediaUrls(supabase, imageUrls);
+  const draftMediaUrls = blockMediaUrls(blocks);
+  if (draftMediaUrls.length) await finalizeMediaUrls(supabase, draftMediaUrls);
 
   return { ok: "Draft saved" };
 }
@@ -712,7 +718,12 @@ export async function updateActivityPost(
       await finalizeMediaUrls(supabase, imageUrls);
     }
 
-    const kept = new Set(imageUrls);
+    // Finalize non-gallery media too (before/after sides live only in the
+    // body), and never GC a dropped gallery url the body still uses.
+    const bodyMediaUrls = blockMediaUrls(normalizeBlocks(body));
+    if (bodyMediaUrls.length) await finalizeMediaUrls(supabase, bodyMediaUrls);
+
+    const kept = new Set([...imageUrls, ...bodyMediaUrls]);
     for (const prev of previousImages ?? []) {
       if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url);
     }

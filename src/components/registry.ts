@@ -1086,6 +1086,70 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     use: "loading.tsx when no closer geometry exists; pass a label naming the surface.",
   },
 
+  {
+    name: "BeforeAfter",
+    importPath: UI,
+    file: "src/components/ui/before-after.tsx",
+    layer: "primitive",
+    category: "media",
+    status: "active",
+    description:
+      "Two-image comparison plate: clip-path reveal on pointer drag/touch, keyboard slider divider, corner label tags.",
+    use: "Before/after photography — suspension drops, wheels, wraps, detailing.",
+    avoid: "Plain image pairs with no comparison story (use Media in a grid).",
+    a11y: "Divider is role=slider with arrow/Home/End control.",
+    cssRecipe: ".ba",
+  },
+  {
+    name: "SortableGrid",
+    importPath: UI,
+    file: "src/components/ui/sortable-grid.tsx",
+    layer: "primitive",
+    category: "media",
+    status: "active",
+    description:
+      "Drag-and-drop ordering for photo strips/tile grids (dnd-kit: pointer, touch, keyboard sensors).",
+    use: "Wrap reorderable thumbs; pair with SortableItem per cell. Keep explicit ↑/↓ controls alongside.",
+    avoid: "Single-item or fixed-order sets.",
+    cssRecipe: ".sortable--lifted",
+  },
+  {
+    name: "SortableItem",
+    importPath: UI,
+    file: "src/components/ui/sortable-grid.tsx",
+    layer: "primitive",
+    category: "media",
+    status: "active",
+    description: "One draggable cell inside a SortableGrid.",
+    use: "Only inside SortableGrid.",
+  },
+  {
+    name: "ActivityBlocksView",
+    importPath: "@/features/activity/blocks-view",
+    file: "src/features/activity/blocks-view.tsx",
+    layer: "feature",
+    category: "media",
+    status: "active",
+    description:
+      "The one renderer for DRVN's activity document model (V0–V2): text, images, embeds, divider, mod change, before/after, performance result, mileage.",
+    use: "Anywhere a post body renders — feed it normalizeBlocks output.",
+    cssRecipe: ".modline / .perfcard / .milestone",
+  },
+
+  {
+    name: "BuildStoryComposer",
+    importPath: "@/features/composer/composer",
+    file: "src/features/composer/composer.tsx",
+    layer: "feature",
+    category: "media",
+    status: "active",
+    description:
+      "The one build-update editor (Tiptap runtime, DRVN-owned document): immediate writing surface, optional starter chips, / and + insert menus, draggable automotive blocks, quiet autosave, explicit publish.",
+    use: "Creating and editing build updates — pass the route's server actions as props.",
+    avoid: "Anything that isn't an activity post. Message threads use MessageComposer.",
+    cssRecipe: ".bsc / .cblock / .cgal",
+  },
+
   /* ---------------- social (feature layer, documented) ---------------- */
   {
     name: "CardEngagement",

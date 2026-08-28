@@ -54,6 +54,8 @@ export {
   fieldDescribedBy,
 } from "./form";
 export { ComboField, type ComboOption } from "./combo-field";
+export { BeforeAfter } from "./before-after";
+export { SortableGrid, SortableItem } from "./sortable-grid";
 export { ActionFooter } from "./action-footer";
 export { MobileActionBar } from "./mobile-action-bar";
 export { BottomSheet } from "./bottom-sheet";

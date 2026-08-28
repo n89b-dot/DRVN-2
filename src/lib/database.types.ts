@@ -86,6 +86,9 @@ export type Car = {
   catalog_model_id: number | null;
   /** 'picker' | 'vin' | 'manual' — how the identity was established (0041). */
   identity_source: string | null;
+  /** Cover framing focal point 0..1 (0043). Null = centered. Render-only. */
+  cover_focal_x: number | null;
+  cover_focal_y: number | null;
   created_at: string;
   updated_at: string;
 };

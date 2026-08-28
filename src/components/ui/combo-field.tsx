@@ -102,10 +102,6 @@ export function ComboField({
       .map((entry) => entry.option);
   }, [options, query]);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query, open]);
-
   // Close on outside pointerdown — blur alone misfires when clicking options.
   useEffect(() => {
     if (!open) return;
@@ -159,6 +155,7 @@ export function ComboField({
               return;
             }
             setOpen(true);
+            setActiveIndex(0);
           }}
           onClick={() => setOpen(true)}
           onChange={(event) => {
@@ -167,6 +164,7 @@ export function ComboField({
             onQueryChange?.(next);
             clearSelection();
             setOpen(true);
+            setActiveIndex(0);
           }}
           onKeyDown={(event) => {
             if (event.key === "ArrowDown") {

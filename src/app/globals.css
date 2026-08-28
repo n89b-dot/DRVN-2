@@ -4926,6 +4926,385 @@ video {
   [data-theme="dark"] select.ctl {
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238f8c82' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
+  /* Build Story Composer (features/composer) — the writing surface is bare
+     paper: no chrome until you want it. Rich blocks ride in .cblock shells
+     whose tools appear on hover/focus (always on coarse pointers). Motion:
+     new blocks rise in over --t-fast; nothing animates under
+     prefers-reduced-motion. */
+  .bsc {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bsc > .microlabel {
+    display: block;
+    margin-bottom: -6px;
+  }
+  .bsc__surface:focus,
+  .bsc__surface:focus-visible {
+    outline: none;
+  }
+  .bsc__title {
+    font-family: var(--sans);
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    background: none;
+    border: none;
+    outline: none;
+    padding: 0;
+    color: var(--ink);
+    width: 100%;
+  }
+  .bsc__title::placeholder {
+    color: var(--dim);
+    opacity: 0.6;
+  }
+  .bsc__starters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .bsc__starter {
+    cursor: pointer;
+    transition: background var(--t-fast) ease, color var(--t-fast) ease;
+  }
+  .bsc__starter:hover,
+  .bsc__starter:focus-visible {
+    background: var(--ink);
+    color: var(--on-ink);
+    outline: none;
+  }
+  .bsc__surface {
+    min-height: 220px;
+    outline: none;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .bsc__surface p {
+    margin: 0 0 0.9em;
+    max-width: 62ch;
+  }
+  .bsc__surface h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 1.2em 0 0.5em;
+  }
+  .bsc__surface hr {
+    border: none;
+    border-top: 1px solid var(--dimline);
+    margin: 18px 0;
+  }
+  .bsc__surface p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--dim);
+    opacity: 0.6;
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+  .bsc__surface .ProseMirror-selectednode > .cblock,
+  .cblock.ProseMirror-selectednode {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+    border-radius: var(--r-ctl);
+  }
+  .bsc__surface .ProseMirror-dropcursor {
+    border-top: 2px solid var(--live);
+  }
+  .cblock {
+    position: relative;
+    margin: 14px 0;
+    animation: cblock-rise var(--t-move) var(--spring);
+  }
+  @keyframes cblock-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cblock {
+      animation: none;
+    }
+  }
+  .cblock__rail {
+    position: absolute;
+    top: -12px;
+    right: 8px;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--t-fast) ease;
+  }
+  .cblock:hover .cblock__rail,
+  .cblock:focus-within .cblock__rail {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .cblock__rail {
+      opacity: 1;
+    }
+  }
+  .cblock__grip {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: -0.08em;
+    color: var(--dim);
+    background: var(--tile);
+    border-radius: var(--r-chip);
+    padding: 4px 6px;
+    cursor: grab;
+    box-shadow: 0 1px 4px var(--scrim);
+  }
+  .cblock__tool {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    background: var(--tile);
+    border-radius: var(--r-chip);
+    min-width: 26px;
+    min-height: 26px;
+    padding: 2px 6px;
+    cursor: pointer;
+    box-shadow: 0 1px 4px var(--scrim);
+    transition: background var(--t-fast) ease, color var(--t-fast) ease;
+  }
+  .cblock__tool:hover,
+  .cblock__tool:focus-visible {
+    background: var(--ink);
+    color: var(--on-ink);
+    outline: none;
+  }
+  .cblock__tool--x:hover,
+  .cblock__tool--x:focus-visible {
+    background: var(--live);
+  }
+  .cblock__body {
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 14px;
+  }
+  .sortable--lifted {
+    opacity: 0.85;
+    z-index: 20;
+    box-shadow: 0 10px 24px var(--scrim);
+    border-radius: var(--r-ctl);
+    cursor: grabbing;
+  }
+
+  .cgal__item {
+    position: relative;
+    margin: 0;
+  }
+  .cgal__tools {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--t-fast) ease;
+  }
+  .cgal__item:hover .cgal__tools,
+  .cgal__item:focus-within .cgal__tools {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .cgal__tools {
+      opacity: 1;
+    }
+  }
+  .cgal__item--pending {
+    opacity: 0.75;
+  }
+  .cgal__state {
+    position: absolute;
+    inset-inline: 6px;
+    bottom: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--on-ink);
+    background: var(--scrim);
+    border-radius: var(--r-chip);
+    padding: 4px 8px;
+  }
+  .cgal__state--failed {
+    background: var(--live);
+  }
+  .bsc__addwrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .bsc__plus {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    width: 280px;
+    z-index: 40;
+  }
+  .bsc__slash {
+    z-index: 40;
+  }
+  .bsc__foot {
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 14px;
+  }
+
+  /* Activity story blocks (features/activity/blocks-view.tsx) — the V2
+     automotive set. Each is a quiet plate in the sheet's own materials; the
+     "Owner-reported" microlabel on results is load-bearing honesty, not
+     decoration. */
+  .modline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 10px;
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 12px 14px;
+  }
+  .modline__label {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .modline__detail {
+    color: var(--dim);
+    font-size: 13px;
+  }
+  .modline__link {
+    margin-left: auto;
+  }
+  .perfcard {
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 14px 16px;
+  }
+  .perfcard__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .perfcard__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 12px 18px;
+    margin: 0;
+  }
+  .perfcard__cell dt {
+    color: var(--dim);
+  }
+  .perfcard__value {
+    font-family: var(--mono);
+    font-size: clamp(18px, 2.4vw, 24px);
+    font-weight: 600;
+    margin: 2px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .perfcard__note {
+    margin: 10px 0 0;
+    color: var(--dim);
+    font-size: 13px;
+  }
+  .milestone {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0;
+  }
+  .milestone__value {
+    font-family: var(--mono);
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* BeforeAfter — the two-image comparison plate (before-after.tsx). One
+     frame, the before layer clipped from the right, a drafting-line divider
+     with a mono grip. Corner tags are microcap chips on scrim so they read on
+     any photograph. */
+  .ba {
+    position: relative;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    aspect-ratio: 3 / 2;
+    background: var(--img-fallback);
+    touch-action: none;
+    user-select: none;
+  }
+  .ba__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .ba__before {
+    position: absolute;
+    inset: 0;
+  }
+  .ba__divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--on-ink);
+    box-shadow: 0 0 0 1px var(--scrim);
+    transform: translateX(-1px);
+    cursor: ew-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ba__divider:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
+  .ba__grip {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    background: var(--on-ink);
+    border-radius: var(--r-chip);
+    padding: 3px 5px;
+    box-shadow: 0 1px 6px var(--scrim);
+  }
+  .ba__tag {
+    position: absolute;
+    bottom: 10px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--on-ink);
+    background: var(--scrim);
+    border-radius: var(--r-chip);
+    padding: 3px 8px;
+    transition: opacity var(--t-fast) ease;
+    pointer-events: none;
+  }
+  .ba__tag--before {
+    left: 10px;
+  }
+  .ba__tag--after {
+    right: 10px;
+  }
+
   /* ComboField — the searchable single-select (combo-field.tsx). The input
      is a plain `.ctl`; the popover is a tile floated off its bottom edge,
      drawn with the sheet's own materials (tile ground, soft rules, mono
