@@ -10,6 +10,7 @@ import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecy
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
+import { capture } from "@/lib/analytics";
 import { decodeVin } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
 import type { Car } from "@/lib/database.types";
@@ -150,6 +151,7 @@ export async function createCar(_prev: ActionState, formData: FormData): Promise
 
   if (error) return { error: error.message };
 
+  capture(user.id, { event: "vehicle_added", props: { identity_source: identitySource } });
   revalidatePath("/garage");
   redirect(`/garage/${data.id}/edit`);
 }
@@ -616,6 +618,16 @@ export async function createRichActivityPost(
   }
   const mediaUrls = blockMediaUrls(blocks);
   if (mediaUrls.length) await finalizeMediaUrls(supabase, mediaUrls);
+
+  capture(user.id, {
+    event: "update_published",
+    props: {
+      blocks: blocks.length,
+      automotive_blocks: blocks.filter((b) =>
+        ["mod", "before_after", "performance", "mileage"].includes(b.type)
+      ).length,
+    },
+  });
 
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);

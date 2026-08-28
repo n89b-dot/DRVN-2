@@ -9,6 +9,8 @@ import {
   type GarageCar,
 } from "@/lib/marketplace/fitment";
 import { reportError } from "@/lib/monitoring";
+import { capture } from "@/lib/analytics";
+import { classifyQuery } from "@/lib/marketplace/search/normalize";
 import { getSearchProvider } from "@/lib/marketplace/search/provider";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
@@ -332,6 +334,20 @@ export async function fetchListings(
   else query = query.order("created_at", { ascending: false });
 
   const { data: listings, count, error } = await query.range(from, from + PAGE_SIZE - 1);
+
+  // Product telemetry (§AE) — first page only, so pagination doesn't
+  // multiply one search into many events. Coarse properties only.
+  if (page === 1 && !error) {
+    if (filters.q?.trim()) {
+      capture(viewerId ?? null, {
+        event: "search_performed",
+        props: { lane: classifyQuery(filters.q).kind, results: count ?? 0 },
+      });
+    }
+    if (filters.fit === "1" && viewerId) {
+      capture(viewerId, { event: "fitment_filter_used" });
+    }
+  }
 
   if (error) {
     reportError("[marketplace] listing query failed", error);

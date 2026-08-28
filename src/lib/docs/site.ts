@@ -94,6 +94,54 @@ export const SITE_PAGES: DocEntry[] = [
 
 export const REFERENCE_DOCS: DocEntry[] = [
   {
+    slug: "search",
+    title: "Marketplace search",
+    description:
+      "The two search lanes, part-number normalization, aliases/interchange, providers, indexing lifecycle and recovery.",
+    file: "docs/site/search.md",
+    kind: "reference",
+  },
+  {
+    slug: "vehicles",
+    title: "Vehicle identity & fitment",
+    description:
+      "The DRVN-owned catalog, data sources and licenses (vPIC, VehiclesDB CC-BY), the Add Car flows, and lightweight fitment.",
+    file: "docs/site/vehicles.md",
+    kind: "reference",
+  },
+  {
+    slug: "activity-schema",
+    title: "Activity document schema",
+    description:
+      "DRVN's content model for build updates: versions, every block type, the editor seam, autosave and rendering.",
+    file: "docs/site/activity-schema.md",
+    kind: "reference",
+  },
+  {
+    slug: "notifications",
+    title: "Notifications",
+    description:
+      "Every notification kind, its governing preference and source (generated table), the delivery seam, and alert etiquette.",
+    file: "docs/site/notifications.md",
+    kind: "reference",
+  },
+  {
+    slug: "domain-states",
+    title: "Domain states & transitions",
+    description:
+      "Generated transition tables for orders, listings, offers, transfers and refunds — with what enforces each.",
+    file: "docs/site/domain-states.md",
+    kind: "reference",
+  },
+  {
+    slug: "operations",
+    title: "Operations — jobs, admin, selling IA",
+    description:
+      "Background-job architecture and decisions, transaction diagnostics, admin cases/authorization, the Selling IA, analytics.",
+    file: "docs/site/operations.md",
+    kind: "reference",
+  },
+  {
     slug: "livesheet-design-md",
     title: "Livesheet design.md (source contract)",
     description:

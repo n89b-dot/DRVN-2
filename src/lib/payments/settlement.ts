@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { recordExternalRefund, runRefundOperation } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
+import { capture } from "@/lib/analytics";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 
 /**
@@ -117,6 +118,12 @@ export async function settleIntent(
       continue;
     }
     if (success) await createTransferIntent(admin, orderId, intent);
+  }
+  if (success && allApplied) {
+    capture(intent.metadata.buyer_id ?? null, {
+      event: "purchase_completed",
+      props: { orders: orderIds.length },
+    });
   }
   return allApplied;
 }

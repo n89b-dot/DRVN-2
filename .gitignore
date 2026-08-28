@@ -46,3 +46,7 @@ next-env.d.ts
 /blob-report/
 /.playwright/
 .env.test.local
+
+# Storybook static builds (local lab only)
+storybook-static/
+*storybook.log

@@ -1,0 +1,5 @@
+/* Map the next/font variables the app sets in its root layout. */
+:root {
+  --font-plex-sans: "IBM Plex Sans";
+  --font-plex-mono: "IBM Plex Mono";
+}

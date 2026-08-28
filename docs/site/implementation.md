@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 5 planned · 1 in progress · 6 implemented · 23 validated · 7 deferred · 1 blocked externally
+**Progress:** 43 initiatives — 6 implemented · 29 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -382,7 +382,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 
 ### 10 · Design system
 
-#### Storybook beside Livesheet — Planned
+#### Storybook beside Livesheet — Validated
 
 - **Brief:** AC
 - **Exists today:** The registry + /docs/components specimens document components, but there is no isolated-state lab (loading/error/long-content/mobile per component).
@@ -390,11 +390,12 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `new .storybook/`, `src/components/`
 - **User benefit:** Every component's states are visible and testable in isolation before they ship into screens.
 - **Approach:** Storybook 9 static build; no paid visual-regression services; registry linkage documented.
-- **Validation:** Not yet validated.
+- **Decisions:** Storybook 9 + nextjs-vite beside the docs site — /docs stays the narrative + registry inventory, Storybook is the isolated-state lab. Local/static only, no paid services. Accepted dev-only advisory: image-size (DoS in ICNS/JXL parsers) inside vite-plugin-storybook-nextjs — no fix exists, devDependency only, never in the production bundle. Stories use local data-URI imagery — no network, no CSP surprises.
+- **Validation:** Static build green in ~4s; nine story files cover the priority list (Button states, ListingCard incl. no-photo/long-title/sold/fitment, order status chips+pipeline, MetricCard, Alert/EmptyState/Skeletons, ComboField, BeforeAfter, the full automotive block set, MessageThread); a11y addon on; day/night toolbar mirrors the app's data-theme; story render verified by screenshot.
 
 ### 11 · Documentation
 
-#### Living implementation artifact — In progress
+#### Living implementation artifact — Validated
 
 - **Brief:** First deliverable
 - **Exists today:** The docs microsite documents design and components; implementation status lived in ad-hoc markdown files.
@@ -402,9 +403,9 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `/docs/implementation`, `src/lib/docs/implementation-registry.ts`, `docs/site/implementation.md`
 - **User benefit:** Anyone can see at a glance what is changing, why it matters, and how far along it actually is.
 - **Approach:** Same governance pattern as the component registry: typed source, rendered page, generated markdown, drift-guarded by tests.
-- **Validation:** Registry + page + markdown twin under construction.
+- **Validation:** Living since Group 1 and updated at every milestone: /docs/implementation renders from the typed registry, the markdown twin is drift-guarded (npm run docs:implementation), and the shareable board republishes from the same source. Statuses audited against the repository at each commit.
 
-#### Code-derived documentation expansion — Planned
+#### Code-derived documentation expansion — Validated
 
 - **Brief:** AD, B3
 - **Exists today:** components.md is generated from the registry; search, vehicles, notifications, activity schema, jobs and Stripe lifecycle have no authored docs pages.
@@ -412,11 +413,12 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `/docs`, `docs/site/`, `src/lib/docs/`
 - **User benefit:** The systems being built in this workstream are approachable instead of mysterious.
 - **Approach:** Extend SITE_PAGES; generate from source-of-truth registries (blocks, notification kinds, domain states) where possible. Fumadocs evaluated: not adopted — the code-generated architecture is the asset (decision recorded).
-- **Validation:** Not yet validated.
+- **Decisions:** Fumadocs evaluated and not adopted: the registry-driven generation + markdown-twin architecture is the asset; a docs framework would replace exactly the part that works. Three generated surfaces now share one governance pattern: components.md, implementation.md, and the systems docs (notification kinds + domain states).
+- **Validation:** Six new docs shipped and served through the microsite's md routes (verified 200 as admin): search (§B3 in full), vehicles (sources + licenses + attribution), activity schema + block table, notifications (GENERATED kinds table), domain states (GENERATED transition tables), operations (jobs decision, diagnostics, admin, Selling IA, analytics). Generated blocks drift-guarded by system-docs.test.ts (npm run docs:systems).
 
 ### 12 · Analytics & observability
 
-#### Product analytics behind an abstraction — Planned
+#### Product analytics behind an abstraction — Validated
 
 - **Brief:** AE
 - **Exists today:** Sentry-style error monitoring exists; there is no product analytics at all.
@@ -424,11 +426,12 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `src/lib/analytics/`, `instrumented flows`
 - **User benefit:** Product decisions can be made from what users actually do — without capturing anything sensitive.
 - **Approach:** capture() no-ops without configuration; payment/address/message/evidence surfaces excluded by construction; DRVN never requires a paid service to run.
-- **Validation:** Not yet validated.
+- **Decisions:** Server-side only: no autocapture, no session replay, no client SDK — the typed union is the privacy review gate; events carry ids and coarse counts, never free text/addresses/messages/evidence. Feature flags are env-based (FLAG_X) behind flagEnabled() — PostHog flags can slot in behind the same function when rollout targeting is actually needed.
+- **Validation:** Typed taxonomy behind capture() — unit-tested (no-op without POSTHOG_KEY, correct payload when configured, failure never throws, env flags). Fourteen flows instrumented server-side: vehicle added, update published, listing started/published, search (lane+results, first page only), fitment filter, saved-search created/alert, offer, checkout started, purchase completed (webhook settle), dispatch, dispute opened.
 
 ### 13 · Future-ready architecture
 
-#### Explicit domain state definitions — Planned
+#### Explicit domain state definitions — Validated
 
 - **Brief:** AG, AH
 - **Exists today:** Statuses for orders/offers/listings/disputes/refunds/transfers are enforced piecemeal across SQL and actions; no single TypeScript definition exists.
@@ -436,9 +439,10 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `src/lib/domain/`, `/docs`
 - **User benefit:** "Which states can reach which states" becomes one readable definition instead of archaeology.
 - **Approach:** Declarative transition maps + doc generation; no state-machine framework.
-- **Validation:** Not yet validated.
+- **Decisions:** Deliberately not a state-machine framework: PostgreSQL stays authoritative; the maps are documentation with teeth (consistency tests + generated docs). Medusa/Vendure informed the shape only.
+- **Validation:** Transition maps for orders/listings/offers/transfers/refunds with per-domain enforcement notes; 5 unit tests (no dangling targets, terminals exist, covers every status the product's own grouping knows, load-bearing money rules, moderation-only takedown clearing); generated into docs/site/domain-states.md.
 
-#### Background-job architecture decision — Planned
+#### Background-job architecture decision — Validated
 
 - **Brief:** AI
 - **Exists today:** pg_cron + durable queue tables + bearer-gated worker routes handle money and GC; new non-financial work (search indexing, saved-search matching) needs a home.
@@ -446,7 +450,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `supabase/`, `src/app/api/jobs/`
 - **User benefit:** Async work stays as durable and observable as the money path already is.
 - **Approach:** Extend the proven worker-route + queue-table pattern first; decision recorded here.
-- **Validation:** Not yet validated.
+- **Validation:** Decision recorded (docs/site/operations.md): the pg_cron + worker-route + durable-queue-table pattern absorbs the new workloads (search sync fire-and-forget + scripted reindex; saved-search matching as a worker pass). PGMQ not adopted — no workload needs SQS semantics; Redis/Trigger.dev/Inngest not introduced; money workers untouched.
 
 ### 14 · Deferred / not pursuing
 

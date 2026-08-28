@@ -10,6 +10,7 @@ import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecy
 import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { capture } from "@/lib/analytics";
 import { syncListingToSearch } from "@/lib/marketplace/search/indexing";
 import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
@@ -195,6 +196,17 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
       .eq("id", modItemId)
       .eq("car_id", parsed.fields.source_car_id);
   }
+
+  capture(user.id, asDraft
+    ? { event: "listing_started" }
+    : {
+        event: "listing_published",
+        props: {
+          category: parsed.fields.category,
+          has_source_car: Boolean(parsed.fields.source_car_id),
+          fitment_rows: parsed.fitments.length,
+        },
+      });
 
   // Search follows the listing (§B1) — fire-and-forget, no-op without an engine.
   void syncListingToSearch(listing.id);

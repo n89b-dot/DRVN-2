@@ -19,6 +19,7 @@ import { deriveEvidenceStoragePath } from "@/lib/evidence-urls";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import type { DisputeCategory, PurchaseBeginResult } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
@@ -190,6 +191,7 @@ async function purchaseListings(
   // proceeds is internal bookkeeping until Connect lands.)
   const allOrderIds = result.orders.map((o) => o.order_id);
   const basketTotal = result.orders.reduce((sum, o) => sum + o.total_cents, 0);
+  capture(buyerId, { event: "checkout_started", props: { items: listingIds.length } });
   // One diagnostics identity for the whole basket (0039): every order carries
   // it, and the processor metadata carries the same value.
   const correlationId = crypto.randomUUID();
@@ -531,6 +533,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     }
   }
 
+  capture(user.id, { event: "offer_submitted" });
   revalidatePath(`/listings/${listingId}`);
   revalidatePath("/orders");
   revalidatePath("/offers");
@@ -1058,6 +1061,7 @@ export async function markShipped(
     .eq("id", orderId);
   if (error) return { error: error.message };
 
+  capture(user.id, { event: "seller_dispatched" });
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Marked as dispatched." };
@@ -1298,6 +1302,7 @@ export async function openDispute(
     `Opened a dispute — ${DISPUTE_CATEGORY_LABEL.get(category)}.${reason ? ` "${reason}"` : ""}`
   );
 
+  capture(user.id, { event: "dispute_opened", props: { category } });
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Dispute opened — the seller has been notified." };

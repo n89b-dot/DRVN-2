@@ -1,0 +1,68 @@
+# Notifications
+
+> The notification domain: every kind, its governing preference, and the one
+> delivery seam. Code: `src/lib/notifications/`,
+> `src/lib/notification-prefs.ts`, migration 0009 onward.
+
+## Shape
+
+One table (`notifications`: kind, section, title, body, href, actor, read_at)
+renders generically on `/notifications` (two sections, unread filter,
+per-item read-on-open). Reactive kinds are written by SECURITY DEFINER
+database triggers; app-raised kinds (worker alerts) go through
+`deliverNotification()` — the delivery boundary — which checks the governing
+preference **at write time** and is the documented seam where future channels
+(email, push, or a provider like Novu) would fan out.
+
+**Novu decision (2026-08):** evaluated, not adopted. One in-app channel needs
+no workflow orchestration, and DRVN must not depend on a hosted notification
+service to function. The seam is `deliver.ts`; revisit when channels
+actually multiply.
+
+## Adding a kind
+
+1. Register it in `NOTIFICATION_KINDS` (`src/lib/notifications/kinds.ts`) —
+   section, governing preference, source. A unit test keeps this registry and
+   `prefKeyForKind` agreeing.
+2. If preference-governed, ensure the pref key exists in
+   `NOTIFICATION_PREFS`.
+3. Write it: a trigger migration for reactive kinds, or
+   `deliverNotification()` from app code.
+4. Regenerate this page's table: `npm run docs:systems`.
+
+## Alert etiquette (brief §C/§D)
+
+Non-transactional alerts (saved searches) are **opt-in only**: saving is
+silent; alerts are a separate explicit toggle; the worker raises at most one
+summary notification per search per pass; the first pass after opt-in only
+stamps a baseline so nobody is alerted about inventory that predates it.
+
+## The kinds
+
+<!-- BEGIN GENERATED: notification-kinds (npm run docs:systems) -->
+
+Source of truth: `src/lib/notifications/kinds.ts`.
+
+| Kind | Section | Preference | Written by | What it means |
+| --- | --- | --- | --- | --- |
+| `follow` | engagement | `profile_follows` | DB trigger | Someone followed your profile. |
+| `save` | engagement | `car_engagement` | DB trigger | Someone saved your car, profile or post. |
+| `comment` | engagement | `comments` | DB trigger | A comment on your build update. |
+| `reaction` | engagement | `comments` | DB trigger | A reaction on your build update. |
+| `review` | engagement | `reviews` | DB trigger | A review after a completed trade. |
+| `listing_save` | marketplace | `listing_saves` | DB trigger | Someone saved your listing. |
+| `question` | marketplace | `questions` | DB trigger | A question on one of your parts. |
+| `offer_new` | marketplace | `offers_sales` | DB trigger | A new offer on your listing. |
+| `offer_response` | marketplace | `offers_sales` | DB trigger | Your offer was answered. |
+| `offer_withdrawn` | marketplace | `offers_sales` | DB trigger | An offer was withdrawn. |
+| `order_sold` | marketplace | `offers_sales` | DB trigger | Your part sold. |
+| `order_paid` | marketplace | `offers_sales` | DB trigger | Payment confirmed on an order. |
+| `order_shipped` | marketplace | `order_updates` | DB trigger | Your order shipped. |
+| `order_delivered` | marketplace | `order_updates` | DB trigger | Delivery confirmed. |
+| `order_disputed` | marketplace | `order_updates` | DB trigger | A dispute opened on an order. |
+| `dispute_resolved` | marketplace | `order_updates` | DB trigger | A dispute was resolved. |
+| `dispute_escalated` | marketplace | `order_updates` | DB trigger | A dispute was escalated to support. |
+| `message` | marketplace | `messages` | DB trigger | A message on an offer or order thread. |
+| `saved_search` | marketplace | `saved_searches` | app (deliver.ts) | New inventory matching a saved search with alerts on. |
+
+<!-- END GENERATED: notification-kinds -->

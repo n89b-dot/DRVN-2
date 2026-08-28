@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { capture } from "@/lib/analytics";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 
 /**
@@ -79,6 +80,7 @@ export async function createSavedSearch(
         : "Couldn't save that search.",
     };
   }
+  capture(user.id, { event: "saved_search_created" });
   revalidatePath("/saved");
   return { ok: "Saved — find it under Saved. Alerts stay off until you turn them on." };
 }
@@ -97,6 +99,7 @@ export async function setSavedSearchAlert(formData: FormData): Promise<SavedSear
     .eq("id", id)
     .eq("user_id", user.id);
   if (error) return { error: "Couldn't update alerts." };
+  if (alert) capture(user.id, { event: "saved_search_alert_enabled" });
   revalidatePath("/saved");
   return { ok: alert ? "Alerts on — you'll hear when new inventory matches." : "Alerts off." };
 }

@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
     // Local agent worktrees (stale checkouts + their .next artifacts) — never
     // part of this checkout's application code; CI never sees them.
     ".claude/**",
+    // Storybook static builds — generated bundles, local lab only.
+    "storybook-static/**",
   ]),
 ]);
 
