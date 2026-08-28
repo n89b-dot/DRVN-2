@@ -44,6 +44,9 @@ export type PaymentRequest = {
   /** Existing Stripe customer, so saved cards can pay this intent. */
   customerId?: string | null;
   lineItems?: { title: string; priceCents: number }[];
+  /** Transaction identity (0039) — stamped into processor metadata so the
+   *  provider dashboard and our diagnostics meet on one id. Never a key. */
+  correlationId?: string;
 };
 
 export type PaymentResult =

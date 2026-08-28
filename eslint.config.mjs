@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     // application code. Linting them only produced noise that masked real
     // findings in src/.
     "design-mockups/**",
+    // Local agent worktrees (stale checkouts + their .next artifacts) — never
+    // part of this checkout's application code; CI never sees them.
+    ".claude/**",
   ]),
 ]);
 

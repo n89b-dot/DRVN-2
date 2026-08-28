@@ -110,7 +110,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "branch-protection",
     name: "Protect the production branch",
     group: "foundations",
-    status: "planned",
+    status: "blocked-external",
     brief: "A1",
     existsToday:
       "CI runs typecheck/lint/unit/build plus four SQL guards, but `main` is not branch-protected — a direct push can bypass every check.",
@@ -120,14 +120,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit:
       "The safety machinery that already exists cannot be accidentally skipped, so a broken money path can't land on main unnoticed.",
     approach:
-      "Configure via `gh api` if the token allows; otherwise ship the precise settings as documentation and mark only the GitHub step external.",
-    validation: "Not yet validated.",
+      "Attempted via `gh api`: both branch protection and rulesets return 403 on this private Free-plan repository. The exact ruleset (PRs required, `verify` + `sql-guard` required checks, no force push) is documented in the production runbook §8 for one-click application once available.",
+    validation:
+      "Configuration attempt executed and refused by GitHub (403 requires Pro/public); documentation shipped.",
+    docs: ["docs/production-runbook.md"],
+    externalStep:
+      "Upgrade the GitHub account to Pro (or make the repo public), then run the documented `gh api` ruleset call in production-runbook §8.",
   },
   {
     id: "commerce-ci",
     name: "Real commerce integration coverage",
     group: "foundations",
-    status: "planned",
+    status: "validated",
     brief: "A2",
     existsToday:
       "Vitest units, four SQL guards and a Playwright golden path run in CI; Stripe test-mode integration never runs anywhere, and E2E skips loudly without secrets.",
@@ -138,13 +142,19 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "The paths that move real money are proven against real Stripe test infrastructure instead of being assumed correct.",
     approach:
       "Vitest integration suite driving the payment provider + webhook dispatcher against Stripe test keys; secrets documented; skipped coverage stated in the CI summary — never faked.",
-    validation: "Not yet validated.",
+    decisions: [
+      "Suite lives in tests/stripe (own vitest config) so `npm test` stays network-free; it throws on non-sk_test_ keys and self-skips loudly without one.",
+      "Multi-seller settlement/transfers/disputes stay with the stub-mode golden path; the CI summary now names that gap on every build instead of the old blanket 'never runs' line.",
+    ],
+    validation:
+      "8/8 passing locally against the real Stripe test API (intents + metadata, confirm, decline, create/refund idempotency replay, over-refund refusal, refund metadata attribution). CI job `stripe-integration` gated on STRIPE_TEST_SECRET_KEY.",
+    docs: ["tests/stripe/README.md"],
   },
   {
     id: "authz-hardening",
     name: "Authorization boundaries & future roles groundwork",
     group: "foundations",
-    status: "planned",
+    status: "validated",
     brief: "L",
     existsToday:
       "Admin membership lives in `admin_users` with `is_admin()` RLS policies, but admin mutations use the service role, so the admin/viewer distinction is TypeScript-enforced only.",
@@ -155,13 +165,19 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "A read-only admin genuinely cannot mutate anything, and future shop/staff accounts have a place to land without a rewrite.",
     approach:
       "Capability map keyed by admin role, asserted inside `auditedAction` before any service-role work; DB-side role assertion where the call shape allows; no OpenFGA/Cerbos.",
-    validation: "Not yet validated.",
+    decisions: [
+      "0040: `assert_admin_actor()` raises unless the actor holds the full admin role — auditedAction calls it before every mutation, so the database now refuses a viewer even on the service role; the audit-log trigger additionally refuses non-admin actors for every role including service_role.",
+      "src/lib/admin/capabilities.ts is the extension seam for shops/staff/moderators: action families → required role today, a capability argument on assert_admin_actor when finer roles exist. No speculative role tables.",
+    ],
+    validation:
+      "Migration 0040 applied twice (idempotent, self-checks pass); admin_guard.sql extended with four actor-enforcement assertions and executed green against the live dev schema (rolled back); capabilities unit tests cover every audit action family.",
+    docs: ["supabase/migrations/0040_admin_actor_enforcement.sql", "src/lib/admin/capabilities.ts"],
   },
   {
     id: "transaction-diagnostics",
     name: "Transaction correlation & diagnostics",
     group: "foundations",
-    status: "planned",
+    status: "implemented",
     brief: "AF",
     existsToday:
       "Understanding one order means reading orders, payments, webhook_events, transfer_intents, refund_operations and Sentry separately.",
@@ -172,7 +188,12 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "An admin can answer \"why is this order in this state?\" from one screen instead of five tables.",
     approach:
       "Correlation ID persisted on order/payment rows and stamped into Stripe metadata; a composed diagnostics view in admin. No heavy OpenTelemetry now.",
-    validation: "Not yet validated.",
+    decisions: [
+      "0039 adds orders.correlation_id, stamped by both checkout paths and mirrored into PaymentIntent metadata; deliberately never threaded through money RPCs — an observability identity, not a lock.",
+      "The admin order sheet gained a Transaction timeline composing order stamps, retained webhook events (matched on the intent reference), transfer-intent lifecycle, refund operations and audit rows — built by a pure, unit-tested builder (lib/admin/diagnostics.ts).",
+    ],
+    validation:
+      "Migration 0039 applied twice (self-checks pass); timeline builder covered by 3 unit tests (chronology, refund lifecycle incl. recovery, future clearing-window truthfulness); Stripe integration test asserts correlation_id lands in intent metadata. Admin UI render check pending the Group 10 visual pass.",
   },
 
   // ── 02 · Marketplace discovery ──────────────────────────────────────────

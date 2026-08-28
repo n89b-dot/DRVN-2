@@ -254,6 +254,37 @@ begin
   end if;
   raise notice 'PASS: admin reads reports through RLS';
 
+  -- ---------- 9. actor enforcement (0040) ----------
+  perform pg_temp.back_to_admin();
+
+  -- A viewer is a console member but not a full admin: the DB must refuse it
+  -- as an actor, service role or not.
+  insert into public.admin_users (user_id, role, note)
+  values (v_civilian, 'viewer', 'guard viewer fixture')
+  on conflict (user_id) do update set role = 'viewer';
+
+  begin
+    perform public.assert_admin_actor(v_civilian);
+    raise exception 'FAIL: assert_admin_actor accepted a viewer';
+  exception when insufficient_privilege then
+    raise notice 'PASS: assert_admin_actor refuses a viewer';
+  end;
+
+  perform public.assert_admin_actor(v_admin);
+  raise notice 'PASS: assert_admin_actor accepts a full admin';
+
+  begin
+    insert into public.admin_audit_log (actor_id, action, subject_type, subject_id, reason)
+    values (v_civilian, 'note.internal', 'order', v_order, 'guard');
+    raise exception 'FAIL: audit row recorded a viewer as actor';
+  exception when insufficient_privilege then
+    raise notice 'PASS: audit trail refuses non-admin actors';
+  end;
+
+  insert into public.admin_audit_log (actor_id, action, subject_type, subject_id, reason)
+  values (v_admin, 'note.internal', 'order', v_order, 'guard');
+  raise notice 'PASS: audit trail accepts a full-admin actor';
+
   perform pg_temp.back_to_admin();
   raise notice '--- all admin-guard checks passed ---';
 end $$;

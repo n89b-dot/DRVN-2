@@ -183,3 +183,35 @@ restored is a hope, not a plan** — rehearse quarterly:
 - [ ] `job_config` points at the production worker URL.
 - [ ] A dispute, a refund, and a payout have each been exercised once in live
       mode with a real card and a Connect test seller before public launch.
+
+## 8. Protect `main` (blocked on GitHub plan — do this once available)
+
+The repository is private on the GitHub Free plan, where branch protection and
+rulesets are unavailable (`403 Upgrade to GitHub Pro or make this repository
+public`). As soon as the repo is public **or** the account has GitHub Pro,
+apply this exact ruleset (Settings → Rules → Rulesets → New branch ruleset, or
+the API call below):
+
+- **Name:** `protect-main` · **Enforcement:** Active · **Target:** default branch
+- **Rules:**
+  - Require a pull request before merging — 0 required approvals (solo-maintained;
+    the point is routing changes through CI, not review bureaucracy)
+  - Require status checks to pass: `verify`, `sql-guard`
+  - Block force pushes (on by default in rulesets)
+
+```bash
+gh api -X POST repos/n89b-dot/DRVN-2/rulesets --input - <<'JSON'
+{"name":"protect-main","target":"branch","enforcement":"active",
+ "conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},
+ "rules":[
+   {"type":"pull_request","parameters":{"required_approving_review_count":0,
+     "dismiss_stale_reviews_on_push":false,"require_code_owner_review":false,
+     "require_last_push_approval":false,"required_review_thread_resolution":false}},
+   {"type":"required_status_checks","parameters":{
+     "strict_required_status_checks_policy":false,
+     "required_status_checks":[{"context":"verify"},{"context":"sql-guard"}]}}]}
+JSON
+```
+
+The `e2e` job stays unrequired — it self-skips without secrets and must not
+block merges. Revisit once E2E secrets are permanent.

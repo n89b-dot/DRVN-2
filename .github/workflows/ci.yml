@@ -151,11 +151,47 @@ jobs:
         name: Golden path
         run: npm run test:e2e
 
+  # Stripe test-mode integration (tests/stripe): intent metadata, confirm,
+  # declines, refunds and the per-order idempotency contract against the real
+  # Stripe test API. Gated on a test-mode secret; the suite itself refuses
+  # non-sk_test_ keys. Skips loudly — a skip is stated, never counted as green
+  # coverage.
+  stripe-integration:
+    runs-on: ubuntu-latest
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+    steps:
+      - name: Check for Stripe test secret
+        id: gate
+        run: |
+          if [ -n "$STRIPE_SECRET_KEY" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::STRIPE_TEST_SECRET_KEY not configured — Stripe integration suite skipped."
+          fi
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - if: steps.gate.outputs.run == 'true'
+        run: npm ci
+
+      - if: steps.gate.outputs.run == 'true'
+        name: Stripe test-mode integration
+        run: npm run test:stripe
+
   # The honest green: says out loud what did and didn't run, so a passing
   # build can't be mistaken for full coverage.
   summary:
     runs-on: ubuntu-latest
-    needs: [verify, sql-guard, e2e]
+    needs: [verify, sql-guard, e2e, stripe-integration]
     if: always()
     steps:
       - name: Coverage summary
@@ -168,5 +204,6 @@ jobs:
             echo "| Typecheck / lint / unit / build | ${{ needs.verify.result }} |"
             echo "| SQL guards (purchase, admin, security, money) | ${{ needs.sql-guard.result }} |"
             echo "| E2E golden path | ${{ needs.e2e.result }} — skipped rows mean no E2E project secrets are configured |"
-            echo "| Stripe test-mode integration | **never runs in CI** — requires test keys; run locally per docs/production-runbook.md |"
+            echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }} — a pass with no STRIPE_TEST_SECRET_KEY means the suite was SKIPPED, not run |"
+            echo "| Multi-seller settlement / transfers / dispute recovery | exercised by the stub-mode golden path only — full Stripe-backed E2E remains future coverage |"
           } >> "$GITHUB_STEP_SUMMARY"

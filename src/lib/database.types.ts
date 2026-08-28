@@ -301,6 +301,10 @@ export type Order = {
   /** The accepted offer this order came from (migration 0034). Null on
    *  buy-now and cart orders, which have no negotiation behind them. */
   origin_offer_id: string | null;
+  /** One identity across a checkout's lifetime (migration 0039): shared by the
+   *  basket's orders and stamped into the Stripe PaymentIntent metadata.
+   *  Observability only — never a money-path key. Null pre-0039. */
+  correlation_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -873,6 +877,12 @@ export type Database = {
       admin_role: {
         Args: Record<string, never>;
         Returns: string | null;
+      };
+      /** Raises unless the actor holds the full 'admin' role (0040). Called by
+       *  auditedAction before every mutation — the DB-side admin boundary. */
+      assert_admin_actor: {
+        Args: { p_actor: string };
+        Returns: undefined;
       };
       /** Atomically reserves a refund amount as a refund_operations row (0026). */
       begin_refund_operation: {

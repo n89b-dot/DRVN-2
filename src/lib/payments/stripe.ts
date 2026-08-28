@@ -52,6 +52,7 @@ export class StripePaymentProvider implements PaymentProvider {
             order_id: request.orderId,
             buyer_id: request.buyerId,
             seller_id: request.sellerId,
+            ...(request.correlationId ? { correlation_id: request.correlationId } : {}),
           },
         },
         request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : undefined

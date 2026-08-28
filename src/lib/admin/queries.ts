@@ -11,7 +11,10 @@ import type {
   PaymentRecovery,
   Report,
   TransferIntent,
+  WebhookEvent,
 } from "@/lib/database.types";
+
+import { buildOrderTimeline, type TimelineEvent } from "./diagnostics";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -418,6 +421,8 @@ export type AdminOrderDetail = {
   /** Photos attached to the dispute by either party (0024). */
   evidence: { id: string; uploaderId: string | null; url: string; note: string | null; createdAt: string }[];
   audit: AdminAuditLogEntry[];
+  /** One chronological view of the transaction (§AF) — see lib/admin/diagnostics.ts. */
+  timeline: TimelineEvent[];
 };
 
 export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail | null> {
@@ -449,6 +454,28 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
       .eq("order_id", orderId)
       .order("created_at", { ascending: false })
       .limit(50),
+  ]);
+
+  // Diagnostics feed (§AF): refund operations by order id; retained webhook
+  // events matched on the payment-intent reference (either the event object
+  // itself or its payment_intent pointer, covering charges and disputes).
+  const paymentRef = payment.data?.provider_reference ?? null;
+  const [refundOps, webhookEvents] = await Promise.all([
+    a
+      .from("refund_operations")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true }),
+    paymentRef
+      ? a
+          .from("webhook_events")
+          .select("id, type, received_at, processed_at, payload")
+          .or(
+            `payload->data->object->>id.eq.${paymentRef},payload->data->object->>payment_intent.eq.${paymentRef}`,
+          )
+          .order("received_at", { ascending: true })
+          .limit(50)
+      : Promise.resolve({ data: [] as WebhookEvent[] }),
   ]);
 
   const loadParty = async (id: string | null, role: "buyer" | "seller") => {
@@ -541,6 +568,14 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
       createdAt: e.created_at,
     })),
     audit: audit.data ?? [],
+    timeline: buildOrderTimeline({
+      order,
+      payment: payment.data ?? null,
+      transferIntent: intent.data ?? null,
+      refundOps: refundOps.data ?? [],
+      webhookEvents: (webhookEvents.data ?? []) as WebhookEvent[],
+      audit: audit.data ?? [],
+    }),
   };
 }
 

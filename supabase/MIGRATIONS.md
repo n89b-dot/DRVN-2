@@ -7,7 +7,13 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0001–0038 applied
+## Status: 0001–0039 applied
+
+0039 (orders.correlation_id — one observability identity per checkout, stamped
+by the app and mirrored into Stripe PaymentIntent metadata; never a money-path
+key) applied 27 August 2026 via `node scripts/apply-migration.mjs` (the
+MIGRATIONS.md runner, now a checked-in script), applied twice (idempotency
+check); self-checks pass.
 
 0037 (card engagement: public `likes` on listings/cars, `saves.target_type`
 learns 'post') and 0038 (notify_on_save handles 'post' — the 0009 trigger's

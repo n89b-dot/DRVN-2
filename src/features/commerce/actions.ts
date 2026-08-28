@@ -190,6 +190,10 @@ async function purchaseListings(
   // proceeds is internal bookkeeping until Connect lands.)
   const allOrderIds = result.orders.map((o) => o.order_id);
   const basketTotal = result.orders.reduce((sum, o) => sum + o.total_cents, 0);
+  // One diagnostics identity for the whole basket (0039): every order carries
+  // it, and the processor metadata carries the same value.
+  const correlationId = crypto.randomUUID();
+  await admin.from("orders").update({ correlation_id: correlationId }).in("id", allOrderIds);
   const payment = await provider.createPayment({
     orderId: allOrderIds.join(","),
     buyerId,
@@ -198,6 +202,7 @@ async function purchaseListings(
     currency: result.orders[0].currency,
     idempotencyKey: options.idempotencyKey,
     customerId: await getStripeCustomerId(buyerId),
+    correlationId,
   });
 
   if (payment.status === "succeeded") {
@@ -817,6 +822,9 @@ export async function completeReservedOrder(
     .eq("id", orderId);
 
   const provider = getPaymentProvider();
+  // Diagnostics identity (0039) — offer-completion orders get one too.
+  const correlationId = crypto.randomUUID();
+  await admin.from("orders").update({ correlation_id: correlationId }).eq("id", orderId);
   const payment = await provider.createPayment({
     orderId,
     buyerId: user.id,
@@ -825,6 +833,7 @@ export async function completeReservedOrder(
     currency: order.currency,
     idempotencyKey: `order:${orderId}`,
     customerId: await getStripeCustomerId(user.id),
+    correlationId,
   });
 
   // Async processor: the buyer confirms in the browser; the webhook settles.

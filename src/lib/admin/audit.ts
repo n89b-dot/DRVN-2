@@ -2,6 +2,8 @@ import type { AdminAuditSubjectType } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 
+import { capabilityFor } from "./capabilities";
+
 /**
  * Append-only audit trail (0018). Every admin mutation flows through
  * `auditedAction`, which makes "no mutation without an audit row" structural
@@ -51,6 +53,19 @@ export async function auditedAction<T>(
 ): Promise<T> {
   if (!entry.reason || !entry.reason.trim()) {
     throw new Error("A reason is required.");
+  }
+  if (!capabilityFor(entry.action)) {
+    throw new Error(`Unregistered admin action family: ${entry.action}`);
+  }
+  // Database boundary (0040): the mutation runs on the service role, which RLS
+  // cannot distinguish, so the database itself verifies the named actor is a
+  // full admin BEFORE anything mutates — whatever the app layer believed.
+  const { error: actorError } = await admin.rpc("assert_admin_actor", {
+    p_actor: entry.actorId,
+  });
+  if (actorError) {
+    reportError("[admin] actor assertion refused", { action: entry.action, actorError });
+    throw new Error("This account is not authorized to act — mutation refused.");
   }
   const result = await mutate();
   await writeAudit(admin, {

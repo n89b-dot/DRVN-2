@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "docs:components": "UPDATE_DOCS=1 vitest run src/lib/docs/registry-docs.test.ts",
     "docs:implementation": "UPDATE_DOCS=1 vitest run src/lib/docs/implementation-docs.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:stripe": "vitest run --config vitest.stripe.config.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.8.0",

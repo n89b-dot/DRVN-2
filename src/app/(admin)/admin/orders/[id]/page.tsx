@@ -49,7 +49,7 @@ export default async function AdminOrderPage({
   const { id } = await params;
   const detail = await getOrderDetail(id);
   if (!detail) notFound();
-  const { order, items, payment, transferIntent, buyer, seller, messages, evidence, audit } =
+  const { order, items, payment, transferIntent, buyer, seller, messages, evidence, audit, timeline } =
     detail;
 
   const refundable = order.total_cents - order.refunded_cents;
@@ -326,6 +326,35 @@ export default async function AdminOrderPage({
           </div>
         </section>
       )}
+
+      {/* ---------- Diagnostics timeline (§AF) ---------- */}
+      <section aria-label="Transaction timeline" className="mb-8">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <span className="microlabel !mb-0">Transaction timeline ({timeline.length})</span>
+          {order.correlation_id ? (
+            <span className="kv" title="Shared by every order in this checkout and stamped into the Stripe PaymentIntent metadata.">
+              correlation {order.correlation_id.slice(0, 8)}
+            </span>
+          ) : null}
+        </div>
+        {timeline.length ? (
+          <div className="rowlist">
+            {timeline.map((event, index) => (
+              <div key={`${event.at}-${event.label}-${index}`} className="jobrow">
+                <p className="order__meta">
+                  {new Date(event.at).toLocaleString()} · {event.source}
+                </p>
+                <p className="mt-0.5 text-body">
+                  {event.label}
+                  {event.detail ? <span className="text-dim"> — {event.detail}</span> : null}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="order__meta mt-2">No recorded events yet.</p>
+        )}
+      </section>
 
       {/* ---------- Thread ---------- */}
       <section aria-label="Order thread" className="mb-8">
