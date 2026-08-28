@@ -387,9 +387,17 @@ export default async function SellerListingsPage({
             </Link>
           }
         >
-          {register === "all"
-            ? "List your first part and it appears here with its views, watchers and offers."
-            : "No listings match this filter right now."}
+          {register === "all" ? (
+            <>
+              List your first part and it appears here with its views, watchers and offers.
+              Already posted it somewhere else?{" "}
+              <Link href="/sell/import" className="jumplink">
+                Import an existing listing →
+              </Link>
+            </>
+          ) : (
+            "No listings match this filter right now."
+          )}
         </EmptyState>
       ) : (
         <section className="deck">

@@ -30,6 +30,9 @@ export const RATE_LIMITS = {
   openDispute: { action: "dispute", limit: 5, windowSeconds: 60 * 60 },
   disputeEvidence: { action: "dispute-evidence", limit: 20, windowSeconds: 60 * 60 },
   createListing: { action: "listing", limit: 20, windowSeconds: 60 * 60 },
+  /** Remote fetch + AI + media transfer — the most expensive user-triggered
+   *  action in the product, so the tightest listing-side limit. */
+  importListing: { action: "listing-import", limit: 10, windowSeconds: 60 * 60 },
   passwordReset: { action: "password-reset", limit: 5, windowSeconds: 60 * 30 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;

@@ -41,12 +41,53 @@ export type ListingDraft = {
   alt_part_numbers?: string[];
 };
 
+/**
+ * One normalized initialization contract for every way a listing form starts:
+ * blank, Garage/Build → Sell, an imported external listing, or (via `listing`)
+ * an existing draft/edit. Values here seed the form once at mount; the form
+ * and the server actions stay the single validation authority.
+ */
+export type SellFormInitialValues = {
+  /** Where these values came from — drives contextual copy only. */
+  origin: "garage" | "import";
+  carId?: string;
+  title?: string;
+  category?: string;
+  subcategory?: string;
+  condition?: string;
+  description?: string;
+  partNumber?: string;
+  /** Dollar strings ("450.00"), matching the form's money inputs. */
+  price?: string;
+  shipping?: string;
+  allowsCollection?: boolean;
+  location?: string;
+  compatibilityNotes?: string;
+  /** Photos already in the seller's own DRVN storage (imports re-host first). */
+  images?: GalleryImage[];
+  fitment?: FitmentRow[];
+  modItemId?: string;
+  /** Parser confidence carried from the mod line, for the guess note below —
+   *  listings have no confidence column, so this never reaches the server. */
+  modConfidence?: number | null;
+  /** Present when these values came from an imported listing. */
+  importReview?: {
+    id: string;
+    /** "Facebook Marketplace", "golfmk7.com", "your pasted post". */
+    sourceLabel: string;
+    /** The imported post, for the collapsed "original post" panel. */
+    originalText?: string;
+    /** Specific check-this reasons, rendered beside the fields they name. */
+    issues: { field: string; message: string }[];
+  };
+};
+
 export function SellForm({
   cars,
   makes,
   userId,
   listing,
-  prefill,
+  initialValues,
   canPublish = true,
 }: {
   cars: { id: string; name: string; make?: string | null; model?: string | null; year?: number | null }[];
@@ -58,22 +99,14 @@ export function SellForm({
   canPublish?: boolean;
   /** Present when editing an existing listing. */
   listing?: ListingDraft;
-  /** Pre-fill from "release a part off this car". */
-  prefill?: {
-    carId?: string;
-    title?: string;
-    category?: string;
-    subcategory?: string;
-    modItemId?: string;
-    partNumber?: string;
-    /** Parser confidence carried from the mod line, for the guess note below —
-     *  listings have no confidence column, so this never reaches the server. */
-    modConfidence?: number | null;
-    /** Fitment inferred from the source car (?car= deep link) — seeds the
-     *  picker on a fresh listing, editable like any typed row. */
-    fitment?: FitmentRow[];
-  };
+  /** Seed values for a fresh listing (Garage → Sell, imported listing). */
+  initialValues?: SellFormInitialValues;
 }) {
+  const prefill = initialValues;
+  const importReview = initialValues?.importReview;
+  /** The import's specific "check this" note for a field, if any. */
+  const issueFor = (field: string): string | undefined =>
+    importReview?.issues.find((issue) => issue.field === field)?.message;
   const isEdit = Boolean(listing);
   const [state, action, pending] = useActionState<SellState, FormData>(
     isEdit ? updateListing : createListing,
@@ -84,8 +117,8 @@ export function SellForm({
   const [subcategory, setSubcategory] = useState(
     listing?.subcategory ?? prefill?.subcategory ?? ""
   );
-  const [condition, setCondition] = useState(listing?.condition ?? "used");
-  const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? []);
+  const [condition, setCondition] = useState(listing?.condition ?? prefill?.condition ?? "used");
+  const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? prefill?.images ?? []);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -98,9 +131,13 @@ export function SellForm({
   // read them live, without re-plumbing the rest of the form.
   const [grade, setGrade] = useState(listing?.grade ?? "");
   const [attestAccurate, setAttestAccurate] = useState(false);
-  const [price, setPrice] = useState(money(listing?.price_cents));
-  const [shipping, setShipping] = useState(money(listing?.shipping_cents ?? 0));
-  const [fitmentCount, setFitmentCount] = useState(listing?.fitments?.length ?? 0);
+  const [price, setPrice] = useState(listing ? money(listing.price_cents) : prefill?.price ?? "");
+  const [shipping, setShipping] = useState(
+    listing ? money(listing.shipping_cents ?? 0) : prefill?.shipping ?? money(0)
+  );
+  const [fitmentCount, setFitmentCount] = useState(
+    listing?.fitments?.length ?? prefill?.fitment?.length ?? 0
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const usedNeedsGrade = condition !== "new";
@@ -218,6 +255,32 @@ export function SellForm({
       {prefill?.modItemId && (
         <input type="hidden" name="mod_item_id" value={prefill.modItemId} />
       )}
+      {importReview && <input type="hidden" name="import_id" value={importReview.id} />}
+
+      {importReview && (
+        <div role="status" className="tile !mb-0">
+          <p className="microlabel microlabel--ink">
+            Imported from {importReview.sourceLabel} — check the details before publishing.
+          </p>
+          {importReview.issues.length > 0 && (
+            <ul className="mt-1 list-disc pl-5 text-micro text-dim">
+              {importReview.issues.map((issue) => (
+                <li key={`${issue.field}-${issue.message}`}>{issue.message}</li>
+              ))}
+            </ul>
+          )}
+          {importReview.originalText && (
+            <details className="mt-2">
+              <summary className="jumplink cursor-pointer text-micro">
+                Original post — nothing was lost
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap text-micro text-dim">
+                {importReview.originalText}
+              </p>
+            </details>
+          )}
+        </div>
+      )}
 
       <ValidationSummary
         entries={errorEntries.map(([field, message]) => ({
@@ -252,7 +315,7 @@ export function SellForm({
           className="max-w-none"
           fieldClassName="!mb-0"
           error={fieldErrors.title}
-          hint="Clear titles sell faster — brand, model, then the car it fits."
+          hint={issueFor("title") ?? "Clear titles sell faster — brand, model, then the car it fits."}
         />
         {/* .field--row collapses to one column on small screens; a bare
             grid-cols-2 kept these side by side at 375px. */}
@@ -268,12 +331,13 @@ export function SellForm({
             fieldClassName="!mb-0"
             error={fieldErrors.category}
             hint={
-              !listing &&
+              issueFor("category") ??
+              (!listing &&
               prefill?.modConfidence !== undefined &&
               prefill?.modConfidence !== null &&
               isLowConfidence(prefill.modConfidence)
                 ? "Guessed from a low-confidence parse of the build line — check it."
-                : undefined
+                : undefined)
             }
           >
             <option value="" disabled>
@@ -313,6 +377,7 @@ export function SellForm({
             onChange={(e) => setCondition(e.target.value)}
             className="max-w-none"
             fieldClassName="!mb-0"
+            hint={issueFor("condition")}
           >
             {CONDITIONS.map((c) => (
               <option key={c.value} value={c.value}>
@@ -330,7 +395,7 @@ export function SellForm({
             placeholder="e.g. CP9660-2S4"
             className="max-w-none"
             fieldClassName="!mb-0"
-            hint="What a buyer cross-references. Seller-entered, not verified."
+            hint={issueFor("part_number") ?? "What a buyer cross-references. Seller-entered, not verified."}
           />
         </div>
         <TextField
@@ -426,7 +491,7 @@ export function SellForm({
           label="Description"
           rows={4}
           maxLength={8000}
-          defaultValue={listing?.description ?? ""}
+          defaultValue={listing?.description ?? prefill?.description ?? ""}
           placeholder="What is it, why is it coming off, anything a buyer should know."
           className="!max-w-none"
           fieldClassName="!mb-0"
@@ -436,7 +501,10 @@ export function SellForm({
       <FormSection
         step={2}
         title="Photos"
-        hint="Up to 12 — the first frame is the cover. Reorder, set a cover, or add alt text below."
+        hint={
+          issueFor("photos") ??
+          "Up to 12 — the first frame is the cover. Reorder, set a cover, or add alt text below."
+        }
       >
         <SortableGrid
           ids={images.map((img) => img.url)}
@@ -610,6 +678,7 @@ export function SellForm({
           })()}
           onCountChange={setFitmentCount}
         />
+        {issueFor("fitment") && <p className="spec-note">{issueFor("fitment")}</p>}
         <div className="field !mb-0">
           <label htmlFor="sell-compatibility_notes" className="microlabel">
             Notes — anything the rows can&apos;t say
@@ -619,7 +688,7 @@ export function SellForm({
             name="compatibility_notes"
             rows={3}
             maxLength={2000}
-            defaultValue={listing?.compatibility_notes ?? ""}
+            defaultValue={listing?.compatibility_notes ?? prefill?.compatibilityNotes ?? ""}
             placeholder='e.g. "Needs the OEM bracket from a facelift car. Verify for RS5."'
             className="ctl !max-w-none"
           />
@@ -640,6 +709,7 @@ export function SellForm({
             prefix="$"
             fieldClassName="!mb-0"
             error={fieldErrors.price}
+            hint={issueFor("price")}
           />
           <TextField
             id="sell-shipping"
@@ -651,7 +721,7 @@ export function SellForm({
             placeholder="0"
             prefix="$"
             fieldClassName="!mb-0"
-            hint="Leave at 0 for free shipping."
+            hint={issueFor("shipping") ?? "Leave at 0 for free shipping."}
           />
         </div>
         <div className="field--row">
@@ -665,13 +735,13 @@ export function SellForm({
             placeholder="—"
             prefix="$"
             fieldClassName="!mb-0"
-            hint="Offers below this are declined automatically."
+            hint={issueFor("offers") ?? "Offers below this are declined automatically."}
           />
           <div className="field !mb-0">
             <label htmlFor="sell-location" className="microlabel">Location</label>
             <input id="sell-location"
               name="location"
-              defaultValue={listing?.location ?? ""}
+              defaultValue={listing?.location ?? prefill?.location ?? ""}
               placeholder="City, state"
               className="ctl max-w-none"
             />
@@ -681,7 +751,7 @@ export function SellForm({
           <input
             type="checkbox"
             name="allows_collection"
-            defaultChecked={listing?.allows_collection ?? false}
+            defaultChecked={listing?.allows_collection ?? prefill?.allowsCollection ?? false}
             className="accent-live"
           />
           Buyers may collect in person

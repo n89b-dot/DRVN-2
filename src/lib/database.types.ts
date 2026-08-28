@@ -42,6 +42,8 @@ export type Profile = {
    *  by client roles — read via is_suspended() or the service client. */
   suspended_at: string | null;
   suspended_reason: string | null;
+  /** One-time importer content-rights acknowledgement (0047). */
+  import_attested_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -705,6 +707,47 @@ export type TransferIntent = {
   updated_at: string;
 };
 
+// ---------- Listing imports (migration 0047) ----------
+
+export type ListingImportStatus =
+  | "pending"
+  | "fetching"
+  | "extracting"
+  | "importing_media"
+  | "ready"
+  | "failed"
+  | "consumed"
+  | "expired";
+
+/** One durable import job — a row IS the state machine (0047). `normalized_source`
+ *  and `extracted` are the DRVN-owned stage payloads (validated server-side,
+ *  never raw crawler output); both are cleared by the retention sweep once the
+ *  import reaches a terminal state. */
+export type ListingImport = {
+  id: string;
+  user_id: string;
+  source_mode: "url" | "paste";
+  source_adapter: string | null;
+  source_url: string | null;
+  canonical_url: string | null;
+  source_domain: string | null;
+  status: ListingImportStatus;
+  attempts: number;
+  lease_expires_at: string | null;
+  normalized_source: Json | null;
+  extracted: Json | null;
+  imported_images: Json | null;
+  selected_item: number | null;
+  error_code: string | null;
+  error_detail: string | null;
+  listing_id: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  consumed_at: string | null;
+  expires_at: string;
+};
+
 // ---------- Money durability (migration 0026) ----------
 
 export type RefundOperationStatus =
@@ -927,6 +970,7 @@ export type Database = {
       ops_cases: Table<OpsCase, "kind">;
       part_number_links: Table<PartNumberLink, "from_compact" | "to_compact" | "kind">;
       staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
+      listing_imports: Table<ListingImport, "user_id" | "source_mode">;
     };
     Views: {
       /** Explore timeline (migration 0032). Read-only; no Insert/Update. */

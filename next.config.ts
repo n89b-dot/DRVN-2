@@ -41,6 +41,12 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Listing-importer server deps that must stay native `require`s rather than
+  // being bundled into server components: playwright-core is resolved
+  // dynamically (optional rendering fallback — src/lib/listing-import/fetch/
+  // render.ts); sharp/jsdom are on Next's built-in external list already.
+  serverExternalPackages: ["playwright-core"],
+
   // The docs markdown route reads repo markdown off disk at request time
   // (src/app/(docs)/docs/md/[slug]/route.ts — registry in src/lib/docs/site.ts).
   // The read is marked turbopackIgnore so the tracer doesn't pull in the whole

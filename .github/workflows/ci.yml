@@ -106,6 +106,14 @@ jobs:
           echo "$out"
           echo "$out" | grep -q -- "--- all money-guard checks passed ---"
 
+      - name: Import guard (0047 RLS, transitions, dedupe, cap)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/import_guard.sql 2>&1)
+          echo "$out"
+          echo "$out" | grep -q -- "--- all import-guard checks passed ---"
+
   # The golden-path e2e suite (signup → list → buy → dispatch → receive) needs
   # a real Supabase project — auth included — so it runs against a dedicated
   # throwaway project configured via repository secrets. Without them the job

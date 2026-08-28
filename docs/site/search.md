@@ -17,10 +17,16 @@ One search box, two behaviors, split by a pure classifier
 (`search/normalize.ts`, unit-tested against the brief's examples):
 
 - **Human discovery** — `mk8 intake`, `bilstein b16`, `golf r downpipe`.
-  Multi-word or low-digit terms. Fuzzy matching helps: the pg_trgm RPC
-  (`search_listing_ids`, migration 0008) matches title/description/
-  compatibility with title-first similarity ranking. Digit-bearing words also
-  union in identifier candidates, so `bilstein b16` still hits part numbers.
+  Multi-word or low-digit terms. **Word-wise, not phrase-wise** (the pg_trgm
+  RPC `search_listing_ids`, rewritten in migration 0048): each word matches
+  independently against title, description, compatibility notes or the
+  category slug, and a word with no direct hit can still match by
+  word-similarity against the title (≥ 0.45), so `garret turbo` forgives the
+  missing *t*. Ranking: more matched words first, then direct title hits,
+  then whole-query title similarity — `porsche seats` puts the Porsche
+  buckets above other seats instead of (as before 0048) requiring the
+  contiguous phrase and returning nothing. Digit-bearing words also union in
+  identifier candidates, so `bilstein b16` still hits part numbers.
 - **Identifier discovery** — `11427566327`, `11-42-7-566-327`, `CP9660-2S4`.
   A single token with ≥5 alphanumerics and ≥2 digits. **Never
   fuzzy-corrected**: a typo in a part number must not "helpfully" match a

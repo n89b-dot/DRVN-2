@@ -1205,6 +1205,18 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     use: "Feature-owned; compose FormSection/ValidationSummary/fields from it, don't fork it.",
   },
   {
+    name: "ImportFlow",
+    importPath: "@/app/(product)/sell/import/import-flow",
+    file: "src/app/(product)/sell/import/import-flow.tsx",
+    layer: "feature",
+    category: "commerce",
+    status: "active",
+    description:
+      "The Existing Listing Importer flow (0047): URL/paste source input, honest state-driven progress, paste fallback on the same import, multi-item picker — hands off to SellForm for review.",
+    use: "Feature-owned at /sell/import; it composes Alert/Stepper/TextField/TextArea/Button — extend those, don't fork this.",
+    avoid: "Any other prefill path — Garage → Sell goes through SellFormInitialValues directly.",
+  },
+  {
     name: "CheckoutSteps",
     importPath: "@/app/(discover)/checkout/checkout-steps",
     file: "src/app/(discover)/checkout/checkout-steps.tsx",

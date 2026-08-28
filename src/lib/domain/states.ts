@@ -1,4 +1,5 @@
 import type {
+  ListingImportStatus,
   ListingStatus,
   OfferStatus,
   OrderStatus,
@@ -81,7 +82,21 @@ export const REFUND_TRANSITIONS: TransitionMap<RefundOperationStatus> = {
   recovery_required: [],
 };
 
-export type DomainName = "order" | "listing" | "offer" | "transfer" | "refund";
+/** Listing imports (0047): the importer's durable job ladder. `ready` can
+ *  fall back to `extracting` (a multi-item re-selection or AI retry), and
+ *  `failed` re-enters at the step that broke rather than restarting. */
+export const IMPORT_TRANSITIONS: TransitionMap<ListingImportStatus> = {
+  pending: ["fetching", "extracting", "failed", "expired"],
+  fetching: ["extracting", "failed", "expired"],
+  extracting: ["importing_media", "ready", "failed", "expired"],
+  importing_media: ["ready", "failed", "expired"],
+  ready: ["consumed", "extracting", "expired"],
+  failed: ["fetching", "extracting", "expired"],
+  consumed: [],
+  expired: [],
+};
+
+export type DomainName = "order" | "listing" | "offer" | "transfer" | "refund" | "listing_import";
 
 export const DOMAIN_STATES: {
   domain: DomainName;
@@ -118,6 +133,12 @@ export const DOMAIN_STATES: {
     title: "Refund operations",
     authority: "begin/settle_refund_operation RPCs + worker resume (0026)",
     transitions: REFUND_TRANSITIONS,
+  },
+  {
+    domain: "listing_import",
+    title: "Listing imports",
+    authority: "CHECK + guard_listing_import_status trigger (0047)",
+    transitions: IMPORT_TRANSITIONS,
   },
 ];
 

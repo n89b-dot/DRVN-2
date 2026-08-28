@@ -84,4 +84,19 @@ Enforced by: begin/settle_refund_operation RPCs + worker resume (0026)
 | `failed` | **terminal** |
 | `recovery_required` | **terminal** |
 
+### Listing imports
+
+Enforced by: CHECK + guard_listing_import_status trigger (0047)
+
+| From | May move to |
+| --- | --- |
+| `pending` | `fetching` · `extracting` · `failed` · `expired` |
+| `fetching` | `extracting` · `failed` · `expired` |
+| `extracting` | `importing_media` · `ready` · `failed` · `expired` |
+| `importing_media` | `ready` · `failed` · `expired` |
+| `ready` | `consumed` · `extracting` · `expired` |
+| `failed` | `fetching` · `extracting` · `expired` |
+| `consumed` | **terminal** |
+| `expired` | **terminal** |
+
 <!-- END GENERATED: domain-states -->

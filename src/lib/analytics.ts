@@ -32,6 +32,18 @@ export type AnalyticsEvent =
   | { event: "fitment_filter_used"; props?: undefined }
   | { event: "saved_search_created"; props?: undefined }
   | { event: "saved_search_alert_enabled"; props?: undefined }
+  | { event: "listing_import_started"; props: { mode: "url" | "paste"; adapter: string } }
+  | { event: "listing_import_fetch_succeeded"; props: { adapter: string; fetch_method: "http" | "render"; images: number } }
+  | { event: "listing_import_fetch_failed"; props: { adapter: string; code: string } }
+  | { event: "listing_import_fallback_to_paste"; props: { adapter: string } }
+  | { event: "listing_import_extraction_succeeded"; props: { adapter: string; multiple_items: boolean; needs_review: number } }
+  | { event: "listing_import_review_opened"; props: { adapter: string } }
+  /** Fired by createListing when a draft/publish consumed an import. `fields_edited`
+   *  counts imported fields the seller changed before saving — the honest
+   *  extraction-quality signal (never field contents, only which/how many). */
+  | { event: "listing_import_consumed"; props: { adapter: string; published: boolean; fields_edited: number; edited_fields: string } }
+  /** Aggregate viability signal for anonymous Facebook retrieval (§32). */
+  | { event: "listing_import_facebook_outcome"; props: { outcome: "fetch_attempted" | "fetch_succeeded" | "render_attempted" | "render_succeeded" | "fallback_to_paste" } }
   | { event: "offer_submitted"; props?: undefined }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }

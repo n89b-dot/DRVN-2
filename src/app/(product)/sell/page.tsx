@@ -3,24 +3,106 @@ import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
+import { capture } from "@/lib/analytics";
+import { sourceLabelFor } from "@/lib/listing-import/engine";
+import {
+  parseExtraction,
+  parseImportedImages,
+  parseNormalizedSource,
+} from "@/lib/listing-import/schema";
 import { mapModCategoryToListing } from "@/lib/mods/category-map";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
-import { SellForm } from "./sell-form";
+import { SellForm, type SellFormInitialValues } from "./sell-form";
 import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Sell a part - DRVN" };
 
+const money = (cents: number | null | undefined) =>
+  cents === null || cents === undefined ? undefined : (cents / 100).toFixed(2);
+
+/** Maps a `ready` import row into the form's initial values. Null = the row
+ *  isn't reviewable (wrong state / unparseable) — callers bounce to /sell/import. */
+function importInitialValues(row: {
+  id: string;
+  status: string;
+  source_mode: string;
+  source_adapter: string | null;
+  source_domain: string | null;
+  selected_item: number | null;
+  normalized_source: unknown;
+  extracted: unknown;
+  imported_images: unknown;
+}): SellFormInitialValues | null {
+  if (row.status !== "ready") return null;
+  const extraction = parseExtraction(row.extracted);
+  if (!extraction || (extraction.multipleItems && row.selected_item === null)) return null;
+  const source = parseNormalizedSource(row.normalized_source);
+  const images = parseImportedImages(row.imported_images).map((img) => ({
+    url: img.url,
+    alt: null,
+  }));
+
+  const issues = [...extraction.needsReview];
+  if (!images.length) {
+    issues.push({
+      field: "photos",
+      message:
+        row.source_mode === "paste"
+          ? "Add the photos from your original listing — text came over, photos don't."
+          : "We couldn't bring over the photos — add your original photos.",
+    });
+  }
+
+  return {
+    origin: "import",
+    title: extraction.title,
+    category: extraction.category,
+    subcategory: extraction.subcategory,
+    condition: extraction.condition,
+    description: extraction.description,
+    partNumber: extraction.partNumber,
+    price: money(extraction.priceCents),
+    shipping:
+      extraction.shippingCents !== undefined
+        ? money(extraction.shippingCents)
+        : extraction.shippingIncluded
+          ? "0.00"
+          : undefined,
+    allowsCollection: extraction.allowsCollection,
+    location: extraction.location,
+    compatibilityNotes: extraction.compatibilityNotes,
+    images,
+    fitment: (extraction.resolvedFitments ?? []).map((f) => ({
+      make: f.make,
+      model: f.model,
+      year_start: f.year_start,
+      year_end: f.year_end,
+    })),
+    importReview: {
+      id: row.id,
+      sourceLabel: sourceLabelFor({
+        source_adapter: row.source_adapter,
+        source_domain: row.source_domain,
+        source_mode: row.source_mode as "url" | "paste",
+      }),
+      originalText: source?.text.slice(0, 4000),
+      issues,
+    },
+  };
+}
+
 export default async function SellPage({
   searchParams,
 }: {
-  // `car` and `mod` arrive from "list a part" on a build page or the garage.
-  searchParams: Promise<{ car?: string; mod?: string }>;
+  // `car` and `mod` arrive from "list a part" on a build page or the garage;
+  // `import` is a ready listing import coming in for review.
+  searchParams: Promise<{ car?: string; mod?: string; import?: string }>;
 }) {
-  const { car: carParam, mod: modParam } = await searchParams;
+  const { car: carParam, mod: modParam, import: importParam } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -43,23 +125,34 @@ export default async function SellPage({
 
   if (error) reportError("[sell] failed to load cars", error);
 
+  let initialValues: SellFormInitialValues | undefined;
+
+  if (importParam) {
+    const admin = createAdminClient();
+    const { data: importRow } = await admin
+      .from("listing_imports")
+      .select("*")
+      .eq("id", importParam)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!importRow) redirect("/sell/import");
+    if (importRow.status === "consumed" && importRow.listing_id) {
+      redirect(`/listings/${importRow.listing_id}/edit`);
+    }
+    const fromImport = importInitialValues(importRow);
+    if (!fromImport) redirect(`/sell/import?resume=${importRow.id}`);
+    initialValues = fromImport;
+    capture(user.id, {
+      event: "listing_import_review_opened",
+      props: { adapter: importRow.source_adapter ?? importRow.source_mode },
+    });
+  }
+
   // Only honour the pre-fill if this really is the seller's own car.
   const sourceCar = carParam ? cars?.find((c) => c.id === carParam) : undefined;
 
-  let prefill:
-    | {
-        carId?: string;
-        title?: string;
-        category?: string;
-        subcategory?: string;
-        modItemId?: string;
-        partNumber?: string;
-        modConfidence?: number | null;
-        fitment?: { make: string; model: string; year_start: number | null; year_end: number | null }[];
-      }
-    | undefined;
-  if (sourceCar) {
-    prefill = { carId: sourceCar.id };
+  if (!initialValues && sourceCar) {
+    initialValues = { origin: "garage", carId: sourceCar.id };
 
     if (modParam) {
       const { data: mod } = await supabase
@@ -76,7 +169,8 @@ export default async function SellPage({
         // than handing the raw mod category to a <select> that doesn't have
         // it as an option.
         const { category, subcategory } = mapModCategoryToListing(mod.category);
-        prefill = {
+        initialValues = {
+          origin: "garage",
           carId: sourceCar.id,
           title: title.slice(0, 140),
           category,
@@ -92,43 +186,64 @@ export default async function SellPage({
         };
       }
     }
+
+    // Automate before asking (brief §G): a part released off a known car starts
+    // with its fitment inferred — one editable row, not a form to fill.
+    if (sourceCar.make && sourceCar.model) {
+      initialValues.fitment = [
+        {
+          make: sourceCar.make,
+          model: sourceCar.model,
+          year_start: sourceCar.year ?? null,
+          year_end: sourceCar.year ?? null,
+        },
+      ];
+    }
   }
 
-  // Automate before asking (brief §G): a part released off a known car starts
-  // with its fitment inferred — one editable row, not a form to fill.
-  if (prefill && sourceCar?.make && sourceCar?.model) {
-    prefill.fitment = [
-      {
-        make: sourceCar.make,
-        model: sourceCar.model,
-        year_start: sourceCar.year ?? null,
-        year_end: sourceCar.year ?? null,
-      },
-    ];
-  }
+  const isImportReview = initialValues?.origin === "import";
 
   return (
     <div className="mx-auto w-full max-w-[860px] px-5 pb-10">
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
-          {prefill?.modItemId
-            ? `Listing a part off your ${sourceCar?.name}`
-            : "New listing — draft, not public yet"}
+          {isImportReview
+            ? `Imported from ${initialValues?.importReview?.sourceLabel} — not public yet`
+            : initialValues?.modItemId
+              ? `Listing a part off your ${sourceCar?.name}`
+              : "New listing — draft, not public yet"}
         </span>
         <h1>
-          List a <span className="live-word">part.</span>
+          {isImportReview ? (
+            <>
+              Check your <span className="live-word">listing.</span>
+            </>
+          ) : (
+            <>
+              List a <span className="live-word">part.</span>
+            </>
+          )}
         </h1>
         <p className="sub">
-          Takes a few minutes. Link it to a car in your garage so buyers can see the build it
-          came off — it&apos;s the difference between a listing and a shrug.
+          {isImportReview
+            ? "We organized your existing post into a DRVN listing. Look it over — you publish, we never do."
+            : "Takes a few minutes. Link it to a car in your garage so buyers can see the build it came off — it's the difference between a listing and a shrug."}
         </p>
+        {!isImportReview && (
+          <p className="sub">
+            Already posted this somewhere else?{" "}
+            <Link href="/sell/import" className="jumplink">
+              Import an existing listing →
+            </Link>
+          </p>
+        )}
       </Rv>
 
       <SellForm
         cars={cars ?? []}
         makes={makes.map((m) => m.name)}
         userId={user.id}
-        prefill={prefill}
+        initialValues={initialValues}
         canPublish={canPublish}
       />
 

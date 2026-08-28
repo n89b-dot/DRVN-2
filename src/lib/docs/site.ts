@@ -197,8 +197,17 @@ export const REFERENCE_DOCS: DocEntry[] = [
   {
     slug: "listing-importer-spec",
     title: "Listing importer specification",
-    description: "Listing importer specification.",
+    description:
+      "The Existing Listing Importer as built: sources, policies, pipeline, non-invention rules, review UX.",
     file: "docs/listing-importer-spec.md",
+    kind: "reference",
+  },
+  {
+    slug: "listing-import",
+    title: "Listing import system",
+    description:
+      "Operating the importer (0047): state machine, safe fetch, adapters, AI contract, media lifecycle, analytics, troubleshooting.",
+    file: "docs/site/listing-import.md",
     kind: "reference",
   },
 ];

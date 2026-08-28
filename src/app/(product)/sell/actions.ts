@@ -11,6 +11,7 @@ import { keepValidGalleryImages } from "@/lib/media-url";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { capture } from "@/lib/analytics";
+import { consumeListingImport } from "@/lib/listing-import/consume";
 import { syncListingToSearch } from "@/lib/marketplace/search/indexing";
 import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
@@ -195,6 +196,29 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
       .update({ linked_listing_id: listing.id })
       .eq("id", modItemId)
       .eq("car_id", parsed.fields.source_car_id);
+  }
+
+  // An imported listing is done once it becomes a real listing — mark the
+  // import consumed and record which fields the seller edited (names only).
+  const importId = String(formData.get("import_id") ?? "");
+  if (importId) {
+    await consumeListingImport({
+      userId: user.id,
+      importId,
+      listingId: listing.id,
+      published: !asDraft,
+      submitted: {
+        title: parsed.fields.title,
+        description: parsed.fields.description,
+        category: parsed.fields.category,
+        subcategory: parsed.fields.subcategory,
+        condition: parsed.fields.condition,
+        price_cents: parsed.fields.price_cents,
+        shipping_cents: parsed.fields.shipping_cents,
+        part_number: parsed.fields.part_number,
+        location: parsed.fields.location,
+      },
+    });
   }
 
   capture(user.id, asDraft

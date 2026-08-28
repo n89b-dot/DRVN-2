@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 6 implemented · 29 validated · 7 deferred · 1 blocked externally
+**Progress:** 44 initiatives — 7 implemented · 29 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -165,6 +165,20 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Extend the existing ?car=&mod= prefill contract to carry the full mod context; contextual action on the mods editor and the removed-part composer block. No provenance ledger.
 - **UX rules:** A useful connection, not a ledger — ordinary relational data only.
 - **Validation:** Three bridges live: build-line 'Sell it' (pre-existing), ?car=&mod= prefill carrying title/category/part number + inferred fitment row, and the composer's removed-mod block linking 'Sell this part →'. Exercised via the sell-form fitment prefill path; no ledger machinery anywhere.
+
+#### Existing Listing Importer — Implemented
+
+- **Brief:** Importer brief (Aug 2026)
+- **Exists today:** Sellers arriving from Facebook Marketplace or forums re-typed their listing field by field; docs/listing-importer-spec.md existed as a spec with nothing built.
+- **Changing:** Paste a listing URL (or the post text) at /sell/import and DRVN reads that one page, organizes it into the structured listing shape (deterministic parsers first, schema-forced AI last, server-side non-invention checks), re-hosts the photos through the staged-media lifecycle, and lands the seller in the normal sell form with specific check-this prompts. Facebook is first-class: anonymous single-page attempt with a paste fallback on the same import.
+- **Surfaces:** `/sell/import`, `/sell`, `src/lib/listing-import/`, `src/app/(product)/sell/import/`, `supabase/migrations/0047_listing_imports.sql`, `/api/jobs/listing-imports`
+- **User benefit:** A seller who already listed a part somewhere else brings it to DRVN in under a minute instead of rebuilding it — supply-side migration without redundant work.
+- **Approach:** Postgres-owned durable job (0047: status machine + transition trigger + step lease), one hardened SSRF-pinned fetcher for pages and images, a source-policy registry with engine adapters (Discourse JSON, XenForo, vBulletin, phpBB, generic JSON-LD/OG/Readability, Facebook, paste), Anthropic extraction behind a config seam with a deterministic stub for dev/CI, fitment through the 0041 catalog, and one SellFormInitialValues contract so the review IS the existing sell form.
+- **Depends on:** vehicle-catalog, background-jobs
+- **UX rules:** The importer never publishes and never invents a seller claim — blank beats guessed. Specific review reasons, never confidence scores. Failures degrade forward to paste on the same import; the seller never restarts.
+- **Decisions:** Crawlee/metascraper not adopted: every import is exactly one user-supplied page fetch, so a hardened undici fetcher + cheerio adapters cover it without a crawler framework's queue machinery (matches the no-Redis/no-PGMQ posture). Facebook is public_url, not paste_only: the attempt is user-directed, single-page, logged-out, with hard no-bypass boundaries; viability is measured by the facebook_outcome analytics aggregate. No screenshot import — text/URL paths only, per product direction. Confidence scores dropped from the old spec in favor of field-specific review issues.
+- **Validation:** 89 unit tests (SSRF matrix, fixture-driven adapters, non-invention validation, heuristic extractor, policy/config); import_guard.sql (8 assertions) green against the dev project; migration applied twice; e2e flow spec covering paste import, review and draft-save.
+- **Docs:** docs/listing-importer-spec.md, docs/site/listing-import.md
 
 ### 05 · Build Story Composer
 

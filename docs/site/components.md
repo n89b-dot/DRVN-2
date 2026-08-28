@@ -230,7 +230,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity, pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
 
-### Features (12)
+### Features (13)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -240,6 +240,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `CheckoutSteps` | Feature | `@/app/(discover)/checkout/checkout-steps` | The checkout workflow (shipping → payment), shared by cart and order checkout. | Feature-owned; the Stepper and field primitives inside it are the reusable parts. |
 | `FollowButton` | Feature | `@/features/social/buttons` | Follow toggle with configurable labels. | Profiles and car sheets. |
 | `GarageSheetCard` | Feature | `@/app/(product)/garage/garage-sheet` | The Garage management sheet card (`.gsheet`) — dims, notes, latest update, orders. | Garage only. The public vehicle row is VehicleCard. |
+| `ImportFlow` | Feature | `@/app/(product)/sell/import/import-flow` | The Existing Listing Importer flow (0047): URL/paste source input, honest state-driven progress, paste fallback on the same import, multi-item picker — hands off to SellForm for review. | Feature-owned at /sell/import; it composes Alert/Stepper/TextField/TextArea/Button — extend those, don't fork this. *Not for:* Any other prefill path — Garage → Sell goes through SellFormInitialValues directly. |
 | `ListingQuickCommerce` | Feature | `@/features/commerce/quick-commerce` | Card-level quick buy/offer actions. | Commerce mosaic walls. |
 | `ProfileBody` | Feature | `@/components/profile/profile-body` | The public profile's tabbed body (vehicles, activity, listings, reviews). | Profile routes. |
 | `SaveButton` | Feature | `@/features/social/buttons` | Full-size save toggle for detail pages. | PDP / car sheet headers. |

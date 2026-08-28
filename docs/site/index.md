@@ -40,6 +40,7 @@ Deeper source documents, served verbatim:
 | Production runbook | `/docs/md/production-runbook` |
 | Remediation status (Aug 2026 hardening pass, issues 1–54) | `/docs/md/remediation-status` |
 | Listing importer specification | `/docs/md/listing-importer-spec` |
+| Listing import system (operations) | `/docs/md/listing-import` |
 
 ## One-line orientation
 

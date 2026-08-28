@@ -7,7 +7,24 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0001–0039 applied
+## Status: 0001–0039 recorded below; 0040–0046 applied but unrecorded here; 0047–0048 applied
+
+0048 (search_wordwise — rewrites `search_listing_ids` from contiguous-phrase
+matching to word-wise matching with word-similarity typo tolerance and
+matched-word-count ranking; empty queries still return everything. Applied
+twice 2026-08-28, idempotent.)
+
+0047 (listing_imports — the Existing Listing Importer's durable job table:
+status state machine with a transition-guard trigger, step lease, owner-only
+RLS, active-URL dedupe index, per-user in-progress cap trigger, 48h expiry
+aligned with the 0029 staged-media lifecycle; plus profiles.import_attested_at
+for the one-time content-rights acknowledgement) applied 28 August 2026 via
+`node scripts/apply-migration.mjs`, applied twice (idempotency check);
+self-checks pass. Guard suite `supabase/tests/import_guard.sql` run against
+the project (rolled back): all 8 assertions pass.
+
+(Note: this file's log drifted behind the repo — 0040–0046 were applied to the
+project when their features shipped but were not written up here.)
 
 0039 (orders.correlation_id — one observability identity per checkout, stamped
 by the app and mirrored into Stripe PaymentIntent metadata; never a money-path

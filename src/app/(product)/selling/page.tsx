@@ -144,7 +144,10 @@ export default async function SellingPage() {
           <p className="field__hint max-w-[62ch]">
             Parts off a car in your garage carry the build&apos;s context automatically — open a
             car&apos;s build sheet and use &ldquo;Sell it&rdquo; on the line, or start from
-            scratch on the sell sheet.
+            scratch on the sell sheet. Already posted it on Facebook or a forum?{" "}
+            <Link href="/sell/import" className="jumplink">
+              Import the existing listing →
+            </Link>
           </p>
         </div>
       </section>
