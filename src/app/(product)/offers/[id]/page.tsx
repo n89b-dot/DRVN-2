@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav, Media } from "@/components/ui";
+import { Foot, SellingNav, Media } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
@@ -188,7 +188,7 @@ export default async function OfferThreadPage({
       {/* A thread is still inside the Offers surface — the family nav keeps
           saying so, and the breadcrumb underneath names the way back. */}
 
-      <MarketplaceNav current="offers" offersCount={offersCount} />
+      <SellingNav current="offers" offersCount={offersCount} />
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/offers" className="jumplink">

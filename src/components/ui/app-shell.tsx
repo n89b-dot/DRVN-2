@@ -9,7 +9,7 @@ import { Icon } from "./icons";
 import { LivesheetBar } from "./livesheet-bar";
 import {
   FAMILY_HREFS,
-  isMarketplaceFamily,
+  isSellingFamily,
   matchesFamily,
   PRIMARY_NAV,
   type NavEntry,
@@ -57,7 +57,7 @@ function AppRail({
     if (familyKey) return matchesFamily(pathname, familyKey);
     return pathname === href || pathname.startsWith(`${href}/`);
   };
-  const familyHere = isMarketplaceFamily(pathname);
+  const familyHere = isSellingFamily(pathname);
 
   return (
     <aside className="rail" aria-label="Sections">
@@ -91,33 +91,33 @@ function AppRail({
           // row — a real link at top-level weight, with the disclosure toggle
           // beside it and the three management children in one container.
           if (entry.kind === "group") {
-            const parentHere = matchesFamily(pathname, "marketplace");
+            const parentHere = matchesFamily(pathname, "selling");
             // Folding the section must not hide attention: the Offers count
             // rides on the parent while the children are away.
             const held = !mktOpen ? offersCount : 0;
             const kids = PRIMARY_NAV.filter(
               (e): e is Extract<NavEntry, { kind: "route" }> =>
-                e.kind === "route" && Boolean(e.child) && e.href !== "/marketplace"
+                e.kind === "route" && Boolean(e.child) && e.href !== "/selling"
             );
             return (
-              <div key="family-marketplace" className="railfamily">
+              <div key="family-selling" className="railfamily">
                 <div className="railfam">
                   <Link
-                    href="/marketplace"
+                    href="/selling"
                     className={cx(
                       "railrow railfam__link",
                       parentHere && "is-here",
                       !mktOpen && familyHere && !parentHere && "is-holding"
                     )}
                     aria-current={parentHere ? "page" : undefined}
-                    title={open ? undefined : "Marketplace"}
+                    title={open ? undefined : "Selling"}
                   >
                     <span className="railrow__ico" aria-hidden="true">
-                      <Icon name="market" className="h-[17px] w-[17px]" />
+                      <Icon name="sell" className="h-[17px] w-[17px]" />
                       {held > 0 && <span className="railrow__dot" />}
                     </span>
                     <span className="railrow__label flex items-center justify-between gap-2">
-                      Marketplace
+                      Selling
                       {held > 0 && (
                         <span className="chip chip--live shrink-0" aria-hidden="true">
                           {held > 9 ? "9+" : held}
@@ -130,11 +130,11 @@ function AppRail({
                     className={cx("railfam__toggle", mktOpen && "is-open")}
                     onClick={toggleMkt}
                     aria-expanded={mktOpen}
-                    aria-controls="rail-marketplace-kids"
+                    aria-controls="rail-selling-kids"
                     aria-label={
                       mktOpen
-                        ? "Collapse the Marketplace section"
-                        : "Expand the Marketplace section"
+                        ? "Collapse the Selling section"
+                        : "Expand the Selling section"
                     }
                   >
                     <Icon name="back" className="h-[13px] w-[13px]" />
@@ -145,7 +145,7 @@ function AppRail({
                     labels to declutter, so it always shows the whole family
                     (CSS overrides the fold below 1081px/collapsed). */}
                 <div
-                  id="rail-marketplace-kids"
+                  id="rail-selling-kids"
                   className={cx("railkids", !mktOpen && "is-folded")}
                 >
                   <div className="railkids__in">

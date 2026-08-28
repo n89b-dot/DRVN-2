@@ -49,14 +49,16 @@ test.describe.serial("discovery + marketplace remediation", () => {
     page,
   }) => {
     await signIn(page, seller);
-    await page.goto("/marketplace");
-    const nav = page.getByRole("navigation", { name: /marketplace sections/i });
+    // The register moved into the Selling family (§J): discovery pages carry
+    // no operational strip; sellers reach their stock from /selling.
+    await page.goto("/selling");
+    const nav = page.getByRole("navigation", { name: /selling sections/i });
     await expect(nav.getByRole("link", { name: "My Listings" })).toBeVisible();
     await expect(nav.getByRole("link", { name: /^Listings$/ })).toHaveCount(0);
     await nav.getByRole("link", { name: "My Listings" }).click();
     await expect(page).toHaveURL(/\/listings$/);
     await expect(
-      page.getByRole("navigation", { name: /marketplace sections/i }).getByRole("link", { name: "My Listings" })
+      page.getByRole("navigation", { name: /selling sections/i }).getByRole("link", { name: "My Listings" })
     ).toHaveAttribute("aria-current", "page");
 
     // Desktop rail (≥1081px) and the phone index read the same register.

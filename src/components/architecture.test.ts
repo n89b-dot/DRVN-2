@@ -36,6 +36,11 @@ const ALLOWED: { from: string; to: string; why: string }[] = [
     why: "PaymentConfirm bridges the two halves of one purchase flow.",
   },
   {
+    from: "(product)/payouts",
+    to: "(product)/settings",
+    why: "The Payouts page renders the same ledger section Settings embeds — one money view, two doors.",
+  },
+  {
     from: "(product)/settings",
     to: "(auth)",
     why: "Sign-out lives with the auth actions.",

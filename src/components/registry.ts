@@ -489,9 +489,9 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
 
   /* ---------------- navigation / search / filtering ---------------- */
   {
-    name: "MarketplaceNav",
+    name: "SellingNav",
     importPath: UI,
-    file: "src/components/ui/marketplace-nav.tsx",
+    file: "src/components/ui/selling-nav.tsx",
     layer: "pattern",
     category: "navigation",
     status: "active",

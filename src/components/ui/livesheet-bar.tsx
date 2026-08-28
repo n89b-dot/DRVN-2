@@ -9,7 +9,7 @@ import { Icon, type IconName } from "./icons";
 import {
   BAR_ROUTES,
   FAMILY_HREFS,
-  isMarketplaceFamily,
+  isSellingFamily,
   matchesFamily,
   PRIMARY_NAV,
   PUBLIC_ROUTES,
@@ -173,7 +173,7 @@ export function LivesheetBar({
           icon: "user" as const,
         },
       ];
-  const familyHere = isMarketplaceFamily(pathname);
+  const familyHere = isSellingFamily(pathname);
   const indexRouteCount = indexEntries.filter((e) => e.kind === "route").length;
 
   return (

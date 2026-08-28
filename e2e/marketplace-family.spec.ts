@@ -30,9 +30,9 @@ const listingTitle = `E2E Family Manifold ${stamp}`;
 
 let listingPath = "";
 
-/** The family subnav, wherever it is on the page. */
+/** The Selling family subnav, wherever it is on the page. */
 function familyNav(page: Page) {
-  return page.getByRole("navigation", { name: /marketplace sections/i });
+  return page.getByRole("navigation", { name: /selling sections/i });
 }
 
 test.describe.serial("Marketplace family", () => {
@@ -64,7 +64,7 @@ test.describe.serial("Marketplace family", () => {
   test("signed out: the management surfaces are gated and never advertised", async ({ page }) => {
     await page.context().clearCookies();
 
-    for (const path of ["/listings", "/offers", "/orders"]) {
+    for (const path of ["/selling", "/listings", "/offers", "/orders", "/payouts"]) {
       await page.goto(path);
       await expect(page, `${path} should require an account`).toHaveURL(/\/login/);
     }
@@ -82,20 +82,24 @@ test.describe.serial("Marketplace family", () => {
       els.map((el) => el.getAttribute("href"))
     );
     expect(hrefs).toContain("/marketplace");
-    expect(hrefs).not.toContain("/listings");
-    expect(hrefs).not.toContain("/offers");
-    expect(hrefs).not.toContain("/orders");
+    for (const surface of ["/selling", "/listings", "/offers", "/orders", "/payouts"]) {
+      expect(hrefs, `${surface} advertised while signed out`).not.toContain(surface);
+    }
   });
 
   // ---------- the family, signed in ----------
 
-  test("signed in: every family child is one interaction away, from anywhere in the family", async ({
+  test("signed in: every Selling child is one interaction away, from anywhere in the family", async ({
     page,
   }) => {
     await signIn(page, seller);
 
-    // Marketplace → Orders directly, without passing through anything.
+    // Marketplace is discovery — it carries no operational family strip.
     await page.goto("/marketplace");
+    await expect(familyNav(page)).toHaveCount(0);
+
+    // The Selling overview reaches every child directly.
+    await page.goto("/selling");
     await expect(familyNav(page)).toBeVisible();
     await familyNav(page).getByRole("link", { name: "Orders" }).click();
     await expect(page).toHaveURL(/\/orders/);
@@ -107,9 +111,11 @@ test.describe.serial("Marketplace family", () => {
     await familyNav(page).getByRole("link", { name: "My Listings" }).click();
     await expect(page).toHaveURL(/\/listings$/);
 
-    // Listings → Offers.
+    // Listings → Offers → Payouts.
     await familyNav(page).getByRole("link", { name: "Offers" }).click();
     await expect(page).toHaveURL(/\/offers/);
+    await familyNav(page).getByRole("link", { name: "Payouts" }).click();
+    await expect(page).toHaveURL(/\/payouts/);
   });
 
   test("signed in: the mobile index reaches Orders without going via Marketplace", async ({
@@ -126,7 +132,7 @@ test.describe.serial("Marketplace family", () => {
     const hrefs = await index.locator("a").evaluateAll((els) =>
       els.map((el) => el.getAttribute("href"))
     );
-    for (const href of ["/marketplace", "/listings", "/offers", "/orders"]) {
+    for (const href of ["/marketplace", "/selling", "/listings", "/offers", "/orders", "/payouts"]) {
       expect(hrefs, `${href} missing from the index`).toContain(href);
     }
 

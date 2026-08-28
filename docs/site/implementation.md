@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 43 initiatives — 13 planned · 1 in progress · 6 implemented · 15 validated · 7 deferred · 1 blocked externally
+**Progress:** 43 initiatives — 12 planned · 1 in progress · 6 implemented · 16 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -143,7 +143,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 
 ### 04 · Selling
 
-#### Selling workspace & IA — Planned
+#### Selling workspace & IA — Validated
 
 - **Brief:** J
 - **Exists today:** Seller operations are scattered: /listings, /offers, /orders (mixed with purchases), payouts inside /settings#payouts, questions inside listing pages; the marketplace family nav spans buyer and seller surfaces.
@@ -152,7 +152,8 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** Occasional sellers can find everything selling-related in one place; power sellers get an operations home instead of hopping between five routes.
 - **Approach:** New route group/section composed almost entirely from existing surfaces and registry components; nav register updated for rail + Index sheet; IA decision recorded here after Mobbin reference review.
 - **UX rules:** Do not duplicate Marketplace browsing. Mobile Index sheet must not bloat.
-- **Validation:** Not yet validated.
+- **Decisions:** IA decision: Marketplace is a plain top-level route (discovery only — the family strip left it entirely); Selling is the collapsible rail group and family — Selling overview / My Listings / Offers / Orders / Payouts. Orders stays one shared surface but homes with Selling, where its operational weight is; buyers keep reaching orders from Home and notifications. /selling composes existing capabilities only: needs-you (offers, questions, dispatch), stock tallies, ledger money, payout gating — no new browsing, no duplicated marketplace. /payouts returned from redirect-stub to a real Selling surface rendering the SAME ledger section Settings embeds (allowlisted share); configuration stays in Settings → Payments. Mobile: no bottom-nav addition — the Index sheet gained the family as a labeled group, keeping the register one tap deep without bloating it.
+- **Validation:** 14/14 family e2e + 10/10 discovery e2e + a11y suite green against the dev server after the IA change; desktop rail, family strip and mobile Index screenshotted and reviewed (1440px + 390px); typecheck/lint/unit green.
 
 #### Remove from Build → Sell this part — Validated
 

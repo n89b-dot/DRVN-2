@@ -1,38 +1,52 @@
 /**
  * The register — one description of DRVN's navigation, read by the desktop
- * rail, the mobile index and the Marketplace-family subnav.
+ * rail, the mobile index and the Selling family subnav.
  *
- * Marketplace, My Listings, Offers and Orders are one *family* (public storefront
- * → what I'm selling → what's being negotiated → what actually sold) but four
- * distinct product surfaces with their own routes, server loading and deep
- * links. The family is a grouping in the navigation, not a tab component.
+ * The IA (brief §J, decision recorded in /docs/implementation): Marketplace
+ * is where people discover and buy — one top-level surface. Selling is where
+ * sellers operate — a family of five (Overview → what I'm selling → what's
+ * being negotiated → what actually sold → where the money stands). Orders
+ * carries purchases too; it lives with Selling because that's where its
+ * operational weight is, while buyers keep reaching their orders from Home,
+ * notifications and receipts. The family is a grouping in the navigation,
+ * not a tab component.
  */
 
 import type { IconName } from "./icons";
 
 export type NavRoute = { href: string; label: string; note: string; icon: IconName };
 
-/** The Marketplace family, in transaction order. */
-export const MARKETPLACE_FAMILY: NavRoute[] = [
-  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
+/** The Selling family, in operating order. Index 0 is the family's home. */
+export const SELLING_FAMILY: NavRoute[] = [
+  { href: "/selling", label: "Selling", note: "Your shop at a glance — what needs you first", icon: "sell" },
   // "My Listings", not "Listings": the register sits beside a public
   // Marketplace full of listings, and the possessive is what tells a seller
   // this is *their* stock. The route stays /listings.
-  { href: "/listings", label: "My Listings", note: "Views, watchers and offers on what you're selling", icon: "sell" },
+  { href: "/listings", label: "My Listings", note: "Views, watchers and offers on what you're selling", icon: "box" },
   { href: "/offers", label: "Offers", note: "Offers you've received and made, and their threads", icon: "scale" },
-  { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery", icon: "box" },
+  { href: "/orders", label: "Orders", note: "Purchases and sales, tracked to delivery", icon: "gauge" },
+  { href: "/payouts", label: "Payouts", note: "What you've earned and where it stands", icon: "card" },
 ];
 
-export type FamilyKey = "marketplace" | "listings" | "offers" | "orders";
+export type FamilyKey = "selling" | "marketplace" | "listings" | "offers" | "orders" | "payouts";
 
-export const FAMILY_KEYS: FamilyKey[] = ["marketplace", "listings", "offers", "orders"];
+export const FAMILY_KEYS: FamilyKey[] = [
+  "selling",
+  "marketplace",
+  "listings",
+  "offers",
+  "orders",
+  "payouts",
+];
 
 /** Family member for a top-level href, for nav surfaces that walk the register. */
 export const FAMILY_HREFS: Record<string, FamilyKey> = {
+  "/selling": "selling",
   "/marketplace": "marketplace",
   "/listings": "listings",
   "/offers": "offers",
   "/orders": "orders",
+  "/payouts": "payouts",
 };
 
 /**
@@ -59,9 +73,14 @@ export function matchesFamily(pathname: string, key: FamilyKey): boolean {
   }
 }
 
-/** True when `pathname` sits anywhere inside the Marketplace family. */
+/** True when `pathname` sits anywhere inside the Selling family. */
+export function isSellingFamily(pathname: string): boolean {
+  return SELLING_FAMILY.some((route) => matchesFamily(pathname, FAMILY_HREFS[route.href]));
+}
+
+/** True when `pathname` is a marketplace (discovery) surface. */
 export function isMarketplaceFamily(pathname: string): boolean {
-  return FAMILY_KEYS.some((key) => matchesFamily(pathname, key));
+  return matchesFamily(pathname, "marketplace");
 }
 
 /**
@@ -76,12 +95,13 @@ export type NavEntry =
 export const PRIMARY_NAV: NavEntry[] = [
   { kind: "route", href: "/home", label: "Home", note: "What's moved since you looked", icon: "home" },
   { kind: "route", href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
+  { kind: "route", href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
   {
     kind: "group",
-    label: "Marketplace",
-    note: "Buying and selling, end to end",
+    label: "Selling",
+    note: "Your shop: stock, offers, orders, payouts",
   },
-  ...MARKETPLACE_FAMILY.map((route) => ({ kind: "route" as const, ...route, child: true })),
+  ...SELLING_FAMILY.map((route) => ({ kind: "route" as const, ...route, child: true })),
   { kind: "route", href: "/garage", label: "Garage", note: "Your cars and their builds", icon: "garage" },
   { kind: "route", href: "/messages", label: "Messages", note: "Every order and offer thread, in one list", icon: "comment" },
   { kind: "route", href: "/profile", label: "Profile", note: "How buyers and sellers see you", icon: "user" },
@@ -97,9 +117,9 @@ export const BAR_ROUTES: NavRoute[] = PRIMARY_NAV.filter(
 );
 
 /**
- * Signed-out visitors get the public surfaces only. Listings, Offers and
- * Orders are account management, not pages with a signed-out reading, so they
- * are never advertised here.
+ * Signed-out visitors get the public surfaces only. Selling surfaces are
+ * account management, not pages with a signed-out reading, so they are never
+ * advertised here.
  */
 export const PUBLIC_ROUTES: NavRoute[] = [
   { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },

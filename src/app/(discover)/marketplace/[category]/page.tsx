@@ -2,10 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { CategoryIcon, Foot, MarketplaceNav } from "@/components/ui";
+import { CategoryIcon, Foot } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
 import { getCategory } from "@/lib/marketplace/taxonomy";
-import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 import { ActiveFilters } from "../active-filters";
@@ -30,14 +29,11 @@ export default async function CategoryPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [page, offersCount] = await Promise.all([
-    fetchListings(
+  const page = await fetchListings(
       supabase,
       { ...filters, category: category.slug, subcategory: filters.subcategory },
       user?.id,
-    ),
-    user ? loadOffersNeedingAttention(supabase, user.id) : Promise.resolve(0),
-  ]);
+    );
   const hasQuery = Boolean(
     filters.q ||
     filters.condition ||
@@ -49,9 +45,6 @@ export default async function CategoryPage({
 
   return (
     <div className="wrap">
-      {user && (
-        <MarketplaceNav current="marketplace" offersCount={offersCount} />
-      )}
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">

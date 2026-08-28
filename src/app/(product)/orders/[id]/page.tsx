@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Alert, Foot, MarketplaceNav, Media, ObjectRow, RatingStars } from "@/components/ui";
+import { Alert, Foot, SellingNav, Media, ObjectRow, RatingStars } from "@/components/ui";
 import {
   ConditionSummary,
   type ConditionSnapshot,
@@ -232,7 +232,7 @@ export default async function OrderDetailPage({
       {/* An order sheet is still inside Orders — the family nav says so, and
           the breadcrumb underneath names the way back to the list. */}
 
-      <MarketplaceNav current="orders" offersCount={offersCount} />
+      <SellingNav current="orders" offersCount={offersCount} />
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           <Link href="/orders" className="jumplink">

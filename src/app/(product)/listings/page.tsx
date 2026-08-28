@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Alert, EmptyState, Foot, MarketplaceNav, Pagination, TileHead } from "@/components/ui";
+import { Alert, EmptyState, Foot, SellingNav, Pagination, TileHead } from "@/components/ui";
 import type {
   SellerListingStat,
   SellerRegisterTally,
@@ -271,7 +271,7 @@ export default async function SellerListingsPage({
 
   return (
     <div className="wrap">
-      <MarketplaceNav current="listings" offersCount={offersCount} />
+      <SellingNav current="listings" offersCount={offersCount} />
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">My Listings · your inventory</span>
         <h1>

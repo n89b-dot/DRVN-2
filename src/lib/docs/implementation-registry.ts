@@ -357,7 +357,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "selling-workspace",
     name: "Selling workspace & IA",
     group: "selling",
-    status: "planned",
+    status: "validated",
     brief: "J",
     existsToday:
       "Seller operations are scattered: /listings, /offers, /orders (mixed with purchases), payouts inside /settings#payouts, questions inside listing pages; the marketplace family nav spans buyer and seller surfaces.",
@@ -369,7 +369,14 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "New route group/section composed almost entirely from existing surfaces and registry components; nav register updated for rail + Index sheet; IA decision recorded here after Mobbin reference review.",
     uxRules: ["Do not duplicate Marketplace browsing.", "Mobile Index sheet must not bloat."],
-    validation: "Not yet validated.",
+    decisions: [
+      "IA decision: Marketplace is a plain top-level route (discovery only — the family strip left it entirely); Selling is the collapsible rail group and family — Selling overview / My Listings / Offers / Orders / Payouts. Orders stays one shared surface but homes with Selling, where its operational weight is; buyers keep reaching orders from Home and notifications.",
+      "/selling composes existing capabilities only: needs-you (offers, questions, dispatch), stock tallies, ledger money, payout gating — no new browsing, no duplicated marketplace.",
+      "/payouts returned from redirect-stub to a real Selling surface rendering the SAME ledger section Settings embeds (allowlisted share); configuration stays in Settings → Payments.",
+      "Mobile: no bottom-nav addition — the Index sheet gained the family as a labeled group, keeping the register one tap deep without bloating it.",
+    ],
+    validation:
+      "14/14 family e2e + 10/10 discovery e2e + a11y suite green against the dev server after the IA change; desktop rail, family strip and mobile Index screenshotted and reviewed (1440px + 390px); typecheck/lint/unit green.",
   },
   {
     id: "remove-to-sell",

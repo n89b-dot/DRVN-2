@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav, Pagination, TileHead } from "@/components/ui";
+import { Foot, SellingNav, Pagination, TileHead } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -253,7 +253,7 @@ export default async function OffersPage({
 
   return (
     <div className="wrap">
-      <MarketplaceNav current="offers" offersCount={attentionCount} />
+      <SellingNav current="offers" offersCount={attentionCount} />
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Negotiations

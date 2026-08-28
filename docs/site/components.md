@@ -219,13 +219,13 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ListingCard` | Product pattern | `@/components/ui` | THE listing card — canonical marketplace/browse representation (delegates to ListingMosaicCell). | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
 | `ListingMosaicCell` | Product pattern | `@/components/ui` | A listing as a mosaic card (price, shipping, provenance, seller trust). | Via ListingCard. |
 | `ListingRow` | Product pattern | `@/components/commerce` | A seller's listing as a dense ledger row — cover, title, price, Live/Sold chip. — `.order` | Seller-scoped lists (profile shopfront, car sheet parts). *Not for:* Marketplace browsing — that's ListingCard. |
-| `MarketplaceNav` | Product pattern | `@/components/ui` | The marketplace-family console nav. | Marketplace-family pages. |
 | `MasonryFeed` | Product pattern | `@/components/ui` | The Explore wall — FeedMosaicCells in a dense Mosaic, with its empty state. | Mixed-kind feed walls. |
 | `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. — `.mosaic` | Container for MosaicCell families on browse surfaces. |
 | `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind, media, title, value, provenance, trust, engagement slots. — `.mcell` | Underlying anatomy for every card; compose, don't fork. |
 | `OrderPipeline` | Product pattern | `@/components/commerce` | The order lifecycle as a `.pipe` stage rail, terminal states included. — `.pipe` | Order rows and order detail. |
 | `PaymentModeNotice` | Product pattern | `@/components/ui` | Test-mode payments banner. | Payment surfaces while Stripe runs in test mode. |
 | `ProfileHeader` | Product pattern | `@/components/ui` | Identity block — avatar plate, name, handle, tagline, website, action slot. | Profile and car sheet heads. |
+| `SellingNav` | Product pattern | `@/components/ui` | The marketplace-family console nav. | Marketplace-family pages. |
 | `StatusChip` | Product pattern | `@/components/commerce` | Order/offer lifecycle state as a toned chip (ok / live / spent). — `.chip--ok/--live/--spent` | Orders, offers, and anywhere an order-family status appears. *Not for:* Non-lifecycle chips — use `.chip` variants directly. |
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity, pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |

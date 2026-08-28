@@ -3,16 +3,17 @@ export { LivesheetBar, Foot } from "./livesheet-bar";
 export { AppShell } from "./app-shell";
 export {
   BAR_ROUTES,
-  MARKETPLACE_FAMILY,
+  SELLING_FAMILY,
   PRIMARY_NAV,
   PUBLIC_ROUTES,
   isMarketplaceFamily,
+  isSellingFamily,
   matchesFamily,
   type FamilyKey,
   type NavEntry,
   type NavRoute,
 } from "./nav-routes";
-export { MarketplaceNav } from "./marketplace-nav";
+export { SellingNav } from "./selling-nav";
 export { CategoryIcon } from "./category-icon";
 export { ListingCard, type ListingCardData, type ListingCardSeller } from "./listing-card";
 export {

@@ -3,23 +3,31 @@ import { describe, expect, it } from "vitest";
 import {
   BAR_ROUTES,
   FAMILY_KEYS,
+  SELLING_FAMILY,
   isMarketplaceFamily,
-  MARKETPLACE_FAMILY,
+  isSellingFamily,
   matchesFamily,
   PRIMARY_NAV,
   PUBLIC_ROUTES,
 } from "./nav-routes";
 
-describe("Marketplace family membership", () => {
-  it("puts every family route in the family", () => {
-    for (const route of MARKETPLACE_FAMILY) {
-      expect(isMarketplaceFamily(route.href)).toBe(true);
+describe("family membership", () => {
+  it("puts every Selling route in the Selling family", () => {
+    for (const route of SELLING_FAMILY) {
+      expect(isSellingFamily(route.href), route.href).toBe(true);
     }
+  });
+
+  it("keeps Marketplace out of Selling, and vice versa", () => {
+    expect(isSellingFamily("/marketplace")).toBe(false);
+    expect(isMarketplaceFamily("/selling")).toBe(false);
+    expect(isMarketplaceFamily("/marketplace")).toBe(true);
   });
 
   it("keeps non-family routes out", () => {
     for (const path of ["/home", "/explore", "/garage", "/messages", "/settings", "/sell", "/cart"]) {
-      expect(isMarketplaceFamily(path)).toBe(false);
+      expect(isSellingFamily(path), path).toBe(false);
+      expect(isMarketplaceFamily(path), path).toBe(false);
     }
   });
 
@@ -48,6 +56,7 @@ describe("Marketplace family membership", () => {
 
   it("never matches two family members at once", () => {
     const paths = [
+      "/selling",
       "/marketplace",
       "/marketplace/suspension",
       "/listings",
@@ -57,6 +66,7 @@ describe("Marketplace family membership", () => {
       "/offers/abc",
       "/orders",
       "/orders/abc",
+      "/payouts",
     ];
     for (const path of paths) {
       const hits = FAMILY_KEYS.filter((key) => matchesFamily(path, key));
@@ -67,15 +77,18 @@ describe("Marketplace family membership", () => {
 
 describe("the register", () => {
   it("calls the seller's register 'My Listings' so it can't be read as the public Marketplace", () => {
-    const listings = MARKETPLACE_FAMILY.find((r) => r.href === "/listings");
+    const listings = SELLING_FAMILY.find((r) => r.href === "/listings");
     expect(listings?.label).toBe("My Listings");
-    // The public storefront keeps its plain name — the possessive is the distinction.
-    expect(MARKETPLACE_FAMILY.find((r) => r.href === "/marketplace")?.label).toBe("Marketplace");
   });
 
-  it("exposes the family's children directly, not behind Marketplace", () => {
+  it("keeps Marketplace a plain top-level route — discovery, not operations", () => {
+    const market = PRIMARY_NAV.find((e) => e.kind === "route" && e.href === "/marketplace");
+    expect(market && "child" in market ? market.child : undefined).toBeFalsy();
+  });
+
+  it("exposes the Selling family's children directly, not behind the group", () => {
     const hrefs = BAR_ROUTES.map((r) => r.href);
-    for (const route of MARKETPLACE_FAMILY) {
+    for (const route of SELLING_FAMILY) {
       expect(hrefs).toContain(route.href);
     }
   });
@@ -83,18 +96,18 @@ describe("the register", () => {
   it("heads the family with a non-link group so no child costs a second click", () => {
     const groupIndex = PRIMARY_NAV.findIndex((e) => e.kind === "group");
     expect(groupIndex).toBeGreaterThan(-1);
-    const children = PRIMARY_NAV.slice(groupIndex + 1, groupIndex + 1 + MARKETPLACE_FAMILY.length);
+    const children = PRIMARY_NAV.slice(groupIndex + 1, groupIndex + 1 + SELLING_FAMILY.length);
     expect(children.map((c) => (c.kind === "route" ? c.href : null))).toEqual(
-      MARKETPLACE_FAMILY.map((r) => r.href)
+      SELLING_FAMILY.map((r) => r.href)
     );
     expect(children.every((c) => c.kind === "route" && c.child)).toBe(true);
   });
 
   it("never advertises private management surfaces to signed-out visitors", () => {
     const hrefs = PUBLIC_ROUTES.map((r) => r.href);
-    expect(hrefs).not.toContain("/listings");
-    expect(hrefs).not.toContain("/offers");
-    expect(hrefs).not.toContain("/orders");
+    for (const surface of ["/selling", "/listings", "/offers", "/orders", "/payouts"]) {
+      expect(hrefs).not.toContain(surface);
+    }
     expect(hrefs).toContain("/marketplace");
   });
 });

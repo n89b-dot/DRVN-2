@@ -1,9 +1,8 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, MarketplaceNav } from "@/components/ui";
+import { Foot } from "@/components/ui";
 import { fetchListings, type ListingFilters } from "@/lib/marketplace/query";
-import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 
 import { ActiveFilters } from "./active-filters";
@@ -32,12 +31,7 @@ export default async function MarketplacePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // The family nav is signed-in navigation, so the badge only ever costs a
-  // query for someone who can see it.
-  const [page, offersCount] = await Promise.all([
-    fetchListings(supabase, filters, user?.id),
-    user ? loadOffersNeedingAttention(supabase, user.id) : Promise.resolve(0),
-  ]);
+  const page = await fetchListings(supabase, filters, user?.id);
   const hasQuery = Boolean(
     filters.q ||
     filters.condition ||
@@ -49,9 +43,6 @@ export default async function MarketplacePage({
 
   return (
     <div className="wrap">
-      {user && (
-        <MarketplaceNav current="marketplace" offersCount={offersCount} />
-      )}
       <Rv as="header" className="pagehead pagehead--task">
         {/* No sell CTA here — this surface is for buyers, and on compact the
             button pushed the inventory below the fold. Selling lives in the
