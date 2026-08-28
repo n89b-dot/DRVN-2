@@ -260,27 +260,28 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     }
   });
 
-  test("garage: two complete management rows inside the first viewport", async ({ page }) => {
+  // The garage rebuild (Aug 2026) replaced dense management rows with build
+  // sheets, folded on phones. SYS-04's intent — every car manageable, tools
+  // reachable without hunting — now means: all three sheets render, and the
+  // first sheet's full three-tool rail (44px targets) sits inside the first
+  // viewport. The sheet anatomy itself is covered in mobile-layout.spec.
+  test("garage: first sheet's management rail inside the first viewport", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/garage");
-    const rows = page.locator(".vehicle--manage");
-    await expect(rows).toHaveCount(3);
+    const sheets = page.locator(".gsheet");
+    await expect(sheets).toHaveCount(3);
 
-    // SYS-04 acceptance: after the compact header, at least two complete
-    // rows — identity, state and Manage — are visible without scrolling.
-    const second = await rows.nth(1).boundingBox();
-    expect(second!.y + second!.height, "second management row must fit the viewport").toBeLessThan(
-      VIEWPORTS.phone.height
-    );
-    for (const i of [0, 1]) {
-      const manage = rows.nth(i).getByRole("link", { name: /manage/i });
-      await expect(manage).toBeVisible();
-      expect((await manage.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    const rail = sheets.first().locator(".gsheet__rail a");
+    await expect(rail).toHaveCount(3);
+    for (const tool of await rail.all()) {
+      await expect(tool).toBeVisible();
+      const box = await tool.boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(
+        box!.y + box!.height,
+        "first sheet's tools must fit the first viewport"
+      ).toBeLessThan(VIEWPORTS.phone.height);
     }
-    // Thumbnail scale: management row, not a spread and not an order thumb.
-    const img = await rows.first().locator(".vehicle__img").boundingBox();
-    expect(img!.width).toBeGreaterThanOrEqual(104);
-    expect(img!.width).toBeLessThanOrEqual(140);
   });
 
   test("buyer: offer lands; seller sees who acts next everywhere", async ({ page }) => {
@@ -300,7 +301,7 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     // Seller: Home leads with the attention stack (SYS-10)…
     await signIn(page, seller);
     await page.goto("/home");
-    const needsYou = page.getByText(/needs you/i).first();
+    const needsYou = page.locator("main").getByText(/needs you/i).first();
     await expect(needsYou).toBeVisible();
     const offerRow = page.getByRole("link", { name: /offer.*your reply|offers? need/i }).first();
     await expect(offerRow).toBeVisible();
@@ -308,7 +309,7 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
 
     // …the offers index flags the row…
     await page.goto("/offers");
-    await expect(page.getByText(/needs you/i).first()).toBeVisible();
+    await expect(page.locator("main").getByText(/needs you/i).first()).toBeVisible();
 
     // …and the thread leads with the decision, above the conversation.
     await page.locator('a[href^="/offers/"]', { hasText: partB }).first().click();

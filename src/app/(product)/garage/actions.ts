@@ -607,6 +607,17 @@ export async function createRichActivityPost(
         .single();
   if (error) return { error: error.message };
 
+  // Belt to the draft-conversion braces: an autosave that raced the publish
+  // can land a fresh draft after the lookup above — sweep it so "one draft
+  // per car" holds and the list never shows the post twice.
+  await supabase
+    .from("activity_posts")
+    .delete()
+    .eq("car_id", carId)
+    .eq("author_id", user.id)
+    .is("published_at", null)
+    .neq("id", post.id);
+
   // Mirror gallery URLs into activity_images so feeds/profile strips get
   // covers; finalize EVERY referenced media url (before/after included)
   // against the staged-upload GC.

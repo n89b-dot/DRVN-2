@@ -60,11 +60,11 @@ test.describe.serial("golden path", () => {
     await page.goto("/garage");
     await page.getByRole("button", { name: /add a car|add car/i }).first().click();
     const addCarDialog = page.getByRole("dialog");
-    await addCarDialog.getByLabel(/name/i).first().fill(carName);
-    // "Add the car" (unanchored: the bracket decorations are part of the
-    // accessible name), NOT bare /add/ — the dialog's auto-appended
-    // "Close Add a car" button matches that too.
-    await addCarDialog.getByRole("button", { name: /add the car/i }).click();
+    // The picker is the primary flow (0041); tests name their cars, so take
+    // the manual fallback — always visible at the dialog's foot.
+    await addCarDialog.getByRole("button", { name: /enter it manually/i }).last().click();
+    await addCarDialog.getByLabel(/^name/i).first().fill(carName);
+    await addCarDialog.getByRole("button", { name: /add to garage/i }).click();
 
     // Lands on the car's edit page.
     await expect(page).toHaveURL(/\/garage\/[\w-]+\/edit/);
@@ -273,7 +273,9 @@ test.describe.serial("golden path", () => {
       "aria-selected",
       "true"
     );
-    await expect(page.getByLabel(/out of 5/i).first()).toBeVisible();
+    // RatingStars announces the score through visually-hidden text
+    // ("N out of 5 stars"), not an aria-label.
+    await expect(page.getByText(/out of 5 stars/i).first()).toBeAttached();
   });
 });
 

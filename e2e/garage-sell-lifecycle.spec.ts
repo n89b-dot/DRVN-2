@@ -45,36 +45,45 @@ async function signInFresh(page: import("@playwright/test").Page) {
   await page.waitForURL(/\/home/);
 }
 
-test("activity composer: closed at rest, counted title, closes on publish", async ({ page }) => {
+test("build updates: link-only section, composer publishes to the public post", async ({
+  page,
+}) => {
   await signInFresh(page);
   await page.goto(editPath);
 
   const section = page.locator("section", { has: page.getByText("Build updates") });
 
-  // At rest: invitation button, no form, empty hint.
-  await expect(section.getByRole("button", { name: /post an update/i })).toBeVisible();
+  // At rest: no inline form — one link into the Build Story Composer (§M3),
+  // plus the empty hint.
+  await expect(section.getByRole("link", { name: /post an update/i })).toBeVisible();
   await expect(section.getByLabel(/^title$/i)).toHaveCount(0);
   await expect(section.getByText(/nothing posted yet/i)).toBeVisible();
 
-  // Open: title focused, counter live.
-  await section.getByRole("button", { name: /post an update/i }).click();
-  const title = section.getByLabel(/^title$/i);
-  await expect(title).toBeFocused();
-  await expect(section.getByText("0 of 160")).toBeVisible();
-  await title.fill("Coilovers fitted");
-  await expect(section.getByText(`${"Coilovers fitted".length} of 160`)).toBeVisible();
+  // The link opens the composer for this car.
+  await section.getByRole("link", { name: /post an update/i }).click();
+  await expect(page).toHaveURL(/\/garage\/[\w-]+\/update\/new/);
 
-  // Cancel collapses without residue, reopen is pristine.
-  await section.getByRole("button", { name: /cancel/i }).click();
-  await expect(section.getByLabel(/^title$/i)).toHaveCount(0);
-  await section.getByRole("button", { name: /post an update/i }).click();
-  await expect(section.getByText("0 of 160")).toBeVisible();
+  // A one-liner stays a one-liner: title, a sentence, publish.
+  const title = page.getByLabel(/^title$/i);
+  await title.fill("Downpipe + tune installed");
+  const body = page.getByLabel(/update body/i);
+  await body.click();
+  await page.keyboard.type("Cat-back on, tune flashed — pulls clean to redline.");
+  await expect(page.getByRole("button", { name: /^\[?\s*publish\s*\]?$/i })).toBeEnabled();
+  await page.getByRole("button", { name: /^\[?\s*publish\s*\]?$/i }).click();
 
-  // Publish: the composer closes itself; the list gaining the row is the receipt.
-  await section.getByLabel(/^title$/i).fill("Downpipe + tune installed");
-  await section.getByRole("button", { name: /publish update/i }).click();
-  await expect(section.getByLabel(/^title$/i)).toHaveCount(0);
-  await expect(section.getByRole("link", { name: /downpipe \+ tune installed/i })).toBeVisible();
+  // Publishing lands on the public post.
+  await expect(page).toHaveURL(/\/cars\/[\w-]+\/activity\/[\w-]+/);
+  await expect(
+    page.getByRole("heading", { name: /downpipe \+ tune installed/i })
+  ).toBeVisible();
+
+  // Back on the editor, the section filed the post — exactly once (a racing
+  // autosave must not leave a duplicate draft) — and dropped the hint.
+  await page.goto(editPath);
+  const filed = section.getByRole("link", { name: /downpipe \+ tune installed/i });
+  await expect(filed).toHaveCount(1);
+  await expect(filed).toBeVisible();
   await expect(section.getByText(/nothing posted yet/i)).toHaveCount(0);
 });
 

@@ -129,6 +129,11 @@ export function BuildStoryComposer({
   // Latest title/draft-action for the debounced autosave closure.
   const titleRef = useRef(title);
   const draftActionRef = useRef(draftAction);
+  // Publishing wins over the debounced autosave: the timer callback checks
+  // this ref so a pending save can't land after the post and leave a
+  // duplicate draft behind. Synced (and the timer cleared) below, once
+  // useActionState provides the pending flag.
+  const publishingRef = useRef(false);
   useEffect(() => {
     titleRef.current = title;
     draftActionRef.current = draftAction;
@@ -259,6 +264,9 @@ export function BuildStoryComposer({
         form.set("title", titleRef.current);
         form.set("blocks", JSON.stringify(docToBlocks(editor.getJSON() as PmDoc)));
         setSaveState("saving");
+        // A publish may have started while this timer was pending — saving
+        // now would resurrect the content as a duplicate draft.
+        if (publishingRef.current) return;
         const result = draftActionRef.current
           ? await draftActionRef.current({}, form)
           : { error: "no draft action" };
@@ -287,6 +295,11 @@ export function BuildStoryComposer({
     publishAction,
     {},
   );
+  useEffect(() => {
+    publishingRef.current = publishing;
+    if (publishing && saveTimer.current) clearTimeout(saveTimer.current);
+  }, [publishing]);
+
   const noopDraft: ComposerServerAction = async () => ({});
   const [draftState, draftFormAction, draftPending] = useActionState<ActionState, FormData>(
     draftAction ?? noopDraft,
