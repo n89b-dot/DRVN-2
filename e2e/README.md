@@ -119,3 +119,24 @@ the test `skip()`s with a reason rather than failing.
 ```bash
 E2E_BASE_URL=http://localhost:3005 npx playwright test e2e/mobile-remediation.spec.ts
 ```
+
+## Transaction-completion flows (`transaction-completion.spec.ts`)
+
+The §44 golden paths — DRVN Shipping rates→label→webhook delivery (A), local
+pickup with the Pickup Pass (C), partial refund (D), and return-for-refund
+(E); manual shipping (B) is the original golden path. They need BOTH stub
+providers plus the shipping flag, so run them against a stub `next start`
+(the dev directory's one-dev-server rule blocks Playwright's own `next dev`
+while the launchd server is running):
+
+```bash
+NEXT_DIST_DIR=.next-check npm run build
+NEXT_DIST_DIR=.next-check PAYMENTS_MODE=stub PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true \
+  FLAG_INTEGRATED_SHIPPING_V1=true SHIPPING_MODE=stub SHIPPING_ALLOW_STUB_IN_PRODUCTION=true \
+  EASYPOST_WEBHOOK_SECRET=e2e-webhook-secret npx next start -p 3006 &
+E2E_BASE_URL=http://localhost:3006 npx playwright test e2e/transaction-completion.spec.ts
+```
+
+Flow A drives the order to `delivered` by POSTing a tracker event to
+`/api/shipping/easypost` signed with `EASYPOST_WEBHOOK_SECRET` — the same
+HMAC door EasyPost uses, so the webhook path is exercised too.
