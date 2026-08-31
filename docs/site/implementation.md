@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 44 initiatives — 7 implemented · 29 validated · 7 deferred · 1 blocked externally
+**Progress:** 50 initiatives — 8 implemented · 34 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -179,6 +179,76 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Decisions:** Crawlee/metascraper not adopted: every import is exactly one user-supplied page fetch, so a hardened undici fetcher + cheerio adapters cover it without a crawler framework's queue machinery (matches the no-Redis/no-PGMQ posture). Facebook is public_url, not paste_only: the attempt is user-directed, single-page, logged-out, with hard no-bypass boundaries; viability is measured by the facebook_outcome analytics aggregate. No screenshot import — text/URL paths only, per product direction. Confidence scores dropped from the old spec in favor of field-specific review issues.
 - **Validation:** 89 unit tests (SSRF matrix, fixture-driven adapters, non-invention validation, heuristic extractor, policy/config); import_guard.sql (8 assertions) green against the dev project; migration applied twice; e2e flow spec covering paste import, review and draft-save.
 - **Docs:** docs/listing-importer-spec.md, docs/site/listing-import.md
+
+#### Immutable commercial sale snapshot — Validated
+
+- **Brief:** TX §6
+- **Exists today:** order_items froze title/price/shipping plus the 0024 condition snapshot; description, category, part numbers, fitment, source car, seller identity and the photo gallery all resolved against the live listing — which the seller can edit or delete after the sale.
+- **Changing:** Migration 0049: order_items.commercial_snapshot (versioned jsonb, NOT NULL) frozen by BEFORE INSERT trigger from the listing/fitment/part-number/source-car/seller rows, plus order_item_snapshot_images (gallery frozen row-per-photo). DB-level immutability guards; media GC treats snapshot images as references; the order page's 'As purchased' reads snapshot data only.
+- **Surfaces:** `supabase/migrations/0049_commercial_snapshot.sql`, `src/features/commerce/snapshot.ts`, `src/app/(product)/orders/[id]/page.tsx`, `src/lib/media-lifecycle.ts`
+- **User benefit:** A dispute never depends on reconstructing historical truth: buyer and seller can both prove exactly what was represented at purchase, even after the listing changes or disappears.
+- **Approach:** Same trigger pattern as 0024 so every SQL order-creation path is covered without redefining the RPCs; snapshot content is built entirely server-side and cannot be forged or edited (42501 column guards, verified by supabase/tests/snapshot_guard.sql).
+- **Decisions:** Versioned jsonb (snapshot_version) rather than accreting snapshot columns; v1 shape documented by the reader in src/features/commerce/snapshot.ts. Pre-0049 rows were backfilled from the live listing and flagged backfilled (or degraded when the listing was gone) — honest about being post-purchase content. listing_id stays unfrozen on order_items so the FK's ON DELETE SET NULL keeps working; everything evidential lives in the snapshot instead. No addresses, phone numbers or payment references in the snapshot — evidence of representation, not private fulfilment data.
+- **Validation:** snapshot_guard.sql green against the project (edit/delete everything post-sale → frozen record byte-identical; UPDATE forgeries refused); reader unit tests; full vitest suite green; 0049 applied twice (idempotent).
+- **Docs:** supabase/MIGRATIONS.md
+
+#### Platform fee on goods + buyer-paid shipping — Validated
+
+- **Brief:** TX §7
+- **Exists today:** The 10% fee was computed on the merchandise subtotal only, hardcoded in purchase_begin (0007) and offer_accept_begin (0034) — sellers could shrink DRVN's fee by pricing value into shipping.
+- **Changing:** Migration 0050 restates both RPCs with the fee basis as subtotal + shipping; the TS mirror, cart/checkout estimates and the /fees page follow. Historical orders keep their stored platform_fee_cents everywhere.
+- **Surfaces:** `supabase/migrations/0050_fee_includes_shipping.sql`, `src/lib/payments/provider.ts`, `src/lib/checkout-data.ts`, `src/app/(legal)/fees/page.tsx`
+- **User benefit:** The fee is split-proof: the same buyer total always produces the same fee, and the fee page shows exactly that arithmetic.
+- **Approach:** Authoritative computation stays in SQL; the ledger's null-fee fallback deliberately keeps the goods-only basis because every such row was charged under it — the ledger reports what was charged, never what today's rule would charge.
+- **Validation:** 0050 self-checks assert the new basis via pg_get_functiondef; snapshot_guard.sql proves fee equality across opposite price/shipping splits of the same total; fee unit tests updated with the brief's $300+$23 worked example.
+- **Docs:** src/app/(legal)/fees/page.tsx, supabase/MIGRATIONS.md
+
+#### DRVN Shipping — rates, labels, tracking — Implemented
+
+- **Brief:** TX §8-§19
+- **Exists today:** Shipping was one flat seller-set number and a client-trusted collection checkbox; tracking was two free-text columns on orders with no carrier feed.
+- **Changing:** A DRVN-owned shipping domain: private seller fulfillment profiles (0051, Settings → Shipping, address-verified), a provider seam (EasyPost via plain fetch + a deterministic stub for dev/e2e, gated by FLAG_INTEGRATED_SHIPPING_V1), shipments/shipment_items/shipment_events + the signed seller_adjustments ledger (0052), listing shipping modes with seller-declared parcels and rated checkout over server-held quotes (0053), seller label buy/void with idempotent adjustments, an HMAC-verified EasyPost webhook that drives shipment and order state, and payout math that nets label costs (transfer worker + ledger).
+- **Surfaces:** `src/lib/shipping/`, `src/features/commerce/{fulfillment,checkout-shipping,shipping-quote-actions,fulfillment-actions}.ts`, `src/app/api/shipping/easypost/route.ts`, `src/app/(discover)/checkout/checkout-steps.tsx`, `src/app/(product)/orders/[id]/shipping-controls.tsx`, `supabase/migrations/0051-0053`
+- **User benefit:** A buyer sees live carrier rates for their address and pays exactly that; the seller gets a one-click label whose cost transparently nets out of their payout; tracking moves the order without anyone clicking.
+- **Approach:** Nothing money-shaped trusts the client: quotes live server-side (deny-all RLS) keyed to a destination fingerprint, purchase_begin takes server-validated overrides, the fee basis (0050) includes quoted shipping automatically, and the DB guards shipment transitions and one-live-shipment-per-item.
+- **Depends on:** commercial-snapshot, fee-includes-shipping
+- **Decisions:** One listing = one parcel (§12) — no cartonization. Shipping fails DISABLED, not closed: a missing EasyPost key in production quietly disables DRVN Shipping; seller-arranged always works. Offers are blocked on DRVN-Shipping listings for now: offers freeze money at accept, rated shipping prices at checkout — recorded as the §15 gap to close with offer-time rating. labels are seller-visible only: shipments.label_reference is excluded from the client column grant; provider ids are opaque so EndShipper→Forge stays a provider-file change (§10).
+- **Validation:** 13 shipping unit tests (mode resolution, EasyPost mappers, stub determinism); guard behaviour in 0052/0053 self-checks; full vitest + production build green. Real EasyPost test-mode calls still to be exercised before production postage (§10 checklist in the runbook).
+- **Docs:** supabase/MIGRATIONS.md, .env.example
+
+#### Provable local pickup — Validated
+
+- **Brief:** TX §20-§21
+- **Exists today:** Collection was an honor system: is_collection came from a client checkbox and nothing proved a handoff ever happened.
+- **Changing:** 0054: seller marks Ready for pickup; buyer opens a rotating single-use Pickup Pass (QR encoding a seller-side redeem URL + six-digit fallback, hashes only in the DB, 1h TTL, 10-attempt lockout); pickup_redeem() burns it atomically and moves the order into the same delivered/clearing path as shipped orders. The 0053 guard separately refuses is_collection unless every item's frozen snapshot offered pickup.
+- **Surfaces:** `supabase/migrations/0054_pickup_confirmations.sql`, `src/features/commerce/pickup-actions.ts`, `src/app/(product)/orders/[id]/pickup-controls.tsx`, `src/app/(product)/orders/[id]/pickup/page.tsx`
+- **User benefit:** A local handoff has objective proof for both sides — no more 'never collected' disputes — and payout clearing starts the moment the part changes hands.
+- **Approach:** No reusable plaintext secrets (§21): the pass rotates on every show, only salted hashes persist, and the buyer's Mark received stays as the fallback path.
+- **Depends on:** commercial-snapshot
+- **Validation:** return_guard.sql proves seller-only redemption, attempt counting, single-use, and order delivery against the live project; nextAction unit tests cover the handshake wording; full suite green.
+
+#### Returns / RMA domain — Validated
+
+- **Brief:** TX §22-§31
+- **Exists today:** Dispute resolution was binary — full refund or argue — with no way to get the item back before money moved, and the day-10 auto-refund could fire while a part was physically in transit back.
+- **Changing:** 0055: an item-aware RMA domain (returns + return_items, guarded 11-state lifecycle, one live RMA per unit) with deadlines frozen on the row (ship within 7 days or expire; 48h seller inspection or the agreed refund proceeds automatically). Sellers resolve disputes three ways (partial refund keep, full refund keep, return-then-refund); shops additionally take policy returns judged against the SNAPSHOT's frozen policy. DRVN return labels for seller-caused returns land on the seller's adjustment ledger; return tracking drives the RMA via the same webhook path; completion refunds through the 0026 engine (initiator return:<id>), and an active RMA pauses the dispute SLA clock.
+- **Surfaces:** `supabase/migrations/0055_returns.sql`, `src/features/commerce/{returns,return-actions,shop-actions}.ts`, `src/app/(product)/orders/[id]/return-controls.tsx`, `src/lib/payments/dispute-sla.ts`, `src/app/api/jobs/transfers/route.ts`
+- **User benefit:** An item can travel back before a refund when it should; ordinary returns resolve on timers without founder intervention; a contested returned box goes to human review before any money moves.
+- **Approach:** The Return domain decides when/how much, the refund engine moves money — no provider calls in return code. Escalation reopens the order's existing ops case (§29), never a new queue. Entitlement math is pure and unit-tested (§31): seller-caused returns include the item's frozen shipping share, buyer-preference returns don't.
+- **Depends on:** integrated-shipping, commercial-snapshot
+- **Validation:** return_guard.sql green against the project (illegal transitions refused, moving returns can't expire, one live RMA per unit); 7 unit tests on entitlement + lifecycle map incl. no-refund-before-receipt; timers wired into the jobs pass; full suite + build green.
+
+#### Lightweight shop profiles — Validated
+
+- **Brief:** TX §34-§38
+- **Exists today:** profiles.profile_type = 'user'|'shop' existed since 0001 (guarded from self-escalation by 0017) but nothing used it — no shop features, no verification concept, no return policies.
+- **Changing:** 0056: shop_profiles one-to-one with profiles (admin-granted verification, returns_accepted + 14/30/60-day window). Controlled server-side conversion in Settings → Shop; the storefront opens on For Sale with a Shop/Verified-shop eyebrow; the snapshot freezes the policy + verified state into every purchase; buyers get the §24B preference-return flow judged against that frozen policy.
+- **Surfaces:** `supabase/migrations/0056_shop_profiles.sql`, `src/features/commerce/shop-actions.ts`, `src/app/(product)/settings/shop-section.tsx`, `src/app/(discover)/u/[username]/page.tsx`
+- **User benefit:** A business runs a recognizable storefront on the same account it uses socially — and a shop tightening its policy tomorrow can never strip a right yesterday's buyer bought with.
+- **Approach:** Shops extend profiles; nothing is duplicated. Verification is manual for MVP: granted service-role/SQL like admin_users, never self-declared — an unverified shop is never rendered verified.
+- **Depends on:** commercial-snapshot, returns-rma
+- **Decisions:** Deliberately NOT built (§38): employees/roles, inventory, POS, CRM, wholesale, fulfillment routing.
+- **Validation:** 0056 self-checks (no client write policy; snapshot freezes the policy; profiles guard intact); frozen-policy reader covered by snapshot unit tests; full suite + build green.
 
 ### 05 · Build Story Composer
 

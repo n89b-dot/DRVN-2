@@ -71,29 +71,43 @@ is reserved for dimension and leader lines.
 
 ## 5. Motion
 
+The full motion language (philosophy, Motion for React vs CSS boundary,
+springs, recipes, reduced motion) lives in **[motion.md](motion.md)** /
+`/docs/motion`. Summary: **Motion for React** (`motion` package, foundation
+in `src/lib/motion`) drives behavioral and structural animation — presence,
+expand/collapse, orchestration, gestures — while **CSS keeps** cosmetic
+transitions (hover color, shimmer, pulses, the `.is-in` draw cascade). Both
+share one timing vocabulary:
+
 | Token | Value | Used for |
 | --- | --- | --- |
-| `--spring` | `cubic-bezier(0.32, 0.72, 0, 1)` | everything that moves |
-| `--t-fast` | 160ms | color/background/press |
-| `--t-move` | 380ms | tiles, sheets, orders, toast travel |
-| `--t-draw` | 650ms | rules drawing themselves in |
+| `--spring` / `ease` | `cubic-bezier(0.32, 0.72, 0, 1)` | everything duration-based that moves |
+| `--t-fast` / `durations.fast` | 160ms | color/background/press |
+| `--t-standard` / `durations.standard` | 240ms | default fades, small state swaps |
+| `--t-move` / `durations.move` | 380ms | tiles, sheets, orders, toast travel |
+| `--t-draw` / `durations.draw` | 650ms | rules drawing themselves in |
+| `springs.*` | snappy / responsive / spatial / gentle | Motion spring presets (see motion.md §4) |
 | stagger | 70ms per index | reveal groups |
 | pulse | 2.2s ease-in-out infinite | live dots |
 | count-up | 900ms ease-out cubic | `[data-count]` numerals |
 | toast dwell | 3200ms | `.toast` |
 
-Behavior primitives (production) are **components**, not hooks, in
-`src/components/livesheet.tsx`: `Rv` (IntersectionObserver reveal wrapper,
-70ms stagger via its `stagger` prop), `LiveDim` (the signature measured
-value — `live` red + pulsing dot, `blank` dashed spine) and
-`Countdown` (server-authoritative H:MM:SS from `expiresAt`). The real hooks
-live in `src/lib/hooks/`: `useFinePointer`, `useReducedMotion`,
-`useKonamiCode`. Live-updating counts over Supabase Realtime are **planned**,
-not built — no Realtime subscription exists in the codebase today.
+Behavior primitives (production) are **components**, not hooks:
+`MotionPolicy` (`src/components/ui/motion-policy.tsx` — the app-level
+`MotionConfig reducedMotion="user"`, mounted once in the root layout) and,
+in `src/components/livesheet.tsx`: `Rv` (Motion-driven reveal wrapper, 70ms
+stagger via its `stagger` prop, still emitting `is-in` for the CSS draw
+cascade), `LiveDim` (the signature measured value — `live` red + pulsing
+dot, `blank` dashed spine) and `Countdown` (server-authoritative H:MM:SS
+from `expiresAt`). The real hooks live in `src/lib/hooks/`:
+`useFinePointer`, `useReducedMotion`, `useKonamiCode`. Live-updating counts
+over Supabase Realtime are **planned**, not built — no Realtime subscription
+exists in the codebase today.
 
-`prefers-reduced-motion`: reveals/draws render settled, pulses and sweeps
-stop, count-ups print the final value, ticks never start — **countdowns keep
-running** (information, not decoration).
+`prefers-reduced-motion`: Motion-driven transforms are disabled globally by
+`MotionPolicy` (opacity still communicates state); reveals/draws render
+settled, pulses and sweeps stop, count-ups print the final value, ticks
+never start — **countdowns keep running** (information, not decoration).
 
 ## 6. The live color contract
 

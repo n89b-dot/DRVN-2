@@ -18,6 +18,9 @@ DRVN's async architecture is **Postgres-owned**, deliberately:
   - `/api/jobs/media-gc` — staged-upload sweep (48h, heals before deleting).
   - `/api/jobs/saved-searches` — saved-search matching → one summary
     notification per search per pass.
+  - `/api/jobs/listing-imports` — importer retention sweep (0047): expires
+    overdue imports (48h) and scrubs source payloads from week-old terminal
+    rows. Run daily beside media-gc. See [listing-import](listing-import.md).
 - **Durable queues as tables:** `transfer_intents` (leased,
   FOR UPDATE SKIP LOCKED), `refund_operations` (8-state machine),
   `admin_alert_outbox`, `payment_recoveries`, `webhook_events` (dedup).

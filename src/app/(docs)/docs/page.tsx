@@ -44,8 +44,14 @@ const SECTION_CARDS = [
     note: "The do/don't contract, accessibility, content and engineering rules.",
   },
   {
-    href: "/docs/material",
+    href: "/docs/motion",
     n: "07",
+    title: "Motion",
+    note: "The motion language — Motion for React vs CSS, timing, springs, recipes, reduced motion.",
+  },
+  {
+    href: "/docs/material",
+    n: "08",
     title: "Material reference",
     note: "What the components borrow from Material 3 — behavior only — and the adaptive model.",
   },

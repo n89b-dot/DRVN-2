@@ -14,6 +14,7 @@ const RADII = [
 const MOTION = [
   { token: "--spring", value: "cubic-bezier(0.32, 0.72, 0, 1)", role: "everything that moves" },
   { token: "--t-fast", value: "160ms", role: "color / background / press" },
+  { token: "--t-standard", value: "240ms", role: "default fades, small state swaps" },
   { token: "--t-move", value: "380ms", role: "tiles, sheets, orders, toast travel" },
   { token: "--t-draw", value: "650ms", role: "rules drawing themselves in" },
   { token: "stagger", value: "70ms / index", role: "reveal groups" },
@@ -209,6 +210,9 @@ export default function DesignSystemPage() {
       <section id="motion" className="mt-8 scroll-mt-24">
         <div className="mb-3 flex items-baseline gap-3">
           <span className="microlabel !mb-0">Motion</span>
+          <Link href="/docs/motion" className="jumplink">
+            Full motion language →
+          </Link>
         </div>
         <Rule className="mb-4" />
         <div className="deck deck--two">
@@ -234,7 +238,11 @@ export default function DesignSystemPage() {
               <tbody>
                 <tr>
                   <td>Rv</td>
-                  <td>IO reveal wrapper, 70ms stagger (livesheet.tsx)</td>
+                  <td>Motion-driven reveal wrapper, 70ms stagger (livesheet.tsx)</td>
+                </tr>
+                <tr>
+                  <td>MotionPolicy</td>
+                  <td>app-level MotionConfig — reducedMotion=&quot;user&quot;</td>
                 </tr>
                 <tr>
                   <td>LiveDim</td>

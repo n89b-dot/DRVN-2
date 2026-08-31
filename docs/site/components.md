@@ -126,7 +126,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (75)
+### Primitives (76)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -160,7 +160,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `FormSection` | Primitive | `@/components/ui` | Numbered form section tile — mono step numeral, heading, hint. | Long editing workflows (Sell, editors). |
 | `Gallery` | Primitive | `@/components/ui` | PDP media gallery. — `.gallery` | Listing detail media. |
 | `GalleryLightbox` | Primitive | `@/components/ui` | Full-screen lightbox with keyboard navigation. | Expanding gallery/vehicle media. |
-| `HorizontalGallery` | Primitive | `@/components/ui` | Scrollable thumbnail strip. | Inline media rows in feeds/timelines. |
+| `HorizontalGallery` | Primitive | `@/components/ui` | Scrollbarless thumbnail strip — edge fades + hover paddles signal overflow. | Inline media rows in feeds/timelines. |
 | `Icon` | Primitive | `@/components/ui` | The stroke icon set. | Any inline icon; never ad-hoc SVGs. |
 | `KeyValueTable` | Primitive | `@/components/ui` | Ruled key/value spec table. — `.spec` | Spec sheets (wheels & tires, dimensions). |
 | `LinkedTitle` | Primitive | `@/components/ui` | Linked title with the drafting-office arrow. | Row/section titles that navigate. |
@@ -173,14 +173,15 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `MetadataTags` | Primitive | `@/components/ui` | Wrapping row of plain chips. — `.chip` | Tag lists. |
 | `MetricCard` | Primitive | `@/components/ui` | KPI tile — microlabel, giant numeral, measured LiveDim line, floor-pinned footer link. — `.tile + .num-giant` | KPI decks (`.deck--kpi`); calculations stay with the feature. |
 | `MobileActionBar` | Primitive | `@/components/ui` | Pinned bottom action bar (buybar) for compact widths. — `.buybar` | Primary commerce actions on PDP-like pages. One bottom surface per route. |
+| `MotionPolicy` | Primitive | `@/components/ui` | App-level Motion for React policy provider (`MotionConfig reducedMotion="user"`). Semantic tokens/springs/recipes live in `src/lib/motion`. | Mounted once in the root layout. Never nest a second one. *Not for:* Per-feature MotionConfig overrides — the global policy is the contract. |
 | `NarrowColumn` | Primitive | `@/components/ui` | Constrained page column (narrow 720 / medium / wide). — `.wrap--*` | Reading and list surfaces that shouldn't span the full 1200px wrap. |
 | `ObjectRow` | Primitive | `@/components/ui` | The `.order` dense row — leading media plate, name, dim meta, trailing actions — inside `.rowlist`. — `.order / .rowlist` | Any object in a dense collection (saved items, cart lines, inbox rows, task rows). *Not for:* Marketplace browsing — that's the mosaic card family. Sortable tables — that's `.ledger`. |
 | `PageHead` | Primitive | `@/components/ui` | Page header: mono eyebrow, display h1, dim sub line, revealed on entry. — `.pagehead` | The head of every page instead of hand-assembling `.pagehead` markup. |
 | `Pagination` | Primitive | `@/components/ui` | Ghost prev/next with mono page marker; renders nothing on a lone first page. | Every paginated list. (Admin's jumplink Pager is a deliberate console variant.) |
 | `Radio` | Primitive | `@/components/ui` | Radio in the square-mark language. — `.sq` | Exclusive options. |
 | `RatingStars` | Primitive | `@/components/ui` | Read-only five-star display with sr-only value. — `.review__stars` | Displaying a rating. (The interactive picker is the review form's `.star-pick`.) |
-| `ResultNote` | Primitive | `@/components/ui` | Action outcome line — ok chip or error text, role=alert. | useActionState results next to a form. |
-| `Rv` | Primitive | `@/components/livesheet` | Livesheet spring reveal (`.rv → .is-in`), staggered per index, reduced-motion safe. — `.rv` | Entry reveal on page heads, tiles, cards. |
+| `ResultNote` | Primitive | `@/components/ui` | Action outcome line — ok chip or error text, role=alert. Motion-driven enter/exit presence. | useActionState results next to a form. |
+| `Rv` | Primitive | `@/components/livesheet` | Livesheet spring reveal, staggered per index, reduced-motion safe. Motion for React drives the animation (shared `reveal` recipe from `src/lib/motion`). | Entry reveal on page heads, tiles, cards. |
 | `ScrollActiveIntoView` **[internal]** | Primitive | `@/components/ui` | Scrolls the active nav item into view on mount. | Inside scrolling nav strips. |
 | `SearchField` | Primitive | `@/components/ui` | The `.search` input band. — `.search` | Search inputs. |
 | `SectionHeading` | Primitive | `@/components/ui` | Mono microlabel section heading. — `.microlabel` | Section labels inside sheets/profiles. |

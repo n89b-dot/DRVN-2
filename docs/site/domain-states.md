@@ -84,6 +84,39 @@ Enforced by: begin/settle_refund_operation RPCs + worker resume (0026)
 | `failed` | **terminal** |
 | `recovery_required` | **terminal** |
 
+### Shipments
+
+Enforced by: CHECK + guard_shipment_status trigger (0052)
+
+| From | May move to |
+| --- | --- |
+| `pending` | `label_purchased` · `in_transit` · `cancelled` · `failed` |
+| `label_purchased` | `in_transit` · `out_for_delivery` · `delivered` · `returned_to_sender` · `cancelled` · `failed` |
+| `in_transit` | `out_for_delivery` · `delivered` · `returned_to_sender` · `failed` |
+| `out_for_delivery` | `delivered` · `in_transit` · `returned_to_sender` · `failed` |
+| `returned_to_sender` | `in_transit` |
+| `delivered` | **terminal** |
+| `cancelled` | **terminal** |
+| `failed` | **terminal** |
+
+### Returns (RMA)
+
+Enforced by: CHECK + guard_return_status trigger (0055)
+
+| From | May move to |
+| --- | --- |
+| `requested` | `approved` · `rejected` · `cancelled` · `escalated` |
+| `approved` | `awaiting_shipment` · `expired` · `cancelled` · `escalated` |
+| `awaiting_shipment` | `in_transit` · `expired` · `cancelled` · `escalated` |
+| `in_transit` | `delivered` · `escalated` |
+| `delivered` | `received` · `escalated` |
+| `received` | `completed` · `escalated` |
+| `escalated` | `received` · `completed` · `rejected` · `cancelled` |
+| `completed` | **terminal** |
+| `rejected` | **terminal** |
+| `expired` | **terminal** |
+| `cancelled` | **terminal** |
+
 ### Listing imports
 
 Enforced by: CHECK + guard_listing_import_status trigger (0047)

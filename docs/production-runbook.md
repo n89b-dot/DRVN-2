@@ -225,3 +225,53 @@ saved search for listings created since its last check and raises at most one
 in-app notification per search per pass. A search's first pass after opt-in
 only stamps the baseline — nobody is alerted about inventory that predates
 their opt-in. `/api/jobs/media-gc` shares the same scheduling posture.
+
+## 10. DRVN Shipping — EasyPost setup (migrations 0051-0056)
+
+DRVN is a **platform buying postage on behalf of sellers**, not a retailer
+shipping its own inventory. Before any production postage is enabled:
+
+1. **Test mode first.** Set `FLAG_INTEGRATED_SHIPPING_V1=true` and a *test*
+   `EASYPOST_API_KEY` (EZTK…). The full flow — verify seller ship-from,
+   rates at checkout, buy/void label, tracker webhooks — runs against
+   EasyPost test mode; nothing in the code branches on which key it is.
+   With no key at all, dev runs the deterministic stub provider and
+   production simply disables DRVN Shipping (seller-arranged shipping keeps
+   working — §42's required fallback).
+2. **Confirm the marketplace account structure with EasyPost** before the
+   production key: whether standard per-seller **EndShipper** records
+   suffice for USPS platform postage, or the account should be on **Forge**.
+   The code stores `seller_fulfillment_profiles.easypost_end_shipper_id` as
+   an opaque reference and passes it through the provider seam only — a move
+   between models changes `src/lib/shipping/easypost.ts`, nothing else.
+3. **Webhook**: create an EasyPost webhook pointing at
+   `https://<domain>/api/shipping/easypost`, generate a webhook secret, and
+   set the same value as `EASYPOST_WEBHOOK_SECRET`. The endpoint refuses
+   everything (500) while unset, rejects bad HMACs (400), dedupes by event
+   id in `webhook_events` (prefixed `easypost:`), and 500s on real failures
+   so EasyPost redelivers.
+4. **Wallet float** (§16): buyer-paid shipping funds postage economically,
+   but EasyPost charges DRVN's wallet before Stripe cash lands in the bank.
+   Keep a small auto-reload balance on the EasyPost wallet for early volume.
+   Every label is recorded against the seller/order in `seller_adjustments`
+   and netted out of the payout by the transfer worker — the float is a
+   timing difference, never a subsidy.
+5. **Cron**: no new job. Return timers (§27) and the dispute-SLA pause (§28)
+   run inside the existing `POST /api/jobs/transfers` pass.
+
+## 11. Shops — verification and conversion
+
+Any account can switch itself to a shop in Settings → Shop (controlled
+server path; `profiles.profile_type` stays client-immutable per 0017). The
+**verified** badge is a separate, admin-granted state and is never implied by
+self-declaration. For MVP, grant it manually — same posture as admin_users:
+
+```sql
+update public.shop_profiles
+   set verification_status = 'verified'
+ where profile_id = '<profile uuid>';
+```
+
+Revoke by setting it back to `'unverified'`. Whatever return policy a shop
+had at each sale is frozen in that order's commercial snapshot; changing the
+policy never affects existing orders.
