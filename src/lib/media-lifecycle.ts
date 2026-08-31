@@ -33,6 +33,13 @@ async function isMediaReferenced(
     admin.from("activity_images").select("id", { count: "exact", head: true }).eq("url", url),
     admin.from("profiles").select("id", { count: "exact", head: true }).eq("avatar_url", url),
     admin.from("cars").select("id", { count: "exact", head: true }).eq("cover_image_url", url),
+    // Purchase evidence (migration 0049): a listing photo frozen onto an order
+    // must survive the seller deleting it from the live listing — historical
+    // transaction truth outlives the listing gallery.
+    admin
+      .from("order_item_snapshot_images")
+      .select("id", { count: "exact", head: true })
+      .eq("url", url),
   ];
   const results = await Promise.all(checks);
   for (const { count, error } of results) {

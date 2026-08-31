@@ -159,15 +159,28 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
 
   /* ---------------- motion / signature behaviors ---------------- */
   {
+    name: "MotionPolicy",
+    importPath: UI,
+    file: "src/components/ui/motion-policy.tsx",
+    layer: "primitive",
+    category: "motion",
+    status: "active",
+    description:
+      "App-level Motion for React policy provider (`MotionConfig reducedMotion=\"user\"`). Semantic tokens/springs/recipes live in `src/lib/motion`.",
+    use: "Mounted once in the root layout. Never nest a second one.",
+    avoid: "Per-feature MotionConfig overrides — the global policy is the contract.",
+    a11y: "Disables Motion-driven transform/layout animation under prefers-reduced-motion while keeping opacity state communication.",
+  },
+  {
     name: "Rv",
     importPath: LIVESHEET,
     file: "src/components/livesheet.tsx",
     layer: "primitive",
     category: "motion",
     status: "active",
-    description: "Livesheet spring reveal (`.rv → .is-in`), staggered per index, reduced-motion safe.",
+    description:
+      "Livesheet spring reveal, staggered per index, reduced-motion safe. Motion for React drives the animation (shared `reveal` recipe from `src/lib/motion`).",
     use: "Entry reveal on page heads, tiles, cards.",
-    cssRecipe: ".rv",
     a11y: "Skips animation under prefers-reduced-motion; failsafe guarantees content never stays hidden.",
   },
   {
@@ -755,12 +768,14 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
   {
     name: "ResultNote",
     importPath: UI,
-    file: "src/components/ui/messaging.tsx",
+    file: "src/components/ui/result-note.tsx",
     layer: "primitive",
     category: "feedback",
     status: "active",
-    description: "Action outcome line — ok chip or error text, role=alert.",
+    description:
+      "Action outcome line — ok chip or error text, role=alert. Motion-driven enter/exit presence.",
     use: "useActionState results next to a form.",
+    a11y: "role=alert + aria-live announce regardless of motion; reduced motion keeps the opacity change only.",
   },
 
   /* ---------------- overlays / actions ---------------- */
@@ -870,7 +885,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "primitive",
     category: "media",
     status: "active",
-    description: "Scrollable thumbnail strip.",
+    description: "Scrollbarless thumbnail strip — edge fades + hover paddles signal overflow.",
     use: "Inline media rows in feeds/timelines.",
   },
   {

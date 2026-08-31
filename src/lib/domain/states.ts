@@ -4,6 +4,8 @@ import type {
   OfferStatus,
   OrderStatus,
   RefundOperationStatus,
+  ReturnStatus,
+  ShipmentStatus,
   TransferIntentStatus,
 } from "@/lib/database.types";
 
@@ -82,6 +84,45 @@ export const REFUND_TRANSITIONS: TransitionMap<RefundOperationStatus> = {
   recovery_required: [],
 };
 
+/** Shipments (0052): parcel movement, outbound or return. Carriers bounce
+ *  (out_for_delivery can fall back to in_transit; returned_to_sender can
+ *  re-enter transit on a re-attempt); a cancelled/failed label may be
+ *  replaced by a new shipment row, never revived. */
+export const SHIPMENT_TRANSITIONS: TransitionMap<ShipmentStatus> = {
+  pending: ["label_purchased", "in_transit", "cancelled", "failed"],
+  label_purchased: [
+    "in_transit",
+    "out_for_delivery",
+    "delivered",
+    "returned_to_sender",
+    "cancelled",
+    "failed",
+  ],
+  in_transit: ["out_for_delivery", "delivered", "returned_to_sender", "failed"],
+  out_for_delivery: ["delivered", "in_transit", "returned_to_sender", "failed"],
+  returned_to_sender: ["in_transit"],
+  delivered: [],
+  cancelled: [],
+  failed: [],
+};
+
+/** Returns / RMAs (0055): goods moving back. `escalated` is the §29
+ *  inspection-dispute detour into ops cases — an admin settles it back onto
+ *  the ladder or terminates it. */
+export const RETURN_TRANSITIONS: TransitionMap<ReturnStatus> = {
+  requested: ["approved", "rejected", "cancelled", "escalated"],
+  approved: ["awaiting_shipment", "expired", "cancelled", "escalated"],
+  awaiting_shipment: ["in_transit", "expired", "cancelled", "escalated"],
+  in_transit: ["delivered", "escalated"],
+  delivered: ["received", "escalated"],
+  received: ["completed", "escalated"],
+  escalated: ["received", "completed", "rejected", "cancelled"],
+  completed: [],
+  rejected: [],
+  expired: [],
+  cancelled: [],
+};
+
 /** Listing imports (0047): the importer's durable job ladder. `ready` can
  *  fall back to `extracting` (a multi-item re-selection or AI retry), and
  *  `failed` re-enters at the step that broke rather than restarting. */
@@ -96,7 +137,15 @@ export const IMPORT_TRANSITIONS: TransitionMap<ListingImportStatus> = {
   expired: [],
 };
 
-export type DomainName = "order" | "listing" | "offer" | "transfer" | "refund" | "listing_import";
+export type DomainName =
+  | "order"
+  | "listing"
+  | "offer"
+  | "transfer"
+  | "refund"
+  | "shipment"
+  | "return"
+  | "listing_import";
 
 export const DOMAIN_STATES: {
   domain: DomainName;
@@ -133,6 +182,18 @@ export const DOMAIN_STATES: {
     title: "Refund operations",
     authority: "begin/settle_refund_operation RPCs + worker resume (0026)",
     transitions: REFUND_TRANSITIONS,
+  },
+  {
+    domain: "shipment",
+    title: "Shipments",
+    authority: "CHECK + guard_shipment_status trigger (0052)",
+    transitions: SHIPMENT_TRANSITIONS,
+  },
+  {
+    domain: "return",
+    title: "Returns (RMA)",
+    authority: "CHECK + guard_return_status trigger (0055)",
+    transitions: RETURN_TRANSITIONS,
   },
   {
     domain: "listing_import",

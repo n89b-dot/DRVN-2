@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { motion } from "motion/react";
+
 import { cx } from "@/lib/format";
+import { springs, transitions } from "@/lib/motion";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -64,6 +67,20 @@ export function BottomSheet({
 
   const sheetActive = open && isCompact;
 
+  // The sheet's children must stay mounted while closed (their form fields
+  // keep submitting with the parent form), so AnimatePresence-style
+  // unmounting is off the table. Instead the always-mounted panel animates
+  // between open/closed and `present` keeps the scrim displayed until the
+  // exit settles — the old CSS version snapped to display:none instantly.
+  const [present, setPresent] = useState(open);
+  // Render-phase adjustment (not an effect): opening must display the wrap
+  // in the same render the panel starts animating in.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setPresent(true);
+  }
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -109,16 +126,28 @@ export function BottomSheet({
     <div
       className={cx(
         "bsheet",
-        open && "is-open",
+        (open || present) && "is-open",
         inlineFrom === "sm" && "bsheet--inline-sm"
       )}
       // While closed on compact, the chrome hides but the children stay in
       // the DOM (and in their form). `hidden` on the wrap would also hide the
       // inline composition, so it's driven by the classes instead.
-      onClick={isCompact ? onClose : undefined}
+      onClick={isCompact && open ? onClose : undefined}
     >
-      <div
+      <motion.div
         ref={panelRef}
+        // In the ≥640px inline composition the panel is display:contents, so
+        // these inline styles have no box to apply to — the values are
+        // harmless there and load-bearing on compact.
+        initial={false}
+        animate={
+          sheetActive || !isCompact
+            ? { opacity: 1, y: 0, transition: { ...springs.spatial, opacity: transitions.standard } }
+            : { opacity: 0, y: 24, transition: transitions.fast }
+        }
+        onAnimationComplete={() => {
+          if (!open) setPresent(false);
+        }}
         role={sheetActive ? "dialog" : undefined}
         aria-modal={sheetActive ? "true" : undefined}
         aria-label={sheetActive ? label : undefined}
@@ -137,7 +166,7 @@ export function BottomSheet({
             Done
           </button>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -3,8 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type MouseEvent } from "react";
 
+import { AnimatePresence, motion } from "motion/react";
+
 import { AuthIntentDialog } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
+import { press, transitions } from "@/lib/motion";
 import { ACTIVITY_EMOJIS } from "@/features/activity/constants";
 import { toggleReaction } from "@/features/activity/actions";
 import { cx } from "@/lib/format";
@@ -142,49 +145,78 @@ export function CardEngagement({
 
   return (
     <span className={cx("cardeng", compact && "cardeng--compact")}>
-      <button
+      <motion.button
         type="button"
         onClick={onLike}
         className={cx("cardeng__act", liked && "is-on")}
         aria-pressed={liked}
         aria-label={liked ? "Liked — tap to remove" : "Like"}
         data-tip={liked ? "Liked" : "Like"}
+        {...press}
       >
-        <Icon name="heart" className="cardeng__ico" />
+        {/* Turning a like ON gets a mechanical settle; removing one doesn't
+            celebrate. */}
+        <motion.span
+          className="inline-flex"
+          animate={liked ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+        >
+          <Icon name="heart" className="cardeng__ico" />
+        </motion.span>
         {likes > 0 && <span className="cardeng__count">{likes}</span>}
-      </button>
+      </motion.button>
       {commentHref && (
-        <button
+        <motion.button
           type="button"
           onClick={onComment}
           className="cardeng__act"
           aria-label={commentCount > 0 ? `Comments (${commentCount})` : "Comment"}
           data-tip="Comment"
+          {...press}
         >
           <Icon name="comment" className="cardeng__ico" />
           {commentCount > 0 && <span className="cardeng__count">{commentCount}</span>}
-        </button>
+        </motion.button>
       )}
-      <button
+      <motion.button
         type="button"
         onClick={onShare}
         className={cx("cardeng__act", shared && "is-on")}
         aria-label="Share"
         data-tip={shared ? "Link copied" : "Share"}
+        {...press}
       >
         <Icon name="share" className="cardeng__ico" />
-        {shared && <span className="cardeng__count">Copied</span>}
-      </button>
-      <button
+        <AnimatePresence>
+          {shared && (
+            <motion.span
+              className="cardeng__count"
+              initial={{ opacity: 0, y: 2 }}
+              animate={{ opacity: 1, y: 0, transition: transitions.fast }}
+              exit={{ opacity: 0, transition: transitions.fast }}
+            >
+              Copied
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </motion.button>
+      <motion.button
         type="button"
         onClick={onSave}
         className={cx("cardeng__act", "cardeng__act--end", saved && "is-on")}
         aria-pressed={saved}
         aria-label={saved ? "Saved — tap to remove" : "Save"}
         data-tip={saved ? "Saved" : "Save"}
+        {...press}
       >
-        <Icon name="bookmark" className="cardeng__ico" />
-      </button>
+        <motion.span
+          className="inline-flex"
+          animate={saved ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+        >
+          <Icon name="bookmark" className="cardeng__ico" />
+        </motion.span>
+      </motion.button>
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}

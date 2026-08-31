@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { Fragment, useState } from "react";
 
+import { motion } from "motion/react";
+
 import { Countdown } from "@/components/livesheet";
+import { expand } from "@/lib/motion";
 import { Icon, Media } from "@/components/ui";
 import type { ListingStatus } from "@/lib/database.types";
 import { cx } from "@/lib/format";
@@ -383,10 +386,20 @@ export function ListingsLedger({
                   className={cx("ledger__detail", open && "is-open")}
                 >
                   <td colSpan={8}>
-                    <div className="pb-2 pl-[18px]">
-                      <span className="microlabel">Offers on this listing</span>
-                      <OfferSummary row={row} />
-                    </div>
+                    {/* The row keeps its `hidden` semantics; the unfold
+                        happens inside the cell so opening reads as the
+                        ledger making room rather than a content pop. */}
+                    <motion.div
+                      className="overflow-hidden"
+                      variants={expand}
+                      initial="collapsed"
+                      animate={open ? "expanded" : "collapsed"}
+                    >
+                      <div className="pb-2 pl-[18px]">
+                        <span className="microlabel">Offers on this listing</span>
+                        <OfferSummary row={row} />
+                      </div>
+                    </motion.div>
                   </td>
                 </tr>
               </Fragment>

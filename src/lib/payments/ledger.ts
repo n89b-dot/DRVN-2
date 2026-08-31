@@ -18,6 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database, OrderStatus } from "@/lib/database.types";
 
+import { adjustmentsByOrder } from "./adjustments";
 import { platformFeeCents } from "./provider";
 import { reportError } from "@/lib/monitoring";
 
@@ -47,7 +48,10 @@ export type LedgerLine = {
   grossCents: number;
   feeCents: number;
   shippingCents: number;
-  /** What lands in the seller's balance: gross − platform fee. */
+  /** Net effect of shipping-label adjustments (0052): ≤ 0 when DRVN bought
+   *  labels on the seller's behalf, restored by voids/refunds. */
+  adjustmentsCents: number;
+  /** What lands in the seller's balance: gross − platform fee + adjustments. */
   netCents: number;
   state: LedgerState;
   /** When this line does/did clear the holding window. Null until delivered. */
@@ -117,12 +121,12 @@ export async function getSellerLedger(
   const captured = orders ?? [];
   const orderIds = captured.map((o) => o.id);
 
-  const { data: items } = orderIds.length
-    ? await supabase
-        .from("order_items")
-        .select("order_id, title, quantity")
-        .in("order_id", orderIds)
-    : { data: [] };
+  const [{ data: items }, adjustments] = await Promise.all([
+    orderIds.length
+      ? supabase.from("order_items").select("order_id, title, quantity").in("order_id", orderIds)
+      : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number }[] }),
+    adjustmentsByOrder(supabase, orderIds),
+  ]);
 
   const itemsByOrder = new Map<string, { title: string | null; quantity: number }[]>();
   for (const item of items ?? []) {
@@ -143,12 +147,15 @@ export async function getSellerLedger(
     // itself — a financial ledger must not let a later fee-rate change
     // retroactively rewrite historical lines. Only fall back to the live
     // constant when the column is null (older rows predating the column).
+    // The fallback stays on subtotal only: every such row was charged under
+    // the pre-0050 goods-only basis, and the ledger reports what was charged.
     const feeCents =
       order.platform_fee_cents != null && order.platform_fee_cents >= 0
         ? order.platform_fee_cents
         : platformFeeCents(order.subtotal_cents);
     const grossCents = order.total_cents;
-    const netCents = grossCents - feeCents;
+    const adjustmentsCents = adjustments.get(order.id) ?? 0;
+    const netCents = grossCents - feeCents + adjustmentsCents;
     const { state, availableAt } = lineState(order, nowMs);
 
     return {
@@ -161,6 +168,7 @@ export async function getSellerLedger(
       grossCents,
       feeCents,
       shippingCents: order.shipping_cents,
+      adjustmentsCents,
       netCents,
       state,
       availableAt,

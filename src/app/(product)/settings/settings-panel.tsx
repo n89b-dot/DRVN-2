@@ -91,6 +91,8 @@ const SETTINGS_SECTIONS = [
   { id: "signals", label: "Notifications" },
   { id: "payments", label: "Payments" },
   { id: "payouts", label: "Payouts" },
+  { id: "shipping", label: "Shipping" },
+  { id: "shop", label: "Shop" },
   { id: "danger", label: "Danger zone" },
 ] as const;
 type SectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
@@ -157,6 +159,8 @@ export function SettingsPanel({
   connect,
   paymentsLive,
   payoutsSection,
+  shippingSection,
+  shopSection,
 }: {
   profile: SettingsProfile;
   logout: () => Promise<void>;
@@ -165,6 +169,10 @@ export function SettingsPanel({
   paymentsLive: boolean;
   /** Settings → Payouts, server-rendered (the ledger needs server data). */
   payoutsSection?: React.ReactNode;
+  /** Settings → Shipping, server-rendered (0051 fulfillment profile). */
+  shippingSection?: React.ReactNode;
+  /** Settings → Shop, server-rendered (0056 shop profile). */
+  shopSection?: React.ReactNode;
 }) {
   // One section at a time (Mobbin pass: Contra / Cloudflare / Perplexity —
   // a rail plus a single active panel is what makes settings navigable).
@@ -351,6 +359,10 @@ export function SettingsPanel({
         )}
 
         {active === "payouts" && payoutsSection}
+
+        {active === "shipping" && shippingSection}
+
+        {active === "shop" && shopSection}
 
         {active === "danger" && (
         <section id="danger" className="tile">

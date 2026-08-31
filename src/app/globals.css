@@ -140,8 +140,11 @@
   --r-chip: 6px;
   --r-meter: 3px;
 
+  /* Motion timing — mirrored in src/lib/motion (the Motion for React
+     foundation); the two systems share one vocabulary. See /docs/motion. */
   --spring: cubic-bezier(0.32, 0.72, 0, 1);
   --t-fast: 160ms;
+  --t-standard: 240ms;
   --t-move: 380ms;
   --t-draw: 650ms;
 
@@ -2573,25 +2576,8 @@ video {
     background: var(--tile);
     border-radius: var(--r);
     padding: 22px;
-    transform: translateY(16px);
-    opacity: 0;
-    transition:
-      transform var(--t-move) var(--spring),
-      opacity var(--t-move) ease;
-  }
-  .sheetwrap.is-open .sheet {
-    transform: none;
-    opacity: 1;
-  }
-  /* The Dialog component only mounts while open, so the panel used to appear
-     already in its end state and the rise never played. @starting-style gives
-     the first rendered frame the pre-state; older browsers just show the
-     panel instantly, which is the correct graceful floor. */
-  @starting-style {
-    .sheetwrap.is-open .sheet {
-      transform: translateY(16px);
-      opacity: 0;
-    }
+    /* Entry/exit rise is Motion-driven on the Dialog panel
+       (src/components/ui/dialog.tsx); the sheet itself is static. */
   }
   .sheet__row {
     display: flex;
@@ -2649,21 +2635,9 @@ video {
     padding: 22px 22px calc(22px + env(safe-area-inset-bottom, 0px));
     display: grid;
     gap: 12px;
-    transform: translateY(24px);
-    opacity: 0;
-    transition:
-      transform var(--t-move) var(--spring),
-      opacity var(--t-move) ease;
-  }
-  .bsheet.is-open .bsheet__panel {
-    transform: none;
-    opacity: 1;
-  }
-  @starting-style {
-    .bsheet.is-open .bsheet__panel {
-      transform: translateY(24px);
-      opacity: 0;
-    }
+    /* Rise/settle is Motion-driven (src/components/ui/bottom-sheet.tsx) —
+       the panel stays mounted while closed, so Motion animates the
+       always-present element instead of unmount/remount. */
   }
   @media (min-width: 640px) {
     .bsheet--inline-sm,
@@ -2713,18 +2687,10 @@ video {
     border-color: var(--dimline);
   }
 
-  /* ---------- reveals (spring + draw) ---------- */
-  .rv {
-    opacity: 0;
-    transform: translateY(12px) scale(0.985);
-  }
-  .rv.is-in {
-    opacity: 1;
-    transform: none;
-    transition:
-      opacity var(--t-move) ease,
-      transform var(--t-move) var(--spring);
-  }
+  /* ---------- reveals (spring + draw) ----------
+     The rise/fade itself is Motion-driven (Rv in src/components/livesheet.tsx,
+     recipe in src/lib/motion). CSS keeps only the `.is-in` draw cascade below
+     (dimline-h, live-word underline, gsheet spines). */
 
   /* ---------- listing detail (PDP) sheet ----------
      DOM order is the phone reading order: media → purchase rail → long-form
@@ -3230,6 +3196,93 @@ video {
 }
 @media (max-width: 640px) {
   .gsheet__pips {
+    display: none;
+  }
+}
+/* Horizontal gallery — a scrollbarless thumbnail strip. The native OS
+   scrollbar never renders (it reads as a foreign white bar on dark paper);
+   overflow is signalled instead by an edge fade on whichever side has more,
+   and by paddle buttons that appear on hover/focus for pointer users. */
+.hgallery {
+  position: relative;
+}
+.hgallery__track {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.hgallery__track::-webkit-scrollbar {
+  display: none;
+}
+.hgallery__track:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+/* Fades live on the wrapper so they sit above the thumbs but never block
+   the pointer. Painted with --paper so they merge into the page ground. */
+.hgallery::before,
+.hgallery::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-fast) ease;
+}
+.hgallery::before {
+  left: 0;
+  background: linear-gradient(to right, var(--paper), transparent);
+}
+.hgallery::after {
+  right: 0;
+  background: linear-gradient(to left, var(--paper), transparent);
+}
+.hgallery.can-back::before,
+.hgallery.can-fwd::after {
+  opacity: 1;
+}
+.hgallery__paddle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  opacity: 0;
+  transition: opacity var(--t-fast) ease, background var(--t-fast) ease;
+}
+.hgallery__paddle--back {
+  left: 6px;
+}
+.hgallery__paddle--fwd {
+  right: 6px;
+}
+.hgallery:hover .hgallery__paddle,
+.hgallery__paddle:focus-visible {
+  opacity: 1;
+}
+.hgallery__paddle:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+.hgallery__paddle:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 1px;
+}
+@media (hover: none) {
+  /* Touch: the strip itself is the control — no hover paddles. */
+  .hgallery__paddle {
     display: none;
   }
 }
@@ -4862,8 +4915,8 @@ video {
        notched phone sat half behind the indicator. */
     bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     z-index: 120;
-    transform: translate(-50%, 12px);
-    opacity: 0;
+    /* Entry/exit rise + fade is Motion-driven (src/components/ui/toast.tsx),
+       including the -50% centering shift. */
     pointer-events: none;
     background: var(--ink);
     color: var(--on-ink);
@@ -4875,13 +4928,6 @@ video {
     border-radius: var(--r-ctl);
     max-width: min(60ch, 92vw);
     text-align: center;
-    transition:
-      opacity var(--t-fast) ease,
-      transform var(--t-move) var(--spring);
-  }
-  .toast.is-shown {
-    opacity: 1;
-    transform: translate(-50%, 0);
   }
 
   /* ---------- in-system form controls ---------- */
@@ -7454,16 +7500,6 @@ video {
     transition: none;
   }
   .pagehead h1 .live-word::after {
-    transform: none;
-    transition: none;
-  }
-  .sheet,
-  .bsheet__panel {
-    transition: none;
-  }
-  .rv,
-  .rv.is-in {
-    opacity: 1;
     transform: none;
     transition: none;
   }

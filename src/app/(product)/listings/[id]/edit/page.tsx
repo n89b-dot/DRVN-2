@@ -7,6 +7,11 @@ import { Alert } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
+import {
+  fulfillmentProfileReady,
+  loadFulfillmentProfile,
+} from "@/features/commerce/fulfillment";
+import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
@@ -103,6 +108,12 @@ export default async function EditListingPage({
           cars={cars ?? []}
           makes={makes.map((m) => m.name)}
           userId={user.id}
+          drvnShipping={{
+            enabled: integratedShippingEnabled(),
+            profileReady: fulfillmentProfileReady(
+              await loadFulfillmentProfile(user.id).catch(() => null),
+            ),
+          }}
           listing={{
             id: listing.id,
             title: listing.title,
@@ -118,6 +129,11 @@ export default async function EditListingPage({
             part_number: listing.part_number,
             price_cents: listing.price_cents,
             shipping_cents: listing.shipping_cents ?? 0,
+            shipping_mode: listing.shipping_mode ?? "flat",
+            weight_oz: listing.weight_oz,
+            length_in: listing.length_in,
+            width_in: listing.width_in,
+            height_in: listing.height_in,
             offer_floor_cents: listing.offer_floor_cents,
             allows_collection: listing.allows_collection ?? false,
             location: listing.location,

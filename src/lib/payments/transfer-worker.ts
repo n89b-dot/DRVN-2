@@ -1,4 +1,5 @@
 import { stripeClient, stripeSecretKey } from "./stripe";
+import { orderAdjustmentCents } from "./adjustments";
 import { reversalShareCents } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
@@ -240,13 +241,18 @@ async function processOne(
   // A partial refund shrinks the payout by its proportional share instead of
   // cancelling the seller's whole payment (the refund path reverses this same
   // share when the transfer already exists — the two must mirror).
+  // Seller adjustments (0052) then apply: labels DRVN bought on the seller's
+  // behalf are negative rows, label refunds positive — signed sum, so simple
+  // addition. Unreadable adjustments throw (retry) rather than overpay.
+  const adjustmentCents = await orderAdjustmentCents(admin, intent.order_id);
   const payableCents =
     intent.amount_cents -
-    reversalShareCents(order.refunded_cents, order.total_cents, intent.amount_cents);
+    reversalShareCents(order.refunded_cents, order.total_cents, intent.amount_cents) +
+    adjustmentCents;
   if (payableCents <= 0) {
     await setIntent(admin, intent.order_id, workerId, {
       status: "cancelled",
-      last_error: "refunds consumed the seller's share",
+      last_error: "refunds and shipping costs consumed the seller's share",
     });
     return "cancelled";
   }

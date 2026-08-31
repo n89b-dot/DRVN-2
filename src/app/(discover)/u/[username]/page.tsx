@@ -100,11 +100,33 @@ export default async function PublicProfilePage({
   const name = profile.display_name ?? `@${profile.username}`;
   const trustLine = ratingLine(view.rating, view.reviewCount);
 
+  // Shop context (0056): same account, storefront emphasis — a shop opens on
+  // For Sale, and the verified badge is admin-granted state, never
+  // self-declaration.
+  const isShop = profile.profile_type === "shop";
+  const { data: shopProfile } = isShop
+    ? await supabase
+        .from("shop_profiles")
+        .select("verification_status, returns_accepted, return_window_days")
+        .eq("profile_id", profile.id)
+        .maybeSingle()
+    : { data: null };
+  const verifiedShop = shopProfile?.verification_status === "verified";
+
   return (
     <NarrowColumn>
       <div className="pagehead !pb-4">
         <span className="microlabel">
-          Seller profile
+          {isShop ? "Shop" : "Seller profile"}
+          {verifiedShop && (
+            <>
+              {" "}
+              <span className="chip chip--ok">Verified shop</span>
+            </>
+          )}
+          {isShop && shopProfile?.returns_accepted && (
+            <> · {shopProfile.return_window_days}-day returns</>
+          )}
           {trustLine && (
             <>
               {" · "}
@@ -142,7 +164,14 @@ export default async function PublicProfilePage({
         bio={profile.bio}
         view={view}
         contactLinks={rest}
-        initialTab={viewParam && TAB_KEYS.includes(viewParam) ? viewParam : undefined}
+        initialTab={
+          viewParam && TAB_KEYS.includes(viewParam)
+            ? viewParam
+            : // §36: a shop is storefront-first — it opens on For Sale.
+              isShop
+              ? "forsale"
+              : undefined
+        }
         basePath={`/u/${profile.username}`}
       />
       {user?.id !== profile.id && (

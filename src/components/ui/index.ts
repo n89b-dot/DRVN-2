@@ -1,4 +1,5 @@
 export { Icon, type IconName } from "./icons";
+export { MotionPolicy } from "./motion-policy";
 export { LivesheetBar, Foot } from "./livesheet-bar";
 export { AppShell } from "./app-shell";
 export {
@@ -85,8 +86,8 @@ export {
   ThreadDivider,
   Message,
   MessageComposer,
-  ResultNote,
 } from "./messaging";
+export { ResultNote } from "./result-note";
 export { FormSection, ValidationSummary, type ValidationEntry } from "./form-section";
 export {
   SkeletonRows,

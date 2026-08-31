@@ -5,14 +5,39 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ElementType,
   type ReactNode,
 } from "react";
 
+import { motion, useInView } from "motion/react";
+
+/* Motion components are stateful — declared once at module scope, picked by
+   name during render. Add a tag here if a page needs a new semantic reveal
+   element. */
+const MOTION_TAGS = {
+  div: motion.div,
+  header: motion.header,
+  section: motion.section,
+  article: motion.article,
+  aside: motion.aside,
+  footer: motion.footer,
+  span: motion.span,
+  p: motion.p,
+  ul: motion.ul,
+  li: motion.li,
+} as const;
+
+export type RvTag = keyof typeof MOTION_TAGS;
+
+import { reveal } from "@/lib/motion";
 import { useReducedMotion } from "@/lib/hooks/useReducedMotion";
 
 /* ------------------------------------------------------------------ */
-/* Rv — Livesheet spring reveal (.rv → .is-in), staggered per index.  */
+/* Rv — Livesheet spring reveal, staggered per index.                 */
+/* Motion for React drives the rise/fade (shared `reveal` recipe);    */
+/* the `is-in` class is still applied at the same moment because the  */
+/* drafting cascade keys off it in CSS (.is-in .dimline-h draws, the  */
+/* pagehead live-word underline sweeps, gsheet dimension spines pull  */
+/* in). One state, two renderers — never two timelines.               */
 /* ------------------------------------------------------------------ */
 
 export function Rv({
@@ -23,50 +48,44 @@ export function Rv({
   style,
 }: {
   children: ReactNode;
-  as?: ElementType;
+  as?: RvTag;
   /** Stagger index — delays entry by index × 70ms (mockup convention). */
   stagger?: number;
   className?: string;
   style?: CSSProperties;
 }) {
-  const Tag = (as ?? "div") as ElementType;
-  const ref = useRef<HTMLElement>(null);
+  // The union of per-tag component types defeats ref inference; every tag
+  // here renders an HTMLElement, so the div signature is safe to assume.
+  const MotionTag = MOTION_TAGS[as ?? "div"] as typeof motion.div;
+  const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
+  const inView = useInView(ref, { once: true, amount: 0.15 });
+  const [forced, setForced] = useState(false);
 
+  // Guarantee: content must never stay hidden because the observer couldn't
+  // fire — zero-size viewports (hidden/background tabs) report no
+  // intersection at all, which left page headers frozen at opacity 0.
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (reduce || !("IntersectionObserver" in window)) {
-      el.classList.add("is-in");
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          window.setTimeout(() => el.classList.add("is-in"), stagger * 70);
-          io.disconnect();
-        }
-      },
-      { threshold: 0.15 },
-    );
-    io.observe(el);
-    // Guarantee: content must never stay hidden because the observer couldn't
-    // fire — zero-size viewports (hidden/background tabs) report no
-    // intersection at all, which left page headers frozen at opacity 0.
-    const failsafe = window.setTimeout(
-      () => el.classList.add("is-in"),
-      900 + stagger * 70,
-    );
-    return () => {
-      io.disconnect();
-      window.clearTimeout(failsafe);
-    };
-  }, [reduce, stagger]);
+    const failsafe = window.setTimeout(() => setForced(true), 900 + stagger * 70);
+    return () => window.clearTimeout(failsafe);
+  }, [stagger]);
+
+  const shown = reduce || inView || forced;
 
   return (
-    <Tag ref={ref} className={`rv ${className}`} style={style}>
+    <MotionTag
+      ref={ref}
+      className={`${shown ? "is-in " : ""}${className}`}
+      style={style}
+      variants={reveal}
+      custom={stagger * 0.07}
+      // Under reduced motion the content simply starts settled — no hidden
+      // frame, no animation, matching the old `.rv` contract exactly.
+      initial={reduce ? false : "hidden"}
+      animate={shown ? "visible" : "hidden"}
+    >
       {children}
-    </Tag>
+    </MotionTag>
   );
 }
 

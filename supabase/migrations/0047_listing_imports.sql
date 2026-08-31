@@ -161,6 +161,13 @@ revoke all on public.listing_imports from anon;
 alter table public.profiles
   add column if not exists import_attested_at timestamptz;
 
+-- 0017 replaced profiles' table-wide privileges with explicit column lists,
+-- so a new self-service column must be granted or every read/write of it is
+-- "permission denied". The attestation is the account holder's own claim:
+-- readable and settable by them, nothing sensitive.
+grant select (import_attested_at) on public.profiles to authenticated;
+grant update (import_attested_at) on public.profiles to authenticated;
+
 -- ============================================================
 -- Self-checks
 -- ============================================================

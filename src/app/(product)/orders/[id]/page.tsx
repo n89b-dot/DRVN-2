@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Alert, Foot, SellingNav, Media, ObjectRow, RatingStars } from "@/components/ui";
+import { Alert, Foot, SellingNav, Media, ObjectRow, RatingStars, TileHead } from "@/components/ui";
 import {
   ConditionSummary,
   type ConditionSnapshot,
@@ -12,6 +12,7 @@ import {
   DISPUTE_WINDOW_DAYS,
   SELLER_RESPONSE_DAYS,
 } from "@/features/commerce/disputes";
+import { fitmentLabel, readCommercialSnapshot } from "@/features/commerce/snapshot";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
 import { countryLabel } from "@/lib/geo/countries";
@@ -32,6 +33,19 @@ import {
   ReportProblemForm,
 } from "./disputes";
 import { CancelOrder, DispatchForm, ReceivedButton } from "./fulfilment";
+import { BuyLabelPanel, LabelReadyPanel } from "./shipping-controls";
+import {
+  PickupPassPanel,
+  ReadyForPickupButton,
+  RedeemPickupForm,
+} from "./pickup-controls";
+import {
+  ProposeReturnForm,
+  RequestShopReturnForm,
+  ReturnInspectionPanel,
+  ReturnShippingPanel,
+  ShopReturnApprovalPanel,
+} from "./return-controls";
 import { reportError } from "@/lib/monitoring";
 
 export async function generateMetadata({
@@ -126,44 +140,101 @@ export default async function OrderDetailPage({
     evidence ?? [],
   );
 
-  const listingIds = (items ?? [])
-    .map((i) => i.listing_id)
-    .filter((x): x is string => Boolean(x));
-  const [{ data: images }, { data: listingMeta }] = await Promise.all([
-    listingIds.length
-      ? supabase
-          .from("listing_images")
-          .select("listing_id, url, position")
-          .in("listing_id", listingIds)
-          .order("position")
-      : Promise.resolve({ data: [] }),
-    // Category/subcategory for the checklist's question catalog — the
-    // snapshot itself only carries answers, not which questions they
-    // answer (0024's trigger doesn't freeze category). Best-effort: a
-    // listing edited since the sale still has the right catalog (question
-    // keys are stable per category); a hard-deleted one falls back to
-    // humanized raw keys in ConditionSummary.
-    listingIds.length
-      ? supabase
-          .from("listings")
-          .select("id, category, subcategory")
-          .in("id", listingIds)
-      : Promise.resolve({ data: [] }),
-  ]);
-  const cover = new Map<string, string>();
-  for (const img of images ?? []) {
-    if (!cover.has(img.listing_id)) cover.set(img.listing_id, img.url);
+  // "As purchased" reads snapshot data only (0049): covers come from the
+  // gallery frozen onto the order, and category/part identity/fitment from
+  // commercial_snapshot. The live listing is linked for navigation, but it is
+  // never evidence of what was bought — the seller may have edited or deleted
+  // it since.
+  const itemIds = (items ?? []).map((i) => i.id);
+  const { data: snapshotImages } = itemIds.length
+    ? await supabase
+        .from("order_item_snapshot_images")
+        .select("order_item_id, url, alt, position")
+        .in("order_item_id", itemIds)
+        .order("position")
+    : { data: [] };
+  const frozenGallery = new Map<string, { url: string; alt: string | null }[]>();
+  for (const img of snapshotImages ?? []) {
+    const list = frozenGallery.get(img.order_item_id) ?? [];
+    list.push({ url: img.url, alt: img.alt });
+    frozenGallery.set(img.order_item_id, list);
   }
-  const listingCategory = new Map<
-    string,
-    { category: string; subcategory: string | null }
-  >();
-  for (const l of listingMeta ?? []) {
-    listingCategory.set(l.id, {
-      category: l.category,
-      subcategory: l.subcategory,
-    });
-  }
+  const snapshots = new Map(
+    (items ?? []).map(
+      (i) => [i.id, readCommercialSnapshot(i.commercial_snapshot)] as const,
+    ),
+  );
+
+  // Shipments (0052) — the authoritative movement record. Admin client
+  // because label_reference is deliberately not client-readable; the page
+  // has already proven the viewer is a participant, and only the seller's
+  // branch renders the label.
+  const adminForShipping = createAdminClient();
+  const { data: allShipments } = await adminForShipping
+    .from("shipments")
+    .select("*")
+    .eq("order_id", id)
+    .order("created_at");
+  const liveShipments = (allShipments ?? []).filter(
+    (s) => !["cancelled", "failed"].includes(s.status),
+  );
+  const { data: shipmentEvents } = liveShipments.length
+    ? await adminForShipping
+        .from("shipment_events")
+        .select("shipment_id, status, description, occurred_at, city, state")
+        .in(
+          "shipment_id",
+          liveShipments.map((s) => s.id),
+        )
+        .order("occurred_at", { ascending: false })
+        .limit(12)
+    : { data: [] };
+  const latestEventFor = (shipmentId: string) =>
+    (shipmentEvents ?? []).find((e) => e.shipment_id === shipmentId);
+  const pendingLabel = liveShipments.find(
+    (s) =>
+      s.direction === "outbound" &&
+      s.fulfillment_type === "drvn_shipping" &&
+      s.status === "pending",
+  );
+  const boughtLabel = liveShipments.find(
+    (s) =>
+      s.direction === "outbound" &&
+      s.fulfillment_type === "drvn_shipping" &&
+      s.status === "label_purchased",
+  );
+
+  // Returns (0055): the latest RMA that still matters. RLS scopes to
+  // participants; terminal-but-informative states still render as history.
+  const { data: orderReturns } = await supabase
+    .from("returns")
+    .select("*")
+    .eq("order_id", id)
+    .order("created_at", { ascending: false });
+  const activeReturn =
+    (orderReturns ?? []).find(
+      (r) => !["cancelled", "expired", "rejected"].includes(r.status),
+    ) ?? null;
+
+  // Shop preference-return window (§24B/§37): judged against the policy
+  // FROZEN in the purchase snapshot, never the shop's current setting.
+  const frozenPolicy =
+    (items ?? [])
+      .map((i) => snapshots.get(i.id)?.commercial.returnPolicy)
+      .find((p) => p?.returnsAccepted) ?? null;
+  const shopReturnDeadline =
+    frozenPolicy && order.delivered_at
+      ? new Date(
+          new Date(order.delivered_at).getTime() +
+            frozenPolicy.windowDays * 86_400_000,
+        )
+      : null;
+  const canRequestShopReturn =
+    isBuyer &&
+    !activeReturn &&
+    ["delivered", "completed"].includes(order.status) &&
+    Boolean(shopReturnDeadline) &&
+    new Date().getTime() < (shopReturnDeadline?.getTime() ?? 0);
 
   // Falls back to the snapshot label, so a deleted account still reads sensibly.
   const counterpartyName =
@@ -310,7 +381,7 @@ export default async function OrderDetailPage({
                 <ObjectRow
                   key={item.id}
                   media={{
-                    src: item.listing_id ? cover.get(item.listing_id) : undefined,
+                    src: frozenGallery.get(item.id)?.[0]?.url,
                     alt: item.title ?? "Part",
                   }}
                 >
@@ -337,32 +408,80 @@ export default async function OrderDetailPage({
             </div>
           </Rv>
 
-          {/* As purchased (0024): the grade/checklist/notes frozen onto
-              this order at the moment of sale — the contract, not the
-              listing as it reads today. */}
-          {(items ?? []).some((item) => item.condition_snapshot) && (
+          {/* As purchased (0024/0049): the condition, identity, fitment and
+              photos frozen onto this order at the moment of sale — the
+              contract, not the listing as it reads today. */}
+          {(items ?? []).length > 0 && (
             <Rv className="tile" stagger={1}>
               <span className="microlabel microlabel--ink">As purchased</span>
               <div className="mt-3 grid gap-5">
                 {(items ?? []).map((item) => {
                   const snapshot = item.condition_snapshot as ConditionSnapshot;
-                  if (!snapshot) return null;
-                  const meta = item.listing_id
-                    ? listingCategory.get(item.listing_id)
-                    : undefined;
+                  const snap = snapshots.get(item.id);
+                  const photos = frozenGallery.get(item.id) ?? [];
+                  const partBits = [
+                    snap?.part.partNumber
+                      ? `Part № ${snap.part.partNumber}${
+                          snap.part.altPartNumbers.length
+                            ? ` (also ${snap.part.altPartNumbers.join(", ")})`
+                            : ""
+                        }`
+                      : null,
+                    snap?.fitment.length
+                      ? `Fits ${snap.fitment.map(fitmentLabel).join(", ")}`
+                      : null,
+                    snap?.sourceCar?.name
+                      ? `From ${snap.sourceCar.name}`
+                      : null,
+                  ].filter(Boolean);
                   return (
-                    <ConditionSummary
-                      key={item.id}
-                      snapshot={snapshot}
-                      category={meta?.category}
-                      subcategory={meta?.subcategory}
-                      label={
-                        (items ?? []).length > 1
-                          ? (item.title ?? "Part")
-                          : "Condition"
-                      }
-                      note="Declared by the seller at listing time and frozen onto this order at purchase."
-                    />
+                    <div key={item.id} className="grid gap-3">
+                      {snapshot && (
+                        <ConditionSummary
+                          snapshot={snapshot}
+                          category={snap?.listing.category ?? undefined}
+                          subcategory={snap?.listing.subcategory ?? undefined}
+                          label={
+                            (items ?? []).length > 1
+                              ? (item.title ?? "Part")
+                              : "Condition"
+                          }
+                          note="Declared by the seller at listing time and frozen onto this order at purchase."
+                        />
+                      )}
+                      {partBits.length > 0 && (
+                        <p className="spec-note">{partBits.join(" · ")}</p>
+                      )}
+                      {photos.length > 0 && (
+                        <div>
+                          <span className="microlabel">
+                            Photos at purchase
+                          </span>
+                          <div className="thumbs !mt-1">
+                            {photos.map((p, idx) => (
+                              <a
+                                key={`${item.id}-${idx}`}
+                                href={p.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="thumb"
+                              >
+                                <Media
+                                  src={p.url}
+                                  alt={
+                                    p.alt ??
+                                    item.title ??
+                                    "Listing photo at purchase"
+                                  }
+                                  className="h-full w-full"
+                                  role="row"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -529,12 +648,110 @@ export default async function OrderDetailPage({
             )}
           </Rv>
 
+          {/* Shipment tracking (0052): parcel-level truth for both parties —
+              per-parcel detail lives here rather than in more order states. */}
+          {liveShipments.length > 0 && (
+            <Rv className="tile" stagger={2}>
+              <span className="microlabel microlabel--ink">Tracking</span>
+              <div className="mt-2 grid gap-3">
+                {liveShipments.map((shipment) => {
+                  const latest = latestEventFor(shipment.id);
+                  return (
+                    <div key={shipment.id} className="grid gap-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-micro font-medium">
+                          {[shipment.carrier, shipment.service]
+                            .filter(Boolean)
+                            .join(" ") ||
+                            (shipment.fulfillment_type === "drvn_shipping"
+                              ? "DRVN Shipping"
+                              : "Shipment")}
+                          {shipment.direction === "return" ? " · return" : ""}
+                        </span>
+                        <span
+                          className={
+                            shipment.status === "delivered"
+                              ? "chip chip--ok"
+                              : "chip"
+                          }
+                        >
+                          {shipment.status.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      {shipment.tracking_code && (
+                        <p className="spec-note !mt-0">{shipment.tracking_code}</p>
+                      )}
+                      {latest?.description && (
+                        <p className="spec-note !mt-0">
+                          {latest.description}
+                          {latest.city ? ` — ${latest.city}${latest.state ? `, ${latest.state}` : ""}` : ""}
+                          {" · "}
+                          {new Date(latest.occurred_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Rv>
+          )}
+
           {/* Actions, gated by role and stage. */}
-          {isSeller && order.status === "paid" && (
+          {isSeller && order.status === "paid" && order.is_collection && (
+            <Rv className="tile" stagger={3}>
+              <span className="microlabel microlabel--ink">Pickup</span>
+              <div className="mt-3">
+                {order.pickup_ready_at ? (
+                  <RedeemPickupForm orderId={id} />
+                ) : (
+                  <ReadyForPickupButton orderId={id} />
+                )}
+              </div>
+            </Rv>
+          )}
+
+          {isBuyer &&
+            order.status === "paid" &&
+            order.is_collection &&
+            order.pickup_ready_at && (
+              <Rv className="tile" stagger={3}>
+                <span className="microlabel microlabel--ink">Pickup Pass</span>
+                <div className="mt-3">
+                  <PickupPassPanel orderId={id} />
+                </div>
+              </Rv>
+            )}
+
+          {isSeller && order.status === "paid" && !order.is_collection && (
             <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Dispatch</span>
-              <div className="mt-3">
-                <DispatchForm orderId={id} isCollection={order.is_collection} />
+              <div className="mt-3 grid gap-4">
+                {pendingLabel && (
+                  <BuyLabelPanel
+                    orderId={id}
+                    quotedCents={pendingLabel.quoted_cents}
+                  />
+                )}
+                {boughtLabel && (
+                  <LabelReadyPanel
+                    shipmentId={boughtLabel.id}
+                    labelUrl={boughtLabel.label_reference}
+                    trackingCode={boughtLabel.tracking_code}
+                    carrier={boughtLabel.carrier}
+                  />
+                )}
+                {pendingLabel || boughtLabel ? (
+                  <details>
+                    <summary className="jumplink cursor-pointer">
+                      Shipping it yourself instead?
+                    </summary>
+                    <div className="mt-3">
+                      <DispatchForm orderId={id} isCollection={order.is_collection} />
+                    </div>
+                  </details>
+                ) : (
+                  <DispatchForm orderId={id} isCollection={order.is_collection} />
+                )}
               </div>
             </Rv>
           )}
@@ -649,15 +866,13 @@ export default async function OrderDetailPage({
               {(items ?? []).map((item) => {
                 const snapshot = item.condition_snapshot as ConditionSnapshot;
                 if (!snapshot) return null;
-                const meta = item.listing_id
-                  ? listingCategory.get(item.listing_id)
-                  : undefined;
+                const snap = snapshots.get(item.id);
                 return (
                   <div key={item.id} className="mt-3">
                     <ConditionSummary
                       snapshot={snapshot}
-                      category={meta?.category}
-                      subcategory={meta?.subcategory}
+                      category={snap?.listing.category ?? undefined}
+                      subcategory={snap?.listing.subcategory ?? undefined}
                       label="What the listing promised (frozen at purchase)"
                       note="This is the contract the dispute is judged against — not anything said since in the conversation below."
                     />
@@ -709,11 +924,23 @@ export default async function OrderDetailPage({
                 </div>
               ) : (
                 isSeller && (
-                  <div className="mt-3">
+                  <div className="mt-3 grid gap-4">
                     <RefundOfferForm
                       orderId={id}
                       totalCents={order.total_cents}
                     />
+                    {/* §25: the third resolution — item back first, refund
+                        after. Hidden once an RMA is already running. */}
+                    {!activeReturn && (
+                      <ProposeReturnForm
+                        orderId={id}
+                        items={(items ?? []).map((item) => ({
+                          id: item.id,
+                          title: item.title ?? "Part",
+                          priceCents: item.price_cents,
+                        }))}
+                      />
+                    )}
                   </div>
                 )
               )}
@@ -736,6 +963,100 @@ export default async function OrderDetailPage({
                   <CloseDisputeButton orderId={id} />
                 </div>
               )}
+            </Rv>
+          )}
+
+          {/* Return / RMA (0055): its own tile — goods moving back is a
+              domain, not another order status. */}
+          {activeReturn && (
+            <Rv className="tile tile--deep" stagger={5}>
+              <TileHead
+                label="Return"
+                end={
+                  <span
+                    className={
+                      activeReturn.status === "completed"
+                        ? "chip chip--ok"
+                        : activeReturn.status === "escalated"
+                          ? "chip chip--live"
+                          : "chip"
+                    }
+                  >
+                    {activeReturn.status.replace(/_/g, " ")}
+                  </span>
+                }
+              />
+              {activeReturn.refund_amount_cents != null && (
+                <p className="spec-note">
+                  Agreed refund {formatPrice(activeReturn.refund_amount_cents)}
+                  {activeReturn.label_deduction_cents > 0
+                    ? ` − ${formatPrice(activeReturn.label_deduction_cents)} return postage`
+                    : ""}{" "}
+                  — moves once the part is back with the seller.
+                </p>
+              )}
+              {activeReturn.ship_by &&
+                ["approved", "awaiting_shipment"].includes(activeReturn.status) && (
+                  <p className="spec-note">
+                    {isBuyer ? "Ship it back by " : "Buyer ships by "}
+                    {new Date(activeReturn.ship_by).toLocaleDateString()} or the
+                    return lapses.
+                  </p>
+                )}
+              {activeReturn.seller_respond_by &&
+                activeReturn.status === "delivered" && (
+                  <p className="spec-note">
+                    {isSeller ? "Confirm or flag it by " : "The seller has until "}
+                    {new Date(activeReturn.seller_respond_by).toLocaleString()} —
+                    silence releases the agreed refund automatically.
+                  </p>
+                )}
+              {activeReturn.status === "escalated" && (
+                <p className="spec-note">
+                  DRVN is reviewing the returned item&apos;s condition — no refund
+                  moves until that&apos;s settled.
+                </p>
+              )}
+
+              {activeReturn.status === "requested" && (
+                <div className="mt-3">
+                  {isSeller ? (
+                    <ShopReturnApprovalPanel returnId={activeReturn.id} />
+                  ) : (
+                    <p className="spec-note">
+                      Waiting on the shop to approve your return request.
+                    </p>
+                  )}
+                </div>
+              )}
+              {isBuyer &&
+                ["approved", "awaiting_shipment"].includes(activeReturn.status) && (
+                  <div className="mt-3">
+                    <ReturnShippingPanel
+                      returnId={activeReturn.id}
+                      sellerPaysPostage={activeReturn.responsibility === "seller"}
+                    />
+                  </div>
+                )}
+              {isSeller &&
+                ["in_transit", "delivered"].includes(activeReturn.status) && (
+                  <div className="mt-3">
+                    <ReturnInspectionPanel returnId={activeReturn.id} />
+                  </div>
+                )}
+            </Rv>
+          )}
+
+          {canRequestShopReturn && shopReturnDeadline && frozenPolicy && (
+            <Rv className="tile" stagger={5}>
+              <span className="microlabel microlabel--ink">Returns</span>
+              <div className="mt-3">
+                <RequestShopReturnForm
+                  orderId={id}
+                  windowDays={frozenPolicy.windowDays}
+                  deadline={shopReturnDeadline.toISOString()}
+                />
+              </div>
             </Rv>
           )}
         </div>

@@ -184,6 +184,14 @@ export type Listing = {
   /** Seller-set flat shipping, charged on top of the asking price. */
   shipping_cents: number;
   allows_collection: boolean;
+  /** How this listing ships (0053): 'flat' seller-arranged, 'drvn' rated
+   *  DRVN Shipping (requires the parcel below), 'pickup_only'. */
+  shipping_mode: "flat" | "drvn" | "pickup_only";
+  /** Seller-declared packed parcel (0053) — required for 'drvn'. */
+  weight_oz: number | null;
+  length_in: number | null;
+  width_in: number | null;
+  height_in: number | null;
   /** Offers below this are refused before the seller sees them. */
   offer_floor_cents: number | null;
   currency: string;
@@ -307,6 +315,11 @@ export type Order = {
   ship_state: string | null;
   ship_phone: string | null;
   is_collection: boolean;
+  /** DRVN Shipping service frozen at checkout (0053, §15.7): per-listing
+   *  provider/service/amount/parcel. Null for flat/pickup orders. */
+  shipping_quote: Json | null;
+  /** Seller marked this collection order ready for handoff (0054). */
+  pickup_ready_at: string | null;
   carrier: string | null;
   tracking_number: string | null;
   shipped_at: string | null;
@@ -382,6 +395,228 @@ export type OrderItem = {
   /** The listing's condition/grade/checklist frozen at purchase by trigger
    *  (migration 0024) — the contract a dispute is judged against. */
   condition_snapshot: Json | null;
+  /** Everything the buyer purchased, frozen at purchase by trigger (0049):
+   *  listing identity, part numbers, condition, fitment, source car,
+   *  commercial terms, seller identity. Immutable; DB-guaranteed NOT NULL. */
+  commercial_snapshot: Json;
+  /** Shape version of commercial_snapshot. v1 = 0049. */
+  snapshot_version: number;
+};
+
+/** The listing gallery frozen at purchase (migration 0049). Immutable rows;
+ *  URLs are protected from media GC while referenced here. */
+export type OrderItemSnapshotImage = {
+  id: string;
+  order_item_id: string;
+  url: string;
+  alt: string | null;
+  position: number;
+  created_at: string;
+};
+
+/** Private ship-from/return address + handling config per seller (migration
+ *  0051). Owner/admin read only; writes are service-role server actions.
+ *  Never shown to buyers; never part of the commercial snapshot. */
+export type SellerFulfillmentProfile = {
+  seller_id: string;
+  ship_from_name: string;
+  company: string | null;
+  street1: string;
+  street2: string | null;
+  city: string;
+  state: string | null;
+  postal_code: string;
+  country: string;
+  phone: string | null;
+  return_name: string | null;
+  return_street1: string | null;
+  return_street2: string | null;
+  return_city: string | null;
+  return_state: string | null;
+  return_postal_code: string | null;
+  return_country: string | null;
+  default_handling_days: number;
+  /** Opaque EasyPost EndShipper reference (brief §10). Null until postage
+   *  identity is provisioned. */
+  easypost_end_shipper_id: string | null;
+  address_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Shipment lifecycle (migration 0052) — guarded by trigger; mirrored in
+ *  src/lib/domain/states.ts. */
+export type ShipmentStatus =
+  | "pending"
+  | "label_purchased"
+  | "in_transit"
+  | "out_for_delivery"
+  | "delivered"
+  | "returned_to_sender"
+  | "cancelled"
+  | "failed";
+
+/** One parcel/label, outbound or return (migration 0052). The authoritative
+ *  movement record; orders' carrier/tracking columns are the legacy mirror.
+ *  label_reference and provider internals are NOT client-readable. */
+export type Shipment = {
+  id: string;
+  order_id: string;
+  direction: "outbound" | "return";
+  return_id: string | null;
+  provider: string | null;
+  provider_shipment_id: string | null;
+  provider_tracker_id: string | null;
+  fulfillment_type: "drvn_shipping" | "seller_arranged";
+  carrier: string | null;
+  service: string | null;
+  status: ShipmentStatus;
+  tracking_code: string | null;
+  label_reference: string | null;
+  quoted_cents: number | null;
+  purchased_cents: number | null;
+  insured_value_cents: number | null;
+  signature_required: boolean;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ShipmentItem = {
+  shipment_id: string;
+  order_item_id: string;
+};
+
+/** Lightweight tracking history (migration 0052). provider_event_ref is the
+ *  webhook dedupe identity. */
+export type ShipmentEvent = {
+  id: string;
+  shipment_id: string;
+  provider_event_ref: string | null;
+  status: string;
+  description: string | null;
+  occurred_at: string;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  created_at: string;
+};
+
+/** Signed payout-affecting ledger rows (migration 0052, brief §17): label
+ *  costs ≤ 0, refunds ≥ 0. Append-only; voided_at stamps once. */
+export type SellerAdjustment = {
+  id: string;
+  seller_id: string | null;
+  order_id: string | null;
+  shipment_id: string | null;
+  return_id: string | null;
+  kind: "outbound_label" | "return_label" | "label_refund" | "insurance";
+  amount_cents: number;
+  currency: string;
+  external_reference: string | null;
+  description: string | null;
+  created_at: string;
+  voided_at: string | null;
+};
+
+/** Server-held DRVN Shipping quote (migration 0053). Deny-all RLS — clients
+ *  only ever hold the opaque id; amounts are re-read server-side at pay. */
+export type ShippingRateQuote = {
+  id: string;
+  buyer_id: string | null;
+  listing_id: string;
+  provider: string;
+  provider_shipment_id: string;
+  rate_ref: string;
+  carrier: string;
+  service: string;
+  service_label: string;
+  amount_cents: number;
+  currency: string;
+  est_delivery_days: number | null;
+  destination_hash: string;
+  parcel: Json;
+  consumed_order_id: string | null;
+  expires_at: string;
+  created_at: string;
+};
+
+/** Single-use pickup pass per order (migration 0054). Hashes only; RLS
+ *  deny-all — minted and redeemed exclusively through server actions. */
+export type PickupConfirmation = {
+  order_id: string;
+  token_hash: string;
+  code_hash: string;
+  attempts: number;
+  expires_at: string;
+  redeemed_at: string | null;
+  redeemed_by: string | null;
+  created_at: string;
+};
+
+/** Return/RMA lifecycle (migration 0055) — guarded by trigger; mirrored in
+ *  src/lib/domain/states.ts. */
+export type ReturnStatus =
+  | "requested"
+  | "approved"
+  | "awaiting_shipment"
+  | "in_transit"
+  | "delivered"
+  | "received"
+  | "completed"
+  | "rejected"
+  | "expired"
+  | "cancelled"
+  | "escalated";
+
+/** One RMA (migration 0055): authorizes goods moving back and — on
+ *  completion — a refund through the 0026 engine. Deadlines are frozen on
+ *  the row; entitlement is agreed at approval and never recomputed. */
+export type OrderReturn = {
+  id: string;
+  order_id: string;
+  requested_by: string | null;
+  return_type: "protection" | "shop_policy";
+  reason: string | null;
+  responsibility: "buyer" | "seller";
+  status: ReturnStatus;
+  requested_at: string;
+  approved_at: string | null;
+  /** Buyer must ship by this or the return expires (§27). */
+  ship_by: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  /** Seller confirms/objects by this or the agreed refund proceeds (§27). */
+  seller_respond_by: string | null;
+  received_at: string | null;
+  completed_at: string | null;
+  refund_amount_cents: number | null;
+  label_deduction_cents: number;
+  refund_operation_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReturnItem = {
+  return_id: string;
+  order_item_id: string;
+  quantity: number;
+  reason: string | null;
+  inspection_status: "pending" | "ok" | "mismatch";
+  inspection_note: string | null;
+};
+
+/** One-to-one shop extension of a profile (migration 0056). Public-readable;
+ *  writes service-role only, verification admin-granted. */
+export type ShopProfile = {
+  profile_id: string;
+  verification_status: "unverified" | "verified";
+  returns_accepted: boolean;
+  /** Predefined windows only: 14 | 30 | 60. */
+  return_window_days: number;
+  created_at: string;
+  updated_at: string;
 };
 
 /** Photos either party attaches to a dispute (migration 0024). */
@@ -926,6 +1161,72 @@ export type Database = {
           },
         ]
       >;
+      order_item_snapshot_images: Table<
+        OrderItemSnapshotImage,
+        "order_item_id" | "url",
+        [
+          {
+            foreignKeyName: "order_item_snapshot_images_order_item_id_fkey";
+            columns: ["order_item_id"];
+            isOneToOne: false;
+            referencedRelation: "order_items";
+            referencedColumns: ["id"];
+          },
+        ]
+      >;
+      seller_fulfillment_profiles: Table<
+        SellerFulfillmentProfile,
+        "seller_id" | "ship_from_name" | "street1" | "city" | "postal_code" | "country"
+      >;
+      shipments: Table<
+        Shipment,
+        "order_id" | "fulfillment_type",
+        [
+          {
+            foreignKeyName: "shipments_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ]
+      >;
+      shipment_items: Table<ShipmentItem, "shipment_id" | "order_item_id">;
+      pickup_confirmations: Table<
+        PickupConfirmation,
+        "order_id" | "token_hash" | "code_hash" | "expires_at"
+      >;
+      shipping_rate_quotes: Table<
+        ShippingRateQuote,
+        | "listing_id"
+        | "provider"
+        | "provider_shipment_id"
+        | "rate_ref"
+        | "carrier"
+        | "service"
+        | "service_label"
+        | "amount_cents"
+        | "destination_hash"
+        | "parcel"
+        | "expires_at"
+      >;
+      shipment_events: Table<ShipmentEvent, "shipment_id" | "status" | "occurred_at">;
+      seller_adjustments: Table<SellerAdjustment, "kind" | "amount_cents">;
+      returns: Table<
+        OrderReturn,
+        "order_id" | "return_type" | "responsibility",
+        [
+          {
+            foreignKeyName: "returns_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ]
+      >;
+      return_items: Table<ReturnItem, "return_id" | "order_item_id">;
+      shop_profiles: Table<ShopProfile, "profile_id">;
       payments: Table<Payment, "order_id" | "amount_cents">;
       offers: Table<
         Offer,
@@ -980,15 +1281,27 @@ export type Database = {
       };
     };
     Functions: {
-      /** Claims listings and creates pending orders in one transaction (0007). */
+      /** Claims listings and creates pending orders in one transaction (0007;
+       *  0053 added the rated-checkout shipping overrides). */
       purchase_begin: {
         Args: {
           p_buyer_id: string;
           p_listing_ids: string[];
           p_idempotency_key?: string | null;
           p_reservation_window?: string;
+          /** listing_id → shipping cents from a server-validated quote (0053). */
+          p_shipping_overrides?: Record<string, number> | null;
         };
         Returns: PurchaseBeginResult;
+      };
+      /** Atomically burns a pickup pass and delivers the order (0054). */
+      pickup_redeem: {
+        Args: {
+          p_order_id: string;
+          p_seller_id: string;
+          p_hash: string;
+        };
+        Returns: { ok: boolean; reason?: string };
       };
       /** Settles a claimed order — the future webhook entry point (0007). */
       purchase_finalize: {

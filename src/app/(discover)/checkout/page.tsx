@@ -120,9 +120,19 @@ export default async function CheckoutPage() {
               priceLabel: formatPrice(line.priceCents),
             }))}
             subtotalLabel={formatPrice(cart.goodsCents)}
-            shippingLabel={cart.shippingCents > 0 ? formatPrice(cart.shippingCents) : "Free"}
+            shippingLabel={
+              cart.drvnLines.length
+                ? cart.shippingCents > 0
+                  ? `${formatPrice(cart.shippingCents)} + rates at checkout`
+                  : "Calculated from your address"
+                : cart.shippingCents > 0
+                  ? formatPrice(cart.shippingCents)
+                  : "Free"
+            }
             total={formatPrice(cart.totalCents)}
             savedCards={savedCards}
+            drvnListings={cart.drvnLines}
+            baseTotalCents={cart.totalCents}
           />
 
           {/* The payment-mode notice and the terms/fees line live in the aside

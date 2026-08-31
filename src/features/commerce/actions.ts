@@ -8,6 +8,13 @@ import { redirect } from "next/navigation";
 import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
 import { isPlausibleEmail, setGuestOrders } from "@/lib/guest-checkout";
 import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
+import {
+  freezeOrderShipping,
+  hashDestination,
+  planCartFulfillment,
+  type FulfillmentPlan,
+} from "./checkout-shipping";
+import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
 import { formatPrice } from "@/lib/payments/fee";
 import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
 import { getPaymentProvider } from "@/lib/payments/provider";
@@ -116,7 +123,13 @@ export async function removeFromCart(formData: FormData) {
 async function purchaseListings(
   buyerId: string,
   listingIds: string[],
-  options: { idempotencyKey?: string; shipping?: ShippingDetails } = {}
+  options: {
+    idempotencyKey?: string;
+    shipping?: ShippingDetails;
+    /** Server-validated fulfillment plan (0053): quoted DRVN-Shipping amounts
+     *  (or zeros for pickup) + the quotes to freeze onto the orders. */
+    fulfillment?: FulfillmentPlan;
+  } = {}
 ): Promise<CheckoutOutcome> {
   const admin = createAdminClient();
   const empty: CheckoutOutcome = { orderIds: [], purchased: [], skipped: [] };
@@ -131,10 +144,12 @@ async function purchaseListings(
   const titleFor = (id: string) =>
     requested?.find((l) => l.id === id)?.title ?? "That part";
 
+  const overrides = options.fulfillment?.overrides ?? {};
   const { data, error } = await admin.rpc("purchase_begin", {
     p_buyer_id: buyerId,
     p_listing_ids: listingIds,
     p_idempotency_key: options.idempotencyKey ?? null,
+    p_shipping_overrides: Object.keys(overrides).length ? overrides : null,
   });
 
   if (error) {
@@ -165,10 +180,13 @@ async function purchaseListings(
   const failures: string[] = [];
 
   // Attach the delivery details to every order before charging, so a paid
-  // order always knows where it is going.
+  // order always knows where it is going. The 0053 collection guard re-checks
+  // is_collection against the frozen snapshots — a refusal here means the
+  // pre-validation missed something, and the checkout must not continue as a
+  // shipping order the buyer believes is a pickup.
   if (options.shipping) {
     for (const order of result.orders) {
-      await admin
+      const { error: shipWrite } = await admin
         .from("orders")
         .update({
           ship_name: options.shipping.name,
@@ -182,7 +200,24 @@ async function purchaseListings(
           is_collection: options.shipping.isCollection,
         })
         .eq("id", order.order_id);
+      if (shipWrite) {
+        reportError("[commerce] delivery details write failed", {
+          orderId: order.order_id,
+          shipWrite,
+        });
+        return {
+          ...empty,
+          skipped,
+          error: "Couldn't confirm the delivery method for this order. Nothing was charged.",
+        };
+      }
     }
+  }
+
+  // Freeze the chosen DRVN-Shipping service onto each order and create the
+  // pending shipment rows the seller will buy labels from (0053).
+  if (options.fulfillment?.quotes.size) {
+    await freezeOrderShipping(admin, result.orders, options.fulfillment.quotes);
   }
 
   // ONE payment per checkout, even for a multi-seller basket: the buyer
@@ -381,11 +416,39 @@ export async function checkoutCart(
     }
   }
 
+  // Fulfillment plan (0053, §14/§15): pickup eligibility and DRVN-Shipping
+  // amounts are validated server-side — the checkbox and the rate picker are
+  // requests, not facts.
+  const quoteIds: Record<string, string> = {};
+  for (const id of ids) {
+    const value = formData.get(`quote_${id}`);
+    if (typeof value === "string" && value) quoteIds[id] = value;
+  }
+  const { plan, error: planError } = await planCartFulfillment(createAdminClient(), {
+    listingIds: ids,
+    isCollection: shipping?.isCollection ?? false,
+    quoteIds,
+    buyerId,
+    destinationHash: shipping
+      ? hashDestination({
+          line1: shipping.line1,
+          city: shipping.city,
+          postcode: shipping.postcode,
+          country: shipping.country,
+        })
+      : "",
+  });
+  if (planError || !plan) return { error: planError ?? "Couldn't verify delivery options." };
+
   // Carried on the form so a double-submitted checkout replays the first
   // result instead of creating a second set of orders.
   const idempotencyKey = String(formData.get("idempotency_key") ?? "") || randomUUID();
 
-  const outcome = await purchaseListings(buyerId, ids, { idempotencyKey, shipping });
+  const outcome = await purchaseListings(buyerId, ids, {
+    idempotencyKey,
+    shipping,
+    fulfillment: plan,
+  });
 
   // Whatever happens next — an inline confirmation or a Stripe redirect — the
   // guest has no session, so this browser needs a receipt saying which orders
@@ -481,11 +544,20 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
 
   const { data: listing } = await supabase
     .from("listings")
-    .select("seller_id, status, offer_floor_cents, price_cents")
+    .select("seller_id, status, offer_floor_cents, price_cents, shipping_mode")
     .eq("id", listingId)
     .maybeSingle();
   if (!listing || listing.status !== "active") return { error: "Listing is not available." };
   if (listing.seller_id === user.id) return { error: "You can't offer on your own listing." };
+  // Decision of record (0053): offers freeze order money at accept time, but
+  // DRVN Shipping is priced per-address at checkout — the two can't both hold
+  // yet, so rated listings are buy-now/pickup until offer-time rating ships.
+  if (listing.shipping_mode === "drvn") {
+    return {
+      error:
+        "This listing uses DRVN Shipping, which is priced at checkout — offers aren't available on it yet. Buy now instead.",
+    };
+  }
   if (amount > listing.price_cents) {
     return { error: "That's above the asking price — buy it now instead." };
   }
@@ -1061,6 +1133,63 @@ export async function markShipped(
     .eq("id", orderId);
   if (error) return { error: error.message };
 
+  // Shipments are the authoritative movement record (0052): manual dispatch
+  // creates a seller_arranged shipment unless a live outbound one already
+  // exists (a bought DRVN label reaching this path as a fallback). Tracker
+  // registration is best-effort — carrier webhooks then drive delivery.
+  if (!order.is_collection) {
+    const { data: existing } = await admin
+      .from("shipments")
+      .select("id, status")
+      .eq("order_id", orderId)
+      .eq("direction", "outbound")
+      .not("status", "in", "(cancelled,failed)");
+    if (!existing?.length) {
+      const { data: shipment, error: shipmentError } = await admin
+        .from("shipments")
+        .insert({
+          order_id: orderId,
+          direction: "outbound",
+          fulfillment_type: "seller_arranged",
+          carrier: carrier || null,
+          tracking_code: tracking || null,
+          status: "in_transit",
+          shipped_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (shipmentError) {
+        reportError("[dispatch] shipment record failed", { orderId, shipmentError });
+      } else if (shipment) {
+        const { data: items } = await admin
+          .from("order_items")
+          .select("id")
+          .eq("order_id", orderId);
+        if (items?.length) {
+          await admin
+            .from("shipment_items")
+            .insert(items.map((i) => ({ shipment_id: shipment.id, order_item_id: i.id })));
+        }
+        if (tracking && integratedShippingEnabled()) {
+          try {
+            const summary = await getShippingProvider().createTracker({
+              trackingCode: tracking,
+              carrier: carrier || null,
+            });
+            if (summary.trackerRef) {
+              await admin
+                .from("shipments")
+                .update({ provider: getShippingProvider().name, provider_tracker_id: summary.trackerRef })
+                .eq("id", shipment.id);
+            }
+          } catch (trackerError) {
+            reportError("[dispatch] tracker registration failed", { orderId, trackerError });
+          }
+        }
+      }
+    }
+  }
+
   capture(user.id, { event: "seller_dispatched" });
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
@@ -1330,17 +1459,33 @@ export async function offerRefund(
   if (order.status !== "disputed") return { error: "This order isn't in dispute." };
   if (!order.buyer_id) return { error: "The buyer's account is no longer active." };
 
-  // Refunds are all-or-nothing: the offer is always everything the buyer
-  // paid. No amount input to validate, no partial-refund bookkeeping.
+  // §25: the offer can be partial (buyer keeps the item) or full. The amount
+  // field is optional — empty means everything still refundable. The 0026
+  // engine re-checks the remainder under a row lock either way.
   const { data: payment } = await admin
     .from("payments")
     .select("amount_cents, refunded_cents, status")
     .eq("order_id", orderId)
     .maybeSingle();
-  if (payment && payment.refunded_cents > 0) {
-    return { error: "This order has already been refunded." };
+  const paidCents = payment?.amount_cents ?? order.total_cents;
+  const remainingCents = paidCents - (payment?.refunded_cents ?? 0);
+  if (remainingCents <= 0) {
+    return { error: "This order has already been fully refunded." };
   }
-  const amount = payment?.amount_cents ?? order.total_cents;
+
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  let amount = remainingCents;
+  if (amountRaw) {
+    amount = Math.round(Number(amountRaw) * 100);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { error: "Enter a valid refund amount." };
+    }
+    if (amount > remainingCents) {
+      return {
+        error: `That's more than the ${formatPrice(remainingCents)} still refundable on this order.`,
+      };
+    }
+  }
 
   const { data: offered, error } = await admin
     .from("orders")
@@ -1413,8 +1558,8 @@ export async function acceptRefund(
   if (!payment?.provider_reference) {
     return { error: "No payment on file for this order." };
   }
-  if (payment.refunded_cents > 0) {
-    return { error: "This order has already been refunded." };
+  if (payment.refunded_cents >= payment.amount_cents) {
+    return { error: "This order has already been fully refunded." };
   }
 
   // Atomic claim: only one request can null the still-set refund_offered_at.
@@ -1433,9 +1578,12 @@ export async function acceptRefund(
   // The one refund path (lib/payments/refunds.ts): per-order idempotency,
   // transfer reversal if the seller was already paid, fee reconciliation,
   // and a recovery case instead of a log line if the reversal fails.
-  const amount = payment.amount_cents;
+  // The amount is the OFFER (§25 — possibly partial, buyer keeps the item);
+  // a partial settle restores pre_dispute_status, a full one → refunded.
+  const amount = claimedAmount;
   const outcome = await refundOrder(admin, {
     orderId,
+    amountCents: amount,
     reason: "Refund accepted by buyer after dispute",
     initiator: { kind: "buyer_accept", buyerId: user.id },
     resolveDispute: true,

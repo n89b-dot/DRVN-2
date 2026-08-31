@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+import { AnimatePresence, motion } from "motion/react";
+
+import { springs, transitions } from "@/lib/motion";
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -84,33 +88,48 @@ export function Dialog({
     };
   }, [open, handleKeyDown]);
 
-  if (!open) return null;
-
+  // AnimatePresence keeps the dialog in the tree while it exits, which is
+  // what finally gives the modals a real close animation — the old CSS
+  // version unmounted instantly and relied on @starting-style for entry.
   return (
-    <div
-      className={`sheetwrap is-open ${align === "center" ? "!items-center" : ""}`}
-      // Clicking the backdrop closes; clicks inside the panel must not.
-      onClick={onClose}
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-        className={className}
-      >
-        {children}
-        <button
-          type="button"
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className={`sheetwrap is-open ${align === "center" ? "!items-center" : ""}`}
+          // Clicking the backdrop closes; clicks inside the panel must not.
           onClick={onClose}
-          className="relbtn !static mt-3"
-          aria-label={`Close ${label}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: transitions.fast }}
+          exit={{ opacity: 0, transition: transitions.fast }}
         >
-          Close
-        </button>
-      </div>
-    </div>
+          <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={label}
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
+            className={className}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              transition: { ...springs.spatial, opacity: transitions.standard },
+            }}
+            exit={{ opacity: 0, y: 8, transition: transitions.fast }}
+          >
+            {children}
+            <button
+              type="button"
+              onClick={onClose}
+              className="relbtn !static mt-3"
+              aria-label={`Close ${label}`}
+            >
+              Close
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

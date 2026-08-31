@@ -12,6 +12,11 @@ import {
 } from "@/lib/listing-import/schema";
 import { mapModCategoryToListing } from "@/lib/mods/category-map";
 import { sellerCanPublish } from "@/lib/payments/connect";
+import {
+  fulfillmentProfileReady,
+  loadFulfillmentProfile,
+} from "@/features/commerce/fulfillment";
+import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
@@ -110,7 +115,7 @@ export default async function SellPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: cars, error }, makes, canPublish] = await Promise.all([
+  const [{ data: cars, error }, makes, canPublish, fulfillment] = await Promise.all([
     supabase
       .from("cars")
       .select("id, name, make, model, year")
@@ -121,7 +126,12 @@ export default async function SellPage({
     // sell page (resolvePaymentsMode throws by design). The server action
     // re-checks on publish either way.
     sellerCanPublish(user.id).catch(() => true),
+    loadFulfillmentProfile(user.id).catch(() => null),
   ]);
+  const drvnShipping = {
+    enabled: integratedShippingEnabled(),
+    profileReady: fulfillmentProfileReady(fulfillment),
+  };
 
   if (error) reportError("[sell] failed to load cars", error);
 
@@ -245,6 +255,7 @@ export default async function SellPage({
         userId={user.id}
         initialValues={initialValues}
         canPublish={canPublish}
+        drvnShipping={drvnShipping}
       />
 
       <div className="mt-8">

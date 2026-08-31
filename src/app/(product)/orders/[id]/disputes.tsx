@@ -12,6 +12,7 @@ import {
   type CommerceState,
 } from "@/features/commerce/actions";
 import { DISPUTE_CATEGORIES } from "@/features/commerce/disputes";
+import { TextField } from "@/components/ui";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/client";
 
@@ -93,12 +94,19 @@ export function RefundOfferForm({
   return (
     <form action={action} className="grid gap-3">
       <input type="hidden" name="order_id" value={orderId} />
-      <p className="field__hint">
-        Refunds are all-or-nothing: the buyer gets the full {formatPrice(totalCents)} back and the
-        order closes as refunded.
-      </p>
+      <TextField
+        id={`refund-amount-${orderId}`}
+        label="Refund amount"
+        name="amount"
+        inputMode="decimal"
+        placeholder={(totalCents / 100).toFixed(2)}
+        prefix="$"
+        className="!max-w-none"
+        fieldClassName="!mb-0"
+        hint={`Leave empty for the full ${formatPrice(totalCents)}. A partial refund settles the dispute and the buyer keeps the item — useful when return postage makes no sense.`}
+      />
       <button type="submit" disabled={pending} className="btn btn--live">
-        {pending ? "Sending…" : `Offer the full ${formatPrice(totalCents)} refund`}
+        {pending ? "Sending…" : "Offer this refund"}
       </button>
       <Result state={state} />
     </form>

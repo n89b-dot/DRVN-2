@@ -7,11 +7,17 @@ import { paymentsAreLive } from "@/lib/payments/provider";
 
 export const metadata = {
   title: "Fees - DRVN",
-  description: "What DRVN charges: 10% of the sale price, out of the seller's payout. Nothing else.",
+  description:
+    "What DRVN charges: 10% of the sale total (item + shipping), out of the seller's payout. Nothing else.",
   alternates: { canonical: "/fees" },
 };
 
-const EXAMPLES = [50_00, 250_00, 1_200_00];
+/** [price, buyer-paid shipping] pairs — the middle one is the brief's worked example. */
+const EXAMPLES: [number, number][] = [
+  [50_00, 8_00],
+  [300_00, 23_00],
+  [1_200_00, 0],
+];
 
 /**
  * Fee transparency, computed from the same constant the checkout uses — so the
@@ -29,8 +35,9 @@ export default function FeesPage() {
           {percent}% of the sale. <span className="live-word">That&apos;s it.</span>
         </h1>
         <p className="sub">
-          Listing is free. DRVN takes {percent}% of what a part sells for, out of the seller&apos;s
-          payout. There&apos;s no fee on shipping, no listing fee, and no subscription.
+          Listing is free. DRVN takes {percent}% of the sale total — the item price plus any
+          buyer-paid shipping — out of the seller&apos;s payout. There&apos;s no listing fee and no
+          subscription.
         </p>
       </Rv>
 
@@ -40,26 +47,34 @@ export default function FeesPage() {
           <table className="spec mt-3">
             <thead className="sr-only">
               <tr>
-                <th>Sale price</th>
+                <th>Sale total</th>
                 <th>DRVN fee</th>
                 <th>Seller receives</th>
               </tr>
             </thead>
             <tbody>
-              {EXAMPLES.map((price) => (
-                <tr key={price}>
-                  <td>Sells for {formatPrice(price)}</td>
-                  <td>
-                    fee {formatPrice(platformFeeCents(price))} → seller gets{" "}
-                    <b>{formatPrice(price - platformFeeCents(price))}</b>
-                  </td>
-                </tr>
-              ))}
+              {EXAMPLES.map(([price, shipping]) => {
+                const basis = price + shipping;
+                return (
+                  <tr key={price}>
+                    <td>
+                      {formatPrice(price)}
+                      {shipping > 0 ? <> + {formatPrice(shipping)} shipping</> : null}
+                    </td>
+                    <td>
+                      fee {formatPrice(platformFeeCents(basis))} → seller gets{" "}
+                      <b>{formatPrice(basis - platformFeeCents(basis))}</b>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <p className="spec-note">
-            Plus shipping, in full. If a seller charges {formatPrice(1_500)} postage, the buyer pays
-            it and the seller keeps every penny of it.
+            The fee applies to the whole amount the buyer pays — item and shipping together — so
+            the split between price and postage never changes what DRVN charges. Out of the seller
+            side, actual postage costs (like a label bought through DRVN) then come out of the
+            shipping the buyer already paid.
           </p>
         </Rv>
 

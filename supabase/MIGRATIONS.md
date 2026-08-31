@@ -7,7 +7,72 @@ preceding `drop policy if exists`, and `purchase_begin` left its temp table
 behind if called twice in one transaction. Both fixed — verified by applying each
 file twice.)
 
-## Status: 0001–0039 recorded below; 0040–0046 applied but unrecorded here; 0047–0048 applied
+## Status: 0001–0039 recorded below; 0040–0046 applied but unrecorded here; 0047–0056 applied
+
+0056 (shop_profiles — one-to-one shop extension of profiles: admin-granted
+verification_status, small preference-return policy (accepted + 14/30/60-day
+window); public-readable, writes service-role only; restates
+listing_commercial_snapshot to freeze the shop policy + verified state into
+each purchase) applied 29 August 2026 via `node scripts/apply-migration.mjs`,
+applied twice; self-checks pass.
+
+0055 (returns — the RMA domain: `returns` (type protection|shop_policy,
+responsibility, guarded 11-state lifecycle, deadlines frozen on the row,
+agreed entitlement + label deduction, refund_operation_id link) +
+`return_items` (item-aware, per-item inspection, one-live-RMA-per-unit guard
+trigger); shipments.return_id gains its FK; participants-read RLS) applied
+29 August 2026, applied twice; self-checks pass. Guard suite
+`supabase/tests/return_guard.sql` green against the project (rolled back):
+lifecycle guard, one-live-RMA, plus the 0054 pickup_redeem checks
+(seller-only, attempt counting, single-use, delivers the order).
+
+0054 (pickup_confirmations — single-use Pickup Pass per collection order:
+hashes only (token + 6-digit code), 10-attempt lockout, 1h TTL, atomic
+`pickup_redeem()` that delivers the order; orders.pickup_ready_at; restates
+listing_commercial_snapshot to freeze the listing's real shipping_mode)
+applied 29 August 2026, applied twice; self-checks pass.
+
+0053 (listing_shipping_choices — listings.shipping_mode flat|drvn|pickup_only
++ seller-declared parcel; server-held `shipping_rate_quotes` (deny-all RLS,
+destination-fingerprinted, expiring); orders.shipping_quote frozen service
+snapshot; `guard_order_collection` trigger — is_collection only when every
+item's SNAPSHOT offered it; purchase_begin restated with
+p_shipping_overrides (old 4-arg overload dropped)) applied 29 August 2026,
+applied twice; self-checks pass.
+
+0052 (shipments_and_adjustments — `shipments` (outbound|return, guarded
+lifecycle, label_reference excluded from the client column grant) +
+`shipment_items` (one-live-shipment-per-item-per-direction guard) +
+`shipment_events` (webhook-dedupe unique index) + `seller_adjustments`
+(signed append-only label/insurance ledger, unique (kind, external_reference)
+idempotency, void-once guard)) applied 29 August 2026, applied twice;
+self-checks pass.
+
+0051 (seller_fulfillment_profiles — PRIVATE ship-from/return address +
+handling days + easypost_end_shipper_id per seller; owner/admin read only,
+zero client write policies) applied 29 August 2026, applied twice;
+self-checks pass.
+
+0050 (fee_includes_shipping — platform-fee basis becomes goods subtotal +
+buyer-paid shipping in both order-creation paths; `purchase_begin` and
+`offer_accept_begin` restated in full with only the fee line changed.
+Historical orders untouched: every consumer prefers the stored
+`platform_fee_cents`) applied 29 August 2026 via
+`node scripts/apply-migration.mjs`, applied twice (idempotency check);
+self-checks pass.
+
+0049 (commercial_snapshot — the immutable "as purchased" record:
+`order_items.commercial_snapshot` (versioned jsonb, NOT NULL, filled by
+BEFORE INSERT trigger from the listing/fitment/part-numbers/source-car/seller
+rows, superseding 0024's condition-only trigger) + `order_item_snapshot_images`
+(gallery frozen row-per-photo, participant-read RLS, UPDATE-refusing guard);
+column guard makes the frozen order_items columns immutable; backfill for
+pre-0049 rows flagged `backfilled`/`degraded`) applied 29 August 2026 via
+`node scripts/apply-migration.mjs`, applied twice (idempotency check);
+self-checks pass. Guard suite `supabase/tests/snapshot_guard.sql` run against
+the project (rolled back): all 7 assertions pass, including
+edit-everything-after-sale leaving the frozen record byte-identical and the
+same buyer total producing the same fee regardless of price/shipping split.
 
 0048 (search_wordwise — rewrites `search_listing_ids` from contiguous-phrase
 matching to word-wise matching with word-similarity typo tolerance and

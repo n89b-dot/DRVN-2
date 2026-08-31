@@ -3,13 +3,16 @@ import { describe, expect, it } from "vitest";
 import { PLATFORM_FEE_BPS, platformFeeCents } from "./provider";
 
 /**
- * The fee is the one number in the product that affects what a seller is paid,
- * and it was previously untested. These lock the invariants the UI copy
- * promises: 10% of goods, integer cents, deducted from the seller — never
- * added to the buyer's total, and never charged on shipping.
+ * The fee is the one number in the product that affects what a seller is paid.
+ * These lock the invariants the UI copy promises: 10% of the fee basis,
+ * integer cents, deducted from the seller — never added to the buyer's total.
+ * Since 0050 the basis is goods subtotal + buyer-paid shipping, so pricing
+ * value into "shipping" cannot reduce DRVN's fee. The authoritative
+ * computation lives in SQL (purchase_begin / offer_accept_begin); this mirror
+ * must agree with it.
  */
 describe("platformFeeCents", () => {
-  it("is 10% of the subtotal", () => {
+  it("is 10% of the basis", () => {
     expect(PLATFORM_FEE_BPS).toBe(1000);
     expect(platformFeeCents(10_000)).toBe(1_000);
     expect(platformFeeCents(0)).toBe(0);
@@ -35,18 +38,27 @@ describe("platformFeeCents", () => {
     }
   });
 
-  it("is charged on goods only — shipping passes through", () => {
-    const goods = 20_000;
-    const shipping = 1_500;
-    const fee = platformFeeCents(goods);
+  it("is charged on goods + buyer-paid shipping (0050)", () => {
+    // The brief's worked example: $300 item, $23 shipping → $32.30 fee.
+    const goods = 30_000;
+    const shipping = 2_300;
+    const fee = platformFeeCents(goods + shipping);
 
-    // Buyer pays goods + shipping; seller receives goods - fee + shipping.
-    const buyerTotal = goods + shipping;
-    const sellerPayout = buyerTotal - fee;
+    expect(fee).toBe(3_230);
+    // Buyer pays goods + shipping; seller receives that minus the fee (the
+    // actual postage label then comes out of the shipping already paid).
+    expect(goods + shipping - fee).toBe(29_070);
+  });
 
-    expect(fee).toBe(2_000);
-    expect(sellerPayout).toBe(19_500);
-    // The fee must not scale with shipping.
-    expect(platformFeeCents(goods)).toBe(platformFeeCents(goods));
+  it("cannot be avoided by moving value into shipping", () => {
+    // Same $323 total, three price/shipping splits — same fee every time.
+    const splits: [number, number][] = [
+      [32_300, 0],
+      [30_000, 2_300],
+      [10_000, 22_300],
+    ];
+    const fees = splits.map(([goods, shipping]) => platformFeeCents(goods + shipping));
+    expect(new Set(fees).size).toBe(1);
+    expect(fees[0]).toBe(3_230);
   });
 });

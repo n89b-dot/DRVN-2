@@ -10,10 +10,18 @@ import {
   STATE_GROUPS,
 } from "./next-action";
 
-const order = (status: OrderStatus, overrides: Partial<{ is_collection: boolean; tracking_number: string | null }> = {}) => ({
+const order = (
+  status: OrderStatus,
+  overrides: Partial<{
+    is_collection: boolean;
+    tracking_number: string | null;
+    pickup_ready_at: string | null;
+  }> = {},
+) => ({
   status,
   is_collection: false,
   tracking_number: null,
+  pickup_ready_at: null,
   ...overrides,
 });
 
@@ -38,8 +46,18 @@ describe("nextAction", () => {
     expect(nextAction(order("paid"), true)).toBe("Dispatch required");
   });
 
-  it("asks a seller to arrange collection when there's nothing to ship", () => {
-    expect(nextAction(order("paid", { is_collection: true }), true)).toBe("Arrange collection");
+  it("walks both parties through the pickup handshake (0054)", () => {
+    // Before the seller readies it, the ball is in their court.
+    expect(nextAction(order("paid", { is_collection: true }), true)).toBe(
+      "Mark it ready for pickup",
+    );
+    expect(nextAction(order("paid", { is_collection: true }), false)).toBe(
+      "Waiting on the seller to prepare pickup",
+    );
+    // Once ready, the handoff needs the Pickup Pass from the buyer's side.
+    const ready = order("paid", { is_collection: true, pickup_ready_at: "2026-08-29T00:00:00Z" });
+    expect(nextAction(ready, true)).toBe("At handoff, scan the buyer's Pickup Pass");
+    expect(nextAction(ready, false)).toBe("Ready — show your Pickup Pass at handoff");
   });
 
   it("tells a buyer the same order is waiting on the seller", () => {

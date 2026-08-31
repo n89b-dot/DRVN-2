@@ -101,7 +101,9 @@ export default async function CartPage() {
 
   const goods = active.reduce((sum, l) => sum + l.price_cents, 0);
   const shipping = active.reduce((sum, l) => sum + (l.shipping_cents ?? 0), 0);
-  const fee = platformFeeCents(goods);
+  // Fee basis is goods + buyer-paid shipping (0050) — the estimate must match
+  // what purchase_begin will charge.
+  const fee = platformFeeCents(goods + shipping);
   const total = goods + shipping;
 
   const listingIds = active.map((l) => l.id);

@@ -46,6 +46,9 @@ export type NextActionInput = {
   status: OrderStatus;
   is_collection: boolean;
   tracking_number: string | null;
+  /** 0054: seller marked a collection order ready for handoff. Optional so
+   *  callers with pre-0054 row shapes keep working. */
+  pickup_ready_at?: string | null;
 };
 
 /**
@@ -61,11 +64,15 @@ export function nextAction(order: NextActionInput, isSale: boolean): string | nu
     case "requires_action":
       return isSale ? "Buyer's payment needs confirming" : "Your payment needs confirming";
     case "paid":
-      return isSale
-        ? order.is_collection
-          ? "Arrange collection"
-          : "Dispatch required"
-        : "Waiting on dispatch";
+      if (order.is_collection) {
+        if (order.pickup_ready_at) {
+          return isSale
+            ? "At handoff, scan the buyer's Pickup Pass"
+            : "Ready — show your Pickup Pass at handoff";
+        }
+        return isSale ? "Mark it ready for pickup" : "Waiting on the seller to prepare pickup";
+      }
+      return isSale ? "Dispatch required" : "Waiting on dispatch";
     case "shipped":
       return isSale
         ? "In transit — waiting on delivery"

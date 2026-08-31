@@ -46,7 +46,10 @@ export type RefundInitiator =
   | { kind: "buyer_accept"; buyerId: string }
   | { kind: "seller_cancel"; sellerId: string }
   | { kind: "card_dispute_lost" }
-  | { kind: "dispute_sla" };
+  | { kind: "dispute_sla" }
+  /** A completed RMA (0055) executing its agreed refund. The requested_by
+   *  label ("return:<id>") is how the return row finds its operation. */
+  | { kind: "return_completed"; returnId: string };
 
 export type RefundOrderInput = {
   orderId: string;
@@ -83,6 +86,8 @@ function initiatorLabel(initiator: RefundInitiator): string {
       return "stripe:dispute_lost";
     case "dispute_sla":
       return "scheduler:dispute_sla";
+    case "return_completed":
+      return `return:${initiator.returnId}`;
   }
 }
 
@@ -192,7 +197,7 @@ export async function refundOrder(
   }
 
   const disputeOutcome: DisputeOutcome =
-    initiator.kind === "buyer_accept"
+    initiator.kind === "buyer_accept" || initiator.kind === "return_completed"
       ? "refund_accepted"
       : initiator.kind === "dispute_sla"
         ? "auto_refunded"

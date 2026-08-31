@@ -154,15 +154,20 @@ async function stepFetch(admin: Admin, row: ListingImport, userId: string): Prom
 
   if (policy.adapterId === "facebook") {
     capture(userId, { event: "listing_import_facebook_outcome", props: { outcome: "fetch_attempted" } });
-    if (config.browserEnabled) {
-      capture(userId, { event: "listing_import_facebook_outcome", props: { outcome: "render_attempted" } });
-    }
   }
 
   const outcome = await fetchNormalizedSource(policy, url, {
     allowPrivate: config.allowPrivateHosts,
     browserEnabled: config.browserEnabled,
   });
+
+  if (policy.adapterId === "facebook") {
+    const renderAttempted =
+      (outcome.ok && outcome.rendered) || (!outcome.ok && outcome.attemptedRender);
+    if (renderAttempted) {
+      capture(userId, { event: "listing_import_facebook_outcome", props: { outcome: "render_attempted" } });
+    }
+  }
 
   if (!outcome.ok) {
     capture(userId, {
@@ -236,9 +241,25 @@ async function stepExtract(admin: Admin, row: ListingImport, userId: string): Pr
 
   let extraction: ListingImportExtraction = finalized.extraction;
 
-  // When one item was selected, the multi-item flags no longer apply.
+  // When one item was selected, the multi-item flags no longer apply — and
+  // the item's own stated price text is evidence enough to backstop a price
+  // the focused extraction missed (deterministic, from the post, not a guess).
   if (row.selected_item !== null) {
+    const chosen = previous?.items?.[row.selected_item];
     extraction = { ...extraction, multipleItems: false, items: previous?.items };
+    if (extraction.priceCents === undefined && chosen?.priceText) {
+      const match = /\$?\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?/.exec(chosen.priceText);
+      if (match) {
+        extraction.priceCents =
+          parseInt(match[1].replaceAll(",", ""), 10) * 100 +
+          (match[2] ? parseInt(match[2], 10) : 0);
+        extraction.needsReview = [
+          ...extraction.needsReview.filter((issue) => issue.field !== "price"),
+          { field: "price", message: `Taken from "${chosen.priceText.trim()}" in your post — confirm.` },
+        ];
+      }
+    }
+    if (!extraction.title && chosen?.label) extraction.title = chosen.label.slice(0, 140);
   }
 
   // Fitment through the real vehicle catalog (0041) — unresolved platform

@@ -1,3 +1,4 @@
+import { processReturnTimers } from "@/features/commerce/returns";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
 import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/transfer-worker";
 import { resumeIncompleteRefunds } from "@/lib/payments/refunds";
@@ -31,9 +32,12 @@ export async function POST(request: Request) {
     const transfers = await processDueTransfers(admin);
     const reconciled = await reconcileTransferRecords(admin);
     const refunds = await resumeIncompleteRefunds(admin);
+    // Return timers run BEFORE the dispute sweep so a return that just
+    // expired/completed releases the dispute clock in the same pass (§27-28).
+    const returns = await processReturnTimers(admin);
     const disputes = await processDisputeSla(admin);
     const alerts = await processAlertOutbox(admin);
-    return Response.json({ ...transfers, ...disputes, reconciled, refunds, alerts });
+    return Response.json({ ...transfers, ...disputes, reconciled, refunds, returns, alerts });
   } catch (error) {
     reportError("[transfers] worker run failed", error);
     return new Response("worker failed", { status: 500 });

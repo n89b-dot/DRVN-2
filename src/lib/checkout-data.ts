@@ -33,6 +33,9 @@ export type CartSummary = {
    *  is_collection flag can't represent both, so the option gets dropped for
    *  the whole basket. Surfaced so that isn't silent. */
   mixedFulfilment: boolean;
+  /** DRVN-Shipping lines (0053): rated at checkout, so their shipping isn't
+   *  in shippingCents until the buyer picks a service. */
+  drvnLines: { id: string; title: string }[];
 };
 
 /**
@@ -57,7 +60,7 @@ export async function loadInFlightCheckout(userId: string | null): Promise<CartS
   const admin = createAdminClient();
   let query = admin
     .from("orders")
-    .select("id, subtotal_cents, shipping_cents, total_cents, seller_id")
+    .select("id, subtotal_cents, shipping_cents, total_cents, platform_fee_cents, seller_id")
     .eq("status", "pending");
   query = userId ? query.eq("buyer_id", userId) : query.in("id", guestOrderIds);
 
@@ -122,10 +125,14 @@ export async function loadInFlightCheckout(userId: string | null): Promise<CartS
     goodsCents,
     shippingCents,
     totalCents: orders.reduce((sum, o) => sum + o.total_cents, 0),
-    feeCents: platformFeeCents(goodsCents),
+    // These orders exist, so the fee is no longer an estimate — read the
+    // figure purchase_begin actually charged rather than recomputing it.
+    feeCents: orders.reduce((sum, o) => sum + (o.platform_fee_cents ?? 0), 0),
     sellerCount: new Set(orders.map((o) => o.seller_id)).size,
     allowsCollection: false,
     mixedFulfilment: false,
+    // In-flight orders were already rated; their shipping is in the totals.
+    drvnLines: [],
   };
 }
 
@@ -137,7 +144,7 @@ export async function loadCartSummary(): Promise<CartSummary> {
     ? await supabase
         .from("listings")
         .select(
-          "id, title, price_cents, shipping_cents, allows_collection, currency, status, seller_id"
+          "id, title, price_cents, shipping_cents, allows_collection, shipping_mode, currency, status, seller_id"
         )
         .in("id", ids)
     : { data: [] };
@@ -199,9 +206,14 @@ export async function loadCartSummary(): Promise<CartSummary> {
     goodsCents,
     shippingCents,
     totalCents: goodsCents + shippingCents,
-    feeCents: platformFeeCents(goodsCents),
+    // Fee basis is goods + buyer-paid shipping (0050) — the estimate must
+    // match what purchase_begin will charge.
+    feeCents: platformFeeCents(goodsCents + shippingCents),
     sellerCount: sellerIds.length,
     allowsCollection: active.length > 0 && active.every((l) => l.allows_collection),
     mixedFulfilment: collectionCapable > 0 && collectionCapable < active.length,
+    drvnLines: active
+      .filter((l) => l.shipping_mode === "drvn")
+      .map((l) => ({ id: l.id, title: l.title })),
   };
 }

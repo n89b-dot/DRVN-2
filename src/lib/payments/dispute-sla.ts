@@ -1,4 +1,6 @@
 import { refundOrder } from "./refunds";
+import { AUTO_REFUND_AFTER_DAYS } from "@/features/commerce/disputes";
+import { orderHasActiveReturn } from "@/features/commerce/returns";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
@@ -14,8 +16,6 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
  * buyer; an admin who resolves the case moves the order out of `disputed`
  * and it never matches. Runs from the same worker pass as transfers.
  */
-
-const AUTO_REFUND_AFTER_DAYS = 10;
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -82,6 +82,12 @@ export async function processDisputeSla(admin: Admin): Promise<DisputeSlaSummary
     .limit(50);
 
   for (const order of stale ?? []) {
+    // §28 (0055): an active RMA supersedes the dispute clock. Auto-refunding
+    // while the returned part is physically in transit would refund-and-keep
+    // by accident — the return's own deadlines govern until it resolves.
+    if (await orderHasActiveReturn(admin, order.id)) {
+      continue;
+    }
     const outcome = await refundOrder(admin, {
       orderId: order.id,
       reason: `Auto-refund: dispute unanswered for ${AUTO_REFUND_AFTER_DAYS} days (SLA)`,

@@ -50,6 +50,8 @@ const BASE_ORDER = {
   platform_fee_refunded_cents: 0,
   refunded_at: null,
   origin_offer_id: null,
+  shipping_quote: null,
+  pickup_ready_at: null,
   correlation_id: "11111111-2222-3333-4444-555555555555",
   created_at: "2026-08-01T10:00:00Z",
   updated_at: "2026-08-01T10:00:00Z",

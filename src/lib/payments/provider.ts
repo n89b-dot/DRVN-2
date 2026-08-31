@@ -23,13 +23,18 @@
 
 import { resolvePaymentsMode } from "@/lib/env";
 
-// 10% platform fee, deducted from the seller's proceeds — the buyer pays the
-// listed price and the seller receives price minus fee (PRD §7.4). The fee is
-// charged on goods only; shipping passes through untouched.
+// 10% platform fee, deducted from the seller's proceeds — the buyer pays
+// goods + shipping and the seller receives that minus the fee (PRD §7.4).
+// Since migration 0050 the fee basis is goods subtotal + buyer-paid shipping:
+// pricing value into "shipping" must not reduce DRVN's fee. The authoritative
+// computation lives in SQL (purchase_begin / offer_accept_begin); this mirror
+// exists for display estimates and docs. Historical orders keep the fee stored
+// on the row — nothing recomputes old fees from this constant.
 export const PLATFORM_FEE_BPS = 1000;
 
-export function platformFeeCents(subtotalCents: number): number {
-  return Math.round((subtotalCents * PLATFORM_FEE_BPS) / 10_000);
+/** @param basisCents goods subtotal + buyer-paid shipping (the pre-tax total). */
+export function platformFeeCents(basisCents: number): number {
+  return Math.round((basisCents * PLATFORM_FEE_BPS) / 10_000);
 }
 
 export type PaymentRequest = {

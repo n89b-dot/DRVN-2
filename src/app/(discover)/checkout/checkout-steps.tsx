@@ -3,9 +3,17 @@
 import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
+import { AnimatePresence, motion } from "motion/react";
+
 import { Button, Select, Stepper, TextField } from "@/components/ui";
+import { springs, transitions } from "@/lib/motion";
 import { checkoutCart, type CommerceState } from "@/features/commerce/actions";
+import {
+  quoteCartShipping,
+  type CartShippingQuotes,
+} from "@/features/commerce/shipping-quote-actions";
 import type { SavedCard } from "@/lib/payments/customers";
+import { formatPrice } from "@/lib/payments/fee";
 import { COUNTRIES, DEFAULT_COUNTRY_CODE, countryLabel } from "@/lib/geo/countries";
 
 import { PaymentConfirm } from "../cart/payment-confirm";
@@ -58,6 +66,8 @@ export function CheckoutSteps({
   savedCards,
   action = checkoutCart,
   orderId,
+  drvnListings = [],
+  baseTotalCents,
 }: {
   idempotencyKey: string;
   /** Signed-out checkout: collect the email the order confirmation goes to. */
@@ -77,6 +87,11 @@ export function CheckoutSteps({
   /** Defaults to cart checkout; a reserved order passes its own action. */
   action?: (prev: CommerceState, formData: FormData) => Promise<CommerceState>;
   orderId?: string;
+  /** DRVN-Shipping lines (0053): the address submit first fetches live rates
+   *  for these, and payment waits for a service selection. */
+  drvnListings?: { id: string; title: string }[];
+  /** Cents backing `total`, so a selected rate can re-total live. */
+  baseTotalCents?: number;
 }) {
   const [state, formAction, pending] = useActionState<CommerceState, FormData>(action, {});
   const [collection, setCollection] = useState(false);
@@ -91,6 +106,34 @@ export function CheckoutSteps({
   const [email, setEmail] = useState("");
   const [saved, setSaved] = useState(false);
   const errorId = useId();
+
+  // DRVN Shipping (0053): the address submit fetches rates first; payment
+  // waits for a service pick. Rates are server-held — the radios carry only
+  // opaque quote ids.
+  const [rates, ratesAction, ratesPending] = useActionState<CartShippingQuotes, FormData>(
+    quoteCartShipping,
+    { groups: [] }
+  );
+  const [pickedQuotes, setPickedQuotes] = useState<Record<string, string>>({});
+  const needsRates = drvnListings.length > 0 && !collection;
+  const ratesReady = rates.groups.length > 0;
+  const chosenFor = (listingId: string): string | undefined => {
+    const group = rates.groups.find((g) => g.listingId === listingId);
+    if (!group?.options.length) return undefined;
+    const picked = pickedQuotes[listingId];
+    return picked && group.options.some((o) => o.quoteId === picked)
+      ? picked
+      : group.options[0].quoteId;
+  };
+  const selectedShippingCents = rates.groups.reduce((sum, group) => {
+    const chosen = chosenFor(group.listingId);
+    const option = group.options.find((o) => o.quoteId === chosen);
+    return sum + (option?.amountCents ?? 0);
+  }, 0);
+  const liveTotal =
+    needsRates && ratesReady && baseTotalCents != null
+      ? formatPrice(baseTotalCents + selectedShippingCents)
+      : total;
 
   const stateRequired = STATE_REQUIRED_COUNTRIES.has(address.country);
   const paymentStep = Boolean(state.payment) && !editingAddress;
@@ -123,8 +166,19 @@ export function CheckoutSteps({
         ]}
       />
 
+      {/* Address form ↔ payment review is the app's largest single content
+          swap; the crossfade keeps it reading as one continuous flow rather
+          than a page replacement. `mode="wait"` so the two compositions
+          never overlap; the fast exit keeps checkout feeling immediate. */}
+      <AnimatePresence mode="wait" initial={false}>
       {paymentStep ? (
-        <>
+        <motion.div
+          key="review"
+          className="grid gap-4"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0, transition: { ...springs.spatial, opacity: transitions.standard } }}
+          exit={{ opacity: 0, transition: transitions.fast }}
+        >
           {/* Review is two conceptual blocks, each with exactly ONE edit
               affordance (SYS-11): Delivery & contact → Edit reopens the
               address form (every field retained); Items → Edit cart. The
@@ -204,7 +258,7 @@ export function CheckoutSteps({
                 )}
                 <div className="sheet__row sheet__total">
                   <span>Total</span>
-                  <b>{total}</b>
+                  <b>{liveTotal}</b>
                 </div>
               </div>
             )}
@@ -216,22 +270,26 @@ export function CheckoutSteps({
                 savedCards={savedCards}
                 clientSecret={state.payment.clientSecret}
                 orderIds={state.payment.orderIds}
-                total={total}
+                total={liveTotal}
               />
             ) : (
               state.payment && (
                 <PaymentConfirm
                   clientSecret={state.payment.clientSecret}
                   orderIds={state.payment.orderIds}
-                  total={total}
+                  total={liveTotal}
                   canSaveCard
                 />
               )
             )}
           </div>
-        </>
+        </motion.div>
       ) : (
-        <form
+        <motion.form
+          key="address"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0, transition: { ...springs.spatial, opacity: transitions.standard } }}
+          exit={{ opacity: 0, transition: transitions.fast }}
           action={(fd) => {
             // Every field, not just the three the summary line shows — so
             // pressing Change again re-renders the form fully pre-filled
@@ -248,6 +306,15 @@ export function CheckoutSteps({
             });
             if (needsEmail) setEmail(String(fd.get("email") ?? ""));
             setSaved(true);
+            // First submit with DRVN-Shipping lines fetches rates for this
+            // address; the follow-up submit (radios now in the form) pays.
+            // A re-opened address form re-fetches — rates are address-bound
+            // (the server checks the destination fingerprint regardless).
+            if (needsRates && (!ratesReady || editingAddress)) {
+              setEditingAddress(false);
+              ratesAction(fd);
+              return;
+            }
             setEditingAddress(false);
             formAction(fd);
           }}
@@ -365,13 +432,23 @@ export function CheckoutSteps({
                   />
                 </div>
                 <div className="field--row">
+                  {/* The country SUBMITS from this state-bound hidden input,
+                      not the select: React's post-action form reset reverts a
+                      select to its first option without a re-sync render, so
+                      a rates submit followed by the payment submit would
+                      silently send a different country than was quoted (the
+                      destination-fingerprint check then refuses the quote).
+                      Browser resets never touch hidden inputs. */}
+                  <input type="hidden" name="ship_country" value={address.country} />
                   <Select
                     id="checkout-ship-country"
                     label="Country"
-                    name="ship_country"
                     className="!max-w-none"
                     required
                     autoComplete="country"
+                    // Remount after each rates fetch so the visible selection
+                    // re-syncs to state after the post-action form reset.
+                    key={`country-${rates.groups.length}`}
                     value={address.country}
                     onChange={(event) =>
                       setAddress((prev) => ({ ...prev, country: event.target.value }))
@@ -411,20 +488,79 @@ export function CheckoutSteps({
             />
           </fieldset>
 
-          <Button type="submit" variant="live" disabled={pending} className="w-full">
-            {pending ? "Saving…" : "Continue to payment"}
+          {needsRates && ratesReady && (
+            <fieldset className="grid gap-4 border-0 p-0">
+              <legend className="microlabel microlabel--ink mb-1">Shipping service</legend>
+              {rates.groups.map((group) => {
+                const chosen = chosenFor(group.listingId);
+                return (
+                  <div key={group.listingId} className="grid gap-2">
+                    {rates.groups.length > 1 && (
+                      <span className="block truncate font-medium text-micro">{group.title}</span>
+                    )}
+                    {group.options.map((option) => (
+                      <label
+                        key={option.quoteId}
+                        className="flex items-center justify-between gap-3 text-micro"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`quote_${group.listingId}`}
+                            value={option.quoteId}
+                            checked={chosen === option.quoteId}
+                            onChange={() =>
+                              setPickedQuotes((prev) => ({
+                                ...prev,
+                                [group.listingId]: option.quoteId,
+                              }))
+                            }
+                            className="sq"
+                          />
+                          {option.serviceLabel}
+                          {option.estDeliveryDays != null && (
+                            <span className="text-dim">
+                              · ~{option.estDeliveryDays} day
+                              {option.estDeliveryDays === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        </span>
+                        <b className="shrink-0">{formatPrice(option.amountCents)}</b>
+                      </label>
+                    ))}
+                  </div>
+                );
+              })}
+              <p className="field__hint">
+                Live carrier rates for your address. Changing the address re-fetches them.
+              </p>
+            </fieldset>
+          )}
+
+          <Button
+            type="submit"
+            variant="live"
+            disabled={pending || ratesPending}
+            className="w-full"
+          >
+            {pending || ratesPending
+              ? "Saving…"
+              : needsRates && !ratesReady
+                ? "Get shipping rates"
+                : `Continue to payment${needsRates && ratesReady ? ` — ${liveTotal}` : ""}`}
           </Button>
 
           <p
             id={errorId}
             role="alert"
             aria-live="polite"
-            className={state.error ? "field__err" : "sr-only"}
+            className={state.error || rates.error ? "field__err" : "sr-only"}
           >
-            {state.error ?? ""}
+            {state.error ?? rates.error ?? ""}
           </p>
-        </form>
+        </motion.form>
       )}
+      </AnimatePresence>
     </div>
   );
 }

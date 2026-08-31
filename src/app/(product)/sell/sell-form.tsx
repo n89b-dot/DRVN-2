@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 
+import { AnimatePresence, motion } from "motion/react";
+
 import { Button, FormSection, Media, Select, TextArea, TextField, ValidationSummary } from "@/components/ui";
+import { expand } from "@/lib/motion";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
 import { useUploadQueue } from "@/lib/use-upload-queue";
@@ -29,6 +32,12 @@ export type ListingDraft = {
   part_number: string | null;
   price_cents: number;
   shipping_cents: number;
+  /** 0053: 'flat' | 'drvn' | 'pickup_only'. */
+  shipping_mode?: "flat" | "drvn" | "pickup_only";
+  weight_oz?: number | null;
+  length_in?: number | null;
+  width_in?: number | null;
+  height_in?: number | null;
   offer_floor_cents: number | null;
   allows_collection: boolean;
   location: string | null;
@@ -89,6 +98,7 @@ export function SellForm({
   listing,
   initialValues,
   canPublish = true,
+  drvnShipping,
 }: {
   cars: { id: string; name: string; make?: string | null; model?: string | null; year?: number | null }[];
   /** Canonical make names for the fitment picker's suggestions. */
@@ -101,6 +111,9 @@ export function SellForm({
   listing?: ListingDraft;
   /** Seed values for a fresh listing (Garage → Sell, imported listing). */
   initialValues?: SellFormInitialValues;
+  /** DRVN Shipping availability (0053): the flag/provider state plus whether
+   *  this seller's ship-from profile is verified. Absent = feature off. */
+  drvnShipping?: { enabled: boolean; profileReady: boolean };
 }) {
   const prefill = initialValues;
   const importReview = initialValues?.importReview;
@@ -119,6 +132,9 @@ export function SellForm({
   );
   const [condition, setCondition] = useState(listing?.condition ?? prefill?.condition ?? "used");
   const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? prefill?.images ?? []);
+  const [shippingMode, setShippingMode] = useState<"flat" | "drvn" | "pickup_only">(
+    listing?.shipping_mode ?? "flat"
+  );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -300,7 +316,7 @@ export function SellForm({
         <span aria-hidden="true">·</span>
         <span>Fitment {fitmentCount > 0 ? "✓" : "—"}</span>
         <span aria-hidden="true">·</span>
-        <span>Shipping {shipping.trim() !== "" ? "✓" : "—"}</span>
+        <span>Shipping {shippingMode !== "flat" || shipping.trim() !== "" ? "✓" : "—"}</span>
       </div>
 
       <FormSection step={1} title="The part — what you're releasing">
@@ -711,6 +727,29 @@ export function SellForm({
             error={fieldErrors.price}
             hint={issueFor("price")}
           />
+          <Select
+            id="sell-shipping-mode"
+            name="shipping_mode"
+            label="How it ships"
+            value={shippingMode}
+            onChange={(e) =>
+              setShippingMode(e.target.value as "flat" | "drvn" | "pickup_only")
+            }
+            fieldClassName="!mb-0"
+            hint={
+              shippingMode === "drvn" && drvnShipping && !drvnShipping.profileReady
+                ? "Needs your verified ship-from address — Settings → Shipping."
+                : undefined
+            }
+          >
+            <option value="flat">Flat rate — I arrange shipping</option>
+            {drvnShipping?.enabled && (
+              <option value="drvn">DRVN Shipping — buyer sees live rates</option>
+            )}
+            <option value="pickup_only">Local pickup only</option>
+          </Select>
+        </div>
+        {shippingMode === "flat" && (
           <TextField
             id="sell-shipping"
             name="shipping"
@@ -723,7 +762,56 @@ export function SellForm({
             fieldClassName="!mb-0"
             hint={issueFor("shipping") ?? "Leave at 0 for free shipping."}
           />
-        </div>
+        )}
+        {shippingMode === "drvn" && (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <TextField
+              id="sell-weight"
+              name="weight_oz"
+              label="Packed weight (oz)"
+              required
+              inputMode="decimal"
+              defaultValue={listing?.weight_oz != null ? String(listing.weight_oz) : ""}
+              placeholder="0"
+              fieldClassName="!mb-0"
+            />
+            <TextField
+              id="sell-length"
+              name="length_in"
+              label="Length (in)"
+              required
+              inputMode="decimal"
+              defaultValue={listing?.length_in != null ? String(listing.length_in) : ""}
+              placeholder="0"
+              fieldClassName="!mb-0"
+            />
+            <TextField
+              id="sell-width"
+              name="width_in"
+              label="Width (in)"
+              required
+              inputMode="decimal"
+              defaultValue={listing?.width_in != null ? String(listing.width_in) : ""}
+              placeholder="0"
+              fieldClassName="!mb-0"
+            />
+            <TextField
+              id="sell-height"
+              name="height_in"
+              label="Height (in)"
+              required
+              inputMode="decimal"
+              defaultValue={listing?.height_in != null ? String(listing.height_in) : ""}
+              placeholder="0"
+              fieldClassName="!mb-0"
+            />
+            <p className="field__hint sm:col-span-4 !mt-0">
+              Measure the part boxed, as it will ship. Buyers see carrier rates
+              calculated from this at checkout; the label comes back to you on
+              the order sheet.
+            </p>
+          </div>
+        )}
         <div className="field--row">
           <TextField
             id="sell-offer_floor"
@@ -747,15 +835,23 @@ export function SellForm({
             />
           </div>
         </div>
-        <label className="flex items-center gap-2 text-micro">
-          <input
-            type="checkbox"
-            name="allows_collection"
-            defaultChecked={listing?.allows_collection ?? prefill?.allowsCollection ?? false}
-            className="accent-live"
-          />
-          Buyers may collect in person
-        </label>
+        {shippingMode === "pickup_only" ? (
+          <label className="flex items-center gap-2 text-micro">
+            <input type="checkbox" checked readOnly disabled className="accent-live" />
+            {/* Pickup-only implies collection; the server sets it regardless. */}
+            Buyers collect in person (pickup-only listing)
+          </label>
+        ) : (
+          <label className="flex items-center gap-2 text-micro">
+            <input
+              type="checkbox"
+              name="allows_collection"
+              defaultChecked={listing?.allows_collection ?? prefill?.allowsCollection ?? false}
+              className="accent-live"
+            />
+            Buyers may collect in person
+          </label>
+        )}
       </FormSection>
 
       {!isEdit &&
@@ -763,9 +859,21 @@ export function SellForm({
           const warnings: string[] = [];
           if (images.length === 0) warnings.push("No photos yet — listings with photos sell faster.");
           if (usedNeedsGrade && !grade) warnings.push("No grade set for a used part — buyers weight this heavily.");
-          if (!shipping.trim() || Number(shipping) === 0) warnings.push("Shipping is $0 — confirm that's intentional, not just unset.");
-          if (!warnings.length && canPublish) return null;
+          if (shippingMode === "flat" && (!shipping.trim() || Number(shipping) === 0)) warnings.push("Shipping is $0 — confirm that's intentional, not just unset.");
+          const show = warnings.length > 0 || !canPublish;
+          // The checklist folds in and out as answers change — while typing,
+          // an instant blink here read as the form glitching.
           return (
+            <AnimatePresence initial={false}>
+              {show && (
+                <motion.div
+                  key="publish-checklist"
+                  variants={expand}
+                  initial="collapsed"
+                  animate="expanded"
+                  exit="collapsed"
+                  className="overflow-hidden"
+                >
             <div role="status" aria-live="polite" id="publish-checklist" className="tile !mb-0">
               <p className="microlabel microlabel--ink">Before you publish</p>
               <ul className="mt-1 list-disc pl-5 text-micro text-dim">
@@ -788,6 +896,9 @@ export function SellForm({
                   : "Drafts save any time — publishing unlocks once payouts are ready."}
               </p>
             </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           );
         })()}
 

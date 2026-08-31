@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  fulfillmentProfileReady,
+  loadFulfillmentProfile,
+} from "@/features/commerce/fulfillment";
 import { checklistFor, sanitizeChecklist } from "@/lib/marketplace/grading";
+import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
@@ -105,6 +110,51 @@ async function readListingFields(formData: FormData, userId: string) {
   const checklist =
     condition !== "new" ? sanitizeChecklist(category, subcategory, rawAnswers) : null;
 
+  // Shipping mode (0053). 'drvn' needs a complete positive parcel and — since
+  // rating starts from the seller's ship-from — a saved fulfillment profile.
+  // 'pickup_only' zeroes shipping and requires the collection flag.
+  const allowsCollection = formData.get("allows_collection") === "on";
+  const modeRaw = String(formData.get("shipping_mode") ?? "flat");
+  const shippingMode = (
+    ["flat", "drvn", "pickup_only"].includes(modeRaw) ? modeRaw : "flat"
+  ) as "flat" | "drvn" | "pickup_only";
+
+  const parcelField = (name: string): number | null => {
+    const raw = String(formData.get(name) ?? "").trim();
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : null;
+  };
+  const weightOz = parcelField("weight_oz");
+  const lengthIn = parcelField("length_in");
+  const widthIn = parcelField("width_in");
+  const heightIn = parcelField("height_in");
+
+  if (shippingMode === "drvn") {
+    if (!integratedShippingEnabled()) {
+      return { error: "DRVN Shipping isn't available yet — use a flat shipping price for now." };
+    }
+    if (!weightOz || !lengthIn || !widthIn || !heightIn) {
+      return { error: "DRVN Shipping needs the packed weight and all three box dimensions." };
+    }
+    if (weightOz > 1_120 || lengthIn > 108 || widthIn > 108 || heightIn > 108) {
+      return {
+        error:
+          "That parcel is beyond what DRVN Shipping handles (70 lb / 108 in) — use seller-arranged shipping or local pickup.",
+      };
+    }
+    const profile = await loadFulfillmentProfile(userId);
+    if (!fulfillmentProfileReady(profile)) {
+      return {
+        error:
+          "DRVN Shipping needs your verified ship-from address first — add it in Settings → Shipping.",
+      };
+    }
+  }
+  if (shippingMode === "pickup_only" && !allowsCollection) {
+    return { error: "Pickup-only listings need the local pickup option ticked." };
+  }
+
   return {
     fitments: readFitments(formData),
     altNumbers: readAltPartNumbers(formData),
@@ -117,9 +167,14 @@ async function readListingFields(formData: FormData, userId: string) {
       grade,
       condition_checklist: checklist,
       price_cents: price,
-      shipping_cents: shipping,
+      shipping_cents: shippingMode === "pickup_only" ? 0 : shipping,
+      shipping_mode: shippingMode,
+      weight_oz: shippingMode === "drvn" ? weightOz : null,
+      length_in: shippingMode === "drvn" ? lengthIn : null,
+      width_in: shippingMode === "drvn" ? widthIn : null,
+      height_in: shippingMode === "drvn" ? heightIn : null,
       offer_floor_cents: floor,
-      allows_collection: formData.get("allows_collection") === "on",
+      allows_collection: shippingMode === "pickup_only" ? true : allowsCollection,
       location: String(formData.get("location") ?? "").trim() || null,
       compatibility_notes: compatibility || null,
       part_number: partNumber || null,

@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from "react";
 
+import { motion } from "motion/react";
+
 import { AuthIntentDialog } from "@/components/ui";
 import { cx } from "@/lib/format";
+import { press } from "@/lib/motion";
 
 import {
   toggleFollow,
@@ -50,9 +53,15 @@ export function SaveButton({
 
   return (
     <>
-      <button type="button" onClick={onClick} disabled={pending} className={toggleClass(saved)}>
+      <motion.button
+        type="button"
+        onClick={onClick}
+        disabled={pending}
+        className={toggleClass(saved)}
+        {...press}
+      >
         {saved ? "Saved" : "Save"}
-      </button>
+      </motion.button>
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}
@@ -95,9 +104,15 @@ export function FollowButton({
 
   return (
     <>
-      <button type="button" onClick={onClick} disabled={pending} className={toggleClass(following)}>
+      <motion.button
+        type="button"
+        onClick={onClick}
+        disabled={pending}
+        className={toggleClass(following)}
+        {...press}
+      >
         {following ? labels[1] : labels[0]}
-      </button>
+      </motion.button>
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}

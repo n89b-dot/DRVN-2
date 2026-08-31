@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 
+import { AnimatePresence, motion } from "motion/react";
+
 import { MasonryFeed } from "@/components/ui";
+import { transitions } from "@/lib/motion";
 import type { FeedItem, FeedTab } from "@/lib/feed";
 
 import { loadFeedPage } from "./actions";
@@ -69,16 +72,31 @@ export function ExploreWall({
         <MasonryFeed items={items} isLoggedIn={isLoggedIn} path="/explore" />
       </section>
       <div ref={sentinel} aria-hidden="true" />
-      {hasMore && (
-        <p className="mt-6 flex justify-center">
-          <button type="button" className="btn btn--ghost" onClick={loadMore} disabled={pending}>
-            {pending ? "Loading…" : "More"}
-          </button>
-        </p>
-      )}
-      {!hasMore && items.length > 0 && (
-        <p className="microlabel mt-8 text-center">You&apos;re all caught up</p>
-      )}
+      {/* The wall itself stays unanimated on purpose: pages preload 800px
+          below the fold, so an entrance would mostly play off-screen. The
+          visible state change is this footer swap — crossfade it. */}
+      <AnimatePresence mode="wait" initial={false}>
+        {hasMore ? (
+          <motion.p
+            key="more"
+            className="mt-6 flex justify-center"
+            exit={{ opacity: 0, transition: transitions.fast }}
+          >
+            <button type="button" className="btn btn--ghost" onClick={loadMore} disabled={pending}>
+              {pending ? "Loading…" : "More"}
+            </button>
+          </motion.p>
+        ) : items.length > 0 ? (
+          <motion.p
+            key="end"
+            className="microlabel mt-8 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: transitions.standard }}
+          >
+            You&apos;re all caught up
+          </motion.p>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }

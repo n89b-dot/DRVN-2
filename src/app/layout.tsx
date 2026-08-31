@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
+import { MotionPolicy } from "@/components/ui";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -67,7 +68,9 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <MotionPolicy>{children}</MotionPolicy>
+      </body>
     </html>
   );
 }

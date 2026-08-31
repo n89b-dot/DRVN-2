@@ -25,5 +25,8 @@ const client = new Client({
 client.on("notice", (n) => console.log("NOTICE:", n.message));
 await client.connect();
 await client.query(readFileSync(file, "utf8"));
+// PostgREST caches the schema; without this, new columns/tables 404 from the
+// API (PGRST204) until the project restarts — a silent, confusing failure.
+await client.query("notify pgrst, 'reload schema'");
 await client.end();
-console.log("applied:", file);
+console.log("applied:", file, "(PostgREST schema reload notified)");

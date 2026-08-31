@@ -156,29 +156,3 @@ export function MessageComposer({
     </form>
   );
 }
-
-/**
- * Action outcome line — ok chip or error text, `role="alert"`. The
- * `state.error ? field__err : chip chip--ok` idiom copy-pasted across the
- * commerce forms.
- */
-export function ResultNote({
-  error,
-  ok,
-  className,
-}: {
-  error?: string | null;
-  ok?: string | null;
-  className?: string;
-}) {
-  if (!error && !ok) return null;
-  return (
-    <p
-      role="alert"
-      aria-live="polite"
-      className={cx(error ? "field__err" : "chip chip--ok", className)}
-    >
-      {error ?? ok}
-    </p>
-  );
-}

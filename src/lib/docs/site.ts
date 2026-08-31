@@ -59,6 +59,14 @@ export const SITE_PAGES: DocEntry[] = [
     kind: "site",
   },
   {
+    slug: "motion",
+    title: "Motion",
+    description:
+      "The DRVN motion language: philosophy, Motion for React vs CSS boundary, timing, springs, recipes, reduced motion.",
+    file: "docs/site/motion.md",
+    kind: "site",
+  },
+  {
     slug: "patterns",
     title: "Patterns",
     description:

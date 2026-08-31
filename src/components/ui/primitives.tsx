@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 import { cx } from "@/lib/format";
@@ -150,7 +151,9 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   return <p className="microlabel microlabel--ink">{children}</p>;
 }
 
-/** Scrollable thumbnail strip — media plates on the sheet, no borders. */
+/** Scrollable thumbnail strip — media plates on the sheet, no borders.
+ *  Native scrollbar is suppressed (`.hgallery`); overflow is signalled by
+ *  edge fades and hover paddles instead. */
 export function HorizontalGallery({
   images,
   large = false,
@@ -160,17 +163,69 @@ export function HorizontalGallery({
   large?: boolean;
   alt: string;
 }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [canBack, setCanBack] = useState(false);
+  const [canFwd, setCanFwd] = useState(false);
+
+  const sync = useCallback(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanBack(el.scrollLeft > 4);
+    setCanFwd(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    sync();
+    const el = trackRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [sync, images.length]);
+
+  const nudge = (direction: -1 | 1) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: "smooth" });
+  };
+
   return (
-    <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]">
-      {images.map((image, index) => (
-        <Media
-          key={`${image}-${index}`}
-          src={image}
-          alt={`${alt} image ${index + 1}`}
-          className={`${large ? "h-[90px] w-40" : "h-[90px] w-[89px]"} shrink-0 rounded-ctl`}
-          sizes={MEDIA_SIZES.thumb}
-        />
-      ))}
+    <div className={cx("hgallery pb-2", canBack && "can-back", canFwd && "can-fwd")}>
+      <div ref={trackRef} onScroll={sync} className="hgallery__track" tabIndex={canBack || canFwd ? 0 : undefined}>
+        {images.map((image, index) => (
+          <Media
+            key={`${image}-${index}`}
+            src={image}
+            alt={`${alt} image ${index + 1}`}
+            className={`${large ? "h-[90px] w-40" : "h-[90px] w-[89px]"} shrink-0 rounded-ctl`}
+            sizes={MEDIA_SIZES.thumb}
+          />
+        ))}
+      </div>
+      {canBack && (
+        <button
+          type="button"
+          className="hgallery__paddle hgallery__paddle--back"
+          aria-label="Previous images"
+          onClick={() => nudge(-1)}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M10 3 5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+      {canFwd && (
+        <button
+          type="button"
+          className="hgallery__paddle hgallery__paddle--fwd"
+          aria-label="More images"
+          onClick={() => nudge(1)}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="m6 3 5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

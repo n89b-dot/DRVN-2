@@ -48,6 +48,8 @@ export type AnalyticsEvent =
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }
   | { event: "seller_dispatched"; props?: undefined }
+  /** Local pickup handoff proven via the Pickup Pass (0054). */
+  | { event: "pickup_confirmed"; props?: undefined }
   | { event: "dispute_opened"; props: { category: string } };
 
 function configured(): boolean {

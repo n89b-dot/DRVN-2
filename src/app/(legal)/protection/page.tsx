@@ -1,7 +1,12 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
+import {
+  AUTO_REFUND_AFTER_DAYS,
+  DISPUTE_WINDOW_DAYS,
+  SELLER_RESPONSE_DAYS,
+} from "@/features/commerce/disputes";
+import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
 import { GRADES } from "@/lib/marketplace/grading";
 
 export const metadata = {
@@ -39,11 +44,14 @@ export default function ProtectionPage() {
         <Rv className="tile tile--deep">
           <span className="microlabel microlabel--ink">The listing is the contract</span>
           <p className="mt-2 text-body leading-relaxed">
-            Every claim a seller makes on a listing — photos, description, grade, checklist
-            answers, fitment — is recorded on the order at the moment you buy. If there&apos;s ever
-            a dispute, it&apos;s judged against what the listing said, not against what anyone
-            remembers. That cuts both ways: honest sellers are protected by their own disclosures,
-            and &quot;not as described&quot; means measurably not as described.
+            Everything a seller represents on a listing — the photos, description, part numbers,
+            grade, checklist answers, fitment, even the shop&apos;s return policy — is frozen onto
+            the order the moment you buy, photos included. Edit the listing afterwards, re-shoot
+            it, delete it entirely: the order&apos;s <b>&quot;As purchased&quot;</b> record doesn&apos;t
+            move. If there&apos;s ever a dispute, it&apos;s judged against that frozen record, not
+            against what anyone remembers. That cuts both ways: honest sellers are protected by
+            their own disclosures, and &quot;not as described&quot; means measurably not as
+            described.
           </p>
         </Rv>
 
@@ -148,8 +156,11 @@ export default function ProtectionPage() {
                   <b>Seller&apos;s move — {SELLER_RESPONSE_DAYS} days</b>
                 </td>
                 <td>
-                  The seller sees your case and can offer a refund (full or partial) or resolve it
-                  with you in the order conversation. Most disputes end here.
+                  The seller sees your case and can resolve it three ways: a <b>partial refund</b>{" "}
+                  (you keep the item — sensible when return postage makes no sense), a{" "}
+                  <b>full refund</b>, or <b>&quot;send it back, then I refund&quot;</b> — a proper
+                  return with tracking. Or they keep talking it through in the order conversation.
+                  Most disputes end here.
                 </td>
               </tr>
               <tr>
@@ -164,11 +175,12 @@ export default function ProtectionPage() {
               </tr>
               <tr>
                 <td>
-                  <b>Day 10, still ignored</b>
+                  <b>Day {AUTO_REFUND_AFTER_DAYS}, still ignored</b>
                 </td>
                 <td>
                   A dispute the seller never responds to is <b>refunded to the buyer
-                  automatically</b>. Silence is never a way for a seller to win.
+                  automatically</b>. Silence is never a way for a seller to win. (While an agreed
+                  return is in motion, the return&apos;s own clocks govern instead — see below.)
                 </td>
               </tr>
             </tbody>
@@ -179,8 +191,79 @@ export default function ProtectionPage() {
           </p>
         </Rv>
 
-        {/* ---------- Accountability ---------- */}
+        {/* ---------- Returns ---------- */}
+        <Rv className="tile tile--deep" stagger={4}>
+          <span className="microlabel microlabel--ink">When the part goes back: returns</span>
+          <p className="mt-2 text-body leading-relaxed">
+            When a resolution requires the item back, the refund waits for the item — a seller is
+            never forced into refund-and-keep, and a buyer is never left holding a paid-for return
+            with no clock on the other side. Both directions run on deadlines:
+          </p>
+          <table className="spec mt-3">
+            <thead className="sr-only">
+              <tr>
+                <th>Step</th>
+                <th>Rule</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <b>Buyer ships — {RETURN_SHIP_DAYS} days</b>
+                </td>
+                <td>
+                  An approved return must be with a carrier, tracked, within {RETURN_SHIP_DAYS}{" "}
+                  days. For seller-caused problems DRVN can generate a prepaid label (the seller
+                  covers it); if it never ships, the return lapses.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <b>Seller checks — {SELLER_INSPECT_HOURS} hours</b>
+                </td>
+                <td>
+                  Once tracking shows the return delivered, the seller has {SELLER_INSPECT_HOURS}{" "}
+                  hours to confirm it&apos;s back as expected — or to flag a genuine problem
+                  (wrong item returned, new damage, empty box), which pauses everything for DRVN
+                  review. Silence releases the agreed refund automatically.
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <b>What comes back</b>
+                </td>
+                <td>
+                  Seller-caused returns refund the item <b>and</b> its original shipping.
+                  Change-of-mind returns (shops that offer them) refund the item; outbound
+                  shipping stays with the seller and return postage is the buyer&apos;s.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="spec-note">
+            Shops can voluntarily accept change-of-mind returns with a declared window. Whatever
+            policy applied when you bought is frozen onto your order — a shop changing its policy
+            later can&apos;t touch a sale already made. Individual sellers don&apos;t owe
+            change-of-mind returns; DRVN Protection above applies to everyone.
+          </p>
+        </Rv>
+
+        {/* ---------- Seller protection ---------- */}
         <Rv className="tile" stagger={5}>
+          <span className="microlabel microlabel--ink">Sellers are protected too</span>
+          <p className="mt-2 text-body leading-relaxed">
+            The same records that protect buyers protect sellers: the frozen listing snapshot
+            proves what was actually promised; carrier tracking proves dispatch and delivery;
+            local pickups are proven by a single-use <b>Pickup Pass</b> the seller scans at
+            handoff — no more &quot;it was never collected&quot; arguments; and the order
+            conversation is on the record. A resolution that requires the item back never
+            auto-refunds while the return is in motion, and a returned box that isn&apos;t what
+            was sent gets human review before any money moves.
+          </p>
+        </Rv>
+
+        {/* ---------- Accountability ---------- */}
+        <Rv className="tile" stagger={6}>
           <span className="microlabel microlabel--ink">Accountability, both directions</span>
           <p className="mt-2 text-body leading-relaxed">
             Disputes a seller loses — refunds accepted, forced, or automatic — go on their record

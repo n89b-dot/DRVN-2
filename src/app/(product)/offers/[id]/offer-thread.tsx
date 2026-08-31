@@ -3,7 +3,10 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 
+import { AnimatePresence, motion } from "motion/react";
+
 import { Message, MessageThread, ResultNote } from "@/components/ui";
+import { expand } from "@/lib/motion";
 
 import {
   acceptCounter,
@@ -108,24 +111,38 @@ export function OfferThread({
               </form>
             </div>
 
-            {showCounter && (
-              <form action={respond} className="composer__row">
-                <input type="hidden" name="offer_id" value={offerId} />
-                <input type="hidden" name="decision" value="countered" />
-                <input
-                  name="counter_amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  required
-                  placeholder="Your number"
-                  className="ctl max-w-none flex-1 !py-2"
-                />
-                <button type="submit" disabled={responding} className="btn btn--live !py-2.5">
-                  Send counter
-                </button>
-              </form>
-            )}
+            {/* The counter composer unfolds instead of shoving the thread
+                down in one frame — the expansion ties it to the Counter
+                button that caused it. */}
+            <AnimatePresence initial={false}>
+              {showCounter && (
+                <motion.div
+                  key="counter"
+                  variants={expand}
+                  initial="collapsed"
+                  animate="expanded"
+                  exit="collapsed"
+                  className="overflow-hidden"
+                >
+                  <form action={respond} className="composer__row">
+                    <input type="hidden" name="offer_id" value={offerId} />
+                    <input type="hidden" name="decision" value="countered" />
+                    <input
+                      name="counter_amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      placeholder="Your number"
+                      className="ctl max-w-none flex-1 !py-2"
+                    />
+                    <button type="submit" disabled={responding} className="btn btn--live !py-2.5">
+                      Send counter
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </>
         )}
 
