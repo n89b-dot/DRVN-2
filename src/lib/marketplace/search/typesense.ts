@@ -1,6 +1,12 @@
 import "server-only";
 
 import { reportError } from "@/lib/monitoring";
+import {
+  typesenseConfigured,
+  typesenseDelete,
+  typesenseRequest,
+  typesenseUpsert,
+} from "@/lib/search/typesense";
 
 import { classifyQuery } from "./normalize";
 import type { SearchProvider } from "./provider";
@@ -9,30 +15,19 @@ import type { SearchProvider } from "./provider";
  * Optional Typesense adapter (brief §B1) — chosen over Meilisearch for its
  * per-field alphanumeric typo control: part-number-shaped tokens can be
  * excluded from typo correction, which is exactly DRVN's identifier rule.
- * Self-hosted/open-source; configured entirely by env:
+ * Self-hosted/open-source; configured entirely by env (TYPESENSE_URL /
+ * TYPESENSE_API_KEY — see the shared transport in src/lib/search/typesense).
  *
- *   TYPESENSE_URL      e.g. http://localhost:8108
- *   TYPESENSE_API_KEY
- *
- * Reached over plain fetch — no client dependency. Any failure returns null
- * and the caller falls back to Postgres; identifier queries are ALWAYS
- * answered by Postgres (exact compact semantics beat engine ranking there).
- * Index lifecycle: scripts/reindex-search.mjs (full rebuild) and
- * syncListingToSearch (per-listing upsert on publish/edit, fire-and-forget).
+ * Any failure returns null and the caller falls back to Postgres; identifier
+ * queries are ALWAYS answered by Postgres (exact compact semantics beat
+ * engine ranking there). Index lifecycle: scripts/reindex-search.mjs (full
+ * rebuild) and syncListingToSearch (per-listing upsert on publish/edit,
+ * fire-and-forget).
  */
 
 export const COLLECTION = "drvn-listings";
 
-export function typesenseConfigured(): boolean {
-  return Boolean(process.env.TYPESENSE_URL && process.env.TYPESENSE_API_KEY);
-}
-
-function headers(): Record<string, string> {
-  return {
-    "X-TYPESENSE-API-KEY": process.env.TYPESENSE_API_KEY ?? "",
-    "Content-Type": "application/json",
-  };
-}
+export { typesenseConfigured };
 
 export type ListingSearchDocument = {
   id: string;
@@ -87,11 +82,9 @@ export class TypesenseSearchProvider implements SearchProvider {
         num_typos: "2,0,1,1,2,2", // no typo correction on part_numbers
         include_fields: "id",
       });
-      const res = await fetch(
-        `${process.env.TYPESENSE_URL}/collections/${COLLECTION}/documents/search?${params}`,
-        { headers: headers(), signal: AbortSignal.timeout(3000) },
+      const res = await typesenseRequest(
+        `/collections/${COLLECTION}/documents/search?${params}`
       );
-      if (!res.ok) throw new Error(`typesense ${res.status}`);
       const body = (await res.json()) as { hits?: { document: { id: string } }[] };
       const ids = (body.hits ?? []).map((hit) => hit.document.id);
       // The engine only knows what's been indexed — union Postgres' answer in
@@ -108,28 +101,9 @@ export class TypesenseSearchProvider implements SearchProvider {
 
 /** Fire-and-forget per-listing sync — no-op unless the engine is configured. */
 export async function upsertSearchDocument(doc: ListingSearchDocument): Promise<void> {
-  if (!typesenseConfigured()) return;
-  try {
-    await fetch(`${process.env.TYPESENSE_URL}/collections/${COLLECTION}/documents?action=upsert`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(doc),
-      signal: AbortSignal.timeout(3000),
-    });
-  } catch (error) {
-    reportError("[search] typesense upsert failed", { id: doc.id, error: String(error) });
-  }
+  await typesenseUpsert(COLLECTION, doc);
 }
 
 export async function deleteSearchDocument(id: string): Promise<void> {
-  if (!typesenseConfigured()) return;
-  try {
-    await fetch(`${process.env.TYPESENSE_URL}/collections/${COLLECTION}/documents/${id}`, {
-      method: "DELETE",
-      headers: headers(),
-      signal: AbortSignal.timeout(3000),
-    });
-  } catch {
-    // A stale document is filtered out by status anyway.
-  }
+  await typesenseDelete(COLLECTION, id);
 }

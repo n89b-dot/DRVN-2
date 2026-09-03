@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 50 initiatives — 8 implemented · 34 validated · 7 deferred · 1 blocked externally
+**Progress:** 51 initiatives — 9 implemented · 34 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -88,6 +88,19 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **UX rules:** Never prompt to save a search. Saving is silent; alerts are a separate explicit opt-in, easy to disable. New matches surface through existing home/notification patterns — no disruptive messaging.
 - **Decisions:** Saving and alerting are separate columns and separate gestures; duplicate saves quietly succeed; 50-search cap enforced by a DB trigger. The worker (/api/jobs/saved-searches, CRON_SECRET) raises at most one notification per search per pass — a summary, never a per-listing flood; 'fits my garage' searches reuse the marketplace's exact fitment matcher.
 - **Validation:** Full loop verified live: silent save from the marketplace UI (toast receipt), row + alert toggle on /saved, worker baseline pass, a new matching listing produced exactly one summary notification with a deep link; first-pass baseline prevents pre-opt-in alerts. RLS guard (cross-user invisibility, forge refusal) executed green live; 0044 applied twice.
+
+#### Unified Explore search — Implemented
+
+- **Brief:** Explore search brief (Aug 2026)
+- **Exists today:** Search existed only for marketplace listings; /explore was a browse-only feed with a tab param and no query surface.
+- **Changing:** One coherent DRVN search ecosystem: Explore gains free-text search with grouped autocomplete over Builds, Updates, Accounts and Parts, plus a deliberately small Advanced Search (vehicle, owner-location for Builds, the marketplace refinement set for Parts). Parts reuse marketplace search wholesale; browse mode stays the untouched feed.
+- **Surfaces:** `/explore`, `src/lib/explore/search/`, `src/app/api/explore/suggest/`, `src/lib/marketplace/query.ts`, `supabase/migrations/0057_explore_search.sql`
+- **User benefit:** "Bilstein B16 Golf R" finds the build carrying that mod, "@kaito" finds the person, and a part number still hits exact-identifier semantics — all from one search field, shareable as a URL.
+- **Approach:** The marketplace provider doctrine extended per object family: three word-wise pg_trgm RPCs (0057) as canonical truth, optional per-family Typesense collections behind the shared transport, ranked-ids-only providers, and hydration through the same hydrateFeedItems/fetchListings paths the feed already uses.
+- **Depends on:** search-architecture
+- **UX rules:** Browse mode is the feed; a query or refinement — not a sort — activates search mode. Domains rank within themselves and present as groups; one relevance score never compares a person to a part. Accounts are discoverable by identity only — no account filters, and location/vehicle filters can never retrieve people. Scope changes shed incompatible filters by construction; location never crosses a scope boundary (owner location ≠ listing location).
+- **Decisions:** Build location filters through cars.owner_id → profiles.location; no location column was added to cars. Updates index a deliberate extractor (activity_post_search_text, generated column) — text blocks, mod labels/details, performance notes; never raw document JSON. Vehicle filtering is canonical catalog identity ("<makeId>-<modelId>"), implemented centrally in fetchListings for listings (fitment rows + source car, seller-stated only). Explore saved searches, alerts, and advanced filters beyond the brief's set are deliberately out of scope.
+- **Validation:** Migration 0057 applied and RPC-smoke-tested against dev data; params/extractor unit tests green; full vitest suite, typecheck and lint green; anon visual QA on the dev server (search, autocomplete keyboard flow, filter-only vehicle search, chips, empty state); explore-search e2e spec covers signed-in Parts scope, privacy exclusions and scope transitions.
 
 #### Part aliases, supersessions & interchange (groundwork) — Validated
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { leadingBeforeAfter, normalizeBlocks } from "@/lib/activity-blocks";
 import type { Database } from "@/lib/database.types";
 import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
 import { fetchWatchCounts } from "@/lib/marketplace/query";
@@ -15,8 +16,16 @@ export type FeedItem =
       intro: string | null;
       carName: string;
       carSlug: string;
+      /** The car's year/make/model for the vehicle line ("2023 Chevrolet
+       *  Corvette Z06"). All null when the keeper never filled them; the
+       *  card then falls back to the car's name. */
+      carVehicle: { year: number | null; make: string | null; model: string | null };
       ownerName: string | null;
       cover_url: string | null;
+      /** The "after" side when the post leads with a before/after plate —
+       *  cover_url is then the "before" side and the card draws a static
+       *  split of the two. Null for a plain photo cover. */
+      compare_url?: string | null;
       avatar_url: string | null;
       reactions: number;
       /** How many photos the post carries — the card's gallery cue. */
@@ -34,7 +43,11 @@ export type FeedItem =
       created_at: string;
       name: string;
       slug: string;
+      /** "2019 Volkswagen Golf R" — the vehicle label, for headlines. */
       meta: string;
+      /** The label's parts, so cards can drop a subline that would only
+       *  repeat a nameless car's name (vehicleSubline). */
+      vehicle: { year: number | null; make: string | null; model: string | null };
       cover_url: string | null;
       ownerName: string | null;
       /** Published build updates on this car. */
@@ -129,7 +142,7 @@ const LEGACY_MAX_FETCH_PER_TABLE = 200;
 
 type FeedKind = FeedItem["kind"];
 
-type FeedEventRow = { kind: FeedKind; id: string; happened_at: string };
+export type FeedEventRow = { kind: FeedKind; id: string; happened_at: string };
 
 /**
  * Hydrates a page-sized window of (kind, id, happened_at) rows into full
@@ -138,8 +151,14 @@ type FeedEventRow = { kind: FeedKind; id: string; happened_at: string };
  * place feed cards' extra signals (watch counts, fitment, activity rollups,
  * image counts) are fetched, so both the view path and the legacy fallback
  * pay the same flat per-page cost.
+ *
+ * Exported for Explore search (src/lib/explore/search/query.ts): search
+ * result windows are the same (kind, id) shape, so feed and search hydrate
+ * through this one path instead of growing divergent enrichment code —
+ * including the private-car re-check on updates, which makes hydration the
+ * final visibility gate for any ranked ids a search index hands back.
  */
-async function hydrateFeedItems(
+export async function hydrateFeedItems(
   supabase: SupabaseClient<Database>,
   rows: FeedEventRow[],
   viewerId?: string | null
@@ -152,7 +171,7 @@ async function hydrateFeedItems(
     postIds.length
       ? supabase
           .from("activity_posts")
-          .select("id, title, intro, car_id, author_id, published_at")
+          .select("id, title, intro, car_id, author_id, published_at, body")
           .in("id", postIds)
       : Promise.resolve({ data: [] }),
     carIds.length
@@ -210,7 +229,7 @@ async function hydrateFeedItems(
     { data: questionRows },
   ] = await Promise.all([
     postCarIds.length
-      ? supabase.from("cars").select("id, slug, name, is_public, cover_image_url").in("id", postCarIds)
+      ? supabase.from("cars").select("id, slug, name, year, make, model, is_public, cover_image_url").in("id", postCarIds)
       : Promise.resolve({ data: [] }),
     ownerIds.length
       ? supabase.from("profiles").select("id, display_name, username").in("id", ownerIds)
@@ -336,6 +355,14 @@ async function hydrateFeedItems(
     if (!postCover.has(img.post_id)) postCover.set(img.post_id, img.url);
     postImageCount.set(img.post_id, (postImageCount.get(img.post_id) ?? 0) + 1);
   }
+  // A post that leads with a before/after plate has no gallery mirror to
+  // cover it (activity_images takes gallery urls only) — the pair itself is
+  // the cover, drawn as a static split on the card.
+  const postCompare = new Map<string, { beforeUrl: string; afterUrl: string }>();
+  for (const p of postsRes.data ?? []) {
+    const pair = leadingBeforeAfter(normalizeBlocks(p.body));
+    if (pair) postCompare.set(p.id, pair);
+  }
   const reactionCount = new Map<string, number>();
   for (const row of reactionRows ?? []) {
     reactionCount.set(row.post_id, (reactionCount.get(row.post_id) ?? 0) + 1);
@@ -372,8 +399,10 @@ async function hydrateFeedItems(
         intro: p.intro,
         carName: car.name,
         carSlug: car.slug,
+        carVehicle: { year: car.year, make: car.make, model: car.model },
         ownerName: ownerById.get(p.author_id) ?? null,
-        cover_url: postCover.get(p.id) ?? null,
+        cover_url: postCompare.get(p.id)?.beforeUrl ?? postCover.get(p.id) ?? null,
+        compare_url: postCompare.get(p.id)?.afterUrl ?? null,
         avatar_url: car.cover_image_url ?? null,
         reactions: reactionCount.get(p.id) ?? 0,
         imageCount: postImageCount.get(p.id) ?? 0,
@@ -391,6 +420,7 @@ async function hydrateFeedItems(
         name: c.name,
         slug: c.slug,
         meta: vehicleLabel(c),
+        vehicle: { year: c.year, make: c.make, model: c.model },
         cover_url: c.cover_image_url,
         ownerName: ownerById.get(c.owner_id) ?? null,
         updateCount: carUpdateCount.get(c.id) ?? 0,

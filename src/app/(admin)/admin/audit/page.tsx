@@ -7,6 +7,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
+import { SearchField } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -83,17 +84,13 @@ export default async function AdminAuditPage({
       </Rv>
 
       <div className="finder mb-4">
-      <form method="get" className="search" role="search">
-        <label htmlFor="audit-action" className="sr-only">
-          Filter by action prefix
-        </label>
-        <input
-          id="audit-action"
-          type="search"
+      {/* Keeps its submit: several fields block implicit Enter submission. */}
+      <form method="get" className="finder__main" role="search">
+        <SearchField
+          label="Filter by action prefix"
           name="action"
           defaultValue={action ?? ""}
-          placeholder="Action prefix, e.g. order.force_refund, user., listing."
-          className="ctl"
+          placeholder="Action prefix, e.g. order.force_refund…"
         />
         <label htmlFor="audit-actor" className="sr-only">
           Filter by actor

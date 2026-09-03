@@ -9,6 +9,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
+import { SearchField } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -85,18 +86,9 @@ export default async function AdminOrdersPage({
       </Rv>
 
       <div className="finder mb-4">
-      <form method="get" className="search" role="search">
-        <label htmlFor="admin-order-q" className="sr-only">
-          Search orders
-        </label>
-        <input
-          id="admin-order-q"
-          type="search"
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="Order id, pi_…, or username"
-          className="ctl"
-        />
+      {/* Keeps its submit: the date fields block implicit Enter submission. */}
+      <form method="get" className="finder__main" role="search">
+        <SearchField label="Search orders" defaultValue={q ?? ""} placeholder="Order id, pi_…, or username…" />
         {activeStatus && <input type="hidden" name="status" value={activeStatus} />}
         <label htmlFor="admin-order-from" className="sr-only">
           From date

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { blockHasContent, normalizeBlocks, youtubeId } from "./activity-blocks";
+import { blockHasContent, leadingBeforeAfter, normalizeBlocks, youtubeId } from "./activity-blocks";
 
 describe("normalizeBlocks", () => {
   it("upgrades legacy V0 sections", () => {
@@ -94,6 +94,35 @@ describe("blockHasContent", () => {
     expect(
       blockHasContent({ type: "mod", action: "installed", modItemId: null, label: "KW" }),
     ).toBe(true);
+  });
+});
+
+describe("leadingBeforeAfter", () => {
+  const ba = { type: "before_after" as const, beforeUrl: "https://x/b.jpg", afterUrl: "https://x/a.jpg" };
+  const images = { type: "images" as const, urls: ["https://x/1.jpg"] };
+  const text = { type: "text" as const, text: "Wheels and a drop." };
+
+  it("returns the pair when the first media block is the plate", () => {
+    expect(leadingBeforeAfter(normalizeBlocks([ba, images]))).toEqual({
+      beforeUrl: ba.beforeUrl,
+      afterUrl: ba.afterUrl,
+    });
+  });
+
+  it("lets prose come first — text does not decide the cover", () => {
+    expect(leadingBeforeAfter(normalizeBlocks([text, ba]))).toEqual({
+      beforeUrl: ba.beforeUrl,
+      afterUrl: ba.afterUrl,
+    });
+  });
+
+  it("defers to a gallery that comes first", () => {
+    expect(leadingBeforeAfter(normalizeBlocks([images, ba]))).toBeNull();
+  });
+
+  it("is null without a plate", () => {
+    expect(leadingBeforeAfter(normalizeBlocks([text, images]))).toBeNull();
+    expect(leadingBeforeAfter([])).toBeNull();
   });
 });
 

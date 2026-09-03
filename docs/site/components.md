@@ -126,7 +126,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (76)
+### Primitives (77)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -152,7 +152,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `FilterButton` | Primitive | `@/components/ui` | Filter as a button. — `.fbtn` | Client-side filters. |
 | `FilterGroup` | Primitive | `@/components/ui` | Labelled filter cluster. — `.filters` | Filter bars. |
 | `FilterLink` | Primitive | `@/components/ui` | GET filter as a link. — `.fbtn` | Stateless filters. |
-| `Finder` | Primitive | `@/components/ui` | The find-in-sheet search band. — `.finder` | List filtering headers. |
+| `Finder` | Primitive | `@/components/ui` | The search instrument: the SearchField owning its row, optional Clear, refinements beneath. — `.finder` | Any GET search with refinements (Saved, Messages). No Search button — Enter submits. |
 | `FinderClear` | Primitive | `@/components/ui` | Finder's clear control. | Inside Finder. |
 | `FinderLabel` | Primitive | `@/components/ui` | Finder's mono label. | Inside Finder. |
 | `Foot` | Primitive | `@/components/ui` | The ruled page foot. — `.foot` | Bottom of full pages. |
@@ -183,7 +183,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ResultNote` | Primitive | `@/components/ui` | Action outcome line — ok chip or error text, role=alert. Motion-driven enter/exit presence. | useActionState results next to a form. |
 | `Rv` | Primitive | `@/components/livesheet` | Livesheet spring reveal, staggered per index, reduced-motion safe. Motion for React drives the animation (shared `reveal` recipe from `src/lib/motion`). | Entry reveal on page heads, tiles, cards. |
 | `ScrollActiveIntoView` **[internal]** | Primitive | `@/components/ui` | Scrolls the active nav item into view on mount. | Inside scrolling nav strips. |
-| `SearchField` | Primitive | `@/components/ui` | The `.search` input band. — `.search` | Search inputs. |
+| `SearchField` | Primitive | `@/components/ui` | The one search field: icon + native search input on a raised tile. — `.search` | Every search input on the platform — never hand-roll `.search` markup. Enter submits. |
 | `SectionHeading` | Primitive | `@/components/ui` | Mono microlabel section heading. — `.microlabel` | Section labels inside sheets/profiles. |
 | `SectionLabel` | Primitive | `@/components/ui` | Ink microlabel paragraph. — `.microlabel--ink` | Ink-toned section labels. |
 | `Select` | Primitive | `@/components/ui` | Native select in the field contract (platform picker on compact). — `.ctl` | Enumerated choices. |
@@ -197,6 +197,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `SortableGrid` | Primitive | `@/components/ui` | Drag-and-drop ordering for photo strips/tile grids (dnd-kit: pointer, touch, keyboard sensors). — `.sortable--lifted` | Wrap reorderable thumbs; pair with SortableItem per cell. Keep explicit ↑/↓ controls alongside. *Not for:* Single-item or fixed-order sets. |
 | `SortableItem` | Primitive | `@/components/ui` | One draggable cell inside a SortableGrid. | Only inside SortableGrid. |
 | `Stepper` | Primitive | `@/components/ui` | Auto-numbered workflow progress rail; live numeral on the current step. — `.steps` | Multi-step workflows (checkout). Workflow state stays with the feature. |
+| `SuggestingSearchField` | Primitive | `@/components/ui` | The `.search` plate with grouped autocomplete (ARIA combobox over a `.combo` popover). Progressive enhancement on a GET search form: debounced fetch from a suggest endpoint, stale requests aborted, Enter without a selection submits the form. — `.search / .combo` | A search field whose short queries should surface direct destinations — Explore's cross-family search. *Not for:* Plain filter search where results are the page anyway (SearchField), and picking one option from a bounded list (ComboField). |
 | `TabNav` | Primitive | `@/components/ui` | The system's tab replacement — a quiet jumprow of mono links. — `.jumprow` | On-page section switching. |
 | `TextArea` | Primitive | `@/components/ui` | Textarea in the field contract. — `.ctl` | Multi-line input. |
 | `TextField` | Primitive | `@/components/ui` | Text input in the field contract; mono prefix support ($, PN). — `.field / .ctl` | Every text input. |
@@ -215,20 +216,20 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `CategoryIcon` | Product pattern | `@/components/ui` | Marketplace taxonomy category mark. | Category navigation and headers. |
 | `ConditionSummary` | Product pattern | `@/components/commerce` | Structured part-condition grid (grade + checklist). | PDP and sell preview condition blocks. |
 | `FeedList` | Product pattern | `@/components/ui/feed-list` | Feed items as dense `.order`-based rows (Home's list-shaped feed). — `.feedrow on .order` | Home feeds where the wall would be too loud. *Not for:* Browse surfaces — that's the mosaic family. |
-| `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card. | Explore and mixed feeds, via MasonryFeed. |
-| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder's compact refine sheet. | Marketplace filtering on compact widths. |
+| `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card. Update: title → two-line excerpt → full vehicle label → owner. Part: title → source car → price alone (no ship line on the discovery wall) → condition chip + grade → seller. Build: name → vehicle → owner · activity. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline). | Explore and mixed feeds, via MasonryFeed. |
+| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder's filters, sheeted at every width behind one sliders-icon trigger. | Finder filtering — a sliders-icon trigger ("Filters" label ≥640px, icon-only on compact) with a live count, opening the refinement sheet (bottom sheet on compact, centered dialog wider). |
 | `ListingCard` | Product pattern | `@/components/ui` | THE listing card — canonical marketplace/browse representation (delegates to ListingMosaicCell). | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
 | `ListingMosaicCell` | Product pattern | `@/components/ui` | A listing as a mosaic card (price, shipping, provenance, seller trust). | Via ListingCard. |
 | `ListingRow` | Product pattern | `@/components/commerce` | A seller's listing as a dense ledger row — cover, title, price, Live/Sold chip. — `.order` | Seller-scoped lists (profile shopfront, car sheet parts). *Not for:* Marketplace browsing — that's ListingCard. |
 | `MasonryFeed` | Product pattern | `@/components/ui` | The Explore wall — FeedMosaicCells in a dense Mosaic, with its empty state. | Mixed-kind feed walls. |
-| `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. — `.mosaic` | Container for MosaicCell families on browse surfaces. |
-| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind, media, title, value, provenance, trust, engagement slots. — `.mcell` | Underlying anatomy for every card; compose, don't fork. |
+| `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. 1×1 cards, plus 2×1 wides on the two-column phone wall; there is no 2×2 shape (it filled a phone viewport with one card). — `.mosaic` | Container for MosaicCell families on browse surfaces. |
+| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind, media, title, lede, provenance, value, detail, meta, trust, engagement slots. — `.mcell` | Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Caption order is title → `lede` (an update's two-line excerpt) → `sub` (the car a part came off) → `value` (price, or the vehicle line) → `detail` (a listing's condition chip + grade) → `meta` (owner / seller). Two spacing steps only: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/10px from 240px). |
 | `OrderPipeline` | Product pattern | `@/components/commerce` | The order lifecycle as a `.pipe` stage rail, terminal states included. — `.pipe` | Order rows and order detail. |
 | `PaymentModeNotice` | Product pattern | `@/components/ui` | Test-mode payments banner. | Payment surfaces while Stripe runs in test mode. |
 | `ProfileHeader` | Product pattern | `@/components/ui` | Identity block — avatar plate, name, handle, tagline, website, action slot. | Profile and car sheet heads. |
 | `SellingNav` | Product pattern | `@/components/ui` | The marketplace-family console nav. | Marketplace-family pages. |
 | `StatusChip` | Product pattern | `@/components/commerce` | Order/offer lifecycle state as a toned chip (ok / live / spent). — `.chip--ok/--live/--spent` | Orders, offers, and anywhere an order-family status appears. *Not for:* Non-lifecycle chips — use `.chip` variants directly. |
-| `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity, pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
+| `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity (name; vehicle line only when it adds to the name), pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
 
 ### Features (13)

@@ -16,6 +16,7 @@ import {
   Message,
   MessageThread,
   MetricCard,
+  MosaicCell,
   ObjectRow,
   PageHead,
   Pagination,
@@ -24,6 +25,7 @@ import {
   SearchField,
   Select,
   Stepper,
+  SuggestingSearchField,
   TextField,
   TileHead,
   ThreadDivider,
@@ -358,6 +360,21 @@ export default function ComponentsPage() {
             <FilterButton pressed>Fits my car</FilterButton>
           </FilterGroup>
           <SearchField label="Search parts" defaultValue="dogleg gearbox" className="w-full" />
+        </Specimen>
+        <Specimen
+          name="Suggesting search field"
+          klass="SuggestingSearchField"
+          note="Production component. The .search plate with grouped autocomplete (ARIA combobox over the .combo popover): debounced fetch from a suggest endpoint, stale requests aborted, arrow keys walk the flattened options, Enter on an option navigates, Enter without one submits the surrounding GET form. This live specimen queries Explore's real suggest endpoint — type two or more characters."
+        >
+          <form role="search" className="finder" action="/explore" method="get">
+            <div className="finder__main">
+              <SuggestingSearchField
+                label="Search DRVN"
+                placeholder="Search…"
+                endpoint="/api/explore/suggest"
+              />
+            </div>
+          </form>
         </Specimen>
       </SpecimenGroup>
 
@@ -718,6 +735,91 @@ export default function ComponentsPage() {
               <p className="mkt__price">$880</p>
               <p className="mkt__metaline">Used — fair · Leeds</p>
             </a>
+          </div>
+        </Specimen>
+        <Specimen
+          name="Before / after card"
+          klass="MosaicCell compareSrc"
+          note="An update that leads with a before/after plate keeps the pair on the wall: before under, after clipped to the right half over it, the plate's own divider and grip at the midline. Static on purpose — the slider lives on the post page — and no composite image is ever made; the card reuses the two originals. FeedMosaicCell derives it from the post's first media block (lib/activity-blocks leadingBeforeAfter)."
+        >
+          <div className="grid max-w-[520px] grid-cols-2 gap-3">
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-1.jpg"
+              compareSrc="/seed/golf-r-2.jpg"
+              alt="Coilovers in"
+              eyebrow="Update"
+              kind="update"
+              corner="6d ago"
+              headline="Coilovers in — finally sits right"
+              lede="HKS Hipermax in, alignment done, wheel gap gone."
+              value="1999 Nissan Silvia"
+              meta="Kaito Nakamura"
+            />
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-3.jpg"
+              alt="Track day"
+              eyebrow="Update · 2 photos"
+              kind="update"
+              corner="1w ago"
+              headline="Track day, first launch"
+              lede="New PB and a master cylinder on order."
+              value="2022 Porsche 911 GT3"
+              meta="Felix Brandt"
+            />
+          </div>
+        </Specimen>
+        <Specimen
+          name="Feed captions"
+          klass="MosaicCell lede / detail / meta"
+          note="The three feed kinds on one rhythm. An update reads title → two-line excerpt (lede) → full vehicle label (value) → owner (meta); a part reads title → source car (sub) → price alone (value — the ship line stays on the marketplace) → condition chip + grade (detail) → seller (meta); a build reads name → vehicle → owner · activity. Tight steps bind a line to the one above, group steps open a new one; from 240px the steps widen from 4/6px to 6/10px."
+        >
+          <div className="grid max-w-[800px] grid-cols-3 gap-3">
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-1.jpg"
+              alt="First real pass in the quarter"
+              eyebrow="Update"
+              kind="update"
+              corner="4d ago"
+              headline="First real pass in the quarter"
+              lede="Stopped babying it. The flat-plane scream past the tree is worth the tire bill."
+              value="2023 Chevrolet Corvette Z06"
+              meta="Jade Whitfield"
+            />
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-2.jpg"
+              alt="992 GT3 centre-lock wheels"
+              eyebrow="For sale"
+              kind="part"
+              headline="992 GT3 centre-lock wheels with Michelin Cup 2, set of four"
+              sub="2022 Porsche 911 GT3"
+              value="$5,200"
+              detail={
+                <>
+                  <span className="chip mcell__cond">Used</span> · Grade B
+                </>
+              }
+              meta="Felix Brandt"
+            />
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-3.jpg"
+              alt="Gruene"
+              eyebrow="Build"
+              kind="car"
+              corner="1w ago"
+              headline="Gruene"
+              value={<span className="vref vref--value">2021 BMW M4 Competition</span>}
+              meta="Marcus Reid · 1 update"
+            />
           </div>
         </Specimen>
         <Specimen

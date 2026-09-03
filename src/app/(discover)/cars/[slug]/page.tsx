@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { CarTabs, type ForSaleItem, type ModLine } from "./car-tabs";
 import { reportError } from "@/lib/monitoring";
-import { platformLabel } from "@/lib/vehicles/label";
+import { vehicleSubline } from "@/lib/vehicles/label";
 
 const TAB_KEYS = ["build", "forsale", "activity", "gallery"];
 
@@ -48,9 +48,9 @@ export async function generateMetadata({
 
   if (!car) return { title: "Car not found - DRVN" };
 
-  const spec = [car.year && String(car.year), platformLabel(car)]
-    .filter(Boolean)
-    .join(" ");
+  // Null when the car is named by its label — "2015 Ferrari 458 Speciale —
+  // 2015 Ferrari 458 Speciale" is not a title.
+  const spec = vehicleSubline(car.name, car);
   const description =
     car.about?.slice(0, 155) ??
     `${spec || car.name} on DRVN — the full build, and the parts for sale off it.`;
@@ -297,9 +297,9 @@ export default async function CarPage({
   }));
 
   const ownerName = owner?.display_name ?? (owner?.username ? `@${owner.username}` : "");
-  const carMeta = [car.year && String(car.year), platformLabel(car), car.color]
-    .filter(Boolean)
-    .join(" · ");
+  // The line under the name: the vehicle when it adds information, then the
+  // colour. A nameless car's label already leads, so only the colour remains.
+  const carMeta = [vehicleSubline(car.name, car), car.color].filter(Boolean).join(" · ");
 
   return (
     <div className="wrap">

@@ -27,7 +27,9 @@ export type IconName =
   | "flag"
   | "card"
   | "share"
-  | "book";
+  | "book"
+  | "filter"
+  | "search";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -122,6 +124,23 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
     /* An arrow leaving the tray — send it somewhere else. */
     share: <path d="M12 14V3.5M12 3.5 7.8 7.7M12 3.5l4.2 4.2M5 12.5v6A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-6" />,
     book: <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4ZM5 17a3 3 0 0 1 3-3h11M9 8h6" />,
+    /* The lens and its handle — replaces the ⌕ text glyph in search
+       fields, which rendered a size down from every real icon beside it. */
+    search: (
+      <>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m20 20-4.9-4.9" />
+      </>
+    ),
+    /* Three slider rails with their knobs — refinements, not a funnel. */
+    filter: (
+      <>
+        <path d="M4 7h16M4 12h16M4 17h16" />
+        <circle cx="9" cy="7" r="1.7" fill="currentColor" />
+        <circle cx="15" cy="12" r="1.7" fill="currentColor" />
+        <circle cx="8" cy="17" r="1.7" fill="currentColor" />
+      </>
+    ),
   };
 
   return (

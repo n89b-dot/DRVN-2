@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { vehicleLabel } from "@/lib/vehicles/label";
+import { vehicleSubline } from "@/lib/vehicles/label";
 
 import { Media } from "./primitives";
 
@@ -33,7 +33,7 @@ export function VehicleCard({
   /** The build's pulse: updates posted and followers. */
   stats?: { updates: number; followers: number };
 }) {
-  const meta = vehicleLabel(vehicle);
+  const meta = vehicleSubline(vehicle.name, vehicle);
   return (
     <Link href={`/cars/${vehicle.slug}`} className="vehicle vehicle--row">
       <span className="vehicle__img">
@@ -47,7 +47,7 @@ export function VehicleCard({
       </span>
       <span className="vehicle__body min-w-0">
         <span className="vehicle__name block">{vehicle.name}</span>
-        <span className="vehicle__meta vref vref--lg block">{meta || "View the build page"}</span>
+        {meta && <span className="vehicle__meta vref vref--lg block">{meta}</span>}
         {stats && (
           <span className="vehicle__stats">
             <span className="vehicle__stat">

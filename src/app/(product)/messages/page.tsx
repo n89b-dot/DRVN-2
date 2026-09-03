@@ -374,16 +374,14 @@ export default async function MessagesPage({
         </p>
       </Rv>
 
-      {/* The house search idiom, now the canonical Finder component: one
-          plate, the query owning the row, submit beside it. The old `.filters`
-          row let the label, field and both actions wrap into a blob — the
-          narrowness was accidental, not designed. */}
+      {/* The house search idiom — the canonical Finder: the query field
+          owning the row, Enter submits, Clear beside it while a query is
+          active. Same field as Explore and the Marketplace. */}
       <Finder
         action="/messages"
         className="mb-5"
         inputLabel="Search your conversations"
         defaultValue={query}
-        placeholder="Listing, person or message…"
         clearHref={query ? "/messages" : undefined}
       />
 

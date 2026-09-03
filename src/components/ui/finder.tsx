@@ -3,13 +3,16 @@ import type { ReactNode } from "react";
 
 import { cx } from "@/lib/format";
 
+import { Icon } from "./icons";
+
 /**
- * The search field itself — the `.search` plate (⌕ glyph + native search
- * input). Standalone it sits on `--tile`; inside a Finder the stylesheet
- * recesses it onto `--paper-deep` and lets it flex.
+ * THE search field — the one `.search` band every search on the platform
+ * renders (Explore via SuggestingSearchField, Marketplace, Messages, Saved,
+ * the console queues): search icon + native search input on a raised
+ * tile. No submit button anywhere — Enter submits, as every search does.
  *
- * Native `<input type="search">` on purpose: 16px mono keeps iOS from
- * zooming, and the platform clear affordance stays.
+ * Native `<input type="search">` on purpose: 16px mono on compact keeps iOS
+ * from zooming, and the platform clear affordance stays.
  */
 export function SearchField({
   label,
@@ -27,7 +30,7 @@ export function SearchField({
 }) {
   return (
     <label className={cx("search", className)}>
-      <span aria-hidden="true">⌕</span>
+      <Icon name="search" className="h-4 w-4 shrink-0" />
       <input
         type="search"
         name={name}
@@ -40,37 +43,33 @@ export function SearchField({
 }
 
 /**
- * The search command plate — the `.finder` composition Saved and Messages
- * each hand-rolled: a query line on top (label · field · submit), refinements
- * on their own line beneath, so search and sort read as two operations
- * instead of collapsing into one blob of controls on a phone.
+ * The search instrument — the `.finder` composition Saved and Messages
+ * each hand-rolled: the query line (the SearchField, owning the row, with
+ * an optional Clear beside it), refinements on their own line beneath, so
+ * search and sort read as two operations instead of collapsing into one
+ * blob of controls on a phone. Same row, same field as Explore and the
+ * Marketplace — one look for search across the platform.
  *
- * Adaptive contract (all in the stylesheet): compact stacks the label,
- * field and submit full-width; medium/expanded run them inline. GET form on
- * purpose — every search is a shareable URL.
+ * GET form on purpose — every search is a shareable URL. Enter submits;
+ * there is no Search button (one text field, so implicit submission holds).
  */
 export function Finder({
   action,
-  searchLabel,
   inputLabel,
   name = "q",
   defaultValue,
-  placeholder,
-  submitLabel = "Search",
+  placeholder = "Search…",
   hidden,
   clearHref,
   refine,
   className,
 }: {
   action: string;
-  /** Optional mono introduction on the query row ("Search"). */
-  searchLabel?: string;
   /** Accessible name for the input itself ("Search saved parts"). */
   inputLabel: string;
   name?: string;
   defaultValue?: string;
   placeholder?: string;
-  submitLabel?: string;
   /** Params carried through a search (active tab, chosen sort). */
   hidden?: Record<string, string | undefined>;
   /** Renders a quiet Clear beside the submit while a query is active. */
@@ -85,22 +84,14 @@ export function Finder({
         value ? <input key={key} type="hidden" name={key} value={value} /> : null
       )}
       <div className="finder__main">
-        {searchLabel && (
-          <span className="microlabel filters__label w-full sm:w-auto">{searchLabel}</span>
-        )}
         <SearchField
           label={inputLabel}
           name={name}
           defaultValue={defaultValue}
           placeholder={placeholder}
         />
-        <button type="submit" className="btn w-full sm:w-auto">
-          {submitLabel}
-        </button>
         {clearHref && (
-          /* `.fbtn` is inline-flex with no justify-content, so stretched to
-             full width its label would sit left under a centred Search. */
-          <Link href={clearHref} className="fbtn w-full justify-center sm:w-auto">
+          <Link href={clearHref} className="fbtn justify-center">
             Clear
           </Link>
         )}

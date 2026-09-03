@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { platformLabel, provenanceLine, vehicleLabel } from "./label";
+import { platformLabel, provenanceLine, vehicleLabel, vehicleSubline } from "./label";
+
+describe("vehicleSubline", () => {
+  const golf = { year: 2019, make: "Volkswagen", model: "Golf R" };
+
+  it("is the label when the car has a personal name", () => {
+    expect(vehicleSubline("Zephyr", golf)).toBe("2019 Volkswagen Golf R");
+  });
+
+  it("is null when the name is the label — the nameless car", () => {
+    expect(vehicleSubline("2019 Volkswagen Golf R", golf)).toBeNull();
+    expect(vehicleSubline("  2019  volkswagen golf r ", golf)).toBeNull();
+  });
+
+  it("is null when nothing is known about the vehicle", () => {
+    expect(vehicleSubline("Zephyr", {})).toBeNull();
+    expect(vehicleSubline("Zephyr", null)).toBeNull();
+  });
+});
 
 describe("vehicleLabel", () => {
   it("joins year, make, model and trim with single spaces", () => {

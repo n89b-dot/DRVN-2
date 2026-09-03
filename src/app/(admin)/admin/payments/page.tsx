@@ -10,6 +10,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
 import { PayloadViewer } from "../_components/payload-viewer";
+import { SearchField } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -56,21 +57,8 @@ export default async function AdminPaymentsPage({
       </Rv>
 
       <form method="get" className="finder mb-6" role="search">
-        <div className="search">
-          <label htmlFor="payments-q" className="sr-only">
-            Search payments ops
-          </label>
-          <input
-            id="payments-q"
-            type="search"
-            name="q"
-            defaultValue={q ?? ""}
-            placeholder="Order id, part title, or seller"
-            className="ctl"
-          />
-          <button type="submit" className="btn">
-            Search
-          </button>
+        <div className="finder__main">
+          <SearchField label="Search payments ops" defaultValue={q ?? ""} placeholder="Order id, part title, or seller…" />
         </div>
       </form>
 

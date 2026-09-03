@@ -33,6 +33,28 @@ export function vehicleLabel(v: VehicleParts | null | undefined): string {
   return [clean(v.year), clean(v.make), clean(v.model), clean(v.trim)].filter(Boolean).join(" ");
 }
 
+/**
+ * The vehicle line that sits UNDER a car's name — or nothing.
+ *
+ * A personal name is optional; when a keeper leaves it blank, Add Car stores
+ * the vehicle label itself as the name ("2015 Ferrari 458 Speciale"), so the
+ * name and the label are the same words. Every surface that pairs the two
+ * (feed card, garage sheet, home tile, saved row, build page, suggestions)
+ * calls this instead of `vehicleLabel` for the second line: the label when
+ * it adds information, null when it would only repeat the bold line above.
+ * Compared case- and whitespace-insensitively, so "BMW M3" and "bmw  m3"
+ * count as the same car.
+ */
+export function vehicleSubline(
+  name: string | null | undefined,
+  v: VehicleParts | null | undefined
+): string | null {
+  const label = vehicleLabel(v);
+  if (!label) return null;
+  const fold = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+  return fold(name ?? "") === fold(label) ? null : label;
+}
+
 /** Make + model only — the platform a part fits, year-agnostic. */
 export function platformLabel(v: Pick<VehicleParts, "make" | "model"> | null | undefined): string {
   if (!v) return "";

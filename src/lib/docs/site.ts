@@ -103,9 +103,9 @@ export const SITE_PAGES: DocEntry[] = [
 export const REFERENCE_DOCS: DocEntry[] = [
   {
     slug: "search",
-    title: "Marketplace search",
+    title: "DRVN search",
     description:
-      "The two search lanes, part-number normalization, aliases/interchange, providers, indexing lifecycle and recovery.",
+      "Marketplace and Explore search: lanes, object families, filters, providers, indexing lifecycle, hydration and privacy model.",
     file: "docs/site/search.md",
     kind: "reference",
   },

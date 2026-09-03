@@ -13,6 +13,7 @@ export const DOCS_SECTIONS = [
   { href: "/docs/design-system", label: "System" },
   { href: "/docs/typography", label: "Type" },
   { href: "/docs/components", label: "Components" },
+  { href: "/docs/motion", label: "Motion" },
   { href: "/docs/patterns", label: "Patterns" },
   { href: "/docs/rules", label: "Rules" },
   { href: "/docs/material", label: "Material" },

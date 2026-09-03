@@ -7,7 +7,7 @@ import type { GarageSheet } from "./garage-data";
 import { PlateSwiper } from "./plate-swiper";
 import { SheetActions } from "./sheet-actions";
 import { SheetDetails } from "./sheet-details";
-import { vehicleLabel } from "@/lib/vehicles/label";
+import { vehicleSubline } from "@/lib/vehicles/label";
 
 const DAY = 864e5;
 
@@ -81,7 +81,7 @@ export function GarageSheetCard({
   stagger: number;
 }) {
   const s = sheet;
-  const meta = vehicleLabel(s);
+  const meta = vehicleSubline(s.name, s);
   const orders = workOrders(s);
   const sheetNo = String(s.index).padStart(2, "0");
 

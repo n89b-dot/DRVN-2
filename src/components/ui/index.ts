@@ -47,6 +47,11 @@ export { Pagination } from "./pagination";
 export { FilterGroup, FilterLink, FilterButton, ActiveFilterChip } from "./filters";
 export { Finder, FinderLabel, FinderClear, SearchField } from "./finder";
 export {
+  SuggestingSearchField,
+  type SearchSuggestGroup,
+  type SearchSuggestItem,
+} from "./search-suggest";
+export {
   FormField,
   TextField,
   TextArea,

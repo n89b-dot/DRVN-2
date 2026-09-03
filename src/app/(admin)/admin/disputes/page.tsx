@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { SheetTabs } from "@/components/ui";
+import { SearchField, SheetTabs } from "@/components/ui";
 import { getDisputeQueue, DISPUTE_SLA_DAYS, DISPUTES_PAGE_SIZE, type DisputeQueueRow } from "@/lib/admin/queries";
 import type { DisputeCategory } from "@/lib/database.types";
 import { gradeLabel } from "@/lib/marketplace/grading";
@@ -212,23 +212,10 @@ export default async function AdminDisputesPage({
       </Rv>
 
       <div className="finder mb-4">
-        <form method="get" className="search" role="search">
-          <label htmlFor="admin-dispute-q" className="sr-only">
-            Search disputes
-          </label>
-          <input
-            id="admin-dispute-q"
-            type="search"
-            name="q"
-            defaultValue={q ?? ""}
-            placeholder="Order id, part, buyer or seller"
-            className="ctl"
-          />
+        <form method="get" className="finder__main" role="search">
+          <SearchField label="Search disputes" defaultValue={q ?? ""} placeholder="Order id, part, buyer or seller…" />
           {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
           {view === "resolved" && <input type="hidden" name="view" value="resolved" />}
-          <button type="submit" className="btn">
-            Search
-          </button>
         </form>
 
         <div className="filters" aria-label="Filter by category">

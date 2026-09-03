@@ -5,7 +5,7 @@ import { CardEngagement } from "@/features/social/card-actions";
 import type { FeedItem } from "@/lib/feed";
 import { cx } from "@/lib/format";
 import { conditionLabel, formatPrice } from "@/lib/marketplace/taxonomy";
-import { provenanceLine } from "@/lib/vehicles/label";
+import { provenanceLine, vehicleLabel, vehicleSubline } from "@/lib/vehicles/label";
 
 import type { ListingCardData } from "./listing-card";
 import { Media } from "./primitives";
@@ -13,7 +13,7 @@ import { ratingLine } from "./rating";
 
 /**
  * Mosaic — the photo-wall grid (Best Buy customer images). Cells sit on one
- * portrait unit: 1×1 cards, with 2×2 features and 2×1 wides on the phone
+ * portrait unit: 1×1 cards, with 2×1 wides on the phone
  * wall, packed `dense` so the wall has no holes. Four units across on
  * desktop, three on tablet, two on phones.
  *
@@ -22,12 +22,16 @@ import { ratingLine } from "./rating";
  *   ┌ link region ──────────────────────────────────────────────┐
  *   │ eyebrow row      mono kind label · annotation (time, watch)│
  *   │ photo plate      takes whatever height the caption leaves  │
- *   │ caption          headline → value line → meta              │
+ *   │ caption          headline → car line → value line → meta   │
  *   └────────────────────────────────────────────────────────────┘
- *   provenance        "Off a 2019 Golf R →" — a link to the build
  *   trust             seller · rating (wide cells)
  *   actions           Buy now · Add to cart (Marketplace only)
  *   engagement        like · comment · share · save
+ *
+ * A listing reads title → the car it came off → price → condition, all in
+ * one caption run inside the link region. The car line is plain text, not
+ * a link to the build: on a phone two stacked targets were too easy to
+ * confuse, so the card is the only thing to tap.
  *
  * The cell is an <article>, not one big <a>: the link region (everything
  * a buyer reads) is one large target, and every control underneath is its
@@ -36,13 +40,19 @@ import { ratingLine } from "./rating";
  * button never opens the listing.
  *
  * Size is a stable hash of the id, so the wall never reshuffles between
- * renders. The caption grows with the cell — a phone 1×1 shows headline and
- * value; a desktop card or a phone wide/feature adds the meta line, the
- * seller line and a second headline line (container queries on the cell,
- * see .mcell in globals.css).
+ * renders. The caption reads the same at every size — headline (two lines),
+ * a secondary line and the meta line are always present (each truncates).
+ * What a wider cell earns is room, not information: roomier padding, a
+ * size step and the seller line (container queries on the cell, see .mcell
+ * in globals.css). Type hierarchy is fixed across kinds: the title is the
+ * only ink text, plus the price on a listing; everything else is one dim
+ * mono secondary voice, then the 11.5px meta. Cell width is not monotonic in viewport width
+ * (it jumps as the wall changes column count), so nothing informational
+ * may be gated on it — a card that gained or lost a line as the window
+ * resized read as a different card.
  */
 
-export type MosaicSize = "sq" | "wide" | "xl";
+export type MosaicSize = "sq" | "wide";
 
 function hashOf(id: string): number {
   let h = 0;
@@ -50,16 +60,14 @@ function hashOf(id: string): number {
   return Math.abs(h);
 }
 
-/** ~10% feature (2×2), ~15% wide (2×1), the rest 1×1. The larger shapes
- *  only take effect on the two-column phone wall (see .mcell--wide in
- *  globals.css); at 3–4 columns every cell is one card, so no photo ever
- *  grows past its 4-column size. */
+/** ~25% wide (2×1), the rest 1×1. There is no 2×2 shape: on a phone it
+ *  filled the whole viewport with one card. The wide shape only takes
+ *  effect on the two-column phone wall (see .mcell--wide in globals.css);
+ *  at 3–4 columns every cell is one card, so no photo ever grows past its
+ *  4-column size. */
 export function mosaicSize(id: string, hasPhoto: boolean): MosaicSize {
   if (!hasPhoto) return "sq";
-  const r = hashOf(id) % 20;
-  if (r < 2) return "xl";
-  if (r < 5) return "wide";
-  return "sq";
+  return hashOf(id) % 20 < 5 ? "wide" : "sq";
 }
 
 export function Mosaic({
@@ -95,6 +103,7 @@ export function MosaicCell({
   href,
   size,
   src,
+  compareSrc,
   alt,
   eyebrow,
   kind,
@@ -103,8 +112,9 @@ export function MosaicCell({
   headline,
   value,
   sub,
-  subHref,
   meta,
+  detail,
+  lede,
   trust,
   actions,
   engagement,
@@ -114,6 +124,11 @@ export function MosaicCell({
   href: string;
   size: MosaicSize;
   src?: string | null;
+  /** The "after" image of a before/after pair (`src` is then the "before").
+   *  The plate draws a static split — before left, after right, the
+   *  drafting-line divider between — so a comparison update reads as one
+   *  on the wall without the slider (which needs the post page). */
+  compareSrc?: string | null;
   alt: string;
   /** Mono kind label, top-left. Omit (with no flag/corner) to drop the top
    *  row entirely — the marketplace wall, where every cell is a part. */
@@ -129,15 +144,20 @@ export function MosaicCell({
   headline: string;
   /** Price line, or a subline for non-priced kinds. */
   value?: ReactNode;
-  /** Quiet vehicle line under the value — the car a part came off. Sits a
-   *  step below the price so it never competes with it. Pass `null` to
-   *  reserve the line (rows stay aligned), `undefined` to omit it. */
+  /** Quiet vehicle line under the title — the car a part came off, as plain
+   *  text (the card is the only link). Pass `null` to reserve the line
+   *  (rows stay aligned), `undefined` to omit it. */
   sub?: string | null;
-  /** Where the source car's build sheet lives. When present the sub line
-   *  becomes its own link beneath the card's main link. */
-  subHref?: string | null;
-  /** Dim meta — only shown once the cell is wide enough. */
-  meta?: string | null;
+  /** Dim meta line under the value ("Marisol Vega · 1 update"). Always
+   *  shown, truncated to one line. Listings lead it with the condition as a
+   *  small chip (see `metaLine`), then the rest as dot-separated text. */
+  meta?: ReactNode;
+  /** A dim fact line between the value and the meta — a listing's
+   *  condition chip and grade, above the seller. One truncating line. */
+  detail?: ReactNode;
+  /** A dim line right under the title — an update's excerpt. Two lines
+   *  before it clamps, the meta's voice, before the vehicle line. */
+  lede?: ReactNode;
   /** Seller trust line — wide cells only. */
   trust?: ReactNode;
   /** Context-owned action row (quick commerce, Unsave…). Never nested in
@@ -155,7 +175,6 @@ export function MosaicCell({
     bare && "mcell--bare",
     tone === "deep" && "mcell--deep"
   );
-  const provenanceIsLink = Boolean(sub && subHref);
 
   return (
     <article className={cls} role="listitem">
@@ -171,35 +190,39 @@ export function MosaicCell({
           </span>
         )}
         {src && (
-          <span className="mcell__img" aria-hidden="true">
+          <span className={cx("mcell__img", compareSrc && "mcell__img--ba")} aria-hidden="true">
             <Media src={src} alt="" className="h-full w-full" role="card" />
+            {compareSrc && (
+              <>
+                <span className="mcell__ba-after">
+                  <Media src={compareSrc} alt="" className="h-full w-full" role="card" />
+                </span>
+                <span className="mcell__ba-divider">
+                  <span className="mcell__ba-grip">◂▸</span>
+                </span>
+              </>
+            )}
           </span>
         )}
         <span className="mcell__cap">
           <span className="mcell__title">{headline}</span>
+          {lede && <span className="mcell__meta mcell__lede">{lede}</span>}
+          {/* The car a part came off — plain text under the title. It used to
+              be its own link to the build; on a phone that and the card were
+              too easy to confuse, so the card is the only target. Pass `null`
+              to reserve the line (rows stay aligned), `undefined` to omit. */}
+          {sub !== undefined && <span className="mcell__car vref">{sub ?? " "}</span>}
           {value && <span className="mcell__value">{value}</span>}
-          {sub !== undefined && !provenanceIsLink && (
-            <span className="mcell__sub vref">{sub ?? " "}</span>
-          )}
           {/* Always rendered on photo cells so every card in a row shares one
               caption height — a card without meta would otherwise push its
               photo taller and its title off the row's baseline. */}
-          {(meta || !bare) && <span className="mcell__meta">{meta ?? " "}</span>}
+          {detail && <span className="mcell__meta mcell__detail">{detail}</span>}
+          {(meta || !bare) && <span className="mcell__meta">{meta ?? " "}</span>}
         </span>
         {/* The headline is the link's name; only say the alt when it adds
-            something (an update card whose headline is a quote, etc.). */}
+            something (an update card whose headline is its intro, etc.). */}
         {alt !== headline && <span className="sr-only">{alt}</span>}
       </Link>
-      {provenanceIsLink && (
-        // Provenance is the marketplace's whole premise, so the car is one
-        // tap from the part — but it stays a quiet mono line under the
-        // price, never the headline.
-        <Link href={subHref!} className="mcell__prov vref" prefetch={false}>
-          {sub}
-          <span aria-hidden="true">{" "}→</span>
-          <span className="sr-only"> — open the build it came off</span>
-        </Link>
-      )}
       {trust && <span className="mcell__trust">{trust}</span>}
       {actions && <div className="mcell__actions">{actions}</div>}
       {engagement}
@@ -240,7 +263,6 @@ export function FeedMosaicCell({
 }: { item: FeedItem } & Viewer) {
   if (item.kind === "part") {
     const href = `/listings/${item.id}`;
-    const ship = shipLine(item.shipping_cents);
     const watching = item.watchCount ?? 0;
     return (
       <MosaicCell
@@ -252,20 +274,18 @@ export function FeedMosaicCell({
         kind="part"
         corner={watching > 0 ? `${watching} watching` : null}
         headline={item.title}
-        value={
-          <>
-            {formatPrice(item.price_cents)}
-            {ship && <span className="mcell__ship"> {ship}</span>}
-          </>
-        }
+        // Price alone: most listings have no shipping figure up front, and
+        // the discovery wall isn't where you check out. The marketplace
+        // card keeps its ship line.
+        value={formatPrice(item.price_cents)}
         sub={provenanceLine(item.sourceCarName)}
-        subHref={item.sourceCarSlug ? `/cars/${item.sourceCarSlug}` : null}
+        // Condition and grade on their own line, the seller under them:
+        // the name reads like the owner line on a build or an update.
+        detail={listingMetaLine(item.condition, [
+          item.grade ? `Grade ${item.grade.toUpperCase()}` : null,
+        ])}
         meta={
-          [
-            conditionLabel(item.condition),
-            item.grade ? `Grade ${item.grade.toUpperCase()}` : null,
-            item.fitsCarName ? `Fits your ${item.fitsCarName}` : null,
-          ]
+          [item.sellerName, item.fitsCarName ? `Fits your ${item.fitsCarName}` : null]
             .filter(Boolean)
             .join(" · ") || null
         }
@@ -289,8 +309,10 @@ export function FeedMosaicCell({
 
   if (item.kind === "car") {
     const href = `/cars/${item.slug}`;
+    // The nameless car is named by what it is — the label leads, and the
+    // vehicle line under it only appears when it adds information.
     const headline = item.name.trim() || item.meta || "Build sheet";
-    const subline = item.name.trim() && item.meta ? item.meta : null;
+    const subline = vehicleSubline(headline, item.vehicle);
     const activity = [
       item.ownerName,
       item.updateCount > 0
@@ -336,15 +358,23 @@ export function FeedMosaicCell({
       href={href}
       size={mosaicSize(item.id, Boolean(item.cover_url))}
       src={item.cover_url}
+      compareSrc={item.compare_url}
       alt={item.title}
       // Same plate as builds and parts — the kind pill is the only thing
-      // that says "update"; a darker tile read as a different card.
-      eyebrow={item.imageCount > 1 && item.cover_url ? `Update · ${item.imageCount} photos` : "Update"}
+      // that says "update", and it says only that: no photo counts, no
+      // before/after tags; the plate itself shows what the update carries.
+      eyebrow="Update"
       kind="update"
       corner={relativeTime(item.created_at)}
-      headline={item.title ? `“${item.title}”` : item.intro ?? "Update"}
-      value={[item.ownerName, item.carName].filter(Boolean).join(" · ")}
-      meta={item.title && item.intro ? item.intro : null}
+      // No quotation marks: the UPDATE pill already says what this is, and
+      // the two glyphs cost the first characters of every title on a phone.
+      headline={item.title || item.intro || "Update"}
+      // The same lines as a build card: the full vehicle label in mono
+      // under the excerpt, the owner alone on the meta line. The car's pet
+      // name only stands in when the keeper never filled the vehicle in.
+      lede={item.title && item.intro ? item.intro : null}
+      value={vehicleLabel(item.carVehicle) || item.carName}
+      meta={item.ownerName}
       engagement={
         <CardEngagement
           target={{ kind: "post", id: item.id }}
@@ -375,6 +405,24 @@ function initialsOf(name: string): string {
 }
 
 /**
+ * The listing meta line: the condition as a small chip so it can be picked
+ * out at a glance, the remaining facts (grade, fit, location) as quiet
+ * dot-separated text after it. Null when there's nothing to say.
+ */
+function listingMetaLine(condition: string | null | undefined, rest: (string | null)[]): ReactNode {
+  const chip = conditionLabel(condition ?? null);
+  const tail = rest.filter(Boolean).join(" · ");
+  if (!chip && !tail) return null;
+  return (
+    <>
+      {chip && <span className="chip mcell__cond">{chip}</span>}
+      {chip && tail && " · "}
+      {tail}
+    </>
+  );
+}
+
+/**
  * One marketplace listing as a mosaic cell — the canonical listing card.
  * Home recommendations, Marketplace results, the PDP rails and Saved all
  * render this; what differs per context is the action row, never the
@@ -396,14 +444,10 @@ export function ListingMosaicCell({
 }) {
   const href = `/listings/${listing.id}`;
   const ship = shipLine(listing.shipping_cents);
-  const meta =
-    [
-      listing.fits_car_name ? `Fits ${listing.fits_car_name}` : null,
-      conditionLabel(listing.condition),
-      listing.location,
-    ]
-      .filter(Boolean)
-      .join(" · ") || null;
+  const meta = listingMetaLine(listing.condition, [
+    listing.fits_car_name ? `Fits ${listing.fits_car_name}` : null,
+    listing.location,
+  ]);
   const seller = listing.seller;
   // `rating` is already a display string ("4.8"); ratingLine only ever
   // interpolates it, so the cast is safe and keeps "4.0"-style strings intact.
@@ -419,7 +463,6 @@ export function ListingMosaicCell({
       alt={listing.title}
       flag={listing.status_flag}
       sub={provenanceLine(listing.source_car_name)}
-      subHref={listing.source_car_slug ? `/cars/${listing.source_car_slug}` : null}
       headline={listing.title}
       value={
         <>

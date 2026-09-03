@@ -204,6 +204,22 @@ export function blockMediaUrls(blocks: ActivityBlock[]): string[] {
   return [...new Set(urls)];
 }
 
+/**
+ * The before/after pair an update leads with, if it does — the card cover
+ * for a post whose first *media* block is the comparison plate (prose may
+ * come first; it doesn't decide the picture). Cards can't run the slider,
+ * so they draw the pair as a static split (mosaic.tsx); no composite asset
+ * is ever generated, the two originals are reused.
+ */
+export function leadingBeforeAfter(
+  blocks: ActivityBlock[]
+): { beforeUrl: string; afterUrl: string } | null {
+  const lead = blocks.find(
+    (block) => (block.type === "images" || block.type === "before_after") && blockHasContent(block)
+  );
+  return lead?.type === "before_after" ? { beforeUrl: lead.beforeUrl, afterUrl: lead.afterUrl } : null;
+}
+
 /** True when a block carries publishable content (used by serializers). */
 export function blockHasContent(block: ActivityBlock): boolean {
   switch (block.type) {

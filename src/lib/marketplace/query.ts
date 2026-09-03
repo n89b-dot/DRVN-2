@@ -12,6 +12,7 @@ import { reportError } from "@/lib/monitoring";
 import { capture } from "@/lib/analytics";
 import { classifyQuery } from "@/lib/marketplace/search/normalize";
 import { getSearchProvider } from "@/lib/marketplace/search/provider";
+import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
 export type ListingSort = "newest" | "price_asc" | "price_desc";
@@ -25,6 +26,14 @@ export type ListingFilters = {
   max?: string;
   fit?: string;
   location?: string;
+  /** Canonical catalog vehicle identity, "<makeId>" or "<makeId>-<modelId>"
+   *  (0041). Matches by the SAME seller-stated routes as `fit`: the listing's
+   *  declared fitment rows or its source car — never compatibility notes. */
+  vehicle?: string;
+  /** Model-year bounds on the SOURCE car (the build the part came off).
+   *  Listings with no source car can't answer and are excluded while set. */
+  ymin?: string;
+  ymax?: string;
   sort?: string;
   page?: string;
 };
@@ -257,6 +266,40 @@ export async function fetchListings(
     }
   }
 
+  // Arbitrary selected-vehicle filter (brief §17/§37) — the shared canonical
+  // route for "parts for a Volkswagen Golf R", used by /marketplace and by
+  // Explore's Parts scope. Same seller-stated-only doctrine as `fit`: a
+  // listing matches through its declared fitment rows (0025) or through its
+  // source car — catalog ids where they exist, exact-string ilike for the
+  // frozen snapshots, never free-text compatibility notes.
+  let vehicleSourceCarIds: string[] = [];
+  let vehicleListingIds: string[] = [];
+  let vehicleActive = false;
+  if (filters.vehicle) {
+    const selection = await resolveVehicleFilter(filters.vehicle);
+    if (selection) {
+      vehicleActive = true;
+      const exact = (value: string) => `"${value.replace(/["\\,()]/g, " ").trim()}"`;
+      const carClause = selection.modelId
+        ? `catalog_model_id.eq.${selection.modelId},and(make.ilike.${exact(selection.make)},model.ilike.${exact(selection.model ?? "")})`
+        : `catalog_make_id.eq.${selection.makeId},make.ilike.${exact(selection.make)}`;
+      let claimsQuery = supabase
+        .from("listing_fitments")
+        .select("listing_id")
+        .ilike("make", selection.make)
+        .limit(1000);
+      if (selection.model) claimsQuery = claimsQuery.ilike("model", selection.model);
+      const [{ data: matchingCars }, { data: claims }] = await Promise.all([
+        supabase.from("cars").select("id").or(carClause).limit(1000),
+        claimsQuery,
+      ]);
+      vehicleSourceCarIds = (matchingCars ?? []).map((c) => c.id);
+      vehicleListingIds = [...new Set((claims ?? []).map((f) => f.listing_id))];
+    }
+    // An unresolvable vehicle param (stale catalog id in a pasted URL) is
+    // treated as no filter rather than an error page.
+  }
+
   let query = supabase
     .from("listings")
     .select(
@@ -271,6 +314,20 @@ export async function fetchListings(
     query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
   }
   if (filters.location) query = query.ilike("location", `%${filters.location}%`);
+
+  // Year is a fact about the source car, not the listing: narrow to listings
+  // whose build falls in the range. A listing without a source car has no
+  // year to match and drops out while the bound is set.
+  if (filters.ymin || filters.ymax) {
+    let yearCars = supabase.from("cars").select("id");
+    if (filters.ymin) yearCars = yearCars.gte("year", Number(filters.ymin));
+    if (filters.ymax) yearCars = yearCars.lte("year", Number(filters.ymax));
+    const { data: yearMatches } = await yearCars.limit(1000);
+    const yearCarIds = (yearMatches ?? []).map((c) => c.id);
+    query = yearCarIds.length
+      ? query.in("source_car_id", yearCarIds)
+      : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  }
 
   if (filters.q) {
     // The search seam (§B1): a provider produces ranked candidate ids — two
@@ -314,6 +371,21 @@ export async function fetchListings(
   }
   if (filters.max && Number.isFinite(max) && max >= 0) {
     query = query.lte("price_cents", Math.round(max * 100));
+  }
+
+  if (vehicleActive) {
+    // Nothing on the platform matches this vehicle by either seller-stated
+    // route → an honest empty page, same doctrine as `fit` below.
+    if (!vehicleSourceCarIds.length && !vehicleListingIds.length) {
+      return { results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
+    }
+    const clauses = [
+      ...(vehicleSourceCarIds.length ? [`source_car_id.in.(${vehicleSourceCarIds.join(",")})`] : []),
+      ...(vehicleListingIds.length ? [`id.in.(${vehicleListingIds.join(",")})`] : []),
+    ];
+    // A separate .or() from the fit clause: PostgREST ANDs them, which is the
+    // correct semantics (fits my garage AND is for this vehicle).
+    query = query.or(clauses.join(","));
   }
 
   if (filters.fit === "1") {

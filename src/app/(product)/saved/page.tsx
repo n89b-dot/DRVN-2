@@ -24,7 +24,7 @@ import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import { SavedSearchList } from "@/features/marketplace/saved-search-list";
-import { vehicleLabel } from "@/lib/vehicles/label";
+import { vehicleSubline } from "@/lib/vehicles/label";
 
 export const metadata = { title: "Saved - DRVN" };
 
@@ -248,7 +248,7 @@ export default async function SavedPage({
           {car.name}
         </Link>
         <span className="order__meta block">
-          {vehicleLabel(car) || "build page"}
+          {vehicleSubline(car.name, car) ?? "build page"}
         </span>
       </span>
     </ObjectRow>
@@ -323,10 +323,8 @@ export default async function SavedPage({
             <Finder
               action="/saved"
               className="!mt-3"
-              searchLabel="Search"
               inputLabel="Search saved parts"
               defaultValue={query}
-              placeholder="Search saved parts…"
               /* Carries tab and the chosen sort through a search, the way the
                  marketplace finder does. Without it, searching silently threw
                  the sort back to newest. */

@@ -178,8 +178,8 @@
 
 /* ============ NIGHT SHEET — the drawing office after hours ============ */
 [data-theme="dark"] {
-  --paper: #171511;
-  --paper-deep: #100f0c;
+  --paper: #15130c;
+  --paper-deep: #0f0d0a;
   --tile: #201e18;
   --tile-2: #1b1914;
   --ink: #f0eee5;
@@ -214,8 +214,8 @@
   --ghost-strong: rgba(240, 238, 229, 0.11);
 
   /* Tailwind scale tokens follow the remap */
-  --color-paper: #171511;
-  --color-paper-deep: #100f0c;
+  --color-paper: #15130c;
+  --color-paper-deep: #0f0d0a;
   --color-tile: #201e18;
   --color-tile-2: #1b1914;
   --color-ink: #f0eee5;
@@ -2644,6 +2644,30 @@ video {
     .bsheet--inline-sm .bsheet__panel {
       display: contents;
     }
+    /* An all-widths sheet floats as a centered dialog once there's room —
+       a full-width strip pinned to a desktop's bottom edge reads as a
+       toast, not a filter panel. */
+    .bsheet--center {
+      align-items: center;
+      padding: 24px;
+    }
+    .bsheet--center .bsheet__panel {
+      border-radius: var(--r);
+      /* A filter dialog is a short stack, not a page: narrower than the
+         compact sheet's 640px, and overflow stays visible so a combo's
+         option list can drop past the panel edge instead of spawning an
+         inner scrollbar. */
+      width: min(480px, 100%);
+      max-height: none;
+      overflow: visible;
+    }
+  }
+  /* Inside a sheet the finder's refinement row becomes a stack — one field
+     per line, the label a heading — instead of the inline flex row that
+     crammed labels beside fields. */
+  .bsheet__panel .finder__refine {
+    display: grid;
+    gap: 12px;
   }
 
   /* Why an account is needed — ruled reasons, the drawing's list voice. */
@@ -2789,8 +2813,8 @@ video {
      variant so each stops reserving the space exactly when its bar goes. */
   /* ---------- mosaic (unlayered: sits above the utility layer, so the
    cell's own spans win) ----------
-   The photo wall: a dense grid on one unit. 1×1 tiles, plus 2×2 features
-   and 2×1 wides on phones; `dense` back-fills holes so the wall closes flush.
+   The photo wall: a dense grid on one unit. 1×1 tiles, plus 2×1 wides on
+   phones (no 2×2 — it swallowed a phone viewport); `dense` back-fills holes so the wall closes flush.
    The unit is a column wide and 1.25 columns tall — a 1×1 is a portrait
    card, so even the smallest tile keeps a real photo above its caption.
    Every cell is the same card the deck already uses (tile surface, padding,
@@ -2803,7 +2827,10 @@ video {
   --mgap: 12px;
   display: grid;
   grid-template-columns: repeat(var(--mcols), minmax(0, 1fr));
-  --mratio: 1.25;
+  /* 1.45 puts an update card's photo (the deepest caption: two-line
+     title, two-line excerpt, vehicle, owner) at the marketplace card's
+     165px on a 271px desktop column, where 1.25 left it a 113px strip. */
+  --mratio: 1.45;
   grid-auto-rows: calc(((100cqw - (var(--mcols) - 1) * var(--mgap)) / var(--mcols)) * var(--mratio));
   grid-auto-flow: dense;
   gap: var(--mgap);
@@ -2815,11 +2842,14 @@ video {
 }
 @container (max-width: 600px) {
   /* A phone column is ~170px: the caption is a fixed cost, so the unit
-     grows taller to keep the photo near 4:3 rather than a letterbox. */
+     grows taller to keep the photo near 4:3 rather than a letterbox. 1.8
+     puts an update's photo (the deepest caption: two-line title, owner line,
+     excerpt) at ~125px on a 168px cell — 4:3 — instead of the 74px strip
+     1.5 left it. */
   .mosaic {
     --mcols: 2;
     --mgap: 8px;
-    --mratio: 1.5;
+    --mratio: 1.8;
   }
 }
 .mcell {
@@ -2843,17 +2873,13 @@ video {
 .mcell--deep {
   background: var(--tile-2);
 }
-/* The larger shapes exist only on the phone wall (2 columns), where a
+/* The wide shape exists only on the phone wall (2 columns), where a
    2-wide cell is still no bigger than one desktop card. At 3–4 columns every
    cell is one card, so no photo is ever wider or taller than its 4-column
    size. */
 @container (max-width: 600px) {
-  .mcell--wide,
-  .mcell--xl {
+  .mcell--wide {
     grid-column: span 2;
-  }
-  .mcell--xl {
-    grid-row: span 2;
   }
 }
 /* Eyebrow row — mono kind label left, annotation right; the card's first
@@ -2937,6 +2963,45 @@ video {
   height: 100%;
   object-fit: cover;
 }
+/* Static before/after on a mosaic card — the same pair the post's
+   BeforeAfter plate runs, frozen at the midline: before under, after
+   clipped to the right half over it, the plate's own divider and grip
+   between. No slider (that's the post page), no composite image. */
+.mcell__img--ba {
+  position: relative;
+}
+.mcell__ba-after {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 0 0 50%);
+}
+.mcell__ba-after > * {
+  width: 100%;
+  height: 100%;
+}
+.mcell__ba-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--on-ink);
+  box-shadow: 0 0 0 1px var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mcell__ba-grip {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  background: var(--on-ink);
+  border-radius: var(--r-chip);
+  padding: 2px 4px;
+  box-shadow: 0 1px 6px var(--scrim);
+}
 /* Caption — ink on the tile, pinned under the plate. */
 .mcell__cap {
   display: flex;
@@ -2951,30 +3016,36 @@ video {
   line-height: 1.3;
   letter-spacing: -0.008em;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  /* Two lines at every width: the title is the one thing a card is scanned
+     by, and a one-line clamp on a phone cell cut most names mid-word. */
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
 .mcell__value {
   font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   margin-top: 5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mcell__sub {
-  font-family: var(--mono);
-  font-size: 10px;
-  line-height: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dim);
-  opacity: 0.85;
-  margin-top: 4px;
+/* Caption rhythm — two steps, no more: 4px binds a line to the one above
+   it (the car to its title, a chip line to the fact it qualifies), 10px
+   opens a new group (the price after the identity, the meta after the
+   price). Every card kind follows the same two numbers so a wall of mixed
+   cards reads as one typographic system. */
+.mcell__cap {
+  --cap-tight: 4px;
+  --cap-group: 6px;
+}
+/* The car a part came off — a quiet mono line bound to the title, plain
+   text: the card is the only link. */
+.mcell__car {
+  display: block;
+  margin-top: var(--cap-tight);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2991,8 +3062,62 @@ video {
   font-weight: 400;
   color: var(--dim);
 }
+/* The condition chip inside a listing's meta line — the `.chip` recipe a
+   size down and outlined, the same inset-ring pill as the BUILD eyebrow, so
+   "Used" reads as a tag against the 11.5px text beside it without a filled
+   block sinking into the night tile. */
+.mcell__meta .mcell__cond {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  padding: 1px 6px;
+  vertical-align: 1px;
+  margin-right: 2px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--dimline);
+  color: var(--dim);
+}
+/* Whatever follows the title is bound to it — the car on a listing, the
+   vehicle on a build, the owner line on a nameless build — the same 4px,
+   with the line-heights trimmed so the optical gap matches too. */
+.mcell__title + .mcell__value,
+.mcell__title + .mcell__meta {
+  margin-top: var(--cap-tight);
+}
+.mcell__value {
+  line-height: 1.3;
+}
+/* THE SECONDARY LINE — one voice for every card kind. The vehicle under a
+   build's name, the car a part came off, the owner · car under an update:
+   all the same mono, dim, one size. Only two things on a card are ink —
+   the title, and (on a listing) the price — so the eye lands on the name,
+   then the number, and reads the rest as context. */
+.mcell__car,
+.mcell__title + .mcell__value,
+.mcell__lede + .mcell__value {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--dim);
+}
+/* A new group opens after the identity lines and after the price. */
+.mcell__car + .mcell__value,
+.mcell__value + .mcell__meta {
+  margin-top: var(--cap-group);
+}
+/* THE PRICE — a listing's one loud number: ink, medium, a full step above
+   everything else in the caption. */
+.mcell__car + .mcell__value {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+/* Always shown — it used to appear only in cells ≥240px wide, which came
+   and went as the wall changed column count, so the same card read
+   differently at 1280 (shown), 1024 (hidden) and 800 (shown again). One
+   truncating line is safe at every cell width. */
 .mcell__meta {
-  display: none;
+  display: block;
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--dim);
@@ -3001,25 +3126,52 @@ video {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Wider cells earn a second headline line and the meta line. */
+/* A listing's condition line — the meta voice above the seller. The price
+   opens the group before it (`.mcell__value + .mcell__meta`) and the
+   seller opens another under it, the way an update's owner line sits
+   under its vehicle: even groups down the caption. */
+.mcell__detail + .mcell__meta {
+  margin-top: var(--cap-group);
+}
+/* An update's excerpt — the meta voice, bound tight under the title, two
+   lines before it clamps; the vehicle line then opens its own group. */
+.mcell__lede {
+  margin-top: var(--cap-tight);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.mcell__lede + .mcell__value {
+  margin-top: var(--cap-group);
+}
+/* Wider cells earn roomier padding and a second headline line. */
 @container (min-width: 240px) {
   .mcell {
     padding: 14px 14px 10px;
   }
   .mcell__title {
-    -webkit-line-clamp: 2;
     font-size: 15px;
   }
-  .mcell__value {
-    font-size: 15px;
-    margin-top: 6px;
+  .mcell__car,
+  .mcell__title + .mcell__value,
+  .mcell__lede + .mcell__value {
+    font-size: 14px;
   }
-  .mcell__meta {
-    display: block;
-    margin-top: 5px;
+  .mcell__car + .mcell__value {
+    font-size: 18px;
   }
   .mcell__cap {
     padding-top: 12px;
+  }
+  /* Wider cells earn wider steps: 6px binds, 10px opens a group — the
+     same hierarchy on every kind, so a listing's title · car · price ·
+     condition · seller and an update's title · excerpt · vehicle · owner
+     read as one system. */
+  .mcell__cap {
+    --cap-tight: 6px;
+    --cap-group: 10px;
   }
 }
 /* Engagement strip — the deck's, tightened. */
@@ -4423,7 +4575,8 @@ video {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px 24px;
-    margin: 26px 0 30px;
+    /* Tight below: the pills caption the cards they filter. */
+    margin: 26px 0 16px;
   }
   /* Straight under a page head the bar drops its own top margin — the head's
      bottom padding is the spacing, and stacking the two (28 + 20 on phones)
@@ -4436,24 +4589,13 @@ video {
     min-width: 0;
     margin: 0;
   }
-  .explorebar__cta {
-    flex: none;
-    background: var(--ink);
-    color: var(--paper-deep);
-  }
-  .explorebar__cta:hover {
-    background: var(--ink-hover);
-    color: var(--paper-deep);
-  }
+
   @media (max-width: 640px) {
     .explorebar {
-      margin: 20px 0 26px;
+      margin: 20px 0 14px;
     }
     /* Hidden on phones — the full-width row crowded the cards below, and the
        marketplace is one tap away in the nav anyway. */
-    .explorebar__cta {
-      display: none;
-    }
   }
   /* Secondary refinements — quieter than the primary register above them. */
   .filters--sub {
@@ -4791,24 +4933,20 @@ video {
     text-transform: uppercase;
   }
 
-  /* ---------- FINDER — the search command plate ----------
-     Search surfaces used to scatter their controls straight onto the canvas:
-     a naked input, four loose refinements, a floating submit. The finder
-     gathers them onto one raised plate — a labelled instrument with the
-     query line up top and refinements beneath, the way a parts counter
-     takes an order. One recipe serves the marketplace, category sheets and
-     the console queues. */
+  /* ---------- FINDER — the search line ----------
+     The finder used to gather search and refinements onto one raised plate;
+     the plate boxed the search away from the content it searches. Now the
+     instrument sits on the canvas: one row — the query field (a raised
+     tile fill on the paper; Enter submits, there is no Search button), then
+     Filters and Sort beside it, the Rarible/Etsy idiom of controls placed
+     next to the field rather than around it. One recipe serves the
+     marketplace, category sheets, Explore and the console queues. */
   .finder {
-    background: var(--tile);
-    border-radius: var(--r);
-    padding: clamp(14px, 1.6vw, 22px) clamp(16px, 1.8vw, 24px);
     display: grid;
     gap: clamp(10px, 1.2vw, 16px);
-    /* The plate always clears whatever follows it. On compact the catnav
-       (whose top margin used to supply this air) is hidden and the results
-       deck started at 0px off the plate; the same clamp here collapses with
-       the catnav's margin where it is shown, so wide widths don't double up. */
-    margin-bottom: clamp(22px, 2.6vw, 34px);
+    /* More air below than a section gap: the search is its own instrument,
+       the scope pills belong to the wall beneath them. */
+    margin-bottom: clamp(36px, 4vw, 56px);
   }
   .finder__main {
     display: flex;
@@ -4820,7 +4958,7 @@ video {
      it would vanish into its own plate — and takes all the width the row
      offers. */
   .finder .search {
-    background: var(--paper-deep);
+    background: var(--tile);
     /* 170px basis keeps the submit on the same row down to 375px viewports
        (finder content at 375 is ~307px: 170 + 8 gap + ~123 button). At 240px
        the button wrapped to its own full row on every phone; at 320 it still
@@ -4862,7 +5000,7 @@ video {
     border-radius: var(--r-ctl);
     padding: 12px 18px;
     font-family: var(--mono);
-    font-size: 16px;
+    font-size: 14px;
     /* Wide enough that the placeholder — the only documentation of what's
        searchable — never clips. */
     width: min(560px, 100%);
@@ -4877,6 +5015,20 @@ video {
   }
   .search input::placeholder {
     color: var(--dim);
+  }
+  /* Under 16px iOS zooms the page into a focused field — the compact input
+     stays at the threshold; only the placeholder (never typed into) steps
+     down, and truncates with an ellipsis instead of clipping mid-word. */
+  .search input {
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 639px) {
+    .search {
+      font-size: 16px;
+    }
+    .search input::placeholder {
+      font-size: 14px;
+    }
   }
 
   /* ---------- footer ---------- */
@@ -7660,24 +7812,6 @@ video {
   flex: 1 1 auto;
   min-height: 0;
 }
-/* Provenance — "Off a 2019 Golf R →" — its own link beneath the caption,
-   a quiet mono line that never competes with the price. */
-.mcell__prov {
-  display: block;
-  align-self: flex-start;
-  max-width: 100%;
-  line-height: 28px;
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--dim);
-  transition: color var(--t-fast) ease;
-}
-.mcell__prov:hover,
-.mcell__prov:focus-visible {
-  color: var(--ink);
-}
 /* Seller trust — wide cells only, like the meta line. */
 .mcell__trust {
   display: none;
@@ -7711,7 +7845,13 @@ video {
 }
 @container (max-width: 600px) {
   .mosaic--commerce {
-    --mratio: 2.18;
+    --mratio: 2.45;
+  }
+  /* A 2-wide, 1-tall listing on a phone was a 343×50 letterbox: the
+     caption plus two action rows ate the whole unit. On the commerce wall
+     the wide shape folds back to a square. */
+  .mosaic--commerce .mcell--wide {
+    grid-column: span 1;
   }
 }
 

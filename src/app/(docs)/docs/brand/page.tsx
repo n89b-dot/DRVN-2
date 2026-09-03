@@ -16,8 +16,8 @@ const DAY_SWATCHES = [
 ];
 
 const NIGHT_SWATCHES = [
-  { name: "paper", hex: "#171511", role: "canvas" },
-  { name: "paper-deep", hex: "#100F0C", role: "recessed" },
+  { name: "paper", hex: "#15130C", role: "canvas" },
+  { name: "paper-deep", hex: "#0F0D0A", role: "recessed" },
   { name: "tile", hex: "#201E18", role: "raised plate" },
   { name: "tile-2", hex: "#1B1914", role: "secondary plate" },
   { name: "ink", hex: "#F0EEE5", role: "text / inverted" },
@@ -141,7 +141,7 @@ export default function BrandPage() {
           <Specimen name="Day — paper" klass=":root">
             <SwatchGrid swatches={DAY_SWATCHES} />
           </Specimen>
-          <section className="tile" style={{ background: "#171511" }}>
+          <section className="tile" style={{ background: "#15130C" }}>
             <div className="tile__head">
               <span className="microlabel !mb-0" style={{ color: "#8F8C82" }}>
                 Night — the drawing office after hours

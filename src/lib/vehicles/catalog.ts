@@ -69,6 +69,47 @@ export async function matchCatalogByName(
   return { makeId: makeRow.id, modelId: modelRow?.id ?? null };
 }
 
+export type VehicleFilterSelection = {
+  makeId: number;
+  modelId: number | null;
+  make: string;
+  model: string | null;
+  /** Display form — "Volkswagen Golf R" / "Volkswagen". */
+  label: string;
+};
+
+/**
+ * Resolve a `vehicle` URL param ("<makeId>" or "<makeId>-<modelId>") into
+ * canonical catalog identity — the shared vocabulary for vehicle filtering on
+ * Explore search and marketplace listings (brief §17). Returns null for
+ * anything that doesn't name real catalog rows, so a mangled URL degrades to
+ * "no vehicle filter" rather than an error.
+ */
+export async function resolveVehicleFilter(
+  param: string | null | undefined,
+): Promise<VehicleFilterSelection | null> {
+  if (!param || !/^\d{1,10}(-\d{1,10})?$/.test(param)) return null;
+  const [makeStr, modelStr] = param.split("-");
+  const makeId = Number(makeStr);
+  const modelId = modelStr ? Number(modelStr) : null;
+  const admin = createAdminClient();
+  const [{ data: make }, { data: model }] = await Promise.all([
+    admin.from("catalog_makes").select("id, name").eq("id", makeId).maybeSingle(),
+    modelId
+      ? admin.from("catalog_models").select("id, make_id, name").eq("id", modelId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (!make) return null;
+  if (modelId && (!model || model.make_id !== make.id)) return null;
+  return {
+    makeId: make.id,
+    modelId: model?.id ?? null,
+    make: make.name,
+    model: model?.name ?? null,
+    label: model ? `${make.name} ${model.name}` : make.name,
+  };
+}
+
 /** Resolve one make + model pair by id, for validating a picker submission. */
 export async function resolveCatalogSelection(
   makeId: number,

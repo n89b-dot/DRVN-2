@@ -38,6 +38,7 @@ export function BottomSheet({
   onClose,
   label,
   inlineFrom,
+  align,
   className,
   children,
 }: {
@@ -48,6 +49,10 @@ export function BottomSheet({
   /** When "sm", the sheet only exists on compact — wider widths render the
    *  children inline where the component sits. Omit for an all-widths sheet. */
   inlineFrom?: "sm";
+  /** "center" floats the panel as a centered dialog ≥640px (compact stays a
+   *  bottom sheet) — for all-widths sheets that would otherwise pin a
+   *  full-width strip to a desktop viewport's bottom edge. */
+  align?: "center";
   className?: string;
   children: React.ReactNode;
 }) {
@@ -110,14 +115,24 @@ export function BottomSheet({
     if (!sheetActive) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
+    const previousPadding = document.body.style.paddingRight;
+    // Locking scroll drops the scrollbar, and the page grows by its width —
+    // a visible shift, and enough for the cards' container queries to flip
+    // (excerpts appearing mid-open). Reserve that width so nothing moves.
+    // Overlay scrollbars (phones, macOS default) measure 0 and get none.
+    const gutter = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
+    if (gutter > 0) document.body.style.paddingRight = `${gutter}px`;
     document.addEventListener("keydown", handleKeyDown);
-    const focusTarget =
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE) ?? panelRef.current;
-    focusTarget?.focus();
+    // Focus the panel itself, not its first field — a combo field opens its
+    // option list on focus, so field-first focus dropped a list over the
+    // sheet the moment it opened. The dialog receives focus; Tab reaches
+    // the first field.
+    panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPadding;
       restoreRef.current?.focus();
     };
   }, [sheetActive, handleKeyDown]);
@@ -127,7 +142,8 @@ export function BottomSheet({
       className={cx(
         "bsheet",
         (open || present) && "is-open",
-        inlineFrom === "sm" && "bsheet--inline-sm"
+        inlineFrom === "sm" && "bsheet--inline-sm",
+        align === "center" && "bsheet--center"
       )}
       // While closed on compact, the chrome hides but the children stay in
       // the DOM (and in their form). `hidden` on the wrap would also hide the
@@ -136,6 +152,16 @@ export function BottomSheet({
     >
       <motion.div
         ref={panelRef}
+        // Closed means no longer interactive — `inert` takes the panel out
+        // of the focus order and accessibility tree the moment it starts
+        // exiting, while its form fields stay mounted (inert fields still
+        // submit with the parent form). Never inert in the ≥640px inline
+        // composition, where the children are the live layout.
+        inert={isCompact && !open ? true : undefined}
+        // aria-hidden mirrors inert for assistive tech (and testing tools)
+        // that don't honor inert yet — while closed on compact, the panel is
+        // out of the accessibility tree, exactly as display:none had it.
+        aria-hidden={isCompact && !open ? true : undefined}
         // In the ≥640px inline composition the panel is display:contents, so
         // these inline styles have no box to apply to — the values are
         // harmless there and load-bearing on compact.
@@ -160,7 +186,7 @@ export function BottomSheet({
           <button
             type="button"
             onClick={onClose}
-            className="btn w-full"
+            className="btn btn--ghost w-full"
             aria-label={`Close ${label}`}
           >
             Done

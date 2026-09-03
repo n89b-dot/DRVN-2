@@ -9,6 +9,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
+import { SearchField } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -48,22 +49,9 @@ export default async function AdminUsersPage({
       </Rv>
 
       <div className="finder mb-4">
-        <form method="get" className="search" role="search">
-          <label htmlFor="admin-user-q" className="sr-only">
-            Search users
-          </label>
-          <input
-            id="admin-user-q"
-            type="search"
-            name="q"
-            defaultValue={q ?? ""}
-            placeholder="Username or display name"
-            className="ctl"
-          />
+        <form method="get" className="finder__main" role="search">
+          <SearchField label="Search users" defaultValue={q ?? ""} placeholder="Username or display name…" />
           {activeState !== "all" && <input type="hidden" name="state" value={activeState} />}
-          <button type="submit" className="btn">
-            Search
-          </button>
         </form>
 
         <div className="filters" aria-label="Filter by state">

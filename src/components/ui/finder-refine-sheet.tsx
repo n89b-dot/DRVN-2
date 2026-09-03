@@ -3,21 +3,25 @@
 import { useState } from "react";
 
 import { BottomSheet } from "./bottom-sheet";
+import { Icon } from "./icons";
 
 /**
- * A Finder's dense refinement row, sheeted on compact.
+ * A Finder's refinements, one quiet step behind the query line.
  *
- * ≥640px this renders exactly the `.finder__refine` row it wraps — nothing
- * changes. On a phone, where five stacked refinement controls would push the
- * results below the fold, the row moves into a BottomSheet behind a single
- * "Refine" control that reports how many refinements are active.
+ * The finder shows a single row at every width — the query field and this
+ * trigger (a sliders icon; "Filters" beside it ≥640px, icon-only on
+ * compact; a live count of what's applied either way). The dense
+ * refinement controls live in a sheet: bottom-anchored on compact, a
+ * centered panel ≥640px. No width ever renders the refinement row inline
+ * under the query — that stacked the plate two to six controls tall before
+ * any results.
  *
- * The children stay mounted either way (BottomSheet hides, never unmounts),
- * so inside a GET form every refinement still submits with the search — URL
- * behavior is unchanged.
+ * The children stay mounted while closed (BottomSheet hides, never
+ * unmounts), so inside a GET form every refinement still submits with the
+ * search — URL behavior is unchanged.
  */
 export function FinderRefineSheet({
-  label = "Refine",
+  label = "Filters",
   activeCount = 0,
   aside,
   children,
@@ -26,9 +30,8 @@ export function FinderRefineSheet({
   /** How many refinements are currently applied — shown on the toggle. */
   activeCount?: number;
   /**
-   * Extra compact toolbar controls (e.g. a Sort select) rendered beside the
-   * Refine trigger. The row is display:none ≥640px, so form fields placed
-   * here still submit with the desktop search.
+   * Extra toolbar controls (e.g. a Sort select) rendered beside the trigger
+   * in the finder's main row. Form fields placed here submit with the search.
    */
   aside?: React.ReactNode;
   children: React.ReactNode;
@@ -37,20 +40,22 @@ export function FinderRefineSheet({
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 sm:hidden">
-        <button
-          type="button"
-          className="fbtn"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => setOpen(true)}
-        >
-          {label}
-          {activeCount > 0 && <span className="n n--live">{activeCount}</span>}
-        </button>
-        {aside}
-      </div>
-      <BottomSheet open={open} onClose={() => setOpen(false)} label={label} inlineFrom="sm">
+      {/* Icon + word wide; icon alone on compact, where the word cost the
+          query field ~70px beside it. The accessible name never drops. */}
+      <button
+        type="button"
+        className={`${activeCount > 0 ? "fbtn is-on" : "fbtn"} gap-1.5`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={activeCount > 0 ? `${label}, ${activeCount} active` : label}
+        onClick={() => setOpen(true)}
+      >
+        <Icon name="filter" className="h-4 w-4" />
+        <span className="hidden sm:inline">{label}</span>
+        {activeCount > 0 && <span className="n n--live">{activeCount}</span>}
+      </button>
+      {aside}
+      <BottomSheet open={open} onClose={() => setOpen(false)} label={label} align="center">
         <div className="finder__refine">{children}</div>
       </BottomSheet>
     </>

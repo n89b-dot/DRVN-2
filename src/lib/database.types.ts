@@ -143,6 +143,9 @@ export type ActivityPost = {
   body: Json;
   video_url: string | null;
   published_at: string | null;
+  /** Generated column (0057): the user-visible text of `body`, extracted by
+   *  activity_post_search_text() for the Explore search RPCs. Read-only. */
+  search_text: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1332,6 +1335,21 @@ export type Database = {
         Returns: boolean;
       };
       search_listing_ids: {
+        Args: { p_query: string };
+        Returns: string[];
+      };
+      /** Explore search RPCs (0057) — ranked candidate ids per object family.
+       *  Visibility enforced inside each function (public / published /
+       *  unsuspended), so the service-role caller stays safe. */
+      search_car_ids: {
+        Args: { p_query: string };
+        Returns: string[];
+      };
+      search_update_ids: {
+        Args: { p_query: string };
+        Returns: string[];
+      };
+      search_profile_ids: {
         Args: { p_query: string };
         Returns: string[];
       };

@@ -29,6 +29,10 @@ export type AnalyticsEvent =
   | { event: "listing_started"; props?: undefined }
   | { event: "listing_published"; props: { category: string; has_source_car: boolean; fitment_rows: number } }
   | { event: "search_performed"; props: { lane: "identifier" | "human"; results: number } }
+  /** Explore search (§39) — scope + coarse counts only, never query text.
+   *  Account search deliberately adds no extra properties: discovery must
+   *  not become a surveillance dataset because analytics exist. */
+  | { event: "explore_search_performed"; props: { scope: string; has_query: boolean; filters: number; results: number; zero: boolean } }
   | { event: "fitment_filter_used"; props?: undefined }
   | { event: "saved_search_created"; props?: undefined }
   | { event: "saved_search_alert_enabled"; props?: undefined }
