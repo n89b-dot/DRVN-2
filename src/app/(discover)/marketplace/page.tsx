@@ -9,7 +9,7 @@ import { ActiveFilters } from "./active-filters";
 import { SaveSearchButton } from "@/features/marketplace/save-search-button";
 import { CategoryNav, CategorySheet } from "./category-nav";
 import { FilterBar } from "./filter-bar";
-import { MarketplaceResults } from "./results";
+import { MarketplaceResults } from "@/features/marketplace/results";
 
 export const metadata = { title: "Marketplace - DRVN" };
 

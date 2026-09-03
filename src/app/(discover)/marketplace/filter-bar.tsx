@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
-import { FinderRefineSheet } from "@/components/ui";
-import { SlashFocus } from "@/components/ui/slash-focus";
+import { FinderRefineSheet, SearchField } from "@/components/ui";
 
 import { SortSelect } from "./sort-select";
 
@@ -15,10 +14,9 @@ import { SortSelect } from "./sort-select";
  *   Search   — the query line: find something by text (this plate's top row)
  *   Category — where you are in the taxonomy (CategoryNav / the Browse
  *              sheet — navigation, deliberately not inside this form)
- *   Refine   — narrow the current set: condition · location · price · garage
- *              fit (inline ≥640px, sheeted behind "Refine" on compact)
- *   Sort     — one control per width (chips in the results head on desktop,
- *              the select in the compact toolbar)
+ *   Filters  — narrow the current set: condition · location · price · garage
+ *              fit (sheeted behind one "Filters" control at every width)
+ *   Sort     — one select in the plate row, every width
  *   Active   — the removable chips under the plate (ActiveFilters)
  *   Results  — the wall
  *
@@ -49,52 +47,28 @@ export function FilterBar({
   return (
     <form action={action} method="get" className="finder" role="search">
       <div className="finder__main">
-        <label className="search">
-          <span aria-hidden="true">⌕</span>
-          {/* Short by design: the long form ("…— 'coilovers', 'ECU', a car")
-              was clipped mid-word at every width under 1100px. */}
-          <input
-            name="q"
-            defaultValue={filters.q ?? ""}
-            placeholder="Search parts…"
-            aria-label="Search parts — press / to focus"
-          />
-          {/* Keyboard affordance in the system's own voice — hidden where
-              there's no hardware keyboard to press it on. */}
-          <kbd className="microlabel hidden select-none md:inline" aria-hidden="true">
-            /
-          </kbd>
-        </label>
-        <SlashFocus />
-        {/* Inline beside the query at every width — a full-width Search row
-            was costing the compact viewport ~54px before any inventory. */}
-        <button type="submit" className="btn">
-          Search
-        </button>
-      </div>
+        <SearchField label="Search parts" defaultValue={filters.q ?? ""} placeholder="Search…" />
 
-      {/* Compact screens sheet the dense refinement row behind one "Refine"
-          control (see FinderRefineSheet) — five stacked controls were pushing
-          the results below the fold. ≥640px this renders the same inline
-          `.finder__refine` row as before; the fields stay mounted either way,
-          so they always submit with the search. The Browse sheet rides in the
-          same toolbar so the three compact controls read as one row:
-          Browse · Refine · Sort. */}
-      <FinderRefineSheet
-        activeCount={activeCount}
-        aside={
-          <>
-            {browse}
-            <SortSelect value={filters.sort} />
-          </>
-        }
-      >
-        {/* Desktop: a labelled register, so the row says what it is. */}
-        <span className="microlabel filters__label hidden sm:inline">Refine</span>
+        {/* The dense refinements live one step behind the query line at
+            every width (see FinderRefineSheet) — a "Filters" control with a
+            live count opens the sheet; the fields stay mounted either way,
+            so they always submit with the search. Browse stays compact-only
+            (≥640px the CategoryNav tiles are the browser); Sort rides in the
+            same row so the plate reads Search · Filters · Sort. */}
+        <FinderRefineSheet
+          activeCount={activeCount}
+          aside={
+            <>
+              <span className="contents sm:hidden">{browse}</span>
+              <SortSelect value={filters.sort} />
+            </>
+          }
+        >
+          <span className="microlabel filters__label">Filters</span>
         <select
           name="condition"
           defaultValue={filters.condition ?? ""}
-          className="ctl w-full max-w-none sm:w-auto"
+          className="ctl w-full max-w-none"
           aria-label="Condition"
         >
           <option value="">Any condition</option>
@@ -108,19 +82,19 @@ export function FilterBar({
           name="location"
           defaultValue={filters.location ?? ""}
           placeholder="Location"
-          className="ctl w-full max-w-none sm:w-32"
+          className="ctl w-full max-w-none"
           aria-label="Location"
         />
         {/* The price bounds are one control in two halves, so they travel
             together — left loose they split across a wrap and read as two
             unrelated fields. */}
-        <span className="flex w-full gap-2 sm:w-auto">
+        <span className="flex w-full gap-2">
           <input
             name="min"
             defaultValue={filters.min ?? ""}
             placeholder="Min $"
             inputMode="decimal"
-            className="ctl min-w-0 max-w-none flex-1 sm:w-24 sm:flex-none"
+            className="ctl min-w-0 max-w-none flex-1"
             aria-label="Minimum price"
           />
           <input
@@ -128,12 +102,12 @@ export function FilterBar({
             defaultValue={filters.max ?? ""}
             placeholder="Max $"
             inputMode="decimal"
-            className="ctl min-w-0 max-w-none flex-1 sm:w-24 sm:flex-none"
+            className="ctl min-w-0 max-w-none flex-1"
             aria-label="Maximum price"
           />
         </span>
         {showFitToggle && (
-          <label className="flex basis-full items-center gap-2 font-mono text-micro uppercase tracking-[0.1em] text-dim sm:ml-auto sm:basis-auto">
+          <label className="flex basis-full items-center gap-2 font-mono text-micro uppercase tracking-[0.1em] text-dim">
             <input
               type="checkbox"
               name="fit"
@@ -144,12 +118,13 @@ export function FilterBar({
             {fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for your garage"}
           </label>
         )}
-        {/* Inside the sheet the refinements apply with the search — say so,
-            instead of leaving a phone user to guess whether "Done" submits. */}
-        <button type="submit" className="btn w-full sm:hidden">
-          Apply refinements
-        </button>
-      </FinderRefineSheet>
+          {/* Inside the sheet the refinements apply with the search — say so,
+              instead of leaving anyone to guess whether "Done" submits. */}
+          <button type="submit" className="btn w-full">
+            Apply filters
+          </button>
+        </FinderRefineSheet>
+      </div>
     </form>
   );
 }

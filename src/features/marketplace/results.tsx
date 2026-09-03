@@ -5,12 +5,6 @@ import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import type { ListingPage } from "@/lib/marketplace/query";
 import { withParams } from "@/lib/url-params";
 
-const SORTS = [
-  { key: "newest", label: "Newest" },
-  { key: "price_asc", label: "Price ↑" },
-  { key: "price_desc", label: "Price ↓" },
-] as const;
-
 /**
  * Shared results block: count · sort, the card wall, and pagination —
  * one implementation for /marketplace and every category route.
@@ -40,7 +34,6 @@ export function MarketplaceResults({
   viewerId?: string | null;
 }) {
   const { results, total, page: current, pageSize, hasMore } = page;
-  const activeSort = params.sort ?? "newest";
   const firstOnPage = (current - 1) * pageSize + 1;
   const lastOnPage = (current - 1) * pageSize + results.length;
 
@@ -71,32 +64,9 @@ export function MarketplaceResults({
 
   return (
     <>
-      {/* No results-count line: "15 parts" is inventory bookkeeping, not
-          something a buyer asked. The row exists only for the desktop sort;
-          compact widths sort from the toolbar's Sort select instead — two
-          sort controls on one phone screen would be one too many. */}
-      <div className="mb-4 hidden flex-wrap items-baseline justify-end gap-3 sm:flex">
-        <div className="filters !my-0" role="group" aria-label="Sort results">
-          <span className="microlabel filters__label">Sort</span>
-          {SORTS.map((sort) => {
-            const isOn = sort.key === activeSort;
-            return (
-              <Link
-                key={sort.key}
-                href={withParams(basePath, params, {
-                  sort: sort.key === "newest" ? undefined : sort.key,
-                  page: undefined,
-                })}
-                className={`fbtn ${isOn ? "is-on" : ""}`}
-                aria-current={isOn ? "true" : undefined}
-              >
-                {sort.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
+      {/* No results-count line, and no sort row: sorting lives in the
+          finder's plate row (SortSelect) at every width — a second sort
+          control above the wall was one too many. */}
       <Mosaic commerce label="Parts for sale">
         {results.map((listing) => {
           // Purchasable = on sale and not the viewer's own. `addToCart` and

@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { ActiveFilters } from "../../active-filters";
 import { CategoryNav, CategorySheet } from "../../category-nav";
-import { MarketplaceResults } from "../../results";
+import { MarketplaceResults } from "@/features/marketplace/results";
 import { FilterBar } from "../../filter-bar";
 
 export default async function SubcategoryPage({
