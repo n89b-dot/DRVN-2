@@ -51,12 +51,13 @@ export async function GET() {
     reviews,
     activityPosts,
     modItems,
+    comments, reactions, savedSearches, analyticsConsent,
   ] = await Promise.all([
     take(
       supabase
         .from("profiles")
         .select(
-          "id, username, display_name, headline, bio, location, links, notification_prefs, profile_type, created_at, updated_at"
+          "id, username, display_name, avatar_url, headline, bio, location, links, notification_prefs, profile_type, created_at, updated_at"
         )
         .eq("id", user.id)
         .maybeSingle(),
@@ -77,6 +78,22 @@ export async function GET() {
       supabase.from("mod_items").select("*, cars!inner(owner_id)").order("id").eq("cars.owner_id", user.id),
       "mod items"
     ),
+    pages(supabase.from("activity_comments").select("*").order("id").eq("author_id", user.id), "activity comments"),
+    pages(supabase.from("activity_reactions").select("*").order("post_id").order("emoji").eq("user_id", user.id), "activity reactions"),
+    pages(supabase.from("saved_searches").select("*").order("id").eq("user_id", user.id), "saved searches"),
+    take(supabase.from("analytics_consents").select("allowed,expires_at").eq("user_id", user.id).maybeSingle(), "analytics preference"),
+  ]);
+
+  const [carImages, listingImages, activityImages, hotspots, fitments, partNumbers, orderItems, paymentHistory] = await Promise.all([
+    pages(supabase.from("car_images").select("*,cars!inner(id)").eq("cars.owner_id", user.id).order("id"), "car images"),
+    pages(supabase.from("listing_images").select("*,listings!inner(id)").eq("listings.seller_id", user.id).order("id"), "listing images"),
+    pages(supabase.from("activity_images").select("*,activity_posts!inner(id)").eq("activity_posts.author_id", user.id).order("id"), "activity images"),
+    pages(supabase.from("car_hotspots").select("*,cars!inner(id)").eq("cars.owner_id", user.id).order("id"), "car hotspots"),
+    pages(supabase.from("listing_fitments").select("*,listings!inner(id)").eq("listings.seller_id", user.id).order("id"), "listing fitments"),
+    pages(supabase.from("listing_part_numbers").select("*,listings!inner(id)").eq("listings.seller_id", user.id).order("id"), "listing part numbers"),
+    pages(supabase.from("order_items").select("*,orders!inner(id)").or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`, { referencedTable: "orders" }).order("id"), "order snapshots"),
+    // Explicit projection excludes raw provider payloads and idempotency secrets.
+    pages(supabase.from("payments").select("id,order_id,amount_cents,currency,status,refunded_cents,created_at,orders!inner(id)").or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`, { referencedTable: "orders" }).order("id"), "payment history"),
   ]);
 
   if (failures.length) return Response.json({ error: "Your export could not be completed. Please retry or contact support.", failed_sections: failures }, { status: 503, headers: { "Cache-Control": "no-store" } });
@@ -97,6 +114,9 @@ export async function GET() {
       reviews,
       activity_posts: activityPosts,
       mod_items: modItems,
+      media: { cars: carImages, listings: listingImages, activity: activityImages, hotspots },
+      listing_fitments: fitments, listing_part_numbers: partNumbers, order_snapshots: orderItems, payment_history: paymentHistory,
+      activity_comments: comments, activity_reactions: reactions, saved_searches: savedSearches, analytics_consent: analyticsConsent,
       note: "Rows involving another member appear exactly as the product shows them to you. Stripe holds payment credentials; DRVN stores only references.",
     },
     null,

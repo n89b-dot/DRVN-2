@@ -140,6 +140,47 @@ suite("Stripe test-mode integration", () => {
     }
   }, 60000);
 
+  it("expires a reservation only after Stripe confirms cancellation", async () => {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { processReservationExpiries } = await import("@/lib/payments/reservation-expiry");
+    const admin = createAdminClient();
+    const users: string[] = [];
+    let orderId: string | undefined, reference: string | undefined;
+    try {
+      for (let i = 0; i < 2; i++) {
+        const created = await admin.auth.admin.createUser({ email: `expiry-${crypto.randomUUID()}@drvn.test`, email_confirm: true });
+        if (created.error || !created.data.user) throw created.error ?? new Error("Missing expiry user");
+        users.push(created.data.user.id);
+      }
+      const listing = await admin.from("listings").insert({ seller_id: users[1], title: "Stripe expiry fixture", category: "engine", status: "active", price_cents: 1200, currency: "GBP" }).select("id").single();
+      if (listing.error) throw listing.error;
+      const begun = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: [listing.data.id], p_idempotency_key: `expiry:${crypto.randomUUID()}` });
+      if (begun.error) throw begun.error;
+      orderId = (begun.data as { orders: { order_id: string }[] }).orders[0].order_id;
+      const payment = await provider.createPayment({ orderId, buyerId: users[0], sellerId: users[1], totalCents: 1200, currency: "GBP" });
+      if (payment.status !== "requires_action") throw new Error(`Expiry payment: ${payment.status}`);
+      reference = payment.reference;
+      const clock = await admin.from("listings").update({ reserved_until: "2000-01-01T00:00:00Z" }).eq("id", listing.data.id);
+      if (clock.error) throw clock.error;
+      const queued = await admin.rpc("release_expired_reservations", {});
+      if (queued.error) throw queued.error;
+      expect((await admin.from("listings").select("status").eq("id", listing.data.id).single()).data?.status).toBe("reserved");
+      const priority = await admin.from("remediation_jobs").update({ next_attempt_at: "1900-01-01T00:00:00Z" }).eq("dedup_key", `expiry:${orderId}`);
+      if (priority.error) throw priority.error;
+      await processReservationExpiries();
+      expect((await stripe.paymentIntents.retrieve(reference)).status).toBe("canceled");
+      expect((await admin.from("listings").select("status").eq("id", listing.data.id).single()).data?.status).toBe("active");
+      expect((await admin.from("remediation_jobs").select("status").eq("dedup_key", `expiry:${orderId}`).single()).data?.status).toBe("completed");
+    } finally {
+      if (reference) { try { await stripe.paymentIntents.cancel(reference); } catch { /* Already cancelled. */ } }
+      if (orderId) {
+        await admin.from("remediation_jobs").delete().eq("dedup_key", `expiry:${orderId}`);
+        await admin.from("orders").delete().eq("id", orderId);
+      }
+      for (const id of users) await admin.auth.admin.deleteUser(id);
+    }
+  }, 120000);
+
   it("creates an intent carrying DRVN metadata (order, buyer, seller, correlation)", async () => {
     const oid = orderId();
     const correlationId = crypto.randomUUID();

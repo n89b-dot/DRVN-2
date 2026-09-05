@@ -20,7 +20,9 @@
     "storybook:build": "storybook build",
     "docs:systems": "UPDATE_DOCS=1 vitest run src/lib/docs/system-docs.test.ts",
     "db:types": "node scripts/generate-database-types.mjs",
-    "db:types:check": "node scripts/generate-database-types.mjs --check"
+    "db:types:check": "node scripts/generate-database-types.mjs --check",
+    "test:operations": "vitest run --config vitest.operations.config.ts",
+    "test:monitor": "node --test scripts/check-worker-health.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

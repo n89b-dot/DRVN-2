@@ -1,3 +1,4 @@
+import { mapBounded } from "@/lib/map-bounded";
 import { stripeClient, stripeSecretKey } from "./stripe";
 import { orderAdjustmentCents } from "./adjustments";
 import { reversalShareCents } from "./refunds";
@@ -35,7 +36,7 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
 type Admin = ReturnType<typeof createAdminClient>;
 
 const MAX_ATTEMPTS = 8;
-const BATCH_SIZE = 20;
+const BATCH_SIZE = 8;
 const LEASE_SECONDS = 300;
 
 export type TransferWorkerSummary = {
@@ -67,7 +68,7 @@ export async function processDueTransfers(admin: Admin): Promise<TransferWorkerS
     throw new Error("Transfer queue unavailable");
   }
 
-  for (const intent of (claimed as IntentRow[] | null) ?? []) {
+  await mapBounded((claimed as IntentRow[] | null) ?? [], 4, async (intent) => {
     try {
       const outcome = await processOne(admin, intent, workerId);
       summary[outcome] += 1;
@@ -76,7 +77,7 @@ export async function processDueTransfers(admin: Admin): Promise<TransferWorkerS
       await recordFailure(admin, intent, workerId, error);
       summary.failed += 1;
     }
-  }
+  });
   return summary;
 }
 

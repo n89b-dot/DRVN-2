@@ -1,0 +1,7 @@
+BEGIN
+psql:supabase/tests/expiry_guard.sql:48: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/expiry_guard.sql:48: NOTICE:  expiry_guard: all checks passed
+DO
+psql:supabase/tests/expiry_guard.sql:62: NOTICE:  expiry_guard: all unfunded checks passed
+DO
+ROLLBACK

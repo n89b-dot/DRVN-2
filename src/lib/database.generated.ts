@@ -305,19 +305,66 @@ export type Database = {
           created_at: string
           note: string | null
           role: string
+          sessions_valid_after: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           note?: string | null
           role?: string
+          sessions_valid_after?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           note?: string | null
           role?: string
+          sessions_valid_after?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      analytics_consents: {
+        Row: {
+          allowed: boolean
+          expires_at: string
+          user_id: string
+          version: string
+        }
+        Insert: {
+          allowed?: boolean
+          expires_at?: string
+          user_id: string
+          version?: string
+        }
+        Update: {
+          allowed?: boolean
+          expires_at?: string
+          user_id?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_consents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      capture_checks: {
+        Row: {
+          next_attempt_at: string
+          reference: string
+        }
+        Insert: {
+          next_attempt_at?: string
+          reference: string
+        }
+        Update: {
+          next_attempt_at?: string
+          reference?: string
         }
         Relationships: []
       }
@@ -703,6 +750,41 @@ export type Database = {
             columns: ["participant_b"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deletion_storage_tasks: {
+        Row: {
+          bucket: string
+          folder: boolean
+          job_id: string
+          page_offset: number
+          path: string
+          status: string
+        }
+        Insert: {
+          bucket: string
+          folder: boolean
+          job_id: string
+          page_offset?: number
+          path: string
+          status?: string
+        }
+        Update: {
+          bucket?: string
+          folder?: boolean
+          job_id?: string
+          page_offset?: number
+          path?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deletion_storage_tasks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "remediation_jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -1591,6 +1673,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          analytics_consent_version: string | null
           buyer_id: string | null
           buyer_label: string | null
           cancel_reason: string | null
@@ -1643,6 +1726,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          analytics_consent_version?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
           cancel_reason?: string | null
@@ -1695,6 +1779,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          analytics_consent_version?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
           cancel_reason?: string | null
@@ -1818,7 +1903,9 @@ export type Database = {
           detail: string | null
           id: string
           kind: string
+          last_seen_at: string
           order_id: string | null
+          recovery_key: string | null
           resolution_note: string | null
           resolved_at: string | null
           resolved_by: string | null
@@ -1830,7 +1917,9 @@ export type Database = {
           detail?: string | null
           id?: string
           kind: string
+          last_seen_at?: string
           order_id?: string | null
+          recovery_key?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -1842,7 +1931,9 @@ export type Database = {
           detail?: string | null
           id?: string
           kind?: string
+          last_seen_at?: string
           order_id?: string | null
+          recovery_key?: string | null
           resolution_note?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
@@ -1869,6 +1960,7 @@ export type Database = {
         Row: {
           correlation_id: string
           created_at: string
+          next_reconcile_at: string
           operation_key: string
           provider_reference: string | null
           request: Json
@@ -1876,6 +1968,7 @@ export type Database = {
         Insert: {
           correlation_id?: string
           created_at?: string
+          next_reconcile_at?: string
           operation_key: string
           provider_reference?: string | null
           request: Json
@@ -1883,6 +1976,7 @@ export type Database = {
         Update: {
           correlation_id?: string
           created_at?: string
+          next_reconcile_at?: string
           operation_key?: string
           provider_reference?: string | null
           request?: Json
@@ -2568,6 +2662,30 @@ export type Database = {
           },
         ]
       }
+      search_rebuilds: {
+        Row: {
+          created_at: string
+          cursor: string | null
+          entity: string
+          id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          cursor?: string | null
+          entity: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          cursor?: string | null
+          entity?: string
+          id?: string
+          status?: string
+        }
+        Relationships: []
+      }
       seller_adjustments: {
         Row: {
           amount_cents: number
@@ -3230,7 +3348,25 @@ export type Database = {
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
       admin_role: { Args: never; Returns: string }
+      advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
       assert_admin_actor: { Args: { p_actor: string }; Returns: undefined }
+      assert_deletion_ready: { Args: { p_user: string }; Returns: undefined }
+      begin_admin_external_operation: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_metadata?: Json
+          p_order: string
+          p_reason: string
+          p_subject: string
+          p_subject_type: string
+        }
+        Returns: Json
+      }
+      begin_admin_mfa_recovery: {
+        Args: { p_actor: string; p_reason: string; p_target: string }
+        Returns: string
+      }
       begin_refund_operation: {
         Args: {
           p_actor_role: string
@@ -3246,12 +3382,17 @@ export type Database = {
         }
         Returns: Json
       }
+      bind_checkout_analytics: {
+        Args: { p_orders: string[] }
+        Returns: undefined
+      }
       bump_listing_view: { Args: { p_listing: string }; Returns: undefined }
       capture_reconciliation_candidates: { Args: never; Returns: Json }
       claim_remediation_jobs: {
         Args: { p_kind: string; p_limit?: number }
         Returns: Json
       }
+      claim_search_jobs: { Args: never; Returns: Json }
       claim_transfer_intents: {
         Args: {
           p_batch?: number
@@ -3285,12 +3426,21 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_unmapped_payment_requests: { Args: never; Returns: Json }
       consume_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window: string }
         Returns: boolean
       }
+      continue_account_deletion: {
+        Args: { p_job: string; p_lease: string }
+        Returns: undefined
+      }
       enqueue_order_receipt: {
         Args: { p_buyer: string; p_destination: string }
+        Returns: undefined
+      }
+      enqueue_search_document: {
+        Args: { p_entity: string; p_id: string }
         Returns: undefined
       }
       escalate_stale_disputes: { Args: never; Returns: number }
@@ -3303,9 +3453,91 @@ export type Database = {
         }
         Returns: Json
       }
+      explore_build_rows: {
+        Args: { p_query: string }
+        Returns: {
+          about: string | null
+          body_class: string | null
+          catalog_make_id: number | null
+          catalog_model_id: number | null
+          color: string | null
+          cover_focal_x: number | null
+          cover_focal_y: number | null
+          cover_image_url: string | null
+          created_at: string
+          drivetrain: string | null
+          engine: string | null
+          id: string
+          identity_source: string | null
+          is_public: boolean
+          make: string | null
+          model: string | null
+          name: string
+          owner_id: string
+          slug: string
+          tags: string[]
+          trim: string | null
+          updated_at: string
+          vin: string | null
+          vin_decoded_at: string | null
+          year: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "cars"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      explore_update_rows: {
+        Args: {
+          p_make?: string
+          p_make_id?: number
+          p_model?: string
+          p_model_id?: number
+          p_query?: string
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          author_id: string
+          body: Json
+          car_id: string
+          created_at: string
+          id: string
+          intro: string | null
+          published_at: string | null
+          search_text: string | null
+          title: string
+          updated_at: string
+          video_url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "activity_posts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      finish_capture_check: {
+        Args: { p_reference: string }
+        Returns: undefined
+      }
       finish_remediation_job: {
         Args: { p_error?: string; p_id: string; p_lease: string }
         Returns: undefined
+      }
+      finish_reservation_expiry: {
+        Args: { p_job: string; p_lease: string; p_reference?: string }
+        Returns: Json
+      }
+      has_embedded_media_reference: {
+        Args: { p_url: string }
+        Returns: boolean
+      }
+      identifier_matches_listing: {
+        Args: { p_compact: string; p_id: string }
+        Returns: boolean
       }
       invoke_remediation_worker: {
         Args: { p_family: string }
@@ -3324,6 +3556,101 @@ export type Database = {
         Returns: Json
       }
       mark_due_transfer_intents: { Args: never; Returns: number }
+      marketplace_filtered_rows: {
+        Args: {
+          p_fit?: boolean
+          p_make?: string
+          p_make_id?: number
+          p_model?: string
+          p_model_id?: number
+          p_query?: string
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          allows_collection: boolean
+          category: string
+          compatibility_notes: string | null
+          condition: string | null
+          condition_checklist: Json | null
+          created_at: string
+          currency: string
+          description: string | null
+          grade: string | null
+          height_in: number | null
+          id: string
+          length_in: number | null
+          location: string | null
+          offer_floor_cents: number | null
+          part_number: string | null
+          part_number_compact: string | null
+          price_cents: number
+          removed_at: string | null
+          removed_reason: string | null
+          reserved_until: string | null
+          seller_id: string
+          shipping_cents: number
+          shipping_mode: string
+          sold_at: string | null
+          source_car_id: string | null
+          status: string
+          subcategory: string | null
+          title: string
+          updated_at: string
+          view_count: number
+          weight_oz: number | null
+          width_in: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "listings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      marketplace_search_rows: {
+        Args: { p_query: string }
+        Returns: {
+          allows_collection: boolean
+          category: string
+          compatibility_notes: string | null
+          condition: string | null
+          condition_checklist: Json | null
+          created_at: string
+          currency: string
+          description: string | null
+          grade: string | null
+          height_in: number | null
+          id: string
+          length_in: number | null
+          location: string | null
+          offer_floor_cents: number | null
+          part_number: string | null
+          part_number_compact: string | null
+          price_cents: number
+          removed_at: string | null
+          removed_reason: string | null
+          reserved_until: string | null
+          seller_id: string
+          shipping_cents: number
+          shipping_mode: string
+          sold_at: string | null
+          source_car_id: string | null
+          status: string
+          subcategory: string | null
+          title: string
+          updated_at: string
+          view_count: number
+          weight_oz: number | null
+          width_in: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "listings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       notify: {
         Args: {
           p_actor_id?: string
@@ -3352,6 +3679,7 @@ export type Database = {
         Args: { p_key: string; p_request: Json }
         Returns: Json
       }
+      profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
         Args: {
@@ -3377,6 +3705,10 @@ export type Database = {
         }
         Returns: Json
       }
+      record_capture_recovery: {
+        Args: { p_amount?: number; p_detail: string; p_key: string }
+        Returns: string
+      }
       record_payment_reference: {
         Args: { p_key: string; p_reference: string }
         Returns: undefined
@@ -3391,6 +3723,14 @@ export type Database = {
         Returns: undefined
       }
       release_expired_reservations: { Args: never; Returns: Json }
+      remap_public_media: {
+        Args: { p_new: string; p_old: string }
+        Returns: Json
+      }
+      renew_remediation_lease: {
+        Args: { p_id: string; p_lease: string }
+        Returns: undefined
+      }
       request_account_deletion: { Args: never; Returns: string }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_ids: { Args: { p_query: string }; Returns: string[] }
@@ -3435,6 +3775,10 @@ export type Database = {
           reserved_count: number
           sold_count: number
         }[]
+      }
+      set_analytics_consent: {
+        Args: { p_allowed: boolean }
+        Returns: undefined
       }
       settle_payment_capture: {
         Args: {

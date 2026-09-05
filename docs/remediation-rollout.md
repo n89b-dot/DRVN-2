@@ -66,3 +66,13 @@ Configure an independent monitor to call `/api/health/workers` with the bearer C
 For ambiguous captures, compare payment_requests, Stripe PaymentIntent metadata, payments, refund_operations and transfer_intents. Reconciliation replays known captured references; unknown/mismatched references require investigation. For an admin result saying an operation ran but its completion record failed, reconcile the displayed operation ID and provider operation before retrying.
 
 Deletion responses mean **queued**, not completed. Failed storage/auth cleanup remains a retryable job. Retained order/evidence references can require supervised retention review. Keep the request ID when assisting the user. Export returns an error if a section cannot be read completely rather than returning a silently incomplete archive.
+
+## Provider-aware expiry follow-up
+
+Apply `20260905101425_provider_aware_expiry.sql` before the compatible worker build. The existing expiry cron now enqueues `reservation_expiry` work instead of releasing inventory. The money worker's new `expiries` family checks Stripe, settles captures, and releases only confirmed cancellations or orders with no persisted provider creation. During the schema/app transition, reservations can remain held longer; do not restore the old SQL sweep to clear them.
+
+A persisted request with no provider reference is unresolved. Its stock remains held and its job retries, eventually appearing as failed work after the existing retry limit. Reconcile that request against the provider before retrying or releasing anything. Automated reference-less recovery and further reconciliation fairness are still phase-two B04 work.
+
+## Phase-two additions
+
+Apply all additive phase-two migrations through the normal upgrade procedure, then deploy compatible application code. New claim/checkpoint/recovery RPCs are required by these workers; do not deploy the code ahead of the schema. Reference-less recovery, fair capture scanning, durable deletion checkpoints and scanner-safe email redemption now have implementation and local evidence. Follow [the updated operations runbook](remediation-operations.md) and [release gates](remediation-release-gates.md), which supersede the earlier pending-work notes in this document.

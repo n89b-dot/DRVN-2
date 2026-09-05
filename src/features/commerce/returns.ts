@@ -156,14 +156,14 @@ export async function processReturnTimers(
     .select("id, status")
     .in("status", ["approved", "awaiting_shipment"])
     .lt("ship_by", nowIso)
-    .limit(50);
+    .limit(50).throwOnError();
   for (const row of lapsed ?? []) {
     const { data: updated } = await admin
       .from("returns")
       .update({ status: "expired" })
       .eq("id", row.id)
       .eq("status", row.status)
-      .select("id");
+      .select("id").throwOnError();
     if (updated?.length) expired += 1;
   }
 
@@ -172,22 +172,23 @@ export async function processReturnTimers(
     .select("id, status")
     .eq("status", "delivered")
     .lt("seller_respond_by", nowIso)
-    .limit(50);
+    .limit(50).throwOnError();
   for (const row of silent ?? []) {
     await admin
       .from("returns")
       .update({ status: "received", received_at: new Date().toISOString() })
       .eq("id", row.id)
-      .eq("status", "delivered");
+      .eq("status", "delivered").throwOnError();
   }
 
   const { data: receivable } = await admin
     .from("returns")
     .select("*")
     .eq("status", "received")
-    .limit(50);
+    .order("updated_at").limit(3).throwOnError();
   for (const row of receivable ?? []) {
     const result = await completeReturn(admin, row);
+    await admin.from("returns").update({ updated_at: new Date().toISOString() }).eq("id", row.id).throwOnError();
     if (result.ok) completed += 1;
     else failed += 1;
   }

@@ -1,3 +1,4 @@
+import { enqueueSearch } from "@/lib/search/enqueue";
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,38 +28,41 @@ import {
  *   syncProfileToSearch  username, display name or headline changed;
  *                        suspension state changes.
  */
-export async function syncCarToSearch(carId: string): Promise<void> {
+export async function indexCarNow(carId: string, assertLease: () => Promise<void> = async () => {}): Promise<void> {
   if (!typesenseConfigured()) return;
   const admin = createAdminClient();
   const { data: car } = await admin
     .from("cars")
-    .select("id, name, make, model, year, tags, about, is_public, created_at")
+    .select("id, owner_id, name, make, model, year, tags, about, is_public, created_at")
     .eq("id", carId)
     .maybeSingle().throwOnError();
   if (!car) {
+    await assertLease();
     await typesenseDelete(EXPLORE_COLLECTIONS.car, carId);
     return;
   }
-  if (!car.is_public) {
+  const owner = await admin.from("profiles").select("suspended_at").eq("id", car.owner_id).maybeSingle().throwOnError();
+  if (!car.is_public || !owner.data || owner.data.suspended_at) {
     // Ineligible car: remove it AND its posts — a published post on a
     // now-private build is no longer search material either.
+    await assertLease();
     await typesenseDelete(EXPLORE_COLLECTIONS.car, carId);
-    const { data: posts } = await admin
-      .from("activity_posts")
-      .select("id")
-      .eq("car_id", carId)
-      .limit(500).throwOnError();
-    await Promise.all(
-      (posts ?? []).map((p) => typesenseDelete(EXPLORE_COLLECTIONS.update, p.id))
-    );
     return;
   }
 
-  const { data: mods } = await admin
-    .from("mod_items")
-    .select("brand, product, part_number")
-    .eq("car_id", carId)
-    .limit(500).throwOnError();
+  const mods: { brand: string | null; product: string | null; part_number: string | null }[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    await assertLease();
+    let query = admin.from("mod_items").select("id, brand, product, part_number")
+      .eq("car_id", carId).order("id").limit(500);
+    if (cursor) query = query.gt("id", cursor);
+    const { data } = await query.throwOnError();
+    const page = data ?? [];
+    mods.push(...page);
+    if (page.length < 500) break;
+    cursor = page[page.length - 1].id;
+  }
 
   const doc: CarSearchDocument = {
     id: car.id,
@@ -76,19 +80,14 @@ export async function syncCarToSearch(carId: string): Promise<void> {
       .join(" "),
     created_at_unix: Math.floor(new Date(car.created_at).getTime() / 1000),
   };
+  await assertLease();
   await typesenseUpsert(EXPLORE_COLLECTIONS.car, doc);
 
-  // A car flipping public makes its already-published posts eligible again.
-  const { data: posts } = await admin
-    .from("activity_posts")
-    .select("id")
-    .eq("car_id", carId)
-    .not("published_at", "is", null)
-    .limit(500).throwOnError();
-  await Promise.all((posts ?? []).map((p) => syncUpdateToSearch(p.id)));
+  // Transactional queue triggers schedule dependent posts.
+
 }
 
-export async function syncUpdateToSearch(postId: string): Promise<void> {
+export async function indexUpdateNow(postId: string, assertLease: () => Promise<void> = async () => {}): Promise<void> {
   if (!typesenseConfigured()) return;
   const admin = createAdminClient();
   const { data: post } = await admin
@@ -97,15 +96,18 @@ export async function syncUpdateToSearch(postId: string): Promise<void> {
     .eq("id", postId)
     .maybeSingle().throwOnError();
   if (!post || !post.published_at) {
+    await assertLease();
     await typesenseDelete(EXPLORE_COLLECTIONS.update, postId);
     return;
   }
   const { data: car } = await admin
     .from("cars")
-    .select("name, make, model, year, is_public")
+    .select("name, make, model, year, is_public, owner_id")
     .eq("id", post.car_id)
     .maybeSingle().throwOnError();
-  if (!car?.is_public) {
+  const owner = car ? await admin.from("profiles").select("suspended_at").eq("id", car.owner_id).maybeSingle().throwOnError() : null;
+  if (!car?.is_public || !owner?.data || owner.data.suspended_at) {
+    await assertLease();
     await typesenseDelete(EXPLORE_COLLECTIONS.update, postId);
     return;
   }
@@ -127,10 +129,11 @@ export async function syncUpdateToSearch(postId: string): Promise<void> {
       .join(" "),
     published_at_unix: Math.floor(new Date(post.published_at).getTime() / 1000),
   };
+  await assertLease();
   await typesenseUpsert(EXPLORE_COLLECTIONS.update, doc);
 }
 
-export async function syncProfileToSearch(profileId: string): Promise<void> {
+export async function indexProfileNow(profileId: string, assertLease: () => Promise<void> = async () => {}): Promise<void> {
   if (!typesenseConfigured()) return;
   const admin = createAdminClient();
   const { data: profile } = await admin
@@ -139,6 +142,7 @@ export async function syncProfileToSearch(profileId: string): Promise<void> {
     .eq("id", profileId)
     .maybeSingle().throwOnError();
   if (!profile || profile.suspended_at || (!profile.username && !profile.display_name)) {
+    await assertLease();
     await typesenseDelete(EXPLORE_COLLECTIONS.profile, profileId);
     return;
   }
@@ -149,5 +153,10 @@ export async function syncProfileToSearch(profileId: string): Promise<void> {
     headline: profile.headline ?? "",
     created_at_unix: Math.floor(new Date(profile.created_at).getTime() / 1000),
   };
+  await assertLease();
   await typesenseUpsert(EXPLORE_COLLECTIONS.profile, doc);
 }
+
+export function syncCarToSearch(id: string) { return enqueueSearch("car", id); }
+export function syncProfileToSearch(id: string) { return enqueueSearch("profile", id); }
+export function syncUpdateToSearch(id: string) { return enqueueSearch("update", id); }

@@ -1,0 +1,445 @@
+psql:supabase/tests/ci_shim.sql:12: NOTICE:  schema "storage" already exists, skipping
+psql:supabase/migrations/0001_v3_schema.sql:8: NOTICE:  trigger "on_auth_user_created" for relation "auth.users" does not exist, skipping
+psql:supabase/migrations/0001_v3_schema.sql:9: NOTICE:  function public.handle_new_user() does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:75: NOTICE:  trigger "profiles_guard_columns" for relation "public.profiles" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:125: NOTICE:  trigger "listings_guard_source_car" for relation "public.listings" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:207: NOTICE:  trigger "offers_guard_columns" for relation "public.offers" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:320: NOTICE:  trigger "messages_guard_columns" for relation "public.messages" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:336: NOTICE:  constraint "profiles_text_bounds" of relation "profiles" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:345: NOTICE:  constraint "cars_text_bounds" of relation "cars" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:354: NOTICE:  constraint "listings_text_bounds" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:360: NOTICE:  constraint "listings_price_ceiling" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:364: NOTICE:  constraint "offers_amount_ceiling" of relation "offers" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:371: NOTICE:  constraint "activity_posts_text_bounds" of relation "activity_posts" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:375: NOTICE:  constraint "reviews_body_bounds" of relation "reviews" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:379: NOTICE:  constraint "messages_body_bounds" of relation "messages" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:383: NOTICE:  constraint "listing_questions_body_bounds" of relation "listing_questions" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:387: NOTICE:  constraint "activity_comments_body_bounds" of relation "activity_comments" does not exist, skipping
+psql:supabase/migrations/0006_security_hardening.sql:391: NOTICE:  constraint "activity_reactions_emoji_bounds" of relation "activity_reactions" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:55: NOTICE:  constraint "listings_shipping_bounds" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:61: NOTICE:  constraint "listings_offer_floor_bounds" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:151: NOTICE:  trigger "orders_snapshot_parties" for relation "public.orders" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:178: NOTICE:  constraint "messages_has_context" of relation "messages" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:235: NOTICE:  policy "participants read payments" for relation "public.payments" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:263: NOTICE:  constraint "offers_counter_bounds" of relation "offers" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "profiles_touch_updated_at" for relation "public.profiles" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "cars_touch_updated_at" for relation "public.cars" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "activity_posts_touch_updated_at" for relation "public.activity_posts" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "listings_touch_updated_at" for relation "public.listings" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "mod_items_touch_updated_at" for relation "public.mod_items" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "orders_touch_updated_at" for relation "public.orders" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "offers_touch_updated_at" for relation "public.offers" does not exist, skipping
+psql:supabase/migrations/0007_commerce_lifecycle.sql:350: NOTICE:  trigger "payments_touch_updated_at" for relation "public.payments" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:43: NOTICE:  policy "users read own notifications" for relation "public.notifications" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:46: NOTICE:  policy "users update own notifications" for relation "public.notifications" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:50: NOTICE:  policy "users delete own notifications" for relation "public.notifications" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:124: NOTICE:  trigger "follows_notify" for relation "public.follows" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:164: NOTICE:  trigger "saves_notify" for relation "public.saves" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:193: NOTICE:  trigger "activity_comments_notify" for relation "public.activity_comments" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:222: NOTICE:  trigger "activity_reactions_notify" for relation "public.activity_reactions" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:242: NOTICE:  trigger "reviews_notify" for relation "public.reviews" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:279: NOTICE:  trigger "listing_questions_notify" for relation "public.listing_questions" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:306: NOTICE:  trigger "offers_notify_new" for relation "public.offers" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:352: NOTICE:  trigger "offers_notify_response" for relation "public.offers" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:409: NOTICE:  trigger "orders_notify_status" for relation "public.orders" does not exist, skipping
+psql:supabase/migrations/0009_notifications.sql:436: NOTICE:  trigger "messages_notify" for relation "public.messages" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:96: NOTICE:  trigger "listings_guard_status" for relation "public.listings" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:120: NOTICE:  trigger "listings_guard_delete" for relation "public.listings" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:487: NOTICE:  trigger "offers_guard_insert" for relation "public.offers" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:524: NOTICE:  trigger "activity_posts_guard_columns" for relation "public.activity_posts" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:544: NOTICE:  trigger "activity_comments_guard_columns" for relation "public.activity_comments" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:575: NOTICE:  trigger "reviews_guard_columns" for relation "public.reviews" does not exist, skipping
+psql:supabase/migrations/0012_commerce_hardening.sql:647: NOTICE:  policy "questions follow listing visibility" for relation "public.listing_questions" does not exist, skipping
+ schedule
+----------
+        1
+(1 row)
+
+ schedule
+----------
+        2
+(1 row)
+
+psql:supabase/migrations/0014_disputes.sql:47: NOTICE:  constraint "orders_dispute_category_check" of relation "orders" does not exist, skipping
+psql:supabase/migrations/0014_disputes.sql:60: NOTICE:  constraint "orders_refund_offer_cents_check" of relation "orders" does not exist, skipping
+psql:supabase/migrations/0018_admin.sql:127: NOTICE:  policy "admins read audit log" for relation "public.admin_audit_log" does not exist, skipping
+psql:supabase/migrations/0018_admin.sql:147: NOTICE:  trigger "admin_audit_log_append_only" for relation "public.admin_audit_log" does not exist, skipping
+psql:supabase/migrations/0018_admin.sql:182: NOTICE:  policy "users file reports" for relation "public.reports" does not exist, skipping
+psql:supabase/migrations/0018_admin.sql:186: NOTICE:  policy "reporters and admins read reports" for relation "public.reports" does not exist, skipping
+psql:supabase/migrations/0018_admin.sql:402: NOTICE:  PASS: 0018 self-checks
+psql:supabase/migrations/0019_money_infra.sql:46: NOTICE:  policy "admins read webhook events" for relation "public.webhook_events" does not exist, skipping
+psql:supabase/migrations/0019_money_infra.sql:86: NOTICE:  policy "admins read transfer intents" for relation "public.transfer_intents" does not exist, skipping
+psql:supabase/migrations/0019_money_infra.sql:120: NOTICE:  policy "admins read payment recoveries" for relation "public.payment_recoveries" does not exist, skipping
+psql:supabase/migrations/0019_money_infra.sql:136: NOTICE:  constraint "orders_refunded_cents_check" of relation "orders" does not exist, skipping
+psql:supabase/migrations/0019_money_infra.sql:159: NOTICE:  PASS: 0019 self-checks
+ schedule
+----------
+        3
+(1 row)
+
+psql:supabase/migrations/0020_transfer_scheduling.sql:187: NOTICE:  PASS: 0020 self-checks
+ schedule
+----------
+        4
+(1 row)
+
+psql:supabase/migrations/0021_dispute_sla.sql:93: NOTICE:  PASS: 0021 self-checks
+psql:supabase/migrations/0022_sla_alert_stamp.sql:30: NOTICE:  PASS: 0022 self-checks
+psql:supabase/migrations/0023_admin_roles_webhook_payloads.sql:70: NOTICE:  PASS: 0023 self-checks
+psql:supabase/migrations/0024_grading_dispute_process.sql:42: NOTICE:  constraint "listings_grade_check" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:48: NOTICE:  constraint "listings_condition_checklist_shape" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:88: NOTICE:  trigger "order_items_condition_snapshot" for relation "public.order_items" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:102: NOTICE:  constraint "orders_dispute_outcome_check" of relation "orders" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:145: NOTICE:  policy "participants read dispute evidence" for relation "public.dispute_evidence" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:169: NOTICE:  policy "public read dispute evidence" for relation "storage.objects" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:173: NOTICE:  policy "users upload dispute evidence" for relation "storage.objects" does not exist, skipping
+psql:supabase/migrations/0024_grading_dispute_process.sql:181: NOTICE:  policy "users delete own dispute evidence" for relation "storage.objects" does not exist, skipping
+psql:supabase/migrations/0025_fitment.sql:37: NOTICE:  constraint "cars_vin_bounds" of relation "cars" does not exist, skipping
+psql:supabase/migrations/0025_fitment.sql:66: NOTICE:  policy "anyone reads vehicle makes" for relation "public.vehicle_makes" does not exist, skipping
+psql:supabase/migrations/0025_fitment.sql:68: NOTICE:  policy "anyone reads vehicle models" for relation "public.vehicle_models" does not exist, skipping
+psql:supabase/migrations/0025_fitment.sql:110: NOTICE:  policy "fitment follows listing" for relation "public.listing_fitments" does not exist, skipping
+psql:supabase/migrations/0025_fitment.sql:120: NOTICE:  policy "sellers manage fitment" for relation "public.listing_fitments" does not exist, skipping
+psql:supabase/migrations/0026_money_durability.sql:91: NOTICE:  policy "admins read refund operations" for relation "public.refund_operations" does not exist, skipping
+psql:supabase/migrations/0026_money_durability.sql:430: NOTICE:  policy "admins read alert outbox" for relation "public.admin_alert_outbox" does not exist, skipping
+psql:supabase/migrations/0026_money_durability.sql:459: NOTICE:  PASS: 0026 self-checks
+psql:supabase/migrations/0027_evidence_privacy.sql:62: NOTICE:  policy "read dispute evidence" for relation "storage.objects" does not exist, skipping
+psql:supabase/migrations/0027_evidence_privacy.sql:119: NOTICE:  PASS: 0027 self-checks
+psql:supabase/migrations/0028_shipping_address_region.sql:42: NOTICE:  PASS: 0028 self-checks
+psql:supabase/migrations/0029_staged_media.sql:45: NOTICE:  policy "owners insert staged uploads" for relation "public.staged_uploads" does not exist, skipping
+psql:supabase/migrations/0029_staged_media.sql:49: NOTICE:  policy "owners read staged uploads" for relation "public.staged_uploads" does not exist, skipping
+psql:supabase/migrations/0029_staged_media.sql:53: NOTICE:  policy "owners update staged uploads" for relation "public.staged_uploads" does not exist, skipping
+psql:supabase/migrations/0029_staged_media.sql:58: NOTICE:  policy "owners delete staged uploads" for relation "public.staged_uploads" does not exist, skipping
+psql:supabase/migrations/0031_conversations.sql:140: NOTICE:  trigger "messages_attach_conversation" for relation "public.messages" does not exist, skipping
+psql:supabase/migrations/0031_conversations.sql:178: NOTICE:  trigger "messages_after_insert" for relation "public.messages" does not exist, skipping
+psql:supabase/migrations/0031_conversations.sql:206: NOTICE:  trigger "messages_read_decrement" for relation "public.messages" does not exist, skipping
+psql:supabase/migrations/0031_conversations.sql:306: NOTICE:  policy "participants read conversations" for relation "public.conversations" does not exist, skipping
+psql:supabase/migrations/0031_conversations.sql:310: NOTICE:  policy "users read own unreads" for relation "public.conversation_unreads" does not exist, skipping
+psql:supabase/migrations/0031_conversations.sql:393: NOTICE:  PASS: 0031 self-checks
+psql:supabase/migrations/0032_feed_events.sql:66: NOTICE:  relation "activity_posts_published_idx" already exists, skipping
+psql:supabase/migrations/0033_part_number_compact.sql:33: NOTICE:  PASS: 0033 self-checks
+psql:supabase/migrations/0034_order_origin_offer.sql:189: NOTICE:  0034: linked 0 order(s) from the payments key; 0 accepted offer(s) remain unlinked (pre-0012 accepts — left null rather than guessed)
+psql:supabase/migrations/0034_order_origin_offer.sql:219: NOTICE:  PASS: 0034 self-checks
+psql:supabase/migrations/0035_seller_open_questions.sql:50: NOTICE:  PASS: 0035 self-checks
+psql:supabase/migrations/0036_account_emails.sql:65: NOTICE:  trigger "users_sync_account_email" for relation "auth.users" does not exist, skipping
+psql:supabase/migrations/0036_account_emails.sql:117: NOTICE:  PASS: 0036 self-checks (0 addresses indexed)
+psql:supabase/migrations/0037_card_engagement.sql:35: NOTICE:  policy "likes public read" for relation "public.likes" does not exist, skipping
+psql:supabase/migrations/0037_card_engagement.sql:38: NOTICE:  policy "users manage own likes" for relation "public.likes" does not exist, skipping
+psql:supabase/migrations/0037_card_engagement.sql:93: NOTICE:  0037 self-checks pass
+psql:supabase/migrations/0038_save_post_notifications.sql:69: NOTICE:  0038 self-checks pass
+psql:supabase/migrations/0039_correlation.sql:54: NOTICE:  PASS: 0039 self-checks
+psql:supabase/migrations/0040_admin_actor_enforcement.sql:69: NOTICE:  trigger "admin_audit_log_actor_guard" for relation "public.admin_audit_log" does not exist, skipping
+psql:supabase/migrations/0040_admin_actor_enforcement.sql:104: NOTICE:  PASS: 0040 self-checks
+psql:supabase/migrations/0041_vehicle_catalog.sql:68: NOTICE:  policy "catalog makes are public" for relation "public.catalog_makes" does not exist, skipping
+psql:supabase/migrations/0041_vehicle_catalog.sql:70: NOTICE:  policy "catalog models are public" for relation "public.catalog_models" does not exist, skipping
+psql:supabase/migrations/0041_vehicle_catalog.sql:116: NOTICE:  0041: catalog holds 0 makes after vPIC seed
+psql:supabase/migrations/0041_vehicle_catalog.sql:116: NOTICE:  PASS: 0041 self-checks
+psql:supabase/migrations/0042_part_identifiers.sql:40: NOTICE:  policy "listing part numbers follow listing" for relation "public.listing_part_numbers" does not exist, skipping
+psql:supabase/migrations/0042_part_identifiers.sql:49: NOTICE:  policy "sellers manage listing part numbers" for relation "public.listing_part_numbers" does not exist, skipping
+psql:supabase/migrations/0042_part_identifiers.sql:88: NOTICE:  PASS: 0042 self-checks
+psql:supabase/migrations/0043_cover_focal.sql:31: NOTICE:  PASS: 0043 self-checks
+psql:supabase/migrations/0044_saved_searches.sql:48: NOTICE:  trigger "saved_searches_count_guard" for relation "public.saved_searches" does not exist, skipping
+psql:supabase/migrations/0044_saved_searches.sql:54: NOTICE:  policy "own saved searches" for relation "public.saved_searches" does not exist, skipping
+psql:supabase/migrations/0044_saved_searches.sql:74: NOTICE:  PASS: 0044 self-checks
+psql:supabase/migrations/0045_car_hotspots.sql:39: NOTICE:  trigger "car_hotspots_count_guard" for relation "public.car_hotspots" does not exist, skipping
+psql:supabase/migrations/0045_car_hotspots.sql:45: NOTICE:  policy "hotspots follow car visibility" for relation "public.car_hotspots" does not exist, skipping
+psql:supabase/migrations/0045_car_hotspots.sql:53: NOTICE:  policy "owners manage hotspots" for relation "public.car_hotspots" does not exist, skipping
+psql:supabase/migrations/0045_car_hotspots.sql:67: NOTICE:  PASS: 0045 self-checks
+psql:supabase/migrations/0046_ops_cases.sql:45: NOTICE:  policy "admins read cases" for relation "public.ops_cases" does not exist, skipping
+psql:supabase/migrations/0046_ops_cases.sql:77: NOTICE:  trigger "ops_case_dispute_sync" for relation "public.orders" does not exist, skipping
+psql:supabase/migrations/0046_ops_cases.sql:103: NOTICE:  trigger "ops_case_report_sync" for relation "public.reports" does not exist, skipping
+psql:supabase/migrations/0046_ops_cases.sql:146: NOTICE:  PASS: 0046 self-checks
+psql:supabase/migrations/0047_listing_imports.sql:112: NOTICE:  trigger "listing_imports_count_guard" for relation "public.listing_imports" does not exist, skipping
+psql:supabase/migrations/0047_listing_imports.sql:146: NOTICE:  trigger "listing_imports_status_guard" for relation "public.listing_imports" does not exist, skipping
+psql:supabase/migrations/0047_listing_imports.sql:152: NOTICE:  policy "own listing imports" for relation "public.listing_imports" does not exist, skipping
+psql:supabase/migrations/0047_listing_imports.sql:204: NOTICE:  PASS: 0047 self-checks
+psql:supabase/migrations/0049_commercial_snapshot.sql:245: NOTICE:  trigger "order_items_purchase_snapshot" for relation "public.order_items" does not exist, skipping
+psql:supabase/migrations/0049_commercial_snapshot.sql:271: NOTICE:  trigger "order_items_snapshot_images" for relation "public.order_items" does not exist, skipping
+psql:supabase/migrations/0049_commercial_snapshot.sql:347: NOTICE:  trigger "order_items_immutable" for relation "public.order_items" does not exist, skipping
+psql:supabase/migrations/0049_commercial_snapshot.sql:362: NOTICE:  trigger "order_item_snapshot_images_immutable" for relation "public.order_item_snapshot_images" does not exist, skipping
+psql:supabase/migrations/0049_commercial_snapshot.sql:374: NOTICE:  policy "participants read snapshot images" for relation "public.order_item_snapshot_images" does not exist, skipping
+psql:supabase/migrations/0049_commercial_snapshot.sql:451: NOTICE:  PASS: 0049 self-checks
+psql:supabase/migrations/0050_fee_includes_shipping.sql:287: NOTICE:  PASS: 0050 self-checks
+psql:supabase/migrations/0051_seller_fulfillment_profiles.sql:58: NOTICE:  constraint "sfp_handling_days_check" of relation "seller_fulfillment_profiles" does not exist, skipping
+psql:supabase/migrations/0051_seller_fulfillment_profiles.sql:66: NOTICE:  constraint "sfp_field_lengths_check" of relation "seller_fulfillment_profiles" does not exist, skipping
+psql:supabase/migrations/0051_seller_fulfillment_profiles.sql:84: NOTICE:  constraint "sfp_return_address_complete_check" of relation "seller_fulfillment_profiles" does not exist, skipping
+psql:supabase/migrations/0051_seller_fulfillment_profiles.sql:94: NOTICE:  trigger "seller_fulfillment_profiles_touch_updated_at" for relation "public.seller_fulfillment_profiles" does not exist, skipping
+psql:supabase/migrations/0051_seller_fulfillment_profiles.sql:106: NOTICE:  policy "owner reads fulfillment profile" for relation "public.seller_fulfillment_profiles" does not exist, skipping
+psql:supabase/migrations/0051_seller_fulfillment_profiles.sql:145: NOTICE:  PASS: 0051 self-checks
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:73: NOTICE:  constraint "shipments_direction_check" of relation "shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:77: NOTICE:  constraint "shipments_fulfillment_type_check" of relation "shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:81: NOTICE:  constraint "shipments_status_check" of relation "shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:88: NOTICE:  constraint "shipments_money_check" of relation "shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:105: NOTICE:  trigger "shipments_touch_updated_at" for relation "public.shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:134: NOTICE:  trigger "shipments_status_guard" for relation "public.shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:179: NOTICE:  trigger "shipment_items_unique_live" for relation "public.shipment_items" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:229: NOTICE:  constraint "seller_adjustments_kind_check" of relation "seller_adjustments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:233: NOTICE:  constraint "seller_adjustments_sign_check" of relation "seller_adjustments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:276: NOTICE:  trigger "seller_adjustments_immutable" for relation "public.seller_adjustments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:295: NOTICE:  policy "participants read shipments" for relation "public.shipments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:306: NOTICE:  policy "participants read shipment items" for relation "public.shipment_items" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:319: NOTICE:  policy "participants read shipment events" for relation "public.shipment_events" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:332: NOTICE:  policy "seller reads own adjustments" for relation "public.seller_adjustments" does not exist, skipping
+psql:supabase/migrations/0052_shipments_and_adjustments.sql:389: NOTICE:  PASS: 0052 self-checks
+psql:supabase/migrations/0053_listing_shipping_choices.sql:41: NOTICE:  constraint "listings_shipping_mode_check" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0053_listing_shipping_choices.sql:47: NOTICE:  constraint "listings_shipping_mode_shape_check" of relation "listings" does not exist, skipping
+psql:supabase/migrations/0053_listing_shipping_choices.sql:132: NOTICE:  trigger "orders_collection_guard" for relation "public.orders" does not exist, skipping
+psql:supabase/migrations/0053_listing_shipping_choices.sql:346: NOTICE:  PASS: 0053 self-checks
+psql:supabase/migrations/0054_pickup_confirmations.sql:281: NOTICE:  PASS: 0054 self-checks
+psql:supabase/migrations/0055_returns.sql:70: NOTICE:  constraint "returns_type_check" of relation "returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:74: NOTICE:  constraint "returns_responsibility_check" of relation "returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:78: NOTICE:  constraint "returns_status_check" of relation "returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:85: NOTICE:  constraint "returns_money_check" of relation "returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:97: NOTICE:  trigger "returns_touch_updated_at" for relation "public.returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:125: NOTICE:  trigger "returns_status_guard" for relation "public.returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:143: NOTICE:  constraint "return_items_inspection_check" of relation "return_items" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:172: NOTICE:  trigger "return_items_unique_live" for relation "public.return_items" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:180: NOTICE:  constraint "shipments_return_id_fkey" of relation "shipments" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:191: NOTICE:  policy "participants read returns" for relation "public.returns" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:202: NOTICE:  policy "participants read return items" for relation "public.return_items" does not exist, skipping
+psql:supabase/migrations/0055_returns.sql:252: NOTICE:  PASS: 0055 self-checks
+psql:supabase/migrations/0056_shop_profiles.sql:35: NOTICE:  constraint "shop_profiles_verification_check" of relation "shop_profiles" does not exist, skipping
+psql:supabase/migrations/0056_shop_profiles.sql:40: NOTICE:  constraint "shop_profiles_window_check" of relation "shop_profiles" does not exist, skipping
+psql:supabase/migrations/0056_shop_profiles.sql:44: NOTICE:  trigger "shop_profiles_touch_updated_at" for relation "public.shop_profiles" does not exist, skipping
+psql:supabase/migrations/0056_shop_profiles.sql:56: NOTICE:  policy "shop profiles readable" for relation "public.shop_profiles" does not exist, skipping
+psql:supabase/migrations/0056_shop_profiles.sql:228: NOTICE:  PASS: 0056 self-checks
+ schedule
+----------
+        5
+(1 row)
+
+ schedule
+----------
+        6
+(1 row)
+
+ schedule
+----------
+        7
+(1 row)
+
+ schedule
+----------
+        8
+(1 row)
+
+
+Running supabase/tests/admin_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: civilian cannot read admin_users
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: civilian cannot self-insert into admin_users
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: is_admin() false for civilian
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: is_admin() true for admin member
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: low-assurance admin cannot use RLS admin access
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: is_admin() false for null-uid context
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: civilian cannot write audit log
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit log invisible to civilian
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: admin reads audit log through RLS
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit log append-only (UPDATE blocked, superuser included)
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit log append-only (DELETE blocked, superuser included)
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspension columns unwritable by their subject
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspension columns unreadable by client roles
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspended seller's listing hidden from browse
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspended seller still sees own listing
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspended seller cannot create listings
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: seller cannot set removed
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: seller cannot clear a takedown
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: removed listing hidden from browse
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: admin reads cross-user orders through RLS
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: user can file a report
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: reporter cannot resolve own report
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: reports invisible to third parties
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: admin reads reports through RLS
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: assert_admin_actor refuses a viewer
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: assert_admin_actor accepts a full admin
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit trail refuses non-admin actors
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit trail accepts a full-admin actor
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  --- all admin-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/admin_transaction_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE TRIGGER
+psql:supabase/tests/admin_transaction_guard.sql:30: NOTICE:  all admin transaction checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/deletion_guard.sql
+BEGIN
+psql:supabase/tests/deletion_guard.sql:18: NOTICE:  all deletion checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/expiry_guard.sql
+BEGIN
+psql:supabase/tests/expiry_guard.sql:48: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/expiry_guard.sql:48: NOTICE:  expiry_guard: all checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/import_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: cross-user import reads are blocked
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: cross-user import writes are blocked
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: imports cannot be created for another user
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: illegal status transitions are refused
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: consumed requires its listing reference
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: consumed imports are terminal
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: same-URL live imports dedupe
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: per-user in-progress cap enforced
+psql:supabase/tests/import_guard.sql:174: NOTICE:  --- all import-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/money_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/money_guard.sql:564: NOTICE:  --- fixtures ready ---
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 1/36: first reservation (6000 of 10000) accepted
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 2/36: second reservation rejected — in-flight sum would exceed the order total
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 3/36: full-amount reservation (5000 of 5000) accepted
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 4/36: second reservation on a fully-reserved order refused — "Nothing left"
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 5/36: external refund for 100% clamps to the 4000 actually remaining
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 6/36: first begin with re_test_1 creates a new operation
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 7/36: second begin with re_test_1 adopts the same operation_id
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 8/36: settle_refund_operation applies on the first call (ok=true, already=false)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 9/36: orders.refunded_cents advanced to 4000
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 10/36: platform_fee_refunded_cents = round(after * fee / total) = 400
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 11/36: payments.refunded_cents advanced and status transitioned to partially_refunded
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 12/36: settling again reports already=true (no re-application)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 13/36: orders.refunded_cents unchanged after the second settle (no double-advance)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 14/36: full-refund settle moves the order to status refunded
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 15/36: the pending transfer_intents row for a fully-refunded order flips to cancelled
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 16/36: partial refund with an existing transfer_reference lands the op in reversal_pending
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 17/36: reversal_due_cents = round(after*net/total) - round(before*net/total) = 2700
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 18/36: a failed op releases its reservation — a same-amount retry succeeds afterward
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 18b/36: the retry's idempotency_key carries the deterministic :r1 suffix
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 19/36: claim_transfer_intents claims 4 rows (3 ready + the stale-leased one, not the live-leased one)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 20/36: every claimed row has status=processing
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 21/36: every claimed row has locked_by set to the claiming worker
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 22/36: every claimed row has lease_expires_at in the future
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 23/36: the row with a live lease was not claimed — untouched, still owned by live-worker
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 24/36: claim_transfer_intents(p_batch=2) returns exactly 2 rows
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 25/36: an intent with attempts >= p_max_attempts is never claimed
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 26/36: an intent whose next_attempt_at is still in the future is not claimed
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 27/36: once next_attempt_at is in the past, the intent is claimed
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 28/36: first insert with dedup_key money-guard-dedup-1 succeeds
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 29/36: a second insert with the same dedup_key is rejected (unique violation)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 30/36: refund_operations rejects a direct client INSERT
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 31/36: refund_operations rejects a direct client UPDATE
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 32/36: a non-admin SELECT on refund_operations returns zero rows
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 33/36: admin_alert_outbox rejects a direct client INSERT
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 34/36: admin_alert_outbox rejects a direct client UPDATE
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 35/36: a non-admin SELECT on admin_alert_outbox returns zero rows, despite fixture rows existing
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 36/36: begin_refund_operation is not EXECUTE-granted to authenticated
+psql:supabase/tests/money_guard.sql:564: NOTICE:  --- all money-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/purchase_guard.sql
+BEGIN
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 1/9: only one buyer claimed the listing; the other was told why
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 2/9: listing held as reserved during payment
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 3/9: replaying an idempotency key returns the first result
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 4/9: failed payment released the reservation
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 5/9: sale recorded and rival offers expired
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 6/9: terminal-state guard — a settled order cannot be re-finalized
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 7/9: dispute constraints — offer cap and category set enforced
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 8/9: opening a dispute notifies the seller
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 9/9: refund settles the dispute, notifies, and keeps the part sold
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  --- all purchase-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/remediation_guard.sql
+BEGIN
+psql:supabase/tests/remediation_guard.sql:95: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/remediation_guard.sql:95: NOTICE:  all remediation checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/return_guard.sql
+BEGIN
+psql:supabase/tests/return_guard.sql:121: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: requested -> completed refused (42501)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: a moving return cannot expire (42501)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: second live RMA refused (42501)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: a new RMA is allowed once the first is terminal
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: only the seller can redeem (not_your_order)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: wrong code rejected and counted
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: valid pass delivers the order
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: pass is single-use (not_redeemable)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: return_guard — all checks green (rolling back)
+DO
+ROLLBACK
+
+Running supabase/tests/security_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/security_guard.sql:555: NOTICE:  --- fixtures ready ---
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 1a: payouts_enabled is not client-writable (0017 column grant)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 1b: stripe_account_id is not client-writable (0017 column grant)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 2a: counter_amount_cents cannot be set at insert time
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 2b: responded_at cannot be set at insert time
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 2c: a new offer must start as open
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 3: a seller cannot offer on their own listing
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 4a: an offer cannot exceed the asking price
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 4b: an offer below the seller's minimum is rejected
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 4c: an in-bounds offer is accepted
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 5a: offer listing_id is immutable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 5b: offer amount_cents is immutable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 6: offer_accept_begin refuses a non-owning seller — no reservation, no order
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 7: an expired offer is refused and marked expired, not accepted
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8a: reviewee must be the order counterparty
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8b: reviewer must be a party to the named order
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8c: a genuine review from the actual buyer is accepted
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8d: duplicate review on the same order is rejected (unique order_id, reviewer_id)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 9a: message insert requires the sender to be party to the order
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 9b: a non-party sees zero rows on another user's order thread
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 9c: a non-party sees zero rows for an order they are not on
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10a: recipient can mark a message read
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10b: sender has no UPDATE access to a message they sent (RLS USING filters it out)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10c: message body is immutable even for the recipient's own UPDATE
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10d: message recipient_id is immutable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 11a: orders reject a direct client INSERT
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 11b: orders reject a direct client UPDATE (zero rows are ever a candidate)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 11c: orders reject a direct client DELETE (zero rows are ever a candidate)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12a: webhook_events is not client-writable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12b: transfer_intents is not client-writable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12c: transfer_intents rejects client UPDATE
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12d: payment_recoveries is not client-writable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 13a: an order participant reads their own dispute evidence
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 13b: a non-participant sees zero dispute_evidence rows
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 13c: dispute_evidence has no client-facing INSERT policy
+psql:supabase/tests/security_guard.sql:555: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 14: a seller cannot purchase their own listing
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 15a: seller cannot clear a reservation by direct PATCH
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 15b: seller cannot set status=sold directly — that is checkout's job
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS: user can save a search
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS: cannot save a search for another user
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS: saved searches invisible to other users
+psql:supabase/tests/security_guard.sql:555: NOTICE:  --- all security-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/snapshot_guard.sql
+BEGIN
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: purchase freezes a complete snapshot + gallery
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: listing/profile edits do not touch the frozen record
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: commercial_snapshot refuses UPDATE (42501)
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: frozen money columns refuse UPDATE (42501)
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: snapshot images refuse UPDATE (42501)
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: listing_id remains writable for the FK cascade
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: fee is 3230 on a 32300 total regardless of the split
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: snapshot_guard — all checks green (rolling back)
+DO
+ROLLBACK

@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const context = vi.hoisted(() => ({ consent: "v1:no", missingRequest: false, tasks: [] as Array<() => Promise<void>> }));
+const context = vi.hoisted(() => ({ consent: "v1:no", missingRequest: false, accountAllowed: true, tasks: [] as Array<() => Promise<void>> }));
 vi.mock("next/headers", () => ({ cookies: async () => { if (context.missingRequest) throw new Error("No request"); return { get: () => ({ value: context.consent }) }; } }));
 vi.mock("next/server", () => ({ after: (task: () => Promise<void>) => { if (context.missingRequest) throw new Error("No request"); context.tasks.push(task); } }));
+vi.mock("./supabase/admin", () => ({ createAdminClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ abortSignal: () => ({ maybeSingle: async () => ({ data: { allowed: context.accountAllowed, expires_at: "2099-01-01" }, error: null }) }) }) }) }) }) }));
 import { capture, flagEnabled } from "./analytics";
 
 describe("analytics", () => {
   afterEach(() => {
-    context.tasks = []; context.consent = "v1:no"; context.missingRequest = false;
+    context.tasks = []; context.consent = "v1:no"; context.missingRequest = false; context.accountAllowed = true;
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -54,6 +55,15 @@ describe("analytics", () => {
     expect(() => capture("worker", { event: "offer_submitted" })).not.toThrow();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("a stale browser opt-in cannot override account withdrawal", async () => {
+    context.consent = "v1:yes"; context.accountAllowed = false;
+    vi.stubEnv("POSTHOG_KEY", "phc_test");
+    const send = vi.fn(); vi.stubGlobal("fetch", send);
+    capture("user-1", { event: "offer_submitted" });
+    await Promise.all(context.tasks.map(task => task()));
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("reads env feature flags", () => {

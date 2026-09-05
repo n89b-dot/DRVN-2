@@ -23,6 +23,10 @@ Working-tree implementation against reviewed baseline `f6cf0a90b027424c7f1564e9f
 | A15 | Commerce actions split by responsibility; generated DB contract and literal RPC drift test; segmented sitemap; search cap disclosure; native modal semantics | TypeScript and transaction/browser tests. Full replacement of handwritten schema types, uncapped search pagination and screen-reader/nested-dialog matrix remain. |
 | A16 | Reproducible local test environment and rollout/recovery instructions | Production restore, independent alert, provider-connected payout/dispute journey, load rehearsal and deployed CI evidence remain launch gates. |
 
+## Remaining implementation plan
+
+The [phase-two remediation plan](remediation-phase-two.md) turns the remaining gaps into ordered work packages B01–B12 with implementation steps, dependencies and acceptance tests. This status remains the record of work already executed.
+
 ## Release decision
 
 **Do not enable live money on the strength of this working-tree change alone.** The implementation closes substantial defects, including a newly verified constraint that rejected multi-seller shared payment references. It does not satisfy every acceptance criterion in A01–A16 yet. In particular, untested money recovery paths and the restore/alert rehearsal are release blockers, not optional feature additions.
@@ -46,3 +50,7 @@ Executed September 5, 2026 UTC against isolated local Supabase and the existing 
 The 11 browser skips are one unseeded vehicle-catalog picker, one opt-in evidence recorder, two private-loopback importer scenarios disallowed by the production SSRF configuration, and seven mobile inventory/seed-dependent scenarios. Those seven remain a test-fixture coverage gap; other checkout/mobile tests passing does not close them. Linux screenshot baselines and hosted CI execution still require verification.
 
 The final capture validation and retry changes are covered by the unit and real Stripe runs above; the full browser suite preceded those final changes. A subsequent production rebuild and Chromium security smoke passed all **4 tests** on the final code. Worker logs during that smoke include expected receipt failures from earlier disposable Stripe fixtures whose accounts were deleted; the test explicitly verifies its own queued receipt reaches completed. Browser traces and local environment files remain ignored because they can contain test session tokens and authenticator details.
+
+## Remaining-plan implementation
+
+The next repository batch implements durable capture recovery, worker leases/health, scanner-safe email access, admin recovery/fencing, resumable deletion/media/search tools, consent-aware purchase analytics, generated schema adoption and nested-modal keyboard behavior. See [the updated phase-two execution record](remediation-phase-two.md#execution-record--remaining-repository-safeguards), [verification evidence](remediation-evidence/phase-two-completion/README.md) and [remaining release gates](remediation-release-gates.md). Hosted deployment and policy-dependent acceptance remain open.

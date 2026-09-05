@@ -301,3 +301,9 @@ Offer expiry is currently advisory: `offers.expires_at` is set and shown, and
 `purchase_finalize` expires rival offers on a sale, but nothing sweeps lapsed
 offers into `'expired'` on a timer. Add that alongside the above if you want the
 status to be authoritative rather than presentational.
+
+## Phase-two provider-aware expiry — local verification only
+
+`20260905101425_provider_aware_expiry.sql` was applied to isolated local Supabase and rebuilt from all migration files on CI's PostgreSQL image on September 5, 2026. It adds expiry queue support, a fenced service-only finalization RPC, creation/expiry serialization and expiry worker health. It has not been applied to a hosted DRVN project. The older scheduling notes above are historical: expiry cron now queues work and requires the compatible money worker to complete release; lapsed offers are swept by the function.
+
+The September 5 phase-two sequence adds capture recovery/claims, lease renewal, consent outbox, serialized search/rebuilds, historical-media guards, deletion manifests/financial rechecks, admin operation/recovery fencing, uncapped search relations and explicit function search paths. Apply these additive files in filename order. Fresh migration, SQL-guard and generated-type verification is recorded in `docs/remediation-evidence/phase-two-completion/`. Never replay `0001_v3_schema.sql` on an existing deployment.

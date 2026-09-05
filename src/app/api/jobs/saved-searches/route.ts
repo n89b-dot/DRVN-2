@@ -1,3 +1,4 @@
+import { trackedWorker } from "@/lib/tracked-worker";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
  * The first pass for a search only stamps last_checked_at — nobody gets
  * alerted about inventory that predates their opt-in.
  */
-export async function POST(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
   if (!secret || auth !== `Bearer ${secret}`) {
@@ -168,3 +169,7 @@ export async function POST(request: Request) {
     await flushMonitoring();
   }
 }
+
+export async function POST(request: Request) { return trackedWorker("savedSearches", request, () => run(request)); }
+
+export const maxDuration = 300;

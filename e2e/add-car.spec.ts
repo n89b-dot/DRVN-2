@@ -1,16 +1,29 @@
+import { randomUUID } from "node:crypto";
+import { fixtureAdmin } from "./fixtures";
 import { expect, test } from "@playwright/test";
 
 import { cleanupE2eUsers, makeUser, signUp } from "./helpers";
 
 /**
  * Canonical Add Car (brief §E): picker primary, VIN secondary, manual always
- * available. The picker cases self-skip when the catalog is unseeded (a fresh
- * disposable project) — the manual and VIN paths must work everywhere.
+ * available. The picker creates its own catalog fixture, so all paths must work on
+ * an empty disposable project.
  */
 
 test.describe("Add Car", () => {
+  const makeName = `Fixture ${randomUUID()}`;
+  let makeId: number;
+  test.beforeAll(async () => {
+    const admin = fixtureAdmin();
+    const make = await admin.from("catalog_makes").insert({ name: makeName, source: "e2e", popularity_decile: 1 }).select("id").single();
+    if (make.error) throw make.error;
+    makeId = make.data.id;
+    const model = await admin.from("catalog_models").insert({ make_id: makeId, name: "Test Coupe", source: "e2e" });
+    if (model.error) throw model.error;
+  });
   test.afterAll(async () => {
     await cleanupE2eUsers();
+    if (makeId) { const result = await fixtureAdmin().from("catalog_makes").delete().eq("id", makeId); if (result.error) throw result.error; }
   });
 
   test("manual fallback creates a car and auto-names it by identity", async ({ page }) => {
@@ -44,18 +57,14 @@ test.describe("Add Car", () => {
     await expect(dialog.getByRole("button", { name: /enter it manually/i }).last()).toBeVisible();
   });
 
-  test("picker selects a catalog vehicle (skips on an unseeded catalog)", async ({ page, request }) => {
-    const catalog = await request.get("/api/vehicles/catalog/makes");
-    const { makes } = await catalog.json();
-    test.skip(!makes?.length, "vehicle catalog not seeded in this environment");
-
+  test("picker selects its catalog vehicle", async ({ page }) => {
     const user = makeUser("addcar-picker", Date.now());
     await signUp(page, user);
     await page.goto("/garage");
     await page.getByRole("button", { name: /add a car/i }).first().click();
     const dialog = page.getByRole("dialog");
-    const firstMake = makes[0].name as string;
-    await dialog.getByRole("combobox", { name: "Make" }).fill(firstMake.slice(0, 4));
+    const firstMake = makeName;
+    await dialog.getByRole("combobox", { name: "Make" }).fill(firstMake);
     await page.getByRole("option", { name: firstMake }).first().click();
     // Model list follows the make; take the first offered option.
     await dialog.getByRole("combobox", { name: "Model" }).click();

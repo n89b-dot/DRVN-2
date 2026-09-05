@@ -1,3 +1,4 @@
+import { createDiscoveryFixture } from "./fixtures";
 import { expect, test, type Page } from "@playwright/test";
 
 import {
@@ -28,6 +29,10 @@ import { PHONE_TIERS, VIEWPORTS } from "./viewports";
  * order/message contracts run instead. Both paths are asserted; neither is
  * silently skipped.
  */
+
+let discovery: Awaited<ReturnType<typeof createDiscoveryFixture>>;
+test.beforeAll(async () => { discovery = await createDiscoveryFixture(); });
+test.afterAll(async () => { await discovery?.cleanup(); });
 
 const stamp = Date.now();
 const seller = makeUser("mx-seller", stamp);
@@ -109,10 +114,7 @@ for (const tier of PHONE_TIERS) {
     });
 
     test("listing detail: price and actions precede record metadata", async ({ page }) => {
-      await page.goto("/marketplace");
-      const firstCard = page.locator('.mosaic a[href^="/listings/"]').first();
-      test.skip((await firstCard.count()) === 0, "no marketplace inventory seeded");
-      await firstCard.click();
+      await page.goto(discovery.listingPath);
       await expect(page).toHaveURL(/\/listings\/[\w-]+/);
       await assertNoHorizontalOverflow(page);
 
@@ -172,10 +174,7 @@ for (const tier of PHONE_TIERS) {
 
 test.describe("anatomy transitions land on documented thresholds", () => {
   test("PDP buybar retires exactly at the 981px split", async ({ page }) => {
-    await page.goto("/marketplace");
-    const firstCard = page.locator('.mosaic a[href^="/listings/"]').first();
-    test.skip((await firstCard.count()) === 0, "no marketplace inventory seeded");
-    await firstCard.click();
+    await page.goto(discovery.listingPath);
     await expect(page).toHaveURL(/\/listings\/[\w-]+/);
 
     for (const width of [979, 980]) {

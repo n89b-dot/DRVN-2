@@ -119,24 +119,19 @@ export async function enableSellerPayouts(username: string) {
   if (!data?.length) throw new Error(`enableSellerPayouts: no profile with username ${username}`);
 }
 
-/**
- * Deletes every e2e-*@drvn.test auth user. Same contract as golden-path's
- * afterAll: needs the service key, and skips loudly when it's absent so local
- * runs still report test results.
- */
+/** Deletes only accounts registered by this suite, across all Auth pages. */
 export async function cleanupE2eUsers() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    console.warn("[e2e] cleanup skipped: no service key configured — test users were NOT removed");
-    return;
+  const { fixtureAdmin, cleanupFixtureUser } = await import("./fixtures");
+  const admin = fixtureAdmin();
+  const users: { id: string; email?: string }[] = [];
+  for (let page = 1; ; page++) {
+    const result = await admin.auth.admin.listUsers({ page, perPage: 100 });
+    if (result.error) throw result.error;
+    users.push(...result.data.users.filter(user => user.email && ownedEmails.has(user.email)));
+    if (result.data.users.length < 100) break;
   }
-  const { createClient } = await import("@supabase/supabase-js");
-  const admin = createClient(url, key, { auth: { persistSession: false } });
-  const { data } = await admin.auth.admin.listUsers();
-  for (const user of data?.users ?? []) {
-    if (user.email && ownedEmails.has(user.email)) {
-      await admin.auth.admin.deleteUser(user.id);
-    }
+  for (const user of users) {
+    await cleanupFixtureUser(user.id);
+    if (user.email) ownedEmails.delete(user.email);
   }
 }

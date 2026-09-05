@@ -11,7 +11,6 @@ import {
 import { reportError } from "@/lib/monitoring";
 import { capture } from "@/lib/analytics";
 import { classifyQuery } from "@/lib/marketplace/search/normalize";
-import { getSearchProvider } from "@/lib/marketplace/search/provider";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
@@ -215,15 +214,13 @@ export async function fetchListings(
   filters: ListingFilters,
   viewerId?: string
 ): Promise<ListingPage> {
-  let searchTruncated = false;
+  const searchTruncated = false;
   const sort = parseSort(filters.sort);
   const page = parsePage(filters.page);
   const from = (page - 1) * PAGE_SIZE;
 
   // Resolve the viewer's garage first: the fitment filter needs to constrain the
   // query itself, not the page it returns.
-  let fitSourceCarIds: string[] = [];
-  let fitDeclaredListingIds: string[] = [];
   let garageByKey = new Map<string, string>();
   let garageCars: GarageCar[] = [];
 
@@ -235,80 +232,20 @@ export async function fetchListings(
     garageCars = data ?? [];
     garageByKey = buildGarageFitmentIndex(garageCars);
 
-    if (filters.fit === "1" && garageByKey.size) {
-      const makes = [...new Set(garageCars.map((c) => c.make).filter(Boolean))] as string[];
-      // Two ways a listing can fit (both seller-stated): its source car
-      // matches the garage, or a structured fitment row (0025) does. The
-      // make pre-filter runs case-insensitively — fitment rows come from
-      // the vPIC picker whose casing ("Volkswagen") needn't match a
-      // hand-typed garage make ("volkswagen").
-      // Quoted so multi-word makes ("Aston Martin") survive the PostgREST
-      // or-syntax; quotes/commas/parens in the value are stripped, not data.
-      const makeClause = makes
-        .map((m) => `make.ilike."${m.replace(/["\\,()]/g, " ").trim()}"`)
-        .join(",");
-      const [{ data: matchingCars }, { data: claims }] = await Promise.all([
-        supabase.from("cars").select("id, make, model").or(makeClause),
-        supabase
-          .from("listing_fitments")
-          .select("listing_id, make, model, year_start, year_end")
-          .or(makeClause),
-      ]);
-
-      fitSourceCarIds = (matchingCars ?? [])
-        .filter((c) => matchGarageFitment(garageByKey, c.make, c.model))
-        .map((c) => c.id);
-      fitDeclaredListingIds = [
-        ...new Set(
-          (claims ?? [])
-            .filter((f) => matchFitmentClaims(garageCars, [f]))
-            .map((f) => f.listing_id)
-        ),
-      ];
-    }
   }
 
-  // Arbitrary selected-vehicle filter (brief §17/§37) — the shared canonical
-  // route for "parts for a Volkswagen Golf R", used by /marketplace and by
-  // Explore's Parts scope. Same seller-stated-only doctrine as `fit`: a
-  // listing matches through its declared fitment rows (0025) or through its
-  // source car — catalog ids where they exist, exact-string ilike for the
-  // frozen snapshots, never free-text compatibility notes.
-  let vehicleSourceCarIds: string[] = [];
-  let vehicleListingIds: string[] = [];
-  let vehicleActive = false;
-  if (filters.vehicle) {
-    const selection = await resolveVehicleFilter(filters.vehicle);
-    if (selection) {
-      vehicleActive = true;
-      const exact = (value: string) => `"${value.replace(/["\\,()]/g, " ").trim()}"`;
-      const carClause = selection.modelId
-        ? `catalog_model_id.eq.${selection.modelId},and(make.ilike.${exact(selection.make)},model.ilike.${exact(selection.model ?? "")})`
-        : `catalog_make_id.eq.${selection.makeId},make.ilike.${exact(selection.make)}`;
-      let claimsQuery = supabase
-        .from("listing_fitments")
-        .select("listing_id")
-        .ilike("make", selection.make)
-        .limit(1000);
-      if (selection.model) claimsQuery = claimsQuery.ilike("model", selection.model);
-      const [{ data: matchingCars }, { data: claims }] = await Promise.all([
-        supabase.from("cars").select("id").or(carClause).limit(1000),
-        claimsQuery,
-      ]);
-      vehicleSourceCarIds = (matchingCars ?? []).map((c) => c.id);
-      vehicleListingIds = [...new Set((claims ?? []).map((f) => f.listing_id))];
-    }
-    // An unresolvable vehicle param (stale catalog id in a pasted URL) is
-    // treated as no filter rather than an error page.
-  }
-
-  let query = supabase
-    .from("listings")
-    .select(
-      "id, title, price_cents, shipping_cents, condition, location, source_car_id, part_number, seller_id",
-      { count: "exact" }
-    )
-    .eq("status", "active");
+  const selection = filters.vehicle ? await resolveVehicleFilter(filters.vehicle) : null;
+  const yearBound = (value: string | undefined, fallback: number) => {
+    const parsed = Number(value);
+    return value && Number.isInteger(parsed) && parsed >= 0 && parsed <= 9999 ? parsed : fallback;
+  };
+  let query = supabase.rpc("marketplace_filtered_rows", {
+    p_query: filters.q?.trim() ?? "", p_make: selection?.make ?? "", p_model: selection?.model ?? "",
+    p_make_id: selection?.makeId ?? 0, p_model_id: selection?.modelId ?? 0,
+    p_ymin: yearBound(filters.ymin, 0), p_ymax: yearBound(filters.ymax, 9999), p_fit: filters.fit === "1",
+  }, { count: "exact" }).select(
+    "id, title, created_at, price_cents, shipping_cents, condition, location, source_car_id, part_number, seller_id"
+  ).eq("status", "active");
 
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
@@ -316,56 +253,6 @@ export async function fetchListings(
     query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
   }
   if (filters.location) query = query.ilike("location", `%${filters.location}%`);
-
-  // Year is a fact about the source car, not the listing: narrow to listings
-  // whose build falls in the range. A listing without a source car has no
-  // year to match and drops out while the bound is set.
-  if (filters.ymin || filters.ymax) {
-    let yearCars = supabase.from("cars").select("id");
-    if (filters.ymin) yearCars = yearCars.gte("year", Number(filters.ymin));
-    if (filters.ymax) yearCars = yearCars.lte("year", Number(filters.ymax));
-    const { data: yearMatches } = await yearCars.limit(1000);
-    const yearCarIds = (yearMatches ?? []).map((c) => c.id);
-    query = yearCarIds.length
-      ? query.in("source_car_id", yearCarIds)
-      : query.eq("id", "00000000-0000-0000-0000-000000000000");
-  }
-
-  if (filters.q) {
-    // The search seam (§B1): a provider produces ranked candidate ids — two
-    // lanes, fuzzy human discovery vs exact identifier matching (see
-    // src/lib/marketplace/search/) — and this canonical Postgres query then
-    // applies every other filter and the sort on top. null = provider
-    // couldn't answer → the legacy ilike clause below keeps search working.
-    const term = filters.q.replace(/[,()]/g, " ").trim();
-    if (term) {
-      const ids = await getSearchProvider()
-        .searchIds(term, { limit: 300 })
-        .catch(() => null);
-      if (ids !== null) {
-        searchTruncated = ids.length >= 300;
-        if (ids.length === 0) {
-          // A definitive empty answer — force an empty page without a
-          // degenerate `in ()` clause.
-          query = query.eq("id", "00000000-0000-0000-0000-000000000000");
-        } else {
-          query = query.in("id", ids);
-        }
-      } else {
-        const clauses = [
-          `title.ilike.%${term}%`,
-          `description.ilike.%${term}%`,
-          `compatibility_notes.ilike.%${term}%`,
-          `part_number.ilike.%${term}%`,
-        ];
-        const compact = term.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-        if (compact.length >= 4 && /\d/.test(compact)) {
-          clauses.push(`part_number_compact.ilike.%${compact}%`);
-        }
-        query = query.or(clauses.join(","));
-      }
-    }
-  }
 
   const min = Number(filters.min);
   const max = Number(filters.max);
@@ -376,39 +263,11 @@ export async function fetchListings(
     query = query.lte("price_cents", Math.round(max * 100));
   }
 
-  if (vehicleActive) {
-    // Nothing on the platform matches this vehicle by either seller-stated
-    // route → an honest empty page, same doctrine as `fit` below.
-    if (!vehicleSourceCarIds.length && !vehicleListingIds.length) {
-      return { searchTruncated, results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
-    }
-    const clauses = [
-      ...(vehicleSourceCarIds.length ? [`source_car_id.in.(${vehicleSourceCarIds.join(",")})`] : []),
-      ...(vehicleListingIds.length ? [`id.in.(${vehicleListingIds.join(",")})`] : []),
-    ];
-    // A separate .or() from the fit clause: PostgREST ANDs them, which is the
-    // correct semantics (fits my garage AND is for this vehicle).
-    query = query.or(clauses.join(","));
-  }
-
-  if (filters.fit === "1") {
-    // No garage, or nothing matching by either route → no results by
-    // definition. Say so rather than showing an unfiltered page.
-    if (!fitSourceCarIds.length && !fitDeclaredListingIds.length) {
-      return { searchTruncated, results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
-    }
-    const clauses = [
-      ...(fitSourceCarIds.length ? [`source_car_id.in.(${fitSourceCarIds.join(",")})`] : []),
-      ...(fitDeclaredListingIds.length ? [`id.in.(${fitDeclaredListingIds.join(",")})`] : []),
-    ];
-    query = query.or(clauses.join(","));
-  }
-
   if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
   else if (sort === "price_desc") query = query.order("price_cents", { ascending: false });
   else query = query.order("created_at", { ascending: false });
 
-  const { data: listings, count, error } = await query.range(from, from + PAGE_SIZE - 1);
+  const { data: listings, count, error } = await query.order("id").range(from, from + PAGE_SIZE - 1);
 
   // Product telemetry (§AE) — first page only, so pagination doesn't
   // multiply one search into many events. Coarse properties only.

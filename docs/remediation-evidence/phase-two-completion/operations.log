@@ -1,0 +1,12 @@
+
+> drvn-2@0.1.0 test:operations
+> vitest run --config vitest.operations.config.ts
+
+
+ RUN  v4.1.10 /Users/neilbarrow/Desktop/Cursor Projects/DRVN 2
+
+
+ Test Files  3 passed (3)
+      Tests  4 passed (4)
+   Start at  10:45:45
+   Duration  15.92s (transform 156ms, setup 0ms, import 570ms, tests 15.00s, environment 0ms)

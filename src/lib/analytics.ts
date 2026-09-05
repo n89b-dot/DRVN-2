@@ -3,6 +3,7 @@ import "server-only";
 import { after } from "next/server";
 import { cookies } from "next/headers";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 
 /**
@@ -69,13 +70,17 @@ function configured(): boolean {
  * built-in 2s timeout, and never let it throw.
  */
 export function capture(distinctId: string | null, entry: AnalyticsEvent): void {
-  if (!configured()) return;
+  if (!configured() || entry.event === "purchase_completed") return; // Authoritative purchases use the durable outbox.
   try {
     const consent = cookies().then((store) => store.get("drvn_analytics_consent")?.value === "v1:yes").catch(() => false);
     after(async () => {
-      if (!(await consent)) return;
-      const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
+      if (!(await consent) || !distinctId) return;
       try {
+      // A stale opt-in cookie must not override account-wide withdrawal.
+      const current = await createAdminClient().from("analytics_consents")
+        .select("allowed,expires_at").eq("user_id", distinctId).abortSignal(AbortSignal.timeout(2000)).maybeSingle();
+      if (current.error || !current.data?.allowed || Date.parse(current.data.expires_at) <= Date.now()) return;
+      const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
         const response = await fetch(`${host}/capture/`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ api_key: process.env.POSTHOG_KEY, event: entry.event,

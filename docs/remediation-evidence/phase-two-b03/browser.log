@@ -1,0 +1,70 @@
+[WebServer] (node:79893) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:79893) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:79925) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80011) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80006) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80010) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80005) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80007) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80009) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80008) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:80035) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 12 tests using 1 worker
+
+(node:80036) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › e2e/golden-path.spec.ts:57:7 › golden path › seller signs up and adds a car (2.5s)
+  ✓   2 [chromium] › e2e/golden-path.spec.ts:74:7 › golden path › seller lists a part off that car (2.5s)
+  ✓   3 [chromium] › e2e/golden-path.spec.ts:97:7 › golden path › the part appears on the car sheet's For sale tab (1.8s)
+  ✓   4 [chromium] › e2e/golden-path.spec.ts:110:7 › golden path › buyer finds the part and buys it (6.2s)
+  ✓   5 [chromium] › e2e/golden-path.spec.ts:145:7 › golden path › the listing is now sold, not buyable twice (616ms)
+  ✓   6 [chromium] › e2e/golden-path.spec.ts:160:7 › golden path › seller dispatches with tracking (2.6s)
+  ✓   7 [chromium] › e2e/golden-path.spec.ts:178:7 › golden path › buyer confirms receipt and reviews (3.2s)
+  ✓   8 [chromium] › e2e/golden-path.spec.ts:206:7 › golden path › the review shows on the seller's public profile (491ms)
+  ✓   9 [chromium] › e2e/remediation-security.spec.ts:26:5 › admin access requires TOTP and respects membership revocation (1.8s)
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: 'f6607f8c-80f5-4066-b7fd-15410dc13587',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: 'f5a7b954-26fb-4c29-ac24-a8a4e5f4c02a',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '22c85844-7d47-4f76-88a9-6e394eff6043',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '956e4b03-6c81-4c4b-bdd0-5b6bda4edf2a',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '78f74692-0907-4a9d-821b-f6844426a55f',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '4b1755f3-034d-4f12-88ab-659baa6f4774',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [worker] family failed {
+[WebServer]   family: 'receipts',
+[WebServer]   runId: 'cb1b8ed3-a60e-4ab2-93bf-62581282552e',
+[WebServer]   error: {}
+[WebServer] }
+  ✓  10 [chromium] › e2e/remediation-security.spec.ts:47:5 › captured email link signs in a fresh browser and cannot be reused (859ms)
+  ✓  11 [chromium] › e2e/remediation-security.spec.ts:82:5 › account deletion drains more than one storage page and rejects stale writes (3.0s)
+  ✓  12 [chromium] › e2e/remediation-security.spec.ts:111:5 › page CSP uses fresh nonces and blocks untrusted inline scripts (361ms)
+
+  12 passed (53.2s)

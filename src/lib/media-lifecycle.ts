@@ -53,7 +53,12 @@ async function isMediaReferenced(
     }
     if ((count ?? 0) > 0) return true;
   }
-  return false;
+  const embedded = await admin.rpc("has_embedded_media_reference", { p_url: url });
+  if (embedded.error) {
+    if (strict) throw new Error("Embedded media reference lookup failed");
+    return true;
+  }
+  return embedded.data !== false;
 }
 
 /**

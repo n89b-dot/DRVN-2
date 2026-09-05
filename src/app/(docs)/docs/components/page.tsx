@@ -1,6 +1,7 @@
 import { OrderPipeline, StatusChip } from "@/components/commerce";
 import { LiveDim } from "@/components/livesheet";
 import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
+import { DialogDemo } from "./dialog-demo";
 import { ComboDemo } from "./combo-demo";
 import {
   ActionFooter,
@@ -613,6 +614,7 @@ export default function ComponentsPage() {
           note="Searchable single-select (ARIA combobox) — ranked options, keyword matching for aliases (try typing 'toyoda'), arrow-key navigation, and an optional footer escape hatch. The Add Car vehicle picker is built from two of these."
         >
           <ComboDemo />
+          <DialogDemo />
         </Specimen>
         <Specimen
           name="Field"

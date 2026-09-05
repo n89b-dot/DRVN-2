@@ -42,12 +42,14 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "**/*.spec.ts",
+  testIgnore: process.env.EVIDENCE === "1" ? [] : ["**/evidence.spec.ts"],
   // The golden path is a sequence — later steps depend on earlier ones — so no
   // parallelism within a file.
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? "github" : "list",
+  reporter: process.env.CI ? [["github"], ["./e2e/release-reporter.ts"]] : "list",
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {

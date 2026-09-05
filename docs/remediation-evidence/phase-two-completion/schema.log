@@ -1,0 +1,5 @@
+
+> drvn-2@0.1.0 db:types:check
+> node scripts/generate-database-types.mjs --check
+
+Connecting to 127.0.0.1 55440

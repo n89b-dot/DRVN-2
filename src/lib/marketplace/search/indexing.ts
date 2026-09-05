@@ -1,3 +1,4 @@
+import { enqueueSearch } from "@/lib/search/enqueue";
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,19 +12,20 @@ import { deleteSearchDocument, upsertSearchDocument, typesenseConfigured, type L
  * no engine is configured, and never on the request's critical path. Full
  * rebuilds: scripts/reindex-search.mjs.
  */
-export async function syncListingToSearch(listingId: string): Promise<void> {
+export async function indexListingNow(listingId: string, assertLease: () => Promise<void> = async () => {}): Promise<void> {
   if (!typesenseConfigured()) return;
   const admin = createAdminClient();
   const { data: listing } = await admin
     .from("listings")
     .select(
-      "id, title, description, compatibility_notes, part_number, part_number_compact, category, subcategory, status, price_cents, created_at, source_car_id",
+      "id, seller_id, title, description, compatibility_notes, part_number, part_number_compact, category, subcategory, status, price_cents, created_at, source_car_id",
     )
     .eq("id", listingId)
     .maybeSingle().throwOnError();
-  if (!listing) { await deleteSearchDocument(listingId); return; }
-  if (listing.status !== "active") {
-    await deleteSearchDocument(listingId);
+  if (!listing) { await assertLease(); await deleteSearchDocument(listingId); return; }
+  const owner = await admin.from("profiles").select("suspended_at").eq("id", listing.seller_id).maybeSingle().throwOnError();
+  if (listing.status !== "active" || !owner.data || owner.data.suspended_at) {
+    await assertLease(); await deleteSearchDocument(listingId);
     return;
   }
 
@@ -31,14 +33,14 @@ export async function syncListingToSearch(listingId: string): Promise<void> {
     admin
       .from("listing_fitments")
       .select("make, model, year_start, year_end")
-      .eq("listing_id", listingId),
-    admin.from("listing_part_numbers").select("number").eq("listing_id", listingId),
+      .eq("listing_id", listingId).throwOnError(),
+    admin.from("listing_part_numbers").select("number").eq("listing_id", listingId).throwOnError(),
     listing.source_car_id
       ? admin
           .from("cars")
           .select("make, model, year")
           .eq("id", listing.source_car_id)
-          .maybeSingle()
+          .maybeSingle().throwOnError()
       : Promise.resolve({ data: null }),
   ]);
 
@@ -68,5 +70,8 @@ export async function syncListingToSearch(listingId: string): Promise<void> {
     price_cents: listing.price_cents,
     created_at_unix: Math.floor(new Date(listing.created_at).getTime() / 1000),
   };
+  await assertLease();
   await upsertSearchDocument(doc);
 }
+
+export function syncListingToSearch(id: string) { return enqueueSearch("listing", id); }

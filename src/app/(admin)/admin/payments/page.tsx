@@ -19,6 +19,7 @@ const KIND_LABEL: Record<string, string> = {
   refund_failed: "Refund failed",
   partial_refund_unattributed: "Partial refund needs attribution",
   transfer_after_refund: "Transfer landed after refund",
+  capture_unresolved: "Captured payment needs reconciliation",
   negative_balance: "Seller owes the platform",
 };
 

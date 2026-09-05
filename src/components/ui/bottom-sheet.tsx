@@ -1,4 +1,5 @@
 "use client";
+import { lockModal, unlockModal, isTopModal } from "./modal-stack";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -57,6 +58,8 @@ export function BottomSheet({
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
   const restoreRef = useRef<HTMLElement | null>(null);
   // Dialog semantics only apply while the chrome is really a sheet.
   const [isCompact, setIsCompact] = useState(inlineFrom == null);
@@ -88,19 +91,22 @@ export function BottomSheet({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !isTopModal(panelRef.current)) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        closeRef.current();
         return;
       }
       if (event.key !== "Tab" || !panelRef.current) return;
       const focusable = Array.from(
         panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)
       ).filter((el) => el.offsetParent !== null);
-      if (!focusable.length) return;
+      if (!focusable.length) { event.preventDefault(); panelRef.current.focus(); return; }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (document.activeElement === panelRef.current || !panelRef.current.contains(document.activeElement)) {
+        event.preventDefault(); (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -108,21 +114,15 @@ export function BottomSheet({
         first.focus();
       }
     },
-    [onClose]
+    []
   );
 
   useEffect(() => {
     if (!sheetActive) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    const previousPadding = document.body.style.paddingRight;
-    // Locking scroll drops the scrollbar, and the page grows by its width —
-    // a visible shift, and enough for the cards' container queries to flip
-    // (excerpts appearing mid-open). Reserve that width so nothing moves.
-    // Overlay scrollbars (phones, macOS default) measure 0 and get none.
-    const gutter = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (gutter > 0) document.body.style.paddingRight = `${gutter}px`;
+    const panel = panelRef.current;
+    if (!panel) return;
+    lockModal(panel);
     document.addEventListener("keydown", handleKeyDown);
     // Focus the panel itself, not its first field — a combo field opens its
     // option list on focus, so field-first focus dropped a list over the
@@ -131,9 +131,9 @@ export function BottomSheet({
     panelRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      document.body.style.paddingRight = previousPadding;
-      restoreRef.current?.focus();
+      const restore = isTopModal(panel);
+      unlockModal(panel);
+      if (restore) restoreRef.current?.focus();
     };
   }, [sheetActive, handleKeyDown]);
 

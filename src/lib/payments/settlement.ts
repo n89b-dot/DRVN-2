@@ -1,3 +1,4 @@
+import { CaptureMismatch, recordCaptureRecovery } from "./capture-recovery";
 import type Stripe from "stripe";
 
 import { recordExternalRefund, runRefundOperation } from "./refunds";
@@ -45,17 +46,18 @@ export async function ordersForIntent(admin: Admin, intentId: string, metadataOr
 /** Captured baskets commit all local obligations or return retryable failure. */
 export async function settleIntent(admin: Admin, intent: Stripe.PaymentIntent, success: boolean): Promise<boolean> {
   const orderIds = await ordersForIntent(admin, intent.id, intent.metadata.order_id);
-  if (!orderIds.length) throw new Error("Payment maps to no orders; reconciliation required");
+  if (!orderIds.length) throw new CaptureMismatch("Payment maps to no orders; reconciliation required");
   if (success) {
     if (intent.status !== "succeeded" || intent.amount_received !== intent.amount) {
-      throw new Error("Payment capture is incomplete; reconciliation required");
+      throw new CaptureMismatch("Payment capture is incomplete; reconciliation required");
     }
-    if (!intent.metadata.buyer_id) throw new Error("Payment lacks buyer identity");
+    if (!intent.metadata.buyer_id) throw new CaptureMismatch("Payment lacks buyer identity");
     const { data, error } = await admin.rpc("settle_payment_capture", {
       p_reference: intent.id, p_order_ids: orderIds, p_amount: intent.amount_received,
       p_currency: intent.currency, p_buyer: intent.metadata.buyer_id,
       p_source: typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge?.id ?? null,
     });
+    if (error?.code === "P0001" || error?.code === "22P02") throw new CaptureMismatch("Capture does not match the local settlement contract");
     if (error) { reportError("[settlement] capture transaction failed", { intent: intent.id, code: error.code }); return false; }
     return Boolean(data && typeof data === "object" && "outcome" in data &&
       ["settled", "compensation_queued"].includes(String(data.outcome)));
@@ -416,8 +418,14 @@ export async function dispatchStripeEvent(
     case "payment_intent.succeeded":
     case "payment_intent.payment_failed": {
       const intent = event.data.object as Stripe.PaymentIntent;
-      const allApplied = await settleIntent(admin, intent, event.type === "payment_intent.succeeded");
-      return allApplied ? "ok" : "partial";
+      try {
+        const allApplied = await settleIntent(admin, intent, event.type === "payment_intent.succeeded");
+        return allApplied ? "ok" : "partial";
+      } catch (error) {
+        if (!(error instanceof CaptureMismatch) || event.type !== "payment_intent.succeeded") throw error;
+        await recordCaptureRecovery(admin, `capture:${intent.id}`, error.message, intent.amount_received);
+        return "ok"; // A durable operator obligation now owns this capture.
+      }
     }
     case "payment_intent.requires_action":
       await markRequiresAction(admin, event.data.object as Stripe.PaymentIntent);

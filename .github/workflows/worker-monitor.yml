@@ -1,0 +1,21 @@
+name: Independent worker monitor
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: read
+jobs:
+  health:
+    if: vars.DRVN_MONITOR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-worker-health.mjs
+        env:
+          DRVN_MONITOR_ORIGIN: ${{ vars.DRVN_MONITOR_ORIGIN }}
+          DRVN_MONITOR_SECRET: ${{ secrets.DRVN_MONITOR_SECRET }}

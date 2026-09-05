@@ -84,48 +84,6 @@ function applyYearBounds<Q extends { gte: (c: "year", v: number) => Q; lte: (c: 
   return query;
 }
 
-/** Ranked car ids for a text query, falling back to a direct ilike lane when
- *  no provider can answer. null never escapes this function. */
-async function rankedCarIds(
-  supabase: SupabaseClient<Database>,
-  q: string
-): Promise<string[]> {
-  const ids = await getExploreSearchProvider()
-    .searchIds("car", q, { limit: 300 })
-    .catch(() => null);
-  if (ids !== null) return ids;
-  const term = escapeIlike(orSafe(q));
-  const { data, error } = await supabase
-    .from("cars")
-    .select("id")
-    .eq("is_public", true)
-    .or(`name.ilike.%${term}%,make.ilike.%${term}%,model.ilike.%${term}%`)
-    .order("created_at", { ascending: false })
-    .limit(300);
-  if (error) reportError("[explore-search] builds ilike fallback failed", error);
-  return (data ?? []).map((c) => c.id);
-}
-
-async function rankedUpdateIds(
-  supabase: SupabaseClient<Database>,
-  q: string
-): Promise<string[]> {
-  const ids = await getExploreSearchProvider()
-    .searchIds("update", q, { limit: 300 })
-    .catch(() => null);
-  if (ids !== null) return ids;
-  const term = escapeIlike(orSafe(q));
-  const { data, error } = await supabase
-    .from("activity_posts")
-    .select("id")
-    .not("published_at", "is", null)
-    .or(`title.ilike.%${term}%,intro.ilike.%${term}%`)
-    .order("published_at", { ascending: false })
-    .limit(300);
-  if (error) reportError("[explore-search] updates ilike fallback failed", error);
-  return (data ?? []).map((p) => p.id);
-}
-
 /**
  * Builds scope: ranked candidates → canonical filters (vehicle, year) →
  * relevance or recency order → shared hydration.
@@ -139,17 +97,8 @@ export async function searchBuilds(
   const page = Math.max(1, opts.page ?? 1);
   const sort = effectiveSort(params, "cars");
 
-  let rankedIds: string[] | null = null;
-  if (params.q) {
-    rankedIds = await rankedCarIds(supabase, params.q);
-    if (!rankedIds.length) return NO_PAGE;
-  }
-
-  let query = supabase
-    .from("cars")
-    .select("id, created_at")
-    .eq("is_public", true);
-  if (rankedIds) query = query.in("id", rankedIds);
+  let query = (params.q ? supabase.rpc("explore_build_rows", { p_query: params.q }) : supabase.from("cars"))
+    .select("id, created_at").eq("is_public", true);
 
   if (params.vehicle) {
     const selection = await resolveVehicleFilter(params.vehicle);
@@ -158,36 +107,11 @@ export async function searchBuilds(
   query = applyYearBounds(query, params);
 
   const from = (page - 1) * pageSize;
-  let windowRows: FeedEventRow[];
-  let hasMore: boolean;
-
-  if (sort === "relevance" && rankedIds) {
-    // The candidate set is bounded (≤300): fetch the filtered ids, restore
-    // provider rank order, and window in memory.
-    const { data, error } = await query;
-    if (error) {
-      reportError("[explore-search] builds query failed", error);
-      return NO_PAGE;
-    }
-    const byId = new Map((data ?? []).map((c) => [c.id, c]));
-    const ordered = rankedIds
-      .filter((id) => byId.has(id))
-      .map((id) => ({ kind: "car" as const, id, happened_at: byId.get(id)!.created_at }));
-    windowRows = ordered.slice(from, from + pageSize);
-    hasMore = ordered.length > from + pageSize;
-  } else {
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .range(from, from + pageSize);
-    if (error) {
-      reportError("[explore-search] builds query failed", error);
-      return NO_PAGE;
-    }
-    hasMore = (data ?? []).length > pageSize;
-    windowRows = (data ?? [])
-      .slice(0, pageSize)
-      .map((c) => ({ kind: "car" as const, id: c.id, happened_at: c.created_at }));
-  }
+  if (sort !== "relevance" || !params.q) query = query.order("created_at", { ascending: false }).order("id");
+  const { data, error } = await query.range(from, from + pageSize);
+  if (error) { reportError("[explore-search] builds query failed", error); return NO_PAGE; }
+  const hasMore = (data ?? []).length > pageSize;
+  const windowRows: FeedEventRow[] = (data ?? []).slice(0, pageSize).map(c => ({ kind: "car", id: c.id, happened_at: c.created_at }));
 
   const items = await hydrateFeedItems(supabase, windowRows, opts.viewerId);
   return { items, hasMore };
@@ -207,66 +131,18 @@ export async function searchUpdates(
   const page = Math.max(1, opts.page ?? 1);
   const sort = effectiveSort(params, "updates");
 
-  let rankedIds: string[] | null = null;
-  if (params.q) {
-    rankedIds = await rankedUpdateIds(supabase, params.q);
-    if (!rankedIds.length) return NO_PAGE;
-  }
-
-  let query = supabase
-    .from("activity_posts")
-    .select("id, published_at")
-    .not("published_at", "is", null);
-  if (rankedIds) query = query.in("id", rankedIds);
-
-  // Every shared refinement narrows through the owning car: vehicle and
-  // year are both car fields.
-  if (params.vehicle || params.ymin || params.ymax) {
-    let carsQuery = supabase.from("cars").select("id").eq("is_public", true);
-    if (params.vehicle) {
-      const selection = await resolveVehicleFilter(params.vehicle);
-      if (selection) carsQuery = carsQuery.or(carVehicleClause(selection));
-    }
-    carsQuery = applyYearBounds(carsQuery, params);
-    const { data: matchingCars } = await carsQuery.limit(1000);
-    const carIds = (matchingCars ?? []).map((c) => c.id);
-    if (!carIds.length) return NO_PAGE;
-    query = query.in("car_id", carIds);
-  }
-
+  const selection = params.vehicle ? await resolveVehicleFilter(params.vehicle) : null;
+  let query = supabase.rpc("explore_update_rows", {
+    p_query: params.q ?? "", p_make: selection?.make ?? "", p_model: selection?.model ?? "",
+    p_make_id: selection?.makeId ?? 0, p_model_id: selection?.modelId ?? 0,
+    p_ymin: params.ymin ? Number(params.ymin) : 0, p_ymax: params.ymax ? Number(params.ymax) : 9999,
+  }).select("id, published_at");
+  if (sort !== "relevance" || !params.q) query = query.order("published_at", { ascending: false }).order("id");
   const from = (page - 1) * pageSize;
-  let windowRows: FeedEventRow[];
-  let hasMore: boolean;
-
-  if (sort === "relevance" && rankedIds) {
-    const { data, error } = await query;
-    if (error) {
-      reportError("[explore-search] updates query failed", error);
-      return NO_PAGE;
-    }
-    const byId = new Map((data ?? []).map((p) => [p.id, p]));
-    const ordered = rankedIds
-      .filter((id) => byId.has(id))
-      .map((id) => ({
-        kind: "update" as const,
-        id,
-        happened_at: byId.get(id)!.published_at!,
-      }));
-    windowRows = ordered.slice(from, from + pageSize);
-    hasMore = ordered.length > from + pageSize;
-  } else {
-    const { data, error } = await query
-      .order("published_at", { ascending: false })
-      .range(from, from + pageSize);
-    if (error) {
-      reportError("[explore-search] updates query failed", error);
-      return NO_PAGE;
-    }
-    hasMore = (data ?? []).length > pageSize;
-    windowRows = (data ?? [])
-      .slice(0, pageSize)
-      .map((p) => ({ kind: "update" as const, id: p.id, happened_at: p.published_at! }));
-  }
+  const { data, error } = await query.range(from, from + pageSize);
+  if (error) { reportError("[explore-search] updates query failed", error); return NO_PAGE; }
+  const hasMore = (data ?? []).length > pageSize;
+  const windowRows: FeedEventRow[] = (data ?? []).slice(0, pageSize).map(p => ({ kind: "update", id: p.id, happened_at: p.published_at! }));
 
   const items = await hydrateFeedItems(supabase, windowRows, opts.viewerId);
   return { items, hasMore };

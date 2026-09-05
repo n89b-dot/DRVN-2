@@ -1,5 +1,7 @@
 "use server";
 
+import { bindCheckoutAnalytics } from "@/lib/purchase-analytics";
+
 import { createHash, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -146,6 +148,7 @@ async function purchaseListings(
   capture(buyerId, { event: "checkout_started", props: { items: listingIds.length } });
   // One diagnostics identity for the whole basket (0039): every order carries
   // it, and the processor metadata carries the same value.
+  await bindCheckoutAnalytics(allOrderIds);
   const payment = await provider.createPayment({
     orderId: allOrderIds.join(","),
     buyerId,
@@ -457,6 +460,7 @@ export async function completeReservedOrder(
 
   const provider = getPaymentProvider();
   // Diagnostics identity (0039) — offer-completion orders get one too.
+  await bindCheckoutAnalytics([orderId]);
   const payment = await provider.createPayment({
     orderId,
     buyerId: user.id,

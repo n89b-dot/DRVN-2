@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { randomUUID } from "node:crypto";
 import type { AdminAuditSubjectType } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
@@ -69,8 +68,14 @@ export async function auditedAction<T>(
     if (error) throw new Error(error.message);
     return data as T;
   }
-  const operationId = randomUUID();
-  await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "requested" } });
+  const claim = await admin.rpc("begin_admin_external_operation", {
+    p_actor: entry.actorId, p_action: entry.action, p_subject_type: entry.subjectType,
+    p_subject: entry.subjectId, p_order: entry.orderId ?? null, p_reason: entry.reason,
+    p_metadata: JSON.parse(JSON.stringify(entry.metadata ?? {})),
+  });
+  if (claim.error || !claim.data) throw new Error("External operation journal unavailable; action refused");
+  const { operationId, reused } = claim.data as { operationId: string; reused: boolean };
+  if (reused) throw new Error(`Operation ${operationId} is awaiting reconciliation. Resume its existing provider operation; do not create another.`);
   let result: T;
   try { result = await mutate(); } catch (error) {
     try { await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "failed_or_requires_reconciliation" } }); }

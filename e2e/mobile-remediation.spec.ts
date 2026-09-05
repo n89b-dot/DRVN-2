@@ -1,3 +1,4 @@
+import { createDiscoveryFixture } from "./fixtures";
 import { expect, test, type Page } from "@playwright/test";
 
 import { addCar, cleanupE2eUsers, makeUser, signIn, signUp } from "./helpers";
@@ -19,6 +20,9 @@ import { addCar, cleanupE2eUsers, makeUser, signIn, signUp } from "./helpers";
  * Deliberately no visual baselines: these are contracts about layout
  * behaviour, and a screenshot would fail on unrelated data churn instead.
  */
+
+let discovery: Awaited<ReturnType<typeof createDiscoveryFixture>>;
+test.beforeAll(async () => { discovery = await createDiscoveryFixture(); });
 
 const stamp = Date.now();
 const owner = makeUser("mr-owner", stamp);
@@ -59,43 +63,11 @@ async function finderContentWidth(page: Page) {
   });
 }
 
-/**
- * Puts something buyable in the guest cart through the real UI — browse the
- * marketplace, open a listing, add it. Returns false when this machine's data
- * has nothing to add (empty marketplace, or nothing on the board still
- * offering purchase actions), so callers can skip rather than fail on seed
- * data they don't control.
- */
-async function seedGuestCart(page: Page): Promise<boolean> {
-  await page.goto("/marketplace");
-  await page.waitForLoadState("networkidle");
-
-  const hrefs = [
-    ...new Set(
-      await page
-        .locator('a[href^="/listings/"]')
-        .evaluateAll((els) => els.map((el) => el.getAttribute("href") ?? ""))
-    ),
-  ].filter(Boolean);
-
-  // Not every listing on the board is buyable — sold, reserved and paused ones
-  // render no purchase actions at all — so walk the first few rather than
-  // betting the whole spec on whatever happens to sort first.
-  for (const href of hrefs.slice(0, 6)) {
-    await page.goto(href);
-    await page.waitForLoadState("networkidle");
-    const addToCart = page.getByRole("button", { name: /add to cart/i });
-    if ((await addToCart.count()) === 0) continue;
-
-    await addToCart.click();
-    // The button swaps for the "In cart ✓ — view cart" link once the action lands.
-    await expect(
-      page.getByRole("link", { name: /in cart/i }),
-      "Add to cart must confirm before the cart surfaces are measured"
-    ).toBeVisible();
-    return true;
-  }
-  return false;
+/** Adds this suite's own listing through the real guest cart UI. */
+async function seedGuestCart(page: Page): Promise<void> {
+  await page.goto(discovery.listingPath);
+  await page.getByRole("button", { name: /add to cart/i }).click();
+  await expect(page.getByRole("link", { name: /in cart/i })).toBeVisible();
 }
 
 test.describe.serial("mobile remediation", () => {
@@ -111,16 +83,8 @@ test.describe.serial("mobile remediation", () => {
   });
 
   test("car sheet: the tab strip holds one scrolling line on phones", async ({ page }) => {
-    await page.goto("/cars/lancia-delta-hf-integrale");
-
+    await page.goto(discovery.carPath);
     const strip = page.locator(".tabstrip");
-    if ((await strip.count()) === 0) {
-      test.skip(
-        true,
-        "no .tabstrip at /cars/lancia-delta-hf-integrale — that car is seeded data and is not present on this machine"
-      );
-      return;
-    }
     await expect(strip, "the car sheet must render its tab strip").toBeVisible();
 
     for (const width of [320, 375, 430, 1440]) {
@@ -160,10 +124,7 @@ test.describe.serial("mobile remediation", () => {
   });
 
   test("cart: the phone checkout bar is reachable and retires on desktop", async ({ page }) => {
-    if (!(await seedGuestCart(page))) {
-      test.skip(true, "no listing with an Add to cart action on this machine — nothing to bank");
-      return;
-    }
+    await seedGuestCart(page);
 
     await page.goto("/cart");
     const bar = page.locator(".buybar--wide");
@@ -387,16 +348,10 @@ test.describe.serial("mobile remediation", () => {
   });
 
   test("checkout: the compact summary stands in for the desktop aside", async ({ page }) => {
-    if (!(await seedGuestCart(page))) {
-      test.skip(true, "no listing with an Add to cart action on this machine — nothing to bank");
-      return;
-    }
+    await seedGuestCart(page);
 
     await page.goto("/checkout");
-    if (new URL(page.url()).pathname === "/cart") {
-      test.skip(true, "/checkout bounced to /cart — the seeded basket held nothing buyable");
-      return;
-    }
+    await expect(page).toHaveURL(/\/checkout/);
 
     const aside = page.locator("aside.max-lg\\:hidden");
     const compact = page.locator("details.ordersum");
@@ -415,4 +370,5 @@ test.describe.serial("mobile remediation", () => {
 
 test.afterAll(async () => {
   await cleanupE2eUsers();
+  await discovery?.cleanup();
 });

@@ -37,7 +37,7 @@ async function alertNewSlaBreaches(admin: Admin): Promise<number> {
     .eq("status", "disputed")
     .is("dispute_sla_alerted_at", null)
     .lt("disputed_at", cutoff)
-    .limit(50);
+    .order("updated_at").limit(5).throwOnError();
 
   let sent = 0;
   for (const order of breached ?? []) {
@@ -79,9 +79,10 @@ export async function processDisputeSla(admin: Admin): Promise<DisputeSlaSummary
     .eq("status", "disputed")
     .lt("disputed_at", cutoff)
     .is("refund_offered_at", null)
-    .limit(50);
+    .order("updated_at").limit(5).throwOnError();
 
   for (const order of stale ?? []) {
+    await admin.from("orders").update({ updated_at: new Date().toISOString() }).eq("id", order.id).throwOnError();
     // §28 (0055): an active RMA supersedes the dispute clock. Auto-refunding
     // while the returned part is physically in transit would refund-and-keep
     // by accident — the return's own deadlines govern until it resolves.

@@ -1,0 +1,59 @@
+[WebServer] (node:62722) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62722) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62739) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62837) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62842) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62839) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62838) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62843) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62840) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:62867) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 29 tests using 1 worker
+
+(node:62869) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › e2e/add-car.spec.ts:29:7 › Add Car › manual fallback creates a car and auto-names it by identity (2.4s)
+  ✓   2 [chromium] › e2e/add-car.spec.ts:45:7 › Add Car › a VIN that will not decode explains itself and offers the way out (4.6s)
+  ✓   3 [chromium] › e2e/add-car.spec.ts:60:7 › Add Car › picker selects its catalog vehicle (2.1s)
+  ✓   4 [chromium] › e2e/mobile-matrix.spec.ts:74:9 › guest discovery @ 320x568 › marketplace: compact controls, then inventory (509ms)
+  ✓   5 [chromium] › e2e/mobile-matrix.spec.ts:101:9 › guest discovery @ 320x568 › marketplace: refine sheet keeps values and restores focus (865ms)
+  ✓   6 [chromium] › e2e/mobile-matrix.spec.ts:116:9 › guest discovery @ 320x568 › listing detail: price and actions precede record metadata (1.2s)
+  ✓   7 [chromium] › e2e/mobile-matrix.spec.ts:74:9 › guest discovery @ 390x844 › marketplace: compact controls, then inventory (510ms)
+  ✓   8 [chromium] › e2e/mobile-matrix.spec.ts:101:9 › guest discovery @ 390x844 › marketplace: refine sheet keeps values and restores focus (878ms)
+  ✓   9 [chromium] › e2e/mobile-matrix.spec.ts:116:9 › guest discovery @ 390x844 › listing detail: price and actions precede record metadata (1.1s)
+  ✓  10 [chromium] › e2e/mobile-matrix.spec.ts:74:9 › guest discovery @ 430x932 › marketplace: compact controls, then inventory (526ms)
+  ✓  11 [chromium] › e2e/mobile-matrix.spec.ts:101:9 › guest discovery @ 430x932 › marketplace: refine sheet keeps values and restores focus (881ms)
+  ✓  12 [chromium] › e2e/mobile-matrix.spec.ts:116:9 › guest discovery @ 430x932 › listing detail: price and actions precede record metadata (1.1s)
+  ✓  13 [chromium] › e2e/mobile-matrix.spec.ts:176:7 › anatomy transitions land on documented thresholds › PDP buybar retires exactly at the 981px split (285ms)
+  ✓  14 [chromium] › e2e/mobile-matrix.spec.ts:193:7 › anatomy transitions land on documented thresholds › register rail exists only above 1080px (277ms)
+  ✓  15 [chromium] › e2e/mobile-matrix.spec.ts:219:7 › authenticated matrix @ 390x844 › setup: seller with three cars and two listings (7.2s)
+  ✓  16 [chromium] › e2e/mobile-matrix.spec.ts:240:7 › authenticated matrix @ 390x844 › task heads: h1 lands within 45% of the viewport on every task route (3.6s)
+  ✓  17 [chromium] › e2e/mobile-matrix.spec.ts:267:7 › authenticated matrix @ 390x844 › garage: first sheet's management rail inside the first viewport (924ms)
+  ✓  18 [chromium] › e2e/mobile-matrix.spec.ts:286:7 › authenticated matrix @ 390x844 › buyer: offer lands; seller sees who acts next everywhere (4.9s)
+  ✓  19 [chromium] › e2e/mobile-matrix.spec.ts:327:7 › authenticated matrix @ 390x844 › checkout: one Delivery & contact edit, one cart edit — or stub completes (8.4s)
+  ✓  20 [chromium] › e2e/mobile-matrix.spec.ts:404:7 › authenticated matrix @ 390x844 › seller can fully delete a listing from the ledger (1.1s)
+  ✓  21 [chromium] › e2e/mobile-remediation.spec.ts:76:7 › mobile remediation › setup: an owner signs up and files a car (1.9s)
+  ✓  22 [chromium] › e2e/mobile-remediation.spec.ts:85:7 › mobile remediation › car sheet: the tab strip holds one scrolling line on phones (658ms)
+  ✓  23 [chromium] › e2e/mobile-remediation.spec.ts:126:7 › mobile remediation › cart: the phone checkout bar is reachable and retires on desktop (2.1s)
+  ✓  24 [chromium] › e2e/mobile-remediation.spec.ts:175:7 › mobile remediation › mods editor: the ledger line becomes a labelled record on a phone (992ms)
+  ✓  25 [chromium] › e2e/mobile-remediation.spec.ts:238:7 › mobile remediation › mods editor: the commit row stacks and goes full width on a phone (1.0s)
+  ✓  26 [chromium] › e2e/mobile-remediation.spec.ts:268:7 › mobile remediation › saved: search owns the phone column and Enter submits the query (979ms)
+  ✓  27 [chromium] › e2e/mobile-remediation.spec.ts:287:7 › mobile remediation › notifications: two filter axes, one row each, still combining in the query (1.1s)
+  ✓  28 [chromium] › e2e/mobile-remediation.spec.ts:332:7 › mobile remediation › messages: search owns the phone column and Enter submits (903ms)
+  ✓  29 [chromium] › e2e/mobile-remediation.spec.ts:350:7 › mobile remediation › checkout: the compact summary stands in for the desktop aside (1.5s)
+
+  29 passed (1.4m)
+[release coverage] selected=29 passed=29 skipped=0

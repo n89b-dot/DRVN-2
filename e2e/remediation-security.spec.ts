@@ -25,7 +25,9 @@ function totp(secret: string) {
 
 test("admin access requires TOTP and respects membership revocation", async ({ page }) => {
   const user = await fixture();
+  const operator = await fixture();
   try {
+    const operatorGrant = await operator.client.from("admin_users").insert({ user_id: operator.id }); if (operatorGrant.error) throw operatorGrant.error;
     const grant = await user.client.from("admin_users").insert({ user_id: user.id }); if (grant.error) throw grant.error;
     await page.goto("/login");
     await page.getByLabel(/^email$/i).fill(user.email);
@@ -39,9 +41,55 @@ test("admin access requires TOTP and respects membership revocation", async ({ p
     await page.getByLabel("Authenticator code").fill(totp((await key.textContent())!));
     await page.getByRole("button", { name: /Verify/ }).click();
     await expect(page).toHaveURL(/\/admin$/);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/docs/components");
+    const opener = page.getByRole("button", { name: "Open nested dialog example" });
+    await opener.focus(); await page.keyboard.press("Enter");
+    const outer = page.getByRole("dialog", { name: "Outer example", exact: true }); await expect(outer).toBeVisible();
+    await page.keyboard.press("Tab");
+    const innerOpener = page.getByRole("button", { name: "Open inner example" }); await expect(innerOpener).toBeFocused();
+    await page.keyboard.press("Enter");
+    const inner = page.getByRole("dialog", { name: "Inner example", exact: true }); await expect(inner).toBeVisible();
+    await page.keyboard.press("Shift+Tab");
+    expect(await inner.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Escape"); await expect(inner).not.toBeVisible(); await expect(outer).toBeVisible();
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe("hidden"); await expect(innerOpener).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(outer).not.toBeVisible(); await expect(opener).toBeFocused();
+    expect(await page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+    await page.goto("/admin");
+
+    // Technical lost-factor recovery: a separate synthetic operator revokes
+    // old admin tokens before removing the lost factor and requiring reenrollment.
+    const recovery = await operator.client.rpc("begin_admin_mfa_recovery", { p_actor: operator.id, p_target: user.id, p_reason: "Disposable recovery drill; synthetic identity verified" });
+    if (recovery.error) throw recovery.error;
+    expect((await page.goto("/admin"))?.status()).toBe(404);
+    const factors = await user.client.auth.admin.mfa.listFactors({ userId: user.id }); if (factors.error) throw factors.error;
+    for (const factor of factors.data.factors) {
+      const removed = await user.client.auth.admin.mfa.deleteFactor({ userId: user.id, id: factor.id }); if (removed.error) throw removed.error;
+    }
+    const epoch = await user.client.from("admin_users").select("sessions_valid_after").eq("user_id", user.id).single(); if (epoch.error) throw epoch.error;
+    // JWT iat is measured in whole seconds; the recovered login must be newer.
+    await expect.poll(() => Math.floor(Date.now() / 1000) > Date.parse(epoch.data.sessions_valid_after) / 1000).toBe(true);
+    await page.context().clearCookies();
+    await page.goto("/login");
+    await page.getByLabel(/^email$/i).fill(user.email); await page.getByLabel(/^password$/i).fill(user.password);
+    await page.getByRole("button", { name: /log in|sign in/i }).click(); await page.waitForURL(/\/home/);
+    await page.goto("/admin"); await expect(page).toHaveURL(/\/admin-verify/);
+    await page.getByRole("button", { name: "Set up authenticator" }).click();
+    await expect(key).toBeVisible(); await page.getByLabel("Authenticator code").fill(totp((await key.textContent())!));
+    await page.getByRole("button", { name: /Verify/ }).click(); await expect(page).toHaveURL(/\/admin$/);
+    const journal = await operator.client.from("admin_audit_log").insert({ actor_id: operator.id, action: "admin.mfa_recovery", subject_type: "user", subject_id: user.id, reason: "Synthetic factor reenrolled and stale admin token rejected", metadata: { operationId: recovery.data, phase: "completed" } }); if (journal.error) throw journal.error;
     const revoked = await user.client.from("admin_users").delete().eq("user_id", user.id); if (revoked.error) throw revoked.error;
     expect((await page.goto("/admin"))?.status()).toBe(404);
-  } finally { await user.client.auth.admin.deleteUser(user.id); }
+  } finally {
+    const removed = await user.client.auth.admin.deleteUser(user.id); if (removed.error) throw removed.error;
+    // Immutable audit rows intentionally retain their actor. Remove all access
+    // rather than silently ignoring the audit foreign key during fixture cleanup.
+    const membership = await operator.client.from("admin_users").delete().eq("user_id", operator.id); if (membership.error) throw membership.error;
+    const banned = await operator.client.auth.admin.updateUserById(operator.id, { ban_duration: "876000h" }); if (banned.error) throw banned.error;
+    const scrubbed = await operator.client.from("profiles").update({ username: null, display_name: "Retained test audit actor" }).eq("id", operator.id); if (scrubbed.error) throw scrubbed.error;
+    const jobs = await operator.client.from("remediation_jobs").delete().eq("kind", "search").in("payload->>id", [user.id, operator.id]); if (jobs.error) throw jobs.error;
+  }
 });
 
 test("captured email link signs in a fresh browser and cannot be reused", async ({ page, request }) => {
@@ -69,9 +117,17 @@ test("captured email link signs in a fresh browser and cannot be reused", async 
     const link = String(message.HTML).match(/href="([^"]+)"/)?.[1].replaceAll("&amp;", "&");
     expect(link).toContain("/confirm?token_hash=");
     await page.context().clearCookies();
+    // Mail scanners may GET the link repeatedly without consuming it.
+    expect((await request.get(link!)).status()).toBe(200);
+    expect((await request.head(link!)).status()).toBe(200);
     await page.goto(link!);
+    await page.getByRole("button", { name: "Continue to orders" }).click();
     await expect(page).toHaveURL(/\/orders$/);
-    const reused = await request.get(link!, { maxRedirects: 0 });
+    const token = new URL(link!).searchParams.get("token_hash")!;
+    const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL!).origin;
+    const crossOrigin = await request.post(`${origin}/confirm`, { headers: { origin: "https://invalid.example" }, form: { token_hash: token }, maxRedirects: 0 });
+    expect(crossOrigin.status()).toBe(403);
+    const reused = await request.post(`${origin}/confirm`, { headers: { origin }, form: { token_hash: token }, maxRedirects: 0 });
     expect(reused.headers().location).toContain("auth-error");
   } finally {
     await user.client.from("remediation_jobs").delete().eq("dedup_key", `access:${user.id}:/orders`);

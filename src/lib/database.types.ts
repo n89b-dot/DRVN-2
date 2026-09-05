@@ -1,26 +1,10 @@
+import type { Database as GeneratedDatabase } from "./database.generated";
+
 // Curated application/domain types retained for compatibility.
 // database.generated.ts is the generated public-schema contract; regenerate
 // with npm run db:types and verify drift with npm run db:types:check.
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
-
-type Relationship = {
-  foreignKeyName: string;
-  columns: string[];
-  isOneToOne: boolean;
-  referencedRelation: string;
-  referencedColumns: string[];
-};
-
-/* Relationships drive supabase-js embed typing (`select("*, listings(...)")`).
-   Declared per-table only where an embed is actually used — the DB has the
-   real FK either way; this is purely for the type layer. */
-type Table<Row, Required extends keyof Row = never, Rels extends Relationship[] = []> = {
-  Row: Row;
-  Insert: Partial<Row> & Pick<Row, Required>;
-  Update: Partial<Row>;
-  Relationships: Rels;
-};
 
 export type Profile = {
   id: string;
@@ -1057,7 +1041,8 @@ export type PaymentRecoveryKind =
   | "refund_failed"
   | "partial_refund_unattributed"
   | "transfer_after_refund"
-  | "negative_balance";
+  | "negative_balance"
+  | "capture_unresolved";
 
 export type PaymentRecovery = {
   id: string;
@@ -1134,319 +1119,93 @@ export type SellerRegisterTally = {
   sold_count: number;
 };
 
+/** Domain refinements for checked status values and structured JSON only.
+ * Columns, inserts, updates, foreign keys and RPC signatures come from generation. */
+type DomainRows = {
+  profiles: Profile;
+  account_emails: AccountEmail;
+  cars: Car;
+  car_images: CarImage;
+  activity_posts: ActivityPost;
+  activity_images: ActivityImage;
+  activity_reactions: ActivityReaction;
+  activity_comments: ActivityComment;
+  listings: Listing;
+  listing_images: ListingImage;
+  mod_items: ModItem;
+  saves: Save;
+  likes: Like;
+  follows: Follow;
+  orders: Order;
+  order_items: OrderItem;
+  order_item_snapshot_images: OrderItemSnapshotImage;
+  seller_fulfillment_profiles: SellerFulfillmentProfile;
+  shipments: Shipment;
+  shipment_items: ShipmentItem;
+  pickup_confirmations: PickupConfirmation;
+  shipping_rate_quotes: ShippingRateQuote;
+  shipment_events: ShipmentEvent;
+  seller_adjustments: SellerAdjustment;
+  returns: OrderReturn;
+  return_items: ReturnItem;
+  shop_profiles: ShopProfile;
+  payments: Payment;
+  offers: Offer;
+  reviews: Review;
+  listing_questions: ListingQuestion;
+  messages: Message;
+  conversations: Conversation;
+  conversation_unreads: ConversationUnread;
+  notifications: Notification;
+  admin_users: AdminUser;
+  admin_audit_log: AdminAuditLogEntry;
+  reports: Report;
+  webhook_events: WebhookEvent;
+  transfer_intents: TransferIntent;
+  payment_recoveries: PaymentRecovery;
+  refund_operations: RefundOperation;
+  admin_alert_outbox: AdminAlertOutboxRow;
+  job_config: JobConfig;
+  dispute_evidence: DisputeEvidence;
+  vehicle_makes: VehicleMake;
+  vehicle_models: VehicleModel;
+  catalog_makes: CatalogMake;
+  catalog_models: CatalogModel;
+  listing_fitments: ListingFitment;
+  listing_part_numbers: ListingPartNumber;
+  saved_searches: SavedSearch;
+  car_hotspots: CarHotspot;
+  ops_cases: OpsCase;
+  part_number_links: PartNumberLink;
+  staged_uploads: StagedUpload;
+  listing_imports: ListingImport;
+};
+type GeneratedTables = GeneratedDatabase["public"]["Tables"];
+type GeneratedFunctions = GeneratedDatabase["public"]["Functions"];
+type RefinedRow<K extends keyof GeneratedTables> = {
+  [C in keyof GeneratedTables[K]["Row"]]: K extends keyof DomainRows
+    ? C extends keyof DomainRows[K] ? DomainRows[K][C] : GeneratedTables[K]["Row"][C]
+    : GeneratedTables[K]["Row"][C];
+};
+/** PostgreSQL function argument nullability is not emitted by Supabase's generator.
+ * These explicit domain exceptions match the verified SQL contracts. */
+type NullableArgs = {
+  begin_admin_external_operation: "p_order";
+  begin_refund_operation: "p_amount_cents" | "p_payment_reference" | "p_refund_reference";
+  settle_payment_capture: "p_source";
+  purchase_begin: "p_idempotency_key";
+  purchase_finalize: "p_reference" | "p_failure_reason";
+  finish_reservation_expiry: "p_reference";
+};
+type RpcArgs<K extends keyof GeneratedFunctions> = GeneratedFunctions[K]["Args"] extends never ? Record<string, never> : {
+  [A in keyof GeneratedFunctions[K]["Args"]]: GeneratedFunctions[K]["Args"][A] | (K extends keyof NullableArgs ? A extends NullableArgs[K] ? null : never : never);
+};
 export type Database = {
-  public: {
-    Tables: {
-      profiles: Table<Profile, "id">;
-      account_emails: Table<AccountEmail, "user_id" | "email">;
-      cars: Table<Car, "owner_id" | "slug" | "name">;
-      car_images: Table<CarImage, "car_id" | "url">;
-      activity_posts: Table<ActivityPost, "car_id" | "author_id" | "title">;
-      activity_images: Table<ActivityImage, "post_id" | "url">;
-      activity_reactions: Table<ActivityReaction, "post_id" | "user_id" | "emoji">;
-      activity_comments: Table<ActivityComment, "post_id" | "author_id" | "body">;
-      listings: Table<Listing, "seller_id" | "title" | "category" | "price_cents">;
-      listing_images: Table<ListingImage, "listing_id" | "url">;
-      mod_items: Table<ModItem, "car_id">;
-      saves: Table<Save, "user_id" | "target_type" | "target_id">;
-      likes: Table<Like, "user_id" | "target_type" | "target_id">;
-      follows: Table<Follow, "follower_id" | "target_type" | "target_id">;
-      orders: Table<Order, "buyer_id" | "seller_id">;
-      order_items: Table<
-        OrderItem,
-        "order_id" | "price_cents",
-        [
-          {
-            foreignKeyName: "order_items_order_id_fkey";
-            columns: ["order_id"];
-            isOneToOne: false;
-            referencedRelation: "orders";
-            referencedColumns: ["id"];
-          },
-        ]
-      >;
-      order_item_snapshot_images: Table<
-        OrderItemSnapshotImage,
-        "order_item_id" | "url",
-        [
-          {
-            foreignKeyName: "order_item_snapshot_images_order_item_id_fkey";
-            columns: ["order_item_id"];
-            isOneToOne: false;
-            referencedRelation: "order_items";
-            referencedColumns: ["id"];
-          },
-        ]
-      >;
-      seller_fulfillment_profiles: Table<
-        SellerFulfillmentProfile,
-        "seller_id" | "ship_from_name" | "street1" | "city" | "postal_code" | "country"
-      >;
-      shipments: Table<
-        Shipment,
-        "order_id" | "fulfillment_type",
-        [
-          {
-            foreignKeyName: "shipments_order_id_fkey";
-            columns: ["order_id"];
-            isOneToOne: false;
-            referencedRelation: "orders";
-            referencedColumns: ["id"];
-          },
-        ]
-      >;
-      shipment_items: Table<ShipmentItem, "shipment_id" | "order_item_id">;
-      pickup_confirmations: Table<
-        PickupConfirmation,
-        "order_id" | "token_hash" | "code_hash" | "expires_at"
-      >;
-      shipping_rate_quotes: Table<
-        ShippingRateQuote,
-        | "listing_id"
-        | "provider"
-        | "provider_shipment_id"
-        | "rate_ref"
-        | "carrier"
-        | "service"
-        | "service_label"
-        | "amount_cents"
-        | "destination_hash"
-        | "parcel"
-        | "expires_at"
-      >;
-      shipment_events: Table<ShipmentEvent, "shipment_id" | "status" | "occurred_at">;
-      seller_adjustments: Table<SellerAdjustment, "kind" | "amount_cents">;
-      returns: Table<
-        OrderReturn,
-        "order_id" | "return_type" | "responsibility",
-        [
-          {
-            foreignKeyName: "returns_order_id_fkey";
-            columns: ["order_id"];
-            isOneToOne: false;
-            referencedRelation: "orders";
-            referencedColumns: ["id"];
-          },
-        ]
-      >;
-      return_items: Table<ReturnItem, "return_id" | "order_item_id">;
-      shop_profiles: Table<ShopProfile, "profile_id">;
-      payments: Table<Payment, "order_id" | "amount_cents">;
-      offers: Table<
-        Offer,
-        "listing_id" | "buyer_id" | "amount_cents",
-        [
-          {
-            foreignKeyName: "offers_listing_id_fkey";
-            columns: ["listing_id"];
-            isOneToOne: false;
-            referencedRelation: "listings";
-            referencedColumns: ["id"];
-          },
-        ]
-      >;
-      reviews: Table<Review, "order_id" | "reviewer_id" | "reviewee_id" | "rating">;
-      listing_questions: Table<ListingQuestion, "listing_id" | "author_id" | "body">;
-      messages: Table<Message, "sender_id" | "recipient_id" | "body">;
-      conversations: Table<Conversation, "type" | "participant_a" | "participant_b">;
-      conversation_unreads: Table<ConversationUnread, "conversation_id" | "user_id">;
-      notifications: Table<Notification, "user_id" | "kind" | "section" | "title">;
-      admin_users: Table<AdminUser, "user_id">;
-      admin_audit_log: Table<AdminAuditLogEntry, "actor_id" | "action" | "subject_type" | "subject_id" | "reason">;
-      reports: Table<Report, "subject_type" | "subject_id" | "reason">;
-      webhook_events: Table<WebhookEvent, "id" | "type">;
-      transfer_intents: Table<TransferIntent, "order_id" | "amount_cents" | "currency">;
-      payment_recoveries: Table<PaymentRecovery, "kind">;
-      refund_operations: Table<
-        RefundOperation,
-        "order_id" | "amount_cents" | "currency" | "remaining_before_cents" | "requested_by" | "idempotency_key"
-      >;
-      admin_alert_outbox: Table<AdminAlertOutboxRow, "kind" | "title">;
-      job_config: Table<JobConfig, "key" | "value">;
-      dispute_evidence: Table<DisputeEvidence, "order_id" | "url">;
-      vehicle_makes: Table<VehicleMake, "id" | "name">;
-      vehicle_models: Table<VehicleModel, "make_id" | "name">;
-      catalog_makes: Table<CatalogMake, "name">;
-      catalog_models: Table<CatalogModel, "make_id" | "name">;
-      listing_fitments: Table<ListingFitment, "listing_id" | "make" | "model">;
-      listing_part_numbers: Table<ListingPartNumber, "listing_id" | "number">;
-      saved_searches: Table<SavedSearch, "user_id" | "name">;
-      car_hotspots: Table<CarHotspot, "car_id" | "image_url" | "x" | "y" | "label">;
-      ops_cases: Table<OpsCase, "kind">;
-      part_number_links: Table<PartNumberLink, "from_compact" | "to_compact" | "kind">;
-      staged_uploads: Table<StagedUpload, "owner_id" | "bucket" | "path" | "url">;
-      listing_imports: Table<ListingImport, "user_id" | "source_mode">;
-    };
-    Views: {
-      /** Explore timeline (migration 0032). Read-only; no Insert/Update. */
-      feed_events: {
-        Row: FeedEvent;
-        Relationships: [];
-      };
-    };
-    Functions: {
-      prepare_payment_request: { Args: { p_key: string; p_request: Json }; Returns: Json };
-      record_payment_reference: { Args: { p_key: string; p_reference: string }; Returns: undefined };
-      settle_payment_capture: { Args: { p_reference: string; p_order_ids: string[]; p_amount: number; p_currency: string; p_source: string | null; p_buyer: string }; Returns: Json };
-      worker_health_snapshot: { Args: Record<string, never>; Returns: Json };
-      request_account_deletion: { Args: Record<string, never>; Returns: string };
-      execute_admin_command: { Args: { p_action: string; p_subject: string; p_reason: string; p_data?: Json }; Returns: Json };
-      record_worker_run: { Args: { p_id: string; p_family: string; p_status: string; p_summary?: Json }; Returns: undefined };
-      capture_reconciliation_candidates: { Args: Record<string, never>; Returns: Json };
-      enqueue_order_receipt: { Args: { p_buyer: string; p_destination: string }; Returns: undefined };
-      claim_remediation_jobs: { Args: { p_kind: string; p_limit?: number }; Returns: Json };
-      finish_remediation_job: { Args: { p_id: string; p_lease: string; p_error?: string | null }; Returns: undefined };
-
-      /** Claims listings and creates pending orders in one transaction (0007;
-       *  0053 added the rated-checkout shipping overrides). */
-      purchase_begin: {
-        Args: {
-          p_buyer_id: string;
-          p_listing_ids: string[];
-          p_idempotency_key?: string | null;
-          p_reservation_window?: string;
-          /** listing_id → shipping cents from a server-validated quote (0053). */
-          p_shipping_overrides?: Record<string, number> | null;
-        };
-        Returns: PurchaseBeginResult;
-      };
-      /** Atomically burns a pickup pass and delivers the order (0054). */
-      pickup_redeem: {
-        Args: {
-          p_order_id: string;
-          p_seller_id: string;
-          p_hash: string;
-        };
-        Returns: { ok: boolean; reason?: string };
-      };
-      /** Settles a claimed order — the future webhook entry point (0007). */
-      purchase_finalize: {
-        Args: {
-          p_order_id: string;
-          p_success: boolean;
-          p_provider?: string;
-          p_reference?: string | null;
-          p_failure_reason?: string | null;
-        };
-        /** { applied, reason?, status? } — `applied:false` means already settled. */
-        Returns: { applied: boolean; reason?: string; status?: string };
-      };
-      offer_accept_begin: {
-        Args: {
-          p_offer_id: string;
-          p_seller_id: string;
-          p_reservation_window?: string;
-        };
-        Returns: string | null;
-      };
-      release_expired_reservations: {
-        Args: Record<string, never>;
-        Returns: { listings_released: number; orders_cancelled: number };
-      };
-      consume_rate_limit: {
-        Args: { p_key: string; p_limit: number; p_window: string };
-        Returns: boolean;
-      };
-      search_listing_ids: {
-        Args: { p_query: string };
-        Returns: string[];
-      };
-      /** Explore search RPCs (0057) — ranked candidate ids per object family.
-       *  Visibility enforced inside each function (public / published /
-       *  unsuspended), so the service-role caller stays safe. */
-      search_car_ids: {
-        Args: { p_query: string };
-        Returns: string[];
-      };
-      search_update_ids: {
-        Args: { p_query: string };
-        Returns: string[];
-      };
-      search_profile_ids: {
-        Args: { p_query: string };
-        Returns: string[];
-      };
-      /** Ids of the caller's conversations matching q by preview, counterparty
-       *  name, or message body — bounded at 50, RLS-scoped (0031). */
-      search_user_messages: {
-        Args: { p_query: string };
-        Returns: string[];
-      };
-      /** Bumps a listing's public view counter. Callable by anyone. */
-      bump_listing_view: {
-        Args: { p_listing: string };
-        Returns: undefined;
-      };
-      /** True when auth.uid() is a row in admin_users (migration 0018). */
-      is_admin: {
-        Args: Record<string, never>;
-        Returns: boolean;
-      };
-      /** 'admin' | 'viewer' for console members, null otherwise (0023). */
-      admin_role: {
-        Args: Record<string, never>;
-        Returns: string | null;
-      };
-      /** Raises unless the actor holds the full 'admin' role (0040). Called by
-       *  auditedAction before every mutation — the DB-side admin boundary. */
-      assert_admin_actor: {
-        Args: { p_actor: string };
-        Returns: undefined;
-      };
-      /** Atomically reserves a refund amount as a refund_operations row (0026). */
-      begin_refund_operation: {
-        Args: {
-          p_order_id: string;
-          p_amount_cents: number | null;
-          p_reason: string;
-          p_requested_by: string;
-          p_actor_role: string;
-          p_resolve_dispute: boolean;
-          p_dispute_outcome: string | null;
-          p_payment_reference: string | null;
-          p_refund_reference?: string | null;
-          p_external?: boolean;
-        };
-        Returns: Json;
-      };
-      /** Applies all internal refund effects in one transaction (0026). */
-      settle_refund_operation: {
-        Args: { p_operation_id: string };
-        Returns: Json;
-      };
-      /** Leased, bounded transfer-intent claim under SKIP LOCKED (0026). */
-      claim_transfer_intents: {
-        Args: {
-          p_worker: string;
-          p_batch?: number;
-          p_lease_seconds?: number;
-          p_max_attempts?: number;
-        };
-        Returns: TransferIntent[];
-      };
-      /** One page of seller-ledger rows, filtered/sorted/counted in SQL (0030). */
-      seller_listing_stats: {
-        Args: {
-          p_seller: string;
-          p_register?: string;
-          p_sort?: string;
-          p_limit?: number;
-          p_offset?: number;
-        };
-        Returns: SellerListingStat[];
-      };
-      /** Register chip counts for the seller's ledger, one grouped scan (0030). */
-      seller_register_tally: {
-        Args: { p_seller: string };
-        Returns: SellerRegisterTally[];
-      };
-      /** Buyer questions across the seller's whole catalog with no reply (0035). */
-      seller_open_questions: {
-        Args: { p_seller: string };
-        Returns: number;
-      };
-    };
-    Enums: Record<string, never>;
-    CompositeTypes: Record<string, never>;
+  public: Omit<GeneratedDatabase["public"], "Tables" | "Functions"> & {
+    Tables: { [K in keyof GeneratedTables]: Omit<GeneratedTables[K], "Row"> & { Row: RefinedRow<K> } };
+    Functions: { [K in keyof GeneratedFunctions]: {
+      Args: RpcArgs<K>;
+      Returns: K extends "seller_listing_stats" ? SellerListingStat[] : GeneratedFunctions[K]["Returns"];
+    } };
   };
 };

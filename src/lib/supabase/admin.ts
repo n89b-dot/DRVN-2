@@ -17,5 +17,6 @@ export function createAdminClient() {
   const { url, serviceRoleKey } = requireServerEnv();
   return createSupabaseClient<Database>(url, serviceRoleKey, {
     auth: { persistSession: false },
+    global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(10000) }) },
   });
 }

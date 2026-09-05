@@ -1,3 +1,4 @@
+import { trackedWorker } from "@/lib/tracked-worker";
 import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
@@ -21,7 +22,7 @@ import { flushMonitoring, reportError } from "@/lib/monitoring";
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const BATCH = 200;
 
-export async function POST(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     reportError("[media-gc] CRON_SECRET is not configured");
@@ -55,10 +56,11 @@ export async function POST(request: Request) {
         removed += 1;
       } else if (outcome === "referenced") {
         // Persisted without a finalize stamp — heal the ledger, keep the object.
-        await admin
+        const healedRow = await admin
           .from("staged_uploads")
           .update({ consumed_at: new Date().toISOString() })
           .eq("id", row.id);
+        if (healedRow.error) throw healedRow.error;
         healed += 1;
       } else {
         // Transient storage error or unparseable URL — logged inside the
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({ scanned: stale?.length ?? 0, removed, healed, skipped });
+    return Response.json({ scanned: stale?.length ?? 0, removed, healed, skipped }, { status: skipped ? 503 : 200 });
   } catch (error) {
     reportError("[media-gc] sweep failed", error);
     return new Response("worker failed", { status: 500 });
@@ -75,3 +77,7 @@ export async function POST(request: Request) {
     await flushMonitoring();
   }
 }
+
+export async function POST(request: Request) { return trackedWorker("media", request, () => run(request)); }
+
+export const maxDuration = 300;

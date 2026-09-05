@@ -34,7 +34,7 @@ function stripe(): Stripe {
   if (!client) {
     const key = stripeSecretKey();
     if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
-    client = new Stripe(key);
+    client = new Stripe(key, { timeout: 10_000, maxNetworkRetries: 0 });
   }
   return client;
 }

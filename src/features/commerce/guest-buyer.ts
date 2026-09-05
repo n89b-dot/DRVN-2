@@ -84,7 +84,7 @@ export async function resolveGuestBuyer(
 export async function deliverOrderAccessLink(email: string, destination: string) {
   const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://127.0.0.1:3000").origin;
   const { url, anonKey } = publicEnv();
-  const auth = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const auth = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(10000) }) } });
   const { error } = await auth.auth.signInWithOtp({
     email: email.trim().toLowerCase(),
     options: { shouldCreateUser: false, emailRedirectTo: `${origin}/confirm?next=${encodeURIComponent(safeRedirectPath(destination, "/orders"))}` },
