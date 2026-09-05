@@ -2,11 +2,12 @@
 
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 
-import { Dialog } from "@/components/ui";
+import { Dialog, TextField } from "@/components/ui";
 import type { AdminActionState } from "@/lib/admin/actions";
 import { cx } from "@/lib/format";
 
 export type ActionField =
+  | { kind: "text"; name: string; label: string; hint?: string }
   | { kind: "reason"; name?: string; label?: string; placeholder?: string }
   | { kind: "amount"; name?: string; label: string; hint?: string }
   | { kind: "select"; name: string; label: string; options: { value: string; label: string }[] };
@@ -100,6 +101,9 @@ export function ActionDialog({
                     />
                   </div>
                 );
+              }
+              if (f.kind === "text") {
+                return <TextField key={fieldId} id={fieldId} name={f.name} label={f.label} hint={f.hint} maxLength={255} autoComplete="off" />;
               }
               if (f.kind === "amount") {
                 return (

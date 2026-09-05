@@ -1976,6 +1976,7 @@ export type Database = {
           shipping_cents: number
           shipping_quote: Json | null
           status: string
+          stripe_dispute_id: string | null
           subtotal_cents: number
           total_cents: number
           tracking_number: string | null
@@ -2029,6 +2030,7 @@ export type Database = {
           shipping_cents?: number
           shipping_quote?: Json | null
           status?: string
+          stripe_dispute_id?: string | null
           subtotal_cents?: number
           total_cents?: number
           tracking_number?: string | null
@@ -2082,6 +2084,7 @@ export type Database = {
           shipping_cents?: number
           shipping_quote?: Json | null
           status?: string
+          stripe_dispute_id?: string | null
           subtotal_cents?: number
           total_cents?: number
           tracking_number?: string | null
@@ -2727,6 +2730,57 @@ export type Database = {
             columns: ["refund_operation_id"]
             isOneToOne: false
             referencedRelation: "refund_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refund_recredit_proofs: {
+        Row: {
+          adjustment_id: string
+          amount_cents: number
+          balance_transaction: string | null
+          currency: string
+          original_reversal_reference: string | null
+          recovery_id: string
+          recredit_transfer_reference: string | null
+          verified_at: string
+          verified_by: string
+        }
+        Insert: {
+          adjustment_id: string
+          amount_cents: number
+          balance_transaction?: string | null
+          currency: string
+          original_reversal_reference?: string | null
+          recovery_id: string
+          recredit_transfer_reference?: string | null
+          verified_at?: string
+          verified_by: string
+        }
+        Update: {
+          adjustment_id?: string
+          amount_cents?: number
+          balance_transaction?: string | null
+          currency?: string
+          original_reversal_reference?: string | null
+          recovery_id?: string
+          recredit_transfer_reference?: string | null
+          verified_at?: string
+          verified_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_recredit_proofs_adjustment_id_fkey"
+            columns: ["adjustment_id"]
+            isOneToOne: true
+            referencedRelation: "refund_lifecycle_adjustments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_recredit_proofs_recovery_id_fkey"
+            columns: ["recovery_id"]
+            isOneToOne: true
+            referencedRelation: "payment_recoveries"
             referencedColumns: ["id"]
           },
         ]
@@ -3581,6 +3635,51 @@ export type Database = {
           },
         ]
       }
+      stripe_dispute_journal: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          dispute_id: string
+          last_event_created: number
+          last_event_id: string
+          lease_expires_at: string | null
+          lease_id: string | null
+          order_ids: string[]
+          payment_reference: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          currency: string
+          dispute_id: string
+          last_event_created: number
+          last_event_id: string
+          lease_expires_at?: string | null
+          lease_id?: string | null
+          order_ids?: string[]
+          payment_reference: string
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          dispute_id?: string
+          last_event_created?: number
+          last_event_id?: string
+          lease_expires_at?: string | null
+          lease_id?: string | null
+          order_ids?: string[]
+          payment_reference?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       transfer_intents: {
         Row: {
           amount_cents: number
@@ -3797,6 +3896,20 @@ export type Database = {
       actor_name: { Args: { p_id: string }; Returns: string }
       admin_role: { Args: never; Returns: string }
       advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
+      apply_stripe_dispute_event: {
+        Args: {
+          p_amount: number
+          p_closed: boolean
+          p_created: number
+          p_currency: string
+          p_dispute: string
+          p_event: string
+          p_intent: string
+          p_lease: string
+          p_status: string
+        }
+        Returns: string
+      }
       assert_admin_actor: { Args: { p_actor: string }; Returns: undefined }
       assert_deletion_ready: { Args: { p_user: string }; Returns: undefined }
       begin_admin_external_operation: {
@@ -3909,6 +4022,10 @@ export type Database = {
           p_worker: string
         }
         Returns: string
+      }
+      complete_stripe_dispute_loss: {
+        Args: { p_dispute: string; p_event: string; p_lease: string }
+        Returns: undefined
       }
       complete_transfer_intent: {
         Args: {
@@ -4039,6 +4156,10 @@ export type Database = {
           p_operation_key: string
           p_worker: string
         }
+        Returns: string
+      }
+      hold_stripe_dispute: {
+        Args: { p_detail: string; p_dispute: string }
         Returns: string
       }
       identifier_matches_listing: {
@@ -4257,6 +4378,19 @@ export type Database = {
           p_refund_reference: string
         }
         Returns: Json
+      }
+      record_refund_recredit_proof: {
+        Args: {
+          p_actor: string
+          p_adjustment: string
+          p_amount: number
+          p_balance_transaction?: string
+          p_currency: string
+          p_recovery: string
+          p_reversal?: string
+          p_transfer?: string
+        }
+        Returns: undefined
       }
       record_transfer_recovery: {
         Args: {

@@ -55,8 +55,8 @@ export default async function AdminPaymentsPage({
       <Rv as="header" className="pagehead">
         <h1>Payments ops</h1>
         <p className="pagehead__sub">
-          Recovery cases stay open until a human closes them with a note. Refunds are driven from
-          the order sheet — never the Stripe dashboard, which the database can&apos;t see.
+          Recovery cases need an audited resolution. Late refund failures require verified seller
+          recredit and a settled replacement buyer refund before they can close.
         </p>
       </Rv>
 
@@ -98,8 +98,9 @@ export default async function AdminPaymentsPage({
                     trigger="Close case"
                     triggerClassName="relbtn !static"
                     hidden={{ recovery_id: r.id }}
-                    confirmNote="Recovered = the money is back where it belongs. Written off = the platform absorbs it, on record."
+                    confirmNote={r.kind === "refund_late_failure" ? "Seller repayment alone does not settle this case. The replacement buyer refund must also be completed and linked to the failed refund." : "Recovered = the money is back where it belongs. Written off = the platform absorbs it, on record."}
                     fields={[
+                      ...(r.kind === "refund_late_failure" ? [{kind: "text" as const, name: "recredit_transfer_reference", label: "Seller recredit transfer ID", hint: "Required when the seller is owed a recredit. DRVN verifies the amount, recipient and refund identity with Stripe."}] : []),
                       {
                         kind: "select",
                         name: "outcome",

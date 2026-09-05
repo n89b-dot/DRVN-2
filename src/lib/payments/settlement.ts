@@ -1,3 +1,4 @@
+import { applyJournaledDispute } from "./dispute-journal";
 import { CaptureMismatch, recordCaptureRecovery } from "./capture-recovery";
 import type Stripe from "stripe";
 
@@ -678,9 +679,9 @@ export async function dispatchStripeEvent(
     case "refund.failed":
       return applyRefundLifecycleEvent(admin, event, event.data.object as Stripe.Refund);
     case "charge.dispute.created":
-      return applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false);
+      return applyJournaledDispute(admin, event, event.data.object as Stripe.Dispute, false, () => applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false));
     case "charge.dispute.closed":
-      return applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true);
+      return applyJournaledDispute(admin, event, event.data.object as Stripe.Dispute, true, () => applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true));
     case "account.updated":
       return applyAccountUpdate(admin, event.data.object as Stripe.Account);
     default:

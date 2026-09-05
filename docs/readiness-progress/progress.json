@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-05T19:54:18.728916+00:00",
+  "updatedAt": "2026-09-05T20:21:48.063270+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Latest local checks: 499 unit tests, 21 SQL guard suites on both local and fresh databases, 10 Stripe API tests, 7 accessibility tests and 8 security/transaction browser tests pass. Provider-dispute ordering, late-refund recredit and broader acceptance remain unfinished; hosted gates are still pending.",
+  "current": "Provider-dispute ordering now passes a real local crash/replay test. Latest checks: 525 unit tests and 23 SQL guard suites pass. Late-refund closure requires evidence for both seller and buyer; automated recovery fulfillment and hosted acceptance remain unfinished.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -66,7 +66,7 @@
       "title": "Payment updates that cannot disappear",
       "category": "Money reliability",
       "status": "partial",
-      "owner": "GPT-5.6 \u00b7 Webhook stream",
+      "owner": "Implementation lead",
       "why": "Keep refunds, disputes, and seller-account changes consistent even when a database write fails.",
       "before": "Some provider updates can be acknowledged before their effects are safely recorded.",
       "after": "Failed saves stay retryable; uncertain events create one tracked recovery case. Pending and later-failed refunds receive explicit handling.",
@@ -111,14 +111,14 @@
         {
           "id": "late_recovery",
           "label": "Late-failure seller re-credit and workflow recovery",
-          "state": "todo",
-          "evidence": "Counters and obligations are durable; seller re-credit and order workflow restoration still need operator reconciliation."
+          "state": "doing",
+          "evidence": "Seller recredit verification and immutable proof implemented; closure also requires settled replacement buyer refund. Automated replacement reservation/reversal workflow remains unfinished."
         },
         {
           "id": "dispute_ordering",
           "label": "Provider-specific dispute ordering journal",
-          "state": "todo",
-          "evidence": "Checked dispute persistence is implemented; full provider-specific ordering remains open."
+          "state": "done",
+          "evidence": "Private provider journal, atomic open/close, exact basket admission, partial-dispute recovery, lease fencing and real local crash/replay integration pass."
         },
         {
           "id": "hosted",
@@ -133,11 +133,11 @@
       "title": "Seller transfers that survive a crash",
       "category": "Money reliability",
       "status": "active",
-      "owner": "GPT-5.6 \u00b7 Transfer stream",
+      "owner": "Implementation lead",
       "why": "Prevent a restarted worker from paying a seller twice or repeating a reversal.",
       "before": "A crash can leave Stripe ahead of local records, and stale retries may miss that earlier transfer.",
       "after": "Each transfer has a saved identity and amount; retries find and reconcile prior provider effects before issuing anything new.",
-      "next": "Implement reversal recovery beyond the provider idempotency window, then verify hosted Connect behavior.",
+      "next": "Verify hosted Connect crash-window behavior once isolated staging is available.",
       "checkpoints": [
         {
           "id": "review",

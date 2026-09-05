@@ -1,5 +1,7 @@
 "use server";
 
+import { verifyLateRefundRecovery } from "@/lib/payments/late-refund-recovery";
+
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
@@ -589,6 +591,7 @@ export async function adminResolveRecovery(
         reason: note,
       },
       async () => {
+        await verifyLateRefundRecovery(ctx.admin, recoveryId, ctx.userId, field(formData, "recredit_transfer_reference"));
         const { data: resolved, error } = await ctx.admin
           .from("payment_recoveries")
           .update({

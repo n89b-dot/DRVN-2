@@ -1,0 +1,50 @@
+begin;
+do $$
+declare seller uuid:=gen_random_uuid();buyer uuid:=gen_random_uuid();operator uuid:=gen_random_uuid();oid uuid;op uuid;replacement uuid;adjustment uuid;recovery uuid;result jsonb;rejected boolean;
+begin
+ insert into auth.users(id,email) values(seller,'recredit-seller@drvn.test'),(buyer,'recredit-buyer@drvn.test'),(operator,'recredit-admin@drvn.test');
+ insert into public.admin_users(user_id,role) values(operator,'admin');
+ insert into public.orders(buyer_id,seller_id,status,subtotal_cents,platform_fee_cents,total_cents,currency,transfer_reference)
+ values(buyer,seller,'paid',10000,1000,10000,'USD','tr_recredit_original') returning id into oid;
+ insert into public.payments(order_id,provider,provider_reference,status,amount_cents,currency) values(oid,'stripe','pi_recredit','succeeded',10000,'USD');
+ result:=public.record_refund_provider_event('evt_recredit_success','re_recredit',null,oid,'pi_recredit',3000,'usd','succeeded',now(),'txn_refund');
+ op:=(result->>'operation_id')::uuid;
+ perform public.settle_refund_operation(op);
+ update public.refund_operations set status='completed',reversal_reference='trr_recredit',reversal_completed_at=now() where id=op;
+ perform public.record_refund_provider_event('evt_recredit_failed','re_recredit',op,oid,'pi_recredit',3000,'usd','failed',now(),'txn_refund','txn_failure','insufficient_funds');
+ select id into strict adjustment from public.refund_lifecycle_adjustments where refund_operation_id=op;
+ select id into strict recovery from public.payment_recoveries where recovery_key='refund-late-failure:re_recredit';
+ rejected:=false;
+ begin update public.payment_recoveries set status='recovered' where id=recovery; exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Case closed without recredit evidence'; end if;
+ rejected:=false;
+ begin update public.payment_recoveries set status='written_off' where id=recovery; exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Write-off erased seller obligation'; end if;
+ rejected:=false;
+ begin perform public.record_refund_recredit_proof(recovery,adjustment,buyer,2700,'usd','tr_repaid','trr_recredit','txn_repaid'); exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Non-admin attested provider evidence'; end if;
+ rejected:=false;
+ begin perform public.record_refund_recredit_proof(recovery,adjustment,operator,2600,'usd','tr_repaid','trr_recredit','txn_repaid'); exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Wrong recredit amount accepted'; end if;
+ perform public.record_refund_recredit_proof(recovery,adjustment,operator,2700,'usd','tr_repaid','trr_recredit','txn_repaid');
+ perform public.record_refund_recredit_proof(recovery,adjustment,operator,2700,'usd','tr_repaid','trr_recredit','txn_repaid');
+ if (select count(*) from public.refund_recredit_proofs where adjustment_id=adjustment)<>1 then raise exception 'Proof replay duplicated'; end if;
+ rejected:=false;
+ begin update public.refund_recredit_proofs set amount_cents=1 where adjustment_id=adjustment; exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Verified proof was mutable'; end if;
+ rejected:=false;
+ begin update public.payment_recoveries set status='recovered' where id=recovery; exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Seller proof erased the outstanding buyer refund'; end if;
+ -- This fixture represents a separately reconciled and settled replacement;
+ -- this guard does not perform an external refund or release a real hold.
+ update public.refund_operations set status='failed' where id=op;
+ result:=public.begin_refund_operation(oid,3000,'Admin refund: Replacement for failed refund re_recredit','guard','admin',true,'admin_refunded','pi_recredit','re_replacement',true);
+ replacement:=(result->>'operation_id')::uuid;
+ perform public.settle_refund_operation(replacement);
+ update public.refund_operations set status='completed',provider_status='succeeded',reversal_reference='trr_replacement' where id=replacement;
+ update public.payment_recoveries set status='recovered',resolved_by=operator,resolved_at=now(),resolution_note='Exact seller recredit verified' where id=recovery;
+ if (select status from public.payment_recoveries where id=recovery)<>'recovered' then raise exception 'Verified case could not close'; end if;
+ if has_function_privilege('authenticated','public.record_refund_recredit_proof(uuid,uuid,uuid,integer,text,text,text,text)','execute') then raise exception 'Client can forge provider proof'; end if;
+ raise notice 'all refund recredit checks passed';
+end $$;
+rollback;
