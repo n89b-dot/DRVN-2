@@ -40,7 +40,7 @@ test.afterAll(async () => {
 async function signInFresh(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel(/email/i).fill(seller.email);
-  await page.getByLabel(/password/i).fill(seller.password);
+  await page.getByLabel(/^password$/i).fill(seller.password);
   await page.getByRole("button", { name: /log in|sign in/i }).click();
   await page.waitForURL(/\/home/);
 }
@@ -118,9 +118,16 @@ test("gallery drop zone: uploads images, refuses non-images with a human message
   await expect(page.getByText(/photos only — notes\.txt isn't an image/i)).toBeVisible();
 });
 
-test("sell publish: gated with an announced checklist until payouts enable", async ({ page }) => {
+test("sell publish: respects the configured payment mode and payout readiness", async ({ page }) => {
   await signInFresh(page);
   await page.goto("/sell");
+
+  if (process.env.PAYMENTS_MODE === "stub") {
+    // Stub checkout intentionally does not require a real Connect account.
+    await expect(page.getByRole("button", { name: /publish to market/i })).not.toHaveAttribute("aria-disabled", "true");
+    await expect(page.locator("#publish-checklist")).not.toContainText(/payouts aren't set up/i);
+    return;
+  }
 
   // The blocker is named up front, and the CTA is aria-disabled — present,
   // focusable, described by the checklist — not vanished from the tab order.

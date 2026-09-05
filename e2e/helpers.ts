@@ -6,6 +6,8 @@ import { expect, type Page } from "@playwright/test";
  * Kept separate so golden-path stays exactly as it is.
  */
 
+const ownedEmails = new Set<string>();
+
 export type TestUser = {
   email: string;
   password: string;
@@ -24,9 +26,10 @@ export function makeUser(role: string, stamp: number): TestUser {
 }
 
 export async function signUp(page: Page, user: TestUser) {
+  ownedEmails.add(user.email);
   await page.goto("/signup");
   await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/password/i).fill(user.password);
+  await page.getByLabel(/^password$/i).fill(user.password);
   await page.getByRole("button", { name: /sign up|create account/i }).click();
 
   // With email confirmation off, signup lands on onboarding.
@@ -40,7 +43,7 @@ export async function signUp(page: Page, user: TestUser) {
 export async function signIn(page: Page, user: TestUser) {
   await page.goto("/login");
   await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/password/i).fill(user.password);
+  await page.getByLabel(/^password$/i).fill(user.password);
   await page.getByRole("button", { name: /log in|sign in/i }).click();
   await page.waitForURL(/\/home/);
 }
@@ -132,7 +135,7 @@ export async function cleanupE2eUsers() {
   const admin = createClient(url, key, { auth: { persistSession: false } });
   const { data } = await admin.auth.admin.listUsers();
   for (const user of data?.users ?? []) {
-    if (user.email?.startsWith("e2e-") && user.email.endsWith("@drvn.test")) {
+    if (user.email && ownedEmails.has(user.email)) {
       await admin.auth.admin.deleteUser(user.id);
     }
   }

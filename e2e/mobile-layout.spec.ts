@@ -94,11 +94,11 @@ test.describe.serial("mobile layout @ 375x812", () => {
     await page.goto("/home");
     const img = page.locator(".vehicle--row .vehicle__img").first();
     await expect(img).toBeVisible();
-    const box = await img.boundingBox();
+    const layoutWidth = await img.evaluate((element) => parseFloat(getComputedStyle(element).width));
     // The canonical .vehicle--row pattern gives the plate a 96px column at
     // compact widths (037895c) — still a vehicle plate, not a ~56px order
     // thumb, which is what this guard exists to catch.
-    expect(box!.width).toBeGreaterThanOrEqual(96);
+    expect(layoutWidth).toBeGreaterThanOrEqual(96);
   });
 
   test("garage: build sheet — full-width plate, folded details, three-tool rail", async ({ page }) => {

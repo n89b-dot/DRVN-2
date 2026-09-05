@@ -32,7 +32,7 @@ const partPrice = "250";
 async function signUp(page: Page, user: typeof seller) {
   await page.goto("/signup");
   await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/password/i).fill(user.password);
+  await page.getByLabel(/^password$/i).fill(user.password);
   // Specific on purpose: dev mode adds an "Open Next.js Dev Tools" button that
   // a loose /open/i matcher collides with under strict mode.
   await page.getByRole("button", { name: /sign up|create account/i }).click();
@@ -48,7 +48,7 @@ async function signUp(page: Page, user: typeof seller) {
 async function signIn(page: Page, user: typeof seller) {
   await page.goto("/login");
   await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/password/i).fill(user.password);
+  await page.getByLabel(/^password$/i).fill(user.password);
   await page.getByRole("button", { name: /log in|sign in/i }).click();
   await page.waitForURL(/\/home/);
 }
@@ -121,7 +121,7 @@ test.describe.serial("golden path", () => {
     // going to the cart is the buyer's own step.
     await page.getByRole("button", { name: /add to cart/i }).click();
     await expect(page.getByText(/added to cart/i).first()).toBeVisible();
-    await page.goto("/cart");
+    await page.getByRole("link", { name: /in cart.*view cart/i }).click();
     await page.getByRole("link", { name: /proceed to checkout/i }).click();
     await expect(page).toHaveURL(/\/checkout/);
 
@@ -171,34 +171,8 @@ test.describe.serial("golden path", () => {
     const dispatchDialog = page.getByRole("dialog");
     await dispatchDialog.getByLabel(/carrier/i).fill("Royal Mail");
     await dispatchDialog.getByLabel(/tracking/i).fill(`E2E${stamp}`);
-    // Click-until-applied: the sheet's remount churn can swallow a single
-    // click, and the dialog's own copy contains "dispatched" — so the only
-    // honest success signal is the tracking number rendered on the ORDER,
-    // outside any dialog.
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const applied = await page.evaluate((needle) => {
-        const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(
-          (d) => (d as HTMLElement).offsetParent !== null
-        );
-        const confirm = dialogs
-          .flatMap((d) => [...d.querySelectorAll("button")])
-          .find((b) => b.textContent?.includes("Mark dispatched"));
-        if (confirm) {
-          confirm.click();
-          return false;
-        }
-        // Dialog gone — has the tracking number landed on the sheet?
-        return (document.body.textContent ?? "").includes(needle);
-      }, `E2E${stamp}`);
-      if (applied) break;
-      await page.waitForTimeout(500);
-    }
-    // In-place RSC refresh can lag behind the action — fresh server HTML is
-    // the authoritative check either way.
-    if (!(await page.getByText(`E2E${stamp}`).first().isVisible().catch(() => false))) {
-      await page.reload();
-    }
-    await expect(page.getByText(`E2E${stamp}`).first()).toBeVisible();
+    await dispatchDialog.getByRole("button", { name: /mark dispatched/i }).click();
+    await expect(page.getByText(`E2E${stamp}`).first()).toBeVisible({ timeout: 30_000 });
   });
 
   test("buyer confirms receipt and reviews", async ({ page }) => {
@@ -212,46 +186,8 @@ test.describe.serial("golden path", () => {
       .click();
     await page.waitForURL(/\/orders\/[\w-]+/);
 
-    // Mark-received confirms through the consequence dialog (payout clearing
-    // starts here — the dialog says so before the click).
-    // Direct DOM activation: this sheet re-hydrates/remounts enough that
-    // Playwright's actionability retries starve on a "detached" element.
-    // Clicking the live node at call time sidesteps the churn. (Known
-    // limitation, worth a look: the buyer order sheet remounts repeatedly
-    // after load.)
-    await page.waitForFunction(() =>
-      [...document.querySelectorAll("button")].some((b) =>
-        b.textContent?.includes("Mark as received")
-      )
-    );
-    // Click-until-applied: one pass per tick — open the dialog if closed,
-    // click its confirm if open, and only stop when the ORDER ITSELF proves
-    // the transition (the review tile / "Rate this trade" only exists once
-    // the order is delivered — dialog copy can't fake that).
-    for (let attempt = 0; attempt < 40; attempt++) {
-      const applied = await page.evaluate(() => {
-        const main = document.querySelector("main");
-        if (main?.textContent?.includes("Rate this trade")) return true;
-        const dialog = [...document.querySelectorAll('[role="dialog"]')].find(
-          (d) =>
-            (d as HTMLElement).offsetParent !== null &&
-            /mark as received/i.test(d.textContent ?? "")
-        );
-        const scope = dialog ?? main ?? document;
-        const btn = [...scope.querySelectorAll("button")].find((b) =>
-          b.textContent?.includes("Mark as received")
-        );
-        btn?.click();
-        return false;
-      });
-      if (applied) break;
-      await page.waitForTimeout(500);
-    }
-    if (
-      !(await page.locator("main").getByText("Rate this trade").isVisible().catch(() => false))
-    ) {
-      await page.reload(); // authoritative server HTML
-    }
+    await page.getByRole("button", { name: /mark as received/i }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /mark as received/i }).click();
     await expect(page.locator("main").getByText("Rate this trade")).toBeVisible();
 
     // Reviews unlock only after delivery, and the rating is explicit — no
@@ -295,7 +231,7 @@ test.afterAll(async () => {
 
   const { data } = await admin.auth.admin.listUsers();
   for (const user of data?.users ?? []) {
-    if (user.email?.startsWith("e2e-") && user.email.endsWith("@drvn.test")) {
+    if (user.email === seller.email || user.email === buyer.email) {
       await admin.auth.admin.deleteUser(user.id);
     }
   }

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
+  addCar,
   cleanupE2eUsers,
   enableSellerPayouts,
   makeUser,
@@ -38,6 +39,7 @@ async function assertNoNestedInteractives(page: Page, label: string) {
 test.describe.serial("discovery + marketplace remediation", () => {
   test("setup: a seller publishes a part", async ({ page }) => {
     await signUp(page, seller);
+    await addCar(page, `Discovery fixture ${stamp}`);
     await enableSellerPayouts(seller.username);
     listingPath = await publishListing(page, { title: partTitle, price: "180", shipping: "12" });
     expect(listingPath).toMatch(/^\/listings\//);
@@ -102,10 +104,9 @@ test.describe.serial("discovery + marketplace remediation", () => {
     // Phones: all four segments share one row.
     await page.setViewportSize(VIEWPORTS.compactShort);
     await page.goto("/home");
-    const rows = await page
-      .getByRole("group", { name: /discovery segments/i })
-      .locator(".fbtn")
-      .evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
+    const phoneSegments = page.getByRole("group", { name: /discovery segments/i }).getByRole("link");
+    await expect(phoneSegments).toHaveCount(4);
+    const rows = await phoneSegments.evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
     expect(rows, "discovery segments must fit one row at 320px").toBe(1);
   });
 
@@ -134,7 +135,7 @@ test.describe.serial("discovery + marketplace remediation", () => {
     // Search/refine survive on the category route.
     await page.getByLabel(/search parts/i).fill("coil");
     // The submit's accessible name carries the `[ ]` bracket glyphs.
-    await page.locator('form[role="search"] button[type="submit"]').first().click();
+    await page.getByLabel(/search parts/i).press("Enter");
     await expect(page).toHaveURL(/\/marketplace\/brakes-suspension\/coilovers\?q=coil/);
 
     // Phones: the grid retires, the Browse sheet carries the whole taxonomy.

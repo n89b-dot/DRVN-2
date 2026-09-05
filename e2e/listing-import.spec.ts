@@ -105,6 +105,7 @@ test.describe("listing importer", () => {
   });
 
   test("forum URL import reads the first post", async ({ page }) => {
+    test.skip(process.env.LISTING_IMPORT_ALLOW_PRIVATE_HOSTS !== "true", "Production browser builds deny private fixture hosts; URL adapter fixtures run in the unit suite.");
     await signIn(page, user);
     await page.goto("/sell/import");
     const urlField = page.getByLabel(/paste the listing url/i);
@@ -134,6 +135,7 @@ test.describe("listing importer", () => {
   });
 
   test("a refused page falls forward to paste on the same import", async ({ page }) => {
+    test.skip(process.env.LISTING_IMPORT_ALLOW_PRIVATE_HOSTS !== "true", "Production browser builds deny private fixture hosts; URL adapter fixtures run in the unit suite.");
     await signIn(page, user);
     await page.goto("/sell/import");
     await page.getByLabel(/paste the listing url/i).fill(`${fixtureBase}/walled`);

@@ -211,7 +211,7 @@ test.describe.serial("Marketplace family", () => {
 
     await expect(page).toHaveURL(/\/login\?next=/);
     await page.getByLabel(/email/i).fill(buyer.email);
-    await page.getByLabel(/password/i).fill(buyer.password);
+    await page.getByLabel(/^password$/i).fill(buyer.password);
     await page.getByRole("button", { name: /sign in/i }).click();
 
     await expect(page).toHaveURL(new RegExp(listingPath));
@@ -232,7 +232,7 @@ test.describe.serial("Marketplace family", () => {
     // Signup accepts the destination…
     await expect(page).toHaveURL(/\/signup\?next=/);
     await page.getByLabel(/email/i).fill(newcomer.email);
-    await page.getByLabel(/password/i).fill(newcomer.password);
+    await page.getByLabel(/^password$/i).fill(newcomer.password);
     await page.getByRole("button", { name: /create account/i }).click();
 
     // …and it survives onboarding, which used to end unconditionally at /home.
@@ -263,10 +263,10 @@ test.describe.serial("Marketplace family", () => {
     for (const hostile of ["//example.com", "https://example.com/evil", "/\\example.com"]) {
       await page.goto(`/login?next=${encodeURIComponent(hostile)}`);
       await page.getByLabel(/email/i).fill(buyer.email);
-      await page.getByLabel(/password/i).fill(buyer.password);
+      await page.getByLabel(/^password$/i).fill(buyer.password);
       await page.getByRole("button", { name: /sign in/i }).click();
 
-      await page.waitForURL(/localhost/);
+      await page.waitForURL(/\/home/);
       expect(new URL(page.url()).hostname, `next=${hostile} escaped the origin`).toMatch(
         /localhost|127\.0\.0\.1/
       );

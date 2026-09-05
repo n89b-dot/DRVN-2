@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -6,6 +8,35 @@ import { expect, test, type Page } from "@playwright/test";
  * frozen and volatile regions (network images, live listing/feed content)
  * masked so the baselines stay deterministic across data changes.
  */
+
+// Visual baselines need the same conditional sections on an empty test DB.
+// This fixture is scoped to this suite and never uses the shared application env.
+const visualId = randomUUID();
+let visualUserId: string | undefined;
+const visualAdmin = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
+test.beforeAll(async () => {
+  const admin = visualAdmin();
+  const user = await admin.auth.admin.createUser({ email: `e2e-visual-${visualId}@drvn.test`, email_confirm: true });
+  if (user.error || !user.data.user) throw user.error || new Error("Visual fixture user missing");
+  visualUserId = user.data.user.id;
+  const path = `${visualUserId}/visual.png`;
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB9kAAAAASUVORK5CYII=", "base64");
+  const upload = await admin.storage.from("car-images").upload(path, png, { contentType: "image/png" });
+  if (upload.error) throw upload.error;
+  const cover = admin.storage.from("car-images").getPublicUrl(path).data.publicUrl;
+  const car = await admin.from("cars").insert({ owner_id: visualUserId, slug: `visual-${visualId}`, name: "Visual fixture build", is_public: true, cover_image_url: cover });
+  if (car.error) throw car.error;
+  const listing = await admin.from("listings").insert({ seller_id: visualUserId, title: "Visual fixture part", category: "performance", price_cents: 10000, shipping_cents: 0, currency: "GBP", status: "active" });
+  if (listing.error) throw listing.error;
+});
+test.afterAll(async () => {
+  if (!visualUserId) return;
+  const admin = visualAdmin();
+  const removed = await admin.storage.from("car-images").remove([`${visualUserId}/visual.png`]);
+  if (removed.error) throw removed.error;
+  const deleted = await admin.auth.admin.deleteUser(visualUserId);
+  if (deleted.error) throw deleted.error;
+});
 
 const VIEWPORTS = [
   { width: 375, height: 812 },

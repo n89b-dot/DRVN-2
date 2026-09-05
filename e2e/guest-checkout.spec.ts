@@ -135,7 +135,7 @@ test.describe.serial("guest checkout", () => {
     // Either outcome proves the orders were created: the Stripe-mode payment-step review ("Delivery & contact") renders only once the action returns a PaymentIntent, and stub mode settles inline onto the placed order;
     // the stepper's "Payment" label is on screen from the start and proves
     // nothing.
-    await expect(page.getByText(/delivery & contact|order placed/i).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/delivery & contact|order placed|paid and confirmed/i).first()).toBeVisible({ timeout: 30_000 });
 
     const admin = await serviceClient();
     const { data: account } = await admin
@@ -179,7 +179,7 @@ test.describe.serial("guest checkout", () => {
     await page.getByRole("button", { name: /buy now/i }).first().click();
     await page.getByRole("link", { name: /proceed to checkout/i }).first().click();
     await fillCheckout(page, member.email);
-    await expect(page.getByText(/delivery & contact|order placed/i).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/delivery & contact|order placed|paid and confirmed/i).first()).toBeVisible({ timeout: 30_000 });
 
     const { data: after } = await admin
       .from("account_emails")

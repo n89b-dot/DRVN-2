@@ -7,7 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
 // setup/cleanup in e2e/helpers.ts). Next loads these itself for the app; the
 // Playwright process needs them too. Minimal parser — no dotenv dependency.
 // Never overrides variables already set in the environment.
-for (const file of [".env.test.local", ".env.local"]) {
+for (const file of [".env.test.local"]) {
   const envPath = path.join(__dirname, file);
   if (!fs.existsSync(envPath)) continue;
   for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
@@ -19,6 +19,25 @@ for (const file of [".env.test.local", ".env.local"]) {
   }
 }
 
+const projectRef = process.env.E2E_TEST_PROJECT_REF;
+const configuredHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://unconfigured.invalid").hostname;
+const isolatedLocal = projectRef === "local-drvn-remediation" && ["localhost", "127.0.0.1"].includes(configuredHost) && new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).port === "54321";
+if (!isolatedLocal && (!projectRef || configuredHost !== `${projectRef}.supabase.co`)) {
+  throw new Error("E2E requires an explicitly isolated E2E_TEST_PROJECT_REF matching NEXT_PUBLIC_SUPABASE_URL; .env.local is never used.");
+}
+if (process.env.PAYMENTS_MODE !== "stub" || process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) {
+  throw new Error("This browser suite requires explicit stub payments. Use the separate Stripe test integration suite for provider coverage.");
+}
+// Deterministic importer coverage in the production test build; no paid AI calls.
+process.env.ANTHROPIC_API_KEY = "";
+process.env.LISTING_IMPORT_AI_MODE = "stub";
+process.env.LISTING_IMPORT_ALLOW_PRIVATE_HOSTS = "false";
+process.env.LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION = "true";
+process.env.EASYPOST_API_KEY = "";
+process.env.SHIPPING_MODE = "stub";
+process.env.SHIPPING_ALLOW_STUB_IN_PRODUCTION = "true";
+process.env.FLAG_INTEGRATED_SHIPPING_V1 = "true";
+process.env.EASYPOST_WEBHOOK_SECRET = "e2e-webhook-secret-isolated-test-only";
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
@@ -39,11 +58,15 @@ export default defineConfig({
     // starves Playwright's stability check; the app honours the OS setting.
     contextOptions: { reducedMotion: "reduce" },
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox", testMatch: /(?:golden-path|remediation-security)\.spec\.ts/, use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", testMatch: /(?:golden-path|remediation-security)\.spec\.ts/, use: { ...devices["Desktop Safari"] } },
+  ],
   webServer: {
-    command: "npm run dev",
+    command: "npm run build && npm run start",
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

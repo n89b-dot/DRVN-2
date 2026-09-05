@@ -115,26 +115,7 @@ async function dispatchOrder(page: Page, tracking: string) {
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(/carrier/i).fill("USPS");
   await dialog.getByLabel(/tracking/i).fill(tracking);
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const applied = await page.evaluate((needle) => {
-      const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(
-        (d) => (d as HTMLElement).offsetParent !== null
-      );
-      const confirm = dialogs
-        .flatMap((d) => [...d.querySelectorAll("button")])
-        .find((b) => b.textContent?.includes("Mark dispatched"));
-      if (confirm) {
-        confirm.click();
-        return false;
-      }
-      return (document.body.textContent ?? "").includes(needle);
-    }, tracking);
-    if (applied) break;
-    await page.waitForTimeout(500);
-  }
-  if (!(await page.getByText(tracking).first().isVisible().catch(() => false))) {
-    await page.reload();
-  }
+  await dialog.getByRole("button", { name: /mark dispatched/i }).click();
   await expect(page.getByText(tracking).first()).toBeVisible();
 }
 

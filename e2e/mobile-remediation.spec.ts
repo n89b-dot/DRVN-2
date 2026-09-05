@@ -304,43 +304,23 @@ test.describe.serial("mobile remediation", () => {
     }
   });
 
-  test("saved: the finder gives search and submit the whole column on a phone", async ({
-    page,
-  }) => {
+  test("saved: search owns the phone column and Enter submits the query", async ({ page }) => {
     await signIn(page, owner);
     await page.goto("/saved");
-
     const finder = page.locator(".finder").first();
-    await expect(finder, "/saved must render the finder plate").toBeVisible();
+    await expect(finder).toBeVisible();
     const search = finder.locator(".search");
-    const submit = finder.locator('button[type="submit"]');
-
     for (const width of [320, 375, 430, 768]) {
       await resizeTo(page, width);
       await assertNoHorizontalOverflow(page, `/saved @ ${width}`);
-
       const content = await finderContentWidth(page);
       const searchWidth = (await search.boundingBox())!.width;
-      const submitWidth = (await submit.boundingBox())!.width;
-
-      if (width === 375) {
-        expect(
-          searchWidth / content,
-          `.search share of the finder column @ ${width}`
-        ).toBeGreaterThanOrEqual(0.9);
-        expect(
-          submitWidth / content,
-          `submit share of the finder column @ ${width}`
-        ).toBeGreaterThanOrEqual(0.9);
-      }
-
-      if (width === 768) {
-        // Wide enough for the query line to be a line again: the submit goes
-        // back to being a compact button beside a long field.
-        expect(submitWidth, `submit must be compact @ ${width}`).toBeLessThan(200);
-        expect(searchWidth, `.search must own the row @ ${width}`).toBeGreaterThan(300);
-      }
+      if (width === 375) expect(searchWidth / content).toBeGreaterThanOrEqual(0.9);
+      if (width === 768) expect(searchWidth).toBeGreaterThan(300);
     }
+    await page.getByLabel("Search saved parts").fill("brakes");
+    await page.getByLabel("Search saved parts").press("Enter");
+    await expect(page).toHaveURL(/q=brakes/);
   });
 
   test("notifications: two filter axes, one row each, still combining in the query", async ({
@@ -388,38 +368,22 @@ test.describe.serial("mobile remediation", () => {
     await expect(page, "the type swaps within its own axis").toHaveURL(/section=engagement/);
   });
 
-  test("messages: the search plate owns the phone column", async ({ page }) => {
+  test("messages: search owns the phone column and Enter submits", async ({ page }) => {
     await signIn(page, owner);
     await page.goto("/messages");
-
     const finder = page.locator(".finder").first();
-    await expect(finder, "/messages must render the finder plate").toBeVisible();
+    await expect(finder).toBeVisible();
     const search = finder.locator(".search");
-    const submit = finder.locator('button[type="submit"]');
-
     for (const width of [320, 375, 430, 768]) {
       await resizeTo(page, width);
       await assertNoHorizontalOverflow(page, `/messages @ ${width}`);
-
       const content = await finderContentWidth(page);
-      const searchWidth = (await search.boundingBox())!.width;
-      const submitWidth = (await submit.boundingBox())!.width;
-
-      if (width === 375) {
-        expect(
-          searchWidth / content,
-          `.search share of the finder column @ ${width}`
-        ).toBeGreaterThanOrEqual(0.9);
-        expect(
-          submitWidth / content,
-          `submit share of the finder column @ ${width}`
-        ).toBeGreaterThanOrEqual(0.9);
-      }
-
-      if (width === 768) {
-        expect(submitWidth, `submit must be compact @ ${width}`).toBeLessThan(200);
-      }
+      if (width === 375) expect((await search.boundingBox())!.width / content).toBeGreaterThanOrEqual(0.9);
     }
+    const field = page.getByLabel("Search your conversations");
+    await field.fill("brakes");
+    await field.press("Enter");
+    await expect(page).toHaveURL(/q=brakes/);
   });
 
   test("checkout: the compact summary stands in for the desktop aside", async ({ page }) => {

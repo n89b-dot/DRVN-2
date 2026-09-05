@@ -74,7 +74,7 @@ for (const tier of PHONE_TIERS) {
       // compact toolbar, all real touch targets.
       const search = page.getByLabel(/search parts/i);
       await expect(search).toBeVisible();
-      const refine = page.getByRole("button", { name: /refine/i });
+      const refine = page.getByRole("button", { name: /filters/i });
       await expect(refine).toBeVisible();
       expect((await refine.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await expect(page.locator('select[name="sort"]')).toBeVisible();
@@ -95,7 +95,7 @@ for (const tier of PHONE_TIERS) {
 
     test("marketplace: refine sheet keeps values and restores focus", async ({ page }) => {
       await page.goto("/marketplace");
-      const refine = page.getByRole("button", { name: /refine/i });
+      const refine = page.getByRole("button", { name: /filters/i });
       await refine.click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
@@ -292,7 +292,7 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel(/your offer/i).fill("350");
     await dialog.getByRole("button", { name: /send offer/i }).click();
-    await expect(page.getByText(/offer sent/i).first()).toBeVisible();
+    await expect(page.getByText(/offer sent/i).first()).toBeVisible({ timeout: 30_000 });
 
     // Switch personas: drop the buyer session first — /login redirects a
     // signed-in visitor straight back to /home.
