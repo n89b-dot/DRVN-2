@@ -69,6 +69,15 @@ begin
   end;
   raise notice 'PASS: valid normalized email consumes an invitation once';
 
+  delete from auth.users where id=invited;
+  if not exists(
+    select 1 from public.beta_invitations
+    where id=invite_id and consumed_at is not null and consumed_by is null
+  ) then
+    raise exception 'FAIL: deleting a joined Auth user lost or invalidated invitation history';
+  end if;
+  raise notice 'PASS: account deletion retains consumed invitation history';
+
   -- All rejection variants return the same database error and create nothing.
   insert into public.beta_invitations(email_normalized,roles,token_hash,expires_at)
   values

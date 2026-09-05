@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
+import { assertAccessible } from "./accessibility";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const admin = () => createClient(url, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
@@ -42,6 +43,10 @@ test("admin access requires TOTP and respects membership revocation", async ({ p
     await page.getByRole("button", { name: /Verify/ }).click();
     await expect(page).toHaveURL(/\/admin$/);
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await assertAccessible(page, "admin overview");
+    await page.goto("/admin/invitations");
+    await expect(page.locator("main")).toBeVisible();
+    await assertAccessible(page, "admin invitations");
     await page.goto("/docs/components");
     const opener = page.getByRole("button", { name: "Open nested dialog example" });
     await opener.focus(); await page.keyboard.press("Enter");

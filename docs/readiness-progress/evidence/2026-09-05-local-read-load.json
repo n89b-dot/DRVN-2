@@ -1,0 +1,103 @@
+{
+  "observedAt": "2026-09-05T20:49:30.396Z",
+  "scope": "Local public read baseline; no checkout, hosted capacity, soak or accepted SLO claim",
+  "origin": "http://127.0.0.1:3001",
+  "stages": [
+    {
+      "concurrency": 1,
+      "elapsedMs": 15055.033625,
+      "requests": 508,
+      "requestsPerSecond": 33.74286718007912,
+      "routes": [
+        {
+          "path": "/",
+          "requests": 170,
+          "errors": 0,
+          "p50Ms": 17.71050000000014,
+          "p95Ms": 42.82449999999881,
+          "p99Ms": 157.02416600000015
+        },
+        {
+          "path": "/explore",
+          "requests": 169,
+          "errors": 0,
+          "p50Ms": 36.74866699999984,
+          "p95Ms": 101.21079199999986,
+          "p99Ms": 416.6649589999997
+        },
+        {
+          "path": "/login",
+          "requests": 169,
+          "errors": 0,
+          "p50Ms": 8.242874999999913,
+          "p95Ms": 20.206374999999753,
+          "p99Ms": 35.760292000000845
+        }
+      ]
+    },
+    {
+      "concurrency": 5,
+      "elapsedMs": 15059.370583,
+      "requests": 740,
+      "requestsPerSecond": 49.13883989516536,
+      "routes": [
+        {
+          "path": "/",
+          "requests": 247,
+          "errors": 0,
+          "p50Ms": 73.23970900000131,
+          "p95Ms": 303.51566699999967,
+          "p99Ms": 405.5295420000002
+        },
+        {
+          "path": "/explore",
+          "requests": 247,
+          "errors": 0,
+          "p50Ms": 105.12462500000038,
+          "p95Ms": 424.1999160000014,
+          "p99Ms": 591.2510000000002
+        },
+        {
+          "path": "/login",
+          "requests": 246,
+          "errors": 0,
+          "p50Ms": 43.46641699999964,
+          "p95Ms": 155.61466700000165,
+          "p99Ms": 265.0923330000005
+        }
+      ]
+    },
+    {
+      "concurrency": 20,
+      "elapsedMs": 15130.181042,
+      "requests": 698,
+      "requestsPerSecond": 46.132957567554264,
+      "routes": [
+        {
+          "path": "/",
+          "requests": 233,
+          "errors": 0,
+          "p50Ms": 368.3532500000001,
+          "p95Ms": 1475.369083999998,
+          "p99Ms": 1747.4514589999962
+        },
+        {
+          "path": "/explore",
+          "requests": 232,
+          "errors": 0,
+          "p50Ms": 398.4992920000004,
+          "p95Ms": 1508.0804579999967,
+          "p99Ms": 1777.5337500000023
+        },
+        {
+          "path": "/login",
+          "requests": 233,
+          "errors": 0,
+          "p50Ms": 238.61212499999965,
+          "p95Ms": 801.0369169999976,
+          "p99Ms": 1109.311791
+        }
+      ]
+    }
+  ]
+}

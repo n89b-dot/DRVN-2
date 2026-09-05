@@ -137,13 +137,15 @@ type RefundOpRow = {
   attempts: number;
   recovery_id: string | null;
   provider_status: string | null;
+  replacement_transfer_reference: string | null;
+  replaces_adjustment_id: string | null;
 };
 
 async function loadOperation(admin: Admin, operationId: string): Promise<RefundOpRow | null> {
   const { data, error } = await admin
     .from("refund_operations")
     .select(
-      "id, order_id, payment_reference, amount_cents, currency, reason, requested_by, idempotency_key, refund_reference, reversal_reference, reversal_due_cents, status, external, attempts, recovery_id, provider_status"
+      "id, order_id, payment_reference, amount_cents, currency, reason, requested_by, idempotency_key, refund_reference, reversal_reference, reversal_due_cents, status, external, attempts, recovery_id, provider_status, replacement_transfer_reference, replaces_adjustment_id"
     )
     .eq("id", operationId)
     .maybeSingle();
@@ -482,8 +484,15 @@ async function ensureProviderRefund(
   admin: Admin,
   op: RefundOpRow
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const wasPending = op.status === "provider_pending";
-  if (op.status === "requested") {
+  let wasPending = op.status === "provider_pending";
+  if (op.replaces_adjustment_id) {
+    const {data: claim, error} = await admin.rpc("claim_refund_replacement_provider", {p_operation: op.id});
+    if (error || !["requested", "provider_pending"].includes(claim ?? "")) {
+      return {ok: false, error: "Reconcile other provider refund evidence before continuing the replacement."};
+    }
+    wasPending = claim === "provider_pending";
+  }
+  if (op.status === "requested" && !op.replaces_adjustment_id) {
     const moved = await transition(admin, op.id, ["requested"], { status: "provider_pending" });
     if (!moved) {
       const current = await loadOperation(admin, op.id);
@@ -671,7 +680,7 @@ async function ensureReversal(
 
   // The transfer reference lives on the intent record even when the order
   // field was never stamped (0019/0026 reconciliation) — check both.
-  let transferReference = transferReferenceHint;
+  let transferReference = op.replacement_transfer_reference ?? transferReferenceHint;
   if (!transferReference) {
     const { data: order, error: orderError } = await admin
       .from("orders")

@@ -142,8 +142,10 @@ export type Database = {
           expires_at: string
           id: string
           last_error: string | null
+          last_purge_attempt_at: string | null
           manifest: Json | null
           manifest_path: string | null
+          purged_at: string | null
           requested_at: string
           status: string
           user_id: string
@@ -158,8 +160,10 @@ export type Database = {
           expires_at?: string
           id?: string
           last_error?: string | null
+          last_purge_attempt_at?: string | null
           manifest?: Json | null
           manifest_path?: string | null
+          purged_at?: string | null
           requested_at?: string
           status?: string
           user_id: string
@@ -174,8 +178,10 @@ export type Database = {
           expires_at?: string
           id?: string
           last_error?: string | null
+          last_purge_attempt_at?: string | null
           manifest?: Json | null
           manifest_path?: string | null
+          purged_at?: string | null
           requested_at?: string
           status?: string
           user_id?: string
@@ -2544,6 +2550,8 @@ export type Database = {
           recovery_id: string | null
           refund_reference: string | null
           remaining_before_cents: number
+          replacement_transfer_reference: string | null
+          replaces_adjustment_id: string | null
           requested_by: string
           resolve_dispute: boolean
           reversal_amount_cents: number | null
@@ -2588,6 +2596,8 @@ export type Database = {
           recovery_id?: string | null
           refund_reference?: string | null
           remaining_before_cents: number
+          replacement_transfer_reference?: string | null
+          replaces_adjustment_id?: string | null
           requested_by: string
           resolve_dispute?: boolean
           reversal_amount_cents?: number | null
@@ -2632,6 +2642,8 @@ export type Database = {
           recovery_id?: string | null
           refund_reference?: string | null
           remaining_before_cents?: number
+          replacement_transfer_reference?: string | null
+          replaces_adjustment_id?: string | null
           requested_by?: string
           resolve_dispute?: boolean
           reversal_amount_cents?: number | null
@@ -2661,6 +2673,13 @@ export type Database = {
             columns: ["recovery_id"]
             isOneToOne: false
             referencedRelation: "payment_recoveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_operations_replaces_adjustment_id_fkey"
+            columns: ["replaces_adjustment_id"]
+            isOneToOne: false
+            referencedRelation: "refund_lifecycle_adjustments"
             referencedColumns: ["id"]
           },
         ]
@@ -3943,6 +3962,10 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_refund_replacement: {
+        Args: { p_actor: string; p_recovery: string }
+        Returns: string
+      }
       beta_access_status: {
         Args: { p_role?: string; p_user_id?: string }
         Returns: Json
@@ -3953,6 +3976,10 @@ export type Database = {
       }
       bump_listing_view: { Args: { p_listing: string }; Returns: undefined }
       capture_reconciliation_candidates: { Args: never; Returns: Json }
+      claim_refund_replacement_provider: {
+        Args: { p_operation: string }
+        Returns: string
+      }
       claim_refund_reversal: {
         Args: {
           p_amount_cents: number

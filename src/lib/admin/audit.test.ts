@@ -16,3 +16,12 @@ describe("external admin failure recovery", () => {
     expect(mutate).toHaveBeenCalledOnce();
   });
 });
+
+it("resumes the explicitly linked replacement after an audit crash", async () => {
+  const rpc = vi.fn().mockResolvedValueOnce({error:null}).mockResolvedValueOnce({data:{operationId:"existing",reused:true}});
+  const insert = vi.fn().mockResolvedValue({error:null});
+  const mutate = vi.fn().mockResolvedValue({operationId:"same-refund"});
+  await expect(auditedAction({rpc,from:()=>({insert})} as never,{...entry,action:"recovery.replace_refund"},mutate)).resolves.toEqual({operationId:"same-refund"});
+  expect(mutate).toHaveBeenCalledOnce();
+  expect(insert.mock.calls[0][0].metadata.operationId).toBe("existing");
+});

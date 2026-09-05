@@ -6,6 +6,10 @@ import {transferAccount,verifyRecreditTransfer} from './recredit-verification';
 export async function verifyLateRefundRecovery(admin:ReturnType<typeof createAdminClient>,recoveryId:string,actorId:string,recreditReference:string){
  const recovery=await admin.from('payment_recoveries').select('kind,recovery_key,order_id').eq('id',recoveryId).single().throwOnError();
  if(recovery.data.kind!=='refund_late_failure')return;
+ // Historical repayment proof remains valid after its transfer is legitimately
+ // reversed for the linked replacement. Do not require it to remain unreversed.
+ const saved=await admin.from('refund_recredit_proofs').select('adjustment_id').eq('recovery_id',recoveryId).maybeSingle().throwOnError();
+ if(saved.data)return;
  const reference=recovery.data.recovery_key?.replace(/^refund-late-failure:/,'');
  if(!reference)throw new Error('The late-refund recovery reference is missing.');
  const adjustment=await admin.from('refund_lifecycle_adjustments').select('id,refund_operation_id,refund_reference,seller_recredit_cents,created_at').eq('refund_reference',reference).single().throwOnError();
@@ -38,6 +42,6 @@ export async function verifyLateRefundRecovery(admin:ReturnType<typeof createAdm
  const destination=transferAccount(original.destination);
  const reversedTransfer=typeof reversal.transfer==='string'?reversal.transfer:reversal.transfer.id;
  if(!destination||original.metadata.order_id!==op.order_id||original.currency.toLowerCase()!==currency||original.livemode!==key.startsWith('sk_live_')||reversedTransfer!==originalReference||reversal.amount!==amount||reversal.currency.toLowerCase()!==currency)throw new Error('Original seller/reversal evidence does not match this obligation.');
- const balance=verifyRecreditTransfer(recredit,{amountCents:amount,currency,destination,operationId:op.id,adjustmentId:a.id,refundReference:a.refund_reference,createdAfter:Math.floor(Date.parse(a.created_at)/1000),live:key.startsWith('sk_live_')});
+ const balance=verifyRecreditTransfer(recredit,{amountCents:amount,currency,destination,operationId:op.id,orderId:op.order_id,adjustmentId:a.id,refundReference:a.refund_reference,createdAfter:Math.floor(Date.parse(a.created_at)/1000),live:key.startsWith('sk_live_')});
  await admin.rpc('record_refund_recredit_proof',{p_recovery:recoveryId,p_adjustment:a.id,p_actor:actorId,p_amount:amount,p_currency:currency,p_transfer:recredit.id,p_reversal:reversalReference,p_balance_transaction:balance}).throwOnError();
 }

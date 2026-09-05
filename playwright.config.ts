@@ -81,6 +81,6 @@ export default defineConfig({
     command: "npm run build && npm run start",
     url: baseURL,
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: process.env.CI ? 120_000 : 300_000,
   },
 });

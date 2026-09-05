@@ -9,6 +9,7 @@ import {
   ACCOUNT_EXPORT_EXCLUSIONS,
   ACCOUNT_EXPORT_PAGE_SIZE,
   ACCOUNT_EXPORT_SECTIONS,
+  exportCursorFilter,
   nextExportCheckpoint,
   type ExportSection,
 } from "./account-export-contract";
@@ -27,10 +28,13 @@ type ExportRequest = {
   current_cursor: string | null;
   expires_at: string;
   status: string;
+  contract_version: string;
 };
 type UntypedAdmin = SupabaseClient;
 
 const BUCKET = "account-exports";
+const PURGE_RETRY_AFTER_MS = 15 * 60 * 1000;
+const PURGE_RESWEEP_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function sha256(bytes: Uint8Array) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -44,38 +48,38 @@ type RelatedIds = { field: string; values: string[] } | null;
 
 async function authorizedIds(admin: UntypedAdmin, section: ExportSection, userId: string): Promise<RelatedIds> {
   switch (section.key) {
-    case "car_images": case "car_hotspots": case "mod_items":
-      return { field: "car_id", values: await ids(admin, "cars", "id", "owner_id", userId) };
-    case "activity_images":
-      return { field: "post_id", values: await ids(admin, "activity_posts", "id", "author_id", userId) };
-    case "listing_images": case "listing_fitments": case "listing_part_numbers": case "offers_received":
-      return { field: "listing_id", values: await ids(admin, "listings", "id", "seller_id", userId) };
-    case "order_items": case "payments": case "refunds": case "returns": case "dispute_evidence": case "shipments": case "pickup_confirmations": {
-      const rows = await allRows(admin.from("orders").select("id").or(`buyer_id.eq.${userId},seller_id.eq.${userId}`).order("id"));
-      return { field: "order_id", values: rows.map(row => row.id) };
-    }
     case "order_snapshot_images": {
-      const orderAccess: RelatedIds = await authorizedIds(admin, { ...section, key: "order_items" }, userId);
-      if (!orderAccess?.values.length) return { field: "order_item_id", values: [] as string[] };
-      const rows = await allRows(admin.from("order_items").select("id").in("order_id", orderAccess.values).order("id"));
+      const orderIds = await ids(admin, "orders", "id", "buyer_id", userId);
+      const soldOrderIds = await ids(admin, "orders", "id", "seller_id", userId);
+      const access = [...new Set([...orderIds, ...soldOrderIds])];
+      if (!access.length) return { field: "order_item_id", values: [] as string[] };
+      const rows = await allRows(admin.from("order_items").select("id").in("order_id", access).order("id"));
       return { field: "order_item_id", values: rows.map(row => row.id) };
     }
     case "refund_adjustments": {
-      const orderAccess: RelatedIds = await authorizedIds(admin, { ...section, key: "order_items" }, userId);
-      if (!orderAccess?.values.length) return { field: "refund_operation_id", values: [] as string[] };
-      const rows = await allRows(admin.from("refund_operations").select("id").in("order_id", orderAccess.values).order("id"));
+      const orderIds = [...new Set([...await ids(admin, "orders", "id", "buyer_id", userId), ...await ids(admin, "orders", "id", "seller_id", userId)])];
+      if (!orderIds.length) return { field: "refund_operation_id", values: [] as string[] };
+      const rows = await allRows(admin.from("refund_operations").select("id").in("order_id", orderIds).order("id"));
       return { field: "refund_operation_id", values: rows.map(row => row.id) };
     }
+    case "refund_recredit_proofs": {
+      const orderIds = [...new Set([...await ids(admin, "orders", "id", "buyer_id", userId), ...await ids(admin, "orders", "id", "seller_id", userId)])];
+      if (!orderIds.length) return { field: "adjustment_id", values: [] as string[] };
+      const operations = await allRows(admin.from("refund_operations").select("id").in("order_id", orderIds).order("id"));
+      if (!operations.length) return { field: "adjustment_id", values: [] as string[] };
+      const adjustments = await allRows(admin.from("refund_lifecycle_adjustments").select("id").in("refund_operation_id", operations.map(row => row.id)).order("id"));
+      return { field: "adjustment_id", values: adjustments.map(row => row.id) };
+    }
     case "return_items": {
-      const orderAccess: RelatedIds = await authorizedIds(admin, { ...section, key: "order_items" }, userId);
-      if (!orderAccess?.values.length) return { field: "return_id", values: [] as string[] };
-      const rows = await allRows(admin.from("returns").select("id").in("order_id", orderAccess.values).order("id"));
+      const orderIds = [...new Set([...await ids(admin, "orders", "id", "buyer_id", userId), ...await ids(admin, "orders", "id", "seller_id", userId)])];
+      if (!orderIds.length) return { field: "return_id", values: [] as string[] };
+      const rows = await allRows(admin.from("returns").select("id").in("order_id", orderIds).order("id"));
       return { field: "return_id", values: rows.map(row => row.id) };
     }
     case "shipment_items": case "shipment_events": {
-      const orderAccess: RelatedIds = await authorizedIds(admin, { ...section, key: "order_items" }, userId);
-      if (!orderAccess?.values.length) return { field: "shipment_id", values: [] as string[] };
-      const rows = await allRows(admin.from("shipments").select("id").in("order_id", orderAccess.values).order("id"));
+      const orderIds = [...new Set([...await ids(admin, "orders", "id", "buyer_id", userId), ...await ids(admin, "orders", "id", "seller_id", userId)])];
+      if (!orderIds.length) return { field: "shipment_id", values: [] as string[] };
+      const rows = await allRows(admin.from("shipments").select("id").in("order_id", orderIds).order("id"));
       return { field: "shipment_id", values: rows.map(row => row.id) };
     }
     default:
@@ -84,11 +88,19 @@ async function authorizedIds(admin: UntypedAdmin, section: ExportSection, userId
 }
 
 async function readPage(admin: UntypedAdmin, request: ExportRequest, section: ExportSection) {
-  let query = admin.from(section.table).select(section.projection);
+  let query = admin.from(section.table).select(section.sourceProjection ?? section.projection);
   const related = await authorizedIds(admin, section, request.user_id);
   if (related) {
     if (!related.values.length) return [];
     query = query.in(related.field, related.values);
+  } else if (["car_images", "car_hotspots", "mod_items"].includes(section.key)) {
+    query = query.eq("cars.owner_id", request.user_id);
+  } else if (section.key === "activity_images") {
+    query = query.eq("activity_posts.author_id", request.user_id);
+  } else if (["listing_images", "listing_fitments", "listing_part_numbers", "offers_received"].includes(section.key)) {
+    query = query.eq("listings.seller_id", request.user_id);
+  } else if (["order_items", "payments", "refunds", "returns", "dispute_evidence", "shipments", "pickup_confirmations"].includes(section.key)) {
+    query = query.or(`buyer_id.eq.${request.user_id},seller_id.eq.${request.user_id}`, { referencedTable: "orders" });
   } else if (section.filter.includes("|")) {
     const [left, right] = section.filter.split("|");
     query = query.or(`${left}.eq.${request.user_id},${right}.eq.${request.user_id}`);
@@ -97,8 +109,9 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
   }
   if (section.cutoffColumn) query = query.lte(section.cutoffColumn, request.cutoff_at);
   if (section.cursor) {
-    query = query.order(section.cursor);
-    if (request.current_cursor) query = query.gt(section.cursor, request.current_cursor);
+    const cursorFields = section.cursor.split(",");
+    for (const field of cursorFields) query = query.order(field);
+    if (request.current_cursor) query = query.or(exportCursorFilter(cursorFields, request.current_cursor));
     query = query.limit(ACCOUNT_EXPORT_PAGE_SIZE);
   } else {
     query = query.order(section.cutoffColumn ?? section.filter.split("|")[0]);
@@ -106,11 +119,19 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
   }
   const result = await query;
   if (result.error) throw new Error(`Export section ${section.key} failed: ${result.error.message}`);
-  return (result.data ?? []) as unknown as Record<string, unknown>[];
+  return ((result.data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
+    const output = { ...row };
+    for (const field of section.excludedSourceFields ?? []) {
+      output[`__cursor_${field}`] = output[field];
+      delete output[field];
+    }
+    return output;
+  });
 }
 
 async function persistPart(admin: UntypedAdmin, request: ExportRequest, sectionKey: string, page: number, body: Uint8Array, rowCount: number, contentType = "application/json") {
-  const objectPath = `${request.user_id}/${request.id}/${sectionKey}/${String(page).padStart(8, "0")}-${sha256(body)}`;
+  // A stale lease must never delete a newer lease's identically hashed upload.
+  const objectPath = `${request.user_id}/${request.id}/${sectionKey}/${String(page).padStart(8, "0")}-${request.job.lease_id}-${sha256(body)}`;
   const upload = await admin.storage.from(BUCKET).upload(objectPath, body, { contentType, upsert: true, cacheControl: "no-store" });
   if (upload.error) throw new Error(`Could not store export section ${sectionKey}`);
   const saved = await admin.rpc("write_account_export", {
@@ -118,7 +139,12 @@ async function persistPart(admin: UntypedAdmin, request: ExportRequest, sectionK
     p_part: {section_key: sectionKey, page_number: page, object_path: objectPath,
       row_count: rowCount, byte_count: body.byteLength, sha256: sha256(body), content_type: contentType},
   });
-  if (saved.error) throw new Error(`Could not checkpoint export section ${sectionKey}`);
+  if (saved.error) {
+    const registered = await admin.from("account_export_parts").select("request_id").eq("object_path", objectPath).maybeSingle();
+    const exactLease = await admin.from("remediation_jobs").select("id").eq("id", request.job.id).eq("lease_id", request.job.lease_id).eq("status", "processing").maybeSingle();
+    if (!registered.error && !registered.data && !exactLease.error && exactLease.data) await admin.storage.from(BUCKET).remove([objectPath]);
+    throw new Error(`Could not checkpoint export section ${sectionKey}`);
+  }
   return objectPath;
 }
 
@@ -149,7 +175,7 @@ async function completeExport(admin: UntypedAdmin, request: ExportRequest) {
     requester: { id: request.user_id, email: auth.data.user.email, created_at: auth.data.user.created_at },
     cutoff_at: request.cutoff_at,
     completed_at: new Date().toISOString(),
-    consistency: "Rows created after cutoff_at are excluded. Each deterministic section page is immutable once checkpointed; updates may reflect the section checkpoint time.",
+    consistency: "Sections with creation timestamps exclude rows created after cutoff_at. Other sections and updates reflect their page-read time. This is a resumable export, not a single database snapshot. Published parts are content-hashed.",
     counts,
     exclusions: ACCOUNT_EXPORT_EXCLUSIONS,
     policy_decisions_pending: ["external analytics event retention/erasure", "audit and operational-log subject access", "backup expiry"],
@@ -162,7 +188,17 @@ async function completeExport(admin: UntypedAdmin, request: ExportRequest) {
 }
 
 async function purgeExportRequest(admin: UntypedAdmin, requestId: string) {
-  const request = await admin.from("account_export_requests").select("user_id").eq("id",requestId).single().throwOnError();
+  const request = await admin.from("account_export_requests").select("user_id,status").eq("id",requestId).single().throwOnError();
+  const attemptedAt = new Date().toISOString();
+  const purgeState: Record<string, unknown> = {
+    status: "expired",
+    manifest: null,
+    manifest_path: null,
+    last_purge_attempt_at: attemptedAt,
+    purged_at: null,
+  };
+  if (request.data.status !== "expired") purgeState.expires_at = attemptedAt;
+  await admin.from("account_export_requests").update(purgeState).eq("id", requestId).throwOnError();
   // Inventory the complete private prefix, including bytes uploaded before a
   // worker crash that never reached the parts register. Delete after listing.
   const paths: string[] = [];
@@ -183,21 +219,52 @@ async function purgeExportRequest(admin: UntypedAdmin, requestId: string) {
     const removed = await admin.storage.from(BUCKET).remove(paths.slice(offset, offset + 100));
     if (removed.error) throw new Error("Could not purge account export package");
   }
-  await admin.from("account_export_requests").update({status:"expired", manifest:null, manifest_path:null}).eq("id", requestId).throwOnError();
+  await admin.from("account_export_requests").update({ purged_at: new Date().toISOString() }).eq("id", requestId).throwOnError();
 }
 export async function purgeAccountExportsForUser(userId: string) {
   const admin = createAdminClient() as unknown as UntypedAdmin;
   const requests = await allRows(admin.from("account_export_requests").select("id").eq("user_id", userId).order("id"));
-  for (const request of requests) await purgeExportRequest(admin, request.id);
+  const failures: string[] = [];
+  for (const request of requests) {
+    try { await purgeExportRequest(admin, request.id); }
+    catch { failures.push(request.id); }
+  }
+  if (failures.length) throw new Error(`Could not purge ${failures.length} account export package(s)`);
 }
 
 export async function purgeExpiredAccountExports() {
   const admin = createAdminClient() as unknown as UntypedAdmin;
-  const expired = await admin.from("account_export_requests").select("id").neq("status", "expired").lte("expires_at", new Date().toISOString()).order("expires_at").limit(20);
-  if (expired.error) throw new Error("Could not read expired account exports");
-  // Expire only this package: a newer package for the same owner remains valid.
-  for (const request of expired.data ?? []) await purgeExportRequest(admin, request.id);
-  return { expired: expired.data?.length ?? 0 };
+  const now = Date.now();
+  const retryBefore = new Date(now - PURGE_RETRY_AFTER_MS).toISOString();
+  const resweepBefore = new Date(now - PURGE_RESWEEP_AFTER_MS).toISOString();
+  const projection = "id,expires_at,last_purge_attempt_at,purged_at";
+  const [newlyExpired, retries, resweeps] = await Promise.all([
+    admin.from("account_export_requests").select(projection).neq("status", "expired").lte("expires_at", new Date(now).toISOString()).order("expires_at").limit(20),
+    admin.from("account_export_requests").select(projection).eq("status", "expired").is("purged_at", null).or(`last_purge_attempt_at.is.null,last_purge_attempt_at.lt.${retryBefore}`).order("last_purge_attempt_at", { nullsFirst: true }).limit(20),
+    admin.from("account_export_requests").select(projection).eq("status", "expired").lt("purged_at", resweepBefore).order("purged_at").limit(20),
+  ]);
+  if (newlyExpired.error || retries.error || resweeps.error) throw new Error("Could not read expired account exports");
+  type Candidate = { id: string; expires_at: string; last_purge_attempt_at: string | null; purged_at: string | null };
+  const candidates = [...new Map(
+    [...(newlyExpired.data ?? []), ...(retries.data ?? []), ...(resweeps.data ?? [])]
+      .map((row) => [row.id, row as Candidate]),
+  ).values()].sort((left, right) => {
+    const leftDue = Date.parse(left.last_purge_attempt_at ?? left.purged_at ?? left.expires_at);
+    const rightDue = Date.parse(right.last_purge_attempt_at ?? right.purged_at ?? right.expires_at);
+    return leftDue - rightDue;
+  }).slice(0, 20);
+  let purged = 0;
+  const failures: string[] = [];
+  // Expire only the selected package: newer packages for the owner remain valid.
+  for (const request of candidates) {
+    try { await purgeExportRequest(admin, request.id); purged++; }
+    catch (error) {
+      failures.push(request.id);
+      reportError("[account-export] purge retry required", { requestId: request.id, error: error instanceof Error ? error.message : "Export purge failed" });
+    }
+  }
+  if (failures.length) throw new Error(`Could not purge ${failures.length} expired account export package(s)`);
+  return { expired: purged, failed: failures.length };
 }
 
 /** Job-family API: root orchestration should invoke this on a bounded cadence. */
@@ -214,11 +281,20 @@ export async function processAccountExports() {
       const requestResult = await admin.from("account_export_requests").select("*").eq("id", job.payload.request_id).eq("user_id", job.payload.user_id).single();
       if (requestResult.error) throw new Error("Account export request is missing");
       const request = {...requestResult.data, job} as ExportRequest;
-      if (request.status === "completed" || request.status === "expired") {
+      if (request.contract_version !== ACCOUNT_EXPORT_CONTRACT_VERSION && request.status !== "completed") {
+        await purgeExportRequest(admin, request.id);
         await admin.rpc("finish_remediation_job", {p_id:job.id,p_lease:job.lease_id}).throwOnError();
         continue;
       }
-      if (new Date(request.expires_at).getTime() <= Date.now()) throw new Error("Account export request expired before completion");
+      if (request.status === "completed") {
+        await admin.rpc("finish_remediation_job", {p_id:job.id,p_lease:job.lease_id}).throwOnError();
+        continue;
+      }
+      if (request.status === "expired" || new Date(request.expires_at).getTime() <= Date.now()) {
+        await purgeExportRequest(admin, request.id);
+        await admin.rpc("finish_remediation_job", {p_id:job.id,p_lease:job.lease_id}).throwOnError();
+        continue;
+      }
       await admin.rpc("write_account_export", {p_job:job.id,p_lease:job.lease_id,p_request:request.id,p_checkpoint:{section:request.current_section,offset:request.current_offset,cursor:request.current_cursor}}).throwOnError();
       const deadline = Date.now() + 25_000;
       let pages = 0;
@@ -227,7 +303,8 @@ export async function processAccountExports() {
         const section = ACCOUNT_EXPORT_SECTIONS[request.current_section];
         const rows = await readPage(admin, request, section);
         const page = Math.floor(request.current_offset / ACCOUNT_EXPORT_PAGE_SIZE);
-        const bytes = new TextEncoder().encode(JSON.stringify({ section: section.key, page, rows }));
+        const exportedRows = rows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__cursor_"))));
+        const bytes = new TextEncoder().encode(JSON.stringify({ section: section.key, page, rows: exportedRows }));
         await persistPart(admin, request, section.key, page, bytes, rows.length);
         if (section.key === "dispute_evidence") await copyEvidenceAssets(admin, request, rows);
         const next = nextExportCheckpoint(section, { section: request.current_section, offset: request.current_offset, cursor: request.current_cursor }, rows);

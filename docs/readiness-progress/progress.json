@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-05T20:21:48.063270+00:00",
+  "updatedAt": "2026-09-05T21:10:59.209597+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Provider-dispute ordering now passes a real local crash/replay test. Latest checks: 525 unit tests and 23 SQL guard suites pass. Late-refund closure requires evidence for both seller and buyer; automated recovery fulfillment and hosted acceptance remain unfinished.",
+  "current": "Final local checks pass: 530 unit tests, 25 SQL suites, three privacy operations tests, schema parity and ten export/accessibility browser cases without retries. The follow-up pull request is being prepared for full GitHub verification; hosted launch gates remain open.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -45,7 +45,7 @@
           "id": "setup",
           "label": "Isolated hosted services",
           "state": "blocked",
-          "evidence": "User selected n89b-dot\u2019s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
+          "evidence": "User selected n89b-dot’s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
         },
         {
           "id": "smoke",
@@ -70,7 +70,7 @@
       "why": "Keep refunds, disputes, and seller-account changes consistent even when a database write fails.",
       "before": "Some provider updates can be acknowledged before their effects are safely recorded.",
       "after": "Failed saves stay retryable; uncertain events create one tracked recovery case. Pending and later-failed refunds receive explicit handling.",
-      "next": "Complete hosted provider proof, operator recovery workflow and provider-specific dispute ordering.",
+      "next": "Verify the final replacement/Connect workflow in staging; reconcile ambiguous allocations and approve seller recredit operations.",
       "checkpoints": [
         {
           "id": "review",
@@ -112,7 +112,7 @@
           "id": "late_recovery",
           "label": "Late-failure seller re-credit and workflow recovery",
           "state": "doing",
-          "evidence": "Seller recredit verification and immutable proof implemented; closure also requires settled replacement buyer refund. Automated replacement reservation/reversal workflow remains unfinished."
+          "evidence": "Explicit linked replacement, immutable seller proof, dedicated reversal target, atomic provider admission, repeated-failure chains and safe case closure implemented and SQL-tested. Seller recredit creation/ambiguous allocations and hosted Connect acceptance remain operator work."
         },
         {
           "id": "dispute_ordering",
@@ -182,7 +182,7 @@
       "title": "A green build you can trust",
       "category": "Release setup",
       "status": "partial",
-      "owner": "GPT-5.6 \u00b7 Release stream",
+      "owner": "GPT-5.6 · Release stream",
       "why": "Make passing checks mean required tests really passed, without relying on retries.",
       "before": "The current green browser run includes one test that passed only after a retry.",
       "after": "Flaky, skipped-required, and missing checks block release; the known fixture race is corrected and jobs have time limits.",
@@ -209,8 +209,8 @@
         {
           "id": "hosted",
           "label": "Two clean hosted candidate runs",
-          "state": "todo",
-          "evidence": ""
+          "state": "doing",
+          "evidence": "Previous merged GitHub run failed on registry rate limiting, accent contrast and obsolete export expectations. Corrections and a fresh candidate CI run are being prepared."
         },
         {
           "id": "protection",
@@ -226,10 +226,10 @@
       "category": "Privacy",
       "status": "active",
       "owner": "Data and privacy stream",
-      "why": "Let members obtain all approved data about their account without exposing someone else\u2019s private information.",
+      "why": "Let members obtain all approved data about their account without exposing someone else’s private information.",
       "before": "Some data families are missing, some exports use broad field selections, and large exports can exceed request limits.",
       "after": "Explicit safe fields, complete approved sections, and resumable large exports with a completeness record.",
-      "next": "Finalize the field-by-field data inventory before changing export behavior.",
+      "next": "Complete final export/purge regression checks, then obtain policy and hosted archive acceptance.",
       "checkpoints": [
         {
           "id": "inventory",
@@ -252,8 +252,8 @@
         {
           "id": "tests",
           "label": "Large-export and cross-account tests",
-          "state": "doing",
-          "evidence": "Real local export integration completes all declared sections; pagination and stale-worker guards pass. Broader privacy acceptance remains pending."
+          "state": "done",
+          "evidence": "Local integration passed: 501-row paginated export, ownership checks, cross-account signed-link denial, contract upgrade, deletion expiry, purge retry and late-orphan sweep. Hosted archive/policy acceptance remains separate."
         },
         {
           "id": "acceptance",
@@ -272,7 +272,7 @@
       "why": "Remove eligible personal data while preserving only records that must be retained.",
       "before": "Protected financial references can prevent final deletion, and historical originals still need reconciliation.",
       "after": "Members and operators see exactly what was removed or retained, why, and what happens next; eligible old media is cleaned up.",
-      "next": "Approve hold and retention rules, then implement clear deletion outcomes.",
+      "next": "Verify retryable cleanup and approve retention/original-file removal before hosted deletion acceptance.",
       "checkpoints": [
         {
           "id": "policy",
@@ -289,14 +289,14 @@
         {
           "id": "media",
           "label": "Historical media normalization and cleanup",
-          "state": "todo",
-          "evidence": ""
+          "state": "doing",
+          "evidence": "Historical inventory/normalization tooling and local media tests exist. Hosted inventory, retention approval and original/CDN removal remain outstanding."
         },
         {
           "id": "tests",
           "label": "Interrupted deletion and retained-record tests",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "SQL verifies explicit hold/operator outcomes and repeated deletion; actual local operations complete deletion after export and verify failed purge replay/newer-package isolation. Earlier isolated 160-object cleanup drill also passed."
         },
         {
           "id": "acceptance",
@@ -325,7 +325,7 @@
         },
         {
           "id": "workers",
-          "label": "Enabled schedules observed",
+          "label": "Worker inventory and health detection implemented",
           "state": "done",
           "evidence": "Complete worker inventory, failed-run detection and overdue queue health implemented; privacy exports share tracked deletion cadence."
         },
@@ -407,13 +407,13 @@
       "why": "Make important actions understandable and usable with keyboard, screen reader, and mobile devices.",
       "before": "Focused fixes exist, but every critical form and assistive-technology path has not been verified.",
       "after": "Clear pending, success, and error states; reliable saved changes; tested focus, text scaling, touch, and screen-reader behavior.",
-      "next": "Continue the full critical-action inventory and accessibility/device matrix.",
+      "next": "Run the candidate-wide browser lane; use the action inventory for remaining failure/reload and manual-device acceptance.",
       "checkpoints": [
         {
           "id": "inventory",
           "label": "Critical action inventory",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "32 critical journeys mapped to server/database boundaries and existing regressions; missing mutation and manual acceptance explicitly listed in docs/remediation-action-inventory.md."
         },
         {
           "id": "dispatch",
@@ -424,14 +424,14 @@
         {
           "id": "mutations",
           "label": "Mutation feedback and recovery fixes",
-          "state": "todo",
-          "evidence": "Dispatch is fixed in the separate checkpoint below; the broader mutation inventory remains open."
+          "state": "doing",
+          "evidence": "Dispatch and announced auth failure are verified; explicit replacement recovery added. The 32-journey inventory identifies remaining failure/reload and provider/device acceptance."
         },
         {
           "id": "automated",
           "label": "Expanded automated accessibility checks",
           "state": "done",
-          "evidence": "Seven Chromium WCAG A/AA checks pass, including authenticated pages and keyboard-only garage dialog; all impact levels block."
+          "evidence": "Nine selected Chromium accessibility/admin cases passed in one zero-retry run (2.4 minutes), including checkout desktop/320px, announced auth errors and MFA admin pages. Full CI follow-up is separate."
         },
         {
           "id": "manual",
@@ -456,13 +456,13 @@
       "why": "Keep search and analytics from exposing stale private data or sending events without consent.",
       "before": "Optional providers remain disabled while their external behavior is unverified.",
       "after": "Disabled services make no calls; enabling either requires proven privacy, deletion, consent, and recovery behavior.",
-      "next": "Verify disabled mode and confirm which optional services belong in the beta.",
+      "next": "Keep optional analytics and external search disabled for the invited beta. Require provider acceptance before enabling either.",
       "checkpoints": [
         {
           "id": "scope",
           "label": "Provider scope recorded",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Implementation default for the invited beta keeps optional analytics and external search disabled. Hosted configuration must be observed before launch."
         },
         {
           "id": "disabled",
@@ -504,8 +504,8 @@
         {
           "id": "load",
           "label": "Representative load exercise",
-          "state": "todo",
-          "evidence": ""
+          "state": "doing",
+          "evidence": "Local public-read baseline: 1,946 requests, no HTTP errors, concurrency 1/5/20; highest route p95 at concurrency20 was1,508ms. Representative hosted commerce load remains pending."
         },
         {
           "id": "restore",
@@ -584,6 +584,16 @@
     }
   ],
   "activity": [
+    {
+      "at": "2026-09-05T21:10:59.209597+00:00",
+      "title": "Final local verification passed",
+      "detail": "The corrected contrast and queued export passed all ten cases in one zero-retry browser run. All 25 SQL suites and 530 unit tests pass; three privacy operations tests verify actual local Auth/Storage behavior."
+    },
+    {
+      "at": "2026-09-05T20:58:47.695588+00:00",
+      "title": "Final implementation and CI gaps addressed",
+      "detail": "Linked refund replacement and privacy races are being closed with regression tests. Nine accessibility/admin cases passed, and the local load baseline completed without HTTP errors. Hosted release gates remain explicit."
+    },
     {
       "at": "2026-09-05T19:03:20.701798+00:00",
       "title": "Remaining local implementation resumed",

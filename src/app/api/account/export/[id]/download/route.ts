@@ -33,6 +33,26 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   } catch {
     return new Response("Export package is unavailable.", {status:503,headers:{"Cache-Control":"private, no-store"}});
   }
+  // Signing may take several storage calls. Re-authorize immediately before the
+  // links leave the server so a deletion committed during that work wins.
+  const [currentRequest, currentProfile] = await Promise.all([
+    admin.from("account_export_requests").select("status,expires_at").eq("id", id).eq("user_id", user.id).maybeSingle(),
+    admin.from("profiles").select("suspended_at").eq("id", user.id).maybeSingle(),
+  ]);
+  if (currentRequest.error || currentProfile.error || !currentRequest.data || !currentProfile.data) {
+    return new Response("Export access is no longer available.", { status: 403, headers: { "Cache-Control": "private, no-store" } });
+  }
+  const finalDecision = exportDownloadDecision(user.id, {
+    user_id: user.id,
+    status: currentRequest.data.status,
+    expires_at: currentRequest.data.expires_at,
+  });
+  if (finalDecision === "expired" || currentProfile.data.suspended_at) {
+    return new Response("Export expired. Request a new package.", { status: 410, headers: { "Cache-Control": "private, no-store" } });
+  }
+  if (finalDecision !== "allowed") {
+    return new Response("Export is not ready.", { status: 409, headers: { "Cache-Control": "private, no-store" } });
+  }
   return new Response(JSON.stringify({ ...exportRequest.manifest, link_expires_at: new Date(Date.now() + 600_000).toISOString(), parts }, null, 2), {
     headers: { "Content-Type": "application/json", "Content-Disposition": `attachment; filename="drvn-export-${id.slice(0, 8)}-manifest.json"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" },
   });

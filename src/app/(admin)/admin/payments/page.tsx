@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { adminReplayWebhookEvent, adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
+import { adminReplayWebhookEvent, adminReplaceFailedRefund, adminResolveRecovery, adminRunTransferWorker } from "@/lib/admin/actions";
 import { payoutAlertChip, refundChip, transferChip } from "@/lib/admin/presentation";
 import { getPaymentsOps } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
@@ -92,6 +92,19 @@ export default async function AdminPaymentsPage({
                 </p>
                 {r.detail && <p className="order__meta mt-0.5">{r.detail}</p>}
                 <div className="mt-2">
+                  {r.kind === "refund_late_failure" && <ActionDialog
+                    action={adminReplaceFailedRefund}
+                    title="Replace failed buyer refund"
+                    trigger="Replace refund"
+                    triggerClassName="relbtn !static"
+                    hidden={{recovery_id: r.id}}
+                    confirmNote="This sends the failed refund amount to the buyer again. Verify any seller repayment first. Repeated submissions resume the recorded replacement; the case remains open until settlement is confirmed."
+                    fields={[
+                      {kind: "text", name: "recredit_transfer_reference", label: "Seller recredit transfer ID", hint: "Required for a positive seller obligation unless already verified."},
+                      {kind: "reason", name: "note", label: "Reason for replacement"},
+                    ]}
+                    submitLabel="Issue replacement refund"
+                  />}
                   <ActionDialog
                     action={adminResolveRecovery}
                     title="Close recovery case"

@@ -75,7 +75,9 @@ export async function auditedAction<T>(
   });
   if (claim.error || !claim.data) throw new Error("External operation journal unavailable; action refused");
   const { operationId, reused } = claim.data as { operationId: string; reused: boolean };
-  if (reused) throw new Error(`Operation ${operationId} is awaiting reconciliation. Resume its existing provider operation; do not create another.`);
+  // This action atomically adopts its linked refund operation before provider
+  // dispatch. Re-entering it reconciles that operation, including audit crashes.
+  if (reused && entry.action !== "recovery.replace_refund") throw new Error(`Operation ${operationId} is awaiting reconciliation. Resume its existing provider operation; do not create another.`);
   let result: T;
   try { result = await mutate(); } catch (error) {
     try { await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "failed_or_requires_reconciliation" } }); }

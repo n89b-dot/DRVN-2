@@ -4,7 +4,7 @@ set -uo pipefail
 : "${PGHOST:?Set an explicit disposable loopback database host}"
 : "${PGPORT:?Set an explicit disposable database port}"
 case "$PGHOST:$PGPORT" in
-  127.0.0.1:54322|localhost:54322|127.0.0.1:55440|localhost:55440) ;;
+  127.0.0.1:54322|localhost:54322|127.0.0.1:55440|localhost:55440|127.0.0.1:55441|localhost:55441) ;;
   127.0.0.1:5432|localhost:5432) [ "${CI:-}" = "true" ] || exit 1 ;;
   *) echo "SQL guards require the isolated local or CI database" >&2; exit 1 ;;
 esac

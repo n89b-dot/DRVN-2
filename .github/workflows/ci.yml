@@ -99,6 +99,19 @@ jobs:
         with:
           node-version: 22.22.0
 
+      # CLI 2.116.0 type generation directly requests this ECR tag. Shared
+      # runner egress hit ECR's rate limit; prefetch the same pinned official
+      # linux/amd64 release from GHCR and supply its expected local alias.
+      - name: Prepare pinned schema generator image
+        run: |
+          image=ghcr.io/supabase/postgres-meta@sha256:4f23a37bc0e3a153463b62cecb71409972660fe97f66cc772989d89d628fafd1
+          for attempt in 1 2 3; do
+            if docker pull "$image"; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 5))
+          done
+          docker tag "$image" public.ecr.aws/supabase/postgres-meta:v0.98.0
+
       - name: Generated database contract matches migrations
         env:
           DRVN_TYPES_DATABASE_URL: postgresql://supabase_admin:postgres@127.0.0.1:5432/postgres

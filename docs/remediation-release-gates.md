@@ -4,7 +4,7 @@ The repository implementation and local evidence do not authorize a live-money r
 
 | Gate | What is needed |
 |---|---|
-| Hosted staging | Select the Supabase organization and confirm any quoted service cost; provision a separate project and canonical HTTPS app origin. Never use `drvn-v3` as a destructive fixture target |
+| Hosted staging | The selected organization is n89b-dot’s Org. Its free active-project slots are occupied; resolve capacity without pausing unrelated projects, then provision a separate project and canonical HTTPS app origin. Never use `drvn-v3` as a destructive fixture target |
 | Real delivery and alerts | Configure controlled external SMTP inboxes, error reporting and an independent notification destination; prove rejection, delay, worker outage and recovery notifications |
 | Stripe browser and Connect | Test HTTPS Payment Element/3DS success, failure and cancellation, connected seller payouts, post-transfer refunds and provider-originated disputes; reconcile balances and operation identities |
 | Retention and deletion | Approve financial/evidence/audit/customer/backup retention and handling of immutable identity references. Validate all required subject-access sections and eligible Stripe Customer cleanup |

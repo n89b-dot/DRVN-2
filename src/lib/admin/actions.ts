@@ -565,6 +565,40 @@ export async function adminRunTransferWorker(
 
 // ---------- Payment recoveries ----------
 
+/** Explicit money action: case closure never initiates a provider request. */
+export async function adminReplaceFailedRefund(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+  const recoveryId = field(formData, "recovery_id");
+  const note = field(formData, "note");
+  if (!recoveryId || !note) return { error: "Recovery case and audit reason are required." };
+  try {
+    const result = await auditedAction(ctx.admin, {
+      actorId: ctx.userId, action: "recovery.replace_refund", subjectType: "payment",
+      subjectId: recoveryId, reason: note,
+    }, async () => {
+      await verifyLateRefundRecovery(ctx.admin, recoveryId, ctx.userId, field(formData, "recredit_transfer_reference"));
+      const {data: operationId} = await ctx.admin.rpc("begin_refund_replacement", {
+        p_recovery: recoveryId, p_actor: ctx.userId,
+      }).throwOnError();
+      if (!operationId) throw new Error("Replacement was not durably reserved.");
+      const {runRefundOperation} = await import("@/lib/payments/refunds");
+      const outcome = await runRefundOperation(ctx.admin, operationId);
+      return {operationId, outcome};
+    });
+    revalidatePath("/admin", "layout");
+    return {ok: result.outcome.ok
+      ? "Replacement buyer refund submitted. Close the case once both obligations are settled."
+      : `Replacement recorded. ${result.outcome.error}`};
+  } catch (error) {
+    return {error: error instanceof Error ? error.message : "Could not start the replacement."};
+  }
+}
+
 export async function adminResolveRecovery(
   _prev: AdminActionState,
   formData: FormData
@@ -581,6 +615,9 @@ export async function adminResolveRecovery(
   if (!note) return { error: "A note is required — it goes in the audit log." };
 
   try {
+    // Transactional commands execute in SQL, so their callback is not invoked.
+    // Save provider evidence before asking that transaction to close the case.
+    await verifyLateRefundRecovery(ctx.admin, recoveryId, ctx.userId, field(formData, "recredit_transfer_reference"));
     await auditedAction(
       ctx.admin,
       {
@@ -591,7 +628,6 @@ export async function adminResolveRecovery(
         reason: note,
       },
       async () => {
-        await verifyLateRefundRecovery(ctx.admin, recoveryId, ctx.userId, field(formData, "recredit_transfer_reference"));
         const { data: resolved, error } = await ctx.admin
           .from("payment_recoveries")
           .update({

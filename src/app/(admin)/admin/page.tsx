@@ -20,7 +20,8 @@ function Kpi({
   href: string;
   detail?: string;
 }) {
-  // A zero queue is good news — let it recede so the live counts own the row.
+  // A zero queue is good news — let the count recede while keeping its
+  // explanatory text at the secondary-text contrast required for body copy.
   const blank = value === 0;
   return (
     <Link href={href} className="tile tile--hover block">
@@ -28,9 +29,7 @@ function Kpi({
       <span className={cx("num-giant block", live && "text-live", blank && "num-giant--blank")}>
         {value}
       </span>
-      {detail && (
-        <span className={cx("order__meta mt-1 block", blank && "opacity-45")}>{detail}</span>
-      )}
+      {detail && <span className="order__meta mt-1 block">{detail}</span>}
       <span className="tile__go" aria-hidden="true">
         →
       </span>

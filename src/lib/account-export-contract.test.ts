@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPORT_SECTIONS, exportDownloadDecision, nextExportCheckpoint } from "./account-export-contract";
+import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPORT_SECTIONS, exportCursorFilter, exportDownloadDecision, nextExportCheckpoint } from "./account-export-contract";
 
 describe("account export contract", () => {
   it("uses explicit projections and covers both sides of shared records", () => {
+    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-09-05.v2");
     expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
     const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
     expect(keys).toEqual(expect.arrayContaining([
       "messages_sent", "messages_received", "offers_made", "offers_received", "returns",
-      "dispute_evidence", "seller_adjustments", "transfers", "refunds", "order_snapshot_images",
+      "dispute_evidence", "seller_adjustments", "transfers", "refunds", "refund_recredit_proofs", "order_snapshot_images",
       "shipments", "shipment_events",
     ]));
   });
 
   it("keeps provider secrets and unrelated counterparty profiles out", () => {
-    const forbidden = ["raw", "idempotency_key", "token_hash", "code_hash", "provider_reference", "last_error", "destination_hash"];
+    const forbidden = ["raw", "idempotency_key", "token_hash", "code_hash", "provider_reference", "last_error", "destination_hash", "replaces_adjustment_id", "replacement_transfer_reference", "adjustment_id", "recovery_id", "verified_by", "balance_transaction", "recredit_transfer_reference"];
     for (const section of ACCOUNT_EXPORT_SECTIONS) {
       const fields = section.projection.split(",").map((field) => field.trim());
       for (const field of forbidden) expect(fields, `${section.key} leaked ${field}`).not.toContain(field);
@@ -26,10 +27,18 @@ describe("account export contract", () => {
     const section = ACCOUNT_EXPORT_SECTIONS.find((item) => item.key === "messages_sent")!;
     const page = Array.from({ length: ACCOUNT_EXPORT_PAGE_SIZE }, (_, index) => ({ id: String(index).padStart(4, "0") }));
     const first = nextExportCheckpoint(section, { section: 0, offset: 0, cursor: null }, page);
-    expect(first).toEqual({ section: 0, offset: 250, cursor: "0249" });
+    expect(first).toEqual({ section: 0, offset: 250, cursor: '["0249"]' });
     const second = nextExportCheckpoint(section, first, page.map((_, index) => ({ id: String(index + 250).padStart(4, "0") })));
-    expect(second).toEqual({ section: 0, offset: 500, cursor: "0499" });
+    expect(second).toEqual({ section: 0, offset: 500, cursor: '["0499"]' });
     expect(nextExportCheckpoint(section, second, [{ id: "0500" }])).toEqual({ section: 1, offset: 0, cursor: null });
+  });
+
+  it("builds a stable lexicographic cursor for composite keys", () => {
+    expect(exportCursorFilter(["target_type", "target_id"], '["car","abc"]')).toBe(
+      'target_type.gt."car",and(target_type.eq."car",target_id.gt."abc")',
+    );
+    expect(() => exportCursorFilter(["target_type"], '["car", "extra"]')).toThrow("Invalid export cursor");
+    expect(exportCursorFilter(["id"], "legacy-uuid-cursor")).toBe('id.gt."legacy-uuid-cursor"');
   });
 
   it("denies anonymous, unrelated, incomplete and expired downloads", () => {
@@ -38,6 +47,7 @@ describe("account export contract", () => {
     expect(exportDownloadDecision(null, request, now)).toBe("unauthenticated");
     expect(exportDownloadDecision("other", request, now)).toBe("not_found");
     expect(exportDownloadDecision("owner", { ...request, status: "processing" }, now)).toBe("not_ready");
+    expect(exportDownloadDecision("owner", { ...request, status: "expired" }, now)).toBe("expired");
     expect(exportDownloadDecision("owner", { ...request, expires_at: "2029-12-01T00:00:00Z" }, now)).toBe("expired");
     expect(exportDownloadDecision("owner", request, now)).toBe("allowed");
   });

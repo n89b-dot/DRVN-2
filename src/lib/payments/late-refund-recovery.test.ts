@@ -4,17 +4,17 @@ vi.mock('./stripe',()=>({stripeSecretKey:()=> 'sk_test_fixture',stripeClient:()=
 vi.mock('./reversal-recovery',()=>({findExistingReversal:mocks.find}));
 import {verifyLateRefundRecovery} from './late-refund-recovery';
 function fixture(amount:number|null=2700,recorded=true){
- const rows=[{kind:'refund_late_failure',recovery_key:'refund-late-failure:re_failed',order_id:'order'},
+ const rows=[{kind:'refund_late_failure',recovery_key:'refund-late-failure:re_failed',order_id:'order'},null,
  {id:'adjustment',refund_operation_id:'operation',refund_reference:'re_failed',seller_recredit_cents:amount,created_at:'2026-09-01T00:00:00Z'},
  {id:'operation',order_id:'order',currency:'USD',reversal_reference:recorded?'trr_original':null,reversal_due_cents:2700,reversal_transfer_reference:'tr_original',reversal_operation_key:'reversal:operation'},
  {transfer_reference:'tr_original'}];
- const chain={select:vi.fn(),eq:vi.fn(),single:vi.fn(),throwOnError:vi.fn(async()=>({data:rows.shift()}))};for(const key of ['select','eq','single'] as const)chain[key].mockReturnValue(chain);
+ const chain={select:vi.fn(),eq:vi.fn(),single:vi.fn(),maybeSingle:vi.fn(),throwOnError:vi.fn(async()=>({data:rows.shift()}))};for(const key of ['select','eq','single','maybeSingle'] as const)chain[key].mockReturnValue(chain);
  const persisted=vi.fn().mockResolvedValue({data:null});return {from:vi.fn(()=>chain),rpc:vi.fn(()=>({throwOnError:persisted})),persisted};
 }
 beforeEach(()=>{
  vi.clearAllMocks();mocks.find.mockResolvedValue({kind:'found',reversalId:'trr_original'});
  mocks.reversal.mockResolvedValue({id:'trr_original',transfer:'tr_original',amount:2700,currency:'usd'});
- mocks.retrieve.mockImplementation(async(id:string)=>id==='tr_original'?{id,metadata:{order_id:'order'},destination:'acct_seller',currency:'usd',livemode:false}:{id,amount:2700,currency:'usd',destination:'acct_seller',livemode:false,reversed:false,amount_reversed:0,balance_transaction:'txn_repaid',created:1900000000,metadata:{refund_operation_id:'operation',recredit_adjustment_id:'adjustment',refund_reference:'re_failed'}});
+ mocks.retrieve.mockImplementation(async(id:string)=>id==='tr_original'?{id,metadata:{order_id:'order'},destination:'acct_seller',currency:'usd',livemode:false}:{id,amount:2700,currency:'usd',destination:'acct_seller',livemode:false,reversed:false,amount_reversed:0,balance_transaction:'txn_repaid',created:1900000000,metadata:{order_id:'order',refund_operation_id:'operation',recredit_adjustment_id:'adjustment',refund_reference:'re_failed'}});
 });
 it('records a proven zero obligation without contacting Stripe',async()=>{
  const admin=fixture(0);await verifyLateRefundRecovery(admin as never,'recovery','actor','');expect(mocks.client).not.toHaveBeenCalled();expect(admin.rpc).toHaveBeenCalledWith('record_refund_recredit_proof',{p_recovery:'recovery',p_adjustment:'adjustment',p_actor:'actor',p_amount:0,p_currency:'usd'});

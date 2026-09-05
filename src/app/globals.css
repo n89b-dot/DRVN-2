@@ -225,6 +225,23 @@
   --color-img-fallback: #262319;
 }
 
+/* `--live` remains the accent fill/border token. Tailwind's generated
+   `text-live` utility otherwise paints that same fill hue as small text,
+   which misses AA on recessed day surfaces. Text states use the separately
+   audited text token in base, important, hover, and group-hover forms. */
+.text-live {
+  color: var(--live-text);
+}
+.\!text-live {
+  color: var(--live-text) !important;
+}
+@media (hover: hover) {
+  .hover\:text-live:hover,
+  .group:hover .group-hover\:text-live {
+    color: var(--live-text);
+  }
+}
+
 [data-theme="dark"] img,
 [data-theme="dark"] video {
   filter: var(--photo-filter);

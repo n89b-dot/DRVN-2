@@ -35,12 +35,18 @@ begin
  rejected:=false;
  begin update public.payment_recoveries set status='recovered' where id=recovery; exception when others then rejected:=true; end;
  if not rejected then raise exception 'Seller proof erased the outstanding buyer refund'; end if;
- -- This fixture represents a separately reconciled and settled replacement;
- -- this guard does not perform an external refund or release a real hold.
- update public.refund_operations set status='failed' where id=op;
- result:=public.begin_refund_operation(oid,3000,'Admin refund: Replacement for failed refund re_recredit','guard','admin',true,'admin_refunded','pi_recredit','re_replacement',true);
- replacement:=(result->>'operation_id')::uuid;
+ replacement:=public.begin_refund_replacement(recovery,operator);
+ if public.begin_refund_replacement(recovery,operator)<>replacement then raise exception 'Replacement retry duplicated operation'; end if;
+ if (select replacement_transfer_reference from public.refund_operations where id=replacement)<>'tr_repaid' then raise exception 'Replacement targeted original transfer'; end if;
+ rejected:=false;
+ begin perform public.begin_refund_operation(oid,100,'unrelated','guard','admin',false,null,'pi_recredit',null,false); exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Ordinary refund consumed an open recovery allocation'; end if;
+ perform public.record_refund_provider_event('evt_replacement_success','re_replacement',replacement,oid,'pi_recredit',3000,'usd','succeeded',now(),'txn_replacement');
  perform public.settle_refund_operation(replacement);
+ rejected:=false;
+ begin perform public.claim_refund_reversal(replacement,'guard','tr_recredit_original',2700,'usd','reversal:'||replacement); exception when others then rejected:=true; end;
+ if not rejected then raise exception 'Replacement reversed original transfer'; end if;
+ perform public.claim_refund_reversal(replacement,'guard','tr_repaid',2700,'usd','reversal:'||replacement);
  update public.refund_operations set status='completed',provider_status='succeeded',reversal_reference='trr_replacement' where id=replacement;
  update public.payment_recoveries set status='recovered',resolved_by=operator,resolved_at=now(),resolution_note='Exact seller recredit verified' where id=recovery;
  if (select status from public.payment_recoveries where id=recovery)<>'recovered' then raise exception 'Verified case could not close'; end if;
