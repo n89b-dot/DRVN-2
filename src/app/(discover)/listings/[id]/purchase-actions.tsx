@@ -142,7 +142,7 @@ export function PurchaseActions({
               const result = await addToCart(fd);
               setCartState(result);
               // Refresh the shell so the cart badge count updates in place.
-              if (result.ok) router.refresh();
+              // Cookie changes return the refreshed server UI with this action.
             })
           }
         >

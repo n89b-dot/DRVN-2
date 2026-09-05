@@ -27,12 +27,12 @@ export function isOwnStorageUrl(value: unknown): value is string {
   } catch {
     return false;
   }
-  if (parsed.protocol !== "https:") return false;
+  const isolatedLocal = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" && ["127.0.0.1", "localhost"].includes(parsed.hostname) && parsed.port === "54321";
+  if (parsed.protocol !== "https:" && !(isolatedLocal && parsed.protocol === "http:")) return false;
 
   const host = supabaseStorageHost();
-  // Without configuration we cannot verify provenance, so accept any https URL
-  // rather than breaking local development against a proxy.
-  if (!host) return true;
+  // Missing configuration cannot establish ownership. Fail closed.
+  if (!host) return false;
 
   return parsed.host === host && parsed.pathname.includes("/storage/v1/object/");
 }
@@ -149,7 +149,8 @@ export function isAllowedVideoUrl(value: unknown): value is string {
   if (typeof value !== "string" || !value) return false;
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== "https:") return false;
+    const isolatedLocal = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" && ["127.0.0.1", "localhost"].includes(parsed.hostname) && parsed.port === "54321";
+  if (parsed.protocol !== "https:" && !(isolatedLocal && parsed.protocol === "http:")) return false;
     return ["youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com"].includes(parsed.host);
   } catch {
     return false;

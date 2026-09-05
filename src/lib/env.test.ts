@@ -15,6 +15,10 @@ const LIVE = {
   STRIPE_WEBHOOK_SECRET: "whsec_x",
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_x",
   SENTRY_DSN: "https://k@o.ingest.sentry.io/1",
+  ADMIN_ALERT_WEBHOOK_URL: "https://hooks.example/x",
+  NEXT_PUBLIC_SITE_URL: "https://drvn.example",
+  CRON_SECRET: "test-cron-secret-at-least-32-characters",
+  GUEST_RECEIPT_SECRET: "test-receipt-secret-at-least-32-characters",
 };
 
 describe("resolvePaymentsMode", () => {
@@ -68,7 +72,7 @@ describe("validatePaymentsEnv", () => {
     const { mode, warnings } = validatePaymentsEnv({
       ...LIVE,
       ADMIN_ALERT_WEBHOOK_URL: "https://hooks.example/x",
-      CRON_SECRET: "s",
+      CRON_SECRET: LIVE.CRON_SECRET,
     });
     expect(mode).toBe("stripe");
     expect(warnings).toEqual([]);
@@ -86,10 +90,11 @@ describe("validatePaymentsEnv", () => {
     }
   });
 
-  it("warns (not throws) on missing alert destination and cron secret", () => {
-    const { warnings } = validatePaymentsEnv(LIVE);
-    expect(warnings.some((w) => w.includes("ADMIN_ALERT_WEBHOOK_URL"))).toBe(true);
-    expect(warnings.some((w) => w.includes("CRON_SECRET"))).toBe(true);
+  it("fails closed when workers, receipt signing or alert delivery are missing", () => {
+    for (const key of ["CRON_SECRET", "GUEST_RECEIPT_SECRET", "ADMIN_ALERT_WEBHOOK_URL", "NEXT_PUBLIC_SITE_URL"]) {
+      const env: Record<string, string | undefined> = { ...LIVE }; delete env[key];
+      expect(() => validatePaymentsEnv(env)).toThrow(PaymentsConfigError);
+    }
   });
 
   it("does not demand live config outside production", () => {

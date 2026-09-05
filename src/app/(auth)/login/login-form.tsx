@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { Alert, Button, TextField } from "@/components/ui";
+import { Alert, Button, PasswordField, TextField } from "@/components/ui";
 
 import { login, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
@@ -43,7 +43,7 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           autoComplete="email"
           className="max-w-none"
         />
-        <TextField
+        <PasswordField
           id="login-password"
           label="Password"
           labelEnd={
@@ -54,7 +54,6 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
             </Link>
           }
           name="password"
-          type="password"
           required
           autoComplete="current-password"
           className="max-w-none"

@@ -1,6 +1,7 @@
+import { secureCookies } from "@/lib/cookie-security";
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 
 import { cookies } from "next/headers";
 
@@ -37,6 +38,9 @@ const MAX_AGE_SECONDS = 60 * 60 * 6;
  * checkout needs no new environment configuration to be secure.
  */
 function signingKey(): string {
+  const secret = process.env.GUEST_RECEIPT_SECRET;
+  if (secret && secret.length >= 32) return secret;
+  if (process.env.NODE_ENV === "production") throw new Error("GUEST_RECEIPT_SECRET must contain at least 32 characters");
   return requireServerEnv().serviceRoleKey;
 }
 
@@ -53,18 +57,23 @@ function verify(payload: string, signature: string): boolean {
 
 /** `<base64url(json)>.<hmac>` */
 export function encodeGuestOrders(orderIds: string[]): string {
-  const payload = Buffer.from(JSON.stringify(orderIds)).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ v: 1, purpose: "order-receipt", ids: orderIds, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS })).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
 export function decodeGuestOrders(value: string | undefined): string[] {
-  if (!value) return [];
+  if (!value || value.length > 4096 || value.split(".").length !== 2) return [];
   const [payload, signature] = value.split(".");
   if (!payload || !signature || !verify(payload, signature)) return [];
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((id): id is string => typeof id === "string");
+    const now = Math.floor(Date.now() / 1000);
+    if (!parsed || parsed.v !== 1 || parsed.purpose !== "order-receipt" ||
+        !Number.isInteger(parsed.iat) || !Number.isInteger(parsed.exp) ||
+        parsed.iat > now + 60 || parsed.exp <= now || parsed.exp - parsed.iat !== MAX_AGE_SECONDS ||
+        !Array.isArray(parsed.ids) || parsed.ids.length > 50 ||
+        !parsed.ids.every((id: unknown) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))) return [];
+    return [...new Set<string>(parsed.ids)];
   } catch {
     return [];
   }
@@ -78,7 +87,7 @@ export async function setGuestOrders(orderIds: string[]) {
     maxAge: MAX_AGE_SECONDS,
     sameSite: "lax",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookies(),
   });
 }
 
@@ -105,4 +114,18 @@ export function isPlausibleEmail(value: string): boolean {
   if (at < 1 || at !== email.lastIndexOf("@")) return false;
   const domain = email.slice(at + 1);
   return domain.includes(".") && !domain.startsWith(".") && !domain.endsWith(".");
+}
+
+/** Opaque browser identity scopes guest attempts; email never authenticates. */
+export async function guestCheckoutIdentity(): Promise<string> {
+  const store = await cookies();
+  const existing = store.get("drvn_checkout_identity")?.value;
+  if (existing && existing.length < 256) {
+    const [id, expiry, signature, extra] = existing.split(".");
+    if (!extra && /^[0-9a-f-]{36}$/.test(id || "") && /^\d+$/.test(expiry || "") && Number(expiry) > Math.floor(Date.now() / 1000) && Number(expiry) <= Math.floor(Date.now() / 1000) + 86400 && verify(`checkout:${id}:${expiry}`, signature || "")) return id;
+  }
+  const id = randomUUID();
+  const expiry = Math.floor(Date.now() / 1000) + 86400;
+  store.set("drvn_checkout_identity", `${id}.${expiry}.${sign(`checkout:${id}:${expiry}`)}`, { httpOnly: true, sameSite: "lax", secure: secureCookies(), path: "/", maxAge: 86400 });
+  return id;
 }

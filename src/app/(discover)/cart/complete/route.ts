@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   const { data: orders } = await admin
     .from("orders")
-    .select("id, buyer_id")
+    .select("id, buyer_id, status, total_cents, currency")
     .in("id", orderIds);
   const claimable = new Set(guestOrderIds);
   const ownOrderIds = (orders ?? [])
@@ -55,7 +55,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/cart", request.url));
   }
 
-  const status = await getPaymentProvider().getStatus(intentId);
+  const { data: payments, error: paymentError } = await admin.from("payments")
+    .select("order_id, provider_reference, amount_cents, currency").in("order_id", ownOrderIds);
+  if (paymentError || payments?.length !== ownOrderIds.length || payments.some((payment) => {
+    const order = orders?.find((order) => order.id === payment.order_id);
+    return payment.provider_reference !== intentId || !order || payment.amount_cents !== order.total_cents || payment.currency !== order.currency;
+  })) return NextResponse.redirect(new URL("/cart?error=Payment+reference+could+not+be+verified", request.url));
+  const providerStatus = await getPaymentProvider().getStatus(intentId);
+  const locallySettled = orders?.filter((order) => ownOrderIds.includes(order.id)).every((order) => ["paid", "shipped", "delivered", "completed", "disputed", "refunded"].includes(order.status));
+  const status = providerStatus === "succeeded" && !locallySettled ? "requires_action" : providerStatus;
 
   if (status === "succeeded") {
     // Clear exactly what was bought from the cookie cart.
@@ -74,7 +82,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(dest, request.url));
   }
 
-  if (status === "requires_action") {
+  if (["requires_action", "processing", "requires_payment_method", "requires_confirmation", "requires_capture", "unknown"].includes(status)) {
     // Still settling (or the buyer abandoned 3DS). Show the pending order —
     // the webhook or the reservation sweeper will resolve it either way.
     if (!user) return NextResponse.redirect(new URL("/order-placed?processing=1", request.url));

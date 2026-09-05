@@ -2821,16 +2821,17 @@ video {
    ink text): eyebrow row → photo plate → headline → value → meta → actions. */
 .mosaicwrap {
   container-type: inline-size;
+  container-name: wall;
 }
 .mosaic {
   --mcols: 4;
   --mgap: 12px;
   display: grid;
   grid-template-columns: repeat(var(--mcols), minmax(0, 1fr));
-  /* 1.45 puts an update card's photo (the deepest caption: two-line
-     title, two-line excerpt, vehicle, owner) at the marketplace card's
+  /* 1.5 puts an update card's photo (the deepest caption: two-line
+     title, two-line excerpt, vehicle, owner) near the marketplace card's
      165px on a 271px desktop column, where 1.25 left it a 113px strip. */
-  --mratio: 1.45;
+  --mratio: 1.5;
   grid-auto-rows: calc(((100cqw - (var(--mcols) - 1) * var(--mgap)) / var(--mcols)) * var(--mratio));
   grid-auto-flow: dense;
   gap: var(--mgap);
@@ -2842,14 +2843,14 @@ video {
 }
 @container (max-width: 600px) {
   /* A phone column is ~170px: the caption is a fixed cost, so the unit
-     grows taller to keep the photo near 4:3 rather than a letterbox. 1.8
-     puts an update's photo (the deepest caption: two-line title, owner line,
-     excerpt) at ~125px on a 168px cell — 4:3 — instead of the 74px strip
-     1.5 left it. */
+     grows taller to keep the photo near 4:3 rather than a letterbox. 2.0
+     puts an update's photo (the deepest caption: two-line title, one-line
+     excerpt, vehicle, owner) at ~120px on a 168px cell instead of the
+     63px strip 1.8 left it once the excerpt joined the caption. */
   .mosaic {
     --mcols: 2;
     --mgap: 8px;
-    --mratio: 1.8;
+    --mratio: 2;
   }
 }
 .mcell {
@@ -3137,11 +3138,41 @@ video {
    lines before it clamps; the vehicle line then opens its own group. */
 .mcell__lede {
   margin-top: var(--cap-tight);
+  /* A half step above the meta: the excerpt is copy, the byline under it
+     is annotation, and the two must not read as one dim block. */
+  font-size: 12px;
+  line-height: 1.45;
   white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow-wrap: anywhere;
+}
+/* A narrow cell earns one excerpt line; the second is the wider cell's
+   room. Two lines on a 168px phone cell crushed the photo to a strip. */
+@container (max-width: 239px) {
+  .mcell__lede {
+    -webkit-line-clamp: 1;
+  }
+}
+/* The phone wall's 2×1 wide cell shares the square's row height, so it
+   gets the square's one excerpt line too — two lines left a 343px-wide
+   plate 77px tall. Queried on the wall, not the cell, so a 271px desktop
+   cell is untouched. */
+@container wall (max-width: 600px) {
+  .mcell--wide .mcell__lede {
+    -webkit-line-clamp: 1;
+  }
+}
+/* Under an excerpt the vehicle and the owner are one byline: the vehicle
+   opens the group after the copy, the owner binds tight beneath it. */
+.mcell__lede ~ .mcell__value + .mcell__meta {
+  margin-top: var(--cap-tight);
+}
+/* The byline's monogram sits on the text line, not above it. */
+.mcell__meta .monogram--xs {
+  vertical-align: -3px;
+  margin-right: 5px;
 }
 .mcell__lede + .mcell__value {
   margin-top: var(--cap-group);
@@ -3155,9 +3186,16 @@ video {
     font-size: 15px;
   }
   .mcell__car,
-  .mcell__title + .mcell__value,
-  .mcell__lede + .mcell__value {
+  .mcell__title + .mcell__value {
     font-size: 14px;
+  }
+  /* With copy above it the vehicle is the byline, not the second line:
+     a size under the excerpt so the reference never outsizes the words. */
+  .mcell__lede {
+    font-size: 13px;
+  }
+  .mcell__lede + .mcell__value {
+    font-size: 12.5px;
   }
   .mcell__car + .mcell__value {
     font-size: 18px;

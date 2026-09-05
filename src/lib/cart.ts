@@ -1,3 +1,4 @@
+import { secureCookies } from "@/lib/cookie-security";
 import { cookies } from "next/headers";
 
 const CART_COOKIE = "drvn_cart";
@@ -34,7 +35,7 @@ export async function setCartIds(ids: string[]) {
     // The cart is only ever read server-side; keeping it out of document.cookie
     // removes it as an XSS target.
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookies(),
   });
 }
 

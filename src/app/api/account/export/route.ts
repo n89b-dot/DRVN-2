@@ -18,10 +18,23 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return new Response("Sign in to export your data.", { status: 401 });
 
+  const failures: string[] = [];
   const take = async <T>(query: PromiseLike<{ data: T; error: unknown }>, label: string) => {
     const { data, error } = await query;
-    if (error) reportError("[export] section failed", { label, error });
+    if (error) { failures.push(label); reportError("[export] section failed", { label, error }); }
     return data ?? null;
+  };
+
+  const pages = async <T>(query: { range(from: number, to: number): PromiseLike<{ data: T[] | null; error: unknown }> }, label: string) => {
+    const rows: T[] = [];
+    for (let offset = 0; offset < 100_000; offset += 500) {
+      const { data, error } = await query.range(offset, offset + 499);
+      if (error) { failures.push(label); reportError("[export] section failed", { label, error }); return null; }
+      rows.push(...(data ?? []));
+      if (!data || data.length < 500) return rows;
+    }
+    failures.push(`${label}: export exceeds synchronous capacity`);
+    return null;
   };
 
   const [
@@ -49,22 +62,24 @@ export async function GET() {
         .maybeSingle(),
       "profile"
     ),
-    take(supabase.from("cars").select("*").eq("owner_id", user.id), "cars"),
-    take(supabase.from("listings").select("*").eq("seller_id", user.id), "listings"),
-    take(supabase.from("orders").select("*").eq("buyer_id", user.id), "orders bought"),
-    take(supabase.from("orders").select("*").eq("seller_id", user.id), "orders sold"),
-    take(supabase.from("offers").select("*").eq("buyer_id", user.id), "offers"),
-    take(supabase.from("messages").select("*").eq("sender_id", user.id), "messages"),
-    take(supabase.from("saves").select("*").eq("user_id", user.id), "saved"),
-    take(supabase.from("follows").select("*").eq("follower_id", user.id), "follows"),
-    take(supabase.from("notifications").select("*").eq("user_id", user.id), "notifications"),
-    take(supabase.from("reviews").select("*").eq("reviewer_id", user.id), "reviews"),
-    take(supabase.from("activity_posts").select("*").eq("author_id", user.id), "activity posts"),
-    take(
-      supabase.from("mod_items").select("*, cars!inner(owner_id)").eq("cars.owner_id", user.id),
+    pages(supabase.from("cars").select("*").order("id").eq("owner_id", user.id), "cars"),
+    pages(supabase.from("listings").select("*").order("id").eq("seller_id", user.id), "listings"),
+    pages(supabase.from("orders").select("*").order("id").eq("buyer_id", user.id), "orders bought"),
+    pages(supabase.from("orders").select("*").order("id").eq("seller_id", user.id), "orders sold"),
+    pages(supabase.from("offers").select("*").order("id").eq("buyer_id", user.id), "offers"),
+    pages(supabase.from("messages").select("*").order("id").eq("sender_id", user.id), "messages"),
+    pages(supabase.from("saves").select("*").order("target_type").order("target_id").eq("user_id", user.id), "saved"),
+    pages(supabase.from("follows").select("*").order("target_type").order("target_id").eq("follower_id", user.id), "follows"),
+    pages(supabase.from("notifications").select("*").order("id").eq("user_id", user.id), "notifications"),
+    pages(supabase.from("reviews").select("*").order("id").eq("reviewer_id", user.id), "reviews"),
+    pages(supabase.from("activity_posts").select("*").order("id").eq("author_id", user.id), "activity posts"),
+    pages(
+      supabase.from("mod_items").select("*, cars!inner(owner_id)").order("id").eq("cars.owner_id", user.id),
       "mod items"
     ),
   ]);
+
+  if (failures.length) return Response.json({ error: "Your export could not be completed. Please retry or contact support.", failed_sections: failures }, { status: 503, headers: { "Cache-Control": "no-store" } });
 
   const body = JSON.stringify(
     {

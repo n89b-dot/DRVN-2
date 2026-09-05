@@ -39,6 +39,7 @@ export type ListingFilters = {
 };
 
 export type ListingPage = {
+  searchTruncated?: boolean;
   results: ListingCardData[];
   total: number;
   page: number;
@@ -214,6 +215,7 @@ export async function fetchListings(
   filters: ListingFilters,
   viewerId?: string
 ): Promise<ListingPage> {
+  let searchTruncated = false;
   const sort = parseSort(filters.sort);
   const page = parsePage(filters.page);
   const from = (page - 1) * PAGE_SIZE;
@@ -341,6 +343,7 @@ export async function fetchListings(
         .searchIds(term, { limit: 300 })
         .catch(() => null);
       if (ids !== null) {
+        searchTruncated = ids.length >= 300;
         if (ids.length === 0) {
           // A definitive empty answer — force an empty page without a
           // degenerate `in ()` clause.
@@ -377,7 +380,7 @@ export async function fetchListings(
     // Nothing on the platform matches this vehicle by either seller-stated
     // route → an honest empty page, same doctrine as `fit` below.
     if (!vehicleSourceCarIds.length && !vehicleListingIds.length) {
-      return { results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
+      return { searchTruncated, results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
     }
     const clauses = [
       ...(vehicleSourceCarIds.length ? [`source_car_id.in.(${vehicleSourceCarIds.join(",")})`] : []),
@@ -392,7 +395,7 @@ export async function fetchListings(
     // No garage, or nothing matching by either route → no results by
     // definition. Say so rather than showing an unfiltered page.
     if (!fitSourceCarIds.length && !fitDeclaredListingIds.length) {
-      return { results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
+      return { searchTruncated, results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
     }
     const clauses = [
       ...(fitSourceCarIds.length ? [`source_car_id.in.(${fitSourceCarIds.join(",")})`] : []),
@@ -423,10 +426,10 @@ export async function fetchListings(
 
   if (error) {
     reportError("[marketplace] listing query failed", error);
-    return { results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
+    return { searchTruncated, results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
   }
   if (!listings?.length) {
-    return { results: [], total: count ?? 0, page, pageSize: PAGE_SIZE, hasMore: false };
+    return { searchTruncated, results: [], total: count ?? 0, page, pageSize: PAGE_SIZE, hasMore: false };
   }
 
   const ids = listings.map((l) => l.id);
@@ -518,6 +521,7 @@ export async function fetchListings(
       question_count: questionCounts.get(card.id) ?? 0,
     })),
     total,
+    searchTruncated,
     page,
     pageSize: PAGE_SIZE,
     hasMore: from + listings.length < total,

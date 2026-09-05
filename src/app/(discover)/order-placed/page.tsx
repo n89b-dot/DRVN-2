@@ -104,7 +104,7 @@ export default async function OrderPlacedPage({
         <span className="microlabel">Next</span>
         <p className="nextaction__what">Check your email</p>
         <p className="spec-note">
-          We&apos;ve sent a link that opens this order — dispatch updates, tracking and
+          An email link is on its way. It opens this order — dispatch updates, tracking and
           messages to the seller all live there. Opening it also finishes setting up your
           DRVN account, so you never need a password.
         </p>

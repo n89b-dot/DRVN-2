@@ -3,7 +3,6 @@ import type Stripe from "stripe";
 import { recordExternalRefund, runRefundOperation } from "./refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
-import { capture } from "@/lib/analytics";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 
 /**
@@ -43,89 +42,28 @@ export async function ordersForIntent(admin: Admin, intentId: string, metadataOr
   return (data ?? []).map((p) => p.order_id);
 }
 
-/**
- * Records that this order's net is owed to its seller — a transfer_intents
- * row, NOT a Stripe transfer. The transfer worker moves the money after
- * delivery + the clearing window. Idempotent via the order_id primary key,
- * so webhook redeliveries can't create a second intent, and the worker's
- * `transfer:{order_id}` Stripe key means even a duplicated intent could
- * never pay twice.
- */
-export async function createTransferIntent(
-  admin: Admin,
-  orderId: string,
-  intent: Stripe.PaymentIntent
-): Promise<void> {
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, seller_id, status, total_cents, platform_fee_cents, currency, transfer_reference, delivered_at")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!order || order.transfer_reference) return;
-  if (order.status !== "paid") return; // finalize failed or refused — no money to move
-
-  if (!order.seller_id) {
-    reportError("[stripe:webhook] settled order has no seller to pay", { orderId });
-    return;
-  }
-
-  const netCents = order.total_cents - order.platform_fee_cents;
-  if (netCents <= 0) return;
-
-  const chargeId =
-    typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge?.id;
-
-  const { error } = await admin.from("transfer_intents").insert({
-    order_id: orderId,
-    seller_id: order.seller_id,
-    amount_cents: netCents,
-    currency: order.currency,
-    status: "holding",
-    source_transaction: chargeId ?? null,
-  });
-  // 23505 = the intent already exists (redelivery) — exactly what we want.
-  if (error && error.code !== "23505") {
-    reportError("[stripe:webhook] failed to record transfer intent", { orderId, error });
-  }
-}
-
-/** Finalizes every order the intent covers, then pays the sellers. */
-export async function settleIntent(
-  admin: Admin,
-  intent: Stripe.PaymentIntent,
-  success: boolean
-): Promise<boolean> {
+/** Captured baskets commit all local obligations or return retryable failure. */
+export async function settleIntent(admin: Admin, intent: Stripe.PaymentIntent, success: boolean): Promise<boolean> {
   const orderIds = await ordersForIntent(admin, intent.id, intent.metadata.order_id);
-  if (!orderIds.length) {
-    reportError("[stripe:webhook] intent maps to no orders", { intent: intent.id });
-    return true; // nothing to retry
-  }
-
-  const failureReason = success ? null : intent.last_payment_error?.message ?? "payment failed";
-
-  let allApplied = true;
-  for (const orderId of orderIds) {
-    const { error } = await admin.rpc("purchase_finalize", {
-      p_order_id: orderId,
-      p_success: success,
-      p_provider: "stripe",
-      p_reference: intent.id,
-      p_failure_reason: failureReason,
-    });
-    if (error) {
-      reportError("[stripe:webhook] purchase_finalize failed", { orderId, error });
-      allApplied = false;
-      continue;
+  if (!orderIds.length) throw new Error("Payment maps to no orders; reconciliation required");
+  if (success) {
+    if (intent.status !== "succeeded" || intent.amount_received !== intent.amount) {
+      throw new Error("Payment capture is incomplete; reconciliation required");
     }
-    if (success) await createTransferIntent(admin, orderId, intent);
-  }
-  if (success && allApplied) {
-    capture(intent.metadata.buyer_id ?? null, {
-      event: "purchase_completed",
-      props: { orders: orderIds.length },
+    if (!intent.metadata.buyer_id) throw new Error("Payment lacks buyer identity");
+    const { data, error } = await admin.rpc("settle_payment_capture", {
+      p_reference: intent.id, p_order_ids: orderIds, p_amount: intent.amount_received,
+      p_currency: intent.currency, p_buyer: intent.metadata.buyer_id,
+      p_source: typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge?.id ?? null,
     });
+    if (error) { reportError("[settlement] capture transaction failed", { intent: intent.id, code: error.code }); return false; }
+    return Boolean(data && typeof data === "object" && "outcome" in data &&
+      ["settled", "compensation_queued"].includes(String(data.outcome)));
   }
-  return allApplied;
+  // A payment_intent.payment_failed event describes an attempt, not a terminal
+  // PaymentIntent. It can be retried successfully. Keep the reservation until
+  // cancellation/expiry resolves it; late capture is compensated by the RPC.
+  return true;
 }
 
 type PaymentRow = {
@@ -453,14 +391,15 @@ export async function claimWebhookEvent(admin: Admin, event: Stripe.Event): Prom
     return !existing?.processed_at; // reprocess only if the first pass died
   }
   reportError("[stripe:webhook] event dedup insert failed", { event: event.id, error });
-  return true; // fail open: idempotent handlers beat dropped events
+  throw new Error("Webhook persistence unavailable; retry delivery");
 }
 
 export async function markWebhookEventProcessed(admin: Admin, eventId: string): Promise<void> {
-  await admin
+  const { error } = await admin
     .from("webhook_events")
     .update({ processed_at: new Date().toISOString() })
     .eq("id", eventId);
+  if (error) throw new Error("Webhook completion could not be persisted");
 }
 
 /**

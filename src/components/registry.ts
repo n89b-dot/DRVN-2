@@ -464,7 +464,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "pattern",
     category: "card",
     status: "active",
-    description: "A feed item (part / build / update) as a mosaic card. Update: title → two-line excerpt → full vehicle label → owner. Part: title → source car → price alone (no ship line on the discovery wall) → condition chip + grade → seller. Build: name → vehicle → owner · activity. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline).",
+    description: "A feed item (part / build / update) as a mosaic card. Update: title → excerpt (two lines from 240px, one on phone cells) → full vehicle label → owner byline (monogram + name). Part: title → source car → price alone (no ship line on the discovery wall) → condition chip + grade → seller. Build: name → vehicle → owner · activity. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline).",
     use: "Explore and mixed feeds, via MasonryFeed.",
   },
   {
@@ -677,6 +677,19 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     description: "Text input in the field contract; mono prefix support ($, PN).",
     use: "Every text input.",
     states: ["error (is-invalid)", "ok", "disabled"],
+    cssRecipe: ".field / .ctl",
+  },
+  {
+    name: "PasswordField",
+    importPath: UI,
+    file: "src/components/ui/password-field.tsx",
+    layer: "primitive",
+    category: "form",
+    status: "active",
+    description:
+      "TextField's password sibling with a labelled reveal/conceal eye toggle; type flips client-side only.",
+    use: "Every password input — never a bare TextField type=password.",
+    states: ["revealed", "error (is-invalid)", "ok", "disabled"],
     cssRecipe: ".field / .ctl",
   },
   {

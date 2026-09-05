@@ -942,6 +942,7 @@ export async function adminCaseUpdate(formData: FormData) {
       {
         actorId: ctx.userId,
         action: "case.update",
+        metadata: { priority, labels },
         subjectType: opsCase.kind === "dispute" ? "order" : "report",
         subjectId: (opsCase.order_id ?? opsCase.report_id)!,
         orderId: opsCase.order_id,

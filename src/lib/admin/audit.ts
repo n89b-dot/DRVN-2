@@ -1,16 +1,14 @@
+import { createClient } from "@/lib/supabase/server";
+import { randomUUID } from "node:crypto";
 import type { AdminAuditSubjectType } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 
 import { capabilityFor } from "./capabilities";
 
-/**
- * Append-only audit trail (0018). Every admin mutation flows through
- * `auditedAction`, which makes "no mutation without an audit row" structural
- * rather than a convention each action must remember: the mutation callback
- * only runs after its audit entry is validated, and the row is written in the
- * same code path — if the audit INSERT fails, the action fails.
- */
+/** Database-only commands commit their mutation and audit in one transaction.
+ * External operations journal authorization before invoking their durable provider
+ * operation, then record completion or reconciliation requirements. */
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -36,16 +34,10 @@ export async function writeAudit(admin: Admin, entry: AuditEntry): Promise<void>
   });
   if (error) {
     reportError("[admin] audit write failed", { action: entry.action, error });
-    throw new Error("Audit write failed — action aborted.");
+    throw new Error("Audit write failed.");
   }
 }
 
-/**
- * Runs `mutate` and records the audit row around it. The audit entry is
- * written AFTER the mutation succeeds (so the log records what happened, not
- * what was attempted) — but a failed audit write still surfaces as an error
- * to the actor, and the mutation result carries what to record.
- */
 export async function auditedAction<T>(
   admin: Admin,
   entry: AuditEntry,
@@ -67,11 +59,29 @@ export async function auditedAction<T>(
     reportError("[admin] actor assertion refused", { action: entry.action, actorError });
     throw new Error("This account is not authorized to act — mutation refused.");
   }
-  const result = await mutate();
-  await writeAudit(admin, {
-    ...entry,
-    metadata: { ...entry.metadata, result: summarize(result) },
-  });
+  const transactional = new Set(["listing.remove", "listing.restore", "user.suspend", "user.unsuspend", "report.actioned", "report.dismissed", "recovery.recovered", "recovery.written_off", "note.internal", "dispute.resolve_for_seller", "order.message_parties", "case.claim", "case.release", "case.update"]);
+  if (transactional.has(entry.action)) {
+    const session = await createClient();
+    const { data, error } = await session.rpc("execute_admin_command", {
+      p_action: entry.action, p_subject: entry.subjectId, p_reason: entry.reason,
+      p_data: JSON.parse(JSON.stringify({ ...entry.metadata, subjectType: entry.subjectType, orderId: entry.orderId ?? null })),
+    });
+    if (error) throw new Error(error.message);
+    return data as T;
+  }
+  const operationId = randomUUID();
+  await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "requested" } });
+  let result: T;
+  try { result = await mutate(); } catch (error) {
+    try { await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "failed_or_requires_reconciliation" } }); }
+    catch { reportError("[admin] operation needs reconciliation", { operationId }); }
+    throw error;
+  }
+  try {
+    await writeAudit(admin, { ...entry, metadata: { ...entry.metadata, operationId, phase: "completed", result: summarize(result) } });
+  } catch {
+    throw new Error(`The operation ran, but its completion record could not be saved. Do not repeat it; reconcile operation ${operationId}.`);
+  }
   return result;
 }
 

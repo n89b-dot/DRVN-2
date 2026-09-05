@@ -1,11 +1,15 @@
 # Applying migrations
 
-Run these in the **Supabase SQL Editor**, in order. Each is wrapped in a
-transaction and written to be idempotent — re-running one is safe. (0007 and
-0009 were *not* re-runnable on first write: they created policies without a
-preceding `drop policy if exists`, and `purchase_begin` left its temp table
-behind if called twice in one transaction. Both fixed — verified by applying each
-file twice.)
+## September 2026 remediation — local verification only
+
+`20260905011618_remediation_integrity.sql` was generated with the Supabase CLI and applied to the disposable local Supabase stack and the exact CI PostgreSQL 15 image. All ten SQL guard files pass there. It has **not** been applied to the shared/production project. The historic status entries below are unchanged and do not imply deployment of this migration.
+
+The migration adds durable payment requests, atomic capture/payout/compensation, queued receipts/search/deletion, admin MFA/atomic commands, normalized-public-upload enforcement and worker health/schedules. It replaces the payment-reference uniqueness rule to allow a multi-seller basket to share one Stripe intent, while enforcing one payment row per order. Check historical duplicate order payments before applying the index.
+
+Follow [the remediation rollout](../docs/remediation-rollout.md) for coordinated application/schema deployment and required Auth, SMTP and scheduler settings. Do not apply the destructive initial schema to an existing project.
+
+
+The entries below are historical application records. Compare the destination's actual schema and migration history before applying any file. Apply only reviewed, unapplied migrations through the established SQL Editor/runner procedure. **0001 is destructive; never replay the tree against an existing project.** Some later files were tested for repeatability, but the whole tree is not a safe re-run operation.
 
 ## Status: 0001–0039 recorded below; 0040–0046 applied but unrecorded here; 0047–0056 applied
 

@@ -24,7 +24,7 @@ language sql as $$
   select set_config('role', 'authenticated', true);
   select set_config(
     'request.jwt.claims',
-    json_build_object('sub', uid::text, 'role', 'authenticated')::text,
+    json_build_object('sub', uid::text, 'role', 'authenticated', 'aal', 'aal2')::text,
     true
   );
 $$;
@@ -98,6 +98,10 @@ begin
     raise exception 'FAIL: is_admin() false for admin member';
   end if;
   raise notice 'PASS: is_admin() true for admin member';
+  perform set_config('request.jwt.claims',json_build_object('sub',v_admin,'role','authenticated','aal','aal1')::text,true);
+  if public.is_admin() then raise exception 'FAIL: low-assurance admin received RLS admin access'; end if;
+  raise notice 'PASS: low-assurance admin cannot use RLS admin access';
+  perform pg_temp.impersonate(v_admin);
 
   perform pg_temp.back_to_admin();
   if public.is_admin() then

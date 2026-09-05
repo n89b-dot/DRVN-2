@@ -170,14 +170,18 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
         `Live-money production is missing required configuration: ${missing.join(", ")}.`
       );
     }
-    if (!env.ADMIN_ALERT_WEBHOOK_URL) {
-      warnings.push(
-        "ADMIN_ALERT_WEBHOOK_URL is unset — admin alerts will accumulate as 'disabled' outbox rows instead of being delivered."
-      );
+    const invalid: string[] = [];
+    if (!env.CRON_SECRET || env.CRON_SECRET.length < 32) invalid.push("CRON_SECRET (at least 32 characters)");
+    if (!env.GUEST_RECEIPT_SECRET || env.GUEST_RECEIPT_SECRET.length < 32) invalid.push("GUEST_RECEIPT_SECRET (at least 32 characters)");
+    for (const name of ["NEXT_PUBLIC_SITE_URL", "ADMIN_ALERT_WEBHOOK_URL", "SENTRY_DSN"]) {
+      try {
+        const value = new URL(env[name] || "");
+        if (value.protocol !== "https:") throw new Error("HTTPS required");
+        if (name === "SENTRY_DSN" && (!value.username || !/^\/\d+$/.test(value.pathname))) throw new Error("Invalid DSN");
+        if (name === "NEXT_PUBLIC_SITE_URL" && (value.username || value.password || value.pathname !== "/" || value.search || value.hash)) throw new Error("Canonical origin required");
+      } catch { invalid.push(name); }
     }
-    if (!env.CRON_SECRET) {
-      warnings.push("CRON_SECRET is unset — the transfer worker endpoint will refuse all runs.");
-    }
+    if (invalid.length) throw new PaymentsConfigError(`Production operations configuration is invalid: ${invalid.join(", ")}.`);
   }
   return { mode, warnings };
 }

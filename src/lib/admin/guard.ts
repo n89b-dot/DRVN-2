@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -39,5 +40,8 @@ export const getAdminContext = cache(async (): Promise<AdminContext | null> => {
   const { data: role } = await supabase.rpc("admin_role");
   if (role !== "admin" && role !== "viewer") return null;
 
+  const { data: assurance, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const verifiedAt = Math.max(0, ...(assurance?.currentAuthenticationMethods ?? []).map((method) => typeof method === "object" && ["totp", "mfa/totp"].includes(method.method) ? method.timestamp : 0));
+  if (error || assurance?.currentLevel !== "aal2" || Date.now() / 1000 - verifiedAt > 900) redirect("/admin-verify");
   return { userId: user.id, role, supabase };
 });

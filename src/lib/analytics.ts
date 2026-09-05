@@ -1,5 +1,8 @@
 import "server-only";
 
+import { after } from "next/server";
+import { cookies } from "next/headers";
+
 import { reportError } from "@/lib/monitoring";
 
 /**
@@ -67,21 +70,22 @@ function configured(): boolean {
  */
 export function capture(distinctId: string | null, entry: AnalyticsEvent): void {
   if (!configured()) return;
-  const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
-  void fetch(`${host}/capture/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: process.env.POSTHOG_KEY,
-      event: entry.event,
-      distinct_id: distinctId ?? "anonymous",
-      properties: { ...entry.props },
-      timestamp: new Date().toISOString(),
-    }),
-    signal: AbortSignal.timeout(2000),
-  }).catch((error) => {
-    reportError("[analytics] capture failed", { event: entry.event, error: String(error) });
-  });
+  try {
+    const consent = cookies().then((store) => store.get("drvn_analytics_consent")?.value === "v1:yes").catch(() => false);
+    after(async () => {
+      if (!(await consent)) return;
+      const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
+      try {
+        const response = await fetch(`${host}/capture/`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: process.env.POSTHOG_KEY, event: entry.event,
+            distinct_id: distinctId ?? "anonymous", properties: { ...entry.props }, timestamp: new Date().toISOString() }),
+          signal: AbortSignal.timeout(2000),
+        });
+        if (!response.ok) throw new Error(`Analytics HTTP ${response.status}`);
+      } catch (error) { reportError("[analytics] capture failed", { event: entry.event, error: String(error) }); }
+    });
+  } catch { /* No request consent in workers or scripts: analytics stays off. */ }
 }
 
 /** Env-based feature flag: flagEnabled("new_search") reads FLAG_NEW_SEARCH. */

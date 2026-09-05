@@ -20,8 +20,8 @@ export async function syncListingToSearch(listingId: string): Promise<void> {
       "id, title, description, compatibility_notes, part_number, part_number_compact, category, subcategory, status, price_cents, created_at, source_car_id",
     )
     .eq("id", listingId)
-    .maybeSingle();
-  if (!listing) return;
+    .maybeSingle().throwOnError();
+  if (!listing) { await deleteSearchDocument(listingId); return; }
   if (listing.status !== "active") {
     await deleteSearchDocument(listingId);
     return;

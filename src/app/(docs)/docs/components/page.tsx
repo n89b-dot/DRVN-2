@@ -26,6 +26,7 @@ import {
   Select,
   Stepper,
   SuggestingSearchField,
+  PasswordField,
   TextField,
   TileHead,
   ThreadDivider,
@@ -592,6 +593,19 @@ export default function ComponentsPage() {
             </Select>
             <Checkbox label="Attach provenance" defaultChecked className="mt-2" />
           </div>
+        </Specimen>
+        <Specimen
+          name="PasswordField"
+          klass="PasswordField"
+          note="TextField's password sibling (src/components/ui/password-field.tsx): the same field contract plus a labelled reveal/conceal eye toggle. Flipping only changes the input type client-side; the toggle stays in the tab order. Used on sign-in, sign-up, reset and Settings → Account."
+        >
+          <PasswordField
+            id="doc-password"
+            name="doc-password"
+            label="Password"
+            defaultValue="hunter2hunter2"
+            hint="Case matters. Nothing else does."
+          />
         </Specimen>
         <Specimen
           name="ComboField"

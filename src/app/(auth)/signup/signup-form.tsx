@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { Button, TextField } from "@/components/ui";
+import { Button, PasswordField, TextField } from "@/components/ui";
 
 import { signup, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
@@ -35,11 +35,10 @@ export function SignupForm({ next }: { next?: string }) {
           className="max-w-none"
           hint="Used for offers, orders and payouts. Never shown publicly."
         />
-        <TextField
+        <PasswordField
           id="signup-password"
           label="Password"
           name="password"
-          type="password"
           required
           minLength={8}
           placeholder="At least 8 characters"

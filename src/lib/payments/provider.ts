@@ -1,3 +1,5 @@
+import { StripePaymentProvider } from "./stripe";
+import "server-only";
 /**
  * Payment provider abstraction.
  *
@@ -23,19 +25,7 @@
 
 import { resolvePaymentsMode } from "@/lib/env";
 
-// 10% platform fee, deducted from the seller's proceeds — the buyer pays
-// goods + shipping and the seller receives that minus the fee (PRD §7.4).
-// Since migration 0050 the fee basis is goods subtotal + buyer-paid shipping:
-// pricing value into "shipping" must not reduce DRVN's fee. The authoritative
-// computation lives in SQL (purchase_begin / offer_accept_begin); this mirror
-// exists for display estimates and docs. Historical orders keep the fee stored
-// on the row — nothing recomputes old fees from this constant.
-export const PLATFORM_FEE_BPS = 1000;
-
-/** @param basisCents goods subtotal + buyer-paid shipping (the pre-tax total). */
-export function platformFeeCents(basisCents: number): number {
-  return Math.round((basisCents * PLATFORM_FEE_BPS) / 10_000);
-}
+export { platformFeeCents, PLATFORM_FEE_BPS } from "./fee";
 
 export type PaymentRequest = {
   orderId: string;
@@ -54,11 +44,15 @@ export type PaymentRequest = {
   correlationId?: string;
 };
 
+export type PaymentStatus = "succeeded" | "failed" | "unknown" | "requires_action" | "processing" | "requires_payment_method" | "requires_confirmation" | "requires_capture";
+
 export type PaymentResult =
   | { status: "succeeded"; reference: string }
   /** Processor needs the buyer (e.g. 3DS). `clientSecret` drives the browser step. */
   | { status: "requires_action"; reference: string; clientSecret: string }
-  | { status: "failed"; reason: string };
+  | { status: "failed"; reason: string }
+  | { status: "unknown"; reason: string }
+  | { status: "processing"; reference: string };
 
 export type RefundResult =
   | { status: "refunded"; reference: string; amountCents: number }
@@ -84,7 +78,7 @@ export interface PaymentProvider {
   /** Full or partial refund. `amountCents` omitted means the whole payment. */
   refund(reference: string, amountCents?: number, options?: RefundOptions): Promise<RefundResult>;
   /** Reconciliation: what does the processor think this payment's state is? */
-  getStatus(reference: string): Promise<PaymentResult["status"]>;
+  getStatus(reference: string): Promise<PaymentStatus>;
 }
 
 class StubPaymentProvider implements PaymentProvider {
@@ -100,7 +94,7 @@ class StubPaymentProvider implements PaymentProvider {
     return { status: "refunded", reference, amountCents: amountCents ?? 0 };
   }
 
-  async getStatus(): Promise<PaymentResult["status"]> {
+  async getStatus(): Promise<PaymentStatus> {
     return "succeeded";
   }
 }
@@ -110,9 +104,6 @@ export function getPaymentProvider(): PaymentProvider {
   // stub because a key went missing — it throws instead (src/lib/env.ts).
   const mode = resolvePaymentsMode();
   if (mode === "stripe") {
-    // Lazy-required so the stub path never loads the Stripe SDK.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- avoids a hard SDK dependency on the stub path
-    const { StripePaymentProvider } = require("./stripe") as typeof import("./stripe");
     return new StripePaymentProvider();
   }
   return new StubPaymentProvider();

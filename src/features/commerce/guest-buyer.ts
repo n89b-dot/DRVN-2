@@ -1,6 +1,8 @@
 import "server-only";
 
-import { headers } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+import { publicEnv } from "@/lib/env";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -79,23 +81,22 @@ export async function resolveGuestBuyer(
  * flow routes them through onboarding to pick one — the same path every other
  * new account takes.
  */
+export async function deliverOrderAccessLink(email: string, destination: string) {
+  const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://127.0.0.1:3000").origin;
+  const { url, anonKey } = publicEnv();
+  const auth = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { error } = await auth.auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: { shouldCreateUser: false, emailRedirectTo: `${origin}/confirm?next=${encodeURIComponent(safeRedirectPath(destination, "/orders"))}` },
+  });
+  if (error) throw new Error(`Order access email delivery failed: ${error.code || error.status}`);
+}
+
+/** Queue before returning; the scheduled worker owns delivery and retries. */
 export async function sendOrderAccessLink(email: string, destination: string) {
   const admin = createAdminClient();
-  const origin =
-    (await headers()).get("origin") ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "";
-
-  const { error } = await admin.auth.admin.generateLink({
-    type: "magiclink",
-    email: email.trim().toLowerCase(),
-    options: { redirectTo: `${origin}/callback?next=${encodeURIComponent(destination)}` },
-  });
-
-  if (error) {
-    // The order is already placed and paid — a failed receipt email must not
-    // fail the checkout. It's on record, and the confirmation screen still
-    // shows the reference.
-    reportError("[commerce] guest order link failed", { error });
-  }
+  const { data, error } = await admin.from("account_emails").select("user_id").eq("email", email.trim().toLowerCase()).single();
+  if (error || !data) throw new Error("Receipt buyer lookup failed");
+  const queued = await admin.rpc("enqueue_order_receipt", { p_buyer: data.user_id, p_destination: safeRedirectPath(destination, "/orders") });
+  if (queued.error) throw new Error("Receipt queue unavailable");
 }

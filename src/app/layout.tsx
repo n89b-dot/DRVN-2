@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import { MotionPolicy } from "@/components/ui";
 import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
-// Runs before first paint, in <head>, ahead of any CSS. Mirrors the cookie the
-// theme toggle writes (see LivesheetBar's toggleTheme in
-// src/components/ui/livesheet-bar.tsx) so there is no flash of the wrong
-// palette — without needing cookies() in this layout, which would opt every
-// route in the app out of static rendering even when the route awaits
-// nothing (terms, privacy, fees...).
+// Runs before paint; a request nonce authorizes the theme bootstrap.
 const THEME_INIT_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )ls-theme=([^;]*)/);if(m&&decodeURIComponent(m[1])==="night"){document.documentElement.dataset.theme="dark";}}catch(e){}})();`;
 
 const plexSans = IBM_Plex_Sans({
@@ -47,17 +43,12 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", description },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // No server-side theme read here (see THEME_INIT_SCRIPT above) — the
-  // attribute is stamped client-side before paint instead, so this layout
-  // (and any route whose own tree doesn't need request data) can be static.
-  // suppressHydrationWarning: the inline script may set data-theme before
-  // React hydrates, which legitimately differs from the (theme-less) server
-  // markup.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
@@ -66,7 +57,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full">
         <MotionPolicy>{children}</MotionPolicy>

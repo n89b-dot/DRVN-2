@@ -2,7 +2,7 @@
 
 import { useActionState, useId } from "react";
 
-import { Button, TextField } from "@/components/ui";
+import { Button, PasswordField } from "@/components/ui";
 import { updatePassword, type AuthState } from "@/app/(auth)/actions";
 
 export function ResetForm() {
@@ -11,11 +11,10 @@ export function ResetForm() {
 
   return (
     <form action={formAction} className="mt-5 grid gap-3">
-      <TextField
+      <PasswordField
         id="reset-password"
         label="New password"
         name="password"
-        type="password"
         required
         minLength={8}
         autoComplete="new-password"
@@ -23,11 +22,10 @@ export function ResetForm() {
         aria-describedby={errorId}
       />
 
-      <TextField
+      <PasswordField
         id="reset-confirm"
         label="Confirm it"
         name="confirm"
-        type="password"
         required
         minLength={8}
         autoComplete="new-password"

@@ -374,7 +374,18 @@ export function FeedMosaicCell({
       // name only stands in when the keeper never filled the vehicle in.
       lede={item.title && item.intro ? item.intro : null}
       value={vehicleLabel(item.carVehicle) || item.carName}
-      meta={item.ownerName}
+      // The owner as a byline — monogram then name, the way the listing
+      // card's trust line signs the seller.
+      meta={
+        item.ownerName ? (
+          <>
+            <span className="monogram monogram--xs" aria-hidden="true">
+              {initialsOf(item.ownerName)}
+            </span>
+            {item.ownerName}
+          </>
+        ) : null
+      }
       engagement={
         <CardEngagement
           target={{ kind: "post", id: item.id }}

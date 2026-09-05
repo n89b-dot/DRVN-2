@@ -64,7 +64,7 @@ export async function processDueTransfers(admin: Admin): Promise<TransferWorkerS
   });
   if (claimError) {
     reportError("[transfers] claim failed", { claimError });
-    return summary;
+    throw new Error("Transfer queue unavailable");
   }
 
   for (const intent of (claimed as IntentRow[] | null) ?? []) {

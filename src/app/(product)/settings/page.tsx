@@ -1,3 +1,4 @@
+import { AnalyticsConsent } from "./analytics-consent";
 import { loadFulfillmentProfile } from "@/features/commerce/fulfillment";
 import { COUNTRIES } from "@/lib/geo/countries";
 import { listSavedCards } from "@/lib/payments/customers";
@@ -51,6 +52,7 @@ export default async function SettingsPage() {
     // own — without it the section register scrolls with no bleed and stops
     // dead at the column edge, saying nothing about the sections to its right.
     <div className="mx-auto w-full max-w-[900px] px-6 pb-10 [--gutter:24px]">
+      <AnalyticsConsent />
       <SettingsPanel
         paymentsLive={paymentsAreLive()}
         savedCards={savedCards}

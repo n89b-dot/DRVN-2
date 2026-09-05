@@ -43,25 +43,20 @@ export async function POST(request: Request) {
 
   const admin = createAdminClient();
 
-  // event.id dedup (0019): a fully processed event acknowledges immediately;
-  // one whose first pass crashed is processed again (handlers are idempotent).
-  if (!(await claimWebhookEvent(admin, event))) {
-    return new Response("duplicate", { status: 200 });
-  }
-
   const done = async (body: string, status: number) => {
     if (status === 200) await markWebhookEventProcessed(admin, event.id);
     return new Response(body, { status });
   };
 
   try {
+    if (!(await claimWebhookEvent(admin, event))) return new Response("duplicate", { status: 200 });
     // All handler mapping lives in dispatchStripeEvent (shared with the
     // console's replay action). A 500 on "partial" makes Stripe redeliver —
     // correct when a finalize genuinely failed, harmless when it later
     // succeeds (the terminal-state guard skips it). "ignored" acknowledges so
     // Stripe stops redelivering what isn't ours to handle.
     const outcome = await dispatchStripeEvent(admin, event);
-    return done(outcome, outcome === "partial" ? 500 : 200);
+    return await done(outcome, outcome === "partial" ? 500 : 200);
   } catch (error) {
     // Unexpected failure: let Stripe redeliver rather than losing the event.
     reportError("[stripe:webhook] handler failed", { type: event.type, error });

@@ -4,7 +4,7 @@
 -- service, not the database image — so migrations touching storage.buckets /
 -- storage.objects need these stand-ins. Structure matches what the
 -- migrations use; nothing more. Never run against a real Supabase project
--- (they already have the real thing; `if not exists` makes it a no-op there).
+-- (this shim intentionally normalizes the disposable image's legacy auth helpers).
 -- ============================================================================
 
 begin;
@@ -39,27 +39,18 @@ as $$
   select (string_to_array(name, '/'))[1 : array_length(string_to_array(name, '/'), 1) - 1];
 $$;
 
--- The image usually provides these; create only when absent so a fuller
--- image wins.
-do $$
-begin
-  if not exists (
-    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'auth' and p.proname = 'uid'
-  ) then
-    create function auth.uid() returns uuid
-      language sql stable
-      as 'select nullif(current_setting(''request.jwt.claim.sub'', true), '''')::uuid';
-  end if;
-
-  if not exists (
-    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'auth' and p.proname = 'role'
-  ) then
-    create function auth.role() returns text
-      language sql stable
-      as 'select coalesce(nullif(current_setting(''request.jwt.claim.role'', true), ''''), ''anon'')';
-  end if;
-end $$;
+-- This disposable image includes legacy claim helpers. Normalize both JWT
+-- formats explicitly so fixture authentication matches the current Auth API.
+-- This file is CI-only and must never be applied to a hosted project.
+create or replace function auth.uid() returns uuid
+language sql stable as $$
+  select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid;
+$$;
+create or replace function auth.role() returns text
+language sql stable as $$
+  select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', 'anon');
+$$;
 
 commit;

@@ -25,6 +25,9 @@ export type RenderResult =
   | { ok: false; code: "render_unavailable" | "render_failed" | "render_blocked" };
 
 export async function renderPublicPage(url: string): Promise<RenderResult> {
+  // A direct caller cannot bypass the production config gate. Chromium DNS
+  // is not pinned; production rendering needs isolated public-only egress.
+  if (process.env.NODE_ENV === "production") return { ok: false, code: "render_blocked" };
   type ChromiumModule = {
     chromium: {
       launch(opts: { headless: boolean }): Promise<{

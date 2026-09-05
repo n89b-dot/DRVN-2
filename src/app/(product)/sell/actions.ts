@@ -17,7 +17,6 @@ import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { capture } from "@/lib/analytics";
 import { consumeListingImport } from "@/lib/listing-import/consume";
-import { syncListingToSearch } from "@/lib/marketplace/search/indexing";
 import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
 
@@ -288,7 +287,6 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
       });
 
   // Search follows the listing (§B1) — fire-and-forget, no-op without an engine.
-  void syncListingToSearch(listing.id);
 
   revalidatePath("/marketplace");
   revalidatePath("/sell");
@@ -397,7 +395,6 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   const { error: fitmentError } = await saveFitments(supabase, id, parsed.fitments);
   await saveAltPartNumbers(supabase, id, parsed.altNumbers);
 
-  void syncListingToSearch(id);
 
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
@@ -477,7 +474,6 @@ export async function setListingStatus(
     .eq("seller_id", user.id);
   if (error) return { error: error.message };
 
-  void syncListingToSearch(id);
 
   revalidatePath("/sell");
   revalidatePath("/listings");
@@ -513,7 +509,6 @@ export async function deleteListing(
     };
   }
 
-  void syncListingToSearch(id);
 
   revalidatePath("/sell");
   revalidatePath("/marketplace");

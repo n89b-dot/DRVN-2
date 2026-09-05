@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 // The module derives its signing key from the service key at call time, so the
 // env has to be in place before it's imported.
@@ -15,6 +15,14 @@ describe("guest order receipts", () => {
     const { encodeGuestOrders, decodeGuestOrders } = await load();
     const ids = ["3f7a1c9e-0000-4000-8000-000000000000", "aa11bb22-0000-4000-8000-000000000001"];
     expect(decodeGuestOrders(encodeGuestOrders(ids))).toEqual(ids);
+  });
+
+  it("rejects a copied receipt after its signed expiry", async () => {
+    const { encodeGuestOrders, decodeGuestOrders } = await load();
+    const now = Date.now();
+    const signed = encodeGuestOrders(["3f7a1c9e-0000-4000-8000-000000000000"]);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now + 6 * 60 * 60 * 1000);
+    try { expect(decodeGuestOrders(signed)).toEqual([]); } finally { clock.mockRestore(); }
   });
 
   it("rejects a forged cookie — the whole point of signing it", async () => {
@@ -50,7 +58,7 @@ describe("guest order receipts", () => {
     const signature = createHmac("sha256", process.env.SUPABASE_SECRET_KEY!)
       .update(payload)
       .digest("base64url");
-    expect(decodeGuestOrders(`${payload}.${signature}`)).toEqual(["ok"]);
+    expect(decodeGuestOrders(`${payload}.${signature}`)).toEqual([]);
   });
 });
 

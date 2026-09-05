@@ -60,6 +60,7 @@ export {
   Radio,
   fieldDescribedBy,
 } from "./form";
+export { PasswordField } from "./password-field";
 export { ComboField, type ComboOption } from "./combo-field";
 export { BeforeAfter } from "./before-after";
 export { SortableGrid, SortableItem } from "./sortable-grid";

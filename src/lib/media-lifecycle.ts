@@ -25,7 +25,8 @@ type ServerClient = Awaited<ReturnType<typeof createClient>>;
  *  promoted to cover, a listing photo re-used in an activity post). */
 async function isMediaReferenced(
   admin: ReturnType<typeof createAdminClient>,
-  url: string
+  url: string,
+  strict = false
 ): Promise<boolean> {
   const checks = [
     admin.from("car_images").select("id", { count: "exact", head: true }).eq("url", url),
@@ -46,6 +47,7 @@ async function isMediaReferenced(
     // An unanswerable check must read as "referenced" — deleting storage on
     // partial information is the one mistake this module exists to prevent.
     if (error) {
+      if (strict) throw new Error("Media reference lookup failed");
       reportError("[media-gc] reference check failed", { url, error });
       return true;
     }
@@ -81,7 +83,8 @@ export async function finalizeMediaUrls(supabase: ServerClient, urls: string[]):
  * Returns "removed" | "referenced" | "skipped" (not ours / unparseable).
  */
 export async function deleteMediaIfUnreferenced(
-  url: string
+  url: string,
+  strict = false
 ): Promise<"removed" | "referenced" | "skipped"> {
   if (!isOwnStorageUrl(url)) return "skipped";
   const object = parseStorageObject(url);
@@ -89,7 +92,7 @@ export async function deleteMediaIfUnreferenced(
 
   try {
     const admin = createAdminClient();
-    if (await isMediaReferenced(admin, url)) return "referenced";
+    if (await isMediaReferenced(admin, url, strict)) return "referenced";
 
     const { error: removeError } = await admin.storage.from(object.bucket).remove([object.path]);
     if (removeError) {
@@ -100,6 +103,7 @@ export async function deleteMediaIfUnreferenced(
     await admin.from("staged_uploads").delete().eq("url", url);
     return "removed";
   } catch (error) {
+    if (strict) throw error;
     reportError("[media-gc] delete-if-unreferenced failed", { url, error });
     return "skipped";
   }

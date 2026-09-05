@@ -33,9 +33,7 @@ export function MarketplaceResults({
   /** Lets a card hide purchase controls on the viewer's own listing. */
   viewerId?: string | null;
 }) {
-  const { results, total, page: current, pageSize, hasMore } = page;
-  const firstOnPage = (current - 1) * pageSize + 1;
-  const lastOnPage = (current - 1) * pageSize + results.length;
+  const { results, page: current, hasMore } = page;
 
   // "Clear the filters" only means something when filters are set — an empty
   // category with no query shouldn't offer a no-op escape hatch.
@@ -57,13 +55,14 @@ export function MarketplaceResults({
           )
         }
       >
-        {emptyBody}
+        {page.searchTruncated ? "This broad search reached its result limit. Add a make, model or part number to narrow the matches." : emptyBody}
       </EmptyState>
     );
   }
 
   return (
     <>
+      {page.searchTruncated && <p role="status" className="order__meta mb-4">More matches may be available. Add a make, model or part number to narrow your search.</p>}
       {/* No results-count line, and no sort row: sorting lives in the
           finder's plate row (SortSelect) at every width — a second sort
           control above the wall was one too many. */}

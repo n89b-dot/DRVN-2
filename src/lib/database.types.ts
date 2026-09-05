@@ -1,5 +1,6 @@
-// Hand-written types for the v3 schema (supabase/migrations/0001_v3_schema.sql).
-// Regenerate with `supabase gen types typescript` once the CLI is wired up.
+// Curated application/domain types retained for compatibility.
+// database.generated.ts is the generated public-schema contract; regenerate
+// with npm run db:types and verify drift with npm run db:types:check.
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -1284,6 +1285,18 @@ export type Database = {
       };
     };
     Functions: {
+      prepare_payment_request: { Args: { p_key: string; p_request: Json }; Returns: Json };
+      record_payment_reference: { Args: { p_key: string; p_reference: string }; Returns: undefined };
+      settle_payment_capture: { Args: { p_reference: string; p_order_ids: string[]; p_amount: number; p_currency: string; p_source: string | null; p_buyer: string }; Returns: Json };
+      worker_health_snapshot: { Args: Record<string, never>; Returns: Json };
+      request_account_deletion: { Args: Record<string, never>; Returns: string };
+      execute_admin_command: { Args: { p_action: string; p_subject: string; p_reason: string; p_data?: Json }; Returns: Json };
+      record_worker_run: { Args: { p_id: string; p_family: string; p_status: string; p_summary?: Json }; Returns: undefined };
+      capture_reconciliation_candidates: { Args: Record<string, never>; Returns: Json };
+      enqueue_order_receipt: { Args: { p_buyer: string; p_destination: string }; Returns: undefined };
+      claim_remediation_jobs: { Args: { p_kind: string; p_limit?: number }; Returns: Json };
+      finish_remediation_job: { Args: { p_id: string; p_lease: string; p_error?: string | null }; Returns: undefined };
+
       /** Claims listings and creates pending orders in one transaction (0007;
        *  0053 added the rated-checkout shipping overrides). */
       purchase_begin: {

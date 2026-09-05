@@ -652,7 +652,7 @@ export async function resumeIncompleteRefunds(
   opts: { batch?: number; olderThanMs?: number } = {}
 ): Promise<{ scanned: number; completed: number; retrying: number }> {
   const olderThan = new Date(Date.now() - (opts.olderThanMs ?? 5 * 60_000)).toISOString();
-  const { data: stale } = await admin
+  const { data: stale, error: staleError } = await admin
     .from("refund_operations")
     .select("id, status, next_attempt_at")
     .in("status", [
@@ -665,6 +665,7 @@ export async function resumeIncompleteRefunds(
     .lt("updated_at", olderThan)
     .order("updated_at", { ascending: true })
     .limit(opts.batch ?? 20);
+  if (staleError) throw new Error("Refund queue unavailable");
 
   const summary = { scanned: 0, completed: 0, retrying: 0 };
   const now = Date.now();

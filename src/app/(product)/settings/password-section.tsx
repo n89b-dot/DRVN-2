@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { TextField } from "@/components/ui";
+import { PasswordField, TextField } from "@/components/ui";
 
 import { changeEmail, changePassword, type AccountState } from "./account-actions";
 
@@ -54,33 +54,30 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
       </form>
 
       <form action={passwordAction} className="grid gap-3">
-        <TextField
+        <PasswordField
           id="account-current-password"
           label="Current password"
           name="current_password"
-          type="password"
           required
           autoComplete="current-password"
           className="!max-w-none"
           fieldClassName="!mb-0"
         />
         <div className="field--row">
-          <TextField
+          <PasswordField
             id="account-new-password"
             label="New password"
             name="password"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"
             className="!max-w-none"
             fieldClassName="!mb-0"
           />
-          <TextField
+          <PasswordField
             id="account-confirm-password"
             label="Confirm new password"
             name="confirm"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"

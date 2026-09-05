@@ -99,6 +99,18 @@ export async function uploadImages({
       failed.push({ file, reason: `${file.name} is over ${maxMb}MB.`, retryable: false });
       continue;
     }
+    if (["avatars", "car-images", "activity-images", "listing-images"].includes(bucket)) {
+      const body = new FormData(); body.set("file", file); body.set("bucket", bucket); body.set("pathPrefix", pathPrefix);
+      try {
+        const response = await fetch("/api/media/public-photo", { method: "POST", body });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Photo upload failed.");
+        uploaded.push({ url: result.url, path: result.path, file });
+      } catch (error) {
+        failed.push({ file, reason: error instanceof Error ? error.message : "Photo upload failed.", retryable: true });
+      }
+      continue;
+    }
     const ext = file.name.split(".").pop() ?? "jpg";
     const path = `${pathPrefix}/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage

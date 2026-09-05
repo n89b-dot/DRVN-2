@@ -41,7 +41,7 @@ export async function typesenseRequest(path: string, init: RequestInit = {}): Pr
     headers: { ...typesenseHeaders(), ...(init.headers ?? {}) },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`typesense ${res.status}`);
+  if (!res.ok && !(init.method === "DELETE" && res.status === 404)) throw new Error(`typesense ${res.status}`);
   return res;
 }
 
@@ -59,6 +59,7 @@ export async function typesenseUpsert(collection: string, doc: object & { id: st
       id: doc.id,
       error: String(error),
     });
+    throw error;
   }
 }
 
@@ -67,8 +68,7 @@ export async function typesenseDelete(collection: string, id: string): Promise<v
   if (!typesenseConfigured()) return;
   try {
     await typesenseRequest(`/collections/${collection}/documents/${id}`, { method: "DELETE" });
-  } catch {
-    // Missing document / transient failure: the canonical query path never
-    // trusts the index alone, so silence is safe here.
+  } catch (error) {
+    throw error;
   }
 }

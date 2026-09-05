@@ -149,13 +149,14 @@ export async function processAlertOutbox(
   const url = process.env.ADMIN_ALERT_WEBHOOK_URL;
   if (!url) return summary;
 
-  const { data: pending } = await admin
+  const { data: pending, error: pendingError } = await admin
     .from("admin_alert_outbox")
     .select("id, kind, title, detail, order_id, amount_cents, attempts")
     .eq("status", "pending")
     .lte("next_attempt_at", new Date().toISOString())
     .order("created_at", { ascending: true })
     .limit(opts.batch ?? 25);
+  if (pendingError) throw new Error("Alert queue unavailable");
 
   for (const row of pending ?? []) {
     try {

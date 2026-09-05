@@ -14,8 +14,8 @@ import {
 
 /**
  * Explore index lifecycle (brief §28) — the same doctrine as
- * syncListingToSearch: fire-and-forget (`void syncCarToSearch(id)`), no-op
- * without an engine, never on a mutation's critical path, and delete-on-
+ * syncListingToSearch: durable queue delivery, no-op
+ * without an engine, retry on query or delivery failure, and delete-on-
  * ineligibility so the index only ever holds public material. Full rebuilds:
  * scripts/reindex-explore.mjs.
  *
@@ -34,7 +34,7 @@ export async function syncCarToSearch(carId: string): Promise<void> {
     .from("cars")
     .select("id, name, make, model, year, tags, about, is_public, created_at")
     .eq("id", carId)
-    .maybeSingle();
+    .maybeSingle().throwOnError();
   if (!car) {
     await typesenseDelete(EXPLORE_COLLECTIONS.car, carId);
     return;
@@ -47,7 +47,7 @@ export async function syncCarToSearch(carId: string): Promise<void> {
       .from("activity_posts")
       .select("id")
       .eq("car_id", carId)
-      .limit(500);
+      .limit(500).throwOnError();
     await Promise.all(
       (posts ?? []).map((p) => typesenseDelete(EXPLORE_COLLECTIONS.update, p.id))
     );
@@ -58,7 +58,7 @@ export async function syncCarToSearch(carId: string): Promise<void> {
     .from("mod_items")
     .select("brand, product, part_number")
     .eq("car_id", carId)
-    .limit(500);
+    .limit(500).throwOnError();
 
   const doc: CarSearchDocument = {
     id: car.id,
@@ -84,7 +84,7 @@ export async function syncCarToSearch(carId: string): Promise<void> {
     .select("id")
     .eq("car_id", carId)
     .not("published_at", "is", null)
-    .limit(500);
+    .limit(500).throwOnError();
   await Promise.all((posts ?? []).map((p) => syncUpdateToSearch(p.id)));
 }
 
@@ -95,7 +95,7 @@ export async function syncUpdateToSearch(postId: string): Promise<void> {
     .from("activity_posts")
     .select("id, title, intro, body, published_at, car_id")
     .eq("id", postId)
-    .maybeSingle();
+    .maybeSingle().throwOnError();
   if (!post || !post.published_at) {
     await typesenseDelete(EXPLORE_COLLECTIONS.update, postId);
     return;
@@ -104,7 +104,7 @@ export async function syncUpdateToSearch(postId: string): Promise<void> {
     .from("cars")
     .select("name, make, model, year, is_public")
     .eq("id", post.car_id)
-    .maybeSingle();
+    .maybeSingle().throwOnError();
   if (!car?.is_public) {
     await typesenseDelete(EXPLORE_COLLECTIONS.update, postId);
     return;
@@ -137,7 +137,7 @@ export async function syncProfileToSearch(profileId: string): Promise<void> {
     .from("profiles")
     .select("id, username, display_name, headline, suspended_at, created_at")
     .eq("id", profileId)
-    .maybeSingle();
+    .maybeSingle().throwOnError();
   if (!profile || profile.suspended_at || (!profile.username && !profile.display_name)) {
     await typesenseDelete(EXPLORE_COLLECTIONS.profile, profileId);
     return;

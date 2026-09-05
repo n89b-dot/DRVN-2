@@ -9,12 +9,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * unthrottled; this keeps the limiter dependency-free rather than introducing
  * Redis for it.
  *
- * Fails **open** on infrastructure error: a limiter outage should not take the
- * product down. Abuse is bounded by the DB constraints and RLS either way.
+ * Checkout and monitoring intake fail closed on infrastructure errors. Other
+ * rules retain their explicit availability tradeoff; database guards still apply.
  */
 export type RateLimitRule = {
   /** Stable name for the action being limited. */
   action: string;
+  failClosed?: boolean;
   /** Permitted attempts per window. */
   limit: number;
   /** Window length in seconds. */
@@ -22,6 +23,8 @@ export type RateLimitRule = {
 };
 
 export const RATE_LIMITS = {
+  checkout: { action: "checkout", limit: 10, windowSeconds: 600, failClosed: true },
+  clientError: { action: "client-error", limit: 20, windowSeconds: 60, failClosed: true },
   makeOffer: { action: "offer", limit: 10, windowSeconds: 60 * 10 },
   askQuestion: { action: "question", limit: 10, windowSeconds: 60 * 10 },
   addComment: { action: "comment", limit: 20, windowSeconds: 60 * 10 },
@@ -49,12 +52,12 @@ export async function allowAction(rule: RateLimitRule, subject: string): Promise
 
     if (error) {
       failOpen(rule, error);
-      return true;
+      return !rule.failClosed;
     }
     return data !== false;
   } catch (error) {
     failOpen(rule, error);
-    return true;
+    return !rule.failClosed;
   }
 }
 
@@ -65,8 +68,8 @@ export async function allowAction(rule: RateLimitRule, subject: string): Promise
  * alert rule (R2).
  */
 function failOpen(rule: RateLimitRule, error: unknown): void {
-  console.error("[rate-limit] check failed, allowing", { action: rule.action, error });
-  void captureMessage("rate limiter failed open", "warning", {
+  console.error("[rate-limit] check failed", { action: rule.action, error });
+  void captureMessage(rule.failClosed ? "rate limiter failed closed" : "rate limiter failed open", "warning", {
     tags: { alert: "rate-limiter-fail-open", action: rule.action },
     extra: { error: error instanceof Error ? error.message : String(error) },
   });

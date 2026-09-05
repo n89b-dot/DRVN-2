@@ -30,7 +30,7 @@ function dsnParts(): { endpoint: string; key: string } | null {
   try {
     const url = new URL(dsn);
     const projectId = url.pathname.replace(/^\//, "");
-    if (!url.username || !projectId) return null;
+    if (url.protocol !== "https:" || !url.username || !/^\d+$/.test(projectId)) return null;
     return {
       endpoint: `${url.protocol}//${url.host}/api/${projectId}/envelope/`,
       key: url.username,
@@ -64,12 +64,13 @@ function eventId(): string {
  * In-flight sends, so serverless paths can flush before the runtime freezes —
  * a webhook that reports an error and returns must not lose the report.
  */
-const inFlight = new Set<Promise<void>>();
+const inFlight = new Map<Promise<void>, AbortController>();
+const MAX_IN_FLIGHT = 32;
 let deliveryFailureLogged = false;
 
 async function send(event: Record<string, unknown>): Promise<void> {
   const dsn = dsnParts();
-  if (!dsn) return;
+  if (!dsn || inFlight.size >= MAX_IN_FLIGHT) return;
 
   const id = eventId();
   const now = new Date().toISOString();
@@ -81,7 +82,7 @@ async function send(event: Record<string, unknown>): Promise<void> {
     "\n" +
     JSON.stringify({ type: "event" }) +
     "\n" +
-    JSON.stringify({
+    JSON.stringify(scrubTelemetry({
       event_id: id,
       timestamp: now,
       platform: "javascript",
@@ -90,18 +91,22 @@ async function send(event: Record<string, unknown>): Promise<void> {
       ...release,
       ...event,
       tags: { ...baseTags, ...eventTags },
-    });
+    }));
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
   const delivery = (async () => {
     try {
-      await fetch(dsn.endpoint, {
+      const response = await fetch(dsn.endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-sentry-envelope",
           "X-Sentry-Auth": `Sentry sentry_version=7, sentry_client=drvn/1.0, sentry_key=${dsn.key}`,
         },
         body: envelope,
+        signal: controller.signal,
       });
+      if (!response.ok) throw new Error(`Telemetry HTTP ${response.status}`);
     } catch (error) {
       // Monitoring must never take the product down with it — but a broken
       // DSN should not be indistinguishable from an absent one either.
@@ -109,16 +114,41 @@ async function send(event: Record<string, unknown>): Promise<void> {
         deliveryFailureLogged = true;
         console.error("[monitoring] Sentry delivery failed (logged once)", error);
       }
+    } finally {
+      clearTimeout(timeout);
     }
   })();
-  inFlight.add(delivery);
+  inFlight.set(delivery, controller);
   void delivery.finally(() => inFlight.delete(delivery));
   await delivery;
 }
 
 /** Await every pending report — call before returning from serverless paths. */
-export async function flushMonitoring(): Promise<void> {
-  await Promise.allSettled([...inFlight]);
+export async function flushMonitoring(budgetMs = 1000): Promise<void> {
+  const pending = [...inFlight.entries()];
+  if (!pending.length) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.allSettled(pending.map(([promise]) => promise)),
+    new Promise<void>((resolve) => { timer = setTimeout(() => {
+      for (const [promise, controller] of pending) { controller.abort(); inFlight.delete(promise); }
+      resolve();
+    }, budgetMs); }),
+  ]);
+  clearTimeout(timer);
+}
+
+/** Redact known credentials and private fields before any remote serialization. */
+export function scrubTelemetry(value: unknown, depth = 0): unknown {
+  if (depth > 6) return "[truncated]";
+  if (typeof value === "string") return value
+    .replace(/\b(?:sk|pk|whsec|sb_secret)_[A-Za-z0-9_]+|pi_[A-Za-z0-9]+_secret_[A-Za-z0-9]+/g, "[redacted]")
+    .replace(/([?&](?:token_hash|code|token|payment_intent_client_secret)=)[^&\s]+/g, "$1[redacted]")
+    .slice(0, 4000);
+  if (Array.isArray(value)) return value.slice(0, 30).map((v) => scrubTelemetry(v, depth + 1));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k,v]) =>
+    [k, /password|secret|authorization|cookie|token|ship_|address|email|phone|payload/i.test(k) ? "[redacted]" : scrubTelemetry(v, depth + 1)]));
+  return value;
 }
 
 export async function captureException(
@@ -156,7 +186,7 @@ export async function captureMessage(
  * paths shouldn't slow down on telemetry.
  */
 export function reportError(...args: unknown[]): void {
-  console.error(...args);
+  console.error(...args.map((arg) => scrubTelemetry(arg instanceof Error ? { name: arg.name, message: arg.message, stack: arg.stack } : arg)));
   const [first, ...rest] = args;
   const errorArg = args.find((a) => a instanceof Error);
   const extra: Record<string, unknown> = {};

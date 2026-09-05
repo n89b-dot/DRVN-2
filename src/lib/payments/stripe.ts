@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { Json } from "@/lib/database.types";
 import Stripe from "stripe";
 
 import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, RefundResult } from "./provider";
@@ -13,8 +16,8 @@ import { reportError } from "@/lib/monitoring";
  * Payment Element, with the truth arriving on the webhook that calls
  * `purchase_finalize`.
  *
- * `payment_method_types` is deliberately never passed: omitting it enables
- * dynamic payment methods, managed from the Stripe Dashboard.
+ * Checkout is restricted to cards until delayed payment methods have complete
+ * reservation, reconciliation and compensation coverage.
  *
  * Scope note: charges land on the platform account (separate charges and
  * transfers); on settlement the webhook transfers each order's net to the
@@ -43,29 +46,39 @@ export class StripePaymentProvider implements PaymentProvider {
 
   async createPayment(request: PaymentRequest): Promise<PaymentResult> {
     try {
-      const intent = await stripe().paymentIntents.create(
-        {
-          amount: request.totalCents,
-          currency: request.currency.toLowerCase(),
-          ...(request.customerId ? { customer: request.customerId } : {}),
-          metadata: {
-            order_id: request.orderId,
-            buyer_id: request.buyerId,
-            seller_id: request.sellerId,
-            ...(request.correlationId ? { correlation_id: request.correlationId } : {}),
-          },
-        },
-        request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : undefined
-      );
+      const admin = createAdminClient();
+      const orderIds = request.orderId.split(",").sort();
+      const operationKey = `checkout:${createHash("sha256").update(orderIds.join(",")).digest("hex")}`;
+      const immutable = { orderIds, buyerId: request.buyerId, sellerId: request.sellerId, totalCents: request.totalCents, currency: request.currency.toLowerCase(), customerId: request.customerId ?? null };
+      const { data, error } = await admin.rpc("prepare_payment_request", { p_key: operationKey, p_request: immutable as Json });
+      if (error || !data) throw new Error("Payment attempt could not be persisted");
+      const saved = data as { correlation_id: string; reference: string | null; created_at: string };
+      if (!saved.reference && Date.now() - Date.parse(saved.created_at) > 23 * 60 * 60 * 1000) {
+        return { status: "unknown", reason: "This payment needs reconciliation before retrying. Contact support with your order reference." };
+      }
+      const intent = saved.reference ? await stripe().paymentIntents.retrieve(saved.reference) : await stripe().paymentIntents.create({
+        amount: request.totalCents,
+        currency: immutable.currency,
+        payment_method_types: ["card"],
+        ...(request.customerId ? { customer: request.customerId } : {}),
+        metadata: { order_id: orderIds.join(","), buyer_id: request.buyerId, seller_id: request.sellerId, correlation_id: saved.correlation_id },
+      }, { idempotencyKey: operationKey });
+      const recorded = await admin.rpc("record_payment_reference", { p_key: operationKey, p_reference: intent.id });
+      if (recorded.error) throw new Error("Payment reference persistence needs reconciliation");
+      await admin.from("orders").update({ correlation_id: saved.correlation_id }).in("id", orderIds);
+      if (intent.status === "canceled") return { status: "failed", reason: "Payment was cancelled." };
+      // A captured retry awaits local webhook settlement; never ask the buyer
+      // to confirm an already successful PaymentIntent again.
+      if (intent.status === "processing" || intent.status === "succeeded") return { status: "processing", reference: intent.id };
       if (!intent.client_secret) {
-        return { status: "failed", reason: "Stripe returned no client secret" };
+        return { status: "unknown", reason: "Payment confirmation is unavailable; reconciliation is required." };
       }
       // A fresh intent always needs the buyer's confirmation in the browser.
       return { status: "requires_action", reference: intent.id, clientSecret: intent.client_secret };
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Stripe request failed";
       reportError("[stripe] createPayment failed", { orderId: request.orderId, reason });
-      return { status: "failed", reason };
+      return { status: "unknown", reason: "Payment status is being checked. Retry this checkout; do not start another payment." };
     }
   }
 
@@ -101,11 +114,11 @@ export class StripePaymentProvider implements PaymentProvider {
     }
   }
 
-  async getStatus(reference: string): Promise<PaymentResult["status"]> {
-    const intent = await stripe().paymentIntents.retrieve(reference);
-    if (intent.status === "succeeded") return "succeeded";
-    if (intent.status === "canceled") return "failed";
-    return "requires_action";
+  async getStatus(reference: string): Promise<import("./provider").PaymentStatus> {
+    try {
+      const intent = await stripe().paymentIntents.retrieve(reference);
+      return intent.status === "canceled" ? "failed" : intent.status;
+    } catch { return "unknown"; }
   }
 }
 

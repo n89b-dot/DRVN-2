@@ -20,19 +20,22 @@ import { beforeAll, describe, expect, it } from "vitest";
  */
 
 function loadLocalEnv() {
-  if (process.env.STRIPE_SECRET_KEY) return;
   try {
-    const env = readFileSync(join(__dirname, "..", "..", ".env.local"), "utf8");
-    const key = env.match(/^STRIPE_SECRET_KEY=(.+)$/m)?.[1]?.trim();
-    if (key) process.env.STRIPE_SECRET_KEY = key;
-  } catch {
-    // no .env.local — the skip below reports it
-  }
+    const env = readFileSync(join(__dirname, "..", "..", ".env.stripe-test.local"), "utf8");
+    for (const line of env.split("\n")) {
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+      if (match && process.env[match[1]] === undefined) process.env[match[1]] = match[2].replace(/^(["'])(.*)\1$/, "$2");
+    }
+  } catch { /* CI supplies isolated settings explicitly. */ }
 }
 loadLocalEnv();
+const ref = process.env.E2E_TEST_PROJECT_REF;
+const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://unconfigured.invalid");
+const isolated = ref === "local-drvn-remediation" ? ["127.0.0.1", "localhost"].includes(host.hostname) && host.port === "54321" : Boolean(ref && host.hostname === `${ref}.supabase.co`);
 
 const key = process.env.STRIPE_SECRET_KEY ?? "";
 const hasTestKey = key.startsWith("sk_test_");
+if (hasTestKey && !isolated) throw new Error("Stripe integration requires an explicitly isolated Supabase test database.");
 
 if (key && !hasTestKey) {
   throw new Error(
@@ -82,6 +85,61 @@ suite("Stripe test-mode integration", () => {
     return { oid, correlationId, intent: confirmed };
   }
 
+  it("settles a real multi-seller capture once and compensates a real late capture", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+    const { settleIntent } = await import("@/lib/payments/settlement");
+    const { runRefundOperation } = await import("@/lib/payments/refunds");
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    const raw = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
+    const users: string[] = [], orders: string[] = [], references: string[] = [];
+    try {
+      for (let i = 0; i < 3; i++) {
+        const { data, error } = await raw.auth.admin.createUser({ email: `stripe-remediation-${crypto.randomUUID()}@drvn.test`, email_confirm: true });
+        if (error || !data.user) throw error || new Error("Fixture account missing"); users.push(data.user.id);
+      }
+      const listed = await raw.from("listings").insert(users.slice(1).map((seller_id) => ({ seller_id, title: "Stripe settlement fixture", category: "engine", status: "active", price_cents: 1000, shipping_cents: 0, currency: "GBP" }))).select("id");
+      if (listed.error) throw listed.error;
+      const begun = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: listed.data.map((l) => l.id), p_idempotency_key: `stripe-fixture:${crypto.randomUUID()}` });
+      if (begun.error) throw begun.error;
+      const basket = begun.data as { orders: { order_id: string }[] }; orders.push(...basket.orders.map((o) => o.order_id));
+      const created = await provider.createPayment({ orderId: orders.join(","), buyerId: users[0], sellerId: "multiple", totalCents: 2000, currency: "GBP" });
+      if (created.status !== "requires_action") throw new Error(`Fixture payment: ${created.status}`);
+      references.push(created.reference);
+      const intent = await stripe.paymentIntents.confirm(created.reference, { payment_method: "pm_card_visa" });
+      expect(await settleIntent(admin, intent, true)).toBe(true);
+      expect(await settleIntent(admin, intent, true)).toBe(true);
+      const obligations = await raw.from("transfer_intents").select("order_id,amount_cents").in("order_id", orders);
+      expect(obligations.error).toBeNull(); expect(obligations.data).toHaveLength(2);
+      expect(obligations.data?.map((o) => o.amount_cents)).toEqual([900,900]);
+      const lateListing = await raw.from("listings").insert({ seller_id: users[1], title: "Late capture fixture", category: "engine", status: "active", price_cents: 1500, currency: "GBP" }).select("id").single();
+      if (lateListing.error) throw lateListing.error;
+      const lateBegin = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: [lateListing.data.id], p_idempotency_key: `stripe-late:${crypto.randomUUID()}` });
+      if (lateBegin.error) throw lateBegin.error;
+      const lateId = (lateBegin.data as { orders: { order_id: string }[] }).orders[0].order_id; orders.push(lateId);
+      const latePayment = await provider.createPayment({ orderId: lateId, buyerId: users[0], sellerId: users[1], totalCents: 1500, currency: "GBP" });
+      if (latePayment.status !== "requires_action") throw new Error(`Late fixture: ${latePayment.status}`);
+      references.push(latePayment.reference);
+      await admin.rpc("purchase_finalize", { p_order_id: lateId, p_success: false, p_provider: "stripe", p_failure_reason: "Simulated expiry" });
+      const lateCapture = await stripe.paymentIntents.confirm(latePayment.reference, { payment_method: "pm_card_visa" });
+      expect(await settleIntent(admin, lateCapture, true)).toBe(true);
+      const operation = await raw.from("refund_operations").select("id").eq("order_id", lateId).eq("purpose", "late_capture").single();
+      if (operation.error) throw operation.error;
+      expect((await runRefundOperation(admin, operation.data.id)).ok).toBe(true);
+      const lateOrder = await raw.from("orders").select("status,refunded_cents").eq("id", lateId).single();
+      expect(lateOrder.data).toEqual({ status: "payment_failed", refunded_cents: 1500 });
+      const latePayouts = await raw.from("transfer_intents").select("order_id").eq("order_id", lateId);
+      expect(latePayouts.data).toHaveLength(0);
+    } finally {
+      for (const reference of references) {
+        try { await stripe.refunds.create({ payment_intent: reference }); } catch { /* Already fully refunded. */ }
+        await raw.from("remediation_jobs").delete().eq("dedup_key", `receipt:${reference}`);
+      }
+      if (orders.length) await raw.from("orders").delete().in("id", orders);
+      for (const id of users) await raw.auth.admin.deleteUser(id);
+    }
+  }, 60000);
+
   it("creates an intent carrying DRVN metadata (order, buyer, seller, correlation)", async () => {
     const oid = orderId();
     const correlationId = crypto.randomUUID();
@@ -102,12 +160,14 @@ suite("Stripe test-mode integration", () => {
     expect(intent.currency).toBe("gbp");
     expect(intent.metadata.order_id).toBe(oid);
     expect(intent.metadata.buyer_id).toBe("buyer-int-test");
-    expect(intent.metadata.correlation_id).toBe(correlationId);
+    expect(intent.metadata.correlation_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("a confirmed test card succeeds — the state the webhook settles on", async () => {
-    const { intent } = await createConfirmedIntent();
+    const { intent, oid } = await createConfirmedIntent();
     expect(intent.status).toBe("succeeded");
+    const retry = await provider.createPayment({ orderId: oid, buyerId: "buyer-int-test", sellerId: "seller-int-test", totalCents: 4_200, currency: "gbp" });
+    expect(retry).toEqual({ status: "processing", reference: intent.id });
   });
 
   it("a declined card surfaces as a failure, not a success", async () => {

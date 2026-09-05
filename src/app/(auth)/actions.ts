@@ -138,8 +138,6 @@ export async function completeOnboarding(
 
   // Username + display name are the account-search projection (brief §28) —
   // fire-and-forget index sync, never on the critical path.
-  const { syncProfileToSearch } = await import("@/lib/explore/search/indexing");
-  void syncProfileToSearch(user.id);
 
   redirect(safeRedirectPath(next, "/home"));
 }

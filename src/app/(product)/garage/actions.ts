@@ -11,11 +11,7 @@ import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
 import { capture } from "@/lib/analytics";
-import {
-  syncCarToSearch,
-  syncProfileToSearch,
-  syncUpdateToSearch,
-} from "@/lib/explore/search/indexing";
+
 import { decodeVin } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
 import type { Car } from "@/lib/database.types";
@@ -158,7 +154,6 @@ export async function createCar(_prev: ActionState, formData: FormData): Promise
 
   capture(user.id, { event: "vehicle_added", props: { identity_source: identitySource } });
   // Fire-and-forget search-index sync (brief §28) — never on the critical path.
-  void syncCarToSearch(data.id);
   revalidatePath("/garage");
   redirect(`/garage/${data.id}/edit`);
 }
@@ -237,7 +232,6 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
 
   // Covers edits AND the public/private toggle: syncCarToSearch removes an
   // ineligible car (and its posts) from the index, or re-adds them.
-  void syncCarToSearch(id);
   revalidatePath("/garage");
   revalidatePath(`/garage/${id}/edit`);
   return decodeNote ? { error: decodeNote } : {};
@@ -248,7 +242,6 @@ export async function deleteCar(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (id) {
     await supabase.from("cars").delete().eq("id", id);
-    void syncCarToSearch(id); // row gone → index documents deleted
   }
   revalidatePath("/garage");
   redirect("/garage");
@@ -324,7 +317,6 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
   }
 
   // Mods are searchable build content (brief §20) — resync the car's document.
-  void syncCarToSearch(carId);
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
   return {};
@@ -653,7 +645,6 @@ export async function createRichActivityPost(
     },
   });
 
-  void syncUpdateToSearch(post.id);
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
   redirect(`/cars/${car.slug}/activity/${post.id}`);
@@ -821,7 +812,6 @@ export async function updateActivityPost(
     }
   }
 
-  void syncUpdateToSearch(postId);
   revalidatePath(`/garage/${post.car_id}/edit`);
   if (car) {
     revalidatePath(`/cars/${car.slug}`);
@@ -854,7 +844,6 @@ export async function deleteActivityPost(
   const { error } = await supabase.from("activity_posts").delete().eq("id", postId);
   if (error) return { error: error.message };
 
-  void syncUpdateToSearch(postId); // row gone → index document deleted
   revalidatePath(`/garage/${post.car_id}/edit`);
   if (car) revalidatePath(`/cars/${car.slug}`);
   redirect(`/garage/${post.car_id}/edit`);
@@ -939,7 +928,6 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
 
   // Identity fields (display name, headline) are the account-search
   // projection — resync. Location/bio changes are indexed nowhere (§22).
-  void syncProfileToSearch(user.id);
   revalidatePath("/profile");
   revalidatePath("/settings");
 
@@ -959,56 +947,17 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
  * failed on a foreign-key violation for anyone who had ever traded.
  */
 export async function deleteAccount(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
 
   const confirmation = String(formData.get("confirm") ?? "").trim();
   if (confirmation !== "DELETE") {
     return { error: 'Type DELETE to confirm.' };
   }
 
-  // Undispatched sales would leave buyers stranded.
-  const { data: openOrders } = await supabase
-    .from("orders")
-    .select("id")
-    .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-    .in("status", ["pending", "paid", "shipped"])
-    .limit(1);
-
-  if (openOrders?.length) {
-    return {
-      error:
-        "You have orders in progress. Finish or cancel them first — deleting now would leave the other party stranded.",
-    };
-  }
-
-  const { createAdminClient } = await import("@/lib/supabase/admin");
-  const admin = createAdminClient();
-
-  // Remove uploaded media, which the row cascade doesn't reach. car-images
-  // and activity-images nest one level deeper (`${uid}/${carId}/...`), and
-  // storage list() is not recursive — a subfolder comes back as an entry
-  // with no object id — so those folders get one level of descent.
-  for (const bucket of ["avatars", "car-images", "activity-images", "listing-images"]) {
-    const { data: entries } = await admin.storage.from(bucket).list(user.id);
-    if (!entries?.length) continue;
-    const paths: string[] = [];
-    for (const entry of entries) {
-      if (entry.id) {
-        paths.push(`${user.id}/${entry.name}`);
-      } else {
-        const { data: nested } = await admin.storage.from(bucket).list(`${user.id}/${entry.name}`);
-        for (const file of nested ?? []) {
-          if (file.id) paths.push(`${user.id}/${entry.name}/${file.name}`);
-        }
-      }
-    }
-    if (paths.length) await admin.storage.from(bucket).remove(paths);
-  }
-
-  // Cascades through profiles → cars, listings, activity, saves, follows.
-  const { error } = await admin.auth.admin.deleteUser(user.id);
+  const { data: requestId, error } = await supabase.rpc("request_account_deletion", {});
   if (error) return { error: error.message };
-
-  await supabase.auth.signOut();
-  redirect("/?deleted=1");
+  // Revoke refresh sessions immediately; the database tombstone also blocks
+  // direct writes with already-issued access tokens until their expiry.
+  await supabase.auth.signOut({ scope: "global" });
+  redirect(`/login?deletion=requested&reference=${requestId}`);
 }

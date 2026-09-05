@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import type { Json } from "@/lib/database.types";
+import { reconcileCapturedPayments } from "@/lib/payments/capture-reconciliation";
+import { processReceiptJobs } from "@/lib/receipt-worker";
 import { processReturnTimers } from "@/features/commerce/returns";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
 import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/transfer-worker";
@@ -29,15 +33,37 @@ export async function POST(request: Request) {
 
   try {
     const admin = createAdminClient();
-    const transfers = await processDueTransfers(admin);
-    const reconciled = await reconcileTransferRecords(admin);
-    const refunds = await resumeIncompleteRefunds(admin);
-    // Return timers run BEFORE the dispute sweep so a return that just
-    // expired/completed releases the dispute clock in the same pass (§27-28).
-    const returns = await processReturnTimers(admin);
-    const disputes = await processDisputeSla(admin);
-    const alerts = await processAlertOutbox(admin);
-    return Response.json({ ...transfers, ...disputes, reconciled, refunds, returns, alerts });
+    const jobs: Record<string, () => Promise<unknown>> = {
+      captures: () => reconcileCapturedPayments(),
+      transfers: () => processDueTransfers(admin),
+      transferReconciliation: () => reconcileTransferRecords(admin),
+      refunds: () => resumeIncompleteRefunds(admin),
+      returns: () => processReturnTimers(admin),
+      disputes: () => processDisputeSla(admin),
+      alerts: () => processAlertOutbox(admin),
+      receipts: () => processReceiptJobs(),
+    };
+    const results: Record<string, unknown> = {};
+    let failed = false;
+    for (const [family, run] of Object.entries(jobs)) {
+      const id = randomUUID();
+      try {
+        const started = await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "running" });
+        if (started.error) throw new Error("Worker tracking unavailable");
+        const result = await run();
+        if (result && typeof result === "object" && "failed" in result && typeof result.failed === "number" && result.failed > 0) {
+          throw new Error(`Worker reported ${result.failed} failed items`);
+        }
+        const finished = await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "succeeded", p_summary: result as Json });
+        if (finished.error) throw new Error("Worker completion tracking unavailable");
+        results[family] = result;
+      } catch (error) {
+        failed = true; results[family] = { failed: true, runId: id };
+        await admin.rpc("record_worker_run", { p_id: id, p_family: family, p_status: "failed", p_summary: { error: "Worker family failed" } });
+        reportError("[worker] family failed", { family, runId: id, error });
+      }
+    }
+    return Response.json(results, { status: failed ? 503 : 200 });
   } catch (error) {
     reportError("[transfers] worker run failed", error);
     return new Response("worker failed", { status: 500 });

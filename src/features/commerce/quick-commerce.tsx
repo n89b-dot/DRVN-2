@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Icon } from "@/components/ui/icons";
@@ -22,7 +21,7 @@ import { addToCart, buyNow, type CommerceState } from "./actions";
  *   · guests can buy (Buy now → /cart?buynow=1; identity at checkout)
  *   · `addToCart` refuses inactive listings and the viewer's own part
  *   · success is confirmed in place (toast + "In cart ✓") and the cart
- *     badge refreshes via router.refresh(), exactly like the PDP
+ *     badge refreshes through the action cookie update, exactly like the PDP
  *   · errors read inline as a polite alert
  *
  * Render it only for a purchasable listing — the card decides (active, not
@@ -41,7 +40,6 @@ export function ListingQuickCommerce({
   listingId: string;
   title: string;
 }) {
-  const router = useRouter();
   const [buyPending, startBuy] = useTransition();
   const [cartPending, startCart] = useTransition();
   const [cartState, setCartState] = useState<CommerceState | null>(null);
@@ -62,7 +60,7 @@ export function ListingQuickCommerce({
       try {
         const result = await addToCart(fd);
         setCartState(result);
-        if (result.ok) router.refresh();
+        // Cookie changes refresh the server UI in the same action response.
       } catch {
         setCartState({ error: "Couldn't add that just now — try again." });
       }

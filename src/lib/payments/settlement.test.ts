@@ -1,6 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type Stripe from "stripe";
 
-import { attributePartialRefund } from "./settlement";
+import { attributePartialRefund, settleIntent } from "./settlement";
+
+describe("capture validation", () => {
+  it.each([
+    { status: "succeeded", amount_received: 500 },
+    { status: "processing", amount_received: 1000 },
+  ])("does not release fulfillment for incomplete capture: %j", async (capture) => {
+    const rpc = vi.fn();
+    const intent = { id: "pi_incomplete", amount: 1000, metadata: { order_id: "order-a", buyer_id: "buyer-a" }, ...capture } as unknown as Stripe.PaymentIntent;
+    await expect(settleIntent({ rpc } as never, intent, true)).rejects.toThrow("capture is incomplete");
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});
 
 const payment = (
   id: string,

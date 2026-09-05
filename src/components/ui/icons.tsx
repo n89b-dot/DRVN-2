@@ -29,7 +29,9 @@ export type IconName =
   | "share"
   | "book"
   | "filter"
-  | "search";
+  | "search"
+  | "eye"
+  | "eye-off";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -139,6 +141,20 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
         <circle cx="9" cy="7" r="1.7" fill="currentColor" />
         <circle cx="15" cy="12" r="1.7" fill="currentColor" />
         <circle cx="8" cy="17" r="1.7" fill="currentColor" />
+      </>
+    ),
+    /* Reveal / conceal — the password field's toggle. */
+    eye: (
+      <>
+        <path d="M2.5 12S6 5.6 12 5.6 21.5 12 21.5 12 18 18.4 12 18.4 2.5 12 2.5 12Z" />
+        <circle cx="12" cy="12" r="2.9" />
+      </>
+    ),
+    "eye-off": (
+      <>
+        <path d="M10.7 5.9a9.6 9.6 0 0 1 1.3-.3c6-.7 9.5 6.4 9.5 6.4a17.4 17.4 0 0 1-3 3.8M6.5 6.5A17 17 0 0 0 2.5 12S6 18.4 12 18.4a9.3 9.3 0 0 0 5.3-1.7" />
+        <path d="M9.95 9.95a2.9 2.9 0 0 0 4.1 4.1" />
+        <path d="m3.5 3.5 17 17" />
       </>
     ),
   };

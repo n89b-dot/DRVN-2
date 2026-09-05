@@ -52,7 +52,7 @@ export function resolveImportConfig(env: EnvLike = process.env): ImportConfig {
   return {
     aiMode,
     model: env.LISTING_IMPORT_MODEL || DEFAULT_IMPORT_MODEL,
-    browserEnabled: env.LISTING_IMPORT_PUBLIC_BROWSER_ENABLED === "true",
+    browserEnabled: !production && env.LISTING_IMPORT_PUBLIC_BROWSER_ENABLED === "true",
     allowPrivateHosts: !production && env.LISTING_IMPORT_ALLOW_PRIVATE_HOSTS === "true",
   };
 }
