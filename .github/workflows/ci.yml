@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # A newer push supersedes an in-flight run on the same ref.
 concurrency:
@@ -74,45 +75,19 @@ jobs:
             psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
           done
 
-      - name: Purchase & dispute guard (9 assertions)
+      - name: All SQL guards (independent results)
         env:
           PGPASSWORD: postgres
-        run: |
-          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/purchase_guard.sql 2>&1)
-          echo "$out"
-          echo "$out" | grep -q -- "--- all purchase-guard checks passed ---"
+        run: bash scripts/test-sql-guards.sh
 
-      - name: Admin guard (0018 invariants)
-        env:
-          PGPASSWORD: postgres
-        run: |
-          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/admin_guard.sql 2>&1)
-          echo "$out"
-          echo "$out" | grep -q -- "--- all admin-guard checks passed ---"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Security guard (payout self-mod, offer/review/message forgery, money-table lockout)
+      - name: Generated database contract matches migrations
         env:
-          PGPASSWORD: postgres
-        run: |
-          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/security_guard.sql 2>&1)
-          echo "$out"
-          echo "$out" | grep -q -- "--- all security-guard checks passed ---"
-
-      - name: Money guard (0026 refund reservations, settle idempotency, transfer leasing, alert dedup)
-        env:
-          PGPASSWORD: postgres
-        run: |
-          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/money_guard.sql 2>&1)
-          echo "$out"
-          echo "$out" | grep -q -- "--- all money-guard checks passed ---"
-
-      - name: Import guard (0047 RLS, transitions, dedupe, cap)
-        env:
-          PGPASSWORD: postgres
-        run: |
-          out=$(psql -h localhost -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/import_guard.sql 2>&1)
-          echo "$out"
-          echo "$out" | grep -q -- "--- all import-guard checks passed ---"
+          DRVN_TYPES_DATABASE_URL: postgresql://supabase_admin:postgres@127.0.0.1:5432/postgres
+        run: node scripts/generate-database-types.mjs --check
 
   # The golden-path e2e suite (signup → list → buy → dispatch → receive) needs
   # a real Supabase project — auth included — so it runs against a dedicated
@@ -122,6 +97,8 @@ jobs:
   # E2E_SUPABASE_SECRET_KEY (a project with migrations applied and email
   # confirmation off).
   e2e:
+    outputs:
+      ran: ${{ steps.gate.outputs.run }}
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
@@ -129,11 +106,15 @@ jobs:
       SUPABASE_SECRET_KEY: ${{ secrets.E2E_SUPABASE_SECRET_KEY }}
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       E2E_BASE_URL: http://localhost:3000
+      E2E_TEST_PROJECT_REF: ${{ secrets.E2E_TEST_PROJECT_REF }}
+      PAYMENTS_MODE: stub
+      PAYMENTS_ALLOW_STUB_IN_PRODUCTION: 'true'
+      GUEST_RECEIPT_SECRET: ci-only-guest-signing-secret-at-least-32-characters
     steps:
       - name: Check for e2e project secrets
         id: gate
         run: |
-          if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+          if [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && [ -n "$SUPABASE_SECRET_KEY" ] && [ -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ] && [ -n "$E2E_TEST_PROJECT_REF" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -153,7 +134,7 @@ jobs:
         run: npm ci
 
       - if: steps.gate.outputs.run == 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - if: steps.gate.outputs.run == 'true'
         name: Golden path
@@ -165,14 +146,22 @@ jobs:
   # non-sk_test_ keys. Skips loudly — a skip is stated, never counted as green
   # coverage.
   stripe-integration:
+    # Both suites use the same disposable project: keep their fixtures isolated in time.
+    needs: [e2e]
+    outputs:
+      ran: ${{ steps.gate.outputs.run }}
     runs-on: ubuntu-latest
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
+      SUPABASE_SECRET_KEY: ${{ secrets.E2E_SUPABASE_SECRET_KEY }}
+      E2E_TEST_PROJECT_REF: ${{ secrets.E2E_TEST_PROJECT_REF }}
     steps:
       - name: Check for Stripe test secret
         id: gate
         run: |
-          if [ -n "$STRIPE_SECRET_KEY" ]; then
+          if [ -n "$STRIPE_SECRET_KEY" ] && [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && [ -n "$SUPABASE_SECRET_KEY" ] && [ -n "$E2E_TEST_PROJECT_REF" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -195,6 +184,25 @@ jobs:
         name: Stripe test-mode integration
         run: npm run test:stripe
 
+  release-gate:
+    if: always() && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    needs: [verify, sql-guard, e2e, stripe-integration]
+    steps:
+      - name: Require executed verification
+        env:
+          VERIFY: ${{ needs.verify.result }}
+          SQL: ${{ needs.sql-guard.result }}
+          E2E: ${{ needs.e2e.result }}
+          STRIPE: ${{ needs.stripe-integration.result }}
+          E2E_RAN: ${{ needs.e2e.outputs.ran }}
+          STRIPE_RAN: ${{ needs.stripe-integration.outputs.ran }}
+        run: |
+          test "$VERIFY" = success
+          test "$SQL" = success
+          test "$E2E" = success && test "$E2E_RAN" = true
+          test "$STRIPE" = success && test "$STRIPE_RAN" = true
+
   # The honest green: says out loud what did and didn't run, so a passing
   # build can't be mistaken for full coverage.
   summary:
@@ -210,8 +218,8 @@ jobs:
             echo "| Suite | Result |"
             echo "|---|---|"
             echo "| Typecheck / lint / unit / build | ${{ needs.verify.result }} |"
-            echo "| SQL guards (purchase, admin, security, money) | ${{ needs.sql-guard.result }} |"
-            echo "| E2E golden path | ${{ needs.e2e.result }} — skipped rows mean no E2E project secrets are configured |"
-            echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }} — a pass with no STRIPE_TEST_SECRET_KEY means the suite was SKIPPED, not run |"
+            echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
+            echo "| E2E golden path | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }} |"
+            echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
             echo "| Multi-seller settlement / transfers / dispute recovery | exercised by the stub-mode golden path only — full Stripe-backed E2E remains future coverage |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -18,7 +18,9 @@
     "test:stripe": "vitest run --config vitest.stripe.config.ts",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
-    "docs:systems": "UPDATE_DOCS=1 vitest run src/lib/docs/system-docs.test.ts"
+    "docs:systems": "UPDATE_DOCS=1 vitest run src/lib/docs/system-docs.test.ts",
+    "db:types": "node scripts/generate-database-types.mjs",
+    "db:types:check": "node scripts/generate-database-types.mjs --check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
@@ -50,8 +52,8 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.62.0",
-    "@storybook/addon-a11y": "^9.1.20",
-    "@storybook/nextjs-vite": "^9.1.20",
+    "@storybook/addon-a11y": "^10.6.0",
+    "@storybook/nextjs-vite": "^10.6.0",
     "@tailwindcss/postcss": "^4",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^20",
@@ -60,7 +62,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "pg": "^8.22.0",
-    "storybook": "^9.1.20",
+    "storybook": "^10.6.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

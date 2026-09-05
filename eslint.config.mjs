@@ -21,6 +21,8 @@ const eslintConfig = defineConfig([
     ".claude/**",
     // Storybook static builds — generated bundles, local lab only.
     "storybook-static/**",
+    // Historical review probes are standalone CommonJS evidence, not application modules.
+    "docs/review-evidence/**",
   ]),
 ]);
 
