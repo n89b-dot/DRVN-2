@@ -8,12 +8,11 @@ import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { isOwnedDisputeEvidenceRef } from "@/lib/media-url";
 import { deriveEvidenceStoragePath } from "@/lib/evidence-urls";
 import { sendAdminAlert } from "@/lib/admin/alerts";
-import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "./disputes";
+import { SELLER_RESPONSE_DAYS } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
-import type { DisputeCategory } from "@/lib/database.types";
-import { reportError } from "@/lib/monitoring";
+import { postOrderSystemMessage } from "./order-system-message";
+import { openDisputeCommand } from "./dispute-command";
 import type { CommerceState } from "./action-types";
 
 async function requireUser() {
@@ -25,107 +24,12 @@ async function requireUser() {
   return { supabase, user };
 }
 
-const DISPUTE_CATEGORY_LABEL = new Map(DISPUTE_CATEGORIES.map((c) => [c.value, c.label]));
-
-async function postOrderSystemMessage(
-  admin: ReturnType<typeof createAdminClient>,
-  orderId: string,
-  senderId: string,
-  recipientId: string,
-  body: string
-) {
-  const { data: item } = await admin
-    .from("order_items")
-    .select("listing_id")
-    .eq("order_id", orderId)
-    .limit(1)
-    .maybeSingle();
-  if (!item?.listing_id) return;
-
-  const { error } = await admin.from("messages").insert({
-    listing_id: item.listing_id,
-    order_id: orderId,
-    sender_id: senderId,
-    recipient_id: recipientId,
-    body,
-  });
-  if (error) {
-    reportError("[commerce] dispute system message failed", { orderId, error });
-  }
-}
-
-export async function openDispute(
-  _prev: CommerceState,
-  formData: FormData
-): Promise<CommerceState> {
-  const { user } = await requireUser();
-
-  if (!(await allowAction(RATE_LIMITS.openDispute, user.id))) {
-    return { error: rateLimitMessage(RATE_LIMITS.openDispute) };
-  }
-
-  const admin = createAdminClient();
-  const orderId = String(formData.get("order_id") ?? "");
-  const category = String(formData.get("category") ?? "") as DisputeCategory;
-  const reason = String(formData.get("reason") ?? "").trim().slice(0, 1000);
-  if (!orderId) return { error: "Missing order." };
-  if (!DISPUTE_CATEGORY_LABEL.has(category)) return { error: "Pick what went wrong." };
-
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, buyer_id, seller_id, status, delivered_at")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!order) return { error: "Order not found." };
-  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
-  // A dispute only makes sense once the seller has actually sent something —
-  // requestCancellation covers everything before dispatch.
-  if (!["shipped", "delivered", "completed"].includes(order.status)) {
-    return { error: "You can report a problem once the order has shipped." };
-  }
-  // The claim window (0024): 30 days from confirmed delivery. Sellers need
-  // finality too — an order can't stay disputable forever. Undelivered
-  // orders have no delivery date to count from, so they stay open.
-  if (
-    order.delivered_at &&
-    Date.now() - new Date(order.delivered_at).getTime() > DISPUTE_WINDOW_DAYS * 86_400_000
-  ) {
-    return {
-      error: `Problems must be reported within ${DISPUTE_WINDOW_DAYS} days of delivery — this order is past that window.`,
-    };
-  }
-  if (!order.seller_id) return { error: "The seller's account is no longer active." };
-
-  const now = new Date().toISOString();
-  const { data: opened, error } = await admin
-    .from("orders")
-    .update({
-      status: "disputed",
-      dispute_category: category,
-      dispute_reason: reason || null,
-      disputed_at: now,
-      disputed_by: user.id,
-      pre_dispute_status: order.status,
-    })
-    .eq("id", orderId)
-    .eq("status", order.status)
-    .select("id");
-  if (error) return { error: error.message };
-  // Zero rows: the order moved on between our read and this write.
-  if (!opened?.length) return { error: "This order changed state — reload and try again." };
-
-  await postOrderSystemMessage(
-    admin,
-    orderId,
-    user.id,
-    order.seller_id,
-    `Opened a dispute — ${DISPUTE_CATEGORY_LABEL.get(category)}.${reason ? ` "${reason}"` : ""}`
-  );
-
-  capture(user.id, { event: "dispute_opened", props: { category } });
+export async function openDispute(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
+  const result = await openDisputeCommand(formData);
+  if (result.error) return result;
   revalidatePath("/orders");
-  revalidatePath(`/orders/${orderId}`);
-  redirect(`/orders/${orderId}`);
+  revalidatePath(`/orders/${String(formData.get("order_id"))}`);
+  return result;
 }
 
 export async function offerRefund(

@@ -8,7 +8,6 @@ import {
   closeDispute,
   escalateDispute,
   offerRefund,
-  openDispute,
   type CommerceState,
 } from "@/features/commerce/actions";
 import { DISPUTE_CATEGORIES } from "@/features/commerce/disputes";
@@ -28,7 +27,9 @@ function Result({ state }: { state: CommerceState }) {
 /** Buyer-only. Only rendered by the page once dispatch has happened and the
  *  order isn't already disputed/refunded/cancelled — see order/[id]/page.tsx. */
 export function ReportProblemForm({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(openDispute, {});
+  const [state, setState] = useState<CommerceState>({});
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -40,7 +41,24 @@ export function ReportProblemForm({ orderId }: { orderId: string }) {
   }
 
   return (
-    <form action={action} className="grid gap-3">
+    <form className="grid gap-3" onSubmit={async event => {
+      event.preventDefault();
+      if (submitting.current) return;
+      submitting.current = true; setPending(true); setState({});
+      const form = new FormData(event.currentTarget);
+      try {
+        const response = await fetch(`/api/orders/${orderId}/dispute`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: form.get("category"), reason: form.get("reason") }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const result: CommerceState = await response.json();
+        if (!response.ok || result.error) { setState({ error: result.error || "The dispute could not be opened." }); return; }
+        // A full navigation is independent of a stalled Server Action transition.
+        window.location.assign(`/orders/${orderId}`);
+      } catch { setState({ error: "The result could not be confirmed. Reload the order before trying again." }); }
+      finally { submitting.current = false; setPending(false); }
+    }}>
       <input type="hidden" name="order_id" value={orderId} />
       <label className="field">
         <span className="field__label">What went wrong</span>

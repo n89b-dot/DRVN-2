@@ -49,6 +49,8 @@ export function GalleryManager({
     setOrdered(images);
   }
 
+  const currentCoverUrl = coverImageUrl ?? ordered[0]?.url ?? null;
+
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
     setError(null);
@@ -78,6 +80,10 @@ export function GalleryManager({
           failed.push(file);
         } else {
           savedCount += 1;
+          if (saved.image) {
+            const image = saved.image;
+            setOrdered(current => current.some(existing => existing.id === image.id) ? current : [...current, image]);
+          }
         }
       }
       noteUploaded(savedCount);
@@ -104,19 +110,19 @@ export function GalleryManager({
         <span className="microlabel microlabel--ink">
           Photos — drag (or ↑↓) to reorder, ★ to set the cover
         </span>
-        {coverImageUrl && (
+        {currentCoverUrl && (
           <button type="button" className="jumplink" onClick={() => setFraming(true)}>
             Frame the cover
           </button>
         )}
       </div>
 
-      {coverImageUrl && (
+      {currentCoverUrl && (
         <FramingDialog
           open={framing}
           onClose={() => setFraming(false)}
           carId={carId}
-          coverUrl={coverImageUrl}
+          coverUrl={currentCoverUrl}
           initial={coverFocal ?? { x: null, y: null }}
         />
       )}
@@ -143,7 +149,7 @@ export function GalleryManager({
           className="thumbs thumbs--edit list-none p-0 m-0"
         >
           {ordered.map((image, index) => {
-            const isCover = coverImageUrl === image.url;
+            const isCover = currentCoverUrl === image.url;
             return (
               <SortableItem
                 key={image.id}
@@ -308,9 +314,9 @@ export function GalleryManager({
         onFiles={(files) => startTransition(async () => { await handleFiles(files); })}
         busy={uploading}
         className="mt-4"
-        title={images.length ? "Add more photos" : "Add the first photos"}
+        title={ordered.length ? "Add more photos" : "Add the first photos"}
         body={
-          images.length
+          ordered.length
             ? "Drop images here, or click to choose. 10MB max each."
             : "Drop images here, or click to choose. The first upload becomes the cover."
         }

@@ -14,7 +14,7 @@ import { capture } from "@/lib/analytics";
 
 import { decodeVin } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
-import type { Car } from "@/lib/database.types";
+import type { Car, CarImage } from "@/lib/database.types";
 
 export type ActionState = { error?: string; ok?: string };
 
@@ -322,7 +322,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
   return {};
 }
 
-export async function addCarImage(carId: string, url: string): Promise<ActionState> {
+export async function addCarImage(carId: string, url: string): Promise<ActionState & { image?: CarImage }> {
   const { supabase, user } = await requireUser();
 
   if (!isOwnedStorageUrl(url, user.id)) {
@@ -334,9 +334,9 @@ export async function addCarImage(carId: string, url: string): Promise<ActionSta
     .select("id", { count: "exact", head: true })
     .eq("car_id", carId);
 
-  const { error } = await supabase
+  const { data: image, error } = await supabase
     .from("car_images")
-    .insert({ car_id: carId, url, position: count ?? 0 });
+    .insert({ car_id: carId, url, position: count ?? 0 }).select("*").single();
   if (error) return { error: error.message };
 
   // The URL is referenced now — release it from the staged-upload GC.
@@ -348,7 +348,7 @@ export async function addCarImage(carId: string, url: string): Promise<ActionSta
   }
 
   revalidatePath(`/garage/${carId}/edit`);
-  return {};
+  return { image };
 }
 
 export async function deleteCarImage(formData: FormData) {

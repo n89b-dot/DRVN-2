@@ -74,7 +74,7 @@ async function settle(page: Page, path: string) {
   if (path === "/marketplace") {
     // Direct style properties work under the enforced nonce CSP; an unnonced
     // injected stylesheet is correctly blocked by the browser.
-    await page.locator(".mkt").evaluateAll(elements => elements.forEach(element => { (element as HTMLElement).style.minHeight = "100vh"; }));
+    await page.locator("main section.deck").evaluateAll(elements => elements.forEach(element => { (element as HTMLElement).style.minHeight = "100vh"; }));
   }
   await page.evaluate(() => document.fonts.ready);
 }
@@ -105,6 +105,7 @@ for (const vp of VIEWPORTS) {
             page.locator(".tile__img"),
             page.locator(".tile"),
             page.locator(".mkt"),
+            ...(route === "/marketplace" ? [page.locator("main section.deck")] : []),
             page.locator(".mosaic"),
           ],
           maxDiffPixelRatio: 0.02,
