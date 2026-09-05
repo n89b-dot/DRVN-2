@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { assertIsolatedTestTarget } from "../tests/support/test-target";
 
 /** This helper is intentionally usable only with the explicit isolated test target. */
 export function fixtureAdmin() {
@@ -7,9 +8,7 @@ export function fixtureAdmin() {
   const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   const ref = process.env.E2E_TEST_PROJECT_REF;
   if (!url || !key || !ref) throw new Error("Fixtures require explicit isolated test configuration");
-  const target = new URL(url);
-  const local = ref === "local-drvn-remediation" && ["localhost", "127.0.0.1"].includes(target.hostname) && target.port === "54321";
-  if (!local && target.hostname !== `${ref}.supabase.co`) throw new Error("Fixture target does not match test project");
+  assertIsolatedTestTarget({ url, projectRef: ref });
   return createClient(url, key, { auth: { persistSession: false } });
 }
 

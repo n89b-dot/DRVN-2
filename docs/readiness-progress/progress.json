@@ -1,0 +1,623 @@
+{
+  "project": "DRVN",
+  "scope": "Invited buyers & sellers",
+  "updatedAt": "2026-09-05T18:30:02.902038+00:00",
+  "baselineCommit": "d6f3be6",
+  "headline": "Making DRVN ready for real people.",
+  "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
+  "current": "First implementation batch verified: safer refunds and transfers, recoverable shipping callbacks, stricter release checks, and a fixed dispatch screen. Next: remaining recovery workflows, invitation boundaries, and hosted staging capacity.",
+  "designSource": {
+    "name": "Distill / YT-Digest-2",
+    "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
+    "url": "https://github.com/n89b-dot/YT-Digest-2/blob/37feb29a22a62f2b5abe4f39af7b547b4b2bd219/apps/web/styles/design.css"
+  },
+  "workstreams": [
+    {
+      "id": "R01",
+      "title": "A safe place to test",
+      "category": "Release setup",
+      "status": "blocked",
+      "owner": "Release lead",
+      "why": "Test changes without touching real buyers, sellers, or payments.",
+      "before": "Testing currently relies on local services; hosted beta access has not been verified.",
+      "after": "A separate HTTPS environment with invited access, test-only payments, controlled email, and repeatable setup.",
+      "next": "Resolve hosted project capacity; keep all destructive fixtures on the isolated local stack.",
+      "checkpoints": [
+        {
+          "id": "scope",
+          "label": "Invited-beta scope confirmed",
+          "state": "done",
+          "evidence": "User confirmed invited buyers and sellers in this task."
+        },
+        {
+          "id": "target",
+          "label": "Fail-closed test project allowlist",
+          "state": "done",
+          "evidence": "15/15 tests passed. Only the explicit local DRVN endpoint or a reviewed hosted project can receive fixtures; hosted allowlist is currently empty."
+        },
+        {
+          "id": "access",
+          "label": "Server-side invitation boundaries",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "setup",
+          "label": "Isolated hosted services",
+          "state": "blocked",
+          "evidence": "User selected n89b-dot\u2019s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
+        },
+        {
+          "id": "smoke",
+          "label": "Environment and access tests",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "review",
+          "label": "Recreation and operator review",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R02",
+      "title": "Payment updates that cannot disappear",
+      "category": "Money reliability",
+      "status": "partial",
+      "owner": "GPT-5.6 \u00b7 Webhook stream",
+      "why": "Keep refunds, disputes, and seller-account changes consistent even when a database write fails.",
+      "before": "Some provider updates can be acknowledged before their effects are safely recorded.",
+      "after": "Failed saves stay retryable; uncertain events create one tracked recovery case. Pending and later-failed refunds receive explicit handling.",
+      "next": "Complete hosted provider proof, operator recovery workflow and provider-specific dispute ordering.",
+      "checkpoints": [
+        {
+          "id": "review",
+          "label": "Failure paths confirmed",
+          "state": "done",
+          "evidence": "Reviewed settlement, webhook route, admin replay and refund provider code."
+        },
+        {
+          "id": "writes",
+          "label": "Durable webhook and replay writes",
+          "state": "done",
+          "evidence": "Checked provider event persistence, completion markers and admin replay; independently reviewed."
+        },
+        {
+          "id": "refunds",
+          "label": "Asynchronous refund lifecycle",
+          "state": "done",
+          "evidence": "Pending/unknown states, exact provider identity, per-refund journal and late-failure counter compensation implemented; 43 focused tests and 16 SQL lifecycle checks passed."
+        },
+        {
+          "id": "tests",
+          "label": "Failure and replay regression tests",
+          "state": "done",
+          "evidence": "34 focused webhook durability and replay tests passed. Async refund verification is a separate checkpoint."
+        },
+        {
+          "id": "shipping",
+          "label": "Shipping persistence and partial-write replay",
+          "state": "done",
+          "evidence": "Exact provider matching, terminal conflict checks and partial-write replay verified. Retained EasyPost events now use the audited admin replay path; 8 routing tests passed."
+        },
+        {
+          "id": "integration",
+          "label": "Independent integration review",
+          "state": "done",
+          "evidence": "Independent cross-review corrections complete; 468 unit tests, 10 Stripe API tests, 17 SQL suites, typecheck and schema parity passed."
+        },
+        {
+          "id": "late_recovery",
+          "label": "Late-failure seller re-credit and workflow recovery",
+          "state": "todo",
+          "evidence": "Counters and obligations are durable; seller re-credit and order workflow restoration still need operator reconciliation."
+        },
+        {
+          "id": "dispute_ordering",
+          "label": "Provider-specific dispute ordering journal",
+          "state": "todo",
+          "evidence": "Checked dispute persistence is implemented; full provider-specific ordering remains open."
+        },
+        {
+          "id": "hosted",
+          "label": "Hosted provider proof",
+          "state": "blocked",
+          "evidence": "Requires isolated HTTPS Stripe staging."
+        }
+      ]
+    },
+    {
+      "id": "R03",
+      "title": "Seller transfers that survive a crash",
+      "category": "Money reliability",
+      "status": "partial",
+      "owner": "GPT-5.6 \u00b7 Transfer stream",
+      "why": "Prevent a restarted worker from paying a seller twice or repeating a reversal.",
+      "before": "A crash can leave Stripe ahead of local records, and stale retries may miss that earlier transfer.",
+      "after": "Each transfer has a saved identity and amount; retries find and reconcile prior provider effects before issuing anything new.",
+      "next": "Implement reversal recovery beyond the provider idempotency window, then verify hosted Connect behavior.",
+      "checkpoints": [
+        {
+          "id": "review",
+          "label": "Crash paths confirmed",
+          "state": "done",
+          "evidence": "Reviewed stale claim SQL, transfer lookup and reversal recovery paths."
+        },
+        {
+          "id": "transfer",
+          "label": "Durable transfer identity and reconciliation",
+          "state": "done",
+          "evidence": "Saved immutable dispatch identity, exact provider lookup, live worker ownership checks, and durable recovery for changed orders."
+        },
+        {
+          "id": "reversal",
+          "label": "Reversal recovery beyond idempotency window",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "tests",
+          "label": "Crash, concurrency and mismatch tests",
+          "state": "done",
+          "evidence": "27 transfer worker tests and the full SQL guard passed, including live-lease checks, conflicting identities, atomic recovery alerts and alert deduplication."
+        },
+        {
+          "id": "integration",
+          "label": "Database and integration review",
+          "state": "done",
+          "evidence": "Independent review corrected legacy repair and provider lookup; final migrations, all SQL guards and generated schema parity passed from a fresh database."
+        },
+        {
+          "id": "hosted",
+          "label": "Hosted transfer and reversal proof",
+          "state": "blocked",
+          "evidence": "Requires test Connect accounts and staged providers."
+        }
+      ]
+    },
+    {
+      "id": "R04",
+      "title": "A green build you can trust",
+      "category": "Release setup",
+      "status": "partial",
+      "owner": "GPT-5.6 \u00b7 Release stream",
+      "why": "Make passing checks mean required tests really passed, without relying on retries.",
+      "before": "The current green browser run includes one test that passed only after a retry.",
+      "after": "Flaky, skipped-required, and missing checks block release; the known fixture race is corrected and jobs have time limits.",
+      "next": "Verify hosted release candidates and enforced branch checks.",
+      "checkpoints": [
+        {
+          "id": "review",
+          "label": "Retry and fixture issue identified",
+          "state": "done",
+          "evidence": "Baseline CI: 164 first passes, one retry pass, two explicit SSRF exclusions."
+        },
+        {
+          "id": "code",
+          "label": "Reporter, fixture and CI changes",
+          "state": "done",
+          "evidence": "Implemented zero-retry release reporter, isolated diagnostic lane, sanitized diagnostics, pinned CI dependencies and job timeouts; reviewed the diff."
+        },
+        {
+          "id": "tests",
+          "label": "Focused local verification",
+          "state": "done",
+          "evidence": "8/8 Chromium search tests, 8/8 reporter tests and 20/20 targeted browser repetitions passed on the first attempt, with zero retries. Focused lint and workflow parse passed."
+        },
+        {
+          "id": "hosted",
+          "label": "Two clean hosted candidate runs",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "protection",
+          "label": "Enforced branch and release checks",
+          "state": "blocked",
+          "evidence": "Private-repository protection requires an account-tier change."
+        }
+      ]
+    },
+    {
+      "id": "R05",
+      "title": "An account export that is complete",
+      "category": "Privacy",
+      "status": "queued",
+      "owner": "Data and privacy stream",
+      "why": "Let members obtain all approved data about their account without exposing someone else\u2019s private information.",
+      "before": "Some data families are missing, some exports use broad field selections, and large exports can exceed request limits.",
+      "after": "Explicit safe fields, complete approved sections, and resumable large exports with a completeness record.",
+      "next": "Finalize the field-by-field data inventory before changing export behavior.",
+      "checkpoints": [
+        {
+          "id": "inventory",
+          "label": "Field and ownership inventory",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "policy",
+          "label": "Export and retention decisions",
+          "state": "blocked",
+          "evidence": "Requires the responsible policy owner."
+        },
+        {
+          "id": "code",
+          "label": "Safe complete export implementation",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "tests",
+          "label": "Large-export and cross-account tests",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Archive and policy verification",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R06",
+      "title": "Deletion with an honest outcome",
+      "category": "Privacy",
+      "status": "queued",
+      "owner": "Data and privacy stream",
+      "why": "Remove eligible personal data while preserving only records that must be retained.",
+      "before": "Protected financial references can prevent final deletion, and historical originals still need reconciliation.",
+      "after": "Members and operators see exactly what was removed or retained, why, and what happens next; eligible old media is cleaned up.",
+      "next": "Approve hold and retention rules, then implement clear deletion outcomes.",
+      "checkpoints": [
+        {
+          "id": "policy",
+          "label": "Retention and hold decisions",
+          "state": "blocked",
+          "evidence": "No legal retention period has been assumed."
+        },
+        {
+          "id": "states",
+          "label": "Explicit deletion and operator states",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "media",
+          "label": "Historical media normalization and cleanup",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "tests",
+          "label": "Interrupted deletion and retained-record tests",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Hosted deletion and media evidence",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R07",
+      "title": "Problems reach a real operator",
+      "category": "Operations",
+      "status": "queued",
+      "owner": "Operations and security stream",
+      "why": "Detect broken jobs and delivery failures quickly, with someone responsible for recovery.",
+      "before": "Local contracts exist, but real external notification and hosted recovery evidence is missing.",
+      "after": "Working email, independent outage alerts, observed schedules, and a practiced admin recovery process.",
+      "next": "Connect controlled email and monitoring in isolated staging.",
+      "checkpoints": [
+        {
+          "id": "setup",
+          "label": "External delivery and monitoring",
+          "state": "blocked",
+          "evidence": "Requires selected services and controlled recipients."
+        },
+        {
+          "id": "workers",
+          "label": "Enabled schedules observed",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "recovery",
+          "label": "Hosted admin recovery rehearsal",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "security",
+          "label": "Hosted security boundary checks",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Outage, escalation and recovery proof",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R08",
+      "title": "The real checkout journey, verified",
+      "category": "Money reliability",
+      "status": "queued",
+      "owner": "Payments and QA stream",
+      "why": "Verify the full experience from card entry to seller transfer, refund, and dispute recovery.",
+      "before": "Real Stripe API tests exist, but the browser suite uses payment stubs.",
+      "after": "Hosted test-mode checkout, 3DS, Connect, refunds and disputes reconcile across the screen, database, and provider.",
+      "next": "Finish the financial fixes and connect the HTTPS provider test environment.",
+      "checkpoints": [
+        {
+          "id": "environment",
+          "label": "Provider-connected browser lane",
+          "state": "blocked",
+          "evidence": "Requires HTTPS staging and test Connect accounts."
+        },
+        {
+          "id": "checkout",
+          "label": "Checkout, decline and 3DS matrix",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "money",
+          "label": "Transfers, refunds and disputes",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "admin",
+          "label": "Interrupted admin refund recovery",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "shipping",
+          "label": "Enabled fulfillment provider checks",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Balances and identities reconciled",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R09",
+      "title": "Actions that feel clear and dependable",
+      "category": "Product quality",
+      "status": "partial",
+      "owner": "Frontend and accessibility stream",
+      "why": "Make important actions understandable and usable with keyboard, screen reader, and mobile devices.",
+      "before": "Focused fixes exist, but every critical form and assistive-technology path has not been verified.",
+      "after": "Clear pending, success, and error states; reliable saved changes; tested focus, text scaling, touch, and screen-reader behavior.",
+      "next": "Continue the full critical-action inventory and accessibility/device matrix.",
+      "checkpoints": [
+        {
+          "id": "inventory",
+          "label": "Critical action inventory",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "dispatch",
+          "label": "Dispatch exits pending and shows saved tracking",
+          "state": "done",
+          "evidence": "Reproduced the UI stall and fixed successful-action navigation. All four final Chromium transaction journeys passed without test-triggered dispatch reloads or action retries (2.4 minutes)."
+        },
+        {
+          "id": "mutations",
+          "label": "Mutation feedback and recovery fixes",
+          "state": "todo",
+          "evidence": "Dispatch is fixed in the separate checkpoint below; the broader mutation inventory remains open."
+        },
+        {
+          "id": "automated",
+          "label": "Expanded automated accessibility checks",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "manual",
+          "label": "Physical-device and screen-reader review",
+          "state": "blocked",
+          "evidence": "Requires the agreed devices and manual testers."
+        },
+        {
+          "id": "acceptance",
+          "label": "Findings fixed and rechecked",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R10",
+      "title": "Optional services stay under control",
+      "category": "Privacy",
+      "status": "queued",
+      "owner": "Integration stream",
+      "why": "Keep search and analytics from exposing stale private data or sending events without consent.",
+      "before": "Optional providers remain disabled while their external behavior is unverified.",
+      "after": "Disabled services make no calls; enabling either requires proven privacy, deletion, consent, and recovery behavior.",
+      "next": "Verify disabled mode and confirm which optional services belong in the beta.",
+      "checkpoints": [
+        {
+          "id": "scope",
+          "label": "Provider scope recorded",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "disabled",
+          "label": "Disabled-mode network and fallback proof",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "provider",
+          "label": "Conditional provider reconciliation",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Privacy and consent gate verified",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R11",
+      "title": "A recovery plan that has been used",
+      "category": "Operations",
+      "status": "queued",
+      "owner": "Operations and release lead",
+      "why": "Prove the app can handle the beta and recover safely after an outage.",
+      "before": "Local restore and small load checks exist, but coordinated hosted recovery remains unproven.",
+      "after": "Measured capacity, matching database and file backups, reconciled payment recovery, and a rehearsed rollback.",
+      "next": "Agree load and recovery targets, then run production-equivalent staged drills.",
+      "checkpoints": [
+        {
+          "id": "budgets",
+          "label": "Capacity and recovery targets agreed",
+          "state": "blocked",
+          "evidence": "Numerical targets remain proposed."
+        },
+        {
+          "id": "load",
+          "label": "Representative load exercise",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "restore",
+          "label": "Coordinated hosted restore",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "rollback",
+          "label": "Compatible rollback rehearsal",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "soak",
+          "label": "Staging observation and final checks",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Staging acceptance signed",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    },
+    {
+      "id": "R12",
+      "title": "A carefully observed invited beta",
+      "category": "Production acceptance",
+      "status": "queued",
+      "owner": "Account owner and release lead",
+      "why": "Open DRVN to invited commerce only after the release evidence is complete.",
+      "before": "No final production deployment or genuine-pilot acceptance has been performed.",
+      "after": "Verified production setup, enforced invitation limits, and real orders observed through delivery, clearing, and payout.",
+      "next": "Complete staging gates before presenting the concrete production rollout.",
+      "checkpoints": [
+        {
+          "id": "preflight",
+          "label": "Production configuration and backup proof",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "approval",
+          "label": "Concrete invited-pilot authorization",
+          "state": "blocked",
+          "evidence": "Requires completed staging evidence and owner authorization."
+        },
+        {
+          "id": "deploy",
+          "label": "Controlled production deployment",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "pilot",
+          "label": "Genuine qualifying orders fulfilled",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "clearing",
+          "label": "Clearing and payout reconciliation",
+          "state": "todo",
+          "evidence": ""
+        },
+        {
+          "id": "acceptance",
+          "label": "Production acceptance signed",
+          "state": "todo",
+          "evidence": ""
+        }
+      ]
+    }
+  ],
+  "activity": [
+    {
+      "at": "2026-09-05T18:30:02.902038+00:00",
+      "title": "First implementation batch verified",
+      "detail": "All four final transaction journeys passed with the dispatch test kept strict. The tracker shows remaining work; no hosted or production acceptance is claimed."
+    },
+    {
+      "at": "2026-09-05T18:26:15.468227+00:00",
+      "title": "Strict UI check caught a remaining defect",
+      "detail": "Dispatch saves correctly but can leave the screen pending. The no-refresh test remains strict while successful-action navigation is corrected."
+    },
+    {
+      "at": "2026-09-05T18:24:33.636889+00:00",
+      "title": "Combined local verification passed",
+      "detail": "468 unit tests, 10 Stripe test-mode API tests, all 17 SQL guard suites and all four browser transaction journeys passed. Hosted and production acceptance remain open."
+    },
+    {
+      "at": "2026-09-05T18:02:53.195284+00:00",
+      "title": "Crash and retry safeguards verified locally",
+      "detail": "23 transfer worker tests, 17 transfer SQL assertions, 28 shipping tests and 20 first-attempt browser repetitions passed. Hosted acceptance remains open."
+    },
+    {
+      "at": "2026-09-05T17:42:45.691572+00:00",
+      "title": "Release checks passed their first local verification",
+      "detail": "All 8 search journeys and 8 reporter tests passed. Hosted release acceptance remains open."
+    },
+    {
+      "at": "2026-09-05T17:33:49.470941+00:00",
+      "title": "Implementation started",
+      "detail": "Three GPT-5.6 streams assigned: webhook durability, transfer recovery, and release-check reliability."
+    },
+    {
+      "at": "2026-09-05T17:33:49.470943+00:00",
+      "title": "Distill design source verified",
+      "detail": "Read the actual design tokens and typography from your GitHub project."
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { fixtureAdmin } from "./fixtures";
 import { cleanupE2eUsers, enableSellerPayouts, makeUser, signUp } from "./helpers";
 
 /**
@@ -107,16 +108,58 @@ async function buyListing(
 const sellerA = makeUser("txa-seller", stamp);
 const buyerA = makeUser("txa-buyer", stamp);
 
-/** Dispatch through the consequence dialog, with golden-path's
- *  click-until-applied loop (the sheet's remount churn can swallow one
- *  click); success = the tracking number rendered on the ORDER. */
+/** Dispatch once, verify complete persistence, then require the action to
+ * update its own UI without another click or a manual page reload. */
 async function dispatchOrder(page: Page, tracking: string) {
+  const orderId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
+  expect(orderId, "order id in dispatch URL").toBeTruthy();
+
   await page.getByRole("button", { name: /mark dispatched/i }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(/carrier/i).fill("USPS");
   await dialog.getByLabel(/tracking/i).fill(tracking);
   await dialog.getByRole("button", { name: /mark dispatched/i }).click();
-  await expect(page.getByText(tracking).first()).toBeVisible();
+
+  const admin = fixtureAdmin();
+  await expect
+    .poll(
+      async () => {
+        const [order, shipment] = await Promise.all([
+          admin
+            .from("orders")
+            .select("status, carrier, tracking_number")
+            .eq("id", orderId!)
+            .maybeSingle(),
+          admin
+            .from("shipments")
+            .select(
+              "direction, fulfillment_type, provider, provider_tracker_id, tracking_code, carrier, status"
+            )
+            .eq("order_id", orderId!)
+            .eq("direction", "outbound")
+            .eq("tracking_code", tracking)
+            .maybeSingle(),
+        ]);
+        if (order.error) throw order.error;
+        if (shipment.error) throw shipment.error;
+        return { order: order.data, shipment: shipment.data };
+      },
+      { message: "dispatch persisted completely", timeout: 30_000 }
+    )
+    .toEqual({
+      order: { status: "shipped", carrier: "USPS", tracking_number: tracking },
+      shipment: {
+        direction: "outbound",
+        fulfillment_type: "seller_arranged",
+        provider: "stub",
+        provider_tracker_id: `stubtrk_${tracking}`,
+        tracking_code: tracking,
+        carrier: "USPS",
+        status: "in_transit",
+      },
+    });
+
+  await expect(page.getByText(tracking).first()).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -254,11 +297,40 @@ test("Flow A — DRVN Shipping: rates → label → webhook delivery", async ({ 
   const tracking = ((await trackingEl.textContent()) ?? "").trim();
   expect(tracking, "tracking code visible on the order sheet").toMatch(/^STUB[A-Z0-9_]+$/);
 
+  // This callback is intentionally shaped like EasyPost even though the
+  // browser suite bought its label through the stub provider. Make the
+  // synthetic shipment identity internally consistent before exercising the
+  // real webhook attribution checks.
+  const trackerRef = `trk_e2e_${stamp}`;
+  const providerShipmentRef = `shp_e2e_${stamp}`;
+  const admin = fixtureAdmin();
+  const { data: syntheticShipment, error: syntheticShipmentError } = await admin
+    .from("shipments")
+    .update({
+      provider: "easypost",
+      provider_shipment_id: providerShipmentRef,
+      provider_tracker_id: trackerRef,
+      tracking_code: tracking,
+      carrier: "StubCarrier",
+    })
+    .eq("direction", "outbound")
+    .eq("tracking_code", tracking)
+    .select("provider, provider_shipment_id, provider_tracker_id, tracking_code, carrier")
+    .single();
+  expect(syntheticShipmentError).toBeNull();
+  expect(syntheticShipment).toEqual({
+    provider: "easypost",
+    provider_shipment_id: providerShipmentRef,
+    provider_tracker_id: trackerRef,
+    tracking_code: tracking,
+    carrier: "StubCarrier",
+  });
+
   const payload = JSON.stringify({
     id: `evt_e2e_${stamp}`,
     description: "tracker.updated",
     result: {
-      id: `trk_e2e_${stamp}`,
+      id: trackerRef,
       tracking_code: tracking,
       carrier: "StubCarrier",
       status: "delivered",

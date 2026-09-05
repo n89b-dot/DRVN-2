@@ -2200,6 +2200,60 @@ export type Database = {
         }
         Relationships: []
       }
+      refund_lifecycle_adjustments: {
+        Row: {
+          created_at: string
+          event_id: string
+          failure_balance_transaction: string | null
+          fee_restore_cents: number
+          id: string
+          kind: string
+          refund_amount_cents: number
+          refund_operation_id: string
+          refund_reference: string
+          seller_recredit_cents: number | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          failure_balance_transaction?: string | null
+          fee_restore_cents: number
+          id?: string
+          kind: string
+          refund_amount_cents: number
+          refund_operation_id: string
+          refund_reference: string
+          seller_recredit_cents?: number | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          failure_balance_transaction?: string | null
+          fee_restore_cents?: number
+          id?: string
+          kind?: string
+          refund_amount_cents?: number
+          refund_operation_id?: string
+          refund_reference?: string
+          seller_recredit_cents?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_lifecycle_adjustments_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "refund_provider_events"
+            referencedColumns: ["event_id"]
+          },
+          {
+            foreignKeyName: "refund_lifecycle_adjustments_refund_operation_id_fkey"
+            columns: ["refund_operation_id"]
+            isOneToOne: false
+            referencedRelation: "refund_operations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       refund_operations: {
         Row: {
           actor_role: string
@@ -2216,7 +2270,14 @@ export type Database = {
           next_attempt_at: string | null
           order_id: string
           payment_reference: string | null
+          provider_balance_transaction: string | null
           provider_completed_at: string | null
+          provider_event_created_at: string | null
+          provider_event_id: string | null
+          provider_failure_balance_transaction: string | null
+          provider_failure_reason: string | null
+          provider_pending_reason: string | null
+          provider_status: string | null
           purpose: string
           reason: string
           recovery_id: string | null
@@ -2245,7 +2306,14 @@ export type Database = {
           next_attempt_at?: string | null
           order_id: string
           payment_reference?: string | null
+          provider_balance_transaction?: string | null
           provider_completed_at?: string | null
+          provider_event_created_at?: string | null
+          provider_event_id?: string | null
+          provider_failure_balance_transaction?: string | null
+          provider_failure_reason?: string | null
+          provider_pending_reason?: string | null
+          provider_status?: string | null
           purpose?: string
           reason?: string
           recovery_id?: string | null
@@ -2274,7 +2342,14 @@ export type Database = {
           next_attempt_at?: string | null
           order_id?: string
           payment_reference?: string | null
+          provider_balance_transaction?: string | null
           provider_completed_at?: string | null
+          provider_event_created_at?: string | null
+          provider_event_id?: string | null
+          provider_failure_balance_transaction?: string | null
+          provider_failure_reason?: string | null
+          provider_pending_reason?: string | null
+          provider_status?: string | null
           purpose?: string
           reason?: string
           recovery_id?: string | null
@@ -2301,6 +2376,75 @@ export type Database = {
             columns: ["recovery_id"]
             isOneToOne: false
             referencedRelation: "payment_recoveries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      refund_provider_events: {
+        Row: {
+          amount_cents: number
+          balance_transaction: string | null
+          currency: string
+          event_id: string
+          failure_balance_transaction: string | null
+          failure_reason: string | null
+          order_id: string | null
+          payment_reference: string | null
+          provider_created_at: string
+          provider_status: string
+          received_at: string
+          refund_operation_id: string | null
+          refund_reference: string
+          reported_operation_id: string | null
+          reported_order_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          balance_transaction?: string | null
+          currency: string
+          event_id: string
+          failure_balance_transaction?: string | null
+          failure_reason?: string | null
+          order_id?: string | null
+          payment_reference?: string | null
+          provider_created_at: string
+          provider_status: string
+          received_at?: string
+          refund_operation_id?: string | null
+          refund_reference: string
+          reported_operation_id?: string | null
+          reported_order_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          balance_transaction?: string | null
+          currency?: string
+          event_id?: string
+          failure_balance_transaction?: string | null
+          failure_reason?: string | null
+          order_id?: string | null
+          payment_reference?: string | null
+          provider_created_at?: string
+          provider_status?: string
+          received_at?: string
+          refund_operation_id?: string | null
+          refund_reference?: string
+          reported_operation_id?: string | null
+          reported_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_provider_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_provider_events_refund_operation_id_fkey"
+            columns: ["refund_operation_id"]
+            isOneToOne: false
+            referencedRelation: "refund_operations"
             referencedColumns: ["id"]
           },
         ]
@@ -3162,13 +3306,20 @@ export type Database = {
           available_at: string | null
           created_at: string
           currency: string
+          dispatch_amount_cents: number | null
+          dispatch_currency: string | null
+          dispatch_destination: string | null
+          dispatch_source_transaction: string | null
+          dispatch_transfer_group: string | null
           last_attempt_at: string | null
           last_error: string | null
           lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           next_attempt_at: string | null
+          operation_key: string | null
           order_id: string
+          provider_call_may_have_occurred: boolean
           seller_id: string | null
           source_transaction: string | null
           status: string
@@ -3181,13 +3332,20 @@ export type Database = {
           available_at?: string | null
           created_at?: string
           currency: string
+          dispatch_amount_cents?: number | null
+          dispatch_currency?: string | null
+          dispatch_destination?: string | null
+          dispatch_source_transaction?: string | null
+          dispatch_transfer_group?: string | null
           last_attempt_at?: string | null
           last_error?: string | null
           lease_expires_at?: string | null
           locked_at?: string | null
           locked_by?: string | null
           next_attempt_at?: string | null
+          operation_key?: string | null
           order_id: string
+          provider_call_may_have_occurred?: boolean
           seller_id?: string | null
           source_transaction?: string | null
           status?: string
@@ -3200,13 +3358,20 @@ export type Database = {
           available_at?: string | null
           created_at?: string
           currency?: string
+          dispatch_amount_cents?: number | null
+          dispatch_currency?: string | null
+          dispatch_destination?: string | null
+          dispatch_source_transaction?: string | null
+          dispatch_transfer_group?: string | null
           last_attempt_at?: string | null
           last_error?: string | null
           lease_expires_at?: string | null
           locked_at?: string | null
           locked_by?: string | null
           next_attempt_at?: string | null
+          operation_key?: string | null
           order_id?: string
+          provider_call_may_have_occurred?: boolean
           seller_id?: string | null
           source_transaction?: string | null
           status?: string
@@ -3406,13 +3571,20 @@ export type Database = {
           available_at: string | null
           created_at: string
           currency: string
+          dispatch_amount_cents: number | null
+          dispatch_currency: string | null
+          dispatch_destination: string | null
+          dispatch_source_transaction: string | null
+          dispatch_transfer_group: string | null
           last_attempt_at: string | null
           last_error: string | null
           lease_expires_at: string | null
           locked_at: string | null
           locked_by: string | null
           next_attempt_at: string | null
+          operation_key: string | null
           order_id: string
+          provider_call_may_have_occurred: boolean
           seller_id: string | null
           source_transaction: string | null
           status: string
@@ -3427,6 +3599,15 @@ export type Database = {
         }
       }
       claim_unmapped_payment_requests: { Args: never; Returns: Json }
+      complete_transfer_intent: {
+        Args: {
+          p_operation_key: string
+          p_order: string
+          p_transfer_reference: string
+          p_worker: string
+        }
+        Returns: string
+      }
       consume_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window: string }
         Returns: boolean
@@ -3679,6 +3860,19 @@ export type Database = {
         Args: { p_key: string; p_request: Json }
         Returns: Json
       }
+      prepare_transfer_dispatch: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_destination: string
+          p_operation_key: string
+          p_order: string
+          p_source_transaction: string
+          p_transfer_group: string
+          p_worker: string
+        }
+        Returns: boolean
+      }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {
@@ -3713,6 +3907,34 @@ export type Database = {
         Args: { p_key: string; p_reference: string }
         Returns: undefined
       }
+      record_refund_provider_event: {
+        Args: {
+          p_amount_cents: number
+          p_balance_transaction?: string
+          p_currency: string
+          p_event_id: string
+          p_failure_balance_transaction?: string
+          p_failure_reason?: string
+          p_operation_id: string
+          p_order_id: string
+          p_payment_reference: string
+          p_pending_reason?: string
+          p_provider_created_at: string
+          p_provider_status: string
+          p_refund_reference: string
+        }
+        Returns: Json
+      }
+      record_transfer_recovery: {
+        Args: {
+          p_amount?: number
+          p_detail: string
+          p_key: string
+          p_order: string
+          p_worker: string
+        }
+        Returns: string
+      }
       record_worker_run: {
         Args: {
           p_family: string
@@ -3723,6 +3945,17 @@ export type Database = {
         Returns: undefined
       }
       release_expired_reservations: { Args: never; Returns: Json }
+      release_transfer_intent: {
+        Args: {
+          p_attempts?: number
+          p_last_error?: string
+          p_next_attempt_at?: string
+          p_order: string
+          p_status: string
+          p_worker: string
+        }
+        Returns: boolean
+      }
       remap_public_media: {
         Args: { p_new: string; p_old: string }
         Returns: Json

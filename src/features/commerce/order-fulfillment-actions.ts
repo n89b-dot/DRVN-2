@@ -120,7 +120,7 @@ export async function markShipped(
   capture(user.id, { event: "seller_dispatched" });
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
-  return { ok: "Marked as dispatched." };
+  redirect(`/orders/${orderId}`);
 }
 
 export async function markReceived(

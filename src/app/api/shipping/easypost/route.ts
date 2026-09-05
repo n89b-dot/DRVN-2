@@ -1,12 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { mapTracker } from "@/lib/shipping/easypost";
-import {
-  applyTrackingSummary,
-  findShipmentForTracker,
-} from "@/lib/shipping/apply-tracking";
+import { dispatchEasyPostEvent } from "@/lib/shipping/webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
+import type { Json } from "@/lib/database.types";
 
 /**
  * EasyPost webhook (brief §18): tracker updates drive shipment status,
@@ -22,9 +19,10 @@ import { flushMonitoring, reportError } from "@/lib/monitoring";
  *    never collide with Stripe's. A replay 200s without effects; every
  *    handler downstream is idempotent anyway (event unique index, guarded
  *    status transitions, compare-and-set order updates).
- *  - Unknown event types and trackers for shipments we don't know are 200s —
- *    EasyPost retries on non-2xx, and retrying those can never succeed.
- *  - Failures processing a KNOWN tracker return 500 so EasyPost redelivers.
+ *  - Unknown event types are intentionally ignored. Unknown or ambiguous
+ *    trackers remain unprocessed because the shipment may be persisted after
+ *    an early provider callback; the retained payload can be replayed.
+ *  - Failures processing tracker events return 500 so EasyPost redelivers.
  */
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.EASYPOST_WEBHOOK_SECRET;
@@ -53,27 +51,20 @@ export async function POST(request: Request): Promise<Response> {
   const claimId = `easypost:${eventId}`;
 
   try {
-    const fresh = await claimEvent(admin, claimId, description);
+    const fresh = await claimEvent(admin, claimId, description, event as Json);
     if (!fresh) return new Response("duplicate", { status: 200 });
 
-    if (description === "tracker.updated" || description === "tracker.created") {
-      const tracker = event.result;
-      if (tracker && typeof tracker === "object") {
-        const summary = mapTracker(tracker as Record<string, unknown>);
-        const shipment = await findShipmentForTracker(admin, summary);
-        if (shipment) {
-          await applyTrackingSummary(admin, shipment, summary);
-        }
-        // No matching shipment: a tracker created outside DRVN's records
-        // (test events, console experiments). Nothing to retry.
-      }
-    }
-    // Other descriptions (refund.*, batch.*): acknowledged, not consumed yet.
+    await dispatchEasyPostEvent(admin, event);
 
-    await admin
+    const { data: completed, error: completionError } = await admin
       .from("webhook_events")
       .update({ processed_at: new Date().toISOString() })
-      .eq("id", claimId);
+      .eq("id", claimId)
+      .select("id")
+      .maybeSingle();
+    if (completionError || completed?.id !== claimId) {
+      throw new Error("webhook completion could not be persisted");
+    }
     return new Response("ok", { status: 200 });
   } catch (error) {
     reportError("[easypost-webhook] processing failed", { eventId, description, error });
@@ -97,23 +88,44 @@ function verifySignature(payload: string, header: string, secret: string): boole
 }
 
 /** Same semantics as the Stripe claim (settlement.ts): true = process it.
- *  A crashed first pass (row exists, processed_at null) reprocesses; insert
- *  errors fail open because every handler is idempotent. */
+ *  A crashed first pass (row exists, processed_at null) reprocesses. Database
+ *  errors fail closed so no provider event is acknowledged without a durable
+ *  claim and retained replay payload. */
 async function claimEvent(
   admin: ReturnType<typeof createAdminClient>,
   id: string,
-  type: string
+  type: string,
+  payload: Json
 ): Promise<boolean> {
-  const { error } = await admin.from("webhook_events").insert({ id, type });
-  if (!error) return true;
+  const { data: claimed, error } = await admin
+    .from("webhook_events")
+    .insert({ id, type, payload })
+    .select("id")
+    .maybeSingle();
+  if (!error && claimed?.id === id) return true;
+  if (!error) throw new Error("webhook claim did not persist a row");
   if (error.code === "23505") {
-    const { data } = await admin
+    const { data, error: lookupError } = await admin
       .from("webhook_events")
-      .select("processed_at")
+      .select("processed_at, payload")
       .eq("id", id)
       .maybeSingle();
-    return !data?.processed_at;
+    if (lookupError || !data) throw new Error("existing webhook claim could not be verified");
+    if (data.processed_at) return false;
+    if (data.payload === null) {
+      const { data: retained, error: retainError } = await admin
+        .from("webhook_events")
+        .update({ type, payload })
+        .eq("id", id)
+        .is("processed_at", null)
+        .select("id")
+        .maybeSingle();
+      if (retainError || retained?.id !== id) {
+        throw new Error("webhook replay payload could not be retained");
+      }
+    }
+    return true;
   }
   reportError("[easypost-webhook] event claim failed", { id, error });
-  return true;
+  throw new Error("webhook persistence unavailable; retry delivery");
 }

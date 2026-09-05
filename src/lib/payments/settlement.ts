@@ -2,6 +2,7 @@ import { CaptureMismatch, recordCaptureRecovery } from "./capture-recovery";
 import type Stripe from "stripe";
 
 import { recordExternalRefund, runRefundOperation } from "./refunds";
+import { stripeClient } from "./stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
@@ -28,6 +29,17 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
+export type StripeDispatchOutcome =
+  | "committed"
+  | "recovery_recorded"
+  | "retry"
+  | "irrelevant";
+
+function persistenceFailure(message: string, context?: unknown): never {
+  reportError(`[stripe:webhook] ${message}`, context);
+  throw new Error(`${message}; retry required`);
+}
+
 /** Order ids the intent covers — metadata first, payments table as fallback. */
 export async function ordersForIntent(admin: Admin, intentId: string, metadataOrderIds?: string) {
   const fromMetadata = (metadataOrderIds ?? "")
@@ -36,10 +48,11 @@ export async function ordersForIntent(admin: Admin, intentId: string, metadataOr
     .filter(Boolean);
   if (fromMetadata.length) return fromMetadata;
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("payments")
     .select("order_id")
     .eq("provider_reference", intentId);
+  if (error) persistenceFailure("payment mapping lookup failed", { intentId, error });
   return (data ?? []).map((p) => p.order_id);
 }
 
@@ -76,6 +89,104 @@ type PaymentRow = {
   status: string;
 };
 
+function stripeId(value: string | { id: string } | null | undefined): string | null {
+  return typeof value === "string" ? value : value?.id ?? null;
+}
+
+function validUuid(value: string | null | undefined): string | null {
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
+const INVALID_REFUND_METADATA_SENTINEL = "00000000-0000-4000-8000-000000000000";
+
+export async function applyRefundLifecycleEvent(
+  admin: Admin,
+  event: Stripe.Event,
+  refund: Stripe.Refund
+): Promise<"committed" | "recovery_recorded" | "retry"> {
+  const paymentReference = stripeId(refund.payment_intent);
+  const rawOperationId = refund.metadata?.operation_id;
+  let operationId = validUuid(rawOperationId);
+  const rawOrderId = refund.metadata?.order_id;
+  let orderId = validUuid(rawOrderId);
+
+  // Invalid metadata is provider-controlled input. Preserve it as an
+  // unattributed durable event instead of passing a malformed UUID to Postgres
+  // forever or adopting it as a different local refund.
+  if ((rawOperationId && !operationId) || (rawOrderId && !orderId)) {
+    operationId = INVALID_REFUND_METADATA_SENTINEL;
+    orderId = null;
+  }
+
+  if (!orderId && !rawOperationId && paymentReference) {
+    const { data: mapped, error } = await admin
+      .from("payments")
+      .select("order_id")
+      .eq("provider_reference", paymentReference);
+    if (error) persistenceFailure("refund lifecycle payment mapping failed", { refund: refund.id, error });
+    const unique = [...new Set((mapped ?? []).map((row) => row.order_id))];
+    if (unique.length === 1) orderId = unique[0];
+  }
+
+  const status: string = ["pending", "requires_action", "succeeded", "failed", "canceled"].includes(
+    refund.status ?? ""
+  )
+    ? refund.status!
+    : "unknown";
+  const { data, error } = await admin.rpc("record_refund_provider_event", {
+    p_event_id: event.id,
+    p_refund_reference: refund.id,
+    p_operation_id: operationId,
+    p_order_id: orderId,
+    p_payment_reference: paymentReference,
+    p_amount_cents: refund.amount,
+    p_currency: refund.currency,
+    p_provider_status: status,
+    // Stripe Event.created orders lifecycle callbacks. Refund.created is the
+    // object birth time and does not change on later updates.
+    p_provider_created_at: new Date(event.created * 1000).toISOString(),
+    p_balance_transaction: stripeId(refund.balance_transaction),
+    p_failure_balance_transaction: stripeId(refund.failure_balance_transaction),
+    p_failure_reason: refund.failure_reason ?? null,
+    p_pending_reason: refund.pending_reason ?? null,
+  });
+  if (error || !data) {
+    persistenceFailure("refund lifecycle event was not committed", {
+      event: event.id,
+      refund: refund.id,
+      error,
+    });
+  }
+  const recorded = data as { action?: string; operation_id?: string };
+  if (recorded.action === "recovery_recorded") return "recovery_recorded";
+  if (recorded.action === "pending" || recorded.action === "committed") return "committed";
+  if (recorded.action !== "settle" || !recorded.operation_id) return "retry";
+
+  const outcome = await runRefundOperation(admin, recorded.operation_id);
+  return outcome.ok ? "committed" : "retry";
+}
+
+async function completeChargeRefundCollection(charge: Stripe.Charge): Promise<Stripe.Refund[]> {
+  if (!charge.refunds?.has_more) return charge.refunds?.data ?? [];
+  const refunds: Stripe.Refund[] = [];
+  let startingAfter: string | undefined;
+  for (let page = 0; page < 10; page += 1) {
+    const listed = await stripeClient().refunds.list({
+      charge: charge.id,
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+    refunds.push(...listed.data);
+    if (!listed.has_more) return refunds;
+    const last = listed.data.at(-1);
+    if (!last) throw new Error("Stripe refund pagination returned an empty continuation page");
+    startingAfter = last.id;
+  }
+  throw new Error("Stripe refund collection exceeded the safe reconciliation bound");
+}
+
 /**
  * Which single order does a partial refund belong to? Only answerable when
  * the refund's outstanding amount (what Stripe has refunded minus what we've
@@ -96,155 +207,174 @@ export function attributePartialRefund(
   return candidates.length === 1 ? candidates[0] : null;
 }
 
+async function verifyRefundBooked(
+  admin: Admin,
+  orderId: string,
+  expectedRefundedCents: number
+): Promise<void> {
+  const { data: payment, error } = await admin
+    .from("payments")
+    .select("refunded_cents")
+    .eq("order_id", orderId)
+    .maybeSingle();
+  if (error) persistenceFailure("refund verification lookup failed", { orderId, error });
+  if (!payment || (payment.refunded_cents ?? 0) < expectedRefundedCents) {
+    persistenceFailure("external refund effects were not committed", {
+      orderId,
+      expectedRefundedCents,
+      actualRefundedCents: payment?.refunded_cents ?? null,
+    });
+  }
+}
+
+async function applyAndVerifyExternalRefund(
+  admin: Admin,
+  input: Parameters<typeof recordExternalRefund>[1],
+  expectedRefundedCents: number
+): Promise<void> {
+  await recordExternalRefund(admin, input);
+  // recordExternalRefund deliberately returns `applied: false` for both an
+  // idempotent replay and a failed begin. The checked ledger read separates
+  // those cases so a database failure cannot be acknowledged as a replay.
+  await verifyRefundBooked(admin, input.orderId, expectedRefundedCents);
+}
+
+async function recordUnattributedRefundRecovery(
+  admin: Admin,
+  charge: Stripe.Charge,
+  amountCents: number,
+  detail: string
+): Promise<void> {
+  const recoveryKey = `stripe:charge-refund:${charge.id}:${charge.amount_refunded}`;
+  const { data: recovery, error } = await admin
+    .from("payment_recoveries")
+    .upsert(
+      {
+        order_id: null,
+        kind: "partial_refund_unattributed",
+        recovery_key: recoveryKey,
+        amount_cents: amountCents,
+        detail,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "recovery_key" }
+    )
+    .select("id")
+    .maybeSingle();
+  if (error || !recovery) {
+    persistenceFailure("refund recovery could not be persisted", {
+      charge: charge.id,
+      recoveryKey,
+      error,
+    });
+  }
+  await sendAdminAlert({
+    kind: "recovery_case_opened",
+    title: "Unattributed refund — recovery case opened",
+    detail,
+    amountCents,
+    dedupKey: recoveryKey,
+  });
+}
+
 /**
  * A refund issued anywhere — the app, or the Stripe Dashboard — arrives here.
  * Attribution, most reliable first:
  *
- *   1. Refund objects carrying our `order_id` metadata (refunds.ts stamps
- *      every app refund) book exactly, per order. App refunds are already
- *      booked, so their delta is zero and recordExternalRefund no-ops.
- *   2. `charge.refunded` (fully refunded) books every order on the intent.
- *   3. A metadata-less partial falls back to attributePartialRefund's
- *      exact-amount match.
- *   4. Anything still ambiguous becomes an OPEN payment_recoveries case —
- *      a queue a human works, not a log line (Rev E item 5).
- *
- * All booking goes through recordExternalRefund, which also reverses the
- * seller's transfer proportionally and reconciles the platform fee.
+ * Every refund object first enters the same immutable lifecycle journal used
+ * by refund.created/updated/failed. The charge counter is only a cumulative
+ * verification: it can open recovery for a gap, but can never invent an
+ * operation identity or settle money from an aggregate.
  */
-export async function applyChargeRefund(admin: Admin, charge: Stripe.Charge): Promise<void> {
+export async function applyChargeRefund(
+  admin: Admin,
+  charge: Stripe.Charge,
+  sourceEvent?: Stripe.Event
+): Promise<"committed" | "recovery_recorded" | "retry"> {
+  let refunds: Stripe.Refund[];
+  try {
+    refunds = await completeChargeRefundCollection(charge);
+  } catch (error) {
+    reportError("[stripe:webhook] complete refund collection lookup failed", {
+      charge: charge.id,
+      error,
+    });
+    return "retry";
+  }
+
+  let sawRecovery = false;
+  for (const refund of refunds) {
+    const observed = {
+      id: sourceEvent
+        ? `${sourceEvent.id}:refund:${refund.id}`
+        : `charge-refund:${charge.id}:${refund.id}:${refund.status ?? "unknown"}`,
+      created: sourceEvent?.created ?? refund.created ?? Math.floor(Date.now() / 1000),
+      type: "refund.updated",
+      data: { object: refund },
+    } as unknown as Stripe.Event;
+    const outcome = await applyRefundLifecycleEvent(admin, observed, refund);
+    if (outcome === "retry") return "retry";
+    if (outcome === "recovery_recorded") sawRecovery = true;
+  }
+
   const intentId =
     typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
-  if (!intentId) return;
+  if (!intentId) {
+    await recordUnattributedRefundRecovery(
+      admin,
+      charge,
+      charge.amount_refunded,
+      `Charge ${charge.id} has no PaymentIntent mapping. Attribute and reconcile it manually.`
+    );
+    return "recovery_recorded";
+  }
 
-  const { data: payments } = await admin
+  const { data: payments, error: paymentsError } = await admin
     .from("payments")
     .select("id, order_id, amount_cents, refunded_cents, status")
     .eq("provider_reference", intentId);
+  if (paymentsError) {
+    persistenceFailure("refund payment lookup failed", { intentId, charge: charge.id, paymentsError });
+  }
   if (!payments?.length) {
     reportError("[stripe:webhook] refund on unknown intent", { intentId, charge: charge.id });
-    return;
+    if (!sawRecovery) {
+      await recordUnattributedRefundRecovery(
+        admin,
+        charge,
+        charge.amount_refunded,
+        `Charge ${charge.id} (intent ${intentId}) maps to no local payment. Attribute and reconcile it manually.`
+      );
+    }
+    return "recovery_recorded";
   }
 
-  // 0. Refunds our own state machine created: resume the operation rather
-  // than re-booking. The refund object carries operation_id metadata; if the
-  // process died between Stripe succeeding and our record advancing, this is
-  // the resume path (store the reference, then drive to completion).
-  for (const refund of charge.refunds?.data ?? []) {
-    const operationId = refund.metadata?.operation_id;
-    if (!operationId) continue;
-    if (refund.status && ["failed", "canceled"].includes(refund.status)) continue;
-    await admin
-      .from("refund_operations")
-      .update({
-        status: "provider_succeeded",
-        refund_reference: refund.id,
-        provider_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", operationId)
-      .in("status", ["requested", "provider_pending"]);
-    await runRefundOperation(admin, operationId);
-  }
-
-  // 1. Metadata-attributed refunds: cumulative target per order. Operations
-  // resumed above are excluded — their booking already lives in
-  // refund_operations; re-reading payments keeps the deltas honest.
-  const { data: refreshed } = await admin
+  // Every refund object now has its own journal/operation identity. Verify the
+  // cumulative successful provider amount is present locally before acking the
+  // charge event; never derive missing lifecycle state from the charge counter.
+  const { data: fresh, error: freshError } = await admin
     .from("payments")
     .select("id, order_id, amount_cents, refunded_cents, status")
     .eq("provider_reference", intentId);
-  const current = refreshed ?? payments;
-
-  const targetByOrder = new Map<string, { target: number; refundId: string | null }>();
-  const orderIds = new Set(current.map((p) => p.order_id));
-  let unattributedCents = 0;
-  for (const refund of charge.refunds?.data ?? []) {
-    if (refund.status && ["failed", "canceled"].includes(refund.status)) continue;
-    if (refund.metadata?.operation_id) continue; // handled above
-    const orderId = refund.metadata?.order_id;
-    if (orderId && orderIds.has(orderId)) {
-      const prior = targetByOrder.get(orderId);
-      targetByOrder.set(orderId, {
-        target: (prior?.target ?? 0) + refund.amount,
-        // Only carry the exact Stripe reference when a single refund object
-        // maps to the order — the reference-dedup must not mis-key.
-        refundId: prior ? null : refund.id,
-      });
-    } else {
-      unattributedCents += refund.amount;
-    }
+  if (freshError) {
+    persistenceFailure("refund attribution lookup failed", { intentId, charge: charge.id, freshError });
   }
-
-  for (const [orderId, { target, refundId }] of targetByOrder) {
-    const payment = current.find((p) => p.order_id === orderId);
-    const alreadyBooked = payment?.refunded_cents ?? 0;
-    const delta = target - alreadyBooked;
-    if (delta > 0) {
-      await recordExternalRefund(admin, {
-        orderId,
-        amountCents: delta,
-        reason: `Stripe refund on ${charge.id}`,
-        refundReference: refundId ?? undefined,
-      });
-    }
-  }
-
-  // 2. Fully refunded — whatever the metadata says, every order ends refunded.
-  if (charge.refunded) {
-    for (const p of current) {
-      const remaining = p.amount_cents - (p.refunded_cents ?? 0);
-      if (remaining > 0) {
-        await recordExternalRefund(admin, {
-          orderId: p.order_id,
-          amountCents: remaining,
-          reason: `Charge ${charge.id} fully refunded at Stripe`,
-        });
-      }
-    }
-    return;
-  }
-
-  if (unattributedCents === 0) return;
-
-  // 3. Metadata-less partial (dashboard refund): exact-amount match, once.
-  const { data: fresh } = await admin
-    .from("payments")
-    .select("id, order_id, amount_cents, refunded_cents, status")
-    .eq("provider_reference", intentId);
-  const match = attributePartialRefund(fresh ?? [], charge.amount_refunded);
-  if (match) {
-    await recordExternalRefund(admin, {
-      orderId: match.order_id,
-      amountCents: match.amount_cents,
-      reason: `Dashboard refund on ${charge.id}, attributed by exact amount`,
-    });
-    return;
-  }
-
-  // 4. Ambiguous — open a case; the order must not stay quietly `paid` while
-  // permitting a second full refund, which is what silence here used to mean.
   const alreadyRecorded = (fresh ?? []).reduce((sum, p) => sum + (p.refunded_cents ?? 0), 0);
-  const outstanding = charge.amount_refunded - alreadyRecorded;
-  if (outstanding > 0) {
-    reportError("[stripe:webhook] partial refund needs manual attribution", {
-      intentId,
-      charge: charge.id,
+  const successfulTotal = refunds
+    .filter((refund) => refund.status === "succeeded")
+    .reduce((sum, refund) => sum + refund.amount, 0);
+  const expectedAtStripe = Math.max(charge.amount_refunded, successfulTotal);
+  const outstanding = expectedAtStripe - alreadyRecorded;
+  if (outstanding > 0 && !sawRecovery) {
+    await recordUnattributedRefundRecovery(
+      admin,
+      charge,
       outstanding,
-    });
-    await admin.from("payment_recoveries").insert({
-      order_id: null,
-      kind: "partial_refund_unattributed",
-      amount_cents: outstanding,
-      detail: `Charge ${charge.id} (intent ${intentId}): ${outstanding} refunded at Stripe matches no single order. Attribute manually and book with a console refund.`,
-    });
-    await sendAdminAlert({
-      kind: "recovery_case_opened",
-      title: "Unattributed partial refund — recovery case opened",
-      detail: `Charge ${charge.id}: a dashboard refund matches no single order.`,
-      amountCents: outstanding,
-    });
+      `Charge ${charge.id} (intent ${intentId}) has ${outstanding} successful provider refund cents absent from the local ledger.`
+    );
+    return "recovery_recorded";
   }
+  return sawRecovery ? "recovery_recorded" : "committed";
 }
 
 /**
@@ -258,31 +388,45 @@ export async function applyDisputeEvent(
   admin: Admin,
   dispute: Stripe.Dispute,
   closed: boolean
-): Promise<void> {
+): Promise<"committed" | "retry" | "irrelevant"> {
   const intentId =
     typeof dispute.payment_intent === "string"
       ? dispute.payment_intent
       : dispute.payment_intent?.id;
-  if (!intentId) return;
+  if (!intentId) return "retry";
 
-  const { data: payments } = await admin
+  const { data: payments, error: paymentsError } = await admin
     .from("payments")
     .select("order_id")
     .eq("provider_reference", intentId);
+  if (paymentsError) {
+    persistenceFailure("dispute payment lookup failed", { intentId, dispute: dispute.id, paymentsError });
+  }
   if (!payments?.length) {
     reportError("[stripe:webhook] dispute on unknown intent", { intentId, dispute: dispute.id });
-    return;
+    return "retry";
   }
-  const orderIds = payments.map((p) => p.order_id);
+  const orderIds = [...new Set(payments.map((p) => p.order_id))];
 
   if (!closed) {
-    const { data: orders } = await admin
+    const { data: orders, error: ordersError } = await admin
       .from("orders")
       .select("id, status")
-      .in("id", orderIds)
-      .in("status", ["paid", "shipped", "delivered", "completed"]);
+      .in("id", orderIds);
+    if (ordersError) {
+      persistenceFailure("dispute order lookup failed", { dispute: dispute.id, ordersError });
+    }
+    if ((orders?.length ?? 0) !== orderIds.length) return "retry";
+    let needsRetry = false;
     for (const order of orders ?? []) {
-      await admin
+      if (order.status === "disputed" || order.status === "refunded") {
+        continue;
+      }
+      if (!["paid", "shipped", "delivered", "completed"].includes(order.status)) {
+        needsRetry = true;
+        continue;
+      }
+      const { data: updated, error: updateError } = await admin
         .from("orders")
         .update({
           status: "disputed",
@@ -290,11 +434,34 @@ export async function applyDisputeEvent(
           disputed_at: new Date().toISOString(),
           dispute_category: "other",
           dispute_reason: `Card dispute via Stripe (${dispute.reason}) — ${dispute.id}`,
+          // These fields can describe a prior in-app or provider dispute. A
+          // newly created Stripe dispute reopens the order's dispute state.
+          dispute_resolved_at: null,
+          dispute_outcome: null,
         })
         .eq("id", order.id)
-        .eq("status", order.status);
+        .eq("status", order.status)
+        .select("id");
+      if (updateError) {
+        persistenceFailure("dispute transition failed", { dispute: dispute.id, orderId: order.id, updateError });
+      }
+      if (!updated?.length) {
+        const { data: current, error: currentError } = await admin
+          .from("orders")
+          .select("status")
+          .eq("id", order.id)
+          .maybeSingle();
+        if (currentError || !current || !["disputed", "refunded"].includes(current.status)) {
+          persistenceFailure("dispute transition was not committed", {
+            dispute: dispute.id,
+            orderId: order.id,
+            current,
+            currentError,
+          });
+        }
+      }
     }
-    return;
+    return needsRetry ? "retry" : "committed";
   }
 
   if (dispute.status === "lost") {
@@ -302,54 +469,108 @@ export async function applyDisputeEvent(
     // as an external refund per order — which also reverses each seller's
     // transfer proportionally and reconciles the fee, instead of the platform
     // silently absorbing the chargeback while the seller keeps the proceeds.
-    const { data: fullOrders } = await admin
+    const { data: fullOrders, error: ordersError } = await admin
       .from("orders")
       .select("id, total_cents, refunded_cents")
       .in("id", orderIds);
+    if (ordersError) {
+      persistenceFailure("lost dispute order lookup failed", { dispute: dispute.id, ordersError });
+    }
+    if ((fullOrders?.length ?? 0) !== orderIds.length) return "retry";
     for (const order of fullOrders ?? []) {
       const remaining = order.total_cents - order.refunded_cents;
       if (remaining > 0) {
-        await recordExternalRefund(admin, {
-          orderId: order.id,
-          amountCents: remaining,
-          reason: `Card dispute lost (${dispute.id})`,
-        });
+        await applyAndVerifyExternalRefund(
+          admin,
+          {
+            orderId: order.id,
+            amountCents: remaining,
+            reason: `Card dispute lost (${dispute.id})`,
+          },
+          order.total_cents
+        );
       }
     }
-    return;
+    return "committed";
   }
 
   if (dispute.status === "won") {
-    const { data: orders } = await admin
+    const { data: orders, error: ordersError } = await admin
       .from("orders")
       .select("id, pre_dispute_status")
       .in("id", orderIds)
       .eq("status", "disputed");
+    if (ordersError) {
+      persistenceFailure("won dispute order lookup failed", { dispute: dispute.id, ordersError });
+    }
     for (const order of orders ?? []) {
-      await admin
+      const { data: updated, error: updateError } = await admin
         .from("orders")
         .update({
           status: order.pre_dispute_status ?? "paid",
           dispute_resolved_at: new Date().toISOString(),
         })
         .eq("id", order.id)
-        .eq("status", "disputed");
+        .eq("status", "disputed")
+        .select("id");
+      if (updateError) {
+        persistenceFailure("won dispute transition failed", { dispute: dispute.id, orderId: order.id, updateError });
+      }
+      if (!updated?.length) {
+        const { data: current, error: currentError } = await admin
+          .from("orders")
+          .select("status")
+          .eq("id", order.id)
+          .maybeSingle();
+        if (currentError || !current || current.status === "disputed") {
+          persistenceFailure("won dispute resolution was not committed", {
+            dispute: dispute.id,
+            orderId: order.id,
+            currentError,
+          });
+        }
+      }
     }
+    return "committed";
   }
-  // Other closed states (warning_closed etc.) change nothing.
+  // Stripe documents warning_closed as the third possible status on this
+  // event: the warning ended without a chargeback, so no money effect exists.
+  return dispute.status === "warning_closed" ? "irrelevant" : "retry";
 }
 
 /** The buyer owes a browser step (3DS) — reflect it on the payment rows. */
-export async function markRequiresAction(admin: Admin, intent: Stripe.PaymentIntent) {
-  await admin
+export async function markRequiresAction(
+  admin: Admin,
+  intent: Stripe.PaymentIntent
+): Promise<"committed" | "retry"> {
+  const { data: updated, error: updateError } = await admin
     .from("payments")
     .update({ status: "requires_action" })
     .eq("provider_reference", intent.id)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("id");
+  if (updateError) {
+    persistenceFailure("requires-action transition failed", { intent: intent.id, updateError });
+  }
+  if (updated?.length) return "committed";
+
+  const { data: existing, error: existingError } = await admin
+    .from("payments")
+    .select("status")
+    .eq("provider_reference", intent.id);
+  if (existingError) {
+    persistenceFailure("requires-action verification failed", { intent: intent.id, existingError });
+  }
+  if (!existing?.length) return "retry";
+  // A replay or an older event must not move a terminal payment backwards.
+  return existing.every((payment) => payment.status !== "pending") ? "committed" : "retry";
 }
 
 /** `account.updated` — Stripe's word on whether the seller is payable. */
-export async function applyAccountUpdate(admin: Admin, account: Stripe.Account) {
+export async function applyAccountUpdate(
+  admin: Admin,
+  account: Stripe.Account
+): Promise<"committed" | "retry"> {
   const payable = account.payouts_enabled === true;
   const { data: sellers, error } = await admin
     .from("profiles")
@@ -357,19 +578,23 @@ export async function applyAccountUpdate(admin: Admin, account: Stripe.Account) 
     .eq("stripe_account_id", account.id)
     .select("id");
   if (error) {
-    reportError("[stripe:webhook] failed to sync payouts_enabled", { account: account.id, error });
-    return;
+    persistenceFailure("failed to sync payouts_enabled", { account: account.id, error });
   }
+  if (!sellers?.length) return "retry";
 
   // A seller who just became payable unblocks their stuck funds eagerly —
   // the worker's next run pays them out instead of waiting on a retry cycle.
   if (payable && sellers?.length) {
-    await admin
+    const { error: unblockError } = await admin
       .from("transfer_intents")
       .update({ status: "ready", last_error: null })
       .in("seller_id", sellers.map((s) => s.id))
       .eq("status", "blocked_unpayable");
+    if (unblockError) {
+      persistenceFailure("payable seller transfer unblock failed", { account: account.id, unblockError });
+    }
   }
+  return "committed";
 }
 
 /**
@@ -379,17 +604,28 @@ export async function applyAccountUpdate(admin: Admin, account: Stripe.Account) 
  * processed again; every handler is idempotent, which is what makes that safe.
  */
 export async function claimWebhookEvent(admin: Admin, event: Stripe.Event): Promise<boolean> {
-  const { error } = await admin
+  const { data: claimed, error } = await admin
     .from("webhook_events")
     // Payload retained (0023) so the console can inspect and replay events.
-    .insert({ id: event.id, type: event.type, payload: event as unknown as null });
-  if (!error) return true;
+    .insert({ id: event.id, type: event.type, payload: event as unknown as null })
+    .select("id")
+    .maybeSingle();
+  if (!error && claimed?.id === event.id) return true;
+  if (!error) {
+    persistenceFailure("webhook claim did not persist a row", { event: event.id });
+  }
   if (error.code === "23505") {
-    const { data: existing } = await admin
+    const { data: existing, error: lookupError } = await admin
       .from("webhook_events")
       .select("processed_at")
       .eq("id", event.id)
       .maybeSingle();
+    if (lookupError || !existing) {
+      persistenceFailure("existing webhook claim could not be verified", {
+        event: event.id,
+        lookupError,
+      });
+    }
     return !existing?.processed_at; // reprocess only if the first pass died
   }
   reportError("[stripe:webhook] event dedup insert failed", { event: event.id, error });
@@ -397,52 +633,57 @@ export async function claimWebhookEvent(admin: Admin, event: Stripe.Event): Prom
 }
 
 export async function markWebhookEventProcessed(admin: Admin, eventId: string): Promise<void> {
-  const { error } = await admin
+  const { data, error } = await admin
     .from("webhook_events")
     .update({ processed_at: new Date().toISOString() })
-    .eq("id", eventId);
-  if (error) throw new Error("Webhook completion could not be persisted");
+    .eq("id", eventId)
+    .select("id");
+  if (error || !data?.length) throw new Error("Webhook completion could not be persisted");
 }
 
 /**
  * The one place a Stripe event maps to handlers — shared by the webhook route
  * (live delivery) and the console's replay action (0023 payload retention).
- * "partial" means a finalize genuinely failed and the event should be retried;
- * every handler is idempotent, so replaying an already-applied event is safe.
+ * Every result states who owns the event now. Only committed effects, durable
+ * recovery, and intentionally irrelevant types may be acknowledged; `retry`
+ * remains unprocessed. Handlers use transactions, status guards, or unique
+ * recovery identities so replaying an already-applied event is safe.
  */
 export async function dispatchStripeEvent(
   admin: Admin,
   event: Stripe.Event
-): Promise<"ok" | "partial" | "ignored"> {
+): Promise<StripeDispatchOutcome> {
   switch (event.type) {
-    case "payment_intent.succeeded":
-    case "payment_intent.payment_failed": {
+    case "payment_intent.succeeded": {
       const intent = event.data.object as Stripe.PaymentIntent;
       try {
-        const allApplied = await settleIntent(admin, intent, event.type === "payment_intent.succeeded");
-        return allApplied ? "ok" : "partial";
+        const allApplied = await settleIntent(admin, intent, true);
+        return allApplied ? "committed" : "retry";
       } catch (error) {
-        if (!(error instanceof CaptureMismatch) || event.type !== "payment_intent.succeeded") throw error;
+        if (!(error instanceof CaptureMismatch)) throw error;
         await recordCaptureRecovery(admin, `capture:${intent.id}`, error.message, intent.amount_received);
-        return "ok"; // A durable operator obligation now owns this capture.
+        return "recovery_recorded"; // A durable operator obligation now owns this capture.
       }
     }
+    // A failed attempt is not a terminal PaymentIntent. Reservation expiry or
+    // a later successful capture owns the local transition.
+    case "payment_intent.payment_failed":
+      return "irrelevant";
     case "payment_intent.requires_action":
-      await markRequiresAction(admin, event.data.object as Stripe.PaymentIntent);
-      return "ok";
+      return markRequiresAction(admin, event.data.object as Stripe.PaymentIntent);
     case "charge.refunded":
-      await applyChargeRefund(admin, event.data.object as Stripe.Charge);
-      return "ok";
+      return applyChargeRefund(admin, event.data.object as Stripe.Charge, event);
+    case "refund.created":
+    case "refund.updated":
+    case "refund.failed":
+      return applyRefundLifecycleEvent(admin, event, event.data.object as Stripe.Refund);
     case "charge.dispute.created":
-      await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false);
-      return "ok";
+      return applyDisputeEvent(admin, event.data.object as Stripe.Dispute, false);
     case "charge.dispute.closed":
-      await applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true);
-      return "ok";
+      return applyDisputeEvent(admin, event.data.object as Stripe.Dispute, true);
     case "account.updated":
-      await applyAccountUpdate(admin, event.data.object as Stripe.Account);
-      return "ok";
+      return applyAccountUpdate(admin, event.data.object as Stripe.Account);
     default:
-      return "ignored";
+      return "irrelevant";
   }
 }

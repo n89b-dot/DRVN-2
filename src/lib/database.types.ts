@@ -1042,7 +1042,10 @@ export type PaymentRecoveryKind =
   | "partial_refund_unattributed"
   | "transfer_after_refund"
   | "negative_balance"
-  | "capture_unresolved";
+  | "capture_unresolved"
+  | "transfer_unresolved"
+  | "refund_lifecycle_unresolved"
+  | "refund_late_failure";
 
 export type PaymentRecovery = {
   id: string;
@@ -1192,6 +1195,9 @@ type RefinedRow<K extends keyof GeneratedTables> = {
 type NullableArgs = {
   begin_admin_external_operation: "p_order";
   begin_refund_operation: "p_amount_cents" | "p_payment_reference" | "p_refund_reference";
+  complete_transfer_intent: "p_operation_key";
+  release_transfer_intent: "p_attempts" | "p_last_error" | "p_next_attempt_at";
+  record_refund_provider_event: "p_operation_id" | "p_order_id" | "p_payment_reference" | "p_balance_transaction" | "p_failure_balance_transaction" | "p_failure_reason" | "p_pending_reason";
   settle_payment_capture: "p_source";
   purchase_begin: "p_idempotency_key";
   purchase_finalize: "p_reference" | "p_failure_reason";

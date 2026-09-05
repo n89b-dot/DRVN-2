@@ -13,7 +13,7 @@ describe("durable capture recovery", () => {
   it("acknowledges a mismatched capture only after its recovery record commits", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: "recovery-id", error: null });
     const event = { type: "payment_intent.succeeded", data: { object: { ...intent, amount_received: 100 } } } as Stripe.Event;
-    expect(await dispatchStripeEvent({ rpc } as never, event)).toBe("ok");
+    expect(await dispatchStripeEvent({ rpc } as never, event)).toBe("recovery_recorded");
     expect(rpc.mock.calls[0][0]).toBe("record_capture_recovery");
     rpc.mockResolvedValue({ error: { code: "08006" } });
     await expect(dispatchStripeEvent({ rpc } as never, event)).rejects.toThrow("retry required");

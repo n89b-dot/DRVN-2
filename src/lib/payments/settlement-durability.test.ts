@@ -1,0 +1,643 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type Stripe from "stripe";
+
+const paymentMocks = vi.hoisted(() => ({
+  recordExternalRefund: vi.fn(),
+  runRefundOperation: vi.fn(),
+}));
+const alertMocks = vi.hoisted(() => ({ sendAdminAlert: vi.fn() }));
+const stripeMocks = vi.hoisted(() => ({ listRefunds: vi.fn() }));
+
+vi.mock("./refunds", () => paymentMocks);
+vi.mock("@/lib/admin/alerts", () => alertMocks);
+vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
+vi.mock("./stripe", () => ({
+  stripeClient: () => ({ refunds: { list: stripeMocks.listRefunds } }),
+}));
+
+import {
+  applyAccountUpdate,
+  applyChargeRefund,
+  applyDisputeEvent,
+  applyRefundLifecycleEvent,
+  claimWebhookEvent,
+  markRequiresAction,
+  markWebhookEventProcessed,
+} from "./settlement";
+
+type QueryResult = { data: unknown; error: unknown };
+
+function query(result: QueryResult) {
+  const builder: Record<string, unknown> = {};
+  for (const method of ["select", "insert", "upsert", "update", "eq", "in", "is"]) {
+    builder[method] = vi.fn(() => builder);
+  }
+  builder.maybeSingle = vi.fn(async () => result);
+  builder.then = (resolve: (value: QueryResult) => unknown, reject: (reason: unknown) => unknown) =>
+    Promise.resolve(result).then(resolve, reject);
+  return builder;
+}
+
+function adminWith(...results: QueryResult[]) {
+  const builders = results.map(query);
+  return {
+    from: vi.fn(() => {
+      const next = builders.shift();
+      if (!next) throw new Error("Unexpected database query");
+      return next;
+    }),
+  };
+}
+
+function adminWithRpc(rpcResults: QueryResult[], ...results: QueryResult[]) {
+  const admin = adminWith(...results);
+  return {
+    ...admin,
+    rpc: vi.fn(async () => {
+      const next = rpcResults.shift();
+      if (!next) throw new Error("Unexpected RPC call");
+      return next;
+    }),
+  };
+}
+
+function refundedCharge(overrides: Partial<Stripe.Charge> = {}): Stripe.Charge {
+  return {
+    id: "ch_1",
+    payment_intent: "pi_1",
+    amount_refunded: 500,
+    refunded: false,
+    refunds: { data: [] },
+    ...overrides,
+  } as unknown as Stripe.Charge;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  paymentMocks.recordExternalRefund.mockResolvedValue({ applied: true });
+  paymentMocks.runRefundOperation.mockResolvedValue({ ok: true });
+  alertMocks.sendAdminAlert.mockResolvedValue(undefined);
+  stripeMocks.listRefunds.mockResolvedValue({ data: [], has_more: false });
+});
+
+describe("webhook persistence failures", () => {
+  it("does not treat a failed payment lookup as an unknown refund", async () => {
+    const admin = adminWith({ data: null, error: { code: "08006" } });
+    await expect(applyChargeRefund(admin as never, refundedCharge())).rejects.toThrow(
+      "refund payment lookup failed; retry required"
+    );
+    expect(alertMocks.sendAdminAlert).not.toHaveBeenCalled();
+  });
+
+  it("opens durable recovery when a successful refund is absent from the ledger", async () => {
+    const row = {
+      id: "pay_1",
+      order_id: "order_1",
+      amount_cents: 500,
+      refunded_cents: 0,
+      status: "succeeded",
+    };
+    const admin = adminWithRpc(
+      [{ data: { action: "settle", operation_id: "op_1" }, error: null }],
+      { data: [row], error: null },
+      { data: [row], error: null },
+      { data: { id: "recovery_1" }, error: null }
+    );
+    const charge = refundedCharge({
+      refunds: {
+        data: [
+          {
+            id: "re_1",
+            amount: 500,
+            status: "succeeded",
+            metadata: { order_id: "order_1" },
+          } as unknown as Stripe.Refund,
+        ],
+      } as Stripe.ApiList<Stripe.Refund>,
+    });
+
+    await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("recovery_recorded");
+  });
+
+  it("uses one stable provider identity for recovery across replays", async () => {
+    const first = adminWith(
+      { data: [], error: null },
+      { data: { id: "recovery_1" }, error: null }
+    );
+    const second = adminWith(
+      { data: [], error: null },
+      { data: { id: "recovery_1" }, error: null }
+    );
+    const charge = refundedCharge();
+
+    await expect(applyChargeRefund(first as never, charge)).resolves.toBe("recovery_recorded");
+    await expect(applyChargeRefund(second as never, charge)).resolves.toBe("recovery_recorded");
+
+    const firstUpsert = (first.from.mock.results[1].value.upsert as ReturnType<typeof vi.fn>);
+    const secondUpsert = (second.from.mock.results[1].value.upsert as ReturnType<typeof vi.fn>);
+    expect(firstUpsert.mock.calls[0][0].recovery_key).toBe("stripe:charge-refund:ch_1:500");
+    expect(secondUpsert.mock.calls[0][0].recovery_key).toBe("stripe:charge-refund:ch_1:500");
+    expect(firstUpsert.mock.calls[0][1]).toEqual({ onConflict: "recovery_key" });
+  });
+
+  it("fetches and books the complete refund collection when Stripe truncates the charge", async () => {
+    const row = {
+      id: "pay_1",
+      order_id: "order_1",
+      amount_cents: 1_000,
+      refunded_cents: 0,
+      status: "succeeded",
+    };
+    const booked = { ...row, refunded_cents: 500, status: "partially_refunded" };
+    const admin = adminWithRpc(
+      [{ data: { action: "settle", operation_id: "op_full" }, error: null }],
+      { data: [row], error: null },
+      { data: [booked], error: null }
+    );
+    stripeMocks.listRefunds.mockResolvedValue({
+      data: [
+        {
+          id: "re_full_page",
+          amount: 500,
+          currency: "usd",
+          status: "succeeded",
+          metadata: { order_id: "order_1" },
+        },
+      ],
+      has_more: false,
+    });
+    const charge = refundedCharge({
+      refunds: { data: [], has_more: true } as unknown as Stripe.ApiList<Stripe.Refund>,
+    });
+
+    await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("committed");
+    expect(stripeMocks.listRefunds).toHaveBeenCalledWith({ charge: "ch_1", limit: 100 });
+    expect(admin.rpc).toHaveBeenCalledWith(
+      "record_refund_provider_event",
+      expect.objectContaining({ p_refund_reference: "re_full_page", p_amount_cents: 500 })
+    );
+    expect(paymentMocks.recordExternalRefund).not.toHaveBeenCalled();
+  });
+
+  it("retries instead of acknowledging when full refund pagination is unavailable", async () => {
+    stripeMocks.listRefunds.mockRejectedValue(new Error("network timeout"));
+    const charge = refundedCharge({
+      refunds: { data: [], has_more: true } as unknown as Stripe.ApiList<Stripe.Refund>,
+    });
+    await expect(applyChargeRefund(adminWith() as never, charge)).resolves.toBe("retry");
+  });
+
+  it("journals operation-backed and external refunds separately before ack", async () => {
+    const before = {
+      id: "pay_1",
+      order_id: "order_1",
+      amount_cents: 1_000,
+      refunded_cents: 0,
+      status: "succeeded",
+    };
+    const fullyApplied = { ...before, refunded_cents: 500, status: "partially_refunded" };
+    const admin = adminWithRpc(
+      [
+        { data: { action: "settle", operation_id: "op_1" }, error: null },
+        { data: { action: "settle", operation_id: "op_2" }, error: null },
+      ],
+      { data: [before], error: null },
+      { data: [fullyApplied], error: null }
+    );
+    const charge = refundedCharge({
+      amount_refunded: 500,
+      refunds: {
+        data: [
+          {
+            id: "re_operation",
+            amount: 300,
+            currency: "usd",
+            status: "succeeded",
+            metadata: { operation_id: "op_1" },
+          },
+          {
+            id: "re_external",
+            amount: 200,
+            currency: "usd",
+            status: "succeeded",
+            metadata: { order_id: "order_1" },
+          },
+        ],
+      } as unknown as Stripe.ApiList<Stripe.Refund>,
+    });
+
+    await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("committed");
+    expect(admin.rpc).toHaveBeenCalledTimes(2);
+    expect(paymentMocks.runRefundOperation).toHaveBeenCalledTimes(2);
+    expect(paymentMocks.recordExternalRefund).not.toHaveBeenCalled();
+  });
+
+  it("does not advance an operation whose immutable provider mapping mismatches", async () => {
+    const payment = {
+      id: "pay_1",
+      order_id: "order_1",
+      amount_cents: 1_000,
+      refunded_cents: 0,
+      status: "succeeded",
+    };
+    const admin = adminWithRpc(
+      [{ data: { action: "recovery_recorded", reason: "operation_mismatch" }, error: null }],
+      { data: [payment], error: null },
+      { data: [payment], error: null }
+    );
+    const charge = refundedCharge({
+      refunds: {
+        data: [
+          {
+            id: "re_1",
+            amount: 300,
+            currency: "usd",
+            status: "succeeded",
+            metadata: { operation_id: "op_other" },
+          },
+        ],
+      } as unknown as Stripe.ApiList<Stripe.Refund>,
+    });
+
+    await expect(applyChargeRefund(admin as never, charge)).resolves.toBe("recovery_recorded");
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+    expect(admin.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles charge.refunded before the matching refund event without double settlement", async () => {
+    const payment = {
+      id: "pay_1",
+      order_id: "order_1",
+      amount_cents: 1_000,
+      refunded_cents: 0,
+      status: "succeeded",
+    };
+    const chargeAdmin = adminWithRpc(
+      [{ data: { action: "settle", operation_id: "op_1" }, error: null }],
+      { data: [payment], error: null },
+      { data: [{ ...payment, refunded_cents: 300 }], error: null }
+    );
+    const charge = refundedCharge({
+      amount_refunded: 300,
+      refunds: {
+        data: [
+          {
+            id: "re_1",
+            amount: 300,
+            currency: "usd",
+            status: "succeeded",
+            metadata: { operation_id: "op_1" },
+          },
+        ],
+      } as unknown as Stripe.ApiList<Stripe.Refund>,
+    });
+
+    await expect(applyChargeRefund(chargeAdmin as never, charge)).resolves.toBe("committed");
+    expect(paymentMocks.runRefundOperation).toHaveBeenCalledTimes(1);
+
+    paymentMocks.runRefundOperation.mockClear();
+    const directEvent = {
+      id: "evt_refund_after_charge",
+      created: 1_800_000_100,
+      type: "refund.updated",
+      data: { object: charge.refunds!.data[0] },
+    } as unknown as Stripe.Event;
+    const replayAdmin = adminWithRpc([
+      { data: { action: "committed", operation_id: "op_1", replayed: true }, error: null },
+    ]);
+    await expect(
+      applyRefundLifecycleEvent(
+        replayAdmin as never,
+        directEvent,
+        directEvent.data.object as Stripe.Refund
+      )
+    ).resolves.toBe("committed");
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+  });
+
+  it("handles the exact refund event before charge.refunded without double settlement", async () => {
+    const refund = {
+      id: "re_event_first",
+      amount: 300,
+      currency: "usd",
+      status: "succeeded",
+      payment_intent: "pi_1",
+      metadata: {},
+      created: 1_800_000_000,
+    } as unknown as Stripe.Refund;
+    const event = {
+      id: "evt_refund_first",
+      created: 1_800_000_010,
+      type: "refund.updated",
+      data: { object: refund },
+    } as unknown as Stripe.Event;
+    const directAdmin = adminWithRpc(
+      [{ data: { action: "settle", operation_id: "op_event_first" }, error: null }],
+      { data: [{ order_id: "order_1" }], error: null }
+    );
+    await expect(applyRefundLifecycleEvent(directAdmin as never, event, refund)).resolves.toBe(
+      "committed"
+    );
+
+    paymentMocks.runRefundOperation.mockClear();
+    const payment = {
+      id: "pay_1",
+      order_id: "order_1",
+      amount_cents: 1_000,
+      refunded_cents: 300,
+      status: "partially_refunded",
+    };
+    const chargeAdmin = adminWithRpc(
+      [{ data: { action: "committed", operation_id: "op_event_first" }, error: null }],
+      { data: [payment], error: null },
+      { data: [{ order_id: "order_1" }], error: null },
+      { data: [payment], error: null }
+    );
+    const charge = refundedCharge({
+      amount_refunded: 300,
+      refunds: { data: [refund], has_more: false } as Stripe.ApiList<Stripe.Refund>,
+    });
+    await expect(applyChargeRefund(chargeAdmin as never, charge)).resolves.toBe("committed");
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+  });
+
+  it("requires recovery persistence before returning a recovery outcome", async () => {
+    const admin = adminWith(
+      { data: [], error: null },
+      { data: null, error: { code: "08006" } }
+    );
+    await expect(applyChargeRefund(admin as never, refundedCharge())).rejects.toThrow(
+      "refund recovery could not be persisted; retry required"
+    );
+  });
+
+  it("returns retry for a dispute whose local mapping is not present yet", async () => {
+    const admin = adminWith({ data: [], error: null });
+    const dispute = { id: "dp_1", payment_intent: "pi_late" } as Stripe.Dispute;
+    await expect(applyDisputeEvent(admin as never, dispute, false)).resolves.toBe("retry");
+  });
+
+  it("replays safely after the second order in a dispute fails to update", async () => {
+    const dispute = {
+      id: "dp_multi",
+      payment_intent: "pi_multi",
+      reason: "fraudulent",
+    } as Stripe.Dispute;
+    const firstAttempt = adminWith(
+      {
+        data: [{ order_id: "order_1" }, { order_id: "order_2" }],
+        error: null,
+      },
+      {
+        data: [
+          { id: "order_1", status: "paid", dispute_resolved_at: null },
+          { id: "order_2", status: "paid", dispute_resolved_at: null },
+        ],
+        error: null,
+      },
+      { data: [{ id: "order_1" }], error: null },
+      { data: null, error: { code: "08006" } }
+    );
+    await expect(applyDisputeEvent(firstAttempt as never, dispute, false)).rejects.toThrow(
+      "dispute transition failed; retry required"
+    );
+
+    const replay = adminWith(
+      {
+        data: [{ order_id: "order_1" }, { order_id: "order_2" }],
+        error: null,
+      },
+      {
+        data: [
+          { id: "order_1", status: "disputed", dispute_resolved_at: null },
+          { id: "order_2", status: "paid", dispute_resolved_at: null },
+        ],
+        error: null,
+      },
+      { data: [{ id: "order_2" }], error: null }
+    );
+    await expect(applyDisputeEvent(replay as never, dispute, false)).resolves.toBe("committed");
+  });
+
+  it("accepts a concurrent dispute transition only after verifying its state", async () => {
+    const admin = adminWith(
+      { data: [{ order_id: "order_1" }], error: null },
+      { data: [{ id: "order_1", status: "paid", dispute_resolved_at: null }], error: null },
+      { data: [], error: null },
+      { data: { status: "disputed", dispute_resolved_at: null }, error: null }
+    );
+    const dispute = {
+      id: "dp_concurrent",
+      payment_intent: "pi_1",
+      reason: "fraudulent",
+    } as Stripe.Dispute;
+    await expect(applyDisputeEvent(admin as never, dispute, false)).resolves.toBe("committed");
+  });
+
+  it("opens a new Stripe dispute after an earlier in-app dispute was resolved", async () => {
+    const admin = adminWith(
+      { data: [{ order_id: "order_1" }], error: null },
+      { data: [{ id: "order_1", status: "paid" }], error: null },
+      { data: [{ id: "order_1" }], error: null }
+    );
+    const dispute = {
+      id: "dp_new",
+      payment_intent: "pi_1",
+      reason: "fraudulent",
+    } as Stripe.Dispute;
+
+    await expect(applyDisputeEvent(admin as never, dispute, false)).resolves.toBe("committed");
+    const update = admin.from.mock.results[2].value.update as ReturnType<typeof vi.fn>;
+    expect(update.mock.calls[0][0]).toMatchObject({
+      status: "disputed",
+      dispute_resolved_at: null,
+      dispute_outcome: null,
+    });
+  });
+
+  it("does not overwrite a concurrent terminal status while closing a won dispute", async () => {
+    const admin = adminWith(
+      { data: [{ order_id: "order_1" }], error: null },
+      { data: [{ id: "order_1", pre_dispute_status: "paid" }], error: null },
+      { data: [], error: null },
+      { data: { status: "refunded" }, error: null }
+    );
+    const dispute = {
+      id: "dp_won",
+      payment_intent: "pi_1",
+      status: "won",
+    } as Stripe.Dispute;
+
+    await expect(applyDisputeEvent(admin as never, dispute, true)).resolves.toBe("committed");
+    const updateBuilder = admin.from.mock.results[2].value;
+    expect(updateBuilder.eq).toHaveBeenCalledWith("status", "disputed");
+  });
+
+  it("does not swallow a requires-action write failure", async () => {
+    const admin = adminWith({ data: null, error: { code: "08006" } });
+    await expect(
+      markRequiresAction(admin as never, { id: "pi_1" } as Stripe.PaymentIntent)
+    ).rejects.toThrow("requires-action transition failed; retry required");
+  });
+
+  it("does not acknowledge a failed account capability sync", async () => {
+    const admin = adminWith({ data: null, error: { code: "08006" } });
+    await expect(
+      applyAccountUpdate(
+        admin as never,
+        { id: "acct_1", payouts_enabled: true } as Stripe.Account
+      )
+    ).rejects.toThrow("failed to sync payouts_enabled; retry required");
+  });
+
+  it("does not acknowledge when unblocking a payable seller fails", async () => {
+    const admin = adminWith(
+      { data: [{ id: "seller_1" }], error: null },
+      { data: null, error: { code: "08006" } }
+    );
+    await expect(
+      applyAccountUpdate(
+        admin as never,
+        { id: "acct_1", payouts_enabled: true } as Stripe.Account
+      )
+    ).rejects.toThrow("payable seller transfer unblock failed; retry required");
+  });
+});
+
+describe("refund lifecycle dispatch", () => {
+  const orderId = "11111111-1111-4111-8111-111111111111";
+  const operationId = "22222222-2222-4222-8222-222222222222";
+
+  function lifecycleEvent(id: string, status: string): Stripe.Event {
+    return {
+      id,
+      created: 1_800_000_000,
+      type: status === "failed" ? "refund.failed" : "refund.updated",
+      data: {
+        object: {
+          id: "re_async",
+          object: "refund",
+          amount: 700,
+          currency: "usd",
+          status,
+          payment_intent: "pi_async",
+          metadata: { order_id: orderId, operation_id: operationId },
+          balance_transaction: status === "succeeded" ? "txn_refund" : null,
+          failure_balance_transaction: status === "failed" ? "txn_restore" : null,
+          failure_reason: status === "failed" ? "insufficient_funds" : undefined,
+          pending_reason: status === "pending" ? "processing" : undefined,
+        },
+      },
+    } as unknown as Stripe.Event;
+  }
+
+  it("durably retains pending identity without settling local effects", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: { action: "pending", operation_id: operationId },
+      error: null,
+    });
+    const event = lifecycleEvent("evt_pending", "pending");
+
+    await expect(
+      applyRefundLifecycleEvent({ rpc } as never, event, event.data.object as Stripe.Refund)
+    ).resolves.toBe("committed");
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith(
+      "record_refund_provider_event",
+      expect.objectContaining({
+        p_event_id: "evt_pending",
+        p_refund_reference: "re_async",
+        p_operation_id: operationId,
+        p_order_id: orderId,
+        p_amount_cents: 700,
+        p_currency: "usd",
+        p_provider_status: "pending",
+      })
+    );
+  });
+
+  it("settles only after a succeeded lifecycle event", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: { action: "settle", operation_id: operationId },
+      error: null,
+    });
+    paymentMocks.runRefundOperation.mockResolvedValueOnce({ ok: true });
+    const event = lifecycleEvent("evt_succeeded", "succeeded");
+
+    await expect(
+      applyRefundLifecycleEvent({ rpc } as never, event, event.data.object as Stripe.Refund)
+    ).resolves.toBe("committed");
+    expect(paymentMocks.runRefundOperation).toHaveBeenCalledWith(expect.anything(), operationId);
+  });
+
+  it("acknowledges a later failure only after its recovery is committed", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: { action: "recovery_recorded", operation_id: operationId, compensated: true },
+      error: null,
+    });
+    const event = lifecycleEvent("evt_failed", "failed");
+
+    await expect(
+      applyRefundLifecycleEvent({ rpc } as never, event, event.data.object as Stripe.Refund)
+    ).resolves.toBe("recovery_recorded");
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+  });
+
+  it("does not acknowledge a lifecycle event when the atomic receipt write fails", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: "connection lost" } });
+    const event = lifecycleEvent("evt_lost", "succeeded");
+
+    await expect(
+      applyRefundLifecycleEvent({ rpc } as never, event, event.data.object as Stripe.Refund)
+    ).rejects.toThrow("refund lifecycle event was not committed; retry required");
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+  });
+
+  it("routes malformed local metadata to recovery instead of adopting by refund id", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: { action: "recovery_recorded", reason: "unknown_operation" },
+      error: null,
+    });
+    const event = lifecycleEvent("evt_bad_metadata", "succeeded");
+    const object = event.data.object as Stripe.Refund;
+    object.metadata = { operation_id: "not-a-uuid", order_id: "also-invalid" };
+
+    await expect(applyRefundLifecycleEvent({ rpc } as never, event, object)).resolves.toBe(
+      "recovery_recorded"
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      "record_refund_provider_event",
+      expect.objectContaining({
+        p_operation_id: "00000000-0000-4000-8000-000000000000",
+        p_order_id: null,
+      })
+    );
+    expect(paymentMocks.runRefundOperation).not.toHaveBeenCalled();
+  });
+});
+
+describe("webhook claim and completion", () => {
+  const event = { id: "evt_1", type: "charge.refunded" } as Stripe.Event;
+
+  it("does not process a duplicate when its existing claim cannot be read", async () => {
+    const admin = adminWith(
+      { data: null, error: { code: "23505" } },
+      { data: null, error: { code: "08006" } }
+    );
+    await expect(claimWebhookEvent(admin as never, event)).rejects.toThrow("retry required");
+  });
+
+  it("rejects a claim insert that reports success without an affected row", async () => {
+    const admin = adminWith({ data: null, error: null });
+    await expect(claimWebhookEvent(admin as never, event)).rejects.toThrow(
+      "webhook claim did not persist a row; retry required"
+    );
+  });
+
+  it("rejects a processed marker that affected no event", async () => {
+    const admin = adminWith({ data: [], error: null });
+    await expect(markWebhookEventProcessed(admin as never, event.id)).rejects.toThrow(
+      "Webhook completion could not be persisted"
+    );
+  });
+});

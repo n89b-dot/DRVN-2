@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import Stripe from "stripe";
 import { beforeAll, describe, expect, it } from "vitest";
+import { assertIsolatedTestTarget } from "../support/test-target";
 
 /**
  * Stripe test-mode integration (brief §A2): proves DRVN's payment layer
@@ -30,12 +31,10 @@ function loadLocalEnv() {
 }
 loadLocalEnv();
 const ref = process.env.E2E_TEST_PROJECT_REF;
-const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "https://unconfigured.invalid");
-const isolated = ref === "local-drvn-remediation" ? ["127.0.0.1", "localhost"].includes(host.hostname) && host.port === "54321" : Boolean(ref && host.hostname === `${ref}.supabase.co`);
 
 const key = process.env.STRIPE_SECRET_KEY ?? "";
 const hasTestKey = key.startsWith("sk_test_");
-if (hasTestKey && !isolated) throw new Error("Stripe integration requires an explicitly isolated Supabase test database.");
+if (hasTestKey) assertIsolatedTestTarget({ url: process.env.NEXT_PUBLIC_SUPABASE_URL, projectRef: ref });
 
 if (key && !hasTestKey) {
   throw new Error(
@@ -262,19 +261,19 @@ suite("Stripe test-mode integration", () => {
     // Partial refund with a cumulative-deterministic key (the refunds.ts shape).
     const keyA = `refund:${intent.id}:2000`;
     const partial = await refundFn(intent.id, 2_000, { idempotencyKey: keyA });
-    expect(partial.status).toBe("refunded");
-    if (partial.status !== "refunded") return;
+    expect(partial.status).toBe("succeeded");
+    if (partial.status !== "succeeded") return;
     expect(partial.amountCents).toBe(2_000);
 
     // Replaying the same operation returns the SAME refund — no double money.
     const replay = await refundFn(intent.id, 2_000, { idempotencyKey: keyA });
-    expect(replay.status).toBe("refunded");
-    if (replay.status !== "refunded") return;
+    expect(replay.status).toBe("succeeded");
+    if (replay.status !== "succeeded") return;
     expect(replay.reference).toBe(partial.reference);
 
     // Refund the remainder under a new cumulative key.
     const rest = await refundFn(intent.id, 8_000, { idempotencyKey: `refund:${intent.id}:10000` });
-    expect(rest.status).toBe("refunded");
+    expect(rest.status).toBe("succeeded");
 
     const charge = await stripe.charges.retrieve(
       typeof intent.latest_charge === "string" ? intent.latest_charge : intent.latest_charge!.id
@@ -296,8 +295,8 @@ suite("Stripe test-mode integration", () => {
       idempotencyKey: `refund:${intent.id}:meta`,
       metadata: { order_id: oid, operation_id: "op-int-test" },
     });
-    expect(result.status).toBe("refunded");
-    if (result.status !== "refunded") return;
+    expect(result.status).toBe("succeeded");
+    if (result.status !== "succeeded" || !result.reference) return;
     const refund = await stripe.refunds.retrieve(result.reference);
     expect(refund.metadata?.order_id).toBe(oid);
     expect(refund.metadata?.operation_id).toBe("op-int-test");
@@ -313,6 +312,6 @@ describe("webhook dispatcher shape (no network)", () => {
       type: "customer.created",
       data: { object: {} },
     } as never);
-    expect(outcome).toBe("ignored");
+    expect(outcome).toBe("irrelevant");
   });
 });

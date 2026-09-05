@@ -2,14 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 
-import type Stripe from "stripe";
-
 import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { processDisputeSla } from "@/lib/payments/dispute-sla";
-import { dispatchStripeEvent } from "@/lib/payments/settlement";
+import { markWebhookEventProcessed } from "@/lib/payments/settlement";
+import { dispatchRecordedWebhookEvent } from "./replay-webhook";
 import { processDueTransfers } from "@/lib/payments/transfer-worker";
 import { getAdminContext } from "./guard";
 import { refundOrder } from "@/lib/payments/refunds";
@@ -776,8 +775,8 @@ export async function adminResolveReports(
 // ---------- Webhook replay ----------
 
 /**
- * Re-run a recorded Stripe event through the same idempotent handlers the
- * live webhook uses (dispatchStripeEvent). For investigations where an event
+ * Re-run a recorded Stripe or EasyPost event through the same handlers the
+ * live webhook uses. For investigations where an event
  * half-applied — replaying an already-applied event is a no-op by design.
  * Events recorded before payload retention (0023) cannot be replayed.
  */
@@ -805,33 +804,30 @@ export async function adminReplayWebhookEvent(
         reason: `${reason} (event ${eventId})`,
       },
       async () => {
-        const { data: row } = await ctx.admin
+        const { data: row, error: rowError } = await ctx.admin
           .from("webhook_events")
           .select("id, payload")
           .eq("id", eventId)
           .maybeSingle();
+        if (rowError) throw new Error("Event lookup failed — try again.");
         if (!row) throw new Error("Event not found.");
         if (!row.payload) {
           throw new Error("Recorded before payload retention (0023) — nothing stored to replay.");
         }
-        const result = await dispatchStripeEvent(ctx.admin, row.payload as Stripe.Event);
-        if (result === "ok") {
-          await ctx.admin
-            .from("webhook_events")
-            .update({ processed_at: new Date().toISOString() })
-            .eq("id", eventId);
-        }
+        const result = await dispatchRecordedWebhookEvent(ctx.admin, row.id, row.payload);
+        if (result === "retry") throw new Error("Replay needs another attempt; the event remains unprocessed.");
+        await markWebhookEventProcessed(ctx.admin, eventId);
         return { result };
       }
     );
     revalidatePath("/admin", "layout");
     return {
       ok:
-        outcome.result === "ok"
+        outcome.result === "committed"
           ? "Event replayed and applied."
-          : outcome.result === "partial"
-            ? "Replayed — some orders could not finalize; check recovery cases."
-            : "Replayed — event type has no handler (ignored).",
+          : outcome.result === "recovery_recorded"
+            ? "Event replayed; a durable recovery case owns the remaining work."
+            : "Replayed — event type is intentionally irrelevant.",
     };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Replay failed." };

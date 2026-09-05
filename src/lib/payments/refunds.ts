@@ -1,9 +1,10 @@
-import { getPaymentProvider } from "./provider";
-import { stripeClient, stripeSecretKey } from "./stripe";
+import { getPaymentProvider, type RefundResult } from "./provider";
+import { mapStripeRefundResult, stripeClient, stripeSecretKey } from "./stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 import type { DisputeOutcome } from "@/lib/database.types";
+import type Stripe from "stripe";
 
 /**
  * The one refund path — now a durable state machine (0026), not a sequence.
@@ -135,16 +136,18 @@ type RefundOpRow = {
   external: boolean;
   attempts: number;
   recovery_id: string | null;
+  provider_status: string | null;
 };
 
 async function loadOperation(admin: Admin, operationId: string): Promise<RefundOpRow | null> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("refund_operations")
     .select(
-      "id, order_id, payment_reference, amount_cents, currency, reason, requested_by, idempotency_key, refund_reference, reversal_reference, reversal_due_cents, status, external, attempts, recovery_id"
+      "id, order_id, payment_reference, amount_cents, currency, reason, requested_by, idempotency_key, refund_reference, reversal_reference, reversal_due_cents, status, external, attempts, recovery_id, provider_status"
     )
     .eq("id", operationId)
     .maybeSingle();
+  if (error) throw new Error("Refund operation lookup failed");
   return (data as RefundOpRow | null) ?? null;
 }
 
@@ -155,13 +158,145 @@ async function transition(
   from: import("@/lib/database.types").RefundOperationStatus[],
   fields: Record<string, unknown>
 ): Promise<boolean> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("refund_operations")
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq("id", operationId)
     .in("status", from)
     .select("id");
+  if (error) throw new Error("Refund operation transition failed");
   return Boolean(data?.length);
+}
+
+type ProviderEventAction = "pending" | "settle" | "committed" | "recovery_recorded";
+
+function refundUuid(value: string | undefined): string | null {
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
+export function providerRefundMatchesOperation(
+  op: Pick<RefundOpRow, "id" | "order_id" | "payment_reference" | "amount_cents" | "currency">,
+  result: RefundResult
+): boolean {
+  const operationId = refundUuid(result.operationId);
+  const orderId = refundUuid(result.orderId);
+  return Boolean(
+    operationId === op.id &&
+      (!result.orderId || orderId === op.order_id) &&
+      result.paymentReference === op.payment_reference &&
+      result.amountCents === op.amount_cents &&
+      result.currency?.toLowerCase() === op.currency.toLowerCase()
+  );
+}
+
+async function recordProviderMismatchRecovery(
+  admin: Admin,
+  op: RefundOpRow,
+  result: RefundResult,
+  detail: string
+): Promise<{ action: "recovery_recorded" }> {
+  const recoveryKey = `refund-lifecycle:${result.reference ?? op.id}`;
+  const { data, error } = await admin
+    .from("payment_recoveries")
+    .upsert(
+      {
+        kind: "refund_lifecycle_unresolved",
+        recovery_key: recoveryKey,
+        order_id: op.order_id,
+        amount_cents: result.amountCents ?? op.amount_cents,
+        detail,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "recovery_key" }
+    )
+    .select("id")
+    .maybeSingle();
+  if (error || !data?.id) throw new Error("Refund identity mismatch recovery was not persisted");
+  const stopped = await transition(admin, op.id, ["requested", "provider_pending"], {
+    status: "recovery_required",
+    recovery_id: data.id,
+    last_error: detail.slice(0, 500),
+  });
+  if (!stopped) {
+    const current = await loadOperation(admin, op.id);
+    if (!current || current.status !== "recovery_required") {
+      throw new Error("Mismatched refund operation was not stopped for recovery");
+    }
+  }
+  return { action: "recovery_recorded" };
+}
+
+async function recordProviderObservation(
+  admin: Admin,
+  op: RefundOpRow,
+  result: RefundResult,
+  eventId: string
+): Promise<{ action: ProviderEventAction; operation_id?: string }> {
+  if (
+    !result.reference ||
+    !result.amountCents ||
+    !result.currency ||
+    !result.createdAt ||
+    !result.paymentReference
+  ) {
+    throw new Error("Provider refund response is missing immutable identity fields");
+  }
+  const reportedOperationId = refundUuid(result.operationId);
+  const reportedOrderId = refundUuid(result.orderId);
+  if ((result.operationId && !reportedOperationId) || (result.orderId && !reportedOrderId)) {
+    return recordProviderMismatchRecovery(
+      admin,
+      op,
+      result,
+      `Refund ${result.reference} returned malformed order or operation metadata.`
+    );
+  }
+  if (!providerRefundMatchesOperation(op, result)) {
+    return recordProviderMismatchRecovery(
+      admin,
+      op,
+      result,
+      `Refund ${result.reference} does not match operation ${op.id}'s payment, amount, currency, or order.`
+    );
+  }
+  const { data, error } = await admin.rpc("record_refund_provider_event", {
+    p_event_id: eventId,
+    p_refund_reference: result.reference,
+    p_operation_id: reportedOperationId,
+    p_order_id: reportedOrderId,
+    p_payment_reference: result.paymentReference,
+    p_amount_cents: result.amountCents,
+    p_currency: result.currency,
+    p_provider_status: result.status,
+    p_provider_created_at: result.createdAt,
+    p_balance_transaction: result.balanceTransaction ?? null,
+    p_failure_balance_transaction: result.failureBalanceTransaction ?? null,
+    p_failure_reason: result.reason ?? null,
+    p_pending_reason: result.pendingReason ?? null,
+  });
+  if (error || !data) throw new Error(error?.message ?? "Refund lifecycle event was not persisted");
+  return data as { action: ProviderEventAction; operation_id?: string };
+}
+
+async function deferUnknownProviderOutcome(
+  admin: Admin,
+  op: RefundOpRow,
+  detail: string
+): Promise<void> {
+  const backoffMinutes = Math.min(2 ** Math.min(op.attempts, 6), 60);
+  const moved = await transition(admin, op.id, ["provider_pending"], {
+    attempts: op.attempts + 1,
+    next_attempt_at: new Date(Date.now() + backoffMinutes * 60_000).toISOString(),
+    last_error: detail.slice(0, 500),
+  });
+  if (!moved) {
+    const current = await loadOperation(admin, op.id);
+    if (!current || current.status === "requested") {
+      throw new Error("Uncertain refund outcome was not durably retained");
+    }
+  }
 }
 
 export async function refundOrder(
@@ -170,22 +305,24 @@ export async function refundOrder(
 ): Promise<RefundOrderOutcome> {
   const { orderId, reason, initiator } = input;
 
-  const { data: order } = await admin
+  const { data: order, error: orderError } = await admin
     .from("orders")
     .select("id, status, total_cents, refunded_cents")
     .eq("id", orderId)
     .maybeSingle();
+  if (orderError) return { ok: false, error: "The order could not be checked — try again." };
   if (!order) return { ok: false, error: "Order not found." };
 
   if (["pending", "requires_action", "payment_failed", "cancelled"].includes(order.status)) {
     return { ok: false, error: "No captured payment on this order to refund." };
   }
 
-  const { data: payment } = await admin
+  const { data: payment, error: paymentError } = await admin
     .from("payments")
     .select("id, provider_reference, amount_cents, refunded_cents, status")
     .eq("order_id", orderId)
     .maybeSingle();
+  if (paymentError) return { ok: false, error: "The payment could not be checked — try again." };
   if (!payment?.provider_reference) {
     return { ok: false, error: "No payment on file for this order." };
   }
@@ -266,12 +403,16 @@ export async function runRefundOperation(
     }
     const s = settled as {
       ok: boolean;
+      error?: string;
       status?: string;
       reversal_due_cents?: number;
       transfer_reference?: string | null;
       fully_refunded?: boolean;
       fee_refunded_delta?: number;
     };
+    if (!s.ok) {
+      return { ok: false, error: s.error ?? "Refund bookkeeping was refused." };
+    }
     feeDelta = s.fee_refunded_delta ?? 0;
     fullyRefunded = s.fully_refunded ?? false;
     transferReference = s.transfer_reference ?? null;
@@ -282,6 +423,16 @@ export async function runRefundOperation(
   let reversedCents = 0;
   let recoveryId = op.recovery_id ?? undefined;
   if (op.status === "reversal_pending") {
+    const current = await loadOperation(admin, op.id);
+    if (
+      !current ||
+      current.status !== "reversal_pending" ||
+      current.provider_status === "failed" ||
+      current.provider_status === "canceled"
+    ) {
+      return { ok: false, error: "Refund reversal stopped for lifecycle recovery." };
+    }
+    op = current;
     const result = await ensureReversal(admin, op, transferReference);
     reversedCents = result.reversedCents;
     recoveryId = result.recoveryId ?? recoveryId;
@@ -310,16 +461,12 @@ export async function runRefundOperation(
     };
   }
   if (op.status === "failed") {
-    return { ok: false, error: op.reason ? `Refund failed.` : "Refund failed." };
+    return { ok: false, error: "Refund failed." };
   }
-  return {
-    ok: true,
-    refundedCents: op.amount_cents,
-    reversedCents,
-    feeRefundedCents: feeDelta,
-    fullyRefunded,
-    recoveryId,
-  };
+  if (op.status === "provider_pending" || op.status === "requested") {
+    return { ok: false, error: "The refund is pending provider confirmation." };
+  }
+  return { ok: false, error: "The refund needs recovery before it can continue." };
 }
 
 /**
@@ -337,7 +484,14 @@ async function ensureProviderRefund(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const wasPending = op.status === "provider_pending";
   if (op.status === "requested") {
-    await transition(admin, op.id, ["requested"], { status: "provider_pending" });
+    const moved = await transition(admin, op.id, ["requested"], { status: "provider_pending" });
+    if (!moved) {
+      const current = await loadOperation(admin, op.id);
+      if (!current || current.status === "requested") {
+        return { ok: false, error: "The refund could not be durably queued." };
+      }
+      return { ok: true };
+    }
   }
 
   const provider = getPaymentProvider();
@@ -345,22 +499,46 @@ async function ensureProviderRefund(
   // Reconcile: did a previous attempt already create this refund?
   if (wasPending && op.payment_reference && stripeSecretKey() && !op.payment_reference.startsWith("stub_")) {
     try {
-      const existing = await stripeClient().refunds.list({
-        payment_intent: op.payment_reference,
-        limit: 100,
-      });
-      const match = existing.data.find((r) => r.metadata?.operation_id === op.id);
-      if (match) {
-        if (match.status === "failed" || match.status === "canceled") {
-          await failOperation(admin, op, `Stripe reports the refund ${match.id} ${match.status}.`);
-          return { ok: false, error: "The refund could not be processed." };
-        }
-        await transition(admin, op.id, ["provider_pending"], {
-          status: "provider_succeeded",
-          refund_reference: match.id,
-          provider_completed_at: new Date().toISOString(),
+      const matches: Stripe.Refund[] = [];
+      let startingAfter: string | undefined;
+      for (let page = 0; page < 10; page += 1) {
+        const listed = await stripeClient().refunds.list({
+          payment_intent: op.payment_reference,
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
         });
-        return { ok: true };
+        matches.push(...listed.data.filter((refund) => refund.metadata?.operation_id === op.id));
+        if (!listed.has_more) break;
+        const last = listed.data.at(-1);
+        if (!last || page === 9) throw new Error("Refund reconciliation exceeded its safe page bound");
+        startingAfter = last.id;
+      }
+
+      if (matches.length > 1) {
+        for (const match of matches) {
+          await recordProviderObservation(
+            admin,
+            op,
+            mapStripeRefundResult(match),
+            `stripe-reconcile:${match.id}:${match.status ?? "unknown"}`
+          );
+        }
+        return { ok: false, error: "Multiple provider refunds need manual reconciliation." };
+      }
+      const match = matches[0];
+      if (match) {
+        const observed = mapStripeRefundResult(match);
+        const recorded = await recordProviderObservation(
+          admin,
+          op,
+          observed,
+          `stripe-reconcile:${match.id}:${match.status ?? "unknown"}`
+        );
+        if (recorded.action === "settle" || recorded.action === "committed") return { ok: true };
+        if (recorded.action === "pending") {
+          return { ok: false, error: "The refund is pending provider confirmation." };
+        }
+        return { ok: false, error: "The provider refund needs recovery." };
       }
     } catch (error) {
       reportError("[refunds] refund reconcile lookup failed", { operationId: op.id, error });
@@ -386,56 +564,73 @@ async function ensureProviderRefund(
         reason: op.reason.slice(0, 480),
         initiated_by: op.requested_by,
       },
+      currency: op.currency,
     });
-    if (result.status === "refunded") {
-      await transition(admin, op.id, ["provider_pending"], {
-        status: "provider_succeeded",
-        refund_reference: result.reference || null,
-        provider_completed_at: new Date().toISOString(),
-      });
-      return { ok: true };
+    if (result.status === "unknown") {
+      await deferUnknownProviderOutcome(admin, op, result.reason ?? "Provider outcome is unknown");
+      return { ok: false, error: "The refund could not be confirmed — it will be reconciled." };
     }
-    failureReason = result.reason;
+    if ((result.status === "failed" || result.status === "canceled") && !result.reference) {
+      failureReason = result.reason ?? "The provider refused the refund.";
+      await failOperation(admin, op, failureReason);
+      return { ok: false, error: failureReason };
+    }
+    const recorded = await recordProviderObservation(
+      admin,
+      op,
+      result,
+      `refund-api:${result.reference}:${result.status}`
+    );
+    if (recorded.action === "settle" || recorded.action === "committed") return { ok: true };
+    if (recorded.action === "pending") {
+      return { ok: false, error: "The refund is pending provider confirmation." };
+    }
+    failureReason = result.reason ?? "The provider refund failed.";
   } catch (error) {
     reportError("[refunds] provider refund threw", { operationId: op.id, error });
     // Ambiguous outcome (timeout, network): leave provider_pending for the
     // resume sweep to reconcile — do NOT fail, the refund may exist.
-    await admin
-      .from("refund_operations")
-      .update({
-        last_error: error instanceof Error ? error.message : String(error),
-        attempts: op.attempts + 1,
-        next_attempt_at: new Date(Date.now() + 60_000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", op.id)
-      .eq("status", "provider_pending");
+    await deferUnknownProviderOutcome(
+      admin,
+      op,
+      error instanceof Error ? error.message : String(error)
+    );
     return { ok: false, error: "The refund could not be confirmed — it will be retried." };
   }
 
-  // Stripe answered with a definitive refusal: terminal, reservation released.
-  await failOperation(admin, op, failureReason);
+  // The lifecycle RPC persisted Stripe's terminal response and recovery
+  // obligation atomically. Do not create another local failure record here.
   return { ok: false, error: failureReason };
 }
 
 async function failOperation(admin: Admin, op: RefundOpRow, detail: string): Promise<void> {
-  const moved = await transition(admin, op.id, ["requested", "provider_pending"], {
-    status: "failed",
-    last_error: detail.slice(0, 500),
-  });
-  if (!moved) return;
-  const { data: recovery } = await admin
+  const recoveryKey = `refund-failed:${op.id}`;
+  const { data: recovery, error: recoveryError } = await admin
     .from("payment_recoveries")
-    .insert({
-      order_id: op.order_id,
-      kind: "refund_failed",
-      amount_cents: op.amount_cents,
-      detail: `${detail} (initiated by ${op.requested_by}: ${op.reason})`,
-    })
+    .upsert(
+      {
+        order_id: op.order_id,
+        kind: "refund_failed",
+        recovery_key: recoveryKey,
+        amount_cents: op.amount_cents,
+        detail: `${detail} (initiated by ${op.requested_by}: ${op.reason})`,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "recovery_key" }
+    )
     .select("id")
     .maybeSingle();
-  if (recovery?.id) {
-    await admin.from("refund_operations").update({ recovery_id: recovery.id }).eq("id", op.id);
+  if (recoveryError || !recovery?.id) throw new Error("Refund failure recovery was not persisted");
+  const moved = await transition(admin, op.id, ["requested", "provider_pending"], {
+    status: "failed",
+    recovery_id: recovery.id,
+    last_error: detail.slice(0, 500),
+  });
+  if (!moved) {
+    const current = await loadOperation(admin, op.id);
+    if (!current || current.status !== "failed" || current.recovery_id !== recovery.id) {
+      throw new Error("Refund failure recovery was not linked to its operation");
+    }
   }
   await sendAdminAlert({
     kind: "recovery_case_opened",
@@ -443,7 +638,7 @@ async function failOperation(admin: Admin, op: RefundOpRow, detail: string): Pro
     detail,
     orderId: op.order_id,
     amountCents: op.amount_cents,
-    dedupKey: `refund_failed:${op.id}`,
+    dedupKey: recoveryKey,
   });
 }
 
@@ -461,10 +656,16 @@ async function ensureReversal(
 ): Promise<{ ok: boolean; reversedCents: number; recoveryId?: string }> {
   const due = op.reversal_due_cents ?? 0;
   if (due <= 0) {
-    await transition(admin, op.id, ["reversal_pending"], {
+    const completed = await transition(admin, op.id, ["reversal_pending"], {
       status: "completed",
       reversal_completed_at: new Date().toISOString(),
     });
+    if (!completed) {
+      const current = await loadOperation(admin, op.id);
+      if (!current || current.status !== "completed") {
+        throw new Error("Zero-value reversal completion was not persisted");
+      }
+    }
     return { ok: true, reversedCents: 0 };
   }
 
@@ -472,19 +673,21 @@ async function ensureReversal(
   // field was never stamped (0019/0026 reconciliation) — check both.
   let transferReference = transferReferenceHint;
   if (!transferReference) {
-    const { data: order } = await admin
+    const { data: order, error: orderError } = await admin
       .from("orders")
       .select("transfer_reference")
       .eq("id", op.order_id)
       .maybeSingle();
+    if (orderError) throw new Error("Refund reversal order lookup failed");
     transferReference = order?.transfer_reference ?? null;
   }
   if (!transferReference) {
-    const { data: intent } = await admin
+    const { data: intent, error: intentError } = await admin
       .from("transfer_intents")
       .select("transfer_reference")
       .eq("order_id", op.order_id)
       .maybeSingle();
+    if (intentError) throw new Error("Refund reversal intent lookup failed");
     transferReference = intent?.transfer_reference ?? null;
   }
   if (!transferReference) {
@@ -508,15 +711,21 @@ async function ensureReversal(
       },
       { idempotencyKey: `trfrev:op:${op.id}` }
     );
-    await transition(admin, op.id, ["reversal_pending"], {
+    const completed = await transition(admin, op.id, ["reversal_pending"], {
       status: "completed",
       reversal_reference: reversal.id,
       reversal_completed_at: new Date().toISOString(),
       last_error: null,
     });
+    if (!completed) {
+      const current = await loadOperation(admin, op.id);
+      if (!current || current.status !== "completed" || current.reversal_reference !== reversal.id) {
+        throw new Error("Transfer reversal identity was not durably recorded");
+      }
+    }
     // A retry that lands closes the case a prior failure opened.
     if (op.recovery_id) {
-      await admin
+      const { error: closeError } = await admin
         .from("payment_recoveries")
         .update({
           status: "recovered",
@@ -525,6 +734,7 @@ async function ensureReversal(
         })
         .eq("id", op.recovery_id)
         .eq("status", "open");
+      if (closeError) throw new Error("Reversal recovery could not be closed");
     }
     return { ok: true, reversedCents: due };
   } catch (error) {
@@ -543,7 +753,7 @@ async function ensureReversal(
       recoveryId = await openReversalRecovery(admin, op, due, detail);
     }
     const backoffMinutes = Math.min(2 ** Math.min(op.attempts, 6), 60);
-    await admin
+    const { data: deferred, error: deferError } = await admin
       .from("refund_operations")
       .update({
         attempts: op.attempts + 1,
@@ -552,7 +762,11 @@ async function ensureReversal(
         updated_at: new Date().toISOString(),
       })
       .eq("id", op.id)
-      .eq("status", "reversal_pending");
+      .eq("status", "reversal_pending")
+      .select("id");
+    if (deferError || !deferred?.length) {
+      throw new Error("Transfer reversal retry was not durably scheduled");
+    }
     return { ok: false, reversedCents: 0, recoveryId };
   }
 }
@@ -563,14 +777,30 @@ async function openReversalRecovery(
   amountCents: number,
   detail: string
 ): Promise<string | undefined> {
-  const { data: recovery } = await admin
+  const recoveryKey = `reversal-failed:${op.id}`;
+  const { data: recovery, error: recoveryError } = await admin
     .from("payment_recoveries")
-    .insert({ order_id: op.order_id, kind: "reversal_failed", amount_cents: amountCents, detail })
+    .upsert(
+      {
+        order_id: op.order_id,
+        kind: "reversal_failed",
+        recovery_key: recoveryKey,
+        amount_cents: amountCents,
+        detail,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "recovery_key" }
+    )
     .select("id")
     .maybeSingle();
-  if (recovery?.id) {
-    await admin.from("refund_operations").update({ recovery_id: recovery.id }).eq("id", op.id);
-  }
+  if (recoveryError || !recovery?.id) throw new Error("Reversal recovery was not persisted");
+  const { data: linked, error: linkError } = await admin
+    .from("refund_operations")
+    .update({ recovery_id: recovery.id })
+    .eq("id", op.id)
+    .eq("status", "reversal_pending")
+    .select("id");
+  if (linkError || !linked?.length) throw new Error("Reversal recovery was not linked");
   await sendAdminAlert({
     kind: "recovery_case_opened",
     title: "Transfer reversal failed — recovery case opened",
@@ -578,7 +808,7 @@ async function openReversalRecovery(
       "Reclaiming the seller's share of a refunded order failed; the platform is out of pocket until this closes.",
     orderId: op.order_id,
     amountCents,
-    dedupKey: `reversal_failed:${op.id}`,
+    dedupKey: recoveryKey,
   });
   return recovery?.id;
 }
@@ -601,11 +831,12 @@ export async function recordExternalRefund(
     refundReference?: string;
   }
 ): Promise<{ applied: boolean; recoveryId?: string }> {
-  const { data: payment } = await admin
+  const { data: payment, error: paymentError } = await admin
     .from("payments")
     .select("provider_reference")
     .eq("order_id", input.orderId)
     .maybeSingle();
+  if (paymentError) throw new Error("External refund payment mapping failed");
 
   const { data: begun, error } = await admin.rpc("begin_refund_operation", {
     p_order_id: input.orderId,

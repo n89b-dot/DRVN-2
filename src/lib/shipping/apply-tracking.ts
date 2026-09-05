@@ -46,28 +46,88 @@ export type ApplyTrackingResult = {
   orderEffect: "none" | "shipped" | "delivered";
 };
 
+export type ShipmentLookupResult =
+  | { kind: "found"; shipment: Shipment }
+  | { kind: "missing" }
+  | { kind: "ambiguous" };
+
+function sameProviderIdentity(shipment: Shipment, summary: TrackingSummary): boolean {
+  const normalize = (value: string) => value.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return (
+    (shipment.provider === null || shipment.provider === "easypost") &&
+    (!summary.trackerRef ||
+      !shipment.provider_tracker_id ||
+      shipment.provider_tracker_id === summary.trackerRef) &&
+    (!summary.trackingCode ||
+      !shipment.tracking_code ||
+      normalize(shipment.tracking_code) === normalize(summary.trackingCode)) &&
+    (!summary.carrier ||
+      !shipment.carrier ||
+      normalize(shipment.carrier) === normalize(summary.carrier))
+  );
+}
+
+/** True only when the provider state is a harmless scan older than the
+ * already-persisted shipment state. Terminal contradictions are not replays. */
+function isEarlierProviderState(current: ShipmentStatus, target: ShipmentStatus): boolean {
+  if (current === "delivered") {
+    return target === "in_transit" || target === "out_for_delivery";
+  }
+  if (current === "returned_to_sender" || current === "failed") {
+    return target === "in_transit" || target === "out_for_delivery";
+  }
+  return false;
+}
+
+function persistenceFailure(message: string, context: Record<string, unknown>): never {
+  reportError(`[shipping] ${message}`, context);
+  throw new Error(`${message}; retry required`);
+}
+
 export async function findShipmentForTracker(
   admin: Admin,
   summary: TrackingSummary
-): Promise<Shipment | null> {
+): Promise<ShipmentLookupResult> {
   if (summary.trackerRef) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("shipments")
       .select("*")
       .eq("provider_tracker_id", summary.trackerRef)
-      .maybeSingle();
-    if (data) return data;
+      .limit(2);
+    if (error) {
+      persistenceFailure("tracker reference lookup failed", {
+        trackerRef: summary.trackerRef,
+        error,
+      });
+    }
+    if ((data?.length ?? 0) > 1) return { kind: "ambiguous" };
+    if (data?.length === 1) {
+      return sameProviderIdentity(data[0], summary)
+        ? { kind: "found", shipment: data[0] }
+        : { kind: "ambiguous" };
+    }
   }
   if (summary.trackingCode) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("shipments")
       .select("*")
       .eq("tracking_code", summary.trackingCode)
       .limit(2);
+    if (error) {
+      persistenceFailure("tracking code lookup failed", {
+        trackingCode: summary.trackingCode,
+        error,
+      });
+    }
     // Ambiguity (two shipments, one code) means we must not guess.
-    if (data?.length === 1) return data[0];
+    if ((data?.length ?? 0) > 1) return { kind: "ambiguous" };
+    if (data?.length === 1) {
+      return sameProviderIdentity(data[0], summary)
+        ? { kind: "found", shipment: data[0] }
+        : { kind: "ambiguous" };
+    }
   }
-  return null;
+  return { kind: "missing" };
 }
 
 export async function applyTrackingSummary(
@@ -76,6 +136,7 @@ export async function applyTrackingSummary(
   summary: TrackingSummary
 ): Promise<ApplyTrackingResult> {
   let eventsInserted = 0;
+  let currentShipment = shipment;
 
   for (const event of summary.events) {
     const { error } = await admin.from("shipment_events").insert({
@@ -90,25 +151,44 @@ export async function applyTrackingSummary(
     });
     if (!error) eventsInserted += 1;
     else if (error.code !== "23505") {
-      reportError("[shipping] event insert failed", { shipmentId: shipment.id, error });
+      persistenceFailure("event insert failed", { shipmentId: shipment.id, error });
     }
   }
 
   // Adopt the tracker reference the first time we learn it.
   if (summary.trackerRef && !shipment.provider_tracker_id) {
-    await admin
+    const { data: adopted, error } = await admin
       .from("shipments")
       .update({ provider_tracker_id: summary.trackerRef })
       .eq("id", shipment.id)
-      .is("provider_tracker_id", null);
+      .is("provider_tracker_id", null)
+      .select("*")
+      .maybeSingle();
+    if (error) persistenceFailure("tracker adoption failed", { shipmentId: shipment.id, error });
+    if (adopted) {
+      currentShipment = adopted;
+    } else {
+      const { data: persisted, error: lookupError } = await admin
+        .from("shipments")
+        .select("*")
+        .eq("id", shipment.id)
+        .maybeSingle();
+      if (lookupError || !persisted || persisted.provider_tracker_id !== summary.trackerRef) {
+        persistenceFailure("tracker adoption could not be verified", {
+          shipmentId: shipment.id,
+          lookupError,
+        });
+      }
+      currentShipment = persisted;
+    }
   }
 
   const target = STATE_TO_STATUS[summary.state];
   let statusChanged = false;
-  if (target && target !== shipment.status) {
-    if (canTransition(SHIPMENT_TRANSITIONS, shipment.status, target)) {
+  if (target && target !== currentShipment.status) {
+    if (canTransition(SHIPMENT_TRANSITIONS, currentShipment.status, target)) {
       const patch: Partial<Shipment> = { status: target };
-      if (target === "in_transit" && !shipment.shipped_at) {
+      if (target === "in_transit" && !currentShipment.shipped_at) {
         patch.shipped_at = summary.events[0]?.occurredAt ?? new Date().toISOString();
       }
       if (target === "delivered") {
@@ -117,61 +197,150 @@ export async function applyTrackingSummary(
       const { data: updated, error } = await admin
         .from("shipments")
         .update(patch)
-        .eq("id", shipment.id)
-        .eq("status", shipment.status)
-        .select("id");
-      if (error) {
-        reportError("[shipping] status update failed", { shipmentId: shipment.id, error });
+        .eq("id", currentShipment.id)
+        .eq("status", currentShipment.status)
+        .select("*")
+        .maybeSingle();
+      if (error) persistenceFailure("status update failed", { shipmentId: shipment.id, error });
+      if (updated) {
+        currentShipment = updated;
+        statusChanged = true;
+      } else {
+        const { data: persisted, error: lookupError } = await admin
+          .from("shipments")
+          .select("*")
+          .eq("id", shipment.id)
+          .maybeSingle();
+        if (lookupError || !persisted) {
+          persistenceFailure("status update could not be verified", {
+            shipmentId: shipment.id,
+            lookupError,
+          });
+        }
+        if (persisted.status !== target) {
+          if (canTransition(SHIPMENT_TRANSITIONS, persisted.status, target)) {
+            persistenceFailure("status update did not reach the provider state", {
+              shipmentId: shipment.id,
+              persistedStatus: persisted.status,
+              target,
+            });
+          }
+          if (!isEarlierProviderState(persisted.status, target)) {
+            persistenceFailure("provider state conflicts with persisted shipment state", {
+              shipmentId: shipment.id,
+              persistedStatus: persisted.status,
+              target,
+            });
+          }
+        }
+        currentShipment = persisted;
       }
-      statusChanged = Boolean(updated?.length);
+    } else if (!isEarlierProviderState(currentShipment.status, target)) {
+      persistenceFailure("provider state conflicts with persisted shipment state", {
+        shipmentId: shipment.id,
+        persistedStatus: currentShipment.status,
+        target,
+      });
     }
-    // Illegal transition = out-of-order/duplicate event; deliberately quiet.
   }
 
   // Return legs never touch order status — they advance the RMA (0055):
   // first movement = the buyer shipped; delivery starts the seller's
   // 48-hour inspection clock, stamped once onto the row.
-  if (shipment.direction === "return" && shipment.return_id && statusChanged) {
-    if (target === "in_transit" || target === "out_for_delivery") {
-      await admin
-        .from("returns")
-        .update({ status: "in_transit", shipped_at: new Date().toISOString() })
-        .eq("id", shipment.return_id)
-        .eq("status", "awaiting_shipment");
-    } else if (target === "delivered") {
+  if (currentShipment.direction === "return" && currentShipment.return_id) {
+    if (["in_transit", "out_for_delivery"].includes(currentShipment.status)) {
+      await markReturnInTransit(admin, currentShipment.return_id);
+    } else if (currentShipment.status === "delivered") {
       // The in_transit hop may never have been seen (final-scan-only carriers).
-      await admin
-        .from("returns")
-        .update({ status: "in_transit", shipped_at: new Date().toISOString() })
-        .eq("id", shipment.return_id)
-        .eq("status", "awaiting_shipment");
-      await admin
-        .from("returns")
-        .update({
-          status: "delivered",
-          delivered_at: summary.deliveredAt ?? new Date().toISOString(),
-          seller_respond_by: new Date(
-            Date.now() + SELLER_INSPECT_HOURS * 3_600_000
-          ).toISOString(),
-        })
-        .eq("id", shipment.return_id)
-        .eq("status", "in_transit");
+      await markReturnInTransit(admin, currentShipment.return_id);
+      await markReturnDelivered(admin, currentShipment.return_id, summary);
     }
   }
 
   let orderEffect: ApplyTrackingResult["orderEffect"] = "none";
-  if (shipment.direction === "outbound" && statusChanged) {
-    if (target === "in_transit" || target === "out_for_delivery") {
-      orderEffect = (await markOrderShipped(admin, shipment)) ? "shipped" : "none";
-    } else if (target === "delivered") {
-      orderEffect = (await maybeMarkOrderDelivered(admin, shipment.order_id)) ? "delivered" : "none";
+  if (currentShipment.direction === "outbound") {
+    if (["in_transit", "out_for_delivery"].includes(currentShipment.status)) {
+      orderEffect = (await markOrderShipped(admin, currentShipment)) ? "shipped" : "none";
+    } else if (currentShipment.status === "delivered") {
       // Delivery also implies the shipped hop happened, even if we never saw
       // the in_transit event (some carriers only report final scan).
-      if (orderEffect === "none") await markOrderShipped(admin, shipment);
+      const shipped = await markOrderShipped(admin, currentShipment);
+      orderEffect = (await maybeMarkOrderDelivered(admin, currentShipment.order_id))
+        ? "delivered"
+        : shipped
+          ? "shipped"
+          : "none";
     }
   }
 
   return { shipmentId: shipment.id, eventsInserted, statusChanged, orderEffect };
+}
+
+async function readReturnStatus(admin: Admin, returnId: string): Promise<string> {
+  const { data, error } = await admin
+    .from("returns")
+    .select("status")
+    .eq("id", returnId)
+    .maybeSingle();
+  if (error || !data) persistenceFailure("return status could not be verified", { returnId, error });
+  return data.status;
+}
+
+async function markReturnInTransit(admin: Admin, returnId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("returns")
+    .update({ status: "in_transit", shipped_at: new Date().toISOString() })
+    .eq("id", returnId)
+    .eq("status", "awaiting_shipment")
+    .select("id")
+    .maybeSingle();
+  if (error) persistenceFailure("return in-transit update failed", { returnId, error });
+  if (data) return true;
+  const status = await readReturnStatus(admin, returnId);
+  if (!["in_transit", "delivered", "received", "completed", "escalated"].includes(status)) {
+    persistenceFailure("return in-transit update affected no row", { returnId, status });
+  }
+  return false;
+}
+
+async function markReturnDelivered(
+  admin: Admin,
+  returnId: string,
+  summary: TrackingSummary
+): Promise<boolean> {
+  const deliveredAt = summary.deliveredAt ??
+    summary.events.find((event) => event.state === "delivered")?.occurredAt ??
+    new Date().toISOString();
+  const deliveredTime = new Date(deliveredAt).getTime();
+  const sellerRespondBy = new Date(
+    (Number.isFinite(deliveredTime) ? deliveredTime : Date.now()) +
+      SELLER_INSPECT_HOURS * 3_600_000
+  ).toISOString();
+  const { data, error } = await admin
+    .from("returns")
+    .update({
+      status: "delivered",
+      delivered_at: deliveredAt,
+      seller_respond_by: sellerRespondBy,
+    })
+    .eq("id", returnId)
+    .eq("status", "in_transit")
+    .select("id")
+    .maybeSingle();
+  if (error) persistenceFailure("return delivered update failed", { returnId, error });
+  if (data) return true;
+  const status = await readReturnStatus(admin, returnId);
+  if (
+    ![
+      "delivered",
+      "received",
+      "completed",
+      "escalated",
+    ].includes(status)
+  ) {
+    persistenceFailure("return delivered update affected no row", { returnId, status });
+  }
+  return false;
 }
 
 /** paid → shipped, once, mirroring carrier/tracking onto the order's legacy
@@ -187,9 +356,32 @@ async function markOrderShipped(admin: Admin, shipment: Shipment): Promise<boole
     })
     .eq("id", shipment.order_id)
     .eq("status", "paid")
-    .select("id");
-  if (error) reportError("[shipping] order shipped update failed", { orderId: shipment.order_id, error });
-  return Boolean(data?.length);
+    .select("id")
+    .maybeSingle();
+  if (error) persistenceFailure("order shipped update failed", { orderId: shipment.order_id, error });
+  if (data) return true;
+  const { data: existing, error: lookupError } = await admin
+    .from("orders")
+    .select("status")
+    .eq("id", shipment.order_id)
+    .maybeSingle();
+  if (lookupError || !existing) {
+    persistenceFailure("order shipped update could not be verified", {
+      orderId: shipment.order_id,
+      lookupError,
+    });
+  }
+  if (
+    !["shipped", "delivered", "completed", "disputed", "refunded", "cancelled"].includes(
+      existing.status
+    )
+  ) {
+    persistenceFailure("order shipped update affected no row", {
+      orderId: shipment.order_id,
+      status: existing.status,
+    });
+  }
+  return false;
 }
 
 /** delivered when every live outbound shipment is delivered (§19). */
@@ -199,7 +391,10 @@ export async function maybeMarkOrderDelivered(admin: Admin, orderId: string): Pr
     .select("status, direction")
     .eq("order_id", orderId)
     .eq("direction", "outbound");
-  if (error || !shipments?.length) return false;
+  if (error) persistenceFailure("outbound shipment lookup failed", { orderId, error });
+  if (!shipments?.length) {
+    persistenceFailure("outbound shipment lookup returned no rows", { orderId });
+  }
 
   const live = shipments.filter((s) => !["cancelled", "failed"].includes(s.status));
   if (!live.length || !live.every((s) => s.status === "delivered")) return false;
@@ -208,10 +403,24 @@ export async function maybeMarkOrderDelivered(admin: Admin, orderId: string): Pr
     .from("orders")
     .update({ status: "delivered", delivered_at: new Date().toISOString() })
     .eq("id", orderId)
-    .in("status", ["paid", "shipped"])
-    .select("id");
-  if (updateError) {
-    reportError("[shipping] order delivered update failed", { orderId, updateError });
+    .eq("status", "shipped")
+    .select("id")
+    .maybeSingle();
+  if (updateError) persistenceFailure("order delivered update failed", { orderId, updateError });
+  if (data) return true;
+  const { data: existing, error: lookupError } = await admin
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (lookupError || !existing) {
+    persistenceFailure("order delivered update could not be verified", { orderId, lookupError });
   }
-  return Boolean(data?.length);
+  if (!["delivered", "completed", "disputed", "refunded", "cancelled"].includes(existing.status)) {
+    persistenceFailure("order delivered update affected no row", {
+      orderId,
+      status: existing.status,
+    });
+  }
+  return false;
 }

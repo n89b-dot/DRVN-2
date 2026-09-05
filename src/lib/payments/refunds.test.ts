@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { reversalShareCents } from "./refunds";
+import { providerRefundMatchesOperation, reversalShareCents } from "./refunds";
 
 /**
  * The reversal share is computed from cumulative totals rather than per-event
@@ -50,5 +50,50 @@ describe("reversalShareCents", () => {
     expect(reversalShareCents(25_000, TOTAL, FEE)).toBe(2_500);
     // Full refund returns the whole fee.
     expect(reversalShareCents(TOTAL, TOTAL, FEE)).toBe(FEE);
+  });
+});
+
+describe("providerRefundMatchesOperation", () => {
+  const operation = {
+    id: "22222222-2222-4222-8222-222222222222",
+    order_id: "11111111-1111-4111-8111-111111111111",
+    payment_reference: "pi_exact",
+    amount_cents: 2_500,
+    currency: "USD",
+  };
+  const providerRefund = {
+    status: "succeeded" as const,
+    reference: "re_exact",
+    amountCents: 2_500,
+    currency: "usd",
+    paymentReference: "pi_exact",
+    operationId: operation.id,
+    orderId: operation.order_id,
+    createdAt: "2026-09-05T12:00:00Z",
+  };
+
+  it("requires exact operation, PaymentIntent, amount, currency, and optional order metadata", () => {
+    expect(providerRefundMatchesOperation(operation, providerRefund)).toBe(true);
+    expect(
+      providerRefundMatchesOperation(operation, { ...providerRefund, paymentReference: "pi_other" })
+    ).toBe(false);
+    expect(providerRefundMatchesOperation(operation, { ...providerRefund, amountCents: 2_499 })).toBe(
+      false
+    );
+    expect(providerRefundMatchesOperation(operation, { ...providerRefund, currency: "eur" })).toBe(
+      false
+    );
+    expect(
+      providerRefundMatchesOperation(operation, {
+        ...providerRefund,
+        orderId: "33333333-3333-4333-8333-333333333333",
+      })
+    ).toBe(false);
+    expect(
+      providerRefundMatchesOperation(operation, {
+        ...providerRefund,
+        operationId: "44444444-4444-4444-8444-444444444444",
+      })
+    ).toBe(false);
   });
 });

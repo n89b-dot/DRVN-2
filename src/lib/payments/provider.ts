@@ -1,4 +1,5 @@
 import { StripePaymentProvider } from "./stripe";
+import { createHash } from "node:crypto";
 import "server-only";
 /**
  * Payment provider abstraction.
@@ -54,9 +55,30 @@ export type PaymentResult =
   | { status: "unknown"; reason: string }
   | { status: "processing"; reference: string };
 
-export type RefundResult =
-  | { status: "refunded"; reference: string; amountCents: number }
-  | { status: "failed"; reason: string };
+export type RefundProviderStatus =
+  | "pending"
+  | "requires_action"
+  | "succeeded"
+  | "failed"
+  | "canceled"
+  | "unknown";
+
+export type RefundResult = {
+  status: RefundProviderStatus;
+  /** Present whenever the provider returned a durable refund object. */
+  reference?: string;
+  /** Exact amount reported by that refund object. */
+  amountCents?: number;
+  currency?: string;
+  createdAt?: string;
+  paymentReference?: string | null;
+  operationId?: string;
+  orderId?: string;
+  balanceTransaction?: string | null;
+  failureBalanceTransaction?: string | null;
+  pendingReason?: string | null;
+  reason?: string;
+};
 
 export type RefundOptions = {
   /**
@@ -68,6 +90,8 @@ export type RefundOptions = {
   idempotencyKey?: string;
   /** Attached to the processor's refund object — lets the webhook attribute it. */
   metadata?: Record<string, string>;
+  /** Expected local currency, used by non-Stripe adapters and verification. */
+  currency?: string;
 };
 
 export interface PaymentProvider {
@@ -81,6 +105,15 @@ export interface PaymentProvider {
   getStatus(reference: string): Promise<PaymentStatus>;
 }
 
+export function stubRefundReference(
+  paymentReference: string,
+  amountCents: number | undefined,
+  idempotencyKey: string | undefined
+): string {
+  const identity = idempotencyKey ?? `legacy:${paymentReference}:${amountCents ?? "full"}`;
+  return `stub_refund_${createHash("sha256").update(identity).digest("hex").slice(0, 32)}`;
+}
+
 class StubPaymentProvider implements PaymentProvider {
   readonly name = "stub";
   readonly isLive = false;
@@ -90,8 +123,19 @@ class StubPaymentProvider implements PaymentProvider {
     return { status: "succeeded", reference: `stub_${request.orderId}` };
   }
 
-  async refund(reference: string, amountCents?: number): Promise<RefundResult> {
-    return { status: "refunded", reference, amountCents: amountCents ?? 0 };
+  async refund(reference: string, amountCents?: number, options?: RefundOptions): Promise<RefundResult> {
+    return {
+      status: "succeeded",
+      reference: stubRefundReference(reference, amountCents, options?.idempotencyKey),
+      amountCents: amountCents ?? 0,
+      currency: options?.currency?.toLowerCase() ?? "usd",
+      // A replay uses the same synthetic observation id, so its immutable
+      // journal payload needs a stable provider timestamp as well.
+      createdAt: "1970-01-01T00:00:00.000Z",
+      paymentReference: reference,
+      operationId: options?.metadata?.operation_id,
+      orderId: options?.metadata?.order_id,
+    };
   }
 
   async getStatus(): Promise<PaymentStatus> {

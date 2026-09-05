@@ -39,6 +39,47 @@ function stripe(): Stripe {
   return client;
 }
 
+function stripeObjectId(value: string | { id: string } | null | undefined): string | null {
+  return typeof value === "string" ? value : value?.id ?? null;
+}
+
+/** Preserve Stripe's asynchronous refund state instead of treating receipt of
+ * a refund object as proof the customer's money has settled. */
+export function mapStripeRefundResult(refund: Stripe.Refund): RefundResult {
+  const common = {
+    reference: refund.id,
+    amountCents: refund.amount,
+    currency: refund.currency.toLowerCase(),
+    createdAt: new Date(refund.created * 1000).toISOString(),
+    paymentReference: stripeObjectId(refund.payment_intent),
+    operationId: refund.metadata?.operation_id,
+    orderId: refund.metadata?.order_id,
+    balanceTransaction: stripeObjectId(refund.balance_transaction),
+    failureBalanceTransaction: stripeObjectId(refund.failure_balance_transaction),
+    pendingReason: refund.pending_reason ?? null,
+  };
+
+  switch (refund.status) {
+    case "pending":
+    case "requires_action":
+    case "succeeded":
+      return { status: refund.status, ...common };
+    case "failed":
+    case "canceled":
+      return {
+        status: refund.status,
+        ...common,
+        reason: refund.failure_reason ?? refund.status,
+      };
+    default:
+      return {
+        status: "unknown",
+        ...common,
+        reason: "Stripe returned a refund with no recognized status.",
+      };
+  }
+}
+
 export class StripePaymentProvider implements PaymentProvider {
   readonly name = "stripe";
   /** sk_test keys move no real money — test-mode banners must stay up. */
@@ -99,18 +140,17 @@ export class StripePaymentProvider implements PaymentProvider {
         // multi-seller basket, so per-intent keys collide across orders.
         { idempotencyKey: options?.idempotencyKey ?? `refund:${reference}` }
       );
-      if (refund.status === "failed" || refund.status === "canceled") {
-        return { status: "failed", reason: refund.failure_reason ?? refund.status };
-      }
-      return {
-        status: "refunded",
-        reference: refund.id,
-        amountCents: refund.amount,
-      };
+      return mapStripeRefundResult(refund);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Stripe refund failed";
       reportError("[stripe] refund failed", { reference, reason });
-      return { status: "failed", reason };
+      if (error instanceof Stripe.errors.StripeInvalidRequestError) {
+        return { status: "failed", reason };
+      }
+      // A timeout can occur after Stripe committed the refund. Only a provider
+      // object or webhook may declare terminal failure; transport uncertainty
+      // remains reconcilable.
+      return { status: "unknown", reason };
     }
   }
 
