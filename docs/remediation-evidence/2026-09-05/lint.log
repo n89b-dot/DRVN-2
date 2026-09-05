@@ -1,0 +1,21 @@
+
+> drvn-2@0.1.0 lint
+> eslint
+
+
+/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/src/app/(discover)/cars/[slug]/activity/[postId]/opengraph-image.tsx
+  56:11  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+
+/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/src/app/(discover)/cars/[slug]/opengraph-image.tsx
+  52:11  warning  Unused eslint-disable directive (no problems were reported from '@next/next/no-img-element')
+
+/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/src/features/commerce/shop-actions.ts
+  32:34  warning  '_prev' is defined but never used      @typescript-eslint/no-unused-vars
+  32:52  warning  '_formData' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/tests/stripe/stripe.integration.test.ts
+  46:3  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+
+✖ 5 problems (0 errors, 5 warnings)
+  0 errors and 3 warnings potentially fixable with the `--fix` option.
+

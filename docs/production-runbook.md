@@ -1,5 +1,7 @@
 # Production runbook
 
+For the September 2026 change, follow [the remediation rollout](remediation-rollout.md) before using the historical setup instructions below. The new migration has only been applied to disposable local databases.
+
 How to stand up (and stand back up) a production DRVN, separate from the dev
 project `grunnjojhdevhuckujmc`. Written to be followed top to bottom the first
 time, and section-by-section afterwards. Rev E items: production project,

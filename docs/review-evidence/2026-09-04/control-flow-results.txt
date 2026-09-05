@@ -1,0 +1,4 @@
+CONFIRMED: cancelled order + successful Stripe intent returns settlement success; emits purchase_completed; no transfer intent.
+CONFIRMED: transfer-intent insert failure is swallowed; settlement still returns success.
+CONFIRMED: admin mutation remains applied when audit insert fails, despite action-aborted error.
+These are isolated control-flow probes with mocked dependencies; no database or payment API was contacted.

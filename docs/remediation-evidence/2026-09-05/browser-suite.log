@@ -1,0 +1,259 @@
+[WebServer] (node:57022) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57022) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57138) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57156) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57161) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57157) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57160) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57158) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57159) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57155) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:57187) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 167 tests using 1 worker
+
+(node:57193) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓    1 [chromium] › e2e/a11y.spec.ts:15:7 › axe: / (1.8s)
+[a11y] /marketplace advisory: heading-order (moderate) ×1
+  ✓    2 [chromium] › e2e/a11y.spec.ts:15:7 › axe: /marketplace (1.4s)
+[a11y] /login advisory: landmark-one-main (moderate) ×1, region (moderate) ×11
+  ✓    3 [chromium] › e2e/a11y.spec.ts:15:7 › axe: /login (1.1s)
+[a11y] /signup advisory: landmark-one-main (moderate) ×1, region (moderate) ×13
+  ✓    4 [chromium] › e2e/a11y.spec.ts:15:7 › axe: /signup (1.1s)
+[a11y] /explore advisory: heading-order (moderate) ×1
+  ✓    5 [chromium] › e2e/a11y.spec.ts:15:7 › axe: /explore (1.4s)
+  ✓    6 [chromium] › e2e/a11y.spec.ts:41:5 › keyboard-only: reach and operate signup (296ms)
+  ✓    7 [chromium] › e2e/add-car.spec.ts:16:7 › Add Car › manual fallback creates a car and auto-names it by identity (2.3s)
+  ✓    8 [chromium] › e2e/add-car.spec.ts:32:7 › Add Car › a VIN that will not decode explains itself and offers the way out (2.6s)
+  -    9 [chromium] › e2e/add-car.spec.ts:47:7 › Add Car › picker selects a catalog vehicle (skips on an unseeded catalog)
+  ✓   10 [chromium] › e2e/discovery-remediation.spec.ts:40:7 › discovery + marketplace remediation › setup: a seller publishes a part (2.6s)
+  ✓   11 [chromium] › e2e/discovery-remediation.spec.ts:50:7 › discovery + marketplace remediation › the seller's register is called My Listings in the family nav, rail and index (1.2s)
+  ✓   12 [chromium] › e2e/discovery-remediation.spec.ts:78:7 › discovery + marketplace remediation › Home Discovery is segmented and URL-addressable (2.2s)
+  ✓   13 [chromium] › e2e/discovery-remediation.spec.ts:115:7 › discovery + marketplace remediation › categories are destinations: tiles on desktop, a Browse sheet on phones (1.5s)
+  ✓   14 [chromium] › e2e/discovery-remediation.spec.ts:165:9 › discovery + marketplace remediation › marketplace cards: buy controls, no nested interactives @ 320 (516ms)
+  ✓   15 [chromium] › e2e/discovery-remediation.spec.ts:165:9 › discovery + marketplace remediation › marketplace cards: buy controls, no nested interactives @ 390 (498ms)
+  ✓   16 [chromium] › e2e/discovery-remediation.spec.ts:165:9 › discovery + marketplace remediation › marketplace cards: buy controls, no nested interactives @ 430 (448ms)
+  ✓   17 [chromium] › e2e/discovery-remediation.spec.ts:188:7 › discovery + marketplace remediation › guest: Add to cart from the card stays on the page and badges the cart; Buy now goes to the cart (1.4s)
+  ✓   18 [chromium] › e2e/discovery-remediation.spec.ts:207:7 › discovery + marketplace remediation › own listing: the seller sees no purchase controls on their own card (1.1s)
+  ✓   19 [chromium] › e2e/discovery-remediation.spec.ts:217:7 › discovery + marketplace remediation › Explore cards stay discovery-only and name their icons on focus (541ms)
+  -   20 [chromium] › e2e/evidence.spec.ts:36:7 › remediation evidence capture › capture
+  ✓   21 [chromium] › e2e/explore-search.spec.ts:33:5 › seeds a user with a public build, a private build and a listing (5.5s)
+  ✓   22 [chromium] › e2e/explore-search.spec.ts:57:5 › free-text search finds the public build; browse mode stays the feed (902ms)
+  ✓   23 [chromium] › e2e/explore-search.spec.ts:74:5 › the Builds scope works and the private build never surfaces (867ms)
+  ✓   24 [chromium] › e2e/explore-search.spec.ts:85:5 › accounts are discoverable by identity in All results (473ms)
+  ✓   25 [chromium] › e2e/explore-search.spec.ts:91:5 › the Parts scope reuses marketplace search with its refinements (1.5s)
+  ✓   26 [chromium] › e2e/explore-search.spec.ts:103:5 › scope transitions shed incompatible filters and keep compatible ones (1.2s)
+  ✓   27 [chromium] › e2e/explore-search.spec.ts:118:5 › autocomplete suggests, supports the keyboard, and excludes private builds (2.3s)
+  ✓   28 [chromium] › e2e/explore-search.spec.ts:151:5 › plain Enter submits the query as a URL search (1.1s)
+  ✓   29 [chromium] › e2e/feature-regression.spec.ts:27:7 › feature regressions › seller lists a part-numbered listing and a free-shipping listing (5.8s)
+  ✓   30 [chromium] › e2e/feature-regression.spec.ts:43:7 › feature regressions › marketplace search matches the raw part number (639ms)
+  ✓   31 [chromium] › e2e/feature-regression.spec.ts:53:7 › feature regressions › marketplace search matches the compact part number (479ms)
+  ✓   32 [chromium] › e2e/feature-regression.spec.ts:62:7 › feature regressions › marketplace cards state the shipping cost (313ms)
+  ✓   33 [chromium] › e2e/feature-regression.spec.ts:75:7 › feature regressions › messages footer links to offers (1.2s)
+  ✓   34 [chromium] › e2e/feature-regression.spec.ts:81:7 › feature regressions › home greets by time of day (968ms)
+  ✓   35 [chromium] › e2e/garage-sell-lifecycle.spec.ts:48:5 › build updates: link-only section, composer publishes to the public post (2.3s)
+  ✓   36 [chromium] › e2e/garage-sell-lifecycle.spec.ts:90:5 › gallery drop zone: uploads images, refuses non-images with a human message (2.1s)
+  ✓   37 [chromium] › e2e/garage-sell-lifecycle.spec.ts:121:5 › sell publish: respects the configured payment mode and payout readiness (903ms)
+  ✓   38 [chromium] › e2e/golden-path.spec.ts:57:7 › golden path › seller signs up and adds a car (2.1s)
+  ✓   39 [chromium] › e2e/golden-path.spec.ts:74:7 › golden path › seller lists a part off that car (3.0s)
+  ✓   40 [chromium] › e2e/golden-path.spec.ts:97:7 › golden path › the part appears on the car sheet's For sale tab (2.0s)
+  ✓   41 [chromium] › e2e/golden-path.spec.ts:110:7 › golden path › buyer finds the part and buys it (6.7s)
+  ✓   42 [chromium] › e2e/golden-path.spec.ts:145:7 › golden path › the listing is now sold, not buyable twice (683ms)
+  ✓   43 [chromium] › e2e/golden-path.spec.ts:160:7 › golden path › seller dispatches with tracking (2.2s)
+  ✓   44 [chromium] › e2e/golden-path.spec.ts:178:7 › golden path › buyer confirms receipt and reviews (2.7s)
+  ✓   45 [chromium] › e2e/golden-path.spec.ts:206:7 › golden path › the review shows on the seller's public profile (511ms)
+  ✓   46 [chromium] › e2e/guest-checkout.spec.ts:61:7 › guest checkout › seller publishes a part for a guest to buy (5.3s)
+  ✓   47 [chromium] › e2e/guest-checkout.spec.ts:82:7 › guest checkout › cart and checkout are public; orders and sell are not (610ms)
+  ✓   48 [chromium] › e2e/guest-checkout.spec.ts:97:7 › guest checkout › Buy now works signed out — no account demanded (1.0s)
+  ✓   49 [chromium] › e2e/guest-checkout.spec.ts:109:7 › guest checkout › Add to cart works signed out (960ms)
+  ✓   50 [chromium] › e2e/guest-checkout.spec.ts:117:7 › guest checkout › a guest pays with an email and gets a real, claimable order (3.5s)
+  ✓   51 [chromium] › e2e/guest-checkout.spec.ts:166:7 › guest checkout › a guest checkout on a registered email attaches to that account (4.1s)
+  ✓   52 [chromium] › e2e/guest-checkout.spec.ts:200:7 › guest checkout › checkout refuses an implausible email before charging anything (1.9s)
+  ✓   53 [chromium] › e2e/guest-checkout.spec.ts:220:7 › guest checkout › making an offer is still gated — that one needs an identity (966ms)
+  ✓   54 [chromium] › e2e/listing-import.spec.ts:80:7 › listing importer › paste import → review in the sell form → save draft (2.3s)
+  -   55 [chromium] › e2e/listing-import.spec.ts:107:7 › listing importer › forum URL import reads the first post
+  -   56 [chromium] › e2e/listing-import.spec.ts:137:7 › listing importer › a refused page falls forward to paste on the same import
+  ✓   57 [chromium] › e2e/listing-import.spec.ts:159:7 › listing importer › multi-item part-out asks which part is being listed (2.8s)
+  ✓   58 [chromium] › e2e/listing-import.spec.ts:185:7 › listing importer › import page has no serious accessibility violations (1.4s)
+  ✓   59 [chromium] › e2e/listing-import.spec.ts:199:7 › listing importer › mobile paste import works end to end (1.1s)
+  ✓   60 [chromium] › e2e/marketplace-family.spec.ts:39:7 › Marketplace family › seller publishes a part to negotiate over (2.2s)
+  ✓   61 [chromium] › e2e/marketplace-family.spec.ts:52:7 › Marketplace family › signed out: marketplace and listing sheets stay public (915ms)
+  ✓   62 [chromium] › e2e/marketplace-family.spec.ts:64:7 › Marketplace family › signed out: the management surfaces are gated and never advertised (831ms)
+  ✓   63 [chromium] › e2e/marketplace-family.spec.ts:92:7 › Marketplace family › signed in: every Selling child is one interaction away, from anywhere in the family (2.3s)
+  ✓   64 [chromium] › e2e/marketplace-family.spec.ts:121:7 › Marketplace family › signed in: the mobile index reaches Orders without going via Marketplace (894ms)
+  ✓   65 [chromium] › e2e/marketplace-family.spec.ts:144:7 › Marketplace family › signed in: a public listing sheet reads as Marketplace, the seller's register as My Listings (1.3s)
+  ✓   66 [chromium] › e2e/marketplace-family.spec.ts:164:7 › Marketplace family › the ledger hands a listing to Offers rather than re-implementing offers (1.0s)
+  ✓   67 [chromium] › e2e/marketplace-family.spec.ts:185:7 › Marketplace family › Make an offer while signed out explains why an account is needed (990ms)
+  ✓   68 [chromium] › e2e/marketplace-family.spec.ts:202:7 › Marketplace family › signing in from the offer dialog returns to the listing with the offer form open (4.3s)
+  ✓   69 [chromium] › e2e/marketplace-family.spec.ts:224:7 › Marketplace family › creating an account from the offer dialog keeps the same intent (2.9s)
+  ✓   70 [chromium] › e2e/marketplace-family.spec.ts:248:7 › Marketplace family › the login/signup swap keeps the destination in both directions (753ms)
+  ✓   71 [chromium] › e2e/marketplace-family.spec.ts:260:7 › Marketplace family › an off-site next is refused, not followed (2.2s)
+  ✓   72 [chromium] › e2e/marketplace-family.spec.ts:280:7 › Marketplace family › Orders drops the offers promo card and the offer-expiry footer (1.8s)
+  ✓   73 [chromium] › e2e/marketplace-family.spec.ts:290:7 › Marketplace family › Orders groups states and keeps raw states addressable (2.0s)
+  ✓   74 [chromium] › e2e/mobile-layout.spec.ts:31:7 › mobile layout @ 375x812 › setup: seller signs up, adds a car, lists a part (5.8s)
+  ✓   75 [chromium] › e2e/mobile-layout.spec.ts:43:7 › mobile layout @ 375x812 › listing detail: rail precedes content, buybar behaves (2.9s)
+  ✓   76 [chromium] › e2e/mobile-layout.spec.ts:92:7 › mobile layout @ 375x812 › home: garage row uses vehicle presentation, not an order thumb (1.3s)
+  ✓   77 [chromium] › e2e/mobile-layout.spec.ts:104:7 › mobile layout @ 375x812 › garage: build sheet — full-width plate, folded details, three-tool rail (1.8s)
+  ✓   78 [chromium] › e2e/mobile-layout.spec.ts:139:7 › mobile layout @ 375x812 › marketplace: filter chips only when filters are applied (723ms)
+  ✓   79 [chromium] › e2e/mobile-layout.spec.ts:157:7 › mobile layout @ 375x812 › explore: mosaic wall, two columns on phones (520ms)
+  ✓   80 [chromium] › e2e/mobile-matrix.spec.ts:69:9 › guest discovery @ 320x568 › marketplace: compact controls, then inventory (544ms)
+  ✓   81 [chromium] › e2e/mobile-matrix.spec.ts:96:9 › guest discovery @ 320x568 › marketplace: refine sheet keeps values and restores focus (876ms)
+  -   82 [chromium] › e2e/mobile-matrix.spec.ts:111:9 › guest discovery @ 320x568 › listing detail: price and actions precede record metadata
+  ✓   83 [chromium] › e2e/mobile-matrix.spec.ts:69:9 › guest discovery @ 390x844 › marketplace: compact controls, then inventory (510ms)
+  ✓   84 [chromium] › e2e/mobile-matrix.spec.ts:96:9 › guest discovery @ 390x844 › marketplace: refine sheet keeps values and restores focus (1.0s)
+  -   85 [chromium] › e2e/mobile-matrix.spec.ts:111:9 › guest discovery @ 390x844 › listing detail: price and actions precede record metadata
+  ✓   86 [chromium] › e2e/mobile-matrix.spec.ts:69:9 › guest discovery @ 430x932 › marketplace: compact controls, then inventory (490ms)
+  ✓   87 [chromium] › e2e/mobile-matrix.spec.ts:96:9 › guest discovery @ 430x932 › marketplace: refine sheet keeps values and restores focus (884ms)
+  -   88 [chromium] › e2e/mobile-matrix.spec.ts:111:9 › guest discovery @ 430x932 › listing detail: price and actions precede record metadata
+  -   89 [chromium] › e2e/mobile-matrix.spec.ts:174:7 › anatomy transitions land on documented thresholds › PDP buybar retires exactly at the 981px split
+  ✓   90 [chromium] › e2e/mobile-matrix.spec.ts:194:7 › anatomy transitions land on documented thresholds › register rail exists only above 1080px (303ms)
+  ✓   91 [chromium] › e2e/mobile-matrix.spec.ts:220:7 › authenticated matrix @ 390x844 › setup: seller with three cars and two listings (7.9s)
+  ✓   92 [chromium] › e2e/mobile-matrix.spec.ts:241:7 › authenticated matrix @ 390x844 › task heads: h1 lands within 45% of the viewport on every task route (4.9s)
+  ✓   93 [chromium] › e2e/mobile-matrix.spec.ts:268:7 › authenticated matrix @ 390x844 › garage: first sheet's management rail inside the first viewport (1.6s)
+  ✓   94 [chromium] › e2e/mobile-matrix.spec.ts:287:7 › authenticated matrix @ 390x844 › buyer: offer lands; seller sees who acts next everywhere (6.1s)
+  ✓   95 [chromium] › e2e/mobile-matrix.spec.ts:328:7 › authenticated matrix @ 390x844 › checkout: one Delivery & contact edit, one cart edit — or stub completes (8.8s)
+  ✓   96 [chromium] › e2e/mobile-matrix.spec.ts:405:7 › authenticated matrix @ 390x844 › seller can fully delete a listing from the ledger (1.3s)
+  ✓   97 [chromium] › e2e/mobile-remediation.spec.ts:104:7 › mobile remediation › setup: an owner signs up and files a car (1.7s)
+  -   98 [chromium] › e2e/mobile-remediation.spec.ts:113:7 › mobile remediation › car sheet: the tab strip holds one scrolling line on phones
+  -   99 [chromium] › e2e/mobile-remediation.spec.ts:162:7 › mobile remediation › cart: the phone checkout bar is reachable and retires on desktop
+  ✓  100 [chromium] › e2e/mobile-remediation.spec.ts:214:7 › mobile remediation › mods editor: the ledger line becomes a labelled record on a phone (1.9s)
+  ✓  101 [chromium] › e2e/mobile-remediation.spec.ts:277:7 › mobile remediation › mods editor: the commit row stacks and goes full width on a phone (1.2s)
+  ✓  102 [chromium] › e2e/mobile-remediation.spec.ts:307:7 › mobile remediation › saved: search owns the phone column and Enter submits the query (1.2s)
+  ✓  103 [chromium] › e2e/mobile-remediation.spec.ts:326:7 › mobile remediation › notifications: two filter axes, one row each, still combining in the query (1.8s)
+  ✓  104 [chromium] › e2e/mobile-remediation.spec.ts:371:7 › mobile remediation › messages: search owns the phone column and Enter submits (1.2s)
+  -  105 [chromium] › e2e/mobile-remediation.spec.ts:389:7 › mobile remediation › checkout: the compact summary stands in for the desktop aside
+  ✓  106 [chromium] › e2e/remediation-security.spec.ts:26:5 › admin access requires TOTP and respects membership revocation (2.2s)
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: 'f6607f8c-80f5-4066-b7fd-15410dc13587',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '4b1755f3-034d-4f12-88ab-659baa6f4774',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: 'f5a7b954-26fb-4c29-ac24-a8a4e5f4c02a',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '22c85844-7d47-4f76-88a9-6e394eff6043',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [worker] family failed {
+[WebServer]   family: 'receipts',
+[WebServer]   runId: 'e4aacd86-e4da-414f-9343-8dbd07811622',
+[WebServer]   error: {}
+[WebServer] }
+  ✓  107 [chromium] › e2e/remediation-security.spec.ts:47:5 › captured email link signs in a fresh browser and cannot be reused (2.0s)
+  ✓  108 [chromium] › e2e/remediation-security.spec.ts:82:5 › account deletion drains more than one storage page and rejects stale writes (3.3s)
+  ✓  109 [chromium] › e2e/remediation-security.spec.ts:111:5 › page CSP uses fresh nonces and blocks untrusted inline scripts (428ms)
+  ✓  110 [chromium] › e2e/responsive.spec.ts:87:11 › 375x812 › / fits and matches baseline (911ms)
+  ✓  111 [chromium] › e2e/responsive.spec.ts:87:11 › 375x812 › /marketplace fits and matches baseline (1.1s)
+  ✓  112 [chromium] › e2e/responsive.spec.ts:87:11 › 375x812 › /login fits and matches baseline (811ms)
+  ✓  113 [chromium] › e2e/responsive.spec.ts:87:11 › 375x812 › /signup fits and matches baseline (814ms)
+  ✓  114 [chromium] › e2e/responsive.spec.ts:87:11 › 375x812 › /protection fits and matches baseline (795ms)
+  ✓  115 [chromium] › e2e/responsive.spec.ts:87:11 › 430x932 › / fits and matches baseline (845ms)
+  ✓  116 [chromium] › e2e/responsive.spec.ts:87:11 › 430x932 › /marketplace fits and matches baseline (1.1s)
+  ✓  117 [chromium] › e2e/responsive.spec.ts:87:11 › 430x932 › /login fits and matches baseline (959ms)
+  ✓  118 [chromium] › e2e/responsive.spec.ts:87:11 › 430x932 › /signup fits and matches baseline (1.4s)
+  ✓  119 [chromium] › e2e/responsive.spec.ts:87:11 › 430x932 › /protection fits and matches baseline (2.1s)
+  ✓  120 [chromium] › e2e/responsive.spec.ts:87:11 › 768x1024 › / fits and matches baseline (1.5s)
+  ✓  121 [chromium] › e2e/responsive.spec.ts:87:11 › 768x1024 › /marketplace fits and matches baseline (1.4s)
+  ✓  122 [chromium] › e2e/responsive.spec.ts:87:11 › 768x1024 › /login fits and matches baseline (877ms)
+  ✓  123 [chromium] › e2e/responsive.spec.ts:87:11 › 768x1024 › /signup fits and matches baseline (911ms)
+  ✓  124 [chromium] › e2e/responsive.spec.ts:87:11 › 768x1024 › /protection fits and matches baseline (927ms)
+  ✓  125 [chromium] › e2e/responsive.spec.ts:87:11 › 1024x768 › / fits and matches baseline (988ms)
+  ✓  126 [chromium] › e2e/responsive.spec.ts:87:11 › 1024x768 › /marketplace fits and matches baseline (1.2s)
+  ✓  127 [chromium] › e2e/responsive.spec.ts:87:11 › 1024x768 › /login fits and matches baseline (836ms)
+  ✓  128 [chromium] › e2e/responsive.spec.ts:87:11 › 1024x768 › /signup fits and matches baseline (900ms)
+  ✓  129 [chromium] › e2e/responsive.spec.ts:87:11 › 1024x768 › /protection fits and matches baseline (930ms)
+  ✓  130 [chromium] › e2e/responsive.spec.ts:87:11 › 1440x900 › / fits and matches baseline (926ms)
+  ✓  131 [chromium] › e2e/responsive.spec.ts:87:11 › 1440x900 › /marketplace fits and matches baseline (1.3s)
+  ✓  132 [chromium] › e2e/responsive.spec.ts:87:11 › 1440x900 › /login fits and matches baseline (855ms)
+  ✓  133 [chromium] › e2e/responsive.spec.ts:87:11 › 1440x900 › /signup fits and matches baseline (855ms)
+  ✓  134 [chromium] › e2e/responsive.spec.ts:87:11 › 1440x900 › /protection fits and matches baseline (896ms)
+  ✓  135 [chromium] › e2e/responsive.spec.ts:114:9 › 320x700 smoke › / has no horizontal overflow at 320 (755ms)
+  ✓  136 [chromium] › e2e/responsive.spec.ts:114:9 › 320x700 smoke › /marketplace has no horizontal overflow at 320 (1.0s)
+  ✓  137 [chromium] › e2e/responsive.spec.ts:114:9 › 320x700 smoke › /login has no horizontal overflow at 320 (780ms)
+  ✓  138 [chromium] › e2e/responsive.spec.ts:114:9 › 320x700 smoke › /signup has no horizontal overflow at 320 (796ms)
+  ✓  139 [chromium] › e2e/responsive.spec.ts:114:9 › 320x700 smoke › /protection has no horizontal overflow at 320 (775ms)
+  ✓  140 [chromium] › e2e/transaction-completion.spec.ts:156:5 › Flow C — local pickup: ready → pass → redeem → delivered (17.6s)
+  ✓  141 [chromium] › e2e/transaction-completion.spec.ts:208:5 › Flow A — DRVN Shipping: rates → label → webhook delivery (15.8s)
+  ✓  142 [chromium] › e2e/transaction-completion.spec.ts:292:5 › Flow D — partial refund: buyer keeps the item, dispute settles (19.2s)
+  ✓  143 [chromium] › e2e/transaction-completion.spec.ts:338:5 › Flow E — return for refund: item travels back before money (20.8s)
+(node:57787) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  144 [firefox] › e2e/golden-path.spec.ts:57:7 › golden path › seller signs up and adds a car (4.8s)
+  ✓  145 [firefox] › e2e/golden-path.spec.ts:74:7 › golden path › seller lists a part off that car (2.6s)
+  ✓  146 [firefox] › e2e/golden-path.spec.ts:97:7 › golden path › the part appears on the car sheet's For sale tab (3.1s)
+  ✓  147 [firefox] › e2e/golden-path.spec.ts:110:7 › golden path › buyer finds the part and buys it (5.2s)
+  ✓  148 [firefox] › e2e/golden-path.spec.ts:145:7 › golden path › the listing is now sold, not buyable twice (1.3s)
+  ✓  149 [firefox] › e2e/golden-path.spec.ts:160:7 › golden path › seller dispatches with tracking (2.9s)
+  ✓  150 [firefox] › e2e/golden-path.spec.ts:178:7 › golden path › buyer confirms receipt and reviews (2.9s)
+  ✓  151 [firefox] › e2e/golden-path.spec.ts:206:7 › golden path › the review shows on the seller's public profile (698ms)
+[WebServer] ResponseAborted: 
+[WebServer]     at ignore-listed frames
+  ✓  152 [firefox] › e2e/remediation-security.spec.ts:26:5 › admin access requires TOTP and respects membership revocation (3.2s)
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: 'f6607f8c-80f5-4066-b7fd-15410dc13587',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: 'f5a7b954-26fb-4c29-ac24-a8a4e5f4c02a',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '22c85844-7d47-4f76-88a9-6e394eff6043',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '956e4b03-6c81-4c4b-bdd0-5b6bda4edf2a',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '78f74692-0907-4a9d-821b-f6844426a55f',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [receipt] delivery failed {
+[WebServer]   jobId: '4b1755f3-034d-4f12-88ab-659baa6f4774',
+[WebServer]   error: 'Receipt account unavailable'
+[WebServer] }
+[WebServer] [worker] family failed {
+[WebServer]   family: 'receipts',
+[WebServer]   runId: 'c7bdd6f5-88db-4e93-98f3-a433f456476a',
+[WebServer]   error: {}
+[WebServer] }
+  ✓  153 [firefox] › e2e/remediation-security.spec.ts:47:5 › captured email link signs in a fresh browser and cannot be reused (2.8s)
+  ✓  154 [firefox] › e2e/remediation-security.spec.ts:82:5 › account deletion drains more than one storage page and rejects stale writes (4.0s)
+  ✓  155 [firefox] › e2e/remediation-security.spec.ts:111:5 › page CSP uses fresh nonces and blocks untrusted inline scripts (959ms)
+(node:57834) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  156 [webkit] › e2e/golden-path.spec.ts:57:7 › golden path › seller signs up and adds a car (3.7s)
+  ✓  157 [webkit] › e2e/golden-path.spec.ts:74:7 › golden path › seller lists a part off that car (2.7s)
+  ✓  158 [webkit] › e2e/golden-path.spec.ts:97:7 › golden path › the part appears on the car sheet's For sale tab (2.4s)
+  ✓  159 [webkit] › e2e/golden-path.spec.ts:110:7 › golden path › buyer finds the part and buys it (5.5s)
+  ✓  160 [webkit] › e2e/golden-path.spec.ts:145:7 › golden path › the listing is now sold, not buyable twice (1.4s)
+  ✓  161 [webkit] › e2e/golden-path.spec.ts:160:7 › golden path › seller dispatches with tracking (2.9s)
+  ✓  162 [webkit] › e2e/golden-path.spec.ts:178:7 › golden path › buyer confirms receipt and reviews (3.2s)
+  ✓  163 [webkit] › e2e/golden-path.spec.ts:206:7 › golden path › the review shows on the seller's public profile (778ms)
+[WebServer] ResponseAborted: 
+[WebServer]     at ignore-listed frames
+  ✓  164 [webkit] › e2e/remediation-security.spec.ts:26:5 › admin access requires TOTP and respects membership revocation (2.6s)
+  ✓  165 [webkit] › e2e/remediation-security.spec.ts:47:5 › captured email link signs in a fresh browser and cannot be reused (1.5s)
+  ✓  166 [webkit] › e2e/remediation-security.spec.ts:82:5 › account deletion drains more than one storage page and rejects stale writes (4.4s)
+  ✓  167 [webkit] › e2e/remediation-security.spec.ts:111:5 › page CSP uses fresh nonces and blocks untrusted inline scripts (763ms)
+
+  11 skipped
+  156 passed (6.7m)

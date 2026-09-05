@@ -1,0 +1,214 @@
+
+Running supabase/tests/admin_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: civilian cannot read admin_users
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: civilian cannot self-insert into admin_users
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: is_admin() false for civilian
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: is_admin() true for admin member
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: low-assurance admin cannot use RLS admin access
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: is_admin() false for null-uid context
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: civilian cannot write audit log
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit log invisible to civilian
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: admin reads audit log through RLS
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit log append-only (UPDATE blocked, superuser included)
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit log append-only (DELETE blocked, superuser included)
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspension columns unwritable by their subject
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspension columns unreadable by client roles
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspended seller's listing hidden from browse
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspended seller still sees own listing
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: suspended seller cannot create listings
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: seller cannot set removed
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: seller cannot clear a takedown
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: removed listing hidden from browse
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: admin reads cross-user orders through RLS
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: user can file a report
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: reporter cannot resolve own report
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: reports invisible to third parties
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: admin reads reports through RLS
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: assert_admin_actor refuses a viewer
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: assert_admin_actor accepts a full admin
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit trail refuses non-admin actors
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  PASS: audit trail accepts a full-admin actor
+psql:supabase/tests/admin_guard.sql:294: NOTICE:  --- all admin-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/admin_transaction_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE TRIGGER
+psql:supabase/tests/admin_transaction_guard.sql:30: NOTICE:  all admin transaction checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/deletion_guard.sql
+BEGIN
+psql:supabase/tests/deletion_guard.sql:18: NOTICE:  all deletion checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/import_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: cross-user import reads are blocked
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: cross-user import writes are blocked
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: imports cannot be created for another user
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: illegal status transitions are refused
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: consumed requires its listing reference
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: consumed imports are terminal
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: same-URL live imports dedupe
+psql:supabase/tests/import_guard.sql:174: NOTICE:  PASS: per-user in-progress cap enforced
+psql:supabase/tests/import_guard.sql:174: NOTICE:  --- all import-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/money_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/money_guard.sql:564: NOTICE:  --- fixtures ready ---
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 1/36: first reservation (6000 of 10000) accepted
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 2/36: second reservation rejected — in-flight sum would exceed the order total
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 3/36: full-amount reservation (5000 of 5000) accepted
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 4/36: second reservation on a fully-reserved order refused — "Nothing left"
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 5/36: external refund for 100% clamps to the 4000 actually remaining
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 6/36: first begin with re_test_1 creates a new operation
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 7/36: second begin with re_test_1 adopts the same operation_id
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 8/36: settle_refund_operation applies on the first call (ok=true, already=false)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 9/36: orders.refunded_cents advanced to 4000
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 10/36: platform_fee_refunded_cents = round(after * fee / total) = 400
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 11/36: payments.refunded_cents advanced and status transitioned to partially_refunded
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 12/36: settling again reports already=true (no re-application)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 13/36: orders.refunded_cents unchanged after the second settle (no double-advance)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 14/36: full-refund settle moves the order to status refunded
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 15/36: the pending transfer_intents row for a fully-refunded order flips to cancelled
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 16/36: partial refund with an existing transfer_reference lands the op in reversal_pending
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 17/36: reversal_due_cents = round(after*net/total) - round(before*net/total) = 2700
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 18/36: a failed op releases its reservation — a same-amount retry succeeds afterward
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 18b/36: the retry's idempotency_key carries the deterministic :r1 suffix
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 19/36: claim_transfer_intents claims 4 rows (3 ready + the stale-leased one, not the live-leased one)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 20/36: every claimed row has status=processing
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 21/36: every claimed row has locked_by set to the claiming worker
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 22/36: every claimed row has lease_expires_at in the future
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 23/36: the row with a live lease was not claimed — untouched, still owned by live-worker
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 24/36: claim_transfer_intents(p_batch=2) returns exactly 2 rows
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 25/36: an intent with attempts >= p_max_attempts is never claimed
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 26/36: an intent whose next_attempt_at is still in the future is not claimed
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 27/36: once next_attempt_at is in the past, the intent is claimed
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 28/36: first insert with dedup_key money-guard-dedup-1 succeeds
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 29/36: a second insert with the same dedup_key is rejected (unique violation)
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 30/36: refund_operations rejects a direct client INSERT
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 31/36: refund_operations rejects a direct client UPDATE
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 32/36: a non-admin SELECT on refund_operations returns zero rows
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 33/36: admin_alert_outbox rejects a direct client INSERT
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 34/36: admin_alert_outbox rejects a direct client UPDATE
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 35/36: a non-admin SELECT on admin_alert_outbox returns zero rows, despite fixture rows existing
+psql:supabase/tests/money_guard.sql:564: NOTICE:  PASS 36/36: begin_refund_operation is not EXECUTE-granted to authenticated
+psql:supabase/tests/money_guard.sql:564: NOTICE:  --- all money-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/purchase_guard.sql
+BEGIN
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 1/9: only one buyer claimed the listing; the other was told why
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 2/9: listing held as reserved during payment
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 3/9: replaying an idempotency key returns the first result
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 4/9: failed payment released the reservation
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 5/9: sale recorded and rival offers expired
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 6/9: terminal-state guard — a settled order cannot be re-finalized
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 7/9: dispute constraints — offer cap and category set enforced
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 8/9: opening a dispute notifies the seller
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  PASS 9/9: refund settles the dispute, notifies, and keeps the part sold
+psql:supabase/tests/purchase_guard.sql:212: NOTICE:  --- all purchase-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/remediation_guard.sql
+BEGIN
+psql:supabase/tests/remediation_guard.sql:95: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/remediation_guard.sql:95: NOTICE:  all remediation checks passed
+DO
+ROLLBACK
+
+Running supabase/tests/return_guard.sql
+BEGIN
+psql:supabase/tests/return_guard.sql:121: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: requested -> completed refused (42501)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: a moving return cannot expire (42501)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: second live RMA refused (42501)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: a new RMA is allowed once the first is terminal
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: only the seller can redeem (not_your_order)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: wrong code rejected and counted
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: valid pass delivers the order
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: pass is single-use (not_redeemable)
+psql:supabase/tests/return_guard.sql:121: NOTICE:  PASS: return_guard — all checks green (rolling back)
+DO
+ROLLBACK
+
+Running supabase/tests/security_guard.sql
+BEGIN
+CREATE FUNCTION
+CREATE FUNCTION
+psql:supabase/tests/security_guard.sql:555: NOTICE:  --- fixtures ready ---
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 1a: payouts_enabled is not client-writable (0017 column grant)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 1b: stripe_account_id is not client-writable (0017 column grant)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 2a: counter_amount_cents cannot be set at insert time
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 2b: responded_at cannot be set at insert time
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 2c: a new offer must start as open
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 3: a seller cannot offer on their own listing
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 4a: an offer cannot exceed the asking price
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 4b: an offer below the seller's minimum is rejected
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 4c: an in-bounds offer is accepted
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 5a: offer listing_id is immutable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 5b: offer amount_cents is immutable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 6: offer_accept_begin refuses a non-owning seller — no reservation, no order
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 7: an expired offer is refused and marked expired, not accepted
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8a: reviewee must be the order counterparty
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8b: reviewer must be a party to the named order
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8c: a genuine review from the actual buyer is accepted
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 8d: duplicate review on the same order is rejected (unique order_id, reviewer_id)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 9a: message insert requires the sender to be party to the order
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 9b: a non-party sees zero rows on another user's order thread
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 9c: a non-party sees zero rows for an order they are not on
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10a: recipient can mark a message read
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10b: sender has no UPDATE access to a message they sent (RLS USING filters it out)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10c: message body is immutable even for the recipient's own UPDATE
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 10d: message recipient_id is immutable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 11a: orders reject a direct client INSERT
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 11b: orders reject a direct client UPDATE (zero rows are ever a candidate)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 11c: orders reject a direct client DELETE (zero rows are ever a candidate)
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12a: webhook_events is not client-writable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12b: transfer_intents is not client-writable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12c: transfer_intents rejects client UPDATE
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 12d: payment_recoveries is not client-writable
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 13a: an order participant reads their own dispute evidence
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 13b: a non-participant sees zero dispute_evidence rows
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 13c: dispute_evidence has no client-facing INSERT policy
+psql:supabase/tests/security_guard.sql:555: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 14: a seller cannot purchase their own listing
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 15a: seller cannot clear a reservation by direct PATCH
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS 15b: seller cannot set status=sold directly — that is checkout's job
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS: user can save a search
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS: cannot save a search for another user
+psql:supabase/tests/security_guard.sql:555: NOTICE:  PASS: saved searches invisible to other users
+psql:supabase/tests/security_guard.sql:555: NOTICE:  --- all security-guard checks passed ---
+DO
+ROLLBACK
+
+Running supabase/tests/snapshot_guard.sql
+BEGIN
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  table "_claimed" does not exist, skipping
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: purchase freezes a complete snapshot + gallery
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: listing/profile edits do not touch the frozen record
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: commercial_snapshot refuses UPDATE (42501)
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: frozen money columns refuse UPDATE (42501)
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: snapshot images refuse UPDATE (42501)
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: listing_id remains writable for the FK cascade
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: fee is 3230 on a 32300 total regardless of the split
+psql:supabase/tests/snapshot_guard.sql:205: NOTICE:  PASS: snapshot_guard — all checks green (rolling back)
+DO
+ROLLBACK
