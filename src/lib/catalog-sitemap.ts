@@ -1,11 +1,9 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/site";
 import { createPublicClient } from "@/lib/supabase/public";
-import { sitemapPages, SITEMAP_PAGE_SIZE } from "@/lib/sitemap-pages";
-export const revalidate = 3600;
-export async function generateSitemaps() { return sitemapPages(); }
-export default async function sitemap({ id }: { id: Promise<string> }): Promise<MetadataRoute.Sitemap> {
-  const match = /^(cars|listings|profiles)-(\d+)$/.exec(await id);
+import { SITEMAP_PAGE_SIZE } from "@/lib/sitemap-pages";
+export async function catalogSitemap(id: string): Promise<MetadataRoute.Sitemap> {
+  const match = /^(cars|listings|profiles)-(\d+)$/.exec(id);
   if (!match) return [];
   const start = Number(match[2]) * SITEMAP_PAGE_SIZE, end = start + SITEMAP_PAGE_SIZE - 1;
   const client = createPublicClient(), base = siteUrl();

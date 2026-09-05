@@ -14,7 +14,7 @@ never a second charge).
   back to `.env.local`. The suite **throws** on any non-test key and
   **self-skips with a loud warning** when no key is configured — a skip is
   reported, never faked as coverage.
-- No database and no other services are needed.
+- An explicitly isolated test Supabase database is required for multi-seller settlement and late-capture compensation coverage. CI provisions its own disposable local stack.
 
 ## In CI
 
@@ -24,8 +24,4 @@ saying it was skipped otherwise.
 
 ## Explicitly not covered here
 
-Multi-seller settlement, transfers to connected accounts, dispute flows and
-recovery paths run through the database + webhook stack; the stub-mode
-golden-path E2E exercises that logic. Full Stripe-backed E2E (webhook delivery
-into a disposable Supabase project) remains documented future coverage — the
-CI summary says so on every build.
+Multi-seller capture and late-capture compensation are covered by the Stripe test API suite. HTTPS Payment Element/3DS browser journeys, connected-account payouts, post-transfer refunds, and provider-originated disputes still require hosted integration evidence. The browser regression suite uses explicit payment stubs; the CI summary distinguishes that coverage.

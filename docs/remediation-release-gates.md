@@ -12,6 +12,6 @@ The repository implementation and local evidence do not authorize a live-money r
 | Populated search projection | Run the implemented inventory/reconciliation commands and verify queue delivery before enabling the optional engine on an existing catalog |
 | Accessibility | Automated axe/keyboard coverage is not a manual screen-reader sign-off. Record critical and nested modal results with the agreed assistive technologies |
 | Recovery and capacity | Agree representative traffic, latency/error budgets and RPO/RTO; perform coordinated hosted database/object restore, reconcile Stripe before workers restart, and prove actual scheduled cycles including daily jobs |
-| Hosted release checks | Run mandatory GitHub checks on the candidate, retain sanitized evidence and configure the required branch/release checks after they pass |
+| Hosted release checks | Run mandatory GitHub checks on the candidate, retain sanitized evidence and configure the required branch/release checks after they pass. GitHub returned HTTP 403 on 2026-09-05: this private repository requires GitHub Pro for branch protection; keep the repository private and upgrade the account to enforce these checks |
 
 Until those gates are complete, product analytics and optional external search should remain disabled in the release environment. Retain schema-compatible rollback builds and preserve the durable record of external financial effects during rollback.
