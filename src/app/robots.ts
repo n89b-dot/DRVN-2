@@ -1,3 +1,4 @@
+import { sitemapPages } from "@/lib/sitemap-pages";
 import type { MetadataRoute } from "next";
 
 import { siteUrl } from "@/lib/site";
@@ -6,7 +7,7 @@ import { siteUrl } from "@/lib/site";
  * Authed product surfaces are excluded — they redirect to /login for a
  * crawler anyway, so indexing them only wastes crawl budget.
  */
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
   return {
     rules: [
       {
@@ -15,6 +16,9 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           "/api/",
           "/callback",
+          "/confirm",
+          "/admin",
+          "/admin-verify",
           "/docs",
           "/cart",
           "/orders",
@@ -27,7 +31,7 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: `${siteUrl()}/sitemap.xml`,
+    sitemap: [`${siteUrl()}/sitemap.xml`, ...(await sitemapPages()).map(({ id }) => `${siteUrl()}/catalog/sitemap/${id}.xml`)],
     host: siteUrl(),
   };
 }
