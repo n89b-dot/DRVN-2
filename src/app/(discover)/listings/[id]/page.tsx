@@ -13,6 +13,7 @@ import { fetchWatchCounts, hydrateListingCards } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
+import { getBetaAccess } from "@/lib/beta-access";
 
 import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
@@ -160,6 +161,7 @@ export default async function ListingPage({
       sourceModLine.raw_text ||
       null
     : null;
+  const betaBuyerAccess = await getBetaAccess(user?.id, "buyer");
 
   const watchCount = watchCounts.get(id) ?? 0;
 
@@ -323,6 +325,8 @@ export default async function ListingPage({
             <PurchaseActions
               listingId={listing.id}
               isLoggedIn={Boolean(user)}
+              betaEnforced={betaBuyerAccess.enforced}
+              buyerEligible={betaBuyerAccess.eligible}
               isOwn={user?.id === listing.seller_id}
               isActive={listing.status === "active"}
               paymentsLive={paymentsAreLive()}

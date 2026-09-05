@@ -1,0 +1,44 @@
+import { describe, expect, it } from "vitest";
+
+import { ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPORT_SECTIONS, exportDownloadDecision, nextExportCheckpoint } from "./account-export-contract";
+
+describe("account export contract", () => {
+  it("uses explicit projections and covers both sides of shared records", () => {
+    expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
+    const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
+    expect(keys).toEqual(expect.arrayContaining([
+      "messages_sent", "messages_received", "offers_made", "offers_received", "returns",
+      "dispute_evidence", "seller_adjustments", "transfers", "refunds", "order_snapshot_images",
+      "shipments", "shipment_events",
+    ]));
+  });
+
+  it("keeps provider secrets and unrelated counterparty profiles out", () => {
+    const forbidden = ["raw", "idempotency_key", "token_hash", "code_hash", "provider_reference", "last_error", "destination_hash"];
+    for (const section of ACCOUNT_EXPORT_SECTIONS) {
+      const fields = section.projection.split(",").map((field) => field.trim());
+      for (const field of forbidden) expect(fields, `${section.key} leaked ${field}`).not.toContain(field);
+      expect(section.projection).not.toMatch(/profiles!/);
+    }
+  });
+
+  it("resumes beyond two page boundaries without replaying a cursor page", () => {
+    const section = ACCOUNT_EXPORT_SECTIONS.find((item) => item.key === "messages_sent")!;
+    const page = Array.from({ length: ACCOUNT_EXPORT_PAGE_SIZE }, (_, index) => ({ id: String(index).padStart(4, "0") }));
+    const first = nextExportCheckpoint(section, { section: 0, offset: 0, cursor: null }, page);
+    expect(first).toEqual({ section: 0, offset: 250, cursor: "0249" });
+    const second = nextExportCheckpoint(section, first, page.map((_, index) => ({ id: String(index + 250).padStart(4, "0") })));
+    expect(second).toEqual({ section: 0, offset: 500, cursor: "0499" });
+    expect(nextExportCheckpoint(section, second, [{ id: "0500" }])).toEqual({ section: 1, offset: 0, cursor: null });
+  });
+
+  it("denies anonymous, unrelated, incomplete and expired downloads", () => {
+    const request = { user_id: "owner", status: "completed", expires_at: "2030-01-02T00:00:00Z" };
+    const now = new Date("2030-01-01T00:00:00Z").getTime();
+    expect(exportDownloadDecision(null, request, now)).toBe("unauthenticated");
+    expect(exportDownloadDecision("other", request, now)).toBe("not_found");
+    expect(exportDownloadDecision("owner", { ...request, status: "processing" }, now)).toBe("not_ready");
+    expect(exportDownloadDecision("owner", { ...request, expires_at: "2029-12-01T00:00:00Z" }, now)).toBe("expired");
+    expect(exportDownloadDecision("owner", request, now)).toBe("allowed");
+  });
+});

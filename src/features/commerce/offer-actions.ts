@@ -8,6 +8,7 @@ import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import type { CommerceState } from "./action-types";
+import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -20,6 +21,9 @@ async function requireUser() {
 
 export async function makeOffer(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
+
+  const betaAccess = await getBetaAccess(user.id, "buyer");
+  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
 
   if (!(await allowAction(RATE_LIMITS.makeOffer, user.id))) {
     return { error: rateLimitMessage(RATE_LIMITS.makeOffer) };
@@ -121,6 +125,10 @@ export async function respondToOffer(
   const decision = String(formData.get("decision") ?? "");
   if (!offerId || !["accepted", "declined", "countered"].includes(decision)) {
     return { error: "Pick accept, counter or decline." };
+  }
+  if (decision !== "declined") {
+    const betaAccess = await getBetaAccess(user.id, "seller");
+    if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
   }
 
   const { data: offer } = await admin
@@ -277,6 +285,8 @@ export async function acceptCounter(
   formData: FormData
 ): Promise<CommerceState> {
   const { user } = await requireUser();
+  const betaAccess = await getBetaAccess(user.id, "buyer");
+  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
   const admin = createAdminClient();
   const offerId = String(formData.get("offer_id") ?? "");
   if (!offerId) return { error: "Missing offer." };

@@ -75,6 +75,7 @@ export function Rv({
   return (
     <MotionTag
       ref={ref}
+      data-reveal="true"
       className={`${shown ? "is-in " : ""}${className}`}
       style={style}
       variants={reveal}

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { EmptyState, Foot, PageHead } from "@/components/ui";
 import { resolveImportConfig } from "@/lib/listing-import/config";
+import { getBetaAccess } from "@/lib/beta-access";
 import { createClient } from "@/lib/supabase/server";
 
 import { ImportFlow } from "./import-flow";
@@ -21,6 +22,17 @@ export default async function ImportPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const betaAccess = await getBetaAccess(user.id, "seller");
+  if (!betaAccess.eligible) {
+    return (
+      <div className="wrap pb-10">
+        <EmptyState mark="β" title="Listing imports are limited to invited sellers">
+          Existing orders remain available, but this account cannot start new selling activity.
+        </EmptyState>
+      </div>
+    );
+  }
 
   const [{ data: profile }, config] = await Promise.all([
     supabase.from("profiles").select("import_attested_at").eq("id", user.id).maybeSingle(),

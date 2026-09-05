@@ -954,10 +954,14 @@ export async function deleteAccount(_prev: ActionState, formData: FormData): Pro
     return { error: 'Type DELETE to confirm.' };
   }
 
-  const { data: requestId, error } = await supabase.rpc("request_account_deletion", {});
+  const { data, error } = await supabase.rpc("request_account_deletion" as never, {} as never);
   if (error) return { error: error.message };
+  const result = data as unknown as { outcome?: string; job_id?: string; message?: string };
+  if (result.outcome !== "cleanup_pending" || !result.job_id) {
+    return { error: result.message ?? "Deletion needs review before cleanup can begin." };
+  }
   // Revoke refresh sessions immediately; the database tombstone also blocks
   // direct writes with already-issued access tokens until their expiry.
   await supabase.auth.signOut({ scope: "global" });
-  redirect(`/login?deletion=requested&reference=${requestId}`);
+  redirect(`/login?deletion=requested&reference=${result.job_id}`);
 }

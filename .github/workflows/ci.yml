@@ -90,6 +90,8 @@ jobs:
 
       - name: All SQL guards (independent results)
         env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
           PGPASSWORD: postgres
         run: bash scripts/test-sql-guards.sh
 

@@ -19,6 +19,7 @@ import { capture } from "@/lib/analytics";
 import { consumeListingImport } from "@/lib/listing-import/consume";
 import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
+import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 export type SellState = { error?: string; ok?: string };
 
@@ -184,6 +185,9 @@ async function readListingFields(formData: FormData, userId: string) {
 
 export async function createListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
+
+  const betaAccess = await getBetaAccess(user.id, "seller");
+  if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
   if (!(await allowAction(RATE_LIMITS.createListing, user.id))) {
     return { error: rateLimitMessage(RATE_LIMITS.createListing) };
@@ -429,6 +433,10 @@ export async function setListingStatus(
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "") as ListingStatus;
   if (!id || !SETTABLE_STATUSES.includes(status)) return { error: "Missing listing or status." };
+  if (status === "active") {
+    const betaAccess = await getBetaAccess(user.id, "seller");
+    if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
+  }
 
   const { data: existing } = await supabase
     .from("listings")

@@ -5,6 +5,7 @@ import { reportError } from "@/lib/monitoring";
 import { sendAdminAlert } from "@/lib/admin/alerts";
 import type { DisputeOutcome } from "@/lib/database.types";
 import type Stripe from "stripe";
+import { recoverTransferReversal } from "./reversal-recovery";
 
 /**
  * The one refund path — now a durable state machine (0026), not a sequence.
@@ -29,9 +30,8 @@ import type Stripe from "stripe";
  *    keys expire after 24 h, so re-calling blind could double-refund), then
  *    call the provider with the STORED key only if the refund never happened.
  *  - provider_succeeded / effects_pending: re-run settle (idempotent).
- *  - reversal_pending: retry the transfer reversal with a per-operation
- *    deterministic key; a recovery case opens on first failure and auto-closes
- *    if a later retry lands.
+ *  - reversal_pending: freeze the exact reversal request, reconcile every
+ *    provider page, and only issue after a live lease proves the history empty.
  *
  * The seller's transfer is REVERSED in proportion to the refund
  * (`transfers.createReversal` — separate charges and transfers, so
@@ -702,73 +702,15 @@ async function ensureReversal(
     return { ok: false, reversedCents: 0, recoveryId };
   }
 
-  try {
-    const reversal = await stripeClient().transfers.createReversal(
-      transferReference,
-      {
-        amount: due,
-        metadata: { order_id: op.order_id, operation_id: op.id, reason: op.reason.slice(0, 480) },
-      },
-      { idempotencyKey: `trfrev:op:${op.id}` }
-    );
-    const completed = await transition(admin, op.id, ["reversal_pending"], {
-      status: "completed",
-      reversal_reference: reversal.id,
-      reversal_completed_at: new Date().toISOString(),
-      last_error: null,
-    });
-    if (!completed) {
-      const current = await loadOperation(admin, op.id);
-      if (!current || current.status !== "completed" || current.reversal_reference !== reversal.id) {
-        throw new Error("Transfer reversal identity was not durably recorded");
-      }
-    }
-    // A retry that lands closes the case a prior failure opened.
-    if (op.recovery_id) {
-      const { error: closeError } = await admin
-        .from("payment_recoveries")
-        .update({
-          status: "recovered",
-          resolved_at: new Date().toISOString(),
-          resolution_note: "Reversal succeeded on retry.",
-        })
-        .eq("id", op.recovery_id)
-        .eq("status", "open");
-      if (closeError) throw new Error("Reversal recovery could not be closed");
-    }
-    return { ok: true, reversedCents: due };
-  } catch (error) {
-    reportError("[refunds] transfer reversal failed", {
-      operationId: op.id,
-      transfer: transferReference,
-      amount: due,
-      error,
-    });
-    const detail =
-      `Refund of ${op.amount_cents} ${op.currency} succeeded but reversing ` +
-      `${due} from transfer ${transferReference} failed: ` +
-      (error instanceof Error ? error.message : String(error));
-    let recoveryId = op.recovery_id ?? undefined;
-    if (!recoveryId) {
-      recoveryId = await openReversalRecovery(admin, op, due, detail);
-    }
-    const backoffMinutes = Math.min(2 ** Math.min(op.attempts, 6), 60);
-    const { data: deferred, error: deferError } = await admin
-      .from("refund_operations")
-      .update({
-        attempts: op.attempts + 1,
-        next_attempt_at: new Date(Date.now() + backoffMinutes * 60_000).toISOString(),
-        last_error: detail.slice(0, 500),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", op.id)
-      .eq("status", "reversal_pending")
-      .select("id");
-    if (deferError || !deferred?.length) {
-      throw new Error("Transfer reversal retry was not durably scheduled");
-    }
-    return { ok: false, reversedCents: 0, recoveryId };
-  }
+  return recoverTransferReversal(admin, {
+    operationId: op.id,
+    orderId: op.order_id,
+    transferReference,
+    amountCents: due,
+    currency: op.currency,
+    reason: op.reason,
+    attempts: op.attempts,
+  });
 }
 
 async function openReversalRecovery(

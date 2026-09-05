@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
+import { ButtonLink, EmptyState, Foot } from "@/components/ui";
+import { getBetaAccess } from "@/lib/beta-access";
 import { capture } from "@/lib/analytics";
 import { sourceLabelFor } from "@/lib/listing-import/engine";
 import {
@@ -114,6 +115,21 @@ export default async function SellPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const betaAccess = await getBetaAccess(user.id, "seller");
+  if (!betaAccess.eligible) {
+    return (
+      <div className="wrap pb-10">
+        <EmptyState
+          mark="β"
+          title="Selling is limited to invited members"
+          action={<ButtonLink href="/marketplace">Browse the marketplace</ButtonLink>}
+        >
+          Your account can keep working on existing orders. Creating or republishing listings requires active seller access.
+        </EmptyState>
+      </div>
+    );
+  }
 
   const [{ data: cars, error }, makes, canPublish, fulfillment] = await Promise.all([
     supabase

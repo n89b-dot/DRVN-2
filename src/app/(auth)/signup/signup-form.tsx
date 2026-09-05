@@ -3,12 +3,20 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { Button, PasswordField, TextField } from "@/components/ui";
+import { Alert, Button, PasswordField, TextField } from "@/components/ui";
 
 import { signup, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
 
-export function SignupForm({ next }: { next?: string }) {
+export function SignupForm({
+  next,
+  invite,
+  betaEnforced,
+}: {
+  next?: string;
+  invite?: string;
+  betaEnforced: boolean;
+}) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signup, {});
   const carry = next ? `?next=${encodeURIComponent(next)}` : "";
 
@@ -19,11 +27,17 @@ export function SignupForm({ next }: { next?: string }) {
         Join <span className="text-live">DRVN.</span>
       </h1>
       <p className="mt-3 text-body text-dim">
-        Show your build. Sell your parts. Find what fits.
+        {betaEnforced
+          ? "DRVN is in an invited beta. Use the email address this invitation was issued to."
+          : "Show your build. Sell your parts. Find what fits."}
       </p>
 
       <form action={action} className="mt-6">
         {next && <input type="hidden" name="next" value={next} />}
+        {invite && <input type="hidden" name="invite" value={invite} />}
+        {betaEnforced && !invite && (
+          <Alert className="mb-4" role="status" title="Invitation required">An invitation link is required while DRVN is in beta.</Alert>
+        )}
         <TextField
           id="signup-email"
           label="Email"
@@ -47,8 +61,8 @@ export function SignupForm({ next }: { next?: string }) {
           hint="8+ characters. Length is what really counts."
           error={state.error}
         />
-        <Button type="submit" variant="live" disabled={pending} className="w-full">
-          {pending ? "Creating…" : "Create account"}
+        <Button type="submit" variant="live" disabled={pending || (betaEnforced && !invite)} className="w-full">
+          {pending ? "Creating…" : betaEnforced ? "Accept invitation" : "Create account"}
         </Button>
         <p className="field__hint mt-3 text-center">
           By creating an account you agree to the{" "}
@@ -69,12 +83,14 @@ export function SignupForm({ next }: { next?: string }) {
         </Link>
       </div>
 
-      <div className="mt-6">
-        <span className="microlabel">Or use an account you already have</span>
-        <div className="mt-3">
-          <OAuthButton next={next} />
+      {!betaEnforced && (
+        <div className="mt-6">
+          <span className="microlabel">Or use an account you already have</span>
+          <div className="mt-3">
+            <OAuthButton next={next} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,62 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      account_deletion_requests: {
+        Row: {
+          affected_data_classes: string[]
+          blocker_code: string | null
+          completed_at: string | null
+          id: string
+          job_id: string | null
+          next_action: string
+          outcome: string
+          policy_decisions_pending: string[]
+          requested_at: string
+          responsible_owner: string | null
+          review_at: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          affected_data_classes?: string[]
+          blocker_code?: string | null
+          completed_at?: string | null
+          id?: string
+          job_id?: string | null
+          next_action: string
+          outcome: string
+          policy_decisions_pending?: string[]
+          requested_at?: string
+          responsible_owner?: string | null
+          review_at?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          affected_data_classes?: string[]
+          blocker_code?: string | null
+          completed_at?: string | null
+          id?: string
+          job_id?: string | null
+          next_action?: string
+          outcome?: string
+          policy_decisions_pending?: string[]
+          requested_at?: string
+          responsible_owner?: string | null
+          review_at?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "remediation_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       account_emails: {
         Row: {
           created_at: string
@@ -27,6 +83,101 @@ export type Database = {
           created_at?: string
           email?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      account_export_parts: {
+        Row: {
+          byte_count: number
+          content_type: string
+          created_at: string
+          object_path: string
+          page_number: number
+          request_id: string
+          row_count: number
+          section_key: string
+          sha256: string
+        }
+        Insert: {
+          byte_count: number
+          content_type?: string
+          created_at?: string
+          object_path: string
+          page_number: number
+          request_id: string
+          row_count: number
+          section_key: string
+          sha256: string
+        }
+        Update: {
+          byte_count?: number
+          content_type?: string
+          created_at?: string
+          object_path?: string
+          page_number?: number
+          request_id?: string
+          row_count?: number
+          section_key?: string
+          sha256?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_export_parts_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "account_export_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      account_export_requests: {
+        Row: {
+          completed_at: string | null
+          contract_version: string
+          current_cursor: string | null
+          current_offset: number
+          current_section: number
+          cutoff_at: string
+          expires_at: string
+          id: string
+          last_error: string | null
+          manifest: Json | null
+          manifest_path: string | null
+          requested_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          contract_version: string
+          current_cursor?: string | null
+          current_offset?: number
+          current_section?: number
+          cutoff_at?: string
+          expires_at?: string
+          id?: string
+          last_error?: string | null
+          manifest?: Json | null
+          manifest_path?: string | null
+          requested_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          contract_version?: string
+          current_cursor?: string | null
+          current_offset?: number
+          current_section?: number
+          cutoff_at?: string
+          expires_at?: string
+          id?: string
+          last_error?: string | null
+          manifest?: Json | null
+          manifest_path?: string | null
+          requested_at?: string
+          status?: string
           user_id?: string
         }
         Relationships: []
@@ -349,6 +500,113 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      beta_access_config: {
+        Row: {
+          enforced: boolean
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enforced: boolean
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enforced?: boolean
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      beta_invitations: {
+        Row: {
+          consumed_at: string | null
+          consumed_by: string | null
+          created_at: string
+          created_by: string | null
+          email_normalized: string
+          expires_at: string
+          id: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          roles: string[]
+          token_hash: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          email_normalized: string
+          expires_at: string
+          id?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          roles?: string[]
+          token_hash: string
+        }
+        Update: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          email_normalized?: string
+          expires_at?: string
+          id?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          roles?: string[]
+          token_hash?: string
+        }
+        Relationships: []
+      }
+      beta_memberships: {
+        Row: {
+          email_normalized: string
+          invitation_id: string
+          joined_at: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          roles: string[]
+          user_id: string
+        }
+        Insert: {
+          email_normalized: string
+          invitation_id: string
+          joined_at?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          roles: string[]
+          user_id: string
+        }
+        Update: {
+          email_normalized?: string
+          invitation_id?: string
+          joined_at?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          roles?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beta_memberships_invitation_id_fkey"
+            columns: ["invitation_id"]
+            isOneToOne: true
+            referencedRelation: "beta_invitations"
             referencedColumns: ["id"]
           },
         ]
@@ -2285,9 +2543,17 @@ export type Database = {
           remaining_before_cents: number
           requested_by: string
           resolve_dispute: boolean
+          reversal_amount_cents: number | null
+          reversal_call_may_have_occurred: boolean
           reversal_completed_at: string | null
+          reversal_currency: string | null
           reversal_due_cents: number | null
+          reversal_last_attempt_at: string | null
+          reversal_lease_expires_at: string | null
+          reversal_locked_by: string | null
+          reversal_operation_key: string | null
           reversal_reference: string | null
+          reversal_transfer_reference: string | null
           status: string
           updated_at: string
         }
@@ -2321,9 +2587,17 @@ export type Database = {
           remaining_before_cents: number
           requested_by: string
           resolve_dispute?: boolean
+          reversal_amount_cents?: number | null
+          reversal_call_may_have_occurred?: boolean
           reversal_completed_at?: string | null
+          reversal_currency?: string | null
           reversal_due_cents?: number | null
+          reversal_last_attempt_at?: string | null
+          reversal_lease_expires_at?: string | null
+          reversal_locked_by?: string | null
+          reversal_operation_key?: string | null
           reversal_reference?: string | null
+          reversal_transfer_reference?: string | null
           status?: string
           updated_at?: string
         }
@@ -2357,9 +2631,17 @@ export type Database = {
           remaining_before_cents?: number
           requested_by?: string
           resolve_dispute?: boolean
+          reversal_amount_cents?: number | null
+          reversal_call_may_have_occurred?: boolean
           reversal_completed_at?: string | null
+          reversal_currency?: string | null
           reversal_due_cents?: number | null
+          reversal_last_attempt_at?: string | null
+          reversal_lease_expires_at?: string | null
+          reversal_locked_by?: string | null
+          reversal_operation_key?: string | null
           reversal_reference?: string | null
+          reversal_transfer_reference?: string | null
           status?: string
           updated_at?: string
         }
@@ -3509,6 +3791,7 @@ export type Database = {
       }
     }
     Functions: {
+      account_deletion_blockers: { Args: { p_user: string }; Returns: Json }
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
@@ -3547,12 +3830,28 @@ export type Database = {
         }
         Returns: Json
       }
+      beta_access_status: {
+        Args: { p_role?: string; p_user_id?: string }
+        Returns: Json
+      }
       bind_checkout_analytics: {
         Args: { p_orders: string[] }
         Returns: undefined
       }
       bump_listing_view: { Args: { p_listing: string }; Returns: undefined }
       capture_reconciliation_candidates: { Args: never; Returns: Json }
+      claim_refund_reversal: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_lease_seconds?: number
+          p_operation: string
+          p_operation_key: string
+          p_transfer_reference: string
+          p_worker: string
+        }
+        Returns: string
+      }
       claim_remediation_jobs: {
         Args: { p_kind: string; p_limit?: number }
         Returns: Json
@@ -3599,6 +3898,18 @@ export type Database = {
         }
       }
       claim_unmapped_payment_requests: { Args: never; Returns: Json }
+      complete_refund_reversal: {
+        Args: {
+          p_amount_cents: number
+          p_currency: string
+          p_operation: string
+          p_operation_key: string
+          p_reversal_reference: string
+          p_transfer_reference: string
+          p_worker: string
+        }
+        Returns: string
+      }
       complete_transfer_intent: {
         Args: {
           p_operation_key: string
@@ -3613,6 +3924,10 @@ export type Database = {
         Returns: boolean
       }
       continue_account_deletion: {
+        Args: { p_job: string; p_lease: string }
+        Returns: undefined
+      }
+      continue_account_export: {
         Args: { p_job: string; p_lease: string }
         Returns: undefined
       }
@@ -3715,6 +4030,16 @@ export type Database = {
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
+      }
+      hold_refund_reversal: {
+        Args: {
+          p_detail: string
+          p_next_attempt_at: string
+          p_operation: string
+          p_operation_key: string
+          p_worker: string
+        }
+        Returns: string
       }
       identifier_matches_listing: {
         Args: { p_compact: string; p_id: string }
@@ -3852,9 +4177,17 @@ export type Database = {
         }
         Returns: string
       }
+      pause_account_deletion_hold: {
+        Args: { p_job: string; p_lease: string; p_user: string }
+        Returns: undefined
+      }
       pickup_redeem: {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }
         Returns: Json
+      }
+      prepare_beta_signup: {
+        Args: { p_email: string; p_token_hash: string }
+        Returns: string
       }
       prepare_payment_request: {
         Args: { p_key: string; p_request: Json }
@@ -3960,11 +4293,21 @@ export type Database = {
         Args: { p_new: string; p_old: string }
         Returns: Json
       }
+      renew_refund_reversal_lease: {
+        Args: {
+          p_lease_seconds?: number
+          p_operation: string
+          p_operation_key: string
+          p_worker: string
+        }
+        Returns: boolean
+      }
       renew_remediation_lease: {
         Args: { p_id: string; p_lease: string }
         Returns: undefined
       }
-      request_account_deletion: { Args: never; Returns: string }
+      request_account_deletion: { Args: never; Returns: Json }
+      request_account_export: { Args: never; Returns: string }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_ids: { Args: { p_query: string }; Returns: string[] }
       search_profile_ids: { Args: { p_query: string }; Returns: string[] }
@@ -4031,6 +4374,18 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       worker_health_snapshot: { Args: never; Returns: Json }
+      write_account_export: {
+        Args: {
+          p_checkpoint?: Json
+          p_error?: string
+          p_job: string
+          p_lease: string
+          p_manifest?: Json
+          p_part?: Json
+          p_request: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

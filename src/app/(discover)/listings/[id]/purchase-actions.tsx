@@ -23,6 +23,8 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 export function PurchaseActions({
   listingId,
   isLoggedIn,
+  betaEnforced,
+  buyerEligible,
   isOwn,
   isActive,
   paymentsLive,
@@ -32,6 +34,8 @@ export function PurchaseActions({
 }: {
   listingId: string;
   isLoggedIn: boolean;
+  betaEnforced: boolean;
+  buyerEligible: boolean;
   isOwn: boolean;
   isActive: boolean;
   paymentsLive: boolean;
@@ -104,6 +108,14 @@ export function PurchaseActions({
   }
 
   function runBuyNow() {
+    if (betaEnforced && !isLoggedIn) {
+      router.push(`/login?next=${encodeURIComponent(`/listings/${listingId}`)}`);
+      return;
+    }
+    if (!buyerEligible) {
+      setCartState({ error: "Buying is limited to invited beta members." });
+      return;
+    }
     startTransition(async () => {
       const fd = new FormData();
       fd.set("listing_id", listingId);
@@ -117,7 +129,7 @@ export function PurchaseActions({
     <div ref={actionsRef} className="mt-5 flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         <Button variant="live" disabled={pending} onClick={runBuyNow} className="flex-1">
-          {pending ? "Processing…" : "Buy now"}
+          {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
         </Button>
         <Button
           variant="ghost"
@@ -229,7 +241,7 @@ export function PurchaseActions({
           </span>
         </span>
         <Button variant="live" disabled={pending} onClick={runBuyNow} className="min-w-0 flex-1">
-          {pending ? "Processing…" : "Buy now"}
+          {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
         </Button>
         <Button
           variant="ghost"

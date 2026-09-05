@@ -36,6 +36,7 @@ const TIMEOUT_MS = 3000;
  * whether that means "fall back" (queries) or "report and move on" (sync).
  */
 export async function typesenseRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  if (!typesenseConfigured()) throw new Error("External search is disabled");
   const res = await fetch(`${process.env.TYPESENSE_URL}${path}`, {
     ...init,
     headers: { ...typesenseHeaders(), ...(init.headers ?? {}) },

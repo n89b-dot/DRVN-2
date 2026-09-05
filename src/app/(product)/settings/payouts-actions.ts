@@ -7,6 +7,7 @@ import { getPaymentProvider } from "@/lib/payments/provider";
 import { siteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 /**
  * Settings → Payments → "Set up payouts". Creates the seller's Express
@@ -19,6 +20,15 @@ export async function startConnectOnboarding(): Promise<{ error?: string }> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const betaAccess = await getBetaAccess(user.id, "seller");
+  if (!betaAccess.eligible) {
+    // Revocation stops new selling, but cannot prevent an existing seller
+    // from completing payout onboarding for an already accepted order.
+    const obligations = await supabase.from("orders").select("id").eq("seller_id", user.id)
+      .not("status", "in", "(cancelled,payment_failed)").limit(1);
+    if (obligations.error || !obligations.data?.length) return { error: betaCommerceError("seller") };
+  }
 
   if (getPaymentProvider().name !== "stripe") {
     return { error: "Payouts need Stripe configured — not available in stub mode." };

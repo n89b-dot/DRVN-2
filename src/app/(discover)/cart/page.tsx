@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { removeFromCart } from "@/features/commerce/actions";
 import { reportError } from "@/lib/monitoring";
+import { getBetaAccess } from "@/lib/beta-access";
 
 export const metadata = { title: "Cart - DRVN" };
 
@@ -43,6 +44,11 @@ export default async function CartPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const betaAccess = await getBetaAccess(user?.id, "buyer");
+  const checkoutHref = betaAccess.enforced && !user
+    ? "/login?next=%2Fcheckout"
+    : "/checkout";
+  const checkoutLabel = betaAccess.enforced && !user ? "Sign in to check out" : "Proceed to checkout";
 
   const { data: listings, error } = ids.length
     ? await supabase
@@ -291,8 +297,8 @@ export default async function CartPage() {
             </p>
 
             {active.length > 0 ? (
-              <ButtonLink href="/checkout" variant="live" className="mt-4 w-full">
-                Proceed to checkout
+              <ButtonLink href={checkoutHref} variant="live" className="mt-4 w-full">
+                {checkoutLabel}
               </ButtonLink>
             ) : (
               <p className="field__hint mt-4">Remove the unavailable lines above to check out.</p>
@@ -315,8 +321,8 @@ export default async function CartPage() {
           offer, and the in-page summary says so instead. */}
       {active.length > 0 && (
         <MobileActionBar label="Checkout" total={formatPrice(total)} wide>
-          <ButtonLink href="/checkout" variant="live" className="min-w-0 flex-1">
-            Proceed to checkout
+          <ButtonLink href={checkoutHref} variant="live" className="min-w-0 flex-1">
+            {checkoutLabel}
           </ButtonLink>
         </MobileActionBar>
       )}

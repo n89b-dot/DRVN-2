@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
+import { betaCommerceError, getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthState = { error?: string; ok?: string };
@@ -66,11 +67,29 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     return { error: "Password must be at least 8 characters." };
   }
 
+  const prepared = await prepareBetaSignup(email, String(formData.get("invite") ?? ""));
+  if (prepared.error) return { error: prepared.error };
+
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: prepared.claimId ? { data: { beta_claim_id: prepared.claimId } } : undefined,
+  });
 
   if (error) {
     return { error: error.message };
+  }
+
+  // In enforced mode, the Auth trigger is the authority: a direct Auth user
+  // without the server-minted claim gets no membership or public profile.
+  if (prepared.enforced) {
+    const access = await getBetaAccess(data.user?.id, "buyer");
+    const sellerAccess = await getBetaAccess(data.user?.id, "seller");
+    if (!access.eligible && !sellerAccess.eligible) {
+      await supabase.auth.signOut();
+      return { error: "This invitation could not be accepted. It may already have been used." };
+    }
   }
 
   // If email confirmation is disabled, a session exists now → onboarding.
@@ -122,6 +141,14 @@ export async function completeOnboarding(
 
   if (!user) {
     redirect("/login");
+  }
+
+  const [buyerAccess, sellerAccess] = await Promise.all([
+    getBetaAccess(user.id, "buyer"),
+    getBetaAccess(user.id, "seller"),
+  ]);
+  if (buyerAccess.enforced && !buyerAccess.eligible && !sellerAccess.eligible) {
+    return { error: betaCommerceError("buyer") };
   }
 
   const { error } = await supabase

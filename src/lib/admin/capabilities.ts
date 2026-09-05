@@ -31,6 +31,7 @@ export const ADMIN_CAPABILITIES: AdminCapability[] = [
   { family: "report.", description: "Action or dismiss moderation reports", requires: "admin" },
   { family: "note.", description: "Record internal notes", requires: "admin" },
   { family: "case.", description: "Claim, label and work operations cases", requires: "admin" },
+  { family: "invitation.", description: "Issue and revoke beta invitations", requires: "admin" },
 ];
 
 export function capabilityFor(action: string): AdminCapability | null {

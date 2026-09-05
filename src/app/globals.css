@@ -8345,3 +8345,8 @@ video {
 
 
 
+
+/* Reduced-motion content is settled even before client hydration. */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal="true"] { opacity: 1 !important; transform: none !important; }
+}

@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-05T18:30:02.902038+00:00",
+  "updatedAt": "2026-09-05T19:54:18.728916+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "First implementation batch verified: safer refunds and transfers, recoverable shipping callbacks, stricter release checks, and a fixed dispatch screen. Next: remaining recovery workflows, invitation boundaries, and hosted staging capacity.",
+  "current": "Latest local checks: 499 unit tests, 21 SQL guard suites on both local and fresh databases, 10 Stripe API tests, 7 accessibility tests and 8 security/transaction browser tests pass. Provider-dispute ordering, late-refund recredit and broader acceptance remain unfinished; hosted gates are still pending.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -16,7 +16,7 @@
       "id": "R01",
       "title": "A safe place to test",
       "category": "Release setup",
-      "status": "blocked",
+      "status": "active",
       "owner": "Release lead",
       "why": "Test changes without touching real buyers, sellers, or payments.",
       "before": "Testing currently relies on local services; hosted beta access has not been verified.",
@@ -38,8 +38,8 @@
         {
           "id": "access",
           "label": "Server-side invitation boundaries",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Server checks plus eight local database scenarios cover invite matching, expiry, revocation, direct Auth and commerce bypass attempts, and existing obligations."
         },
         {
           "id": "setup",
@@ -132,7 +132,7 @@
       "id": "R03",
       "title": "Seller transfers that survive a crash",
       "category": "Money reliability",
-      "status": "partial",
+      "status": "active",
       "owner": "GPT-5.6 \u00b7 Transfer stream",
       "why": "Prevent a restarted worker from paying a seller twice or repeating a reversal.",
       "before": "A crash can leave Stripe ahead of local records, and stale retries may miss that earlier transfer.",
@@ -154,8 +154,8 @@
         {
           "id": "reversal",
           "label": "Reversal recovery beyond idempotency window",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Frozen reversal parameters, provider-history reconciliation and lease-fenced completion; eight SQL checks pass. Hosted provider crash-window proof remains separate."
         },
         {
           "id": "tests",
@@ -224,7 +224,7 @@
       "id": "R05",
       "title": "An account export that is complete",
       "category": "Privacy",
-      "status": "queued",
+      "status": "active",
       "owner": "Data and privacy stream",
       "why": "Let members obtain all approved data about their account without exposing someone else\u2019s private information.",
       "before": "Some data families are missing, some exports use broad field selections, and large exports can exceed request limits.",
@@ -234,8 +234,8 @@
         {
           "id": "inventory",
           "label": "Field and ownership inventory",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Explicit versioned field inventory covers both sides of messages and offers, order records, refunds, shipments and private evidence; internal/provider fields excluded."
         },
         {
           "id": "policy",
@@ -246,14 +246,14 @@
         {
           "id": "code",
           "label": "Safe complete export implementation",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Bounded durable export worker, private manifest/parts, ownership-checked downloads, expiry and lease-fenced checkpoints implemented."
         },
         {
           "id": "tests",
           "label": "Large-export and cross-account tests",
-          "state": "todo",
-          "evidence": ""
+          "state": "doing",
+          "evidence": "Real local export integration completes all declared sections; pagination and stale-worker guards pass. Broader privacy acceptance remains pending."
         },
         {
           "id": "acceptance",
@@ -267,7 +267,7 @@
       "id": "R06",
       "title": "Deletion with an honest outcome",
       "category": "Privacy",
-      "status": "queued",
+      "status": "active",
       "owner": "Data and privacy stream",
       "why": "Remove eligible personal data while preserving only records that must be retained.",
       "before": "Protected financial references can prevent final deletion, and historical originals still need reconciliation.",
@@ -283,8 +283,8 @@
         {
           "id": "states",
           "label": "Explicit deletion and operator states",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Financial holds, cleanup progress and operator-retained-identity outcomes are explicit; existing job types and stale-session protections preserved."
         },
         {
           "id": "media",
@@ -310,7 +310,7 @@
       "id": "R07",
       "title": "Problems reach a real operator",
       "category": "Operations",
-      "status": "queued",
+      "status": "active",
       "owner": "Operations and security stream",
       "why": "Detect broken jobs and delivery failures quickly, with someone responsible for recovery.",
       "before": "Local contracts exist, but real external notification and hosted recovery evidence is missing.",
@@ -326,14 +326,14 @@
         {
           "id": "workers",
           "label": "Enabled schedules observed",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Complete worker inventory, failed-run detection and overdue queue health implemented; privacy exports share tracked deletion cadence."
         },
         {
           "id": "recovery",
           "label": "Hosted admin recovery rehearsal",
-          "state": "todo",
-          "evidence": ""
+          "state": "doing",
+          "evidence": "Independent failure/recovery/escalation watcher with durable notification identity and dead-man heartbeat implemented. External delivery proof pending."
         },
         {
           "id": "security",
@@ -402,7 +402,7 @@
       "id": "R09",
       "title": "Actions that feel clear and dependable",
       "category": "Product quality",
-      "status": "partial",
+      "status": "active",
       "owner": "Frontend and accessibility stream",
       "why": "Make important actions understandable and usable with keyboard, screen reader, and mobile devices.",
       "before": "Focused fixes exist, but every critical form and assistive-technology path has not been verified.",
@@ -430,8 +430,8 @@
         {
           "id": "automated",
           "label": "Expanded automated accessibility checks",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Seven Chromium WCAG A/AA checks pass, including authenticated pages and keyboard-only garage dialog; all impact levels block."
         },
         {
           "id": "manual",
@@ -467,8 +467,8 @@
         {
           "id": "disabled",
           "label": "Disabled-mode network and fallback proof",
-          "state": "todo",
-          "evidence": ""
+          "state": "done",
+          "evidence": "Four tests verify disabled analytics/search avoid provider dispatch. Relational search remains available."
         },
         {
           "id": "provider",
@@ -584,6 +584,11 @@
     }
   ],
   "activity": [
+    {
+      "at": "2026-09-05T19:03:20.701798+00:00",
+      "title": "Remaining local implementation resumed",
+      "detail": "Three GPT-5.6 streams are implementing money recovery, invitations and privacy; the coordinating stream handles release, monitoring and accessibility."
+    },
     {
       "at": "2026-09-05T18:30:02.902038+00:00",
       "title": "First implementation batch verified",

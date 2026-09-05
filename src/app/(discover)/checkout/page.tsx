@@ -4,7 +4,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
+import { ButtonLink, EmptyState, Foot, ObjectRow, PaymentModeNotice } from "@/components/ui";
+import { getBetaAccess } from "@/lib/beta-access";
 import { loadCartSummary, loadInFlightCheckout } from "@/lib/checkout-data";
 import { listSavedCards } from "@/lib/payments/customers";
 import { formatPrice } from "@/lib/payments/fee";
@@ -25,6 +26,21 @@ export default async function CheckoutPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const betaAccess = await getBetaAccess(user?.id, "buyer");
+  if (betaAccess.enforced && !user) redirect("/login?next=%2Fcheckout");
+  if (!betaAccess.eligible) {
+    return (
+      <div className="wrap pb-10">
+        <EmptyState
+          mark="β"
+          title="Checkout is limited to invited members"
+          action={<ButtonLink href="/marketplace">Back to the marketplace</ButtonLink>}
+        >
+          Your account can still browse DRVN and access existing orders. New purchases require an active beta membership.
+        </EmptyState>
+      </div>
+    );
+  }
 
   // Submitting the shipping step reserves every listing in the basket, and a
   // server action re-renders the route it ran on — so by the time this runs
@@ -37,9 +53,7 @@ export default async function CheckoutPage() {
     )) ?? (await loadInFlightCheckout(user?.id ?? null));
   if (!cart?.lines.length) redirect("/cart");
 
-  // Guests check out too — buying is the service, not an account feature.
-  // Saved cards only exist for a signed-in buyer; a guest pays with the
-  // Payment Element and identifies themselves with an email.
+  // Guest checkout remains available outside the controlled-beta rollout.
   const savedCards = user ? await listSavedCards(user.id).catch(() => []) : [];
 
   return (

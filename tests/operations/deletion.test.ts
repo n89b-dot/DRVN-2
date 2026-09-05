@@ -12,6 +12,7 @@ it("checkpoints a nested account across bounded deletion runs before removing Au
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
     await mapBounded(paths, 4, async path => { const uploaded = await admin.storage.from("avatars").upload(path, png, { contentType: "image/png" }); if (uploaded.error) throw uploaded.error; });
     const job = await admin.from("remediation_jobs").insert({ kind: "delete_account", dedup_key: `delete:${uid}`, payload: { user_id: uid }, next_attempt_at: "2000-01-01" }).select("id").single().throwOnError(); jobId = job.data.id;
+    await admin.from("account_deletion_requests").insert({user_id:uid,job_id:jobId,outcome:"cleanup_pending",next_action:"Automated cleanup is in progress."}).throwOnError();
     const first = await processAccountDeletions(); expect(first).toHaveProperty("continued", 1);
     expect((await admin.auth.admin.getUserById(uid)).data.user).not.toBeNull();
     const checkpoint = await admin.from("deletion_storage_tasks").select("path", { count: "exact" }).eq("job_id", jobId).eq("status", "deleted").throwOnError(); expect(checkpoint.count).toBeGreaterThan(0);

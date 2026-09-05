@@ -22,7 +22,7 @@
     "db:types": "node scripts/generate-database-types.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:operations": "vitest run --config vitest.operations.config.ts",
-    "test:monitor": "node --test scripts/check-worker-health.test.mjs"
+    "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

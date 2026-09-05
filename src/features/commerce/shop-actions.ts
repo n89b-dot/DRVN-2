@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { postOrderThreadMessage } from "./order-thread";
 import { readCommercialSnapshot } from "./snapshot";
 import { RETURN_SHIP_DAYS, returnEntitlementCents } from "./returns";
+import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 /**
  * Shop profiles + shop-policy returns (brief §34-§37, migration 0056).
@@ -35,6 +36,9 @@ export async function becomeShop(_prev: ShopState, _formData: FormData): Promise
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const betaAccess = await getBetaAccess(user.id, "seller");
+  if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
   const admin = createAdminClient();
   const { data: profile } = await admin

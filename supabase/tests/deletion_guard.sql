@@ -5,7 +5,7 @@ begin
  insert into auth.users(id,email) values(uid,'deletion-guard@example.test');
  perform set_config('role','authenticated',true);
  perform set_config('request.jwt.claims',json_build_object('sub',uid,'role','authenticated')::text,true);
- request:=public.request_account_deletion();
+ request:=(public.request_account_deletion()->>'job_id')::uuid;
  if request is null then raise exception 'Missing deletion request'; end if;
  begin
   update public.profiles set display_name='stale session write' where id=uid;

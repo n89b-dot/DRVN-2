@@ -10,6 +10,7 @@ import type { SavedCard } from "@/lib/payments/customers";
 import { updateNotificationPrefs, updateProfile, type ActionState } from "../garage/actions";
 import { startConnectOnboarding } from "./payouts-actions";
 import { DeleteAccount } from "./delete-account";
+import { ExportAccount } from "./export-account";
 import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
 
@@ -370,20 +371,20 @@ export function SettingsPanel({
             <span className="microlabel microlabel--ink">Your data</span>
           </div>
           <p className="field__hint max-w-[62ch]">
-            Download everything DRVN holds about you — profile, cars, listings, orders, offers,
-            messages you&apos;ve sent — as one JSON file.
+            Request a private package of your account, content, both sides of your conversations
+            and transactions, delivery records, and authorized evidence. Large packages resume
+            safely and expire after seven days.
           </p>
           <div className="mb-6 mt-3">
-            <a href="/api/account/export" download className="btn btn--ghost">
-              Download my data
-            </a>
+            <ExportAccount />
           </div>
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Delete your account</span>
           </div>
           <p className="field__hint max-w-[62ch]">
-            Deleting your account removes your cars, listings and uploads. Orders you&apos;ve
-            bought or sold stay on the other party&apos;s record, with your name replaced.
+            Deletion removes eligible profile, content, uploads and provider data. Active money
+            obligations place the request on hold. Financial or audit records may require a
+            scrubbed identity and operator review; retention periods still await policy approval.
           </p>
           <div className="mt-4">
             <DeleteAccount />

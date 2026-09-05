@@ -4,6 +4,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
 import { reportError } from "@/lib/monitoring";
+import { purgeAccountExportsForUser } from "@/lib/account-export-worker";
+import { deletionOutcome } from "@/lib/account-deletion-policy";
 
 type Job = { id: string; lease_id: string; payload: { user_id: string; stripe_customer_id?: string | null } };
 const buckets = ["avatars", "car-images", "activity-images", "listing-images"];
@@ -48,8 +50,16 @@ export async function processAccountDeletions() {
     try {
       const uid = job.payload.user_id;
       const heartbeat = jobHeartbeat(admin, job);
+      const deletionRequest = await admin.from("account_deletion_requests" as never).select("id" as never).eq("user_id" as never, uid).maybeSingle();
+      if (deletionRequest.error || !deletionRequest.data) throw new Error("Deletion request record is missing");
+      const deletionRequestId = (deletionRequest.data as unknown as { id: string }).id;
       await heartbeat();
-      await admin.rpc("assert_deletion_ready", { p_user: uid }).throwOnError();
+      const blockers = await admin.rpc("account_deletion_blockers" as never, { p_user: uid } as never);
+      if (blockers.error) throw new Error("Deletion blocker check failed");
+      if (deletionOutcome(blockers.data as unknown as { financial_hold?: boolean }) === "temporary_financial_hold") {
+        await admin.rpc("pause_account_deletion_hold" as never, { p_job: job.id, p_lease: job.lease_id, p_user: uid } as never).throwOnError();
+        return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
+      }
       // Preserve the external identity before profile/Auth cascades can remove it.
       if (!("stripe_customer_id" in job.payload)) {
         const profile = await admin.from("profiles").select("stripe_customer_id").eq("id", uid).maybeSingle().throwOnError();
@@ -76,7 +86,32 @@ export async function processAccountDeletions() {
         return { completed, continued: 1 };
       }
       await heartbeat();
-      await admin.rpc("assert_deletion_ready", { p_user: uid }).throwOnError();
+      const recheck = await admin.rpc("account_deletion_blockers" as never, { p_user: uid } as never);
+      if (recheck.error) throw new Error("Deletion blocker recheck failed");
+      const blockersAfterCleanup = recheck.data as unknown as { financial_hold?: boolean; retained_identity?: boolean };
+      const outcome = deletionOutcome(blockersAfterCleanup);
+      if (outcome === "temporary_financial_hold") {
+        await admin.rpc("pause_account_deletion_hold" as never, { p_job: job.id, p_lease: job.lease_id, p_user: uid } as never).throwOnError();
+        return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
+      }
+      await purgeAccountExportsForUser(uid);
+      if (outcome === "operator_attention") {
+        const retained = await admin.from("account_deletion_requests" as never).update({
+          outcome: "operator_attention",
+          blocker_code: "immutable_retained_identity",
+          affected_data_classes: ["orders", "financial records", "audit or reporting references"],
+          next_action: "An operator must apply the approved retained-identity anonymization and retention policy.",
+          responsible_owner: "operations and policy owner",
+          review_at: null,
+          policy_decisions_pending: ["financial record retention duration", "audit/log retention", "eventual identity anonymization", "backup expiry"],
+          updated_at: new Date().toISOString(),
+        } as never).eq("user_id" as never, uid);
+        if (retained.error) throw new Error("Could not record retained identity outcome");
+        completed++;
+        const acknowledged = await admin.rpc("finish_remediation_job", { p_id: job.id, p_lease: job.lease_id, p_error: undefined });
+        if (acknowledged.error) throw new Error("Deletion outcome acknowledgement failed");
+        return { completed, outcome: "operator_attention" as const };
+      }
       if (job.payload.stripe_customer_id) {
         const stripe = stripeClient();
         const customer = await stripe.customers.retrieve(job.payload.stripe_customer_id, {}, { timeout: 10000, maxNetworkRetries: 0 });
@@ -90,6 +125,7 @@ export async function processAccountDeletions() {
         const deleted = await admin.auth.admin.deleteUser(uid);
         if (deleted.error) throw new Error("Auth deletion needs retry; retained media may require operator review");
       }
+      await admin.from("account_deletion_requests" as never).update({ outcome: "completed", blocker_code: null, next_action: "No further action is required.", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id" as never, deletionRequestId).throwOnError();
       completed++;
     } catch (error) {
       failure = error instanceof Error ? error.message : "Account deletion failed";

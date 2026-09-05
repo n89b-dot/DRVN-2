@@ -19,6 +19,7 @@ import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import type { PurchaseBeginResult } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
+import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import type { CommerceState, CheckoutOutcome, ShippingDetails } from "./action-types";
 
 async function requireUser() {
@@ -282,6 +283,11 @@ export async function checkoutCart(
   formData: FormData
 ): Promise<CommerceState> {
   const { user } = await optionalUser();
+  const betaAccess = await getBetaAccess(user?.id, "buyer");
+  if (betaAccess.enforced && !user) {
+    return { error: "Sign in with an invited beta account to check out." };
+  }
+  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
   const requestHeaders = await headers();
   const subject = abuseIdentity(requestHeaders, user?.id);
   if (!(await allowAction(RATE_LIMITS.checkout, subject))) return { error: rateLimitMessage(RATE_LIMITS.checkout) };
