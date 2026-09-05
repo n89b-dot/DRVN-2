@@ -125,7 +125,7 @@ export async function openDispute(
   capture(user.id, { event: "dispute_opened", props: { category } });
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
-  return { ok: "Dispute opened — the seller has been notified." };
+  redirect(`/orders/${orderId}`);
 }
 
 export async function offerRefund(

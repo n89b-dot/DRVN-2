@@ -95,7 +95,7 @@ export function GalleryManager({
     if (!failedFiles.length) return;
     const dt = new DataTransfer();
     failedFiles.forEach((f) => dt.items.add(f));
-    handleFiles(dt.files);
+    startTransition(async () => { await handleFiles(dt.files); });
   }
 
   return (
@@ -305,7 +305,7 @@ export function GalleryManager({
       )}
 
       <DropZone
-        onFiles={handleFiles}
+        onFiles={(files) => startTransition(async () => { await handleFiles(files); })}
         busy={uploading}
         className="mt-4"
         title={images.length ? "Add more photos" : "Add the first photos"}
