@@ -260,6 +260,24 @@ shipping its own inventory. Before any production postage is enabled:
    timing difference, never a subsidy.
 5. **Cron**: no new job. Return timers (§27) and the dispute-SLA pause (§28)
    run inside the existing `POST /api/jobs/transfers` pass.
+6. **Interrupted label operations:** label purchases are frozen in
+   `outbound_label_requests`; label refunds are frozen separately in
+   `outbound_label_void_requests`. A seller retries a void with the **Void
+   label** action on `/orders/<order id>`. The action always uses the saved
+   provider Shipment. `provider_pending` first reads that Shipment's
+   `refund_status`; `submitted` and unknown results stay pending without a
+   seller credit, `rejected` leaves the purchased label and deduction intact,
+   and `refunded` atomically cancels the shipment and appends the exact
+   `label_refund` adjustment. A crashed pre-call claim can be reassigned only
+   after its lease expires and a later provider read reports no refund request.
+   Review `admin_alert_outbox.dedup_key =
+   'outbound-label-void:<shipment uuid>'` with the journal row before any
+   manual provider action. The existing `/api/jobs/transfers` heartbeat scans
+   at most five due rows as the `labelVoids` worker family: new/unknown rows
+   are revisited after a short delay and carrier-submitted refunds every six
+   hours. The seller action remains the immediate retry path. Confirm EasyPost
+   test and production-account behavior for each enabled carrier, including
+   asynchronous acceptance and rejection, before enabling live postage.
 
 ## 11. Shops — verification and conversion
 

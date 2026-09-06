@@ -107,8 +107,9 @@ export type AddressVerification = {
 };
 
 export type VoidLabelResult = {
-  /** submitted = refund requested, provider decides async; refunded/rejected = final. */
-  state: "submitted" | "refunded" | "rejected";
+  /** null on a provider read proves no refund has been requested yet. Unknown
+   *  values remain ambiguous and must never be treated as a refund. */
+  state: "not_requested" | "submitted" | "refunded" | "rejected" | "unknown";
 };
 
 export type GetRatesInput = {
@@ -150,6 +151,7 @@ export interface ShippingProvider {
   getRates(input: GetRatesInput): Promise<RatedShipment>;
   buyLabel(input: BuyLabelInput): Promise<PurchasedLabel>;
   voidLabel(input: { shipmentRef: string }): Promise<VoidLabelResult>;
+  getLabelRefundStatus(input: { shipmentRef: string }): Promise<VoidLabelResult>;
   createTracker(input: CreateTrackerInput): Promise<TrackingSummary>;
   getTracking(input: GetTrackingInput): Promise<TrackingSummary>;
   /** A return shipment is a rated shipment with the legs swapped and the

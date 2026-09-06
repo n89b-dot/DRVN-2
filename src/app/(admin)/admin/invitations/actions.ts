@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "@/lib/admin/audit";
@@ -48,6 +48,10 @@ export async function createBetaInvitation(
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + days * 86_400_000).toISOString();
+  // Admin audit subjects are UUIDs. Allocate the invitation identity before
+  // journaling so the audit boundary and the inserted row name the same
+  // durable object; using the email here made the journal's UUID cast fail.
+  const invitationId = randomUUID();
 
   try {
     await auditedAction(
@@ -56,14 +60,15 @@ export async function createBetaInvitation(
         actorId: context.actorId,
         action: "invitation.create",
         subjectType: "user",
-        subjectId: email,
+        subjectId: invitationId,
         reason: `Invite ${email} for ${roles.join(" and ")}`,
-        metadata: { roles, expiresAt },
+        metadata: { email, roles, expiresAt },
       },
       async () => {
         const { data, error } = await context.betaAdmin
           .from("beta_invitations")
           .insert({
+            id: invitationId,
             email_normalized: email,
             roles,
             token_hash: tokenHash,
@@ -86,37 +91,46 @@ export async function createBetaInvitation(
   }
 }
 
-export async function revokeBetaInvitation(formData: FormData): Promise<void> {
+export async function revokeBetaInvitation(
+  _previous: InvitationActionState,
+  formData: FormData
+): Promise<InvitationActionState> {
   const context = await adminMutationContext();
-  if ("error" in context) return;
+  if ("error" in context) return context;
   const invitationId = String(formData.get("invitation_id") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!invitationId || !reason) return;
+  if (!invitationId) return { error: "Invitation is missing." };
+  if (!reason) return { error: "A revocation reason is required." };
 
-  await auditedAction(
-    context.admin,
-    {
-      actorId: context.actorId,
-      action: "invitation.revoke",
-      subjectType: "user",
-      subjectId: invitationId,
-      reason,
-    },
-    async () => {
-      const { data, error } = await context.betaAdmin
-        .from("beta_invitations")
-        .update({
-          revoked_at: new Date().toISOString(),
-          revoked_by: context.actorId,
-          revoke_reason: reason,
-        })
-        .eq("id", invitationId)
-        .is("revoked_at", null)
-        .select("id");
-      if (error || !data?.length) throw new Error(error?.message ?? "Invitation was already revoked.");
-      return data[0];
-    }
-  );
-  revalidatePath("/admin/invitations");
-  revalidatePath("/marketplace");
+  try {
+    await auditedAction(
+      context.admin,
+      {
+        actorId: context.actorId,
+        action: "invitation.revoke",
+        subjectType: "user",
+        subjectId: invitationId,
+        reason,
+      },
+      async () => {
+        const { data, error } = await context.betaAdmin
+          .from("beta_invitations")
+          .update({
+            revoked_at: new Date().toISOString(),
+            revoked_by: context.actorId,
+            revoke_reason: reason,
+          })
+          .eq("id", invitationId)
+          .is("revoked_at", null)
+          .select("id");
+        if (error || !data?.length) throw new Error(error?.message ?? "Invitation was already revoked.");
+        return data[0];
+      }
+    );
+    revalidatePath("/admin/invitations");
+    revalidatePath("/marketplace");
+    return { ok: "Invitation revoked." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Invitation was not revoked." };
+  }
 }

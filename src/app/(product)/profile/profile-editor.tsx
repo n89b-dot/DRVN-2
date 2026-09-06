@@ -51,7 +51,12 @@ export function ProfileEditor({
         setAvatarError(failed[0].reason);
         return;
       }
-      if (uploaded[0]) setAvatarUrl(uploaded[0].url);
+      if (uploaded[0]) {
+        setAvatarUrl(uploaded[0].url);
+        setSubmitted(false);
+      }
+    } catch {
+      setAvatarError("The photo upload was interrupted. Try again.");
     } finally {
       setUploadingAvatar(false);
       if (avatarFileRef.current) avatarFileRef.current.value = "";
@@ -78,6 +83,7 @@ export function ProfileEditor({
                 setSubmitted(true);
                 action(fd);
               }}
+              onChange={() => setSubmitted(false)}
               className="mt-4"
             >
               <input type="hidden" name="avatar_url" value={avatarUrl ?? ""} />

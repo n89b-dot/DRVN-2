@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -37,10 +38,11 @@ export default async function NewUpdatePage({
   const [{ data: draft }, { data: modRows }] = await Promise.all([
     supabase
       .from("activity_posts")
-      .select("title, body, updated_at")
+      .select("id, title, body, updated_at")
       .eq("car_id", car.id)
       .eq("author_id", user.id)
       .is("published_at", null)
+      .is("draft_archived_at", null)
       .maybeSingle(),
     supabase
       .from("mod_items")
@@ -112,6 +114,7 @@ export default async function NewUpdatePage({
         mods={mods}
         initialTitle={draft?.title ?? ""}
         initialBlocks={draftBlocks && draftBlocks.length ? draftBlocks : seededBlocks}
+        initialOperationId={draft?.id ?? randomUUID()}
         draftSavedAt={draft?.updated_at ?? null}
         publishAction={createRichActivityPost}
         draftAction={saveActivityDraft}

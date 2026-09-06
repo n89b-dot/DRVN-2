@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { FilterGroup, FilterLink, Foot, NarrowColumn, Pagination } from "@/components/ui";
+import { Alert, FilterGroup, FilterLink, Foot, NarrowColumn, Pagination } from "@/components/ui";
 import { prefEnabled, prefKeyForKind } from "@/lib/notification-prefs";
 import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
@@ -86,6 +86,7 @@ function Section({
                   // a form (a plain link keeps middle-click / new-tab working).
                   <Link
                     href={`/notifications/open/${row.id}`}
+                    prefetch={false}
                     className="min-w-0 flex-1 transition-colors hover:text-live"
                   >
                     {content}
@@ -116,9 +117,9 @@ function Section({
 export default async function NotificationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; section?: string; page?: string }>;
+  searchParams: Promise<{ filter?: string; section?: string; page?: string; notice?: string }>;
 }) {
-  const { filter, section: sectionParam, page: pageParam } = await searchParams;
+  const { filter, section: sectionParam, page: pageParam, notice } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -197,6 +198,12 @@ export default async function NotificationsPage({
           </div>
         )}
       </Rv>
+
+      {notice === "read_failed" && (
+        <Alert tone="live" ico="!" title="That notification is still unread" role="alert">
+          We couldn&apos;t save the read state. Try opening it again.
+        </Alert>
+      )}
 
       {/* Two independent filter axes, not one five-way choice. Run together in
           a single wrapping row — separated only by a middot — a phone breaks

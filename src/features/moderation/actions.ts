@@ -32,10 +32,7 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-
-  if (!(await allowAction(RATE_LIMITS.fileReport, user.id))) {
-    return { error: rateLimitMessage(RATE_LIMITS.fileReport) };
-  }
+  const reporterId = user.id;
 
   const subjectType = String(formData.get("subject_type") ?? "");
   const subjectId = String(formData.get("subject_id") ?? "");
@@ -47,14 +44,38 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   }
   if (!REASONS.includes(reason)) return { error: "Pick what's wrong." };
 
+  const reportId = String(formData.get("report_id") ?? "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(reportId)) {
+    return { error: "Refresh this page before filing your report." };
+  }
+  const success = { ok: "Reported — DRVN will review it. Thanks for flagging." };
+  async function readExisting() {
+    return supabase.from("reports").select("reporter_id, subject_type, subject_id, reason, detail").eq("id", reportId).maybeSingle();
+  }
+  function matches(row: { reporter_id: string | null; subject_type: string; subject_id: string; reason: string; detail: string | null }) {
+    return row.reporter_id === reporterId && row.subject_type === subjectType && row.subject_id === subjectId && row.reason === reason && row.detail === (detail || null);
+  }
+  const existing = await readExisting();
+  if (existing.error) return { error: "Couldn't check whether your report was filed. Try again." };
+  if (existing.data) return matches(existing.data) ? success : { error: "This report changed after filing. Refresh the page to file another report." };
+  if (!(await allowAction(RATE_LIMITS.fileReport, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.fileReport) };
+  }
+
   const { error } = await supabase.from("reports").insert({
+    id: reportId,
     reporter_id: user.id,
     subject_type: subjectType as "listing" | "user",
     subject_id: subjectId,
     reason,
     detail: detail || null,
   });
-  if (error) return { error: "The report couldn't be filed — try again." };
+  if (error) {
+    const committed = await readExisting();
+    if (committed.error || !committed.data || !matches(committed.data)) {
+      return { error: "The report couldn't be confirmed — try again with the same details." };
+    }
+  }
 
-  return { ok: "Reported — DRVN will review it. Thanks for flagging." };
+  return success;
 }

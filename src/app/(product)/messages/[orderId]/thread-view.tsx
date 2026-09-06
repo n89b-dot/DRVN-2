@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
-import { Message, MessageThread, ResultNote, ThreadDivider } from "@/components/ui";
-import { sendThreadMessage, type CommerceState } from "@/features/commerce/actions";
+import { Message, MessageThread, ThreadDivider } from "@/components/ui";
+import { MessageComposer } from "@/features/commerce/message-composer";
 
 type ThreadMessage = {
   id: string;
@@ -71,10 +70,7 @@ export function ThreadView({
   /** True when `?before=` is set — i.e. this isn't the live/latest window. */
   viewingHistory: boolean;
 }) {
-  const router = useRouter();
-  const formRef = useRef<HTMLFormElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const [state, action, pending] = useActionState<CommerceState, FormData>(sendThreadMessage, {});
 
   // Opening the live thread lands the reader at the newest message, the way
   // any conversation surface does — not at a months-old first page. History
@@ -85,17 +81,6 @@ export function ThreadView({
       endRef.current?.scrollIntoView({ block: "end" });
     }
   }, [viewingHistory, latestId]);
-
-  // A send that lands doesn't otherwise refresh this route (the action
-  // revalidates the order page, not this one) — refresh explicitly so the new
-  // message shows up, and clear the composer so a retry after a failure
-  // doesn't leave stale text sitting under a stale error.
-  useEffect(() => {
-    if (state.ok) {
-      formRef.current?.reset();
-      router.refresh();
-    }
-  }, [state.ok, router]);
 
   const groups = groupByDay(messages);
 
@@ -157,23 +142,9 @@ export function ThreadView({
 
       {!viewingHistory && (
         <div className="composer--pin grid gap-2" ref={endRef}>
-          <form ref={formRef} action={action} className="composer__row">
-            <input type="hidden" name="order_id" value={orderId} />
-            <input
-              name="body"
-              required
-              maxLength={4000}
-              placeholder="Message the other party…"
-              className="ctl max-w-none flex-1 !py-2"
-            />
-            <button type="submit" disabled={pending} className="btn btn--ghost !py-2.5">
-              {pending ? "Sending…" : "Send"}
-            </button>
-          </form>
-          <ResultNote error={state.error} ok={state.ok} />
+          <MessageComposer orderId={orderId} />
         </div>
       )}
-      {viewingHistory && <ResultNote error={state.error} ok={state.ok} />}
     </div>
   );
 }

@@ -1,0 +1,96 @@
+import { beforeEach, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  existing: vi.fn(),
+  listing: vi.fn(),
+  rpc: vi.fn(),
+  allow: vi.fn(),
+  beta: vi.fn(),
+}));
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("@/lib/analytics", () => ({ capture: vi.fn() }));
+vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
+vi.mock("@/lib/rate-limit", () => ({
+  RATE_LIMITS: { makeOffer: {} },
+  allowAction: mocks.allow,
+  rateLimitMessage: () => "limited",
+}));
+vi.mock("@/lib/beta-access", () => ({
+  getBetaAccess: mocks.beta,
+  betaCommerceError: () => "beta denied",
+}));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: { getUser: mocks.auth },
+    from: (table: string) => ({
+      select: () => ({ eq: () => ({ maybeSingle: table === "offers" ? mocks.existing : mocks.listing }) }),
+    }),
+    rpc: mocks.rpc,
+  }),
+}));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+
+import { makeOffer } from "./offer-actions";
+
+const offerId = "30000000-0000-4000-8000-000000000001";
+function form(message = "Opening note") {
+  const data = new FormData();
+  data.set("offer_id", offerId);
+  data.set("listing_id", "listing-1");
+  data.set("amount", "90.00");
+  data.set("message", message);
+  return data;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.auth.mockResolvedValue({ data: { user: { id: "buyer-1" } } });
+  mocks.existing.mockResolvedValue({ data: null, error: null });
+  mocks.listing.mockResolvedValue({ data: {
+    seller_id: "seller-1",
+    status: "active",
+    offer_floor_cents: 8000,
+    price_cents: 10000,
+    shipping_mode: "seller",
+  }, error: null });
+  mocks.beta.mockResolvedValue({ eligible: true });
+  mocks.allow.mockResolvedValue(true);
+  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: false }, error: null });
+});
+
+it("creates the offer and opening message through one atomic RPC", async () => {
+  expect(form().get("offer_id")).toBe(offerId);
+  await expect(makeOffer({}, form())).resolves.toMatchObject({ ok: expect.stringContaining("Offer sent") });
+  expect(mocks.rpc).toHaveBeenCalledWith("create_offer_with_message", {
+    p_offer: offerId,
+    p_listing: "listing-1",
+    p_amount: 9000,
+    p_message: "Opening note",
+  });
+});
+
+it("replays the same committed identity without consuming admission again", async () => {
+  mocks.existing.mockResolvedValue({ data: { id: offerId }, error: null });
+  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: true }, error: null });
+  await expect(makeOffer({}, form())).resolves.toHaveProperty("ok");
+  expect(mocks.beta).not.toHaveBeenCalled();
+  expect(mocks.allow).not.toHaveBeenCalled();
+  expect(mocks.listing).not.toHaveBeenCalled();
+});
+
+it("holds an uncertain RPC outcome for an exact retry", async () => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { message: "connection closed" } });
+  await expect(makeOffer({}, form())).resolves.toEqual({
+    error: "Couldn't confirm your offer was sent. Try again with the same offer.",
+  });
+});
+
+it("never calls the database mutation without a valid stable identity", async () => {
+  const data = form();
+  data.set("offer_id", "not-a-uuid");
+  await expect(makeOffer({}, data)).resolves.toHaveProperty("error");
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});

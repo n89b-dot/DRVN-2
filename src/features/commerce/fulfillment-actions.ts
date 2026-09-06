@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { reportError } from "@/lib/monitoring";
-import { recordLabelRefund, recordSellerAdjustment } from "@/lib/payments/adjustments";
 import { integratedShippingEnabled, getShippingProvider } from "@/lib/shipping/provider";
-import { ShippingProviderError, type PurchasedLabel } from "@/lib/shipping/types";
+import { ensureOutboundLabel } from "@/lib/shipping/outbound-label";
+import { ensureOutboundLabelVoid } from "@/lib/shipping/outbound-label-void";
+import { ShippingProviderError } from "@/lib/shipping/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -117,11 +118,11 @@ export async function saveFulfillmentProfile(
  * on the seller as a negative adjustment (0052) that the payout worker nets
  * out — economically funded by that buyer-paid shipping.
  *
- * Failure shapes handled (§41): a timed-out buy that actually succeeded is
- * recovered by the provider's already-purchased re-read; a duplicate submit
- * is stopped by the shipment status compare-and-set and the adjustment's
- * unique external reference; an expired rate re-rates the same parcel and
- * prefers the same carrier+service before falling back to the cheapest.
+ * Failure shapes handled (§41): the provider shipment/rate is persisted
+ * before purchase, so a timed-out buy and every duplicate submit retry that
+ * exact identity. Shipment state and the seller adjustment then commit in one
+ * transaction. A missing pre-purchase identity can be rated once; after a buy
+ * may have happened the flow never silently re-rates.
  */
 export async function buyShippingLabel(
   _prev: FulfillmentState,
@@ -158,7 +159,7 @@ export async function buyShippingLabel(
     .eq("order_id", orderId)
     .eq("direction", "outbound")
     .eq("fulfillment_type", "drvn_shipping")
-    .eq("status", "pending");
+    .in("status", ["pending", "label_purchased"]);
   if (!shipments?.length) {
     return { error: "No label waiting to be bought on this order." };
   }
@@ -169,6 +170,25 @@ export async function buyShippingLabel(
 
   let lastLabelUrl: string | null = null;
   for (const shipment of shipments) {
+    if (shipment.status === "label_purchased") {
+      if (!shipment.label_reference) {
+        return { error: "This label's local record needs reconciliation. Contact support before buying another." };
+      }
+      const repaired = await admin.rpc("repair_completed_outbound_label", {
+        p_shipment: shipment.id,
+        p_actor: user.id,
+      });
+      const repairResult = repaired.data as { ok?: boolean; label_url?: string } | null;
+      if (repaired.error || !repairResult?.ok || !repairResult.label_url) {
+        reportError("[label] completed shipment ledger repair failed", {
+          shipmentId: shipment.id,
+          error: repaired.error,
+        });
+        return { error: "This label's local ledger needs reconciliation. Contact support before buying another." };
+      }
+      lastLabelUrl = repairResult.label_url;
+      continue;
+    }
     // The consumed quote row still holds the provider rate reference.
     const { data: quote } = await admin
       .from("shipping_rate_quotes")
@@ -177,104 +197,75 @@ export async function buyShippingLabel(
       .eq("provider_shipment_id", shipment.provider_shipment_id ?? "")
       .maybeSingle();
 
-    let label: PurchasedLabel | null = null;
     try {
-      if (!shipment.provider_shipment_id || !quote) {
-        throw new ShippingProviderError("quote reference missing — re-rating", {
-          retryable: false,
-        });
-      }
-      label = await provider.buyLabel({
-        shipmentRef: shipment.provider_shipment_id,
-        rateRef: quote.rate_ref,
-        endShipperRef: profile.easypost_end_shipper_id,
-        idempotencyKey: `label:${shipment.id}`,
+      const label = await ensureOutboundLabel(admin, {
+        shipmentId: shipment.id,
+        actorId: user.id,
+        provider,
+        createRate: async () => {
+          if (shipment.provider_shipment_id && quote) {
+            const carrier = shipment.carrier ?? quote.carrier;
+            const service = shipment.service ?? quote.service;
+            if (!carrier || !service) throw new Error("Saved outbound rate is incomplete");
+            return {
+              shipmentRef: shipment.provider_shipment_id,
+              rateRef: quote.rate_ref,
+              amountCents: quote.amount_cents,
+              currency: quote.currency,
+              carrier,
+              service,
+              endShipperRef: profile.easypost_end_shipper_id,
+            };
+          }
+
+          // Missing pre-purchase provider identity may be rated once. The
+          // selected rate is committed by prepare_outbound_label before any
+          // postage purchase, so every later retry uses that exact identity.
+          const parcel = (quote?.parcel ?? null) as {
+            weightOz: number;
+            lengthIn: number;
+            widthIn: number;
+            heightIn: number;
+          } | null;
+          if (!parcel) throw new Error("No parcel is available for a safe re-rate");
+          const rated = await provider.getRates({
+            from: shipFromAddress(profile),
+            to: {
+              name: order.ship_name ?? "Buyer",
+              street1: order.ship_line1!,
+              street2: order.ship_line2,
+              city: order.ship_city ?? "",
+              state: order.ship_state,
+              postalCode: order.ship_postcode ?? "",
+              country: order.ship_country ?? "US",
+              phone: order.ship_phone,
+            },
+            parcel,
+            endShipperRef: profile.easypost_end_shipper_id,
+          });
+          const preferred = rated.rates.find(
+            (rate) => rate.carrier === shipment.carrier && rate.service === shipment.service
+          ) ?? [...rated.rates].sort((a, b) => a.amountCents - b.amountCents)[0];
+          if (!preferred) throw new Error("No carrier offered an outbound rate");
+          return {
+            shipmentRef: rated.shipmentRef,
+            rateRef: preferred.rateRef,
+            amountCents: preferred.amountCents,
+            currency: preferred.currency,
+            carrier: preferred.carrier,
+            service: preferred.service,
+            endShipperRef: profile.easypost_end_shipper_id,
+          };
+        },
       });
+      lastLabelUrl = label.labelUrl;
     } catch (error) {
-      if (!(error instanceof ShippingProviderError)) throw error;
-      // Expired shipment/rate (or missing refs): re-rate the same parcel to
-      // the same address, prefer the service the buyer chose, buy that.
-      const parcel = (quote?.parcel ?? null) as {
-        weightOz: number;
-        lengthIn: number;
-        widthIn: number;
-        heightIn: number;
-      } | null;
-      if (!parcel) {
-        reportError("[label] no parcel to re-rate", { shipmentId: shipment.id });
-        return { error: "Couldn't buy this label — contact support." };
-      }
-      try {
-        const rated = await provider.getRates({
-          from: shipFromAddress(profile),
-          to: {
-            name: order.ship_name ?? "Buyer",
-            street1: order.ship_line1,
-            street2: order.ship_line2,
-            city: order.ship_city ?? "",
-            state: order.ship_state,
-            postalCode: order.ship_postcode ?? "",
-            country: order.ship_country ?? "US",
-            phone: order.ship_phone,
-          },
-          parcel,
-          endShipperRef: profile.easypost_end_shipper_id,
-        });
-        const preferred =
-          rated.rates.find(
-            (r) => r.carrier === shipment.carrier && r.service === shipment.service
-          ) ?? rated.rates[0];
-        if (!preferred) throw new ShippingProviderError("no rates on re-rate");
-        label = await provider.buyLabel({
-          shipmentRef: rated.shipmentRef,
-          rateRef: preferred.rateRef,
-          endShipperRef: profile.easypost_end_shipper_id,
-          idempotencyKey: `label:${shipment.id}:rerate`,
-        });
-        await admin
-          .from("shipments")
-          .update({ provider_shipment_id: rated.shipmentRef })
-          .eq("id", shipment.id);
-      } catch (retryError) {
-        const reason =
-          retryError instanceof ShippingProviderError ? retryError.message : "provider error";
-        reportError("[label] buy failed after re-rate", { shipmentId: shipment.id, reason });
-        return {
-          error: "The carrier couldn't sell that label just now — try again in a few minutes.",
-        };
-      }
+      const reason = error instanceof Error ? error.message : "provider error";
+      reportError("[label] purchase needs reconciliation", { shipmentId: shipment.id, reason });
+      return {
+        error: "Couldn't confirm the label purchase. Retry this request; don't buy another label while it is being checked.",
+      };
     }
-
-    if (!label) return { error: "Label purchase failed — try again." };
-
-    // Record the movement + the money, both idempotently.
-    const { error: updateError } = await admin
-      .from("shipments")
-      .update({
-        status: "label_purchased",
-        purchased_cents: label.amountCents,
-        label_reference: label.labelUrl,
-        tracking_code: label.trackingCode,
-        provider_tracker_id: label.trackerRef,
-        carrier: label.carrier || shipment.carrier,
-        service: label.service || shipment.service,
-      })
-      .eq("id", shipment.id)
-      .eq("status", "pending");
-    if (updateError) {
-      reportError("[label] shipment update failed", { shipmentId: shipment.id, updateError });
-    }
-    await recordSellerAdjustment(admin, {
-      sellerId: user.id,
-      orderId,
-      shipmentId: shipment.id,
-      kind: "outbound_label",
-      amountCents: -Math.abs(label.amountCents),
-      currency: order.currency,
-      externalReference: `label:${shipment.id}`,
-      description: `${label.carrier} ${label.service} outbound label`,
-    });
-    lastLabelUrl = label.labelUrl;
   }
 
   revalidatePath(`/orders/${orderId}`);
@@ -308,39 +299,26 @@ export async function voidShippingLabel(
   const orderMeta = (shipment as unknown as { orders?: { seller_id: string | null; currency: string } } | null)
     ?.orders;
   if (!shipment || orderMeta?.seller_id !== user.id) return { error: "Not your shipment." };
-  if (shipment.status !== "label_purchased") {
-    return { error: "Only an unused, purchased label can be voided." };
-  }
   if (!shipment.provider_shipment_id) return { error: "No provider label on record." };
 
   try {
-    const result = await getShippingProvider().voidLabel({
-      shipmentRef: shipment.provider_shipment_id,
+    const outcome = await ensureOutboundLabelVoid(admin, {
+      shipmentId,
+      actorId: user.id,
+      provider: getShippingProvider(),
     });
-    if (result.state === "rejected") {
+    if (outcome === "rejected") {
       return { error: "The carrier refused the refund — the label may already be in use." };
     }
+    if (outcome === "pending") {
+      return { ok: "The carrier refund is pending. This saved request will be reconciled before any retry." };
+    }
   } catch (error) {
-    const reason = error instanceof ShippingProviderError ? error.message : "provider error";
-    reportError("[label] void failed", { shipmentId, reason });
-    return { error: "Couldn't void the label just now — try again shortly." };
+    const reason = error instanceof Error ? error.message : "provider error";
+    reportError("[label] void needs reconciliation", { shipmentId, reason });
+    return { error: "Couldn't confirm the carrier refund. Check this saved request before trying again." };
   }
 
-  await admin
-    .from("shipments")
-    .update({ status: "cancelled" })
-    .eq("id", shipmentId)
-    .eq("status", "label_purchased");
-  if (shipment.purchased_cents) {
-    await recordLabelRefund(admin, {
-      sellerId: user.id,
-      orderId: shipment.order_id,
-      shipmentId,
-      amountCents: shipment.purchased_cents,
-      currency: orderMeta?.currency ?? "USD",
-      externalReference: `label:${shipmentId}`,
-    });
-  }
   revalidatePath(`/orders/${shipment.order_id}`);
   return { ok: "Label voided — the cost comes back off your payout deduction." };
 }

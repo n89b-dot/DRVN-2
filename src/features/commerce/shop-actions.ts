@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { postOrderThreadMessage } from "./order-thread";
 import { readCommercialSnapshot } from "./snapshot";
-import { RETURN_SHIP_DAYS, returnEntitlementCents } from "./returns";
+import { RETURN_SHIP_DAYS } from "./returns";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 /**
@@ -31,6 +31,8 @@ export type ShopState = { error?: string; ok?: string };
 const ALLOWED_WINDOWS = new Set([14, 30, 60]);
 
 export async function becomeShop(_prev: ShopState, _formData: FormData): Promise<ShopState> {
+  void _prev;
+  void _formData;
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,31 +42,15 @@ export async function becomeShop(_prev: ShopState, _formData: FormData): Promise
   const betaAccess = await getBetaAccess(user.id, "seller");
   if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("profile_type")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!profile) return { error: "Profile not found." };
-  if (profile.profile_type === "shop") return { ok: "You're already set up as a shop." };
-
-  const { error: typeError } = await admin
-    .from("profiles")
-    .update({ profile_type: "shop" })
-    .eq("id", user.id);
-  if (typeError) {
-    reportError("[shop] conversion failed", { userId: user.id, typeError });
+  const { data, error } = await supabase.rpc("become_shop");
+  const result = data as { ok?: boolean; applied?: boolean; repaired?: boolean } | null;
+  if (error || !result?.ok) {
+    reportError("[shop] conversion failed", { userId: user.id, error });
     return { error: "Couldn't switch this account to a shop. Try again." };
-  }
-  const { error: shopError } = await admin
-    .from("shop_profiles")
-    .upsert({ profile_id: user.id }, { onConflict: "profile_id" });
-  if (shopError) {
-    reportError("[shop] shop row failed", { userId: user.id, shopError });
   }
 
   revalidatePath("/settings");
+  if (!result.applied && !result.repaired) return { ok: "You're already set up as a shop." };
   return {
     ok: "You're selling as a shop now. Verification is a separate review DRVN grants — self-declaring never shows a verified badge.",
   };
@@ -161,43 +147,25 @@ export async function requestShopReturn(
     };
   }
 
-  const { data: ret, error: insertError } = await admin
-    .from("returns")
-    .insert({
-      order_id: orderId,
-      requested_by: user.id,
-      return_type: "shop_policy",
-      reason: reason || "Preference return within the shop's window",
-      responsibility: "buyer",
-      status: "requested",
-      // Item value only — the buyer keeps paying the original outbound
-      // shipping and their own return postage (§26).
-      refund_amount_cents: returnEntitlementCents(items, { includeShipping: false }),
-    })
-    .select("id")
-    .single();
-  if (insertError || !ret) {
-    reportError("[shop-return] request failed", { orderId, insertError });
-    return { error: "Couldn't open the return. Try again." };
-  }
-  const { error: itemsError } = await admin
-    .from("return_items")
-    .insert(items.map((item) => ({ return_id: ret.id, order_item_id: item.id, reason })));
-  if (itemsError) {
-    await admin.from("returns").delete().eq("id", ret.id);
-    if (itemsError.code === "42501") {
-      return { error: "This order already has an active return." };
-    }
-    reportError("[shop-return] items failed", { returnId: ret.id, itemsError });
+  const { data, error: createError } = await admin.rpc("create_shop_policy_return", {
+    p_order: orderId,
+    p_buyer: user.id,
+    p_reason: reason || undefined,
+  });
+  const result = data as { ok?: boolean; return_id?: string; replayed?: boolean } | null;
+  if (createError || !result?.ok || !result.return_id) {
+    reportError("[shop-return] request failed", { orderId, createError });
     return { error: "Couldn't open the return. Try again." };
   }
 
-  await postOrderThreadMessage(
-    admin,
-    orderId,
-    user.id,
-    "Requested a return under the shop's return policy."
-  );
+  if (!result.replayed) {
+    await postOrderThreadMessage(
+      admin,
+      orderId,
+      user.id,
+      "Requested a return under the shop's return policy."
+    );
+  }
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Return requested — the shop reviews it next." };
 }
@@ -233,54 +201,32 @@ async function respondToShopReturn(
   if (!returnId) return { error: "Missing return." };
 
   const admin = createAdminClient();
-  const { data: ret } = await admin.from("returns").select("*").eq("id", returnId).maybeSingle();
-  if (!ret) return { error: "Return not found." };
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, seller_id")
-    .eq("id", ret.order_id)
-    .maybeSingle();
-  if (!order || order.seller_id !== user.id) return { error: "Not your order." };
-  if (ret.status !== "requested") return { error: "This return has already been handled." };
-
-  if (verb === "reject") {
-    const { data: updated } = await admin
-      .from("returns")
-      .update({ status: "rejected" })
-      .eq("id", returnId)
-      .eq("status", "requested")
-      .select("id");
-    if (!updated?.length) return { error: "Couldn't update — refresh and try again." };
-    await postOrderThreadMessage(admin, order.id, user.id, "Return request declined.");
-    revalidatePath(`/orders/${order.id}`);
-    return { ok: "Return declined." };
+  const { data, error } = await admin.rpc("respond_shop_policy_return", {
+    p_return: returnId,
+    p_seller: user.id,
+    p_decision: verb,
+    p_ship_days: RETURN_SHIP_DAYS,
+  });
+  const result = data as { ok?: boolean; order_id?: string; replayed?: boolean; reason?: string } | null;
+  if (error || !result) {
+    reportError("[shop-return] response failed", { returnId, error });
+    return { error: "Couldn't update — refresh and try again." };
   }
-
-  const now = Date.now();
-  const { data: approved } = await admin
-    .from("returns")
-    .update({
-      status: "approved",
-      approved_at: new Date(now).toISOString(),
-      ship_by: new Date(now + RETURN_SHIP_DAYS * 86_400_000).toISOString(),
-    })
-    .eq("id", returnId)
-    .eq("status", "requested")
-    .select("id");
-  if (!approved?.length) return { error: "Couldn't update — refresh and try again." };
-  // approved → awaiting_shipment: the buyer's move starts immediately.
-  await admin
-    .from("returns")
-    .update({ status: "awaiting_shipment" })
-    .eq("id", returnId)
-    .eq("status", "approved");
-
-  await postOrderThreadMessage(
-    admin,
-    order.id,
-    user.id,
-    `Return approved — ship it back (tracked) within ${RETURN_SHIP_DAYS} days.`
-  );
-  revalidatePath(`/orders/${order.id}`);
-  return { ok: "Return approved — the buyer ships it back next." };
+  if (!result.ok || !result.order_id) return { error: result.reason ?? "This return has already been handled." };
+  if (!result.replayed) {
+    await postOrderThreadMessage(
+      admin,
+      result.order_id,
+      user.id,
+      verb === "approve"
+        ? `Return approved — ship it back (tracked) within ${RETURN_SHIP_DAYS} days.`
+        : "Return request declined."
+    );
+  }
+  revalidatePath(`/orders/${result.order_id}`);
+  return {
+    ok: verb === "approve"
+      ? "Return approved — the buyer ships it back next."
+      : "Return declined.",
+  };
 }

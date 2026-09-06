@@ -40,6 +40,7 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
         setSubmitted(true);
         action(fd);
       }}
+      onChange={() => setSubmitted(false)}
     >
       {NOTIFICATION_PREF_GROUPS.map((group) => (
         <div key={group}>
@@ -270,6 +271,7 @@ export function SettingsPanel({
               setSaved(true);
               action(fd);
             }}
+            onChange={() => setSaved(false)}
           >
             <DataRow label="Display name">
               <input name="display_name" defaultValue={profile.display_name} required className="ctl" />

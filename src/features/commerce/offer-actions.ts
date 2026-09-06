@@ -21,18 +21,14 @@ async function requireUser() {
 
 export async function makeOffer(_prev: CommerceState, formData: FormData): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
-
-  const betaAccess = await getBetaAccess(user.id, "buyer");
-  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
-
-  if (!(await allowAction(RATE_LIMITS.makeOffer, user.id))) {
-    return { error: rateLimitMessage(RATE_LIMITS.makeOffer) };
-  }
-
+  const offerId = String(formData.get("offer_id") ?? "");
   const listingId = String(formData.get("listing_id") ?? "");
   const amount = Math.round(Number(String(formData.get("amount") ?? "")) * 100);
   const message = String(formData.get("message") ?? "").trim();
 
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(offerId)) {
+    return { error: "Refresh this listing before sending your offer." };
+  }
   if (!listingId || !Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid offer amount." };
   }
@@ -44,67 +40,58 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     return { error: "Keep the message under 2000 characters." };
   }
 
-  const { data: listing } = await supabase
-    .from("listings")
-    .select("seller_id, status, offer_floor_cents, price_cents, shipping_mode")
-    .eq("id", listingId)
-    .maybeSingle();
-  if (!listing || listing.status !== "active") return { error: "Listing is not available." };
-  if (listing.seller_id === user.id) return { error: "You can't offer on your own listing." };
-  // Decision of record (0053): offers freeze order money at accept time, but
-  // DRVN Shipping is priced per-address at checkout — the two can't both hold
-  // yet, so rated listings are buy-now/pickup until offer-time rating ships.
-  if (listing.shipping_mode === "drvn") {
-    return {
-      error:
-        "This listing uses DRVN Shipping, which is priced at checkout — offers aren't available on it yet. Buy now instead.",
-    };
-  }
-  if (amount > listing.price_cents) {
-    return { error: "That's above the asking price — buy it now instead." };
-  }
-  if (listing.offer_floor_cents && amount < listing.offer_floor_cents) {
-    return {
-      error: `The seller doesn't consider offers below ${(listing.offer_floor_cents / 100).toFixed(2)}.`,
-    };
+  const existingRequest = await supabase.from("offers").select("id").eq("id", offerId).maybeSingle();
+  if (existingRequest.error) {
+    return { error: "Couldn't check whether your offer was sent. Try again with the same offer." };
   }
 
-  // One live offer per buyer per listing.
-  const { data: existing } = await supabase
-    .from("offers")
-    .select("id")
-    .eq("listing_id", listingId)
-    .eq("buyer_id", user.id)
-    .in("status", ["open", "countered"])
-    .maybeSingle();
-  if (existing) {
-    return { error: "You already have an offer on this part. Withdraw it first." };
-  }
-
-  const { data: offer, error } = await supabase
-    .from("offers")
-    .insert({
-      listing_id: listingId,
-      buyer_id: user.id,
-      amount_cents: amount,
-      // Offers lapse rather than hanging open forever — the UI promises a window.
-      expires_at: new Date(Date.now() + 1000 * 60 * 60 * 72).toISOString(),
-    })
-    .select("id")
-    .single();
-  if (error) return { error: error.message };
-
-  if (message) {
-    const { error: messageError } = await supabase.from("messages").insert({
-      listing_id: listingId,
-      offer_id: offer.id,
-      sender_id: user.id,
-      recipient_id: listing.seller_id,
-      body: message,
-    });
-    if (messageError) {
-      reportError("[commerce] offer message failed", { offerId: offer.id, messageError });
+  // Exact committed-response replay bypasses admission/rate consumption. The
+  // RPC verifies the original buyer/listing/amount/message before returning.
+  if (!existingRequest.data) {
+    const betaAccess = await getBetaAccess(user.id, "buyer");
+    if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
+    if (!(await allowAction(RATE_LIMITS.makeOffer, user.id))) {
+      return { error: rateLimitMessage(RATE_LIMITS.makeOffer) };
     }
+    const { data: listing } = await supabase
+      .from("listings")
+      .select("seller_id, status, offer_floor_cents, price_cents, shipping_mode")
+      .eq("id", listingId)
+      .maybeSingle();
+    if (!listing || listing.status !== "active") return { error: "Listing is not available." };
+    if (listing.seller_id === user.id) return { error: "You can't offer on your own listing." };
+    // Decision of record (0053): offers freeze order money at accept time, but
+    // DRVN Shipping is priced per-address at checkout — the two can't both hold
+    // yet, so rated listings are buy-now/pickup until offer-time rating ships.
+    if (listing.shipping_mode === "drvn") {
+      return {
+        error:
+          "This listing uses DRVN Shipping, which is priced at checkout — offers aren't available on it yet. Buy now instead.",
+      };
+    }
+    if (amount > listing.price_cents) {
+      return { error: "That's above the asking price — buy it now instead." };
+    }
+    if (listing.offer_floor_cents && amount < listing.offer_floor_cents) {
+      return {
+        error: `The seller doesn't consider offers below ${(listing.offer_floor_cents / 100).toFixed(2)}.`,
+      };
+    }
+  }
+
+  const created = await supabase.rpc("create_offer_with_message", {
+    p_offer: offerId,
+    p_listing: listingId,
+    p_amount: amount,
+    p_message: message || undefined,
+  });
+  if (created.error || !(created.data as { offer_id?: string } | null)?.offer_id) {
+    reportError("[commerce] atomic offer submission failed", { offerId, error: created.error });
+    return {
+      error: created.error?.code === "23505"
+        ? "You already have an offer on this part, or this offer changed. Check Orders before trying again."
+        : "Couldn't confirm your offer was sent. Try again with the same offer.",
+    };
   }
 
   capture(user.id, { event: "offer_submitted" });
@@ -165,11 +152,14 @@ export async function respondToOffer(
   if (listing.seller_id !== user.id) return { error: "That isn't your listing." };
 
   if (decision === "declined") {
-    const { error } = await admin
+    const { data: declined, error } = await admin
       .from("offers")
       .update({ status: "declined", responded_at: new Date().toISOString() })
-      .eq("id", offerId);
+      .eq("id", offerId)
+      .in("status", ["open", "countered"])
+      .select("id");
     if (error) return { error: error.message };
+    if (!declined?.length) return { error: "That offer has already been settled." };
     revalidatePath("/orders");
     revalidatePath("/offers");
     revalidatePath(`/offers/${offerId}`);
@@ -188,15 +178,18 @@ export async function respondToOffer(
       return { error: "A counter should be above the buyer's offer." };
     }
 
-    const { error } = await admin
+    const { data: countered, error } = await admin
       .from("offers")
       .update({
         status: "countered",
         counter_amount_cents: counter,
         countered_at: new Date().toISOString(),
       })
-      .eq("id", offerId);
+      .eq("id", offerId)
+      .in("status", ["open", "countered"])
+      .select("id");
     if (error) return { error: error.message };
+    if (!countered?.length) return { error: "That offer has already been settled." };
     revalidatePath("/orders");
     revalidatePath("/offers");
     revalidatePath(`/offers/${offerId}`);

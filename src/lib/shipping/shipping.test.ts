@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   dollarsToCents,
   humanizeService,
+  mapLabelRefundState,
   mapRates,
   mapTracker,
   mapTrackingState,
@@ -11,6 +12,15 @@ import { resolveShippingMode, ShippingConfigError } from "./provider";
 import { stubShippingProvider } from "./stub";
 
 const FLAG_ON = { FLAG_INTEGRATED_SHIPPING_V1: "true" };
+
+it("maps exact EasyPost refund states and holds unknown values", () => {
+  expect(mapLabelRefundState(null)).toEqual({ state: "not_requested" });
+  expect(mapLabelRefundState("submitted")).toEqual({ state: "submitted" });
+  expect(mapLabelRefundState("refunded")).toEqual({ state: "refunded" });
+  expect(mapLabelRefundState("rejected")).toEqual({ state: "rejected" });
+  expect(mapLabelRefundState("not_applicable")).toEqual({ state: "rejected" });
+  expect(mapLabelRefundState("future_state")).toEqual({ state: "unknown" });
+});
 
 describe("resolveShippingMode", () => {
   it("is disabled everywhere while the rollout flag is off", () => {

@@ -6494,6 +6494,13 @@ video {
     gap: 8px;
     margin-top: 12px;
   }
+  /* Editable tiles carry three 44px hit targets across their first row. Give
+     that row enough width at every pointer type so the move and cover targets
+     cannot overlap and intercept one another. */
+  .thumbs--edit {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
   .thumb {
     position: relative;
     aspect-ratio: 4/3;
@@ -6530,10 +6537,10 @@ video {
      offset live here rather than in utilities so the coarse-pointer rule below
      has something to raise — a `gap-1` utility would outrank it. */
   .thumb__ctl {
-    gap: 4px;
+    gap: 20px;
   }
   .thumb__ctl--second {
-    top: 32px;
+    top: 48px;
   }
   /* Touch pointers get a bigger cell and real separation between controls.
      The 84px cell is a mouse instrument: at 375px it packs three columns of
@@ -6545,20 +6552,6 @@ video {
      44px targets apart, and the second bar drops to clear the first bar's hit
      area (4px top + 24px badge + 20px) rather than merely its badge. */
   @media (pointer: coarse) {
-    .thumbs--edit {
-      /* 140px, not 148: the extra 8px is what keeps two columns at 375px
-         (2×140 + 12 = 292 into a 303px content box) instead of collapsing to
-         one enormous tile per photo. A 145px cell still seats the left pair
-         and the star with 20px between them. */
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 12px;
-    }
-    .thumbs--edit .thumb__ctl {
-      gap: 20px;
-    }
-    .thumbs--edit .thumb__ctl--second {
-      top: 48px;
-    }
   }
   .thumb__tag {
     position: absolute;

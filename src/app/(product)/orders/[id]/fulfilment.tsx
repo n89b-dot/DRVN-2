@@ -1,20 +1,34 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 
-import { ConfirmDialog, Message, MessageThread, ResultNote } from "@/components/ui";
+import { MessageComposer } from "@/features/commerce/message-composer";
+import { ConfirmDialog, Message, MessageThread } from "@/components/ui";
 import {
   markReceived,
   markShipped,
   requestCancellation,
-  sendThreadMessage,
   type CommerceState,
 } from "@/features/commerce/actions";
+
+function recoverableOrderAction(action: (previous: CommerceState, data: FormData) => Promise<CommerceState>) {
+  return async (previous: CommerceState, data: FormData): Promise<CommerceState> => {
+    try {
+      return await action(previous, data);
+    } catch (error) {
+      unstable_rethrow(error);
+      return { error: "Couldn't confirm the update. Your details are still here; retry to check the saved result." };
+    }
+  };
+}
 
 /** Seller dispatch. Tracking is required for posted goods — without it the
  *  buyer has no visibility, which is the entire point of the step. */
 export function DispatchForm({ orderId, isCollection }: { orderId: string; isCollection: boolean }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(markShipped, {});
+  const [state, action, pending] = useActionState<CommerceState, FormData>(recoverableOrderAction(markShipped), {});
+  const [carrier, setCarrier] = useState("");
+  const [tracking, setTracking] = useState("");
   const label = isCollection ? "Mark ready for collection" : "Mark dispatched";
 
   return (
@@ -38,11 +52,11 @@ export function DispatchForm({ orderId, isCollection }: { orderId: string; isCol
             <div className="field--row mt-3">
               <label className="field">
                 <span className="field__label">Carrier</span>
-                <input name="carrier" required className="ctl !max-w-none" placeholder="Royal Mail" />
+                <input name="carrier" value={carrier} onChange={(event) => setCarrier(event.target.value)} disabled={pending} required className="ctl !max-w-none" placeholder="Royal Mail" />
               </label>
               <label className="field">
                 <span className="field__label">Tracking number</span>
-                <input name="tracking_number" required className="ctl !max-w-none" />
+                <input name="tracking_number" value={tracking} onChange={(event) => setTracking(event.target.value)} disabled={pending} required className="ctl !max-w-none" />
               </label>
             </div>
           )
@@ -55,7 +69,7 @@ export function DispatchForm({ orderId, isCollection }: { orderId: string; isCol
 }
 
 export function ReceivedButton({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(markReceived, {});
+  const [state, action, pending] = useActionState<CommerceState, FormData>(recoverableOrderAction(markReceived), {});
 
   return (
     <div className="grid gap-2">
@@ -80,8 +94,9 @@ export function ReceivedButton({ orderId }: { orderId: string }) {
 }
 
 export function CancelOrder({ orderId }: { orderId: string }) {
+  const [reason, setReason] = useState("");
   const [state, action, pending] = useActionState<CommerceState, FormData>(
-    requestCancellation,
+    recoverableOrderAction(requestCancellation),
     {}
   );
 
@@ -104,7 +119,7 @@ export function CancelOrder({ orderId }: { orderId: string }) {
         fields={
           <label className="field mt-3">
             <span className="field__label">Reason (optional, recorded on the order)</span>
-            <input name="reason" className="ctl !max-w-none" maxLength={500} />
+            <input name="reason" value={reason} onChange={(event) => setReason(event.target.value)} disabled={pending} className="ctl !max-w-none" maxLength={500} />
           </label>
         }
       >
@@ -124,7 +139,6 @@ export function OrderThread({
   currentUserId: string;
   messages: { id: string; sender_id: string; sender_name: string; body: string; created_at: string }[];
 }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(sendThreadMessage, {});
 
   return (
     <div className="grid gap-3">
@@ -146,20 +160,7 @@ export function OrderThread({
         </p>
       )}
 
-      <form action={action} className="composer__row">
-        <input type="hidden" name="order_id" value={orderId} />
-        <input
-          name="body"
-          required
-          maxLength={4000}
-          placeholder="Message the other party…"
-          className="ctl max-w-none flex-1 !py-2"
-        />
-        <button type="submit" disabled={pending} className="btn btn--ghost !py-2.5">
-          {pending ? "Sending…" : "Send"}
-        </button>
-      </form>
-      <ResultNote error={state.error} ok={state.ok} />
+      <MessageComposer orderId={orderId} />
     </div>
   );
 }

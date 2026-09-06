@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getCartIds, removeCartIds, setCartIds } from "@/lib/cart";
+import { getCartIds, MAX_CART_ITEMS, removeCartIds, setCartIds } from "@/lib/cart";
 import { createClient } from "@/lib/supabase/server";
 import type { CommerceState } from "./action-types";
 
@@ -39,25 +39,36 @@ export async function addToCart(formData: FormData): Promise<CommerceState> {
     return { error: "That's your own listing." };
   }
 
-  const current = await getCartIds();
-  if (!current.includes(id)) await setCartIds([...current, id]);
+  try {
+    const current = await getCartIds();
+    if (!current.includes(id)) {
+      if (current.length >= MAX_CART_ITEMS) return { error: "Your cart is full. Remove a part before adding another." };
+      await setCartIds([...current, id]);
+    }
+  } catch {
+    return { error: "Couldn't save your cart. Try again." };
+  }
   // Stay on the page: the buyer gets an in-place confirmation and the cart
   // badge updates; going to the cart is their choice, not a hijack.
   return { ok: "Added to cart." };
 }
 
-export async function removeFromCart(formData: FormData) {
+export async function removeFromCart(formData: FormData): Promise<CommerceState> {
   const id = String(formData.get("listing_id") ?? "");
-  if (id) await removeCartIds([id]);
+  if (!id) return { error: "Missing listing." };
+  try { await removeCartIds([id]); }
+  catch { return { error: "Couldn't remove that part. Try again." }; }
   revalidatePath("/cart");
+  return { ok: "Removed from cart." };
 }
 
-export async function buyNow(formData: FormData): Promise<void> {
+export async function buyNow(formData: FormData): Promise<CommerceState> {
   // No account needed to get here. The cart and checkout are public surfaces;
   // the buyer identifies themselves with an email at the payment step.
   const id = String(formData.get("listing_id") ?? "");
   if (!id) redirect("/marketplace");
 
-  await setCartIds([...(await getCartIds()), id]);
+  const result = await addToCart(formData);
+  if (result.error) return result;
   redirect("/cart?buynow=1");
 }

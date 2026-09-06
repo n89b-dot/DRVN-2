@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { fixtureAdmin } from "./fixtures";
 import { enableSellerPayouts } from "./helpers";
 
 /**
@@ -136,6 +137,19 @@ test.describe.serial("golden path", () => {
     // lands on the order. Against Stripe this step stops at the Payment
     // Element instead — see e2e/README.md, which is why the money-completing
     // specs are run with PAYMENTS_MODE=stub.
+    let interruptedCheckout = false;
+    await page.route("**/checkout", async (route) => {
+      if (!interruptedCheckout && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        interruptedCheckout = true;
+        const response = await route.fetch();
+        expect(response.status()).toBe(303);
+        expect(response.headers()["x-action-redirect"]).toContain("/orders/");
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: /continue to payment|confirm and pay/i }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("We couldn't confirm checkout");
+    await expect(page.getByLabel(/^address$/i)).toHaveValue("1 Test Street");
     await page.getByRole("button", { name: /continue to payment|confirm and pay/i }).click();
 
     await page.waitForURL(/\/orders/, { timeout: 60_000 });
@@ -171,6 +185,20 @@ test.describe.serial("golden path", () => {
     const dispatchDialog = page.getByRole("dialog");
     await dispatchDialog.getByLabel(/carrier/i).fill("Royal Mail");
     await dispatchDialog.getByLabel(/tracking/i).fill(`E2E${stamp}`);
+    let interruptedDispatch = false;
+    await page.route(`**${new URL(page.url()).pathname}`, async (route) => {
+      if (!interruptedDispatch && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        interruptedDispatch = true;
+        const response = await route.fetch();
+        expect(response.status()).toBe(303);
+        expect(response.headers()["x-action-redirect"]).toContain("/orders/");
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await dispatchDialog.getByRole("button", { name: /mark dispatched/i }).click();
+    await expect(dispatchDialog.getByRole("alert")).toContainText("Your details are still here");
+    await expect(dispatchDialog.getByLabel(/carrier/i)).toHaveValue("Royal Mail");
+    await expect(dispatchDialog.getByLabel(/tracking/i)).toHaveValue(`E2E${stamp}`);
     await dispatchDialog.getByRole("button", { name: /mark dispatched/i }).click();
     await expect(page.getByText(`E2E${stamp}`).first()).toBeVisible({ timeout: 30_000 });
   });
@@ -197,10 +225,30 @@ test.describe.serial("golden path", () => {
       await page.reload(); // the review tile unlocks with the delivered status
     }
     await page.getByRole("radio", { name: "5 stars" }).click();
+    const reviewBody = `Reliable seller — recovery check ${stamp}`;
+    const reviewInput = page.getByRole("textbox", { name: /review.*optional/i });
+    await reviewInput.fill(reviewBody);
+    let interruptedReview = false;
+    await page.route(`**${new URL(page.url()).pathname}`, async (route) => {
+      if (!interruptedReview && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        interruptedReview = true;
+        expect((await route.fetch()).status()).toBe(200);
+        await route.abort("failed");
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: /leave review/i }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toContainText("rating and text are still here");
+    await expect(reviewInput).toHaveValue(reviewBody);
+    await expect(page.getByRole("radio", { name: "5 stars" })).toHaveAttribute("aria-checked", "true");
     await page.getByRole("button", { name: /leave review/i }).click();
     await expect(
       page.locator("main").getByText(/review filed|thanks|your review/i).first()
     ).toBeVisible();
+    const reviews = await fixtureAdmin().from("reviews").select("id")
+      .eq("order_id", new URL(page.url()).pathname.split("/").at(-1)!)
+      .eq("body", reviewBody);
+    if (reviews.error) throw reviews.error;
+    expect(reviews.data).toHaveLength(1);
   });
 
   test("the review shows on the seller's public profile", async ({ page }) => {

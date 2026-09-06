@@ -165,6 +165,13 @@ export function mapTrackingState(status: unknown): TrackingState {
   return typeof status === "string" ? (TRACKING_STATE_MAP[status] ?? "unknown") : "unknown";
 }
 
+export function mapLabelRefundState(status: unknown): VoidLabelResult {
+  if (status == null || status === "") return { state: "not_requested" };
+  if (status === "submitted" || status === "refunded") return { state: status };
+  if (status === "rejected" || status === "not_applicable") return { state: "rejected" };
+  return { state: "unknown" };
+}
+
 export function mapRates(shipment: Json): RatedShipment {
   const shipmentRef = typeof shipment.id === "string" ? shipment.id : null;
   if (!shipmentRef) {
@@ -319,10 +326,15 @@ export const easypostProvider: ShippingProvider = {
 
   async voidLabel(input: { shipmentRef: string }): Promise<VoidLabelResult> {
     const shipment = await request("POST", `/shipments/${input.shipmentRef}/refund`);
-    const status = typeof shipment.refund_status === "string" ? shipment.refund_status : "";
-    if (status === "refunded") return { state: "refunded" };
-    if (status === "rejected") return { state: "rejected" };
-    return { state: "submitted" };
+    const result = mapLabelRefundState(shipment.refund_status);
+    // A successful POST with an unrecognised/empty status is an unknown
+    // outcome, not proof that no request exists.
+    return result.state === "not_requested" ? { state: "unknown" } : result;
+  },
+
+  async getLabelRefundStatus(input: { shipmentRef: string }): Promise<VoidLabelResult> {
+    const shipment = await request("GET", `/shipments/${input.shipmentRef}`);
+    return mapLabelRefundState(shipment.refund_status);
   },
 
   async createTracker(input: CreateTrackerInput): Promise<TrackingSummary> {

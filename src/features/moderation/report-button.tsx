@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useActionState, useId, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useId, useRef, useState } from "react";
 
 import { Dialog } from "@/components/ui";
 
@@ -35,7 +35,22 @@ export function ReportButton({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [state, formAction, pending] = useActionState<ReportState, FormData>(fileReport, null);
+  const reportId = useRef<string | null>(null);
+  const [detail, setDetail] = useState("");
+  const [reason, setReason] = useState(REASON_OPTIONS[0].value);
+  const [state, setState] = useState<ReportState>(null);
+  const [pending, setPending] = useState(false);
+  const inFlight = useRef(false);
+  async function submit(data: FormData) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPending(true);
+    reportId.current ??= crypto.randomUUID();
+    data.set("report_id", reportId.current);
+    try { setState(await fileReport(state, data)); }
+    catch (error) { unstable_rethrow(error); setState({ error: "Couldn't confirm your report was filed. Your details are still here; try again." }); }
+    finally { inFlight.current = false; setPending(false); }
+  }
   const idBase = useId();
 
   return (
@@ -66,14 +81,14 @@ export function ReportButton({
             Goes straight to DRVN&apos;s review queue. The {subjectType === "listing" ? "seller" : "user"}{" "}
             isn&apos;t told who reported.
           </p>
-          <form action={formAction} className="mt-4 flex flex-col gap-3">
+          <form onSubmit={(event) => { event.preventDefault(); void submit(new FormData(event.currentTarget)); }} className="mt-4 flex flex-col gap-3">
             <input type="hidden" name="subject_type" value={subjectType} />
             <input type="hidden" name="subject_id" value={subjectId} />
             <div className="field">
               <label htmlFor={`${idBase}-reason`} className="microlabel">
                 What&apos;s wrong
               </label>
-              <select id={`${idBase}-reason`} name="reason" required className="ctl max-w-none">
+              <select id={`${idBase}-reason`} name="reason" value={reason} onChange={(event) => setReason(event.target.value)} disabled={pending} required className="ctl max-w-none">
                 {REASON_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
@@ -88,6 +103,9 @@ export function ReportButton({
               <textarea
                 id={`${idBase}-detail`}
                 name="detail"
+                value={detail}
+                onChange={(event) => setDetail(event.target.value)}
+                readOnly={pending}
                 rows={3}
                 maxLength={1000}
                 placeholder="What you saw, where"

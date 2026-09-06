@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { reportError } from "@/lib/monitoring";
-import { recordSellerAdjustment } from "@/lib/payments/adjustments";
+import { ensureReturnLabel } from "@/lib/shipping/return-label";
 import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
 import { ShippingProviderError } from "@/lib/shipping/types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { loadFulfillmentProfile, returnAddress } from "./fulfillment";
 import { postOrderThreadMessage } from "./order-thread";
-import { completeReturn, RETURN_SHIP_DAYS, returnEntitlementCents } from "./returns";
+import { completeReturn, RETURN_SHIP_DAYS } from "./returns";
 
 /**
  * Return/RMA actions (brief §24-§29, migration 0055).
@@ -98,52 +98,26 @@ export async function proposeReturn(
     : items;
   if (!selected.length) return { error: "Pick which item is coming back." };
 
-  const entitlement = returnEntitlementCents(selected, { includeShipping: true });
-  const now = Date.now();
-
-  const { data: ret, error: insertError } = await admin
-    .from("returns")
-    .insert({
-      order_id: orderId,
-      requested_by: order.buyer_id,
-      return_type: "protection",
-      reason: order.dispute_reason,
-      responsibility: "seller",
-      status: "awaiting_shipment",
-      approved_at: new Date(now).toISOString(),
-      ship_by: new Date(now + RETURN_SHIP_DAYS * 86_400_000).toISOString(),
-      refund_amount_cents: entitlement,
-    })
-    .select("id")
-    .single();
-  if (insertError || !ret) {
-    reportError("[returns] propose failed", { orderId, insertError });
+  const { data, error: createError } = await admin.rpc("create_protection_return", {
+    p_order: orderId,
+    p_seller: user.id,
+    p_item_ids: selected.map((item) => item.id),
+    p_ship_days: RETURN_SHIP_DAYS,
+  });
+  const result = data as { ok?: boolean; return_id?: string; replayed?: boolean } | null;
+  if (createError || !result?.ok || !result.return_id) {
+    reportError("[returns] propose failed", { orderId, createError });
     return { error: "Couldn't set up the return. Try again." };
   }
 
-  const { error: itemsError } = await admin.from("return_items").insert(
-    selected.map((item) => ({
-      return_id: ret.id,
-      order_item_id: item.id,
-      reason: order.dispute_reason,
-    }))
-  );
-  if (itemsError) {
-    // Most likely the 0055 one-live-RMA guard (42501): roll the shell back.
-    await admin.from("returns").delete().eq("id", ret.id);
-    if (itemsError.code === "42501") {
-      return { error: "One of those items already has an active return." };
-    }
-    reportError("[returns] items insert failed", { returnId: ret.id, itemsError });
-    return { error: "Couldn't set up the return. Try again." };
+  if (!result.replayed) {
+    await postOrderThreadMessage(
+      admin,
+      orderId,
+      user.id,
+      `Return agreed — send the part back within ${RETURN_SHIP_DAYS} days and the refund follows once it arrives.`
+    );
   }
-
-  await postOrderThreadMessage(
-    admin,
-    orderId,
-    user.id,
-    `Return agreed — send the part back within ${RETURN_SHIP_DAYS} days and the refund follows once it arrives.`
-  );
   revalidatePath(`/orders/${orderId}`);
   return { ok: "Return authorized — the buyer now ships it back." };
 }
@@ -179,14 +153,17 @@ export async function createReturnLabel(
   }
 
   // Existing live return shipment = the label already exists; re-serve it.
-  const { data: existing } = await admin
+  const { data: existing, error: existingError } = await admin
     .from("shipments")
     .select("label_reference, status")
     .eq("return_id", returnId)
     .not("status", "in", "(cancelled,failed)")
     .maybeSingle();
+  if (existingError) return { error: "Couldn't check your existing return label. Try again." };
   if (existing?.label_reference) {
-    return { ok: "Your return label is ready.", labelUrl: existing.label_reference };
+    const request = await admin.from("return_label_requests").select("completed_at").eq("return_id", returnId).maybeSingle();
+    if (request.error) return { error: "Couldn't confirm your label records. Try again." };
+    if (!request.data || request.data.completed_at) return { ok: "Your return label is ready.", labelUrl: existing.label_reference };
   }
 
   const profile = await loadFulfillmentProfile(order.seller_id);
@@ -206,80 +183,32 @@ export async function createReturnLabel(
 
   try {
     const provider = getShippingProvider();
-    const rated = await provider.createReturnShipment({
-      from: {
-        name: order.ship_name ?? "Buyer",
-        street1: order.ship_line1,
-        street2: order.ship_line2,
-        city: order.ship_city ?? "",
-        state: order.ship_state,
-        postalCode: order.ship_postcode ?? "",
-        country: order.ship_country ?? "US",
-        phone: order.ship_phone,
+    const label = await ensureReturnLabel(admin, {
+      returnId, actorId: user.id, provider,
+      createRate: async () => {
+        const rated = await provider.createReturnShipment({
+          from: {
+            name: order.ship_name ?? "Buyer", street1: order.ship_line1!, street2: order.ship_line2,
+            city: order.ship_city ?? "", state: order.ship_state, postalCode: order.ship_postcode ?? "",
+            country: order.ship_country ?? "US", phone: order.ship_phone,
+          },
+          to: returnAddress(profile), parcel, endShipperRef: profile.easypost_end_shipper_id,
+        });
+        const cheapest = [...rated.rates].sort((a, b) => a.amountCents - b.amountCents)[0];
+        if (!cheapest) throw new Error("No carrier offered a return rate");
+        return { shipmentRef: rated.shipmentRef, rateRef: cheapest.rateRef,
+          amountCents: cheapest.amountCents, currency: cheapest.currency,
+          carrier: cheapest.carrier, service: cheapest.service,
+          endShipperRef: profile.easypost_end_shipper_id };
       },
-      to: returnAddress(profile),
-      parcel,
-      endShipperRef: profile.easypost_end_shipper_id,
     });
-    const cheapest = rated.rates[0];
-    if (!cheapest) return { error: "No carrier offered a return rate — add tracking manually." };
-    const label = await provider.buyLabel({
-      shipmentRef: rated.shipmentRef,
-      rateRef: cheapest.rateRef,
-      endShipperRef: profile.easypost_end_shipper_id,
-      idempotencyKey: `retlabel:${returnId}`,
-    });
-
-    const { data: shipment } = await admin
-      .from("shipments")
-      .insert({
-        order_id: order.id,
-        direction: "return",
-        return_id: returnId,
-        provider: provider.name,
-        provider_shipment_id: label.shipmentRef,
-        provider_tracker_id: label.trackerRef,
-        fulfillment_type: "drvn_shipping",
-        carrier: label.carrier,
-        service: label.service,
-        status: "label_purchased",
-        tracking_code: label.trackingCode,
-        label_reference: label.labelUrl,
-        purchased_cents: label.amountCents,
-      })
-      .select("id")
-      .single();
-    if (shipment) {
-      const { data: retItems } = await admin
-        .from("return_items")
-        .select("order_item_id")
-        .eq("return_id", returnId);
-      if (retItems?.length) {
-        await admin
-          .from("shipment_items")
-          .insert(
-            retItems.map((ri) => ({ shipment_id: shipment.id, order_item_id: ri.order_item_id }))
-          );
-      }
-      await recordSellerAdjustment(admin, {
-        sellerId: order.seller_id,
-        orderId: order.id,
-        shipmentId: shipment.id,
-        returnId,
-        kind: "return_label",
-        amountCents: -Math.abs(label.amountCents),
-        currency: order.currency,
-        externalReference: `retlabel:${returnId}`,
-        description: `${label.carrier} ${label.service} return label`,
-      });
-    }
 
     revalidatePath(`/orders/${order.id}`);
     return { ok: "Return label ready — print it and ship the part back.", labelUrl: label.labelUrl };
   } catch (error) {
     const reason = error instanceof ShippingProviderError ? error.message : "provider error";
     reportError("[returns] label failed", { returnId, reason });
-    return { error: "Couldn't generate the label just now — try again, or ship tracked and add the tracking." };
+    return { error: "Couldn't confirm the return label. Retry this request; don't buy another label while it is being checked." };
   }
 }
 
@@ -298,79 +227,27 @@ export async function markReturnShipped(
   const admin = createAdminClient();
   const loaded = await loadReturnForParty(admin, returnId, user.id, "buyer");
   if ("error" in loaded) return { error: loaded.error };
-  const { ret, order } = loaded;
-  if (!["approved", "awaiting_shipment"].includes(ret.status)) {
-    return { error: "This return isn't waiting to be shipped." };
+  const { order } = loaded;
+  const transitioned = await admin.rpc("mark_return_dispatched", {
+    p_return: returnId, p_actor: user.id, p_carrier: carrier, p_tracking: tracking,
+  });
+  if (transitioned.error || !(transitioned.data as { ok?: boolean } | null)?.ok) {
+    reportError("[returns] dispatch transition failed", { returnId, error: transitioned.error });
+    return { error: "Couldn't confirm dispatch. Check that any prepaid label is ready, then retry with the same tracking." };
   }
-
-  const { data: labelShipment } = await admin
-    .from("shipments")
-    .select("id, tracking_code")
-    .eq("return_id", returnId)
-    .eq("status", "label_purchased")
-    .maybeSingle();
-
-  if (!labelShipment && (!carrier || !tracking)) {
-    return { error: "Add the carrier and tracking number for the return." };
-  }
-
-  if (labelShipment) {
-    await admin
-      .from("shipments")
-      .update({ status: "in_transit", shipped_at: new Date().toISOString() })
-      .eq("id", labelShipment.id)
-      .eq("status", "label_purchased");
-  } else {
-    const { data: shipment } = await admin
-      .from("shipments")
-      .insert({
-        order_id: order.id,
-        direction: "return",
-        return_id: returnId,
-        fulfillment_type: "seller_arranged",
-        carrier,
-        tracking_code: tracking,
-        status: "in_transit",
-        shipped_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-    if (shipment && tracking && integratedShippingEnabled()) {
-      try {
-        const summary = await getShippingProvider().createTracker({
-          trackingCode: tracking,
-          carrier: carrier || null,
-        });
-        if (summary.trackerRef) {
-          await admin
-            .from("shipments")
-            .update({
-              provider: getShippingProvider().name,
-              provider_tracker_id: summary.trackerRef,
-            })
-            .eq("id", shipment.id);
-        }
-      } catch (trackerError) {
-        reportError("[returns] tracker registration failed", { returnId, trackerError });
+  const result = transitioned.data as { applied: boolean; manual: boolean; shipment_id: string; carrier: string; tracking: string };
+  if (result.applied && result.manual && integratedShippingEnabled()) {
+    try {
+      const provider = getShippingProvider();
+      const summary = await provider.createTracker({ trackingCode: result.tracking, carrier: result.carrier });
+      if (summary.trackerRef) {
+        const stamped = await admin.from("shipments").update({ provider: provider.name, provider_tracker_id: summary.trackerRef }).eq("id", result.shipment_id);
+        if (stamped.error) reportError("[returns] tracker save failed", { returnId, error: stamped.error });
       }
-    }
+    } catch (error) { reportError("[returns] tracker registration failed", { returnId, error }); }
   }
 
-  const fromStatus = ret.status;
-  if (fromStatus === "approved") {
-    await admin
-      .from("returns")
-      .update({ status: "awaiting_shipment" })
-      .eq("id", returnId)
-      .eq("status", "approved");
-  }
-  await admin
-    .from("returns")
-    .update({ status: "in_transit", shipped_at: new Date().toISOString() })
-    .eq("id", returnId)
-    .eq("status", "awaiting_shipment");
-
-  await postOrderThreadMessage(admin, order.id, user.id, "Return shipped — tracking attached.");
+  if (result.applied) await postOrderThreadMessage(admin, order.id, user.id, "Return shipped — tracking attached.");
   revalidatePath(`/orders/${order.id}`);
   return { ok: "Return on its way — the refund follows once it's received." };
 }

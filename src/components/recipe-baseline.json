@@ -1,5 +1,5 @@
 {
-  "btn": 83,
+  "btn": 81,
   "field__label": 9,
   "pagehead": 46,
   "tile__head": 44,
@@ -9,7 +9,7 @@
   "thread": 0,
   "msg": 0,
   "composer": 0,
-  "composer__row": 5,
+  "composer__row": 3,
   "steps": 0,
   "bline": 2,
   "review__stars": 0,

@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -189,81 +190,112 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   const betaAccess = await getBetaAccess(user.id, "seller");
   if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
 
-  if (!(await allowAction(RATE_LIMITS.createListing, user.id))) {
-    return { error: rateLimitMessage(RATE_LIMITS.createListing) };
-  }
-
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
 
   // The page promises "nothing reaches the market until you publish it", so
   // honour it: saving a draft is a real, separate outcome.
   const asDraft = formData.get("save_draft") !== null;
+  const requestId = String(formData.get("request_id") ?? "");
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuid.test(requestId)) return { error: "Reload the listing form and try again." };
 
-  if (!asDraft && !(await sellerCanPublish(user.id))) {
+  const images = keepValidGalleryImages(safeParseJson(formData.get("image_urls")), 12, user.id);
+  const modItemId = String(formData.get("mod_item_id") ?? "");
+  const importId = String(formData.get("import_id") ?? "");
+  const payloadHash = createHash("sha256")
+    .update(JSON.stringify({
+      asDraft,
+      fields: parsed.fields,
+      fitments: parsed.fitments,
+      altNumbers: parsed.altNumbers,
+      images,
+      modItemId,
+      importId,
+    }))
+    .digest("hex");
+  const claimed = await supabase.rpc("claim_listing_creation", {
+    p_request: requestId,
+    p_payload_hash: payloadHash,
+  });
+  if (claimed.error) {
+    return {
+      error: claimed.error.code === "22023"
+        ? "This save request no longer matches the listing form. Reload and try again."
+        : "Couldn't prepare this listing. Try again.",
+    };
+  }
+  const claim = claimed.data as unknown as {
+    listing_id?: string;
+    completed?: boolean;
+    fresh?: boolean;
+  } | null;
+  if (!claim?.listing_id || !uuid.test(claim.listing_id)) {
+    return { error: "Couldn't prepare this listing. Try again." };
+  }
+  // Completed delivery replays only recover the original destination. Every
+  // unfinished attempt is admitted again; a denial releases an unused claim
+  // so a second click cannot masquerade as a free recovery.
+  if (!claim.completed && !(await allowAction(RATE_LIMITS.createListing, user.id))) {
+    const discarded = await supabase.rpc(
+      "discard_listing_creation",
+      { p_request: requestId, p_payload_hash: payloadHash }
+    );
+    if (discarded.error || discarded.data !== true) {
+      reportError("[sell] rate-limited listing claim wasn't discarded", {
+        requestId,
+        error: discarded.error,
+      });
+    }
+    return { error: rateLimitMessage(RATE_LIMITS.createListing) };
+  }
+
+  if (!claim.completed && !asDraft && !(await sellerCanPublish(user.id))) {
     return {
       error:
         "Publishing needs payouts set up first (Settings → Payments), so a sale has somewhere to send your money. You can still save this as a draft.",
     };
   }
 
-  const { data: listing, error } = await supabase
-    .from("listings")
-    .insert({
-      seller_id: user.id,
-      ...parsed.fields,
-      status: asDraft ? "draft" : "active",
-    })
-    .select("id")
-    .single();
-
-  if (error) return { error: error.message };
-
-  // Array order is the gallery order: index 0 is the cover, everything else
-  // is `position` — reorder and "set as cover" are both just moves within
-  // this list on the client, resolved here on save.
-  const images = keepValidGalleryImages(safeParseJson(formData.get("image_urls")), 12, user.id);
-  let imagesFailed = false;
-  if (images.length) {
-    const { error: imageError } = await supabase.from("listing_images").insert(
-      images.map((img, index) => ({
-        listing_id: listing.id,
-        url: img.url,
-        alt: img.alt,
-        position: index,
-      }))
-    );
-    if (imageError) {
-      reportError("[sell] listing images failed", { listingId: listing.id, imageError });
-      imagesFailed = true;
-    } else {
-      // The URLs are referenced now — release them from the staged-upload GC.
-      await finalizeMediaUrls(supabase, images.map((img) => img.url));
+  if (modItemId && !uuid.test(modItemId)) return { error: "The source build line is invalid." };
+  const saved = await supabase.rpc(
+    "save_listing_creation",
+    {
+      p_request: requestId,
+      p_payload_hash: payloadHash,
+      p_listing: { ...parsed.fields, status: asDraft ? "draft" : "active" },
+      p_images: images,
+      p_fitments: parsed.fitments,
+      p_alt_numbers: parsed.altNumbers,
+      p_mod_item: modItemId || undefined,
     }
+  );
+  if (saved.error) {
+    reportError("[sell] atomic listing creation failed", { requestId, error: saved.error });
+    return {
+      error: saved.error.code === "40001"
+        ? "This listing changed while the save was being recovered. Refresh before continuing."
+        : "Couldn't save the complete listing. Your form is still here — try again.",
+    };
   }
-
-  const { error: fitmentError } = await saveFitments(supabase, listing.id, parsed.fitments);
-  await saveAltPartNumbers(supabase, listing.id, parsed.altNumbers);
-
-  // Close the loop from the build sheet: if this part came off a specific mod
-  // line, link them so the car page can show it as listed.
-  const modItemId = String(formData.get("mod_item_id") ?? "");
-  if (modItemId && parsed.fields.source_car_id) {
-    await supabase
-      .from("mod_items")
-      .update({ linked_listing_id: listing.id })
-      .eq("id", modItemId)
-      .eq("car_id", parsed.fields.source_car_id);
+  const saveResult = saved.data as unknown as {
+    listing_id?: string;
+    completed?: boolean;
+    replayed?: boolean;
+  } | null;
+  const listingId = saveResult?.listing_id;
+  if (!listingId || !uuid.test(listingId) || saveResult?.completed !== true) {
+    return { error: "Couldn't confirm the complete listing. Try again." };
   }
+  if (images.length) await finalizeMediaUrls(supabase, images.map((img) => img.url));
 
   // An imported listing is done once it becomes a real listing — mark the
   // import consumed and record which fields the seller edited (names only).
-  const importId = String(formData.get("import_id") ?? "");
   if (importId) {
     await consumeListingImport({
       userId: user.id,
       importId,
-      listingId: listing.id,
+      listingId,
       published: !asDraft,
       submitted: {
         title: parsed.fields.title,
@@ -279,7 +311,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     });
   }
 
-  capture(user.id, asDraft
+  if (!saveResult.replayed) capture(user.id, asDraft
     ? { event: "listing_started" }
     : {
         event: "listing_published",
@@ -290,27 +322,12 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
         },
       });
 
-  // Search follows the listing (§B1) — fire-and-forget, no-op without an engine.
-
   revalidatePath("/marketplace");
   revalidatePath("/sell");
   if (parsed.fields.source_car_id) revalidatePath(`/garage/${parsed.fields.source_car_id}/edit`);
 
-  // Photos failing to save must not look like a clean success — the listing
-  // exists either way, so keep it and send the seller to fix the gallery
-  // rather than redirecting them past a silent data loss.
-  if (imagesFailed) {
-    return {
-      error:
-        "Listing created, but the photos couldn't be saved. Open it from My Listings and re-add them from Edit.",
-    };
-  }
-  if (fitmentError) {
-    return { error: `Listing created, but: ${fitmentError}` };
-  }
-
-  if (asDraft) redirect(`/listings/${listing.id}/edit?saved=draft`);
-  redirect(`/listings/${listing.id}`);
+  if (asDraft) redirect(`/listings/${listingId}/edit?saved=draft`);
+  redirect(`/listings/${listingId}`);
 }
 
 /**
@@ -397,14 +414,16 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   }
 
   const { error: fitmentError } = await saveFitments(supabase, id, parsed.fitments);
-  await saveAltPartNumbers(supabase, id, parsed.altNumbers);
+  const { error: altNumberError } = await saveAltPartNumbers(supabase, id, parsed.altNumbers);
 
 
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/marketplace");
   revalidatePath("/sell");
-  if (fitmentError) return { error: `Listing updated, but: ${fitmentError}` };
+  if (fitmentError || altNumberError) {
+    return { error: `Listing updated, but: ${fitmentError ?? altNumberError}` };
+  }
   return { ok: "Listing updated." };
 }
 
@@ -608,7 +627,11 @@ async function saveFitments(
   listingId: string,
   fitments: FitmentInput[]
 ): Promise<{ error?: string }> {
-  await supabase.from("listing_fitments").delete().eq("listing_id", listingId);
+  const cleared = await supabase.from("listing_fitments").delete().eq("listing_id", listingId);
+  if (cleared.error) {
+    reportError("[sell] prior fitment rows couldn't be cleared", { listingId, error: cleared.error });
+    return { error: "Fitment rows couldn't be saved — re-add them from Edit." };
+  }
   if (!fitments.length) return {};
   const { error } = await supabase
     .from("listing_fitments")
@@ -647,13 +670,18 @@ async function saveAltPartNumbers(
   supabase: Awaited<ReturnType<typeof createClient>>,
   listingId: string,
   numbers: string[]
-): Promise<void> {
-  await supabase.from("listing_part_numbers").delete().eq("listing_id", listingId);
-  if (!numbers.length) return;
+): Promise<{ error?: string }> {
+  const cleared = await supabase.from("listing_part_numbers").delete().eq("listing_id", listingId);
+  if (cleared.error) return { error: "Alternate part numbers couldn't be saved." };
+  if (!numbers.length) return {};
   const { error } = await supabase
     .from("listing_part_numbers")
     .insert(numbers.map((number) => ({ listing_id: listingId, number })));
-  if (error) reportError("[sell] alt part numbers failed", { listingId, error });
+  if (error) {
+    reportError("[sell] alt part numbers failed", { listingId, error });
+    return { error: "Alternate part numbers couldn't be saved." };
+  }
+  return {};
 }
 
 function safeParseJson(value: FormDataEntryValue | null): unknown {

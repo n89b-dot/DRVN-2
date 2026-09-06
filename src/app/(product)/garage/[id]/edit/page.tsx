@@ -38,6 +38,7 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
         .from("activity_posts")
         .select("id, title, published_at")
         .eq("car_id", id)
+        .is("draft_archived_at", null)
         .order("published_at", { ascending: false }),
       supabase.from("car_hotspots").select("*").eq("car_id", id).order("created_at"),
     ]);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useOptimistic, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useOptimistic, useState, useTransition } from "react";
 
 import { EmptyState, Message, MessageComposer, MessageThread, TileHead } from "@/components/ui";
 import { askQuestion, type CommerceState } from "@/features/commerce/actions";
@@ -12,7 +13,10 @@ export type QAItem = {
   created_at: string;
   authorName: string;
   isSeller: boolean;
+  optimistic?: boolean;
 };
+
+type SubmitQuestion = (formData: FormData, onSuccess?: () => void) => void;
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -35,16 +39,25 @@ function Thread({
   depth,
   action,
   pending,
+  result,
 }: {
   item: QAItem;
   replies: QAItem[];
   listingId: string;
   isLoggedIn: boolean;
   depth: number;
-  action: (formData: FormData) => void;
+  action: SubmitQuestion;
   pending: boolean;
+  result: CommerceState;
 }) {
   const [replying, setReplying] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [operationId, setOperationId] = useState("");
+
+  const startReply = () => {
+    if (!operationId) setOperationId(crypto.randomUUID());
+    setReplying(true);
+  };
 
   return (
     <div id={`q-${item.id}`} style={depth > 0 ? { marginLeft: 16 } : undefined}>
@@ -53,12 +66,12 @@ function Thread({
         who={item.authorName}
         whoEnd={item.isSeller && <span className="chip chip--ok ml-2 normal-case">Seller</span>}
         body={item.body}
-        meta={item.id.startsWith("optimistic-") ? "Posting…" : formatTimestamp(item.created_at)}
+        meta={item.optimistic ? "Posting…" : formatTimestamp(item.created_at)}
       >
         {isLoggedIn && !replying && (
           <button
             type="button"
-            onClick={() => setReplying(true)}
+            onClick={startReply}
             className="jumplink !mt-1 justify-self-start text-xs"
           >
             Reply
@@ -66,24 +79,29 @@ function Thread({
         )}
         {replying && (
           <form
-            action={(formData) => {
+            action={(formData) => action(formData, () => {
+              setDraft("");
+              setOperationId("");
               setReplying(false);
-              action(formData);
-            }}
+            })}
             className="composer__row mt-1"
           >
             <input type="hidden" name="listing_id" value={listingId} />
             <input type="hidden" name="parent_id" value={item.id} />
+            <input type="hidden" name="operation_id" value={operationId} />
             <input
               name="body"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={pending}
               required
               autoFocus
               aria-label={`Reply to ${item.authorName}`}
               placeholder="Write a reply…"
               className="ctl flex-1"
             />
-            <button type="submit" disabled={pending} className="btn">
-              Post
+            <button type="submit" disabled={pending || !operationId || !draft.trim()} className="btn">
+              {pending && result.operationId === operationId ? "Posting…" : "Post"}
             </button>
             <button type="button" onClick={() => setReplying(false)} className="jumplink text-xs">
               Cancel
@@ -101,6 +119,7 @@ function Thread({
           depth={depth + 1}
           action={action}
           pending={pending}
+          result={result}
         />
       ))}
     </div>
@@ -127,7 +146,10 @@ export function QASection({
   isLoggedIn: boolean;
   isSeller: boolean;
 }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(askQuestion, {});
+  const [state, setState] = useState<CommerceState>({});
+  const [pending, startTransition] = useTransition();
+  const [draft, setDraft] = useState("");
+  const [operationId, setOperationId] = useState("");
 
   // The record is the receipt: the question appears in the thread the moment
   // it's posted, marked "Posting…" until the server revalidates. On failure
@@ -139,19 +161,34 @@ export function QASection({
     (current, added) => [...current, added]
   );
 
-  const submit = (formData: FormData) => {
+  const submit: SubmitQuestion = (formData, onSuccess) => {
     const body = String(formData.get("body") ?? "").trim();
-    if (body) {
-      addOptimistic({
-        id: `optimistic-${Date.now()}`,
-        parent_id: (formData.get("parent_id") as string | null) || null,
-        body,
-        created_at: new Date().toISOString(),
-        authorName: isSeller ? "You (seller)" : "You",
-        isSeller,
-      });
-    }
-    action(formData);
+    const submittedOperationId = String(formData.get("operation_id") ?? "");
+    startTransition(async () => {
+      setState({ operationId: submittedOperationId });
+      if (body && submittedOperationId) {
+        addOptimistic({
+          id: submittedOperationId,
+          parent_id: String(formData.get("parent_id") ?? "") || null,
+          body,
+          created_at: new Date().toISOString(),
+          authorName: isSeller ? "You (seller)" : "You",
+          isSeller,
+          optimistic: true,
+        });
+      }
+      try {
+        const result = await askQuestion({}, formData);
+        setState(result);
+        if (result.ok && result.operationId === submittedOperationId) onSuccess?.();
+      } catch (error) {
+        unstable_rethrow(error);
+        setState({
+          error: "The response was interrupted. Your text is still here — try posting it again.",
+          operationId: submittedOperationId,
+        });
+      }
+    });
   };
 
   const topLevel = optimisticItems.filter((i) => !i.parent_id);
@@ -181,6 +218,7 @@ export function QASection({
             depth={0}
             action={submit}
             pending={pending}
+            result={state}
           />
         ))}
         {topLevel.length === 0 && (
@@ -193,8 +231,16 @@ export function QASection({
       {isLoggedIn && !isSeller && (
         <MessageComposer
           block
-          action={submit}
-          hidden={{ listing_id: listingId }}
+          action={(formData) => submit(formData, () => {
+            setDraft("");
+            setOperationId("");
+          })}
+          hidden={{ listing_id: listingId, operation_id: operationId }}
+          value={draft}
+          onChange={(event) => {
+            if (!operationId) setOperationId(crypto.randomUUID());
+            setDraft(event.target.value);
+          }}
           inputLabel="Ask the seller a question"
           placeholder="Ask the seller a question…"
           pending={pending}

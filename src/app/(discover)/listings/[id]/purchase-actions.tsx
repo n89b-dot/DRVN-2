@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
+import { useRouter, unstable_rethrow } from "next/navigation";
+import { useEffect, useId, useRef, useState, useTransition, type FormEvent } from "react";
 
 import {
   addToCart,
@@ -53,7 +53,11 @@ export function PurchaseActions({
   const [offerOpen, setOfferOpen] = useState(() => resumeAction === "offer" && isLoggedIn);
   // Which gated action a signed-out visitor reached for, if any.
   const [authIntent, setAuthIntent] = useState<AuthIntent | null>(null);
-  const [offerState, offerAction, offerPending] = useActionState<CommerceState, FormData>(makeOffer, {});
+  const [offerState, setOfferState] = useState<CommerceState>({});
+  const [offerPending, startOfferTransition] = useTransition();
+  const [offerAmount, setOfferAmount] = useState("");
+  const [offerMessage, setOfferMessage] = useState("");
+  const offerIdentity = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Cart gets its own pending so "Buy now" doesn't flash "Processing…" while
   // a different button is the one working — and vice versa.
@@ -119,7 +123,41 @@ export function PurchaseActions({
     startTransition(async () => {
       const fd = new FormData();
       fd.set("listing_id", listingId);
-      await buyNow(fd);
+      try {
+        const result = await buyNow(fd);
+        if (result?.error) setCartState(result);
+      } catch (error) {
+        unstable_rethrow(error);
+        setCartState({ error: "Couldn't open checkout. Try again." });
+      }
+    });
+  }
+
+  function submitOffer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (offerPending) return;
+    offerIdentity.current ??= crypto.randomUUID();
+    const data = new FormData();
+    data.set("offer_id", offerIdentity.current);
+    data.set("listing_id", listingId);
+    data.set("amount", offerAmount);
+    data.set("message", offerMessage);
+    setOfferState({});
+    startOfferTransition(async () => {
+      try {
+        const result = await makeOffer({}, data);
+        setOfferState(result);
+        if (result.ok) {
+          offerIdentity.current = null;
+          setOfferAmount("");
+          setOfferMessage("");
+        }
+      } catch (error) {
+        unstable_rethrow(error);
+        setOfferState({
+          error: "Couldn't confirm your offer was sent. Your draft is still here; try again.",
+        });
+      }
     });
   }
 
@@ -151,8 +189,12 @@ export function PurchaseActions({
             startCartTransition(async () => {
               const fd = new FormData();
               fd.set("listing_id", listingId);
-              const result = await addToCart(fd);
-              setCartState(result);
+              try {
+                const result = await addToCart(fd);
+                setCartState(result);
+              } catch {
+                setCartState({ error: "Couldn't add that just now — try again." });
+              }
               // Refresh the shell so the cart badge count updates in place.
               // Cookie changes return the refreshed server UI with this action.
             })
@@ -183,8 +225,7 @@ export function PurchaseActions({
       <Dialog open={offerOpen} onClose={() => setOfferOpen(false)} label="Make an offer">
         <div className="sheet">
           <span className="microlabel microlabel--ink">Make an offer</span>
-          <form action={offerAction} className="mt-4 flex flex-col gap-3">
-            <input type="hidden" name="listing_id" value={listingId} />
+          <form onSubmit={submitOffer} className="mt-4 flex flex-col gap-3">
             {/* TextField wires the field-state classes so a rejected amount
                 paints the control itself (tinted border), not just the error
                 line — and `.field.is-ok .field__ok` shows the success line
@@ -197,6 +238,8 @@ export function PurchaseActions({
               required
               inputMode="decimal"
               placeholder="0"
+              value={offerAmount}
+              onChange={(event) => setOfferAmount(event.target.value)}
               hint="The seller can accept, counter once, or let it lapse. Offers expire after 72 hours."
               error={offerState.error}
               ok={offerState.ok}
@@ -211,6 +254,8 @@ export function PurchaseActions({
                 rows={2}
                 placeholder="Anything the seller should know"
                 className="ctl"
+                value={offerMessage}
+                onChange={(event) => setOfferMessage(event.target.value)}
               />
             </div>
             <div className="sheet__actions">

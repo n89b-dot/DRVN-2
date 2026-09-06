@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { unstable_rethrow } from "next/navigation";
 
 import { ConfirmDialog } from "@/components/ui";
 
@@ -19,7 +20,14 @@ export function DeleteListing({
   listingId: string;
   triggerLabel?: string;
 }) {
-  const [state, formAction, pending] = useActionState(deleteListing, null);
+  const [state, formAction, pending] = useActionState(async (previous: Parameters<typeof deleteListing>[0], data: FormData) => {
+    try {
+      return await deleteListing(previous, data);
+    } catch (error) {
+      unstable_rethrow(error);
+      return { error: "Couldn’t confirm the change. Try again to check the same request." };
+    }
+  }, null);
 
   return (
     <ConfirmDialog

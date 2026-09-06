@@ -17,7 +17,7 @@ import {
   Pagination,
   TileHead,
 } from "@/components/ui";
-import { removeFollow, removeSave } from "@/features/social/actions";
+import { RelationshipRemove } from "@/features/social/remove-button";
 import { initialsOf } from "@/lib/format";
 import { withParams as buildParams } from "@/lib/url-params";
 import { hydrateListingCards } from "@/lib/marketplace/query";
@@ -231,13 +231,12 @@ export default async function SavedPage({
       media={{ src: car.cover_image_url ?? undefined, alt: car.name }}
       mediaHref={`/cars/${car.slug}`}
       actions={
-        <form action={kind === "save" ? removeSave : removeFollow}>
-          <input type="hidden" name="target_type" value="car" />
-          <input type="hidden" name="target_id" value={car.id} />
-          <button type="submit" className="relbtn !static">
-            {kind === "save" ? "Unsave" : "Unfollow"}
-          </button>
-        </form>
+        <RelationshipRemove
+          kind={kind}
+          targetType="car"
+          targetId={car.id}
+          label={kind === "save" ? "Unsave" : "Unfollow"}
+        />
       }
     >
       <span className="min-w-0">
@@ -361,13 +360,7 @@ export default async function SavedPage({
                       key={card.id}
                       listing={card}
                       actions={
-                        <form action={removeSave}>
-                          <input type="hidden" name="target_type" value="listing" />
-                          <input type="hidden" name="target_id" value={card.id} />
-                          <button type="submit" className="relbtn !static inline-flex min-h-11 items-center">
-                            Unsave
-                          </button>
-                        </form>
+                        <RelationshipRemove kind="save" targetType="listing" targetId={card.id} label="Unsave" />
                       }
                     />
                   ))}
@@ -410,13 +403,7 @@ export default async function SavedPage({
                       : undefined
                   }
                   actions={
-                    <form action={removeSave}>
-                      <input type="hidden" name="target_type" value="post" />
-                      <input type="hidden" name="target_id" value={post.id} />
-                      <button type="submit" className="relbtn !static">
-                        Unsave
-                      </button>
-                    </form>
+                    <RelationshipRemove kind="save" targetType="post" targetId={post.id} label="Unsave" />
                   }
                 >
                   <span className="min-w-0">
@@ -510,13 +497,7 @@ export default async function SavedPage({
                     />
                   }
                   actions={
-                    <form action={removeFollow}>
-                      <input type="hidden" name="target_type" value="profile" />
-                      <input type="hidden" name="target_id" value={p.id} />
-                      <button type="submit" className="relbtn !static">
-                        Unfollow
-                      </button>
-                    </form>
+                    <RelationshipRemove kind="follow" targetType="profile" targetId={p.id} label="Unfollow" />
                   }
                 >
                   <span className="min-w-0">

@@ -31,44 +31,41 @@ function revalidateIfAllowed(path: string) {
   console.warn("[social] ignoring revalidate for unexpected path", { path });
 }
 
-export async function toggleSave(
-  targetType: SaveTargetType,
+async function setRelationship(
+  kind: "save" | "like" | "follow",
+  targetType: SaveTargetType | LikeTargetType | FollowTargetType,
   targetId: string,
-  path: string
-): Promise<{ saved: boolean } | { error: string }> {
+  active: boolean,
+): Promise<{ active: boolean } | { error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "login" };
+  if (!user) return { error: "login" } as const;
 
-  const { data: existing } = await supabase
-    .from("saves")
-    .select("target_id")
-    .eq("user_id", user.id)
-    .eq("target_type", targetType)
-    .eq("target_id", targetId)
-    .maybeSingle();
-
-  if (existing) {
-    // The delete result used to be discarded, so a failure looked like success.
-    const { error } = await supabase
-      .from("saves")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("target_type", targetType)
-      .eq("target_id", targetId);
-    if (error) return { error: error.message };
-    revalidateIfAllowed(path);
-    return { saved: false };
+  const result = await supabase.rpc("set_social_relationship", {
+    p_kind: kind,
+    p_target_type: targetType,
+    p_target_id: targetId,
+    p_active: active,
+  });
+  if (result.error || result.data !== active) {
+    reportError("[social] relationship update failed", { kind, targetType, error: result.error });
+    return { error: "Couldn't update that. Try again." } as const;
   }
+  return { active } as const;
+}
 
-  const { error } = await supabase
-    .from("saves")
-    .insert({ user_id: user.id, target_type: targetType, target_id: targetId });
-  if (error) return { error: error.message };
+export async function toggleSave(
+  targetType: SaveTargetType,
+  targetId: string,
+  path: string,
+  saved: boolean,
+): Promise<{ saved: boolean } | { error: string }> {
+  const result = await setRelationship("save", targetType, targetId, saved);
+  if ("error" in result) return result;
   revalidateIfAllowed(path);
-  return { saved: true };
+  return { saved: result.active };
 }
 
 /** Public like on a listing or car (0037). Posts like through
@@ -76,122 +73,50 @@ export async function toggleSave(
 export async function toggleLike(
   targetType: LikeTargetType,
   targetId: string,
-  path: string
+  path: string,
+  liked: boolean,
 ): Promise<{ liked: boolean } | { error: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "login" };
-
-  const { data: existing } = await supabase
-    .from("likes")
-    .select("target_id")
-    .eq("user_id", user.id)
-    .eq("target_type", targetType)
-    .eq("target_id", targetId)
-    .maybeSingle();
-
-  if (existing) {
-    const { error } = await supabase
-      .from("likes")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("target_type", targetType)
-      .eq("target_id", targetId);
-    if (error) return { error: error.message };
-    revalidateIfAllowed(path);
-    return { liked: false };
-  }
-
-  const { error } = await supabase
-    .from("likes")
-    .insert({ user_id: user.id, target_type: targetType, target_id: targetId });
-  if (error) return { error: error.message };
+  const result = await setRelationship("like", targetType, targetId, liked);
+  if ("error" in result) return result;
   revalidateIfAllowed(path);
-  return { liked: true };
+  return { liked: result.active };
 }
 
 export async function toggleFollow(
   targetType: FollowTargetType,
   targetId: string,
-  path: string
+  path: string,
+  following: boolean,
 ): Promise<{ following: boolean } | { error: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "login" };
-
-  const { data: existing } = await supabase
-    .from("follows")
-    .select("target_id")
-    .eq("follower_id", user.id)
-    .eq("target_type", targetType)
-    .eq("target_id", targetId)
-    .maybeSingle();
-
-  if (existing) {
-    const { error } = await supabase
-      .from("follows")
-      .delete()
-      .eq("follower_id", user.id)
-      .eq("target_type", targetType)
-      .eq("target_id", targetId);
-    if (error) return { error: error.message };
-    revalidateIfAllowed(path);
-    return { following: false };
-  }
-
-  const { error } = await supabase
-    .from("follows")
-    .insert({ follower_id: user.id, target_type: targetType, target_id: targetId });
-  if (error) return { error: error.message };
+  const result = await setRelationship("follow", targetType, targetId, following);
+  if ("error" in result) return result;
   revalidateIfAllowed(path);
-  return { following: true };
+  return { following: result.active };
 }
+
+export type SocialRemovalState = { error?: string };
 
 /** Direct removal from the Saved page, which had no way to unsave anything. */
-export async function removeSave(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-
+export async function removeSave(_previous: SocialRemovalState, formData: FormData): Promise<SocialRemovalState> {
   const targetType = String(formData.get("target_type") ?? "") as SaveTargetType;
   const targetId = String(formData.get("target_id") ?? "");
-  if (!targetId || !["listing", "car", "profile", "post"].includes(targetType)) return;
+  if (!targetId || !["listing", "car", "profile", "post"].includes(targetType)) return { error: "That saved item couldn't be removed." };
 
-  const { error } = await supabase
-    .from("saves")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("target_type", targetType)
-    .eq("target_id", targetId);
-  if (error) reportError("[social] removeSave failed", error);
+  const result = await setRelationship("save", targetType, targetId, false);
+  if ("error" in result) return { error: result.error === "login" ? "Sign in again to remove this." : result.error };
 
   revalidatePath("/saved");
+  return {};
 }
 
-export async function removeFollow(formData: FormData) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-
+export async function removeFollow(_previous: SocialRemovalState, formData: FormData): Promise<SocialRemovalState> {
   const targetType = String(formData.get("target_type") ?? "") as FollowTargetType;
   const targetId = String(formData.get("target_id") ?? "");
-  if (!targetId || !["car", "profile"].includes(targetType)) return;
+  if (!targetId || !["car", "profile"].includes(targetType)) return { error: "That follow couldn't be removed." };
 
-  const { error } = await supabase
-    .from("follows")
-    .delete()
-    .eq("follower_id", user.id)
-    .eq("target_type", targetType)
-    .eq("target_id", targetId);
-  if (error) reportError("[social] removeFollow failed", error);
+  const result = await setRelationship("follow", targetType, targetId, false);
+  if ("error" in result) return { error: result.error === "login" ? "Sign in again to remove this." : result.error };
 
   revalidatePath("/saved");
+  return {};
 }

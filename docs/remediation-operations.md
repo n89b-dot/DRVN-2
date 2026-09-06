@@ -14,6 +14,30 @@ Reconciliation uses a persisted next-attempt schedule, so poison references cann
 
 External administrator operations journal an operation ID before the provider call. A requested operation with no completed/reconciled phase blocks another call for the same action and subject. Inspect the provider and the existing durable refund/transfer operation, reconcile the local ledger, and append an attributable audit row with the **same** operation ID and phase `reconciled`. Do not clear the fence merely because a request timed out. The fence is conservative: it does not guess whether an external call succeeded.
 
+## Shipping label recovery
+
+Outbound purchase intent lives in `outbound_label_requests`; outbound void
+intent lives in `outbound_label_void_requests`. The supported seller retry is
+the order sheet's **Void label** action, which calls `voidShippingLabel` and
+reconciles the frozen provider Shipment before another refund request. Pending
+or unrecognised carrier states surface as a pending/needs-reconciliation
+message and retain the `outbound-label-void:<shipment uuid>` alert. A carrier
+rejection surfaces as refused and does not cancel the shipment or create a
+refund adjustment. Only an exact `refunded` observation can atomically cancel
+the shipment and append the opposing adjustment; local write failure rolls
+both effects back.
+
+The `labelVoids` family in `/api/jobs/transfers` scans at most five due rows per
+pass. It waits six hours between reads of carrier-submitted refunds and uses a
+shorter delay for unknown outcomes or a crash before the first call. Each read
+is bound to the database claim attempt and database observation-start time, so
+a late result cannot settle or authorize a newer attempt. For an aged pending
+row, inspect the exact provider shipment reference, amount, currency, original
+`outbound_label` adjustment and EasyPost `refund_status`. Resume through the
+same seller action where possible. Do not create a manual seller credit or
+submit a provider refund against a different shipment. Carrier-specific live
+refund acceptance and settlement timing remain an operational launch check.
+
 For lost TOTP, a separately authorized operator must first verify identity and record that evidence reference. Call service-only `begin_admin_mfa_recovery(actor, target, reason)` before removing the lost factor through Supabase Auth administration. This invalidates previously issued administrator JWTs at both the application and RLS boundaries. Require a new sign-in and fresh authenticator enrollment; append completion to the audit using the returned operation ID. The automated drill proves this mechanism with synthetic identities; it does not replace the organization's human identity-verification procedure.
 
 ## Search rebuilds

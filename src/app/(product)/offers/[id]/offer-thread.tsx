@@ -6,12 +6,12 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Message, MessageThread, ResultNote } from "@/components/ui";
+import { MessageComposer } from "@/features/commerce/message-composer";
 import { expand } from "@/lib/motion";
 
 import {
   acceptCounter,
   respondToOffer,
-  sendThreadMessage,
   withdrawOffer,
   type CommerceState,
 } from "../actions";
@@ -62,10 +62,6 @@ export function OfferThread({
   );
   const [counterState, takeCounter, takingCounter] = useActionState<CommerceState, FormData>(
     acceptCounter,
-    {}
-  );
-  const [messageState, sendMessage, sendingMessage] = useActionState<CommerceState, FormData>(
-    sendThreadMessage,
     {}
   );
   const [showCounter, setShowCounter] = useState(false);
@@ -197,20 +193,7 @@ export function OfferThread({
       <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--rule-soft)] pt-4">
         {/* Messaging survives the offer closing — a declined thread should
             still read back, not vanish. */}
-        <form action={sendMessage} className="composer__row">
-          <input type="hidden" name="offer_id" value={offerId} />
-          <input
-            name="body"
-            required
-            maxLength={4000}
-            placeholder="Message…"
-            className="ctl max-w-none flex-1 !py-2"
-          />
-          <button type="submit" disabled={sendingMessage} className="btn btn--ghost !py-2.5">
-            {sendingMessage ? "Sending…" : "Send"}
-          </button>
-        </form>
-        <ResultNote error={messageState.error} ok={messageState.ok} />
+        <MessageComposer offerId={offerId} />
       </div>
     </>
   );

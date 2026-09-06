@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Alert, Button, PasswordField, TextField } from "@/components/ui";
 
@@ -10,6 +10,8 @@ import { OAuthButton } from "../oauth-button";
 
 export function LoginForm({ next, message }: { next?: string; message?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, {});
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   // Every route out of this page keeps the destination: the signup swap and
   // the OAuth button used to drop it, so "create an account instead" or
   // "continue with Google" silently abandoned whatever brought you here.
@@ -30,6 +32,11 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           Check your email to confirm your account, then sign in.
         </Alert>
       )}
+      {message === "auth-error" && (
+        <Alert tone="live" className="mt-5" role="alert" title="Link unavailable">
+          This sign-in or reset link is invalid, expired, or already used. Request a new password link if needed.
+        </Alert>
+      )}
 
       <form action={action} className="mt-6">
         <input type="hidden" name="next" value={next ?? "/home"} />
@@ -41,6 +48,8 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           required
           placeholder="you@somewhere"
           autoComplete="email"
+          value={email}
+          onChange={(event) => setEmail(event.currentTarget.value)}
           className="max-w-none"
         />
         <PasswordField
@@ -56,6 +65,8 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
           name="password"
           required
           autoComplete="current-password"
+          value={password}
+          onChange={(event) => setPassword(event.currentTarget.value)}
           className="max-w-none"
           hint="Case matters. Nothing else does."
           error={state.error}

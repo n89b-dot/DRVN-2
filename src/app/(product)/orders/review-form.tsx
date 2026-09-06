@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+
+import { unstable_rethrow } from "next/navigation";
 
 import { submitReview, type CommerceState } from "@/features/commerce/actions";
 
@@ -15,13 +17,31 @@ export function ReviewForm({
   orderId: string;
   revieweeName: string;
 }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(submitReview, {});
+  const [state, setState] = useState<CommerceState>({});
+  const [pending, setPending] = useState(false);
+  const inFlight = useRef(false);
   const [rating, setRating] = useState<number | null>(null);
   const [body, setBody] = useState("");
   const legendId = useId();
 
+  async function post(data: FormData) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setPending(true);
+    setState({});
+    try {
+      setState(await submitReview({}, data));
+    } catch (error) {
+      unstable_rethrow(error);
+      setState({ error: "Couldn't confirm your review was posted. Your rating and text are still here; retry with the same review." });
+    } finally {
+      inFlight.current = false;
+      setPending(false);
+    }
+  }
+
   if (state.ok) {
-    return <span className="chip chip--ok">Review posted — thanks</span>;
+    return <span role="status" className="chip chip--ok">Review posted — thanks</span>;
   }
 
   const trimmed = body.trim();
@@ -30,11 +50,11 @@ export function ReviewForm({
   const alreadyReviewed = state.error === "You've already reviewed this order.";
 
   return (
-    <form action={action} className="grid gap-3">
+    <form onSubmit={(event) => { event.preventDefault(); void post(new FormData(event.currentTarget)); }} aria-busy={pending} className="grid gap-3">
       <input type="hidden" name="order_id" value={orderId} />
       <input type="hidden" name="rating" value={rating ?? ""} />
 
-      <fieldset className="grid gap-2 border-0 p-0">
+      <fieldset disabled={pending} className="grid gap-2 border-0 p-0">
         <legend id={legendId} className="field__label">
           Rate {revieweeName} for order {orderId.slice(0, 8).toUpperCase()}
         </legend>
@@ -60,6 +80,7 @@ export function ReviewForm({
       <label className="field">
         <span className="field__label">Review {revieweeName} (optional)</span>
         <textarea
+          disabled={pending}
           name="body"
           value={body}
           onChange={(event) => setBody(event.target.value.slice(0, MAX_LEN))}

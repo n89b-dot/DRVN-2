@@ -1,13 +1,13 @@
 "use client";
 
-import { useTransition } from "react";
+import { useActionState } from "react";
 
 import { ConfirmDialog } from "@/components/ui";
 
-import { deleteCar } from "../../actions";
+import { deleteCar, type ActionState } from "../../actions";
 
 export function DangerZone({ carId, carName }: { carId: string; carName: string }) {
-  const [pending, startTransition] = useTransition();
+  const [state, action, pending] = useActionState<ActionState, FormData>(deleteCar, {});
 
   return (
     <section className="undrawn !place-items-start text-left">
@@ -25,9 +25,10 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
           "This cannot be undone",
         ]}
         confirmLabel={pending ? "Deleting…" : "Delete this car"}
-        formAction={(fd) => startTransition(() => deleteCar(fd))}
+        formAction={action}
         hidden={{ id: carId }}
         pending={pending}
+        error={state.error}
         // The purpose-built destructive trigger (red outline, transparent
         // ground), and a typed gate for the irreversible tier.
         triggerClassName="btn btn--destructive"

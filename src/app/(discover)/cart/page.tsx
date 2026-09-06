@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import {
   Alert,
-  Button,
   ButtonLink,
   EmptyState,
   Foot,
@@ -16,7 +15,7 @@ import { formatPrice, platformFeeCents } from "@/lib/payments/fee";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
-import { removeFromCart } from "@/features/commerce/actions";
+import { CartRemoveButton } from "@/features/commerce/cart-remove-button";
 import { reportError } from "@/lib/monitoring";
 import { getBetaAccess } from "@/lib/beta-access";
 
@@ -171,12 +170,7 @@ export default async function CartPage() {
                     key={line.id}
                     state="invalid"
                     actions={
-                      <form action={removeFromCart}>
-                        <input type="hidden" name="listing_id" value={line.id} />
-                        <Button type="submit" variant="quiet">
-                          Remove
-                        </Button>
-                      </form>
+                      <CartRemoveButton listingId={line.id} />
                     }
                   >
                     <span className="min-w-0">
@@ -230,12 +224,7 @@ export default async function CartPage() {
                       key={listing.id}
                       media={{ src: cover.get(listing.id) ?? undefined, alt: listing.title }}
                       actions={
-                        <form action={removeFromCart}>
-                          <input type="hidden" name="listing_id" value={listing.id} />
-                          <Button type="submit" variant="quiet">
-                            Remove
-                          </Button>
-                        </form>
+                        <CartRemoveButton listingId={listing.id} />
                       }
                     >
                       <span className="min-w-0">

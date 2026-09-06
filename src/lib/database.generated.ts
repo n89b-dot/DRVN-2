@@ -268,8 +268,11 @@ export type Database = {
           body: Json
           car_id: string
           created_at: string
+          draft_archived_at: string | null
+          draft_key: string | null
           id: string
           intro: string | null
+          publish_operation_id: string | null
           published_at: string | null
           search_text: string | null
           title: string
@@ -281,8 +284,11 @@ export type Database = {
           body?: Json
           car_id: string
           created_at?: string
+          draft_archived_at?: string | null
+          draft_key?: string | null
           id?: string
           intro?: string | null
+          publish_operation_id?: string | null
           published_at?: string | null
           search_text?: string | null
           title: string
@@ -294,8 +300,11 @@ export type Database = {
           body?: Json
           car_id?: string
           created_at?: string
+          draft_archived_at?: string | null
+          draft_key?: string | null
           id?: string
           intro?: string | null
+          publish_operation_id?: string | null
           published_at?: string | null
           search_text?: string | null
           title?: string
@@ -1937,6 +1946,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          accepted_checkout_shipping: Json | null
           analytics_consent_version: string | null
           buyer_id: string | null
           buyer_label: string | null
@@ -1968,6 +1978,7 @@ export type Database = {
           refund_offered_at: string | null
           refunded_at: string | null
           refunded_cents: number
+          seller_cancellation_relisted_at: string | null
           seller_id: string | null
           seller_label: string | null
           ship_city: string | null
@@ -1991,6 +2002,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accepted_checkout_shipping?: Json | null
           analytics_consent_version?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
@@ -2022,6 +2034,7 @@ export type Database = {
           refund_offered_at?: string | null
           refunded_at?: string | null
           refunded_cents?: number
+          seller_cancellation_relisted_at?: string | null
           seller_id?: string | null
           seller_label?: string | null
           ship_city?: string | null
@@ -2045,6 +2058,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accepted_checkout_shipping?: Json | null
           analytics_consent_version?: string | null
           buyer_id?: string | null
           buyer_label?: string | null
@@ -2076,6 +2090,7 @@ export type Database = {
           refund_offered_at?: string | null
           refunded_at?: string | null
           refunded_cents?: number
+          seller_cancellation_relisted_at?: string | null
           seller_id?: string | null
           seller_label?: string | null
           ship_city?: string | null
@@ -2132,6 +2147,126 @@ export type Database = {
             columns: ["seller_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_label_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          label: Json | null
+          provider: string
+          rated: Json
+          shipment_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          label?: Json | null
+          provider: string
+          rated: Json
+          shipment_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          label?: Json | null
+          provider?: string
+          rated?: Json
+          shipment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_label_requests_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: true
+            referencedRelation: "shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_label_void_requests: {
+        Row: {
+          amount_cents: number
+          attempts: number
+          claim_expires_at: string | null
+          claim_owner: string | null
+          completed_at: string | null
+          created_at: string
+          currency: string
+          last_error: string | null
+          order_id: string
+          provider: string
+          provider_observed_at: string | null
+          provider_shipment_reference: string
+          provider_state: string | null
+          rejected_at: string | null
+          seller_id: string
+          shipment_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          attempts?: number
+          claim_expires_at?: string | null
+          claim_owner?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency: string
+          last_error?: string | null
+          order_id: string
+          provider: string
+          provider_observed_at?: string | null
+          provider_shipment_reference: string
+          provider_state?: string | null
+          rejected_at?: string | null
+          seller_id: string
+          shipment_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          attempts?: number
+          claim_expires_at?: string | null
+          claim_owner?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency?: string
+          last_error?: string | null
+          order_id?: string
+          provider?: string
+          provider_observed_at?: string | null
+          provider_shipment_reference?: string
+          provider_state?: string | null
+          rejected_at?: string | null
+          seller_id?: string
+          shipment_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_label_void_requests_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_label_void_requests_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_label_void_requests_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: true
+            referencedRelation: "shipments"
             referencedColumns: ["id"]
           },
         ]
@@ -2420,6 +2555,8 @@ export type Database = {
       purchase_attempts: {
         Row: {
           buyer_id: string | null
+          checkout_context: Json | null
+          checkout_request_key: string | null
           created_at: string
           idempotency_key: string
           request_fingerprint: Json | null
@@ -2427,6 +2564,8 @@ export type Database = {
         }
         Insert: {
           buyer_id?: string | null
+          checkout_context?: Json | null
+          checkout_request_key?: string | null
           created_at?: string
           idempotency_key: string
           request_fingerprint?: Json | null
@@ -2434,6 +2573,8 @@ export type Database = {
         }
         Update: {
           buyer_id?: string | null
+          checkout_context?: Json | null
+          checkout_request_key?: string | null
           created_at?: string
           idempotency_key?: string
           request_fingerprint?: Json | null
@@ -2944,6 +3085,51 @@ export type Database = {
             columns: ["return_id"]
             isOneToOne: false
             referencedRelation: "returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      return_label_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          label: Json | null
+          provider: string
+          rated: Json
+          return_id: string
+          shipment_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          label?: Json | null
+          provider: string
+          rated: Json
+          return_id: string
+          shipment_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          label?: Json | null
+          provider?: string
+          rated?: Json
+          return_id?: string
+          shipment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "return_label_requests_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: true
+            referencedRelation: "returns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "return_label_requests_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: true
+            referencedRelation: "shipments"
             referencedColumns: ["id"]
           },
         ]
@@ -3931,6 +4117,7 @@ export type Database = {
       }
       assert_admin_actor: { Args: { p_actor: string }; Returns: undefined }
       assert_deletion_ready: { Args: { p_user: string }; Returns: undefined }
+      become_shop: { Args: never; Returns: Json }
       begin_admin_external_operation: {
         Args: {
           p_action: string
@@ -3970,12 +4157,30 @@ export type Database = {
         Args: { p_role?: string; p_user_id?: string }
         Returns: Json
       }
+      bind_cart_checkout_payment: {
+        Args: {
+          p_buyer: string
+          p_idempotency_key: string
+          p_orders: string[]
+          p_provider: string
+          p_reference: string
+        }
+        Returns: Json
+      }
       bind_checkout_analytics: {
         Args: { p_orders: string[] }
         Returns: undefined
       }
       bump_listing_view: { Args: { p_listing: string }; Returns: undefined }
       capture_reconciliation_candidates: { Args: never; Returns: Json }
+      claim_listing_creation: {
+        Args: { p_payload_hash: string; p_request: string }
+        Returns: Json
+      }
+      claim_outbound_label_void: {
+        Args: { p_shipment: string; p_worker: string }
+        Returns: Json
+      }
       claim_refund_replacement_provider: {
         Args: { p_operation: string }
         Returns: string
@@ -4038,6 +4243,14 @@ export type Database = {
         }
       }
       claim_unmapped_payment_requests: { Args: never; Returns: Json }
+      complete_listing_creation: {
+        Args: { p_listing: string; p_payload_hash: string; p_request: string }
+        Returns: boolean
+      }
+      complete_outbound_label: {
+        Args: { p_label: Json; p_shipment: string }
+        Returns: Json
+      }
       complete_refund_reversal: {
         Args: {
           p_amount_cents: number
@@ -4049,6 +4262,10 @@ export type Database = {
           p_worker: string
         }
         Returns: string
+      }
+      complete_return_label: {
+        Args: { p_label: Json; p_return: string }
+        Returns: Json
       }
       complete_stripe_dispute_loss: {
         Args: { p_dispute: string; p_event: string; p_lease: string }
@@ -4074,6 +4291,36 @@ export type Database = {
       continue_account_export: {
         Args: { p_job: string; p_lease: string }
         Returns: undefined
+      }
+      create_offer_with_message: {
+        Args: {
+          p_amount: number
+          p_listing: string
+          p_message?: string
+          p_offer: string
+        }
+        Returns: Json
+      }
+      create_protection_return: {
+        Args: {
+          p_item_ids?: string[]
+          p_order: string
+          p_seller: string
+          p_ship_days?: number
+        }
+        Returns: Json
+      }
+      create_shop_policy_return: {
+        Args: { p_buyer: string; p_order: string; p_reason?: string }
+        Returns: Json
+      }
+      discard_listing_creation: {
+        Args: { p_payload_hash: string; p_request: string }
+        Returns: boolean
+      }
+      edit_car_gallery: {
+        Args: { p_car: string; p_operation: string; p_payload: Json }
+        Returns: Json
       }
       enqueue_order_receipt: {
         Args: { p_buyer: string; p_destination: string }
@@ -4144,8 +4391,11 @@ export type Database = {
           body: Json
           car_id: string
           created_at: string
+          draft_archived_at: string | null
+          draft_key: string | null
           id: string
           intro: string | null
+          publish_operation_id: string | null
           published_at: string | null
           search_text: string | null
           title: string
@@ -4169,6 +4419,14 @@ export type Database = {
       }
       finish_reservation_expiry: {
         Args: { p_job: string; p_lease: string; p_reference?: string }
+        Returns: Json
+      }
+      freeze_accepted_offer_checkout: {
+        Args: { p_actor: string; p_order: string; p_shipping: Json }
+        Returns: Json
+      }
+      freeze_cart_checkout_shipping: {
+        Args: { p_buyer: string; p_idempotency_key: string; p_order: string }
         Returns: Json
       }
       has_embedded_media_reference: {
@@ -4209,7 +4467,33 @@ export type Database = {
         }
         Returns: Json
       }
+      listing_question_parent_matches: {
+        Args: { p_listing_id: string; p_parent_id: string }
+        Returns: boolean
+      }
       mark_due_transfer_intents: { Args: never; Returns: number }
+      mark_order_dispatched: {
+        Args: {
+          p_actor: string
+          p_carrier: string
+          p_order: string
+          p_tracking: string
+        }
+        Returns: Json
+      }
+      mark_order_received: {
+        Args: { p_actor: string; p_hold_days?: number; p_order: string }
+        Returns: Json
+      }
+      mark_return_dispatched: {
+        Args: {
+          p_actor: string
+          p_carrier: string
+          p_return: string
+          p_tracking: string
+        }
+        Returns: Json
+      }
       marketplace_filtered_rows: {
         Args: {
           p_fit?: boolean
@@ -4337,8 +4621,30 @@ export type Database = {
         Args: { p_email: string; p_token_hash: string }
         Returns: string
       }
+      prepare_outbound_label: {
+        Args: {
+          p_actor: string
+          p_provider: string
+          p_rated: Json
+          p_shipment: string
+        }
+        Returns: Json
+      }
+      prepare_outbound_label_void: {
+        Args: { p_actor: string; p_provider: string; p_shipment: string }
+        Returns: Json
+      }
       prepare_payment_request: {
         Args: { p_key: string; p_request: Json }
+        Returns: Json
+      }
+      prepare_return_label: {
+        Args: {
+          p_actor: string
+          p_provider: string
+          p_rated: Json
+          p_return: string
+        }
         Returns: Json
       }
       prepare_transfer_dispatch: {
@@ -4359,6 +4665,8 @@ export type Database = {
       purchase_begin: {
         Args: {
           p_buyer_id: string
+          p_checkout_context?: Json
+          p_checkout_request_key?: string
           p_idempotency_key?: string
           p_listing_ids: string[]
           p_reservation_window?: string
@@ -4383,6 +4691,28 @@ export type Database = {
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }
         Returns: string
+      }
+      record_outbound_label_void_observation: {
+        Args: {
+          p_attempt: number
+          p_detail?: string
+          p_observed_at: string
+          p_shipment: string
+          p_source: string
+          p_state: string
+          p_worker: string
+        }
+        Returns: Json
+      }
+      record_outbound_label_void_observation_unfenced: {
+        Args: {
+          p_detail?: string
+          p_shipment: string
+          p_source: string
+          p_state: string
+          p_worker: string
+        }
+        Returns: Json
       }
       record_payment_reference: {
         Args: { p_key: string; p_reference: string }
@@ -4467,8 +4797,37 @@ export type Database = {
         Args: { p_id: string; p_lease: string }
         Returns: undefined
       }
+      repair_completed_outbound_label: {
+        Args: { p_actor: string; p_shipment: string }
+        Returns: Json
+      }
       request_account_deletion: { Args: never; Returns: Json }
       request_account_export: { Args: never; Returns: string }
+      respond_shop_policy_return: {
+        Args: {
+          p_decision: string
+          p_return: string
+          p_seller: string
+          p_ship_days?: number
+        }
+        Returns: Json
+      }
+      save_listing_creation: {
+        Args: {
+          p_alt_numbers: Json
+          p_fitments: Json
+          p_images: Json
+          p_listing: Json
+          p_mod_item?: string
+          p_payload_hash: string
+          p_request: string
+        }
+        Returns: Json
+      }
+      save_mod_items: {
+        Args: { p_car_id: string; p_items: Json }
+        Returns: Json
+      }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
       search_listing_ids: { Args: { p_query: string }; Returns: string[] }
       search_profile_ids: { Args: { p_query: string }; Returns: string[] }
@@ -4517,6 +4876,15 @@ export type Database = {
         Args: { p_allowed: boolean }
         Returns: undefined
       }
+      set_social_relationship: {
+        Args: {
+          p_active: boolean
+          p_kind: string
+          p_target_id: string
+          p_target_type: string
+        }
+        Returns: boolean
+      }
       settle_payment_capture: {
         Args: {
           p_amount: number
@@ -4530,6 +4898,10 @@ export type Database = {
       }
       settle_refund_operation: {
         Args: { p_operation_id: string }
+        Returns: Json
+      }
+      settle_seller_cancellation: {
+        Args: { p_actor: string; p_order: string; p_reason?: string }
         Returns: Json
       }
       show_limit: { Args: never; Returns: number }
@@ -4546,6 +4918,22 @@ export type Database = {
           p_request: string
         }
         Returns: undefined
+      }
+      write_activity_post: {
+        Args: {
+          p_body?: Json
+          p_car_id: string
+          p_image_urls?: string[]
+          p_intro?: string
+          p_mode: string
+          p_post_id: string
+          p_title: string
+          p_video_url?: string
+        }
+        Returns: {
+          outcome: string
+          post_id: string
+        }[]
       }
     }
     Enums: {

@@ -13,12 +13,16 @@ import { reportError } from "@/lib/monitoring";
  * (middle-click, "open in new tab", right-click-copy all keep working) while
  * still getting a read receipt on the way through.
  */
-export async function markNotificationRead(id: string): Promise<string | null> {
+export type NotificationOpenResult =
+  | { href: string | null }
+  | { error: "not_found" | "write_failed" };
+
+export async function markNotificationRead(id: string): Promise<NotificationOpenResult> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { error: "not_found" };
 
   const { data: notification, error: fetchError } = await supabase
     .from("notifications")
@@ -27,41 +31,54 @@ export async function markNotificationRead(id: string): Promise<string | null> {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (fetchError) reportError("[notifications] mark-read lookup failed", fetchError);
-  if (!notification) return null;
+  if (fetchError) {
+    reportError("[notifications] mark-read lookup failed", fetchError);
+    return { error: "write_failed" };
+  }
+  if (!notification) return { error: "not_found" };
 
   if (!notification.read_at) {
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("notifications")
       .update({ read_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", user.id);
-    if (error) reportError("[notifications] mark-read failed", error);
+      .eq("user_id", user.id)
+      .select("id")
+      .maybeSingle();
+    if (error || !updated) {
+      reportError("[notifications] mark-read failed", error ?? { message: "Notification disappeared before update" });
+      return { error: "write_failed" };
+    }
 
     revalidatePath("/notifications");
     revalidatePath("/", "layout");
   }
 
-  return notification.href;
+  return { href: notification.href };
 }
 
 /** Clears the unread state. RLS scopes the update to the caller's own rows. */
-export async function markAllNotificationsRead() {
+export async function markAllNotificationsRead(): Promise<{ marked: number } | { error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("user_id", user.id)
-    .is("read_at", null);
+    .is("read_at", null)
+    .select("id");
 
-  if (error) reportError("[notifications] mark-all-read failed", error);
+  if (error) {
+    reportError("[notifications] mark-all-read failed", error);
+    return { error: "Couldn't mark notifications as read. Try again." };
+  }
 
   revalidatePath("/notifications");
   // The badge lives in the shell, so every product surface needs refreshing.
   revalidatePath("/", "layout");
+  return { marked: updated?.length ?? 0 };
 }

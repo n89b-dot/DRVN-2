@@ -35,6 +35,7 @@ export function SaveButton({
 }) {
   const [saved, setSaved] = useState(initialSaved);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   // Signed out, the shared auth-intent dialog explains what the account is
   // for and carries the return path — same pattern as Buy now / Make an offer,
   // rather than a bespoke redirect per button.
@@ -45,9 +46,16 @@ export function SaveButton({
       setAskAuth(true);
       return;
     }
+    const next = !saved;
+    setError(null);
     startTransition(async () => {
-      const result = await toggleSave(targetType, targetId, path);
-      if ("saved" in result) setSaved(result.saved);
+      try {
+        const result = await toggleSave(targetType, targetId, path, next);
+        if ("saved" in result) setSaved(result.saved);
+        else setError(result.error === "login" ? "Sign in again to save this." : result.error);
+      } catch {
+        setError("Couldn't update that. Try again.");
+      }
     });
   }
 
@@ -58,10 +66,12 @@ export function SaveButton({
         onClick={onClick}
         disabled={pending}
         className={toggleClass(saved)}
+        aria-pressed={saved}
         {...press}
       >
         {saved ? "Saved" : "Save"}
       </motion.button>
+      {error && <span role="alert" aria-live="polite" className="field__err">{error}</span>}
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}
@@ -90,15 +100,23 @@ export function FollowButton({
   const [following, setFollowing] = useState(initialFollowing);
   const [pending, startTransition] = useTransition();
   const [askAuth, setAskAuth] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function onClick() {
     if (!isLoggedIn) {
       setAskAuth(true);
       return;
     }
+    const next = !following;
+    setError(null);
     startTransition(async () => {
-      const result = await toggleFollow(targetType, targetId, path);
-      if ("following" in result) setFollowing(result.following);
+      try {
+        const result = await toggleFollow(targetType, targetId, path, next);
+        if ("following" in result) setFollowing(result.following);
+        else setError(result.error === "login" ? "Sign in again to follow this." : result.error);
+      } catch {
+        setError("Couldn't update that. Try again.");
+      }
     });
   }
 
@@ -109,10 +127,12 @@ export function FollowButton({
         onClick={onClick}
         disabled={pending}
         className={toggleClass(following)}
+        aria-pressed={following}
         {...press}
       >
         {following ? labels[1] : labels[0]}
       </motion.button>
+      {error && <span role="alert" aria-live="polite" className="field__err">{error}</span>}
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}

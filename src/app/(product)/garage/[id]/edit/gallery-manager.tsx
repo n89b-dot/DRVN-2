@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
 import { uploadImages } from "@/lib/media-upload";
@@ -9,7 +9,6 @@ import { Button, ConfirmDialog, Dialog, DropZone, Media, SortableGrid, SortableI
 import {
   addCarImage,
   deleteCarImage,
-  moveCarImage,
   reorderCarImages,
   setCoverFocal,
   setCoverImage,
@@ -37,7 +36,11 @@ export function GalleryManager({
   const [error, setError] = useState<string | null>(null);
   const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [, startTransition] = useTransition();
+  const [transitionPending, startTransition] = useTransition();
+  const [mutationPending, setMutationPending] = useState(false);
+  const pending = transitionPending || mutationPending;
+  const mutationBusy = useRef(false);
+  const [pendingUploads, setPendingUploads] = useState<{ url: string; file: File }[]>([]);
   const [editingAlt, setEditingAlt] = useState<string | null>(null);
 
   // Local order for optimistic drag-and-drop; server order wins on refresh
@@ -50,6 +53,61 @@ export function GalleryManager({
   }
 
   const currentCoverUrl = coverImageUrl ?? ordered[0]?.url ?? null;
+
+  async function mutate(action: () => Promise<{ error?: string }>, after?: () => void) {
+    if (mutationBusy.current) return;
+    mutationBusy.current = true;
+    setMutationPending(true);
+    setError(null);
+    try {
+      const result = await action();
+      if (result.error) { setError(result.error); return false; }
+      after?.();
+      return true;
+    } catch {
+      setError("Couldn't confirm the gallery change. Try again or refresh to check it.");
+      return false;
+    } finally { mutationBusy.current = false; setMutationPending(false); }
+  }
+
+  function saveOrder(ids: string[]) {
+    if (pending || uploading || mutationBusy.current) return;
+    const previous = ordered;
+    const byId = new Map(previous.map((image) => [image.id, image]));
+    setOrdered(ids.flatMap((id) => byId.has(id) ? [byId.get(id)!] : []));
+    startTransition(async () => {
+      if (!await mutate(() => reorderCarImages(carId, ids))) setOrdered(previous);
+    });
+  }
+
+  function move(index: number, offset: number) {
+    const ids = ordered.map(image => image.id);
+    [ids[index], ids[index + offset]] = [ids[index + offset], ids[index]];
+    saveOrder(ids);
+  }
+
+  async function attachUploads(uploads: { url: string; file: File }[]) {
+    const remaining: typeof uploads = [];
+    let count = 0;
+    for (const upload of uploads) {
+      try {
+        const saved = await addCarImage(carId, upload.url);
+        if (saved.error || !saved.image) {
+          setError(saved.error ?? "Couldn't confirm this photo was added. Try again.");
+          remaining.push(upload);
+        } else {
+          const image = saved.image;
+          setOrdered(current => current.some(item => item.id === image.id) ? current : [...current, image]);
+          count += 1;
+        }
+      } catch {
+        setError("Your photo uploaded, but the gallery save wasn't confirmed. Retry to finish adding it.");
+        remaining.push(upload);
+      }
+    }
+    setPendingUploads(remaining);
+    noteUploaded(count);
+  }
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -72,21 +130,10 @@ export function GalleryManager({
         // an oversize or non-image file will fail again identically.
         if (failure.retryable) failed.push(failure.file);
       }
-      let savedCount = 0;
-      for (const { url, file } of result.uploaded) {
-        const saved = await addCarImage(carId, url);
-        if (saved.error) {
-          setError(saved.error);
-          failed.push(file);
-        } else {
-          savedCount += 1;
-          if (saved.image) {
-            const image = saved.image;
-            setOrdered(current => current.some(existing => existing.id === image.id) ? current : [...current, image]);
-          }
-        }
-      }
-      noteUploaded(savedCount);
+      await attachUploads(result.uploaded);
+    } catch {
+      setError("Couldn't finish uploading. Select the files again or retry.");
+      failed.push(...Array.from(files));
     } finally {
       setUploading(false);
       setFailedFiles(failed);
@@ -98,10 +145,16 @@ export function GalleryManager({
   }
 
   function retryFailed() {
-    if (!failedFiles.length) return;
-    const dt = new DataTransfer();
-    failedFiles.forEach((f) => dt.items.add(f));
-    startTransition(async () => { await handleFiles(dt.files); });
+    if (uploading || pending) return;
+    startTransition(async () => {
+      setError(null);
+      if (pendingUploads.length) { await attachUploads(pendingUploads); return; }
+      if (failedFiles.length) {
+        const dt = new DataTransfer();
+        failedFiles.forEach(file => dt.items.add(file));
+        await handleFiles(dt.files);
+      }
+    });
   }
 
   return (
@@ -129,7 +182,7 @@ export function GalleryManager({
       {error && (
         <div role="alert" aria-live="polite" className="field__err mt-3 flex items-center gap-3">
           <span>{error}</span>
-          {failedFiles.length > 0 && (
+          {(failedFiles.length > 0 || pendingUploads.length > 0) && (
             <button type="button" onClick={retryFailed} className="jumplink pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
               Retry
             </button>
@@ -139,13 +192,7 @@ export function GalleryManager({
       {ordered.length > 0 ? (
         <SortableGrid
           ids={ordered.map((image) => image.id)}
-          onReorder={(ids) => {
-            const byId = new Map(ordered.map((image) => [image.id, image]));
-            setOrdered(ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
-            startTransition(() => {
-              void reorderCarImages(carId, ids);
-            });
-          }}
+          onReorder={saveOrder}
           className="thumbs thumbs--edit list-none p-0 m-0"
         >
           {ordered.map((image, index) => {
@@ -175,35 +222,19 @@ export function GalleryManager({
                   <div className="thumb__ctl flex">
                     <button
                       type="button"
-                      onClick={() =>
-                        startTransition(async () => {
-                          const fd = new FormData();
-                          fd.set("car_id", carId);
-                          fd.set("image_id", image.id);
-                          fd.set("direction", "up");
-                          await moveCarImage(fd);
-                        })
-                      }
-                      disabled={index === 0}
+                      onClick={() => move(index, -1)}
+                      disabled={pending || uploading || index === 0}
                       aria-label={`Move photo ${index + 1} earlier`}
-                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
+                      className="thumb__x !relative !top-0 !right-0 disabled:opacity-30"
                     >
                       ↑
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        startTransition(async () => {
-                          const fd = new FormData();
-                          fd.set("car_id", carId);
-                          fd.set("image_id", image.id);
-                          fd.set("direction", "down");
-                          await moveCarImage(fd);
-                        })
-                      }
-                      disabled={index === ordered.length - 1}
+                      onClick={() => move(index, 1)}
+                      disabled={pending || uploading || index === ordered.length - 1}
                       aria-label={`Move photo ${index + 1} later`}
-                      className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
+                      className="thumb__x !relative !top-0 !right-0 disabled:opacity-30"
                     >
                       ↓
                     </button>
@@ -214,11 +245,11 @@ export function GalleryManager({
                       const fd = new FormData();
                       fd.set("car_id", carId);
                       fd.set("url", image.url);
-                      startTransition(() => setCoverImage(fd));
+                      startTransition(async () => { await mutate(() => setCoverImage(fd)); });
                     }}
-                    disabled={isCover}
+                    disabled={pending || uploading || isCover}
                     aria-label={isCover ? `Photo ${index + 1} is the cover` : `Set photo ${index + 1} as cover`}
-                    className="thumb__x !static !top-0 !right-0 disabled:opacity-30"
+                    className="thumb__x !relative !top-0 !right-0 disabled:opacity-30"
                   >
                     ★
                   </button>
@@ -229,7 +260,7 @@ export function GalleryManager({
                     type="button"
                     onClick={() => setEditingAlt(editingAlt === image.id ? null : image.id)}
                     aria-label={`Edit description for photo ${index + 1}`}
-                    className="thumb__x !static !top-0 !right-0"
+                    className="thumb__x !relative !top-0 !right-0"
                   >
                     ✎
                   </button>
@@ -243,45 +274,19 @@ export function GalleryManager({
                     ]}
                     confirmLabel="Delete photo"
                     destructive
-                    formAction={(fd) => startTransition(() => deleteCarImage(fd))}
+                    formAction={async (fd) => { await mutate(() => deleteCarImage(fd)); }}
+                    pending={pending}
+                    error={error}
+                    triggerDisabled={pending || uploading}
                     hidden={{ image_id: image.id, car_id: carId }}
-                    triggerClassName="thumb__x !static !top-0 !right-0"
+                    triggerClassName="thumb__x !relative !top-0 !right-0"
                   >
                     ✕
                   </ConfirmDialog>
                 </div>
 
                 {editingAlt === image.id && (
-                  <form
-                    action={(fd) =>
-                      startTransition(async () => {
-                        await updateCarImageAlt(fd);
-                        setEditingAlt(null);
-                      })
-                    }
-                    className="absolute inset-x-0 bottom-0 z-20 flex gap-1 bg-paper-deep p-1"
-                  >
-                    <input type="hidden" name="car_id" value={carId} />
-                    <input type="hidden" name="image_id" value={image.id} />
-                    <label htmlFor={`alt-${image.id}`} className="sr-only">
-                      Photo description
-                    </label>
-                    {/* 12px suits the mouse-sized tile, but a sub-16px input
-                        makes iOS zoom the whole page on focus — so touch gets
-                        the 16px `.ctl` default back. The tile is 145px+ on a
-                        coarse pointer now, which has room for it. */}
-                    <input
-                      id={`alt-${image.id}`}
-                      name="alt"
-                      defaultValue={image.alt ?? ""}
-                      placeholder="Describe this photo"
-                      className="ctl max-w-none text-xs pointer-coarse:min-h-11 pointer-coarse:text-base"
-                      autoFocus
-                    />
-                    <button type="submit" className="jumplink text-xs pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:items-center pointer-coarse:justify-center">
-                      Save
-                    </button>
-                  </form>
+                  <AltEditor image={image} carId={carId} onSaved={() => setEditingAlt(null)} />
                 )}
               </SortableItem>
             );
@@ -312,7 +317,7 @@ export function GalleryManager({
 
       <DropZone
         onFiles={(files) => startTransition(async () => { await handleFiles(files); })}
-        busy={uploading}
+        busy={uploading || pending || pendingUploads.length > 0}
         className="mt-4"
         title={ordered.length ? "Add more photos" : "Add the first photos"}
         body={
@@ -345,7 +350,8 @@ function FramingDialog({
 }) {
   const [point, setPoint] = useState({ x: initial.x ?? 0.5, y: initial.y ?? 0.5 });
   const [saving, setSaving] = useState(false);
-const [, startSave] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [, startSave] = useTransition();
   return (
     <Dialog open={open} onClose={onClose} label="Frame the cover" align="center">
       <div className="sheet text-left">
@@ -394,6 +400,7 @@ const [, startSave] = useTransition();
             </figure>
           ))}
         </div>
+        {error && <p role="alert" className="field__err">{error}</p>}
         <div className="sheet__actions">
           <Button
             variant="live"
@@ -407,9 +414,13 @@ const [, startSave] = useTransition();
               fd.set("focal_x", String(point.x));
               fd.set("focal_y", String(point.y));
               startSave(async () => {
-                await setCoverFocal(fd);
-                setSaving(false);
-                onClose();
+                setError(null);
+                try {
+                  const result = await setCoverFocal(fd);
+                  if (result.error) setError(result.error);
+                  else onClose();
+                } catch { setError("Couldn't save framing. Your choice is still here; try again."); }
+                finally { setSaving(false); }
               });
             }}
           >
@@ -422,4 +433,27 @@ const [, startSave] = useTransition();
       </div>
     </Dialog>
   );
+}
+
+function AltEditor({ image, carId, onSaved }: { image: CarImage; carId: string; onSaved: () => void }) {
+  const [alt, setAlt] = useState(image.alt ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return <form onSubmit={event => {
+    event.preventDefault();
+    if (pending) return;
+    const data = new FormData();
+    data.set("car_id", carId); data.set("image_id", image.id); data.set("alt", alt);
+    start(async () => {
+      setError(null);
+      try { const result = await updateCarImageAlt(data); if (result.error) setError(result.error); else onSaved(); }
+      catch { setError("Couldn't save the description. Try again."); }
+    });
+  }} className="absolute inset-x-0 bottom-0 z-20 grid gap-1 bg-paper-deep p-1">
+    <label htmlFor={`alt-${image.id}`} className="sr-only">Photo description</label>
+    <input id={`alt-${image.id}`} name="alt" value={alt} onChange={event => setAlt(event.target.value)} maxLength={200} readOnly={pending}
+      placeholder="Describe this photo" className="ctl max-w-none text-xs pointer-coarse:min-h-11 pointer-coarse:text-base" autoFocus />
+    <Button type="submit" variant="quiet" loading={pending} pendingLabel="Saving…">Save</Button>
+    {error && <p role="alert" className="field__err">{error}</p>}
+  </form>;
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useState, useTransition } from "react";
 
-import { PasswordField, TextField } from "@/components/ui";
+import { Button, PasswordField, TextField } from "@/components/ui";
 
 import { changeEmail, changePassword, type AccountState } from "./account-actions";
 
@@ -21,24 +22,50 @@ function Feedback({ state }: { state: AccountState }) {
 
 /** Change email and password — neither was possible before. */
 export function PasswordSection({ currentEmail }: { currentEmail: string }) {
-  const [emailState, emailAction, emailPending] = useActionState<AccountState, FormData>(
-    changeEmail,
-    {}
-  );
-  const [passwordState, passwordAction, passwordPending] = useActionState<AccountState, FormData>(
-    changePassword,
-    {}
-  );
+  const [email, setEmail] = useState(currentEmail);
+  const [emailState, setEmailState] = useState<AccountState>({});
+  const [emailPending, startEmailTransition] = useTransition();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordState, setPasswordState] = useState<AccountState>({});
+  const [passwordPending, startPasswordTransition] = useTransition();
 
   return (
     <div className="grid gap-6">
-      <form action={emailAction} className="grid gap-3">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          const submitter = (event.nativeEvent as SubmitEvent).submitter;
+          if (submitter instanceof HTMLButtonElement && submitter.name) {
+            formData.set(submitter.name, submitter.value);
+          }
+          startEmailTransition(async () => {
+            setEmailState({});
+            try {
+              setEmailState(await changeEmail({}, formData));
+            } catch (error) {
+              unstable_rethrow(error);
+              setEmailState({
+                error: "The response was interrupted. The email may already be pending — try again.",
+              });
+            }
+          });
+        }}
+        className="grid gap-3"
+      >
         <TextField
           id="account-email"
           label="Sign-in email"
           name="email"
           type="email"
-          defaultValue={currentEmail}
+          value={email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            setEmailState({});
+          }}
+          disabled={emailPending}
           required
           autoComplete="email"
           className="!max-w-none"
@@ -46,20 +73,67 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           hint="We'll email the new address to confirm before anything changes."
         />
         <div>
-          <button type="submit" disabled={emailPending} className="btn btn--ghost">
+          <button
+            type="submit"
+            name="intent"
+            value="request"
+            disabled={emailPending}
+            className="btn btn--ghost"
+          >
             {emailPending ? "Sending…" : "Update email"}
           </button>
+          {emailState.pendingEmail && (
+            <Button
+              type="submit"
+              name="intent"
+              value="resend"
+              disabled={emailPending}
+              variant="ghost"
+              className="ml-2"
+            >
+              {emailPending ? "Sending…" : "Resend confirmation"}
+            </Button>
+          )}
         </div>
         <Feedback state={emailState} />
       </form>
 
-      <form action={passwordAction} className="grid gap-3">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          startPasswordTransition(async () => {
+            setPasswordState({});
+            try {
+              const result = await changePassword({}, formData);
+              setPasswordState(result);
+              if (result.ok) {
+                setCurrentPassword("");
+                setNextPassword("");
+                setConfirmPassword("");
+              }
+            } catch (error) {
+              unstable_rethrow(error);
+              setPasswordState({
+                error: "The response was interrupted. Your entries are still here — try again.",
+              });
+            }
+          });
+        }}
+        className="grid gap-3"
+      >
         <PasswordField
           id="account-current-password"
           label="Current password"
           name="current_password"
           required
           autoComplete="current-password"
+          value={currentPassword}
+          onChange={(event) => {
+            setCurrentPassword(event.target.value);
+            setPasswordState({});
+          }}
+          disabled={passwordPending}
           className="!max-w-none"
           fieldClassName="!mb-0"
         />
@@ -71,6 +145,12 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
             required
             minLength={8}
             autoComplete="new-password"
+            value={nextPassword}
+            onChange={(event) => {
+              setNextPassword(event.target.value);
+              setPasswordState({});
+            }}
+            disabled={passwordPending}
             className="!max-w-none"
             fieldClassName="!mb-0"
           />
@@ -81,6 +161,12 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
             required
             minLength={8}
             autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => {
+              setConfirmPassword(event.target.value);
+              setPasswordState({});
+            }}
+            disabled={passwordPending}
             className="!max-w-none"
             fieldClassName="!mb-0"
           />

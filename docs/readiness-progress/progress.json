@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-05T21:10:59.209597+00:00",
+  "updatedAt": "2026-09-06T00:44:10.987644+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Final local checks pass: 530 unit tests, 25 SQL suites, three privacy operations tests, schema parity and ten export/accessibility browser cases without retries. The follow-up pull request is being prepared for full GitHub verification; hosted launch gates remain open.",
+  "current": "Local acceptance is complete: 640 unit tests, 104 fresh migrations, 42 SQL guard suites and 34 browser cases pass. Interrupted checkout, content saves and postage recovery are implemented. The candidate is being committed for full GitHub verification; hosted launch gates remain open.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -45,7 +45,7 @@
           "id": "setup",
           "label": "Isolated hosted services",
           "state": "blocked",
-          "evidence": "User selected n89b-dot’s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
+          "evidence": "User selected n89b-dot\u2019s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
         },
         {
           "id": "smoke",
@@ -121,6 +121,12 @@
           "evidence": "Private provider journal, atomic open/close, exact basket admission, partial-dispute recovery, lease fencing and real local crash/replay integration pass."
         },
         {
+          "id": "postage_recovery",
+          "label": "Postage purchase and carrier-refund recovery",
+          "state": "done",
+          "evidence": "Outbound/return purchases and carrier refunds retain exact provider identities. Bounded automatic void reconciliation, 15-family worker health, local SQL/operations and browser transaction flows pass. Hosted carrier behavior remains a separate acceptance gate."
+        },
+        {
           "id": "hosted",
           "label": "Hosted provider proof",
           "state": "blocked",
@@ -182,11 +188,11 @@
       "title": "A green build you can trust",
       "category": "Release setup",
       "status": "partial",
-      "owner": "GPT-5.6 · Release stream",
+      "owner": "GPT-5.6 \u00b7 Release stream",
       "why": "Make passing checks mean required tests really passed, without relying on retries.",
       "before": "The current green browser run includes one test that passed only after a retry.",
       "after": "Flaky, skipped-required, and missing checks block release; the known fixture race is corrected and jobs have time limits.",
-      "next": "Verify hosted release candidates and enforced branch checks.",
+      "next": "Verify the new candidate in GitHub CI, then resolve private-repository branch-protection availability before release.",
       "checkpoints": [
         {
           "id": "review",
@@ -209,8 +215,8 @@
         {
           "id": "hosted",
           "label": "Two clean hosted candidate runs",
-          "state": "doing",
-          "evidence": "Previous merged GitHub run failed on registry rate limiting, accent contrast and obsolete export expectations. Corrections and a fresh candidate CI run are being prepared."
+          "state": "done",
+          "evidence": "All six GitHub checks, including release-gate, passed for PR #2 / e20c620 in run33992300864. Browser:168 passed,2 documented exclusions,0 flaky/unexpected; Stripe:10 passed."
         },
         {
           "id": "protection",
@@ -226,10 +232,10 @@
       "category": "Privacy",
       "status": "active",
       "owner": "Data and privacy stream",
-      "why": "Let members obtain all approved data about their account without exposing someone else’s private information.",
+      "why": "Let members obtain all approved data about their account without exposing someone else\u2019s private information.",
       "before": "Some data families are missing, some exports use broad field selections, and large exports can exceed request limits.",
       "after": "Explicit safe fields, complete approved sections, and resumable large exports with a completeness record.",
-      "next": "Complete final export/purge regression checks, then obtain policy and hosted archive acceptance.",
+      "next": "Obtain retention policy and hosted archive acceptance; local export/purge regression checks pass.",
       "checkpoints": [
         {
           "id": "inventory",
@@ -272,7 +278,7 @@
       "why": "Remove eligible personal data while preserving only records that must be retained.",
       "before": "Protected financial references can prevent final deletion, and historical originals still need reconciliation.",
       "after": "Members and operators see exactly what was removed or retained, why, and what happens next; eligible old media is cleaned up.",
-      "next": "Verify retryable cleanup and approve retention/original-file removal before hosted deletion acceptance.",
+      "next": "Approve retention/original-file removal and verify hosted deletion acceptance; local retryable cleanup checks pass.",
       "checkpoints": [
         {
           "id": "policy",
@@ -358,7 +364,7 @@
       "why": "Verify the full experience from card entry to seller transfer, refund, and dispute recovery.",
       "before": "Real Stripe API tests exist, but the browser suite uses payment stubs.",
       "after": "Hosted test-mode checkout, 3DS, Connect, refunds and disputes reconcile across the screen, database, and provider.",
-      "next": "Finish the financial fixes and connect the HTTPS provider test environment.",
+      "next": "Connect the isolated HTTPS provider test environment for Connect/3DS and carrier acceptance.",
       "checkpoints": [
         {
           "id": "environment",
@@ -407,7 +413,7 @@
       "why": "Make important actions understandable and usable with keyboard, screen reader, and mobile devices.",
       "before": "Focused fixes exist, but every critical form and assistive-technology path has not been verified.",
       "after": "Clear pending, success, and error states; reliable saved changes; tested focus, text scaling, touch, and screen-reader behavior.",
-      "next": "Run the candidate-wide browser lane; use the action inventory for remaining failure/reload and manual-device acceptance.",
+      "next": "Verify full GitHub browser coverage, then close the remaining command-family and manual-device acceptance in the action inventory.",
       "checkpoints": [
         {
           "id": "inventory",
@@ -425,13 +431,13 @@
           "id": "mutations",
           "label": "Mutation feedback and recovery fixes",
           "state": "doing",
-          "evidence": "Dispatch and announced auth failure are verified; explicit replacement recovery added. The 32-journey inventory identifies remaining failure/reload and provider/device acceptance."
+          "evidence": "Retained drafts, exact request identities and atomic related writes now cover checkout, listings/offers, messages/reports/questions, garage, order/return, account and social flows. Final selected browser lane: 34 passed with zero retries; 640 unit tests and 42 fresh-schema SQL guards pass. The action inventory preserves remaining command-family and hosted/manual acceptance."
         },
         {
           "id": "automated",
           "label": "Expanded automated accessibility checks",
           "state": "done",
-          "evidence": "Nine selected Chromium accessibility/admin cases passed in one zero-retry run (2.4 minutes), including checkout desktop/320px, announced auth errors and MFA admin pages. Full CI follow-up is separate."
+          "evidence": "Final full GitHub browser lane:168 passes,2 documented exclusions,zero retries/flakes. Includes corrected small accent text, checkout/reflow, queued export, authenticated dialogs and MFA admin pages. Manual screen-reader/device acceptance remains separate."
         },
         {
           "id": "manual",
@@ -547,8 +553,8 @@
         {
           "id": "preflight",
           "label": "Production configuration and backup proof",
-          "state": "todo",
-          "evidence": ""
+          "state": "doing",
+          "evidence": "Repository CI release gate passes on e20c620. Hosted configuration/provider/retention/recovery and pilot acceptance remain required; no production deployment performed."
         },
         {
           "id": "approval",
@@ -584,6 +590,16 @@
     }
   ],
   "activity": [
+    {
+      "at": "2026-09-05T23:11:47.375403+00:00",
+      "title": "Failure testing found and fixed more user-facing gaps",
+      "detail": "Stable retry identities now protect messages, reports, mod rows and return postage. Atomic database writes protect galleries, order handoff and return records. The first browser pass found additional issues; corrections are being retested before these checkpoints are marked complete."
+    },
+    {
+      "at": "2026-09-05T21:31:46.526442+00:00",
+      "title": "Full GitHub release checks passed",
+      "detail": "Draft PR #2 passes every check: build/typecheck/lint/unit, fresh SQL/schema, full browser, Stripe and aggregate release gate. Remaining launch requirements are still visible; this is not a hosted production sign-off."
+    },
     {
       "at": "2026-09-05T21:10:59.209597+00:00",
       "title": "Final local verification passed",

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-export const REQUIRED_FAMILIES = ['expiries', 'captures', 'transfers', 'transferReconciliation', 'refunds', 'returns', 'disputes', 'alerts', 'receipts', 'analytics', 'search', 'deletions', 'savedSearches', 'media'];
+export const REQUIRED_FAMILIES = ['expiries', 'captures', 'transfers', 'transferReconciliation', 'refunds', 'labelVoids', 'returns', 'disputes', 'alerts', 'receipts', 'analytics', 'search', 'deletions', 'savedSearches', 'media'];
 class MonitorError extends Error { constructor(code) { super(code); this.name = 'MonitorError'; } }
 function endpoint(value, local = false) {
   let target;
@@ -10,7 +10,7 @@ function endpoint(value, local = false) {
   return target;
 }
 
-// Independent checks verify exact families: fourteen duplicate rows are not proof.
+// Independent checks verify exact families: duplicate rows are not proof.
 export async function checkWorkerHealth(url, secret, transport = fetch) {
   if (!url || !secret) throw new MonitorError('monitor_configuration_missing');
   const origin = endpoint(url, true);

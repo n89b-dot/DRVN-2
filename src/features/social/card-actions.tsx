@@ -80,8 +80,9 @@ export function CardEngagement({
   const [likes, setLikes] = useState(likeCount);
   const [saved, setSaved] = useState(initialSaved);
   const [shared, setShared] = useState(false);
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const [askAuth, setAskAuth] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function requireAuth(e: MouseEvent): boolean {
     if (isLoggedIn) return false;
@@ -95,16 +96,23 @@ export function CardEngagement({
     if (requireAuth(e)) return;
     // Optimistic: the row answers the tap; the action settles the truth.
     const next = !liked;
+    setError(null);
     setLiked(next);
     setLikes((n) => Math.max(0, n + (next ? 1 : -1)));
     startTransition(async () => {
-      const result =
-        target.kind === "post"
-          ? await toggleReaction(target.id, ACTIVITY_EMOJIS[0], path)
-          : await toggleLike(target.kind, target.id, path);
-      if ("error" in result) {
+      try {
+        const result =
+          target.kind === "post"
+            ? await toggleReaction(target.id, ACTIVITY_EMOJIS[0], path)
+            : await toggleLike(target.kind, target.id, path, next);
+        if (!("error" in result)) return;
         setLiked(!next);
         setLikes((n) => Math.max(0, n + (next ? -1 : 1)));
+        setError(result.error === "login" ? "Sign in again to like this." : "Couldn't update that like. Try again.");
+      } catch {
+        setLiked(!next);
+        setLikes((n) => Math.max(0, n + (next ? -1 : 1)));
+        setError("Couldn't update that like. Try again.");
       }
     });
   }
@@ -136,10 +144,19 @@ export function CardEngagement({
     stop(e);
     if (requireAuth(e)) return;
     const next = !saved;
+    setError(null);
     setSaved(next);
     startTransition(async () => {
-      const result = await toggleSave(target.kind as SaveTargetType, target.id, path);
-      if ("error" in result) setSaved(!next);
+      try {
+        const result = await toggleSave(target.kind as SaveTargetType, target.id, path, next);
+        if ("error" in result) {
+          setSaved(!next);
+          setError(result.error === "login" ? "Sign in again to save this." : "Couldn't update that save. Try again.");
+        }
+      } catch {
+        setSaved(!next);
+        setError("Couldn't update that save. Try again.");
+      }
     });
   }
 
@@ -148,6 +165,7 @@ export function CardEngagement({
       <motion.button
         type="button"
         onClick={onLike}
+        disabled={pending}
         className={cx("cardeng__act", liked && "is-on")}
         aria-pressed={liked}
         aria-label={liked ? "Liked — tap to remove" : "Like"}
@@ -203,6 +221,7 @@ export function CardEngagement({
       <motion.button
         type="button"
         onClick={onSave}
+        disabled={pending}
         className={cx("cardeng__act", "cardeng__act--end", saved && "is-on")}
         aria-pressed={saved}
         aria-label={saved ? "Saved — tap to remove" : "Save"}
@@ -217,6 +236,11 @@ export function CardEngagement({
           <Icon name="bookmark" className="cardeng__ico" />
         </motion.span>
       </motion.button>
+      {error && (
+        <span role="alert" aria-live="polite" className="field__err">
+          {error}
+        </span>
+      )}
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}

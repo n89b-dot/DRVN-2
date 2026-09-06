@@ -138,6 +138,10 @@ export const stubShippingProvider: ShippingProvider = {
     return { state: "refunded" };
   },
 
+  async getLabelRefundStatus(): Promise<VoidLabelResult> {
+    return { state: "refunded" };
+  },
+
   async createTracker(input: CreateTrackerInput): Promise<TrackingSummary> {
     return summaryFor(input.trackingCode, input.carrier ?? null);
   },

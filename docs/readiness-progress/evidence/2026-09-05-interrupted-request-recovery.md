@@ -1,0 +1,106 @@
+# Interrupted-request recovery and atomic writes
+
+Scope: controlled beta with invited buyers and sellers. This batch continues
+from `e20c620`; it is separate from that commit's green CI evidence.
+
+## What changes for members
+
+- Messages, reports, questions, activity updates and new listings keep a stable
+  submission identity. An interrupted confirmation can be retried without
+  creating another copy. Draft text remains available until success is known.
+- Gallery changes and modification sheets save complete desired state. Failed
+  writes do not leave half a reorder or half a sheet. Uploaded photos awaiting
+  attachment can be retried without uploading their bytes again.
+- Cart capacity and failed writes are explained. Buy-now navigation follows a
+  confirmed cart write; repeated add/remove actions converge on the intended
+  contents. Checkout retains the original request, address and selected services
+  before payment. Address, quotes and shipment records freeze atomically; retries
+  verify payment settlement and can finish a partially settled multi-seller basket.
+- New offers and their opening messages commit together. An interrupted response
+  reuses that offer, while a database constraint prevents concurrent live duplicates.
+- Dispatch, receipt and return transitions commit their related rows together.
+  Receipt retries preserve the original payout hold. Accepted-offer checkout
+  freezes delivery details before creating the payment and adopts a completed
+  payment on retry.
+- Outbound and return postage retain the chosen provider shipment before buying
+  a label. Uncertain purchases reconcile that identity. Carrier-refund requests
+  retain their own identity and credit the seller only after a confirmed refund.
+- Password-reset links retain the exchanged session correctly. Email and
+  password settings preserve entries after interrupted responses and check
+  whether the requested change already happened. Pending email confirmations
+  have an explicit resend action.
+- Save/like/follow controls use desired state; notification navigation checks
+  read persistence and avoids marking messages read through link prefetch.
+- Invitation creation uses a valid audit identity, with copy/revoke feedback.
+  Car editing shows saved feedback reliably, and gallery controls have enough
+  space to receive clicks without overlapping.
+
+## Verification record
+
+Local verification is complete; GitHub candidate verification is pending.
+
+- Final combined Chromium run: **34 passed**, zero retries, 3.7 minutes. It
+  includes interrupted checkout, accepted offers, listings, messages, reports,
+  questions, gallery, modifications, activity, settings, invitations, and the
+  complete order/return flows.
+
+Other local verification:
+
+- 640 unit tests passed across 96 files; TypeScript passed.
+- 104 migrations applied to a fresh disposable database; all 42 SQL guard suites
+  passed. Generated database types match that clean schema.
+- Lint: zero errors and three existing unused-disable warnings.
+- Monitoring/release tooling: 11 passed. Stripe test-mode API: 10 passed.
+- Operations: 10 passed across 8 files, including isolated Typesense recovery.
+- Production dependency audit: zero reported vulnerabilities.
+- Database static lint still reports the runtime-created `_claimed` temporary
+  table in `purchase_begin` as missing during static analysis, plus three warnings
+  (JSON conversion and unused variables). The clean-schema purchase and recovery
+  guards execute that function successfully; static lint is not recorded as clean.
+
+Earlier diagnostic runs are not accepted as final browser evidence:
+
+- First selected browser run: 14 passed, 8 failed, 1 dependent case not run.
+- Second selected browser run: 18 passed, 11 failed. Failures included a real
+  recursive question-insert permission rule and several ambiguous test selectors.
+- Third invocation failed during production startup because newly added RPCs
+  were not yet in generated types. No browser test cases ran.
+- Fourth selected browser run: 21 passed, 8 failed, 4 dependent cases not run.
+  It confirmed activity/message/report/question/social/notification recovery;
+  remaining failures included gallery hit-target positioning, lost login input,
+  car-save feedback, and incorrect test assumptions about redirect responses.
+- Fifth selected browser run: 30 passed, 4 failed. Checkout, dispatch, receipt,
+  review, gallery, password reset and account changes passed. Remaining failures
+  identified listing transport-error handling, car feedback reset, and two
+  locators affected by changing/transitioning feedback. Those were corrected
+  before the sixth clean run.
+- Sixth selected browser run: 31 passed, 3 failed. Message recovery passed;
+  listing creation retained its draft and completed on retry. Invitation revoke
+  and listing publish selectors omitted the visible button brackets; car-save
+  feedback still needed its dirty state reset. The three affected specs are
+  rerun after those corrections.
+- The three-case follow-up passed invitation and listing recovery; the car
+  status remained hidden. Two focused car runs isolated the cause: the save
+  returned success, but standalone `field__ok` text was hidden by CSS. The final
+  fix explicitly displays that status and the same invitation status text; all
+  temporary diagnostics were removed before the combined run.
+- A later fresh database pass applied 101 migrations. All 39 SQL guard suites
+  passed after the worker-inventory guard was updated to assert the new family;
+  generated-type parity passed. Subsequent cart/offer hardening is being rechecked.
+- The unit suite passed 625 tests across 94 files before the final cart/offer
+  additions. TypeScript passed, lint had zero errors and three existing warnings,
+  and all 11 monitoring/release-tool tests passed.
+- Stripe test-mode API checks: 10 passed.
+- Local operations checks: 10 passed across 8 files, including real Typesense
+  outage recovery. An initial invocation failed because that disposable search
+  service was not running; it was started and the full lane rerun.
+
+## Evidence limits
+
+Local stub shipping and browser payment tests exercise application/database
+behavior; they do not prove live carrier refund timing, Stripe Connect/3DS,
+external email delivery, or hosted operational readiness. The separate hosted
+staging environment, repository protection, retention decisions, manual
+screen-reader/device testing, hosted restore/load/soak and invited-pilot approval
+remain open in the progress tracker. No live production fixtures, paid upgrades,
+or external messages were used for this batch.

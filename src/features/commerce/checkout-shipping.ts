@@ -134,8 +134,10 @@ export async function planCartFulfillment(
  * After purchase_begin created the orders: freeze the chosen service onto
  * each order (orders.shipping_quote), consume the quotes, and create the
  * pending DRVN-Shipping shipment rows the seller will buy labels from.
- * Runs before payment; failures are reported but never strand the checkout —
- * the shipment can be reconstructed from the frozen order quote.
+ * Runs before payment and fails closed on every required projection write.
+ * Exact partial retries reuse the consumed quote and matching shipment, so an
+ * interrupted guest freeze can finish without charging against incomplete
+ * shipping records.
  */
 export async function freezeOrderShipping(
   admin: Admin,
@@ -174,23 +176,81 @@ export async function freezeOrderShipping(
         orderId: order.order_id,
         quoteWrite,
       });
+      throw new Error("Shipping quote could not be frozen");
     }
 
-    const { data: items } = await admin
+    const { data: items, error: itemsError } = await admin
       .from("order_items")
       .select("id, listing_id")
       .eq("order_id", order.order_id);
+    if (itemsError || !items) {
+      reportError("[checkout] shipping order items could not be verified", {
+        orderId: order.order_id,
+        itemsError,
+      });
+      throw new Error("Shipping order items could not be verified");
+    }
 
     for (const { listingId, quote } of orderQuotes) {
-      await admin
+      const { data: consumed, error: consumeError } = await admin
         .from("shipping_rate_quotes")
         .update({ consumed_order_id: order.order_id })
         .eq("id", quote.id)
-        .is("consumed_order_id", null);
+        .is("consumed_order_id", null)
+        .select("id, consumed_order_id")
+        .maybeSingle();
+      if (consumeError || !consumed) {
+        const { data: existingQuote, error: quoteReadError } = await admin
+          .from("shipping_rate_quotes")
+          .select("consumed_order_id")
+          .eq("id", quote.id)
+          .maybeSingle();
+        if (quoteReadError || existingQuote?.consumed_order_id !== order.order_id) {
+          reportError("[checkout] shipping quote consumption failed", {
+            orderId: order.order_id,
+            quoteId: quote.id,
+            consumeError,
+            quoteReadError,
+          });
+          throw new Error("Shipping quote could not be consumed");
+        }
+      }
 
-      const { data: shipment, error: shipmentError } = await admin
+      const { data: existingShipment, error: shipmentReadError } = await admin
         .from("shipments")
-        .insert({
+        .select("id, fulfillment_type, carrier, service, quoted_cents")
+        .eq("order_id", order.order_id)
+        .eq("direction", "outbound")
+        .eq("provider", quote.provider)
+        .eq("provider_shipment_id", quote.provider_shipment_id)
+        .maybeSingle();
+      if (shipmentReadError) {
+        reportError("[checkout] existing shipment read failed", {
+          orderId: order.order_id,
+          quoteId: quote.id,
+          shipmentReadError,
+        });
+        throw new Error("Shipping shipment could not be verified");
+      }
+      if (
+        existingShipment &&
+        (
+          existingShipment.fulfillment_type !== "drvn_shipping" ||
+          existingShipment.carrier !== quote.carrier ||
+          existingShipment.service !== quote.service ||
+          existingShipment.quoted_cents !== quote.amount_cents
+        )
+      ) {
+        reportError("[checkout] existing shipment differs from quote", {
+          orderId: order.order_id,
+          quoteId: quote.id,
+        });
+        throw new Error("Existing shipment differs from the selected quote");
+      }
+
+      let shipmentId = existingShipment?.id;
+      if (!shipmentId) {
+        const inserted = await admin.from("shipments").insert({
           order_id: order.order_id,
           direction: "outbound",
           provider: quote.provider,
@@ -203,24 +263,35 @@ export async function freezeOrderShipping(
         })
         .select("id")
         .single();
-      if (shipmentError || !shipment) {
-        reportError("[checkout] shipment create failed", {
-          orderId: order.order_id,
-          shipmentError,
-        });
-        continue;
-      }
-      const itemId = (items ?? []).find((i) => i.listing_id === listingId)?.id;
-      if (itemId) {
-        const { error: linkError } = await admin
-          .from("shipment_items")
-          .insert({ shipment_id: shipment.id, order_item_id: itemId });
-        if (linkError) {
-          reportError("[checkout] shipment item link failed", {
-            shipmentId: shipment.id,
-            linkError,
+        if (inserted.error || !inserted.data) {
+          reportError("[checkout] shipment create failed", {
+            orderId: order.order_id,
+            shipmentError: inserted.error,
           });
+          throw new Error("Shipping shipment could not be created");
         }
+        shipmentId = inserted.data.id;
+      }
+      const itemId = items.find((i) => i.listing_id === listingId)?.id;
+      if (!itemId) {
+        reportError("[checkout] quoted listing has no order item", {
+          orderId: order.order_id,
+          listingId,
+        });
+        throw new Error("Quoted listing has no order item");
+      }
+      const { error: linkError } = await admin
+        .from("shipment_items")
+        .upsert(
+          { shipment_id: shipmentId, order_item_id: itemId },
+          { onConflict: "shipment_id,order_item_id", ignoreDuplicates: true }
+        );
+      if (linkError) {
+        reportError("[checkout] shipment item link failed", {
+          shipmentId,
+          linkError,
+        });
+        throw new Error("Shipping item link could not be created");
       }
     }
   }

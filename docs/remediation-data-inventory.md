@@ -23,3 +23,35 @@ This inventory separates implemented behavior from policy decisions. No statutor
 The export uses deterministic keyset pagination for stable scalar and composite keys. Rows created after `cutoff_at` are excluded. Each page becomes immutable once checkpointed; updates may reflect that section's checkpoint time, and this consistency limit is written into the manifest. The worker can resume from the recorded section, offset and cursor. A section failure, missing private evidence, hash/checkpoint failure, or requester loss leaves the request incomplete; no partial package is labeled complete.
 
 Deletion has four visible outcomes: `temporary_financial_hold`, `cleanup_pending`, `operator_attention`, and `completed`. A hold does not suspend an active member at request time, so they can finish orders/returns/refunds/payouts. Cleanup suspends access and rechecks for a fresh hold before irreversible provider/Auth work. Immutable financial, audit, or reporting identity references complete the automation job into an operator case rather than consume generic retry attempts. The case explicitly leaves review dates and retention durations unset until the responsible policy owner supplies them.
+
+## Durable mutation coordination added during acceptance testing
+
+Activity drafts now carry internal draft and publish identities. Older duplicate
+drafts are archived in place, preserving their content rather than deleting it.
+The existing activity export projection includes authored content and excludes
+these internal coordination columns. Archiving does not establish a new retention
+period or exempt a row from account cleanup.
+
+`return_label_requests` and `outbound_label_requests` retain the provider shipment
+and selected rate before buying postage. They also retain the confirmed label
+result so interrupted requests can reconcile the same purchase.
+`outbound_label_void_requests` retains the original shipment/provider reference,
+seller/order, amount, currency, provider observation, claim ownership and terminal
+refund outcome so an interrupted void cannot be mistaken for a new request. These
+restricted service tables belong to the delivery/financial record family: they
+are not a new self-service export section. The existing shipment and
+seller-adjustment sections expose the user's delivery facts and financial result;
+internal provider references and recovery details remain excluded. Their
+retention and eventual purge follow the unresolved transaction-record policy
+above. Pending recovery also creates an operator alert; an alert is not proof of
+provider completion.
+
+`purchase_attempts` also retains an internal checkout request binding and frozen
+checkout context: the delivery address, destination fingerprint and selected
+listing-to-quote identities. These let an interrupted checkout restore the same
+delivery choices before payment, including after a partial multi-seller result.
+They are restricted coordination data rather than a new export section; the
+existing order and delivery projections expose the member's transaction facts.
+Their retention, address redaction and eventual purge require the same unresolved
+transaction-record policy above. Listing creation request identities likewise
+coordinate retries without adding a new member-content export section.

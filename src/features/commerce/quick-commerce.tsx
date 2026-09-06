@@ -1,5 +1,6 @@
 "use client";
 
+import { unstable_rethrow } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Icon } from "@/components/ui/icons";
@@ -49,7 +50,13 @@ export function ListingQuickCommerce({
       const fd = new FormData();
       fd.set("listing_id", listingId);
       // Redirects to the cart; a thrown redirect is the success path.
-      await buyNow(fd);
+      try {
+        const result = await buyNow(fd);
+        if (result?.error) setCartState(result);
+      } catch (error) {
+        unstable_rethrow(error);
+        setCartState({ error: "Couldn't open checkout. Try again." });
+      }
     });
   }
 

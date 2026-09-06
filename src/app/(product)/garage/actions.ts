@@ -10,13 +10,15 @@ import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecy
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
+import { reportError } from "@/lib/monitoring";
 
 import { decodeVin } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
-import type { Car, CarImage } from "@/lib/database.types";
+import type { Car, CarImage, Json } from "@/lib/database.types";
 
-export type ActionState = { error?: string; ok?: string };
+export type ActionState = { error?: string; ok?: string; href?: string };
 
 async function requireUser() {
   const supabase = await createClient();
@@ -48,6 +50,12 @@ function sanitizeActivityBlocks(blocks: ActivityBlock[], userId: string): Activi
     })
     .filter((block): block is ActivityBlock => block !== null)
     .filter((block) => block.type !== "images" || block.urls.length > 0);
+}
+
+function activityBlocksJson(blocks: ActivityBlock[]): Json {
+  // normalizeBlocks has already constrained every union member. The JSON
+  // round-trip also rejects values Postgres jsonb cannot represent.
+  return JSON.parse(JSON.stringify(blocks)) as Json;
 }
 
 /**
@@ -177,15 +185,19 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
   if (vinRaw && (vinRaw.length < 11 || vinRaw.length > 17)) {
     return { error: "That VIN doesn't look right — 17 characters on modern cars." };
   }
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("cars")
-    .select("vin")
+    .select("vin, slug")
     .eq("id", id)
     .maybeSingle();
+  if (existingError || !existing) return { error: "Car not found." };
 
   let make = String(formData.get("make") ?? "").trim() || null;
   let model = String(formData.get("model") ?? "").trim() || null;
   let year = yearRaw ? Number(yearRaw) : null;
+  if (year !== null && (!Number.isInteger(year) || year < 1900 || year > 2100)) {
+    return { error: "Enter a valid year." };
+  }
   let decodedFields: Partial<Car> = {};
   let decodeNote: string | undefined;
   if (vinRaw && vinRaw !== (existing?.vin ?? "")) {
@@ -211,7 +223,7 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
     decodedFields = { vin_decoded_at: null };
   }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("cars")
     .update({
       name,
@@ -226,30 +238,39 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
       is_public: formData.get("is_public") === "on",
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
+  if (!updated) return { error: "Car not found." };
 
   // Covers edits AND the public/private toggle: syncCarToSearch removes an
   // ineligible car (and its posts) from the index, or re-adds them.
   revalidatePath("/garage");
-  revalidatePath(`/garage/${id}/edit`);
-  return decodeNote ? { error: decodeNote } : {};
+  revalidatePath(`/cars/${existing.slug}`);
+  return { ok: decodeNote || "Changes saved." };
 }
 
-export async function deleteCar(formData: FormData) {
+export async function deleteCar(
+  _previous: ActionState,
+  formData: FormData
+): Promise<ActionState> {
   const { supabase } = await requireUser();
   const id = String(formData.get("id") ?? "");
-  if (id) {
-    await supabase.from("cars").delete().eq("id", id);
-  }
+  if (!id) return { error: "Car is missing." };
+  const { error } = await supabase.from("cars").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  // Deleting an already-absent id is the desired state after a response was
+  // lost. RLS still prevents this call from changing anybody else's car.
   revalidatePath("/garage");
   redirect("/garage");
 }
 
 export type ModItemInput = {
-  /** Present for rows that already exist, so their listing link survives a save. */
-  id?: string | null;
+  /** Stable for saved and unfiled rows so response-loss replay converges. */
+  id: string;
   group_label: string;
   brand: string | null;
   product: string | null;
@@ -266,175 +287,103 @@ export type ModItemInput = {
 /**
  * Saves the mod sheet.
  *
- * Deliberately not delete-and-reinsert: `mod_items.linked_listing_id` connects a
- * build line to the part listed off it, and wiping every row on each save
- * destroyed that link. Existing rows are updated in place, absent rows deleted,
- * new rows inserted.
+ * One database function applies the whole desired sheet transactionally.
+ * Existing ids update in place so listing links survive; stable new ids make a
+ * repeated request converge after a committed response is lost.
  */
 export async function saveModItems(carId: string, items: ModItemInput[]): Promise<ActionState> {
   const { supabase, user } = await requireUser();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!carId || items.length > 200 || items.some((item) => !uuid.test(item.id))) {
+    return { error: "The modification sheet is invalid. Reload and try again." };
+  }
+  if (new Set(items.map((item) => item.id)).size !== items.length) {
+    return { error: "The modification sheet contains duplicate lines." };
+  }
 
   // Ownership is enforced by RLS, but check up front for a clean error.
-  const { data: car } = await supabase
+  const { data: car, error: carError } = await supabase
     .from("cars")
     .select("id, slug, owner_id")
     .eq("id", carId)
-    .single();
-  if (!car || car.owner_id !== user.id) return { error: "Car not found." };
+    .maybeSingle();
+  if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
 
-  const keepIds = items.map((i) => i.id).filter((id): id is string => Boolean(id));
-
-  const deleteQuery = supabase.from("mod_items").delete().eq("car_id", carId);
-  const { error: delError } = keepIds.length
-    ? await deleteQuery.not("id", "in", `(${keepIds.join(",")})`)
-    : await deleteQuery;
-  if (delError) return { error: delError.message };
-
-  for (const [index, item] of items.entries()) {
-    const row = {
-      group_label: item.group_label || "Other",
-      brand: item.brand,
-      product: item.product,
-      part_number: item.part_number ?? null,
-      // Client-supplied; the columns have no DB constraint, so gate here:
-      // unknown categories become null, confidence is clamped to [0, 1].
-      category: MOD_CATEGORIES.includes(item.category as ModCategory)
-        ? (item.category as ModCategory)
+  const payload = items.map((item) => ({
+    id: item.id,
+    group_label: item.group_label || "Other",
+    brand: item.brand,
+    product: item.product,
+    part_number: item.part_number ?? null,
+    category: MOD_CATEGORIES.includes(item.category as ModCategory)
+      ? (item.category as ModCategory)
+      : null,
+    confidence:
+      typeof item.confidence === "number" && Number.isFinite(item.confidence)
+        ? Math.min(1, Math.max(0, item.confidence))
         : null,
-      confidence:
-        typeof item.confidence === "number" && Number.isFinite(item.confidence)
-          ? Math.min(1, Math.max(0, item.confidence))
-          : null,
-      raw_text: item.raw_text,
-      position: index,
-    };
-
-    const { error } = item.id
-      ? await supabase.from("mod_items").update(row).eq("id", item.id).eq("car_id", carId)
-      : await supabase.from("mod_items").insert({ car_id: carId, ...row });
-
-    if (error) return { error: error.message };
+    raw_text: item.raw_text,
+  }));
+  const { data, error } = await supabase.rpc(
+    "save_mod_items" as never,
+    { p_car_id: carId, p_items: payload } as never
+  );
+  if (error) return { error: error.message };
+  if ((data as unknown as { outcome?: string } | null)?.outcome !== "saved") {
+    return { error: "The modification sheet was not saved." };
   }
 
   // Mods are searchable build content (brief §20) — resync the car's document.
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
-  return {};
+  return { ok: "Build saved." };
+}
+
+async function galleryChange(carId: string, operation: string, payload: Record<string, string | string[]>) {
+  const { supabase, user } = await requireUser();
+  const client = operation === "add" ? createAdminClient() : supabase;
+  const { data, error } = await client.rpc("edit_car_gallery", { p_car: carId, p_operation: operation, p_payload: operation === "add" ? { ...payload, actor: user.id } : payload });
+  if (error) return { error: "Couldn't save the gallery change. Refresh if the gallery changed, then try again." };
+  revalidatePath(`/garage/${carId}/edit`);
+  revalidatePath("/garage");
+  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
+  if (car) revalidatePath(`/cars/${car.slug}`);
+  return { result: data as { ok: boolean; image?: CarImage; deleted_url?: string | null } };
 }
 
 export async function addCarImage(carId: string, url: string): Promise<ActionState & { image?: CarImage }> {
   const { supabase, user } = await requireUser();
-
-  if (!isOwnedStorageUrl(url, user.id)) {
-    return { error: "That image couldn't be verified. Try uploading it again." };
-  }
-
-  const { count } = await supabase
-    .from("car_images")
-    .select("id", { count: "exact", head: true })
-    .eq("car_id", carId);
-
-  const { data: image, error } = await supabase
-    .from("car_images")
-    .insert({ car_id: carId, url, position: count ?? 0 }).select("*").single();
-  if (error) return { error: error.message };
-
-  // The URL is referenced now — release it from the staged-upload GC.
+  if (!isOwnedStorageUrl(url, user.id)) return { error: "That image couldn't be verified. Try uploading it again." };
+  const changed = await galleryChange(carId, "add", { url });
+  if (changed.error) return { error: changed.error };
   await finalizeMediaUrls(supabase, [url]);
-
-  // First image becomes the cover automatically; changeable via setCoverImage.
-  if ((count ?? 0) === 0) {
-    await supabase.from("cars").update({ cover_image_url: url }).eq("id", carId);
-  }
-
-  revalidatePath(`/garage/${carId}/edit`);
-  return { image };
+  return { image: changed.result?.image };
 }
 
-export async function deleteCarImage(formData: FormData) {
-  const { supabase } = await requireUser();
-  const id = String(formData.get("image_id") ?? "");
+export async function deleteCarImage(formData: FormData): Promise<ActionState> {
   const carId = String(formData.get("car_id") ?? "");
-
-  if (id) {
-    // If this was the cover, promote another image rather than leaving a
-    // dangling cover_image_url.
-    const { data: image } = await supabase
-      .from("car_images")
-      .select("url, car_id")
-      .eq("id", id)
-      .maybeSingle();
-
-    await supabase.from("car_images").delete().eq("id", id);
-
-    if (image) {
-      const { data: car } = await supabase
-        .from("cars")
-        .select("cover_image_url")
-        .eq("id", image.car_id)
-        .maybeSingle();
-
-      if (car?.cover_image_url === image.url) {
-        const { data: next } = await supabase
-          .from("car_images")
-          .select("url")
-          .eq("car_id", image.car_id)
-          .order("position")
-          .limit(1)
-          .maybeSingle();
-        await supabase
-          .from("cars")
-          .update({ cover_image_url: next?.url ?? null })
-          .eq("id", image.car_id);
-      }
-
-      // With the row (and any cover pointer) gone, the storage object may be
-      // orphaned — the helper re-checks every referencing table before
-      // touching storage and never fails this action.
-      await deleteMediaIfUnreferenced(image.url);
-    }
-  }
-
-  if (carId) revalidatePath(`/garage/${carId}/edit`);
+  const id = String(formData.get("image_id") ?? "");
+  if (!carId || !id) return { error: "Missing image." };
+  const changed = await galleryChange(carId, "delete", { id });
+  if (changed.error) return { error: changed.error };
+  if (changed.result?.deleted_url) await deleteMediaIfUnreferenced(changed.result.deleted_url);
+  return { ok: "Photo deleted" };
 }
 
-/** Lets the owner choose the cover instead of being stuck with the first upload. */
-export async function setCoverImage(formData: FormData): Promise<void> {
-  const { supabase, user } = await requireUser();
+export async function setCoverImage(formData: FormData): Promise<ActionState> {
+  const { user } = await requireUser();
   const carId = String(formData.get("car_id") ?? "");
   const url = String(formData.get("url") ?? "");
-  if (!carId || !isOwnedStorageUrl(url, user.id)) return;
-
-  await supabase.from("cars").update({ cover_image_url: url }).eq("id", carId);
-  revalidatePath(`/garage/${carId}/edit`);
-
-  const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
-  if (car) revalidatePath(`/cars/${car.slug}`);
+  if (!carId || !isOwnedStorageUrl(url, user.id)) return { error: "Choose one of your gallery photos." };
+  const changed = await galleryChange(carId, "cover", { url });
+  return changed.error ? { error: changed.error } : { ok: "Cover saved" };
 }
 
-/**
- * Swaps an image with its immediate neighbour by `position`. Reorder was
- * previously drag-only in intent but had no implementation at all — this
- * gives keyboard/touch users an equivalent up/down control.
- */
-/**
- * Full-order rewrite for drag-and-drop (§S2) — the ↑/↓ neighbour swap can't
- * express a multi-step drag. RLS scopes every update to the owner's rows;
- * ids not belonging to this car are simply no-ops.
- */
+/** The complete desired order makes a retry idempotent, including arrow moves. */
 export async function reorderCarImages(carId: string, orderedIds: string[]): Promise<ActionState> {
-  const { supabase } = await requireUser();
-  if (!carId || orderedIds.length === 0 || orderedIds.length > 48) return {};
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    const { error } = await supabase
-      .from("car_images")
-      .update({ position: index })
-      .eq("id", orderedIds[index])
-      .eq("car_id", carId);
-    if (error) return { error: "Couldn't save the new order." };
-  }
-  revalidatePath(`/garage/${carId}/edit`);
-  return { ok: "Order saved" };
+  if (!carId || orderedIds.length > 48) return { error: "Invalid gallery order." };
+  const changed = await galleryChange(carId, "reorder", { ids: orderedIds });
+  return changed.error ? { error: changed.error } : { ok: "Order saved" };
 }
 
 export type ShowcasePinInput = {
@@ -500,42 +449,14 @@ export async function setCoverFocal(formData: FormData): Promise<ActionState> {
   const y = Number(formData.get("focal_y"));
   if (!carId || !Number.isFinite(x) || !Number.isFinite(y)) return { error: "Bad focal point." };
   const clamp = (v: number) => Math.min(1, Math.max(0, Math.round(v * 1000) / 1000));
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("cars")
     .update({ cover_focal_x: clamp(x), cover_focal_y: clamp(y) })
-    .eq("id", carId);
-  if (error) return { error: error.message };
+    .eq("id", carId).select("id").maybeSingle();
+  if (error || !data) return { error: "Couldn't save this change. Try again." };
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath("/garage");
   return { ok: "Framing saved" };
-}
-
-export async function moveCarImage(formData: FormData): Promise<void> {
-  const { supabase } = await requireUser();
-  const carId = String(formData.get("car_id") ?? "");
-  const imageId = String(formData.get("image_id") ?? "");
-  const direction = String(formData.get("direction") ?? "");
-  if (!carId || !imageId || (direction !== "up" && direction !== "down")) return;
-
-  const { data: images } = await supabase
-    .from("car_images")
-    .select("id, position")
-    .eq("car_id", carId)
-    .order("position");
-  if (!images) return;
-
-  const index = images.findIndex((img) => img.id === imageId);
-  if (index === -1) return;
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  if (swapIndex < 0 || swapIndex >= images.length) return;
-
-  const a = images[index];
-  const b = images[swapIndex];
-
-  await supabase.from("car_images").update({ position: b.position }).eq("id", a.id);
-  await supabase.from("car_images").update({ position: a.position }).eq("id", b.id);
-
-  revalidatePath(`/garage/${carId}/edit`);
 }
 
 /** Lets the owner describe a photo for screen readers / SEO alt text. */
@@ -546,11 +467,11 @@ export async function updateCarImageAlt(formData: FormData): Promise<ActionState
   const alt = String(formData.get("alt") ?? "").trim().slice(0, 200);
   if (!imageId) return { error: "Missing image." };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("car_images")
     .update({ alt: alt || null })
-    .eq("id", imageId);
-  if (error) return { error: error.message };
+    .eq("id", imageId).eq("car_id", carId).select("id").maybeSingle();
+  if (error || !data) return { error: "Couldn't save this change. Try again." };
 
   if (carId) revalidatePath(`/garage/${carId}/edit`);
   return { ok: "Saved" };
@@ -563,8 +484,12 @@ export async function createRichActivityPost(
   const { supabase, user } = await requireUser();
 
   const carId = String(formData.get("car_id") ?? "");
+  const operationId = String(formData.get("operation_id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   if (!carId || !title) return { error: "A title is required." };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationId)) {
+    return { error: "Refresh this page before publishing." };
+  }
 
   const { data: car } = await supabase
     .from("cars")
@@ -587,51 +512,25 @@ export async function createRichActivityPost(
   }
   if (blocks.length === 0) return { error: "Add at least one block." };
 
-  // Publishing converts the car's draft when one exists (one draft per car),
-  // so a draft never survives as a second copy of the post it became.
-  const { data: draft } = await supabase
-    .from("activity_posts")
-    .select("id")
-    .eq("car_id", carId)
-    .eq("author_id", user.id)
-    .is("published_at", null)
-    .maybeSingle();
-
-  const publishedAt = new Date().toISOString();
-  const { data: post, error } = draft
-    ? await supabase
-        .from("activity_posts")
-        .update({ title, body: blocks, published_at: publishedAt })
-        .eq("id", draft.id)
-        .select("id")
-        .single()
-    : await supabase
-        .from("activity_posts")
-        .insert({ car_id: carId, author_id: user.id, title, intro: null, body: blocks, published_at: publishedAt })
-        .select("id")
-        .single();
-  if (error) return { error: error.message };
-
-  // Belt to the draft-conversion braces: an autosave that raced the publish
-  // can land a fresh draft after the lookup above — sweep it so "one draft
-  // per car" holds and the list never shows the post twice.
-  await supabase
-    .from("activity_posts")
-    .delete()
-    .eq("car_id", carId)
-    .eq("author_id", user.id)
-    .is("published_at", null)
-    .neq("id", post.id);
-
-  // Mirror gallery URLs into activity_images so feeds/profile strips get
-  // covers; finalize EVERY referenced media url (before/after included)
-  // against the staged-upload GC.
   const imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
-  if (imageUrls.length) {
-    await supabase.from("activity_images").insert(
-      imageUrls.map((url, index) => ({ post_id: post.id, url, position: index }))
-    );
+  const { data: post, error } = await supabase
+    .rpc("write_activity_post", {
+      p_mode: "publish",
+      p_post_id: operationId,
+      p_car_id: carId,
+      p_title: title,
+      p_body: activityBlocksJson(blocks),
+      p_image_urls: imageUrls,
+    })
+    .single();
+  if (error || !post) {
+    reportError("[activity] publish failed", { carId, operationId, error });
+    return { error: "Couldn't confirm this update was published. Try again with the same draft." };
   }
+
+  // The post and its feed-cover projection commit together in SQL. Media
+  // finalization follows safely: references are already durable, and the
+  // staging sweeper rechecks those references before removing anything.
   const mediaUrls = blockMediaUrls(blocks);
   if (mediaUrls.length) await finalizeMediaUrls(supabase, mediaUrls);
 
@@ -647,7 +546,7 @@ export async function createRichActivityPost(
 
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
-  redirect(`/cars/${car.slug}/activity/${post.id}`);
+  return { ok: "Published.", href: `/cars/${car.slug}/activity/${post.post_id}` };
 }
 
 /**
@@ -664,8 +563,12 @@ export async function saveActivityDraft(
   const { supabase, user } = await requireUser();
 
   const carId = String(formData.get("car_id") ?? "");
+  const operationId = String(formData.get("operation_id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   if (!carId || !title) return { error: "A title is required to save a draft." };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationId)) {
+    return { error: "Refresh this page before saving the draft." };
+  }
 
   const { data: car } = await supabase
     .from("cars")
@@ -685,23 +588,18 @@ export async function saveActivityDraft(
     return { error: "Could not read the post content." };
   }
 
-  const { data: existing } = await supabase
-    .from("activity_posts")
-    .select("id")
-    .eq("car_id", carId)
-    .eq("author_id", user.id)
-    .is("published_at", null)
-    .maybeSingle();
-
-  const { error } = existing
-    ? await supabase
-        .from("activity_posts")
-        .update({ title, body: blocks })
-        .eq("id", existing.id)
-    : await supabase
-        .from("activity_posts")
-        .insert({ car_id: carId, author_id: user.id, title, intro: null, body: blocks, published_at: null });
-  if (error) return { error: error.message };
+  const { error } = await supabase.rpc("write_activity_post", {
+    p_mode: "draft",
+    p_post_id: operationId,
+    p_car_id: carId,
+    p_title: title,
+    p_body: activityBlocksJson(blocks),
+    p_image_urls: [],
+  });
+  if (error) {
+    reportError("[activity] draft save failed", { carId, operationId, error });
+    return { error: "Couldn't save this draft. Your local copy is still here — try again." };
+  }
 
   // Draft media is referenced content now — release it from the
   // staged-upload GC so a draft that sits for a week keeps its photos.
@@ -749,7 +647,7 @@ export async function updateActivityPost(
   // into a single paragraph.
   const blocksRaw = formData.get("blocks");
   const bodyRaw = formData.get("body");
-  let body: unknown | undefined;
+  let body: ActivityBlock[] | undefined;
 
   if (typeof blocksRaw === "string" && blocksRaw) {
     const { normalizeBlocks } = await import("@/lib/activity-blocks");
@@ -761,24 +659,13 @@ export async function updateActivityPost(
     if ((body as unknown[]).length === 0) return { error: "Add at least one block." };
   } else if (typeof bodyRaw === "string") {
     const text = bodyRaw.trim();
-    body = text ? [{ heading: null, text }] : [];
+    body = text ? [{ type: "text", style: "normal", text }] : [];
   }
 
-  const { error } = await supabase
-    .from("activity_posts")
-    .update({
-      title,
-      intro: String(formData.get("intro") ?? "").trim() || null,
-      video_url: videoUrl || null,
-      ...(body === undefined ? {} : { body: body as never }),
-    })
-    .eq("id", postId);
-  if (error) return { error: error.message };
-
-  // Keep activity_images in step so feed covers reflect the edit — but only when
-  // the body was actually replaced, or a details edit would wipe the gallery.
+  let previousImages: { url: string }[] = [];
+  let imageUrls: string[] | null = null;
   if (Array.isArray(body)) {
-    const imageUrls = keepValidImageUrls(
+    imageUrls = keepValidImageUrls(
       (body as { type?: string; urls?: string[] }[]).flatMap((b) =>
         b.type === "images" ? (b.urls ?? []) : []
       ),
@@ -788,18 +675,38 @@ export async function updateActivityPost(
 
     // Snapshot the outgoing gallery first, so photos this edit drops can be
     // GC'd once nothing references them anymore.
-    const { data: previousImages } = await supabase
+    const previous = await supabase
       .from("activity_images")
       .select("url")
       .eq("post_id", postId);
-
-    await supabase.from("activity_images").delete().eq("post_id", postId);
-    if (imageUrls.length) {
-      await supabase
-        .from("activity_images")
-        .insert(imageUrls.map((url, index) => ({ post_id: postId, url, position: index })));
-      await finalizeMediaUrls(supabase, imageUrls);
+    if (previous.error) {
+      reportError("[activity] prior image projection lookup failed", { postId, error: previous.error });
+    } else {
+      previousImages = previous.data ?? [];
     }
+  }
+
+  const { error } = await supabase.rpc("write_activity_post", {
+    p_mode: "update",
+    p_post_id: postId,
+    p_car_id: post.car_id,
+    p_title: title,
+    ...(body === undefined ? {} : {
+      p_body: activityBlocksJson(body),
+      p_image_urls: imageUrls ?? [],
+    }),
+    p_intro: String(formData.get("intro") ?? "").trim() || undefined,
+    p_video_url: videoUrl || undefined,
+  });
+  if (error) {
+    reportError("[activity] update failed", { postId, error });
+    return { error: "Couldn't save this update. Try again." };
+  }
+
+  // SQL changed body + cover projection atomically. Finalize referenced media
+  // and clean no-longer-used objects only after the transaction succeeds.
+  if (Array.isArray(body) && imageUrls) {
+    if (imageUrls.length) await finalizeMediaUrls(supabase, imageUrls);
 
     // Finalize non-gallery media too (before/after sides live only in the
     // body), and never GC a dropped gallery url the body still uses.
@@ -807,7 +714,7 @@ export async function updateActivityPost(
     if (bodyMediaUrls.length) await finalizeMediaUrls(supabase, bodyMediaUrls);
 
     const kept = new Set([...imageUrls, ...bodyMediaUrls]);
-    for (const prev of previousImages ?? []) {
+    for (const prev of previousImages) {
       if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url);
     }
   }

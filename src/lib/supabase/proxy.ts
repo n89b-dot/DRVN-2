@@ -99,7 +99,11 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isProductRoute = isProductPath(pathname);
-  const isAuthPage = AUTH_PAGES.some(
+  // A recovery callback establishes a real session before it redirects here;
+  // this one authenticated auth route must remain reachable so that session
+  // can set the new password.
+  const isPasswordRecovery = pathname === "/login/reset";
+  const isAuthPage = !isPasswordRecovery && AUTH_PAGES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
 

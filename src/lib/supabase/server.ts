@@ -1,10 +1,12 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 import { publicEnv } from "@/lib/env";
 import type { Database } from "@/lib/database.types";
 
-export async function createClient() {
+export type SupabaseCookie = { name: string; value: string; options: CookieOptions };
+
+export async function createClient(onSetCookies?: (cookies: SupabaseCookie[]) => void) {
   const cookieStore = await cookies();
   // Accepts either key generation — see @/lib/env.
   const { url, anonKey } = publicEnv();
@@ -18,6 +20,10 @@ export async function createClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
+          // Route handlers that return their own NextResponse must attach the
+          // Auth cookies to that response explicitly. Server Actions can keep
+          // using the mutable cookie store as before.
+          onSetCookies?.(cookiesToSet);
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)

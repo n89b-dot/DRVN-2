@@ -1,18 +1,28 @@
 import { NextResponse } from "next/server";
 
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
-import { createClient } from "@/lib/supabase/server";
+import { siteUrl } from "@/lib/site";
+import { createClient, type SupabaseCookie } from "@/lib/supabase/server";
+
+function redirectWithCookies(path: string, authCookies: SupabaseCookie[]) {
+  const response = NextResponse.redirect(`${new URL(siteUrl()).origin}${path}`);
+  for (const { name, value, options } of authCookies) {
+    response.cookies.set(name, value, options);
+  }
+  return response;
+}
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   // The OAuth button puts the pending destination here. It comes back via the
   // provider, so it is treated as untrusted input and re-validated as a
   // same-origin path — never as a URL to follow.
   const next = safeRedirectPath(searchParams.get("next"), "");
+  const authCookies: SupabaseCookie[] = [];
 
   if (code) {
-    const supabase = await createClient();
+    const supabase = await createClient((cookies) => authCookies.push(...cookies));
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
@@ -32,7 +42,7 @@ export async function GET(request: Request) {
         const destination = profile?.username
           ? next || "/home"
           : onboardingPath(next);
-        return NextResponse.redirect(`${origin}${destination}`);
+        return redirectWithCookies(destination, authCookies);
       }
     }
   }
@@ -40,5 +50,5 @@ export async function GET(request: Request) {
   const failure = next
     ? `/login?message=auth-error&next=${encodeURIComponent(next)}`
     : "/login?message=auth-error";
-  return NextResponse.redirect(`${origin}${failure}`);
+  return redirectWithCookies(failure, authCookies);
 }

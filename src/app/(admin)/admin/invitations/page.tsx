@@ -1,10 +1,10 @@
 
-import { Button, EmptyState, PageHead } from "@/components/ui";
+import { EmptyState, PageHead } from "@/components/ui";
 import { getAdminContext } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { revokeBetaInvitation } from "./actions";
 import { InvitationForm } from "./invitation-form";
+import { RevokeInvitationForm } from "./revoke-invitation-form";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +22,20 @@ type InvitationRow = {
 export default async function InvitationsPage() {
   const context = await getAdminContext();
   const admin = createAdminClient();
-  const [{ data: config }, { data, error }] = await Promise.all([
+  const [{ data: config }, { data, error }, { data: expiredData, error: expiredError }] = await Promise.all([
     admin.from("beta_access_config").select("enforced").eq("singleton", true).maybeSingle(),
     admin
       .from("beta_invitations")
       .select("id, email_normalized, roles, expires_at, created_at, consumed_at, revoked_at, revoke_reason")
       .order("created_at", { ascending: false })
       .limit(100),
+    // PostgreSQL parses the timestamp literal `now` at query time. This keeps
+    // expiry classification on the database clock and render-pure in React.
+    admin.from("beta_invitations").select("id").lt("expires_at", "now"),
   ]);
   const invitations = (data ?? []) as InvitationRow[];
+  const expiredIds = new Set((expiredData ?? []).map((invitation) => invitation.id));
+  const invitationError = error ?? expiredError;
   const siteOrigin = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").origin;
 
   return (
@@ -45,17 +50,20 @@ export default async function InvitationsPage() {
 
       <section className="mt-8">
         <h2 className="font-display text-section">Recent invitations</h2>
-        {error || !invitations.length ? (
-          <EmptyState mark="—" title={error ? "Invitations unavailable" : "No invitations yet"}>
-            {error ? "The invitation register could not be read." : "Create the first controlled-beta invitation above."}
+        {invitationError || !invitations.length ? (
+          <EmptyState mark="—" title={invitationError ? "Invitations unavailable" : "No invitations yet"}>
+            {invitationError ? "The invitation register could not be read." : "Create the first controlled-beta invitation above."}
           </EmptyState>
         ) : (
           <div className="rowlist mt-4">
             {invitations.map((invitation) => {
+              const expired = expiredIds.has(invitation.id);
               const status = invitation.revoked_at
                 ? "revoked"
                 : invitation.consumed_at
                   ? "joined"
+                  : expired
+                    ? "expired"
                   : "unclaimed";
               return (
                 <div key={invitation.id} className="jobrow">
@@ -66,15 +74,14 @@ export default async function InvitationsPage() {
                         {invitation.roles.join(" + ")} · expires {new Date(invitation.expires_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <span className={`chip ${status === "unclaimed" ? "chip--ok" : status === "revoked" ? "chip--live" : ""}`}>{status}</span>
+                    <span
+                      className={`chip ${status === "unclaimed" ? "chip--ok" : status === "revoked" ? "chip--live" : status === "expired" ? "chip--warn" : ""}`}
+                      aria-live="polite"
+                    >
+                      {status}
+                    </span>
                   </div>
-                  {!invitation.revoked_at && context?.role === "admin" && (
-                    <form action={revokeBetaInvitation} className="mt-3 flex flex-wrap gap-2">
-                      <input type="hidden" name="invitation_id" value={invitation.id} />
-                      <input className="ctl min-w-[220px] flex-1" name="reason" aria-label="Reason for revocation" placeholder="Reason for revocation" required maxLength={500} />
-                      <Button type="submit" variant="quiet">Revoke</Button>
-                    </form>
-                  )}
+                  {!invitation.revoked_at && context?.role === "admin" && <RevokeInvitationForm invitationId={invitation.id} />}
                   {invitation.revoke_reason && <p className="order__meta mt-2">Reason: {invitation.revoke_reason}</p>}
                 </div>
               );

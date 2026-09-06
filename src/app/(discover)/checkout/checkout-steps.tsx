@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { useActionState, useId, useState } from "react";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -51,8 +52,9 @@ const BLANK_ADDRESS: Address = {
 /**
  * P21 — the checkout, lululemon-shaped: 1 Shipping → 2 Payment, a completed
  * step collapsing to a summary line with a Change link. The address submit is
- * what creates the orders + PaymentIntent (idempotent, so Change → resubmit
- * replays the same orders with updated details rather than duplicating).
+ * what creates the orders + PaymentIntent. Retries preserve that request's
+ * original basket, address and service. The server rejects changed details
+ * once checkout has started; reopening this form does not change a payment.
  */
 export function CheckoutSteps({
   idempotencyKey,
@@ -93,7 +95,14 @@ export function CheckoutSteps({
   /** Cents backing `total`, so a selected rate can re-total live. */
   baseTotalCents?: number;
 }) {
-  const [state, formAction, pending] = useActionState<CommerceState, FormData>(action, {});
+  const [state, formAction, pending] = useActionState<CommerceState, FormData>(async (previous, data) => {
+    try {
+      return await action(previous, data);
+    } catch (error) {
+      unstable_rethrow(error);
+      return { error: "We couldn't confirm checkout. Your details are still here. Retry with the same details so we can check the existing payment request." };
+    }
+  }, {});
   const [collection, setCollection] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
   // Kept in state (not just read at submit time) so "Change" re-renders the
@@ -111,7 +120,14 @@ export function CheckoutSteps({
   // waits for a service pick. Rates are server-held — the radios carry only
   // opaque quote ids.
   const [rates, ratesAction, ratesPending] = useActionState<CartShippingQuotes, FormData>(
-    quoteCartShipping,
+    async (previous, data) => {
+      try {
+        return await quoteCartShipping(previous, data);
+      } catch (error) {
+        unstable_rethrow(error);
+        return { groups: [], error: "Couldn't fetch shipping rates. Your address is still here; try again." };
+      }
+    },
     { groups: [] }
   );
   const [pickedQuotes, setPickedQuotes] = useState<Record<string, string>>({});

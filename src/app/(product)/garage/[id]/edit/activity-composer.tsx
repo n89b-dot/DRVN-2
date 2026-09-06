@@ -30,7 +30,9 @@ export function ActivityComposer({
           {posts.map((post) => (
             <li key={post.id}>
               <Link
-                href={`/garage/${carId}/update/${post.id}/edit`}
+                href={post.published_at
+                  ? `/garage/${carId}/update/${post.id}/edit`
+                  : `/garage/${carId}/update/new`}
                 className="min-w-0 flex-1 truncate transition-colors hover:text-live"
               >
                 {post.title}

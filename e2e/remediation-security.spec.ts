@@ -1,10 +1,13 @@
+import { execFile } from "node:child_process";
 import { createHmac, randomUUID } from "node:crypto";
+import { promisify } from "node:util";
 import { createClient } from "@supabase/supabase-js";
 import { expect, test } from "@playwright/test";
 import { assertAccessible } from "./accessibility";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const admin = () => createClient(url, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
+const execFileAsync = promisify(execFile);
 async function fixture() {
   const email = `e2e-remediation-${randomUUID()}@drvn.test`;
   const password = `Test-${randomUUID()}!`;
@@ -136,6 +139,98 @@ test("captured email link signs in a fresh browser and cannot be reused", async 
     expect(reused.headers().location).toContain("auth-error");
   } finally {
     await user.client.from("remediation_jobs").delete().eq("dedup_key", `access:${user.id}:/orders`);
+    await user.client.auth.admin.deleteUser(user.id);
+  }
+});
+
+test("delivered password reset succeeds once while reused and expired links fail clearly", async ({ browser, page, request }) => {
+  test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Mailpit and Auth expiry fixtures belong to the isolated local environment");
+  const user = await fixture();
+  const seenMessages = new Set<string>();
+
+  async function recoveryLink() {
+    let messageId: string | undefined;
+    await expect.poll(async () => {
+      const response = await request.get("http://127.0.0.1:54324/api/v1/messages");
+      const inbox = await response.json();
+      messageId = inbox.messages.find((message: { ID: string; To: { Address: string }[] }) =>
+        !seenMessages.has(message.ID) && message.To.some((recipient) => recipient.Address === user.email)
+      )?.ID;
+      return Boolean(messageId);
+    }).toBe(true);
+    seenMessages.add(messageId!);
+    const message = await (await request.get(`http://127.0.0.1:54324/api/v1/message/${messageId}`)).json();
+    const link = String(message.HTML)
+      .match(/href="([^"]*\/auth\/v1\/verify[^"]*)"/)?.[1]
+      .replaceAll("&amp;", "&");
+    expect(link).toContain("type=recovery");
+    return link!;
+  }
+
+  async function requestReset() {
+    await page.goto("/login/forgot");
+    await page.getByLabel(/^email$/i).fill(user.email);
+    await page.getByRole("button", { name: "Send the link" }).click();
+    await expect(page.getByRole("status")).toContainText("If that address has an account");
+    return recoveryLink();
+  }
+
+  try {
+    const firstLink = await requestReset();
+    await page.goto(firstLink);
+    await expect(page).toHaveURL(/\/login\/reset$/);
+    const newPassword = `Changed-${randomUUID()}!`;
+    await page.getByLabel("New password").fill(newPassword);
+    await page.getByLabel("Confirm it").fill(newPassword);
+    await page.getByRole("button", { name: "Save and sign in" }).click();
+    await expect(page).toHaveURL(/\/home$/);
+
+    await page.context().clearCookies();
+    await page.goto("/login");
+    await page.getByLabel(/^email$/i).fill(user.email);
+    await page.getByLabel(/^password$/i).fill(user.password);
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /invalid login credentials/i })).toBeVisible();
+    await expect(page.getByLabel(/^email$/i)).toHaveValue(user.email);
+    await expect(page.getByLabel(/^password$/i)).toHaveValue(user.password);
+    await page.getByLabel(/^password$/i).fill(newPassword);
+    await page.getByRole("button", { name: /sign in/i }).click();
+    await expect(page).toHaveURL(/\/home$/);
+
+    const reusedContext = await browser.newContext({ baseURL: process.env.E2E_BASE_URL });
+    try {
+      const reused = await reusedContext.newPage();
+      await reused.goto(firstLink);
+      await expect(reused).toHaveURL(/\/login\?message=auth-error/);
+      await expect(
+        reused.getByRole("alert").filter({ hasText: /invalid, expired, or already used/i })
+      ).toBeVisible();
+    } finally {
+      await reusedContext.close();
+    }
+
+    await page.context().clearCookies();
+    const expiredLink = await requestReset();
+    if (!/^[0-9a-f-]{36}$/i.test(user.id)) throw new Error("Invalid local Auth fixture id");
+    await execFileAsync(
+      "psql",
+      [
+        "-h", "127.0.0.1",
+        "-p", "54322",
+        "-U", "postgres",
+        "-d", "postgres",
+        "-v", "ON_ERROR_STOP=1",
+        "-c",
+        `update auth.users set recovery_sent_at=now()-interval '2 hours' where id='${user.id}'; update auth.one_time_tokens set created_at=now()-interval '2 hours' where user_id='${user.id}' and token_type='recovery_token';`,
+      ],
+      { env: { ...process.env, PGPASSWORD: "postgres" } }
+    );
+    await page.goto(expiredLink);
+    await expect(page).toHaveURL(/\/login\?message=auth-error/);
+    await expect(
+      page.getByRole("alert").filter({ hasText: /invalid, expired, or already used/i })
+    ).toBeVisible();
+  } finally {
     await user.client.auth.admin.deleteUser(user.id);
   }
 });

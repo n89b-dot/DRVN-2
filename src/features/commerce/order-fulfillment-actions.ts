@@ -32,92 +32,53 @@ export async function markShipped(
   const tracking = String(formData.get("tracking_number") ?? "").trim();
 
   if (!orderId) return { error: "Missing order." };
-
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, seller_id, status, is_collection")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!order) return { error: "Order not found." };
-  if (order.seller_id !== user.id) return { error: "That isn't your sale." };
-  if (order.status !== "paid") {
-    return { error: "Only a paid order can be dispatched." };
-  }
-  // Tracking is required for posted goods — without it the buyer has no
-  // visibility, which is the whole point of the dispatch step.
-  if (!order.is_collection && (!carrier || !tracking)) {
+  if (!carrier || !tracking) {
     return { error: "Add the carrier and tracking number." };
   }
 
-  const { error } = await admin
-    .from("orders")
-    .update({
-      status: "shipped",
-      carrier: carrier || null,
-      tracking_number: tracking || null,
-      shipped_at: new Date().toISOString(),
-    })
-    .eq("id", orderId);
-  if (error) return { error: error.message };
+  const { data, error } = await admin.rpc("mark_order_dispatched", {
+    p_order: orderId,
+    p_actor: user.id,
+    p_carrier: carrier,
+    p_tracking: tracking,
+  });
+  if (error || !data) {
+    reportError("[dispatch] atomic transition failed", { orderId, error });
+    return { error: "We couldn't record dispatch. Check the order and try again." };
+  }
+  const result = data as { ok: boolean; applied: boolean; reason?: string; shipment_id?: string };
+  if (!result.ok) return { error: result.reason ?? "This order cannot be dispatched." };
 
-  // Shipments are the authoritative movement record (0052): manual dispatch
-  // creates a seller_arranged shipment unless a live outbound one already
-  // exists (a bought DRVN label reaching this path as a fallback). Tracker
-  // registration is best-effort — carrier webhooks then drive delivery.
-  if (!order.is_collection) {
-    const { data: existing } = await admin
+  // Tracker registration is recoverable decoration around the committed local
+  // transition. An exact action replay only calls the provider while the
+  // authoritative shipment still has no tracker reference.
+  if (result.shipment_id && integratedShippingEnabled()) {
+    const { data: shipment, error: shipmentReadError } = await admin
       .from("shipments")
-      .select("id, status")
-      .eq("order_id", orderId)
-      .eq("direction", "outbound")
-      .not("status", "in", "(cancelled,failed)");
-    if (!existing?.length) {
-      const { data: shipment, error: shipmentError } = await admin
-        .from("shipments")
-        .insert({
-          order_id: orderId,
-          direction: "outbound",
-          fulfillment_type: "seller_arranged",
-          carrier: carrier || null,
-          tracking_code: tracking || null,
-          status: "in_transit",
-          shipped_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-      if (shipmentError) {
-        reportError("[dispatch] shipment record failed", { orderId, shipmentError });
-      } else if (shipment) {
-        const { data: items } = await admin
-          .from("order_items")
-          .select("id")
-          .eq("order_id", orderId);
-        if (items?.length) {
-          await admin
-            .from("shipment_items")
-            .insert(items.map((i) => ({ shipment_id: shipment.id, order_item_id: i.id })));
+      .select("provider_tracker_id")
+      .eq("id", result.shipment_id)
+      .maybeSingle();
+    if (shipmentReadError) {
+      reportError("[dispatch] tracker state read failed", { orderId, shipmentReadError });
+    } else if (shipment && !shipment.provider_tracker_id) {
+      try {
+        const provider = getShippingProvider();
+        const summary = await provider.createTracker({ trackingCode: tracking, carrier });
+        if (summary.trackerRef) {
+          const { error: trackerWriteError } = await admin
+            .from("shipments")
+            .update({ provider: provider.name, provider_tracker_id: summary.trackerRef })
+            .eq("id", result.shipment_id)
+            .is("provider_tracker_id", null);
+          if (trackerWriteError) reportError("[dispatch] tracker reference write failed", { orderId, trackerWriteError });
         }
-        if (tracking && integratedShippingEnabled()) {
-          try {
-            const summary = await getShippingProvider().createTracker({
-              trackingCode: tracking,
-              carrier: carrier || null,
-            });
-            if (summary.trackerRef) {
-              await admin
-                .from("shipments")
-                .update({ provider: getShippingProvider().name, provider_tracker_id: summary.trackerRef })
-                .eq("id", shipment.id);
-            }
-          } catch (trackerError) {
-            reportError("[dispatch] tracker registration failed", { orderId, trackerError });
-          }
-        }
+      } catch (trackerError) {
+        reportError("[dispatch] tracker registration failed", { orderId, trackerError });
       }
     }
   }
 
-  capture(user.id, { event: "seller_dispatched" });
+  if (result.applied) capture(user.id, { event: "seller_dispatched" });
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
   redirect(`/orders/${orderId}`);
@@ -132,35 +93,17 @@ export async function markReceived(
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };
 
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, buyer_id, status")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!order) return { error: "Order not found." };
-  if (order.buyer_id !== user.id) return { error: "That isn't your order." };
-  if (!["shipped", "paid"].includes(order.status)) {
-    return { error: "This order isn't out for delivery yet." };
+  const { data, error } = await admin.rpc("mark_order_received", {
+    p_order: orderId,
+    p_actor: user.id,
+    p_hold_days: CLEARING_HOLD_DAYS,
+  });
+  if (error || !data) {
+    reportError("[receipt] atomic transition failed", { orderId, error });
+    return { error: "We couldn't confirm receipt. Check the order and try again." };
   }
-
-  const now = new Date().toISOString();
-  const { error } = await admin
-    .from("orders")
-    .update({ status: "delivered", delivered_at: now, completed_at: now })
-    .eq("id", orderId);
-  if (error) return { error: error.message };
-
-  // Delivery starts the clearing window the ledger displays: the transfer
-  // intent becomes due at delivered_at + CLEARING_HOLD_DAYS, after which
-  // the scheduler moves the seller's money (0020).
-  await admin
-    .from("transfer_intents")
-    .update({
-      available_at: new Date(Date.now() + CLEARING_HOLD_DAYS * 86_400_000).toISOString(),
-    })
-    .eq("order_id", orderId)
-    .eq("status", "holding")
-    .is("available_at", null);
+  const result = data as { ok: boolean; reason?: string };
+  if (!result.ok) return { error: result.reason ?? "This order cannot be marked received." };
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
@@ -189,32 +132,36 @@ export async function requestCancellation(
   if (order.seller_id !== user.id) {
     return { error: "Only the seller can cancel — message them from the order." };
   }
-  if (!["pending", "paid"].includes(order.status)) {
+  if (!["pending", "paid", "refunded", "cancelled"].includes(order.status)) {
     return { error: "This order has already shipped." };
   }
 
-  // Return the goods to sale and record the refund intent. With the stub
-  // provider no money moved; a real processor refunds here (R6).
-  const { data: items } = await admin
-    .from("order_items")
-    .select("listing_id")
-    .eq("order_id", orderId);
+  const settleCancellation = async () => {
+    const { data, error } = await admin.rpc("settle_seller_cancellation", {
+      p_order: orderId,
+      p_actor: user.id,
+      p_reason: reason || undefined,
+    });
+    if (error || !data) {
+      reportError("[cancellation] atomic settlement failed", { orderId, error });
+      return { error: "Cancellation is being reconciled. Check this order before trying again." } as const;
+    }
+    return { result: data as { ok?: boolean; complete?: boolean; needs_refund?: boolean; reason?: string } } as const;
+  };
 
-  const listingIds = (items ?? [])
-    .map((i) => i.listing_id)
-    .filter((id): id is string => Boolean(id));
+  const prepared = await settleCancellation();
+  if ("error" in prepared) return { error: prepared.error };
+  if (!prepared.result.ok) return { error: prepared.result.reason ?? "This order cannot be cancelled." };
 
-  if (listingIds.length) {
-    await admin.from("listings").update({ status: "active", sold_at: null }).in("id", listingIds);
-  }
-
-  const { data: payment } = await admin
-    .from("payments")
-    .select("provider_reference, amount_cents")
-    .eq("order_id", orderId)
-    .maybeSingle();
-
-  if (order.status === "paid" && payment?.provider_reference) {
+  if (prepared.result.needs_refund) {
+    const { data: payment } = await admin
+      .from("payments")
+      .select("provider_reference")
+      .eq("order_id", orderId)
+      .maybeSingle();
+    if (!payment?.provider_reference) {
+      return { error: "Payment records need reconciliation before this order can be cancelled." };
+    }
     // Money moved, so this cancellation is a refund — through the one refund
     // path, which also cancels the pending transfer intent (and reverses a
     // transfer in the edge case one already exists). It stamps the order
@@ -225,16 +172,13 @@ export async function requestCancellation(
       initiator: { kind: "seller_cancel", sellerId: user.id },
     });
     if (!outcome.ok) return { error: outcome.error };
-  } else {
-    const { error } = await admin
-      .from("orders")
-      .update({
-        status: "cancelled",
-        cancelled_at: new Date().toISOString(),
-        cancel_reason: reason || "cancelled by seller",
-      })
-      .eq("id", orderId);
-    if (error) return { error: error.message };
+    const finalized = await settleCancellation();
+    if ("error" in finalized) return { error: finalized.error };
+    if (!finalized.result.ok || !finalized.result.complete) {
+      return { error: finalized.result.reason ?? "The refund is complete, but relisting is still being reconciled." };
+    }
+  } else if (!prepared.result.complete) {
+    return { error: prepared.result.reason ?? "Cancellation is still being reconciled." };
   }
 
   revalidatePath("/orders");

@@ -186,7 +186,10 @@ export async function requestPasswordReset(
   const origin = (await headers()).get("origin") ?? "";
 
   await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/login/reset`,
+    // The SSR client uses PKCE. Recovery must return through the callback so
+    // the one-time code is exchanged into HttpOnly session cookies before the
+    // password form renders.
+    redirectTo: `${origin}/callback?next=${encodeURIComponent("/login/reset")}`,
   });
 
   return { ok: "If that address has an account, a reset link is on its way." };

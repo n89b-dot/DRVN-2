@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { ChangeEventHandler, ReactNode, Ref } from "react";
 
 import { cx } from "@/lib/format";
 
@@ -88,6 +88,8 @@ export function MessageComposer({
   name = "body",
   placeholder,
   inputLabel,
+  value,
+  onChange,
   maxLength,
   autoFocus = false,
   pending = false,
@@ -107,6 +109,8 @@ export function MessageComposer({
   placeholder: string;
   /** aria-label for the input when no visible label exists nearby. */
   inputLabel?: string;
+  value?: string;
+  onChange?: ChangeEventHandler<HTMLInputElement>;
   maxLength?: number;
   autoFocus?: boolean;
   pending?: boolean;
@@ -129,6 +133,9 @@ export function MessageComposer({
         ))}
       <input
         name={name}
+        value={value}
+        onChange={onChange}
+        disabled={pending}
         required
         maxLength={maxLength}
         autoFocus={autoFocus}

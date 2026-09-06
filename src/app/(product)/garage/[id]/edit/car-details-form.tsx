@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRef, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 
 import { Button, TextArea, TextField } from "@/components/ui";
 import type { Car } from "@/lib/database.types";
@@ -8,14 +9,37 @@ import type { Car } from "@/lib/database.types";
 import { updateCar, type ActionState } from "../../actions";
 
 export function CarDetailsForm({ car }: { car: Car }) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(updateCar, {});
+  const [state, setState] = useState<ActionState>({});
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
+  const revision = useRef(0);
+  const [dirty, setDirty] = useState(false);
 
   return (
     <section className="tile">
       <div className="tile__head">
         <span className="microlabel microlabel--ink">Details — shown on the build page</span>
       </div>
-      <form action={action} className="flex flex-col gap-4">
+      <form className="flex flex-col gap-4" onChange={() => { revision.current += 1; setDirty(true); }} onSubmit={async (event) => {
+        event.preventDefault();
+        if (submitting.current) return;
+        const data = new FormData(event.currentTarget);
+        const submittedRevision = revision.current;
+        submitting.current = true;
+        setPending(true);
+        setState({});
+        try {
+          const result = await updateCar({}, data);
+          setState(result);
+          if (result.ok && revision.current === submittedRevision) setDirty(false);
+        } catch (error) {
+          unstable_rethrow(error);
+          setState({ error: "Couldn’t confirm the save. Your changes are still here; try again." });
+        } finally {
+          submitting.current = false;
+          setPending(false);
+        }
+      }}>
         <input type="hidden" name="id" value={car.id} />
         <TextField
           id="car-name"
@@ -111,6 +135,11 @@ export function CarDetailsForm({ car }: { car: Car }) {
         {state.error && (
           <p role="alert" aria-live="polite" className="field__err">
             {state.error}
+          </p>
+        )}
+        {!dirty && !pending && !state.error && state.ok && (
+          <p role="status" aria-live="polite" className="field__ok !block">
+            {state.ok}
           </p>
         )}
         <div className="flex justify-end">

@@ -120,7 +120,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   function save() {
     setStatus(null);
     const items: ModItemInput[] = rows.map((r, i) => ({
-      id: r.id,
+      id: r.id ?? r.key,
       group_label: r.group_label,
       brand: r.brand.trim() || null,
       product: r.product.trim() || null,
@@ -131,13 +131,31 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       position: i,
     }));
     startTransition(async () => {
-      const result = await saveModItems(carId, items);
+      let result: Awaited<ReturnType<typeof saveModItems>>;
+      try {
+        result = await saveModItems(carId, items);
+      } catch {
+        // The request may have committed before its response disappeared. Keep
+        // every draft value and the client UUIDs so retrying converges on the
+        // same rows instead of forcing a reload or creating duplicates.
+        setStatus({
+          kind: "error",
+          message: "Couldn't confirm the save. Your changes are still here — try again.",
+        });
+        return;
+      }
       setStatus(
         result.error
           ? { kind: "error", message: result.error }
           : { kind: "ok", message: "Saved ✓" }
       );
       if (!result.error) {
+        // New rows use their client UUID as the durable database id. Promote
+        // that id locally so an ordinary second save and a response-loss retry
+        // update the same row instead of inserting a duplicate.
+        setRows((current) =>
+          current.map((row) => (row.id ? row : { ...row, id: row.key }))
+        );
         const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
           [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
         const before = new Set(initialMods.map((m) => label(m)).filter(Boolean));

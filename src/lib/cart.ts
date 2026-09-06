@@ -2,7 +2,7 @@ import { secureCookies } from "@/lib/cookie-security";
 import { cookies } from "next/headers";
 
 const CART_COOKIE = "drvn_cart";
-const MAX_ITEMS = 50;
+export const MAX_CART_ITEMS = 50;
 
 /**
  * Cookie-based cart: an array of listing ids only.
@@ -19,7 +19,7 @@ export async function getCartIds(): Promise<string[]> {
     if (!Array.isArray(ids)) return [];
     return [...new Set(ids.filter((id): id is string => typeof id === "string"))].slice(
       0,
-      MAX_ITEMS
+      MAX_CART_ITEMS
     );
   } catch {
     return [];
@@ -28,7 +28,7 @@ export async function getCartIds(): Promise<string[]> {
 
 export async function setCartIds(ids: string[]) {
   const store = await cookies();
-  store.set(CART_COOKIE, JSON.stringify([...new Set(ids)].slice(0, MAX_ITEMS)), {
+  store.set(CART_COOKIE, JSON.stringify([...new Set(ids)].slice(0, MAX_CART_ITEMS)), {
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
     sameSite: "lax",

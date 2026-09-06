@@ -12,13 +12,14 @@ import { resumeIncompleteRefunds } from "@/lib/payments/refunds";
 import { processAlertOutbox } from "@/lib/admin/alerts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
+import { reconcileOutboundLabelVoids } from "@/lib/shipping/outbound-label-void";
 
 /**
  * The money worker's HTTP door — hit by pg_cron via pg_net (0020's
  * `invoke_transfer_worker()`, configured through `job_config`) or any
  * external cron. One pass covers due transfers, transfer-record
  * reconciliation, abandoned-refund resume, the dispute-SLA auto-refund sweep
- * (0021), and the alert-outbox drain (0026) — every durable queue the money
+ * (0021), saved label-refund reconciliation, and the alert-outbox drain (0026) — every durable queue the money
  * paths write gets its retry heartbeat here. Bearer-secret gated;
  * unauthenticated callers get 404, like everything else that shouldn't be
  * discoverable.
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
       transfers: () => processDueTransfers(admin),
       transferReconciliation: () => reconcileTransferRecords(admin),
       refunds: () => resumeIncompleteRefunds(admin, { batch: 3 }),
+      labelVoids: () => reconcileOutboundLabelVoids(admin, { batch: 5 }),
       returns: () => processReturnTimers(admin),
       disputes: () => processDisputeSla(admin),
       alerts: () => processAlertOutbox(admin, { batch: 5 }),

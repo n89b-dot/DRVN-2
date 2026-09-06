@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
 
 import { AnimatePresence, motion } from "motion/react";
 
@@ -121,10 +122,9 @@ export function SellForm({
   const issueFor = (field: string): string | undefined =>
     importReview?.issues.find((issue) => issue.field === field)?.message;
   const isEdit = Boolean(listing);
-  const [state, action, pending] = useActionState<SellState, FormData>(
-    isEdit ? updateListing : createListing,
-    {}
-  );
+  const [state, setState] = useState<SellState>({});
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
   const [sourceCarId, setSourceCarId] = useState(listing?.source_car_id ?? prefill?.carId ?? "");
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
   const [subcategory, setSubcategory] = useState(
@@ -137,6 +137,9 @@ export function SellForm({
   );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Kept for the lifetime of this form so a retry after a lost Server Action
+  // response addresses the same listing creation request.
+  const creationRequestId = useRef<string | null>(null);
 
   const subcategories = CATEGORIES.find((c) => c.slug === category)?.subcategories ?? [];
   const money = (cents: number | null | undefined) =>
@@ -255,14 +258,32 @@ export function SellForm({
 
   return (
     <form
-      action={(formData) => {
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (submitting.current) return;
+        const formData = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter);
         const errors = validate(formData);
         if (Object.keys(errors).length) {
           setFieldErrors(errors);
           return;
         }
         setFieldErrors({});
-        action(formData);
+        if (!isEdit) {
+          creationRequestId.current ??= crypto.randomUUID();
+          formData.set("request_id", creationRequestId.current);
+        }
+        submitting.current = true;
+        setPending(true);
+        setState({});
+        try {
+          setState(await (isEdit ? updateListing : createListing)({}, formData));
+        } catch (error) {
+          unstable_rethrow(error);
+          setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
+        } finally {
+          submitting.current = false;
+          setPending(false);
+        }
       }}
       className="deck !pb-0"
     >

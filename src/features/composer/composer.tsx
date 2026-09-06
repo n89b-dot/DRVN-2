@@ -5,12 +5,13 @@ import Suggestion from "@tiptap/suggestion";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
+import { useRouter } from "next/navigation";
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
-import type { ActivityBlock } from "@/lib/activity-blocks";
+import { normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
 
 import { blocksToDoc, docToBlocks, type PmDoc } from "./doc";
 import { composerNodes, type ComposerContext } from "./extensions";
@@ -75,7 +76,7 @@ const TEMPLATES: { key: string; label: string; explain: string; blocks: Activity
   },
 ];
 
-export type ActionState = { error?: string; ok?: string };
+export type ActionState = { error?: string; ok?: string; href?: string };
 export type ComposerServerAction = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 
 type SlashState = {
@@ -92,6 +93,7 @@ export function BuildStoryComposer({
   postId,
   initialTitle = "",
   initialBlocks = [],
+  initialOperationId,
   draftSavedAt = null,
   publishAction,
   draftAction,
@@ -103,6 +105,8 @@ export function BuildStoryComposer({
   postId?: string;
   initialTitle?: string;
   initialBlocks?: ActivityBlock[];
+  /** Stable UUID reused by draft saves and publish retries. */
+  initialOperationId?: string;
   draftSavedAt?: string | null;
   /** The route's server action for publish (create) or save (edit). */
   publishAction: ComposerServerAction;
@@ -112,9 +116,11 @@ export function BuildStoryComposer({
   extraHidden?: Record<string, string>;
 }) {
   const isEdit = Boolean(postId);
+  const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
   const [blocksJson, setBlocksJson] = useState(() => JSON.stringify(initialBlocks));
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+  const [operationId, setOperationId] = useState(initialOperationId ?? postId ?? "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "recovered">(
     draftSavedAt ? "saved" : "idle",
   );
   const [slash, setSlash] = useState<SlashState>(null);
@@ -128,6 +134,8 @@ export function BuildStoryComposer({
   const localKey = `drvn-composer:${postId ?? carId}`;
   // Latest title/draft-action for the debounced autosave closure.
   const titleRef = useRef(title);
+  const blocksRef = useRef(initialBlocks);
+  const operationIdRef = useRef(operationId);
   const draftActionRef = useRef(draftAction);
   // Publishing wins over the debounced autosave: the timer callback checks
   // this ref so a pending save can't land after the post and leave a
@@ -136,8 +144,9 @@ export function BuildStoryComposer({
   const publishingRef = useRef(false);
   useEffect(() => {
     titleRef.current = title;
+    operationIdRef.current = operationId;
     draftActionRef.current = draftAction;
-  }, [title, draftAction]);
+  }, [draftAction, operationId, title]);
 
   const slashExtension = useMemo(
     () =>
@@ -242,43 +251,104 @@ export function BuildStoryComposer({
     },
   });
 
-  // Serialize on every change; autosave (create mode) debounced and quiet.
-  useEffect(() => {
-    if (!editor) return;
-    const onUpdate = () => {
-      const blocks = docToBlocks(editor.getJSON() as PmDoc);
-      const json = JSON.stringify(blocks);
-      setBlocksJson(json);
-      setIsEmpty(blocks.length === 0);
+  const writeLocalRecovery = useCallback((nextTitle: string, nextBlocks: ActivityBlock[]) => {
+    try {
+      localStorage.setItem(localKey, JSON.stringify({
+        title: nextTitle,
+        blocks: nextBlocks,
+        operationId: operationIdRef.current,
+        at: Date.now(),
+      }));
+    } catch {
+      // Storage full/blocked — the server draft remains the primary copy.
+    }
+  }, [localKey]);
+
+  const scheduleAutosave = useCallback((nextBlocks: ActivityBlock[]) => {
+    writeLocalRecovery(titleRef.current, nextBlocks);
+    if (isEdit || !titleRef.current.trim()) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSaveState((state) => state === "idle" ? state : "saving");
+    saveTimer.current = setTimeout(async () => {
+      if (publishingRef.current) return;
+      const form = new FormData();
+      form.set("car_id", carId);
+      form.set("operation_id", operationIdRef.current);
+      form.set("title", titleRef.current);
+      form.set("blocks", JSON.stringify(blocksRef.current));
+      setSaveState("saving");
       try {
-        localStorage.setItem(localKey, JSON.stringify({ title, blocks, at: Date.now() }));
-      } catch {
-        // Storage full/blocked — recovery is a nicety.
-      }
-      if (isEdit) return;
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      setSaveState((state) => (state === "idle" ? state : "saving"));
-      saveTimer.current = setTimeout(async () => {
-        const form = new FormData();
-        form.set("car_id", carId);
-        form.set("title", titleRef.current);
-        form.set("blocks", JSON.stringify(docToBlocks(editor.getJSON() as PmDoc)));
-        setSaveState("saving");
-        // A publish may have started while this timer was pending — saving
-        // now would resurrect the content as a duplicate draft.
-        if (publishingRef.current) return;
         const result = draftActionRef.current
           ? await draftActionRef.current({}, form)
           : { error: "no draft action" };
         setSaveState(result.error ? "error" : "saved");
-      }, 1600);
+      } catch {
+        setSaveState("error");
+      }
+    }, 1600);
+  }, [carId, isEdit, writeLocalRecovery]);
+
+  // Serialize on every editor change and keep a local recovery copy until a
+  // server save or publish is confirmed.
+  useEffect(() => {
+    if (!editor) return;
+    const onUpdate = () => {
+      const blocks = docToBlocks(editor.getJSON() as PmDoc);
+      blocksRef.current = blocks;
+      setBlocksJson(JSON.stringify(blocks));
+      setIsEmpty(blocks.length === 0);
+      scheduleAutosave(blocks);
     };
     editor.on("update", onUpdate);
     return () => {
       editor.off("update", onUpdate);
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [editor, carId, isEdit, localKey, title]);
+  }, [editor, scheduleAutosave]);
+
+  // Recover a newer browser copy after a crash or interrupted request. The
+  // operation UUID comes with it so retrying a committed publish is harmless.
+  useEffect(() => {
+    if (!editor || isEdit) return;
+    let frame: number | null = null;
+    try {
+      const raw = localStorage.getItem(localKey);
+      if (!raw) return;
+      const recovered = JSON.parse(raw) as {
+        title?: unknown;
+        blocks?: unknown;
+        operationId?: unknown;
+        at?: unknown;
+      };
+      const serverSavedAt = draftSavedAt ? Date.parse(draftSavedAt) : 0;
+      if (typeof recovered.at !== "number" || recovered.at <= serverSavedAt) return;
+      const recoveredTitle = typeof recovered.title === "string"
+        ? recovered.title.slice(0, ACTIVITY_TITLE_MAX)
+        : "";
+      const recoveredBlocks = normalizeBlocks(recovered.blocks);
+      const recoveredOperation = typeof recovered.operationId === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(recovered.operationId)
+        ? recovered.operationId
+        : operationIdRef.current;
+      frame = requestAnimationFrame(() => {
+        titleRef.current = recoveredTitle;
+        blocksRef.current = recoveredBlocks;
+        operationIdRef.current = recoveredOperation;
+        setTitle(recoveredTitle);
+        setBlocksJson(JSON.stringify(recoveredBlocks));
+        setOperationId(recoveredOperation);
+        setIsEmpty(recoveredBlocks.length === 0 && !recoveredTitle);
+        setSaveState("recovered");
+        editor.commands.setContent(blocksToDoc(recoveredBlocks) as object);
+        scheduleAutosave(recoveredBlocks);
+      });
+    } catch {
+      // Malformed or unavailable local recovery must never block the editor.
+    }
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [draftSavedAt, editor, isEdit, localKey, scheduleAutosave]);
 
 
   const applyTemplate = useCallback(
@@ -291,8 +361,24 @@ export function BuildStoryComposer({
     [editor],
   );
 
+  const safePublish = useCallback<ComposerServerAction>(async (previous, formData) => {
+    publishingRef.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    try {
+      return await publishAction(previous, formData);
+    } catch {
+      return { error: "The response was interrupted. Your draft is still here — try publishing again." };
+    }
+  }, [publishAction]);
+  const safeDraft = useCallback<ComposerServerAction>(async (previous, formData) => {
+    try {
+      return draftAction ? await draftAction(previous, formData) : {};
+    } catch {
+      return { error: "The response was interrupted. Your draft is still here — try saving again." };
+    }
+  }, [draftAction]);
   const [publishState, publishFormAction, publishing] = useActionState<ActionState, FormData>(
-    publishAction,
+    safePublish,
     {},
   );
   useEffect(() => {
@@ -300,13 +386,13 @@ export function BuildStoryComposer({
     if (publishing && saveTimer.current) clearTimeout(saveTimer.current);
   }, [publishing]);
 
-  const noopDraft: ComposerServerAction = async () => ({});
   const [draftState, draftFormAction, draftPending] = useActionState<ActionState, FormData>(
-    draftAction ?? noopDraft,
+    safeDraft,
     {},
   );
 
-  // Publishing clears the local recovery buffer.
+  // A confirmed publish clears recovery before navigation. A lost response
+  // leaves it intact, including the stable operation UUID used by the retry.
   useEffect(() => {
     if (publishState.ok || draftState.ok) {
       try {
@@ -315,7 +401,8 @@ export function BuildStoryComposer({
         /* noop */
       }
     }
-  }, [publishState.ok, draftState.ok, localKey]);
+    if (publishState.href) router.push(publishState.href);
+  }, [publishState.href, publishState.ok, draftState.ok, localKey, router]);
 
   const showTemplates = !isEdit && isEmpty;
 
@@ -330,7 +417,12 @@ export function BuildStoryComposer({
         placeholder="Title your update"
         maxLength={ACTIVITY_TITLE_MAX}
         value={title}
-        onChange={(event) => setTitle(event.target.value)}
+        onChange={(event) => {
+          const nextTitle = event.target.value;
+          titleRef.current = nextTitle;
+          setTitle(nextTitle);
+          scheduleAutosave(blocksRef.current);
+        }}
       />
 
       {showTemplates && (
@@ -444,6 +536,7 @@ export function BuildStoryComposer({
       <form className="bsc__foot">
         <input type="hidden" name="car_id" value={carId} />
         {postId && <input type="hidden" name="post_id" value={postId} />}
+        {!isEdit && <input type="hidden" name="operation_id" value={operationId} />}
         <input type="hidden" name="title" value={title} />
         <input type="hidden" name="blocks" value={blocksJson} />
         {Object.entries(extraHidden ?? {}).map(([name, value]) => (
@@ -471,15 +564,17 @@ export function BuildStoryComposer({
               Save draft
             </Button>
           )}
-          <span className="microlabel !mb-0" role="status" aria-live="polite">
+          <span className="microlabel !mb-0" aria-live="polite">
             {publishState.error || draftState.error ? (
-              <span className="text-live">{publishState.error ?? draftState.error}</span>
+              <span className="text-live" role="alert">{publishState.error ?? draftState.error}</span>
             ) : saveState === "saving" ? (
               "Saving…"
             ) : saveState === "saved" ? (
               "Saved — only you can see it"
             ) : saveState === "error" ? (
               <span className="text-live">Autosave failed — use Save draft</span>
+            ) : saveState === "recovered" ? (
+              "Recovered a newer browser draft — save or publish when ready"
             ) : null}
           </span>
         </div>

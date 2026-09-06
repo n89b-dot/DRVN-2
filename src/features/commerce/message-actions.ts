@@ -23,17 +23,38 @@ export async function sendThreadMessage(
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
 
-  if (!(await allowAction(RATE_LIMITS.sendMessage, user.id))) {
-    return { error: rateLimitMessage(RATE_LIMITS.sendMessage) };
-  }
-
   const offerId = String(formData.get("offer_id") ?? "") || null;
   const orderId = String(formData.get("order_id") ?? "") || null;
   const body = String(formData.get("body") ?? "").trim();
 
   if (!body) return { error: "Write something first." };
   if (body.length > 4000) return { error: "Keep it under 4000 characters." };
-  if (!offerId && !orderId) return { error: "Nothing to reply to." };
+  if (Boolean(offerId) === Boolean(orderId)) return { error: "Choose one conversation to reply to." };
+  const messageId = String(formData.get("message_id") ?? "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)) {
+    return { error: "Refresh this page before sending your message." };
+  }
+
+  // Reuse the row identity after an uncertain response. Never adopt someone
+  // else's message, or silently treat changed content as a successful retry.
+  async function existingMessage() {
+    return supabase.from("messages")
+      .select("sender_id, body, order_id, offer_id")
+      .eq("id", messageId).maybeSingle();
+  }
+  function matches(message: { sender_id: string; body: string; order_id: string | null; offer_id: string | null }) {
+    return message.sender_id === user.id && message.body === body &&
+      message.order_id === orderId && message.offer_id === offerId;
+  }
+  const previous = await existingMessage();
+  if (previous.error) return { error: "Couldn't check whether this message was sent. Try again." };
+  if (previous.data) return matches(previous.data)
+    ? { ok: "Sent." }
+    : { error: "This message changed after sending. Refresh the conversation before sending again." };
+
+  if (!(await allowAction(RATE_LIMITS.sendMessage, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.sendMessage) };
+  }
 
   const admin = createAdminClient();
   let listingId: string | null = null;
@@ -79,6 +100,7 @@ export async function sendThreadMessage(
   const { error } = await supabase.from("messages").insert({
     // Nullable since 0031: an order whose listing was deleted (order_items
     // keeps listing_id null) still gets its message through.
+    id: messageId,
     listing_id: listingId,
     offer_id: offerId,
     order_id: orderId,
@@ -86,7 +108,15 @@ export async function sendThreadMessage(
     recipient_id: recipient,
     body,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    const committed = await existingMessage();
+    if (committed.error || !committed.data || !matches(committed.data)) {
+      return { error: "Couldn't confirm your message was sent. Try again with the same message." };
+    }
+  }
+
+  revalidatePath("/messages");
+  if (orderId) revalidatePath(`/messages/${orderId}`);
 
   revalidatePath("/orders");
   if (orderId) revalidatePath(`/orders/${orderId}`);

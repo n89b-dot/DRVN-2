@@ -1,10 +1,38 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Alert, Button, TextField } from "@/components/ui";
 
 import { createBetaInvitation, type InvitationActionState } from "./actions";
+
+function CopyInvitationLink({ link }: { link: string }) {
+  const [result, setResult] = useState<"idle" | "copied" | "failed">("idle");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setResult("copied");
+    } catch {
+      setResult("failed");
+    }
+  }
+
+  return (
+    <>
+      <Alert role="status" title="One-time invitation link">
+        <span className="break-all font-mono text-sm">{link}</span>
+      </Alert>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" variant="quiet" onClick={copy}>
+          {result === "copied" ? "Copied ✓" : "Copy invitation link"}
+        </Button>
+        {result === "copied" && <span className="field__ok !block" role="status">Invitation link copied.</span>}
+        {result === "failed" && <span className="field__err" role="alert">Copy failed. Select the link above and copy it manually.</span>}
+      </div>
+    </>
+  );
+}
 
 export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
   const [state, action, pending] = useActionState<InvitationActionState, FormData>(
@@ -44,15 +72,12 @@ export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
         <label className="mt-2 flex items-center gap-2"><input name="buyer" type="checkbox" defaultChecked /> Buy</label>
         <label className="mt-2 flex items-center gap-2"><input name="seller" type="checkbox" defaultChecked /> Sell</label>
       </fieldset>
-      {state?.error && <p className="field__error">{state.error}</p>}
-      {state?.ok && <p className="field__ok">{state.ok}</p>}
-      {link && (
-        <Alert role="status" title="One-time invitation link"><span className="break-all font-mono text-sm">{link}</span></Alert>
-      )}
+      {state?.error && <p className="field__err" role="alert">{state.error}</p>}
+      {state?.ok && <p className="field__ok !block" role="status">{state.ok}</p>}
+      {link && <CopyInvitationLink key={link} link={link} />}
       <Button type="submit" variant="live" disabled={pending}>
         {pending ? "Creating…" : "Create invitation"}
       </Button>
     </form>
   );
 }
-

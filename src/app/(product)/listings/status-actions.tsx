@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { unstable_rethrow } from "next/navigation";
 
 import { setListingStatus } from "@/app/(product)/sell/actions";
 import type { ListingStatus } from "@/lib/database.types";
@@ -21,7 +22,14 @@ export function ListingStatusActions({
   id: string;
   status: ListingStatus;
 }) {
-  const [state, formAction, pending] = useActionState(setListingStatus, null);
+  const [state, formAction, pending] = useActionState(async (previous: Parameters<typeof setListingStatus>[0], data: FormData) => {
+    try {
+      return await setListingStatus(previous, data);
+    } catch (error) {
+      unstable_rethrow(error);
+      return { error: "Couldn’t confirm the change. Try again to check the same request." };
+    }
+  }, null);
 
   // Reserved means a checkout is holding it — the seller must not intervene.
   // Sold is terminal; relisting means creating a new listing so order history

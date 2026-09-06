@@ -11,8 +11,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const { origin } = new URL(request.url);
 
-  const href = await markNotificationRead(id);
-  const destination = href && href.startsWith("/") ? href : "/notifications";
+  const result = await markNotificationRead(id);
+  if ("error" in result) {
+    const destination = result.error === "write_failed" ? "/notifications?notice=read_failed" : "/notifications";
+    return NextResponse.redirect(`${origin}${destination}`);
+  }
+  const destination = result.href?.startsWith("/") ? result.href : "/notifications";
 
   return NextResponse.redirect(`${origin}${destination}`);
 }

@@ -4,7 +4,7 @@ import { checkWorkerHealth, monitorCycle, REQUIRED_FAMILIES } from './check-work
 const healthy = { families: REQUIRED_FAMILIES.map(family => ({ family, stale: false })), queues: [] };
 test('accepts complete healthy state and keeps the bearer out of results', async () => {
  const result = await checkWorkerHealth('https://drvn.example', 'secret', async (_url, init) => { assert.equal(init.redirect, 'error'); return Response.json(healthy); });
- assert.deepEqual(result, { healthy: true, families: 14 });
+ assert.deepEqual(result, { healthy: true, families: 15 });
 });
 test('fails on unavailable, malformed, stale and exhausted health', async () => {
  for (const response of [new Response(null, { status: 503 }), Response.json({}), Response.json({ ...healthy, families: [{ stale: true }] }), Response.json({ ...healthy, queues: [{ status: 'failed' }] })]) {
@@ -16,7 +16,7 @@ test('never sends a bearer over remote HTTP', async () => {
 });
 
 test('rejects duplicated inventory and transport errors without leaking request secrets', async () => {
- await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json({families:Array.from({length:14},()=>({family:'alerts',stale:false})),queues:[]})), /incomplete/);
+ await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => Response.json({families:Array.from({length:15},()=>({family:'alerts',stale:false})),queues:[]})), /incomplete/);
  await assert.rejects(checkWorkerHealth('https://drvn.example', 'secret', async () => {throw new Error('secret in upstream error');}), error => !error.message.includes('secret'));
 });
 test('notifies failure once, escalates, and notifies recovery; health heartbeat is independent', async () => {
