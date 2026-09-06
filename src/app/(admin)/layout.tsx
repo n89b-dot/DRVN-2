@@ -10,6 +10,7 @@ import { cx } from "@/lib/format";
 
 import { SlashFocus } from "@/components/ui/slash-focus";
 import { AdminNav } from "./admin/_components/admin-nav";
+import { AdminActionToast } from "./admin/_components/admin-action-toast";
 
 /**
  * Metadata must not leak the console's existence: a static `title` here would
@@ -94,6 +95,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <SlashFocus />
         {children}
       </main>
+      <AdminActionToast />
     </div>
   );
 }

@@ -99,6 +99,26 @@ test("notification click-through persists read state and renders write-failure f
       page.getByRole("alert").filter({ hasText: "still unread" }),
     ).toBeVisible();
     expect((await admin.from("notifications").select("read_at").eq("id", failureId).single()).data?.read_at).toBeNull();
+
+    await page.unroute(`**/notifications/open/${failureId}*`);
+    await page.goto("/notifications");
+    let failMarkAll = true;
+    await page.route("**/notifications*", async route => {
+      if (failMarkAll && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        failMarkAll = false;
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
+    await page.getByRole("button", { name: "Mark all as read" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Couldn't mark notifications as read" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mark all as read" })).toBeEnabled();
+    await page.reload();
+    await expect(page.getByRole("link", { name: /Write failure/ }).getByLabel("unread")).toBeVisible();
+    await page.getByRole("button", { name: "Mark all as read" }).click();
+    await expect.poll(async () => (await admin.from("notifications").select("read_at").eq("id", failureId).single()).data?.read_at).not.toBeNull();
+    await page.reload();
+    await expect(page.getByRole("link", { name: /Write failure/ }).getByLabel("unread")).toHaveCount(0);
   } finally {
     await cleanupFixtureUser(viewer.id);
     await cleanupFixtureUser(owner.id);

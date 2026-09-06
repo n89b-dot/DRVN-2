@@ -4,20 +4,23 @@ set -euo pipefail
 : "${DRVN_RESTORE_DUMP:?Supply a local, synthetic backup archive}"
 : "${DRVN_RESTORE_DISPOSABLE:?Set to local-container-55441}"
 [ "$DRVN_RESTORE_DISPOSABLE" = local-container-55441 ] || exit 1
-export PGPASSWORD=postgres
-target='postgresql://supabase_admin:postgres@127.0.0.1:55441/postgres'
+# Refuse to erase an unrelated local Postgres instance, even on the same port.
+[ "$(docker port drvn-recovery-target 5432/tcp)" = "127.0.0.1:55441" ] || exit 1
+# Use the target image's matching client, not a newer host pg_restore.
+psql_target() { docker exec -i -e PGPASSWORD=postgres drvn-recovery-target psql -U supabase_admin -d postgres "$@"; }
+restore_section() { docker exec -i -e PGPASSWORD=postgres drvn-recovery-target pg_restore --section="$1" --no-owner --exit-on-error --dbname=postgres -U supabase_admin < "$DRVN_RESTORE_DUMP"; }
 started=$(date +%s)
-psql "$target" -v ON_ERROR_STOP=1 -q -c 'drop schema if exists public,auth,storage,extensions cascade'
-pg_restore --section=pre-data --no-owner --exit-on-error --dbname="$target" "$DRVN_RESTORE_DUMP"
-psql "$target" -v ON_ERROR_STOP=1 -q <<'SQL'
+psql_target -v ON_ERROR_STOP=1 -q -c 'drop schema if exists public,private,auth,storage,extensions cascade'
+restore_section pre-data
+psql_target -v ON_ERROR_STOP=1 -q <<'SQL'
 create extension if not exists pg_trgm with schema public;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists "uuid-ossp" with schema extensions;
 create extension if not exists pg_stat_statements with schema extensions;
 SQL
-pg_restore --section=data --no-owner --exit-on-error --dbname="$target" "$DRVN_RESTORE_DUMP"
-pg_restore --section=post-data --no-owner --exit-on-error --dbname="$target" "$DRVN_RESTORE_DUMP"
-psql "$target" -v ON_ERROR_STOP=1 -q <<'SQL'
+restore_section data
+restore_section post-data
+psql_target -v ON_ERROR_STOP=1 -q <<'SQL'
 -- Restored environments cannot invoke configured financial endpoints.
 truncate public.job_config;
 select count(*) as restored_users from auth.users;

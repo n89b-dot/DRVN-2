@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   reportError: vi.fn(),
   rpc: vi.fn(),
+  from: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
@@ -18,14 +19,9 @@ vi.mock("@/lib/media-lifecycle", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => {
-    const carQuery = {
-      select: () => carQuery,
-      eq: () => carQuery,
-      single: async () => ({ data: { id: "car", slug: "activity-car", owner_id: "owner" }, error: null }),
-    };
     return {
       auth: { getUser: async () => ({ data: { user: { id: "owner" } } }) },
-      from: () => carQuery,
+      from: mocks.from,
       rpc: (...args: unknown[]) => ({
         single: async () => mocks.rpc(...args),
         then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.rpc(...args)).then(resolve),
@@ -34,7 +30,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 
-import { createRichActivityPost, saveActivityDraft } from "./actions";
+import { createRichActivityPost, deleteActivityPost, saveActivityDraft } from "./actions";
 
 const OPERATION_ID = "12345678-1234-4234-8234-123456789012";
 const blocks = [{ type: "text", style: "normal", text: "A durable update" }];
@@ -50,6 +46,15 @@ function form() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.from.mockImplementation(() => {
+    const query = {
+      select: () => query,
+      eq: () => query,
+      single: async () => ({ data: { id: "car", slug: "activity-car", owner_id: "owner" }, error: null }),
+      maybeSingle: async () => ({ data: { id: "car", slug: "activity-car", owner_id: "owner" }, error: null }),
+    };
+    return query;
+  });
   mocks.rpc.mockResolvedValue({ data: { post_id: "post", outcome: "published" }, error: null });
 });
 
@@ -98,5 +103,26 @@ describe("durable activity actions", () => {
 
     expect((await createRichActivityPost({}, data)).error).toContain("Refresh");
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("keeps activity deletion retryable when the post lookup fails", async () => {
+    const query = {
+      select: () => query,
+      eq: () => query,
+      maybeSingle: async () => ({ data: null, error: { message: "database unavailable" } }),
+    };
+    mocks.from.mockReturnValueOnce(query);
+    const data = new FormData();
+    data.set("post_id", "post");
+    data.set("car_id", "car");
+
+    await expect(deleteActivityPost({}, data)).resolves.toEqual({
+      error: "Couldn't confirm whether the entry was deleted. Try again.",
+    });
+    expect(mocks.from).toHaveBeenCalledTimes(1);
+    expect(mocks.reportError).toHaveBeenCalledWith(
+      "[activity] delete lookup failed",
+      expect.objectContaining({ postId: "post" })
+    );
   });
 });

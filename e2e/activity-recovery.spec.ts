@@ -96,6 +96,8 @@ test("activity restores a browser draft and a lost publish response cannot dupli
       .select("id,title")
       .eq("car_id", car.data.id)
       .not("published_at", "is", null);
+    if (published.error) throw published.error;
+    if (!published.data) throw new Error("Published activity row was not returned");
     expect(published.data).toEqual([expect.objectContaining({ title: titleText })]);
     const drafts = await admin
       .from("activity_posts")
@@ -104,6 +106,40 @@ test("activity restores a browser draft and a lost publish response cannot dupli
       .is("published_at", null)
       .is("draft_archived_at", null);
     expect(drafts.data).toEqual([]);
+
+    const postId = published.data[0].id;
+    const editPath = `/garage/${car.data.id}/update/${postId}/edit`;
+    await page.goto(editPath);
+    const revisedTitle = "Recovered edited operation";
+    await page.getByLabel(/^title$/i).fill(revisedTitle);
+    interrupted = false;
+    await page.route(`**${editPath}*`, async route => {
+      if (!interrupted && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        interrupted = true;
+        expect((await route.fetch()).status()).toBe(200);
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "response was interrupted" })).toBeVisible();
+    await expect(page.getByLabel(/^title$/i)).toHaveValue(revisedTitle);
+    await expect.poll(async () => (await admin.from("activity_posts").select("title").eq("id", postId).single()).data?.title).toBe(revisedTitle);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText("Update saved.", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel(/^title$/i)).toHaveValue(revisedTitle);
+
+    await page.getByRole("button", { name: "Delete this entry" }).click();
+    interrupted = false;
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /Couldn.t confirm the deletion/ })).toBeVisible();
+    await expect.poll(async () => (await admin.from("activity_posts").select("id").eq("id", postId)).data?.length).toBe(0);
+    await expect(page.getByRole("button", { name: "Delete permanently" })).toBeEnabled();
+    await page.getByRole("button", { name: "Delete permanently" }).click();
+    await expect(page).toHaveURL(new RegExp(`/garage/${car.data.id}/edit$`));
+    await page.reload();
+    await expect(page.getByText(revisedTitle, { exact: true })).toHaveCount(0);
   } finally {
     await cleanupFixtureUser(owner.id);
   }

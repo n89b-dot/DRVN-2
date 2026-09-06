@@ -1,0 +1,22 @@
+{
+  "observedAt": "2026-09-06T03:35:44.467Z",
+  "scope": "isolated local purchase_begin admission and replay; excludes provider calls, hosted capacity, payment settlement, and checkout UI",
+  "concurrency": 8,
+  "exactReplay": {
+    "requests": 8,
+    "errors": 0,
+    "distinctResults": 1,
+    "persistedOrders": 1,
+    "p50Ms": 58.24,
+    "p95Ms": 64.62
+  },
+  "competingBuyers": {
+    "requests": 8,
+    "errors": 0,
+    "winners": 1,
+    "skipped": 7,
+    "persistedOrders": 1,
+    "p50Ms": 62.76,
+    "p95Ms": 86.29
+  }
+}

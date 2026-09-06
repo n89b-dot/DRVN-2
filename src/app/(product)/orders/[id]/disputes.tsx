@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   acceptRefund,
@@ -14,6 +14,7 @@ import { DISPUTE_CATEGORIES } from "@/features/commerce/disputes";
 import { TextField } from "@/components/ui";
 import { formatPrice } from "@/lib/payments/fee";
 import { createClient } from "@/lib/supabase/client";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 function Result({ state }: { state: CommerceState }) {
   if (!state.error && !state.ok) return null;
@@ -105,12 +106,12 @@ export function RefundOfferForm({
   orderId: string;
   totalCents: number;
 }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(offerRefund, {});
+  const [state, action, pending] = useRecoverableAction<CommerceState>(offerRefund);
 
   if (state.ok) return <Result state={state} />;
 
   return (
-    <form action={action} className="grid gap-3">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-3">
       <input type="hidden" name="order_id" value={orderId} />
       <TextField
         id={`refund-amount-${orderId}`}
@@ -139,10 +140,10 @@ export function AcceptRefundButton({
   orderId: string;
   offerCents: number;
 }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(acceptRefund, {});
+  const [state, action, pending] = useRecoverableAction<CommerceState>(acceptRefund);
 
   return (
-    <form action={action} className="grid gap-2">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
       <button type="submit" disabled={pending} className="btn btn--live">
         {pending ? "Confirming…" : `Accept ${formatPrice(offerCents)} refund`}
@@ -155,12 +156,12 @@ export function AcceptRefundButton({
 /** Buyer-only. "Ask DRVN to step in" — the explicit escalation, shown once
  *  the seller-response window has passed. The server re-checks every rule. */
 export function EscalateDisputeButton({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(escalateDispute, {});
+  const [state, action, pending] = useRecoverableAction<CommerceState>(escalateDispute);
 
   if (state.ok) return <Result state={state} />;
 
   return (
-    <form action={action} className="grid gap-2">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
       <button type="submit" disabled={pending} className="btn">
         {pending ? "Escalating…" : "Ask DRVN to step in"}
@@ -173,10 +174,7 @@ export function EscalateDisputeButton({ orderId }: { orderId: string }) {
 /** Either party. Uploads a photo into the dispute-evidence bucket, then
  *  records it against the dispute. Mirrors the sell form's upload flow. */
 export function DisputeEvidenceForm({ orderId, userId }: { orderId: string; userId: string }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(
-    addDisputeEvidence,
-    {}
-  );
+  const [state, action, pending] = useRecoverableAction<CommerceState>(addDisputeEvidence);
   // dispute-evidence is private (0027) — the object has no fetchable public
   // URL, so `path` (submitted as `url`) is the bare storage path and
   // `previewUrl` is a local blob: URL for the pre-submit thumbnail only.
@@ -227,7 +225,7 @@ export function DisputeEvidenceForm({ orderId, userId }: { orderId: string; user
   }
 
   return (
-    <form action={action} className="grid gap-2">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
       <input type="hidden" name="url" value={path ?? ""} />
       <input
@@ -285,10 +283,10 @@ export function DisputeEvidenceForm({ orderId, userId }: { orderId: string; user
 /** Buyer-only. Closes the dispute with no refund — "resolved, no action
  *  needed". */
 export function CloseDisputeButton({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(closeDispute, {});
+  const [state, action, pending] = useRecoverableAction<CommerceState>(closeDispute);
 
   return (
-    <form action={action} className="grid gap-2">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
       <button type="submit" disabled={pending} className="btn btn--ghost">
         {pending ? "Closing…" : "Resolved — no action needed"}

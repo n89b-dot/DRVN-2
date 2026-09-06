@@ -1,13 +1,35 @@
 "use client";
 
-import { useActionState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui";
 
 import { deleteCar, type ActionState } from "../../actions";
 
 export function DangerZone({ carId, carName }: { carId: string; carName: string }) {
-  const [state, action, pending] = useActionState<ActionState, FormData>(deleteCar, {});
+  const router = useRouter();
+  const submitting = useRef(false);
+  const [state, setState] = useState<ActionState>({});
+  const [pending, setPending] = useState(false);
+
+  async function submit(data: FormData) {
+    if (submitting.current) return;
+    submitting.current = true;
+    setPending(true);
+    setState({});
+    try {
+      const result = await deleteCar({}, data);
+      setState(result);
+      if (result.href) router.push(result.href);
+    } catch (error) {
+      unstable_rethrow(error);
+      setState({ error: "Couldn’t confirm the deletion. Try again to check the same car." });
+    } finally {
+      submitting.current = false;
+      setPending(false);
+    }
+  }
 
   return (
     <section className="undrawn !place-items-start text-left">
@@ -25,7 +47,7 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
           "This cannot be undone",
         ]}
         confirmLabel={pending ? "Deleting…" : "Delete this car"}
-        formAction={action}
+        onSubmit={submit}
         hidden={{ id: carId }}
         pending={pending}
         error={state.error}

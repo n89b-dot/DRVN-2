@@ -158,24 +158,59 @@ Every money queue is durable and visible in **Admin → Payments**:
 
 ## 6. Backups, and the rehearsed restore
 
-Supabase Pro runs daily backups plus PITR. **A backup that has never been
-restored is a hope, not a plan** — rehearse quarterly:
+Use the backup and point-in-time recovery facilities actually enabled on the
+hosted project. A paid plan name alone is not evidence that a recovery point
+exists. Rehearse quarterly and after material schema or storage changes.
 
-1. Create a scratch Supabase project.
-2. Restore the latest production backup into it (dashboard → Backups →
-   Restore, or `pg_restore` from a downloaded dump).
-3. Run `supabase/tests/restore_integrity.sql` against the copy (read-only:
-   auth references, money invariants, transfer references, evidence bucket
-   privacy, RLS presence — raises on any failure), then the four guard
-   suites.
-4. Point a local app at the copy (`.env.local` overrides) and click through:
-   sign-in, marketplace, an order detail, `/admin`.
-5. Record the date and the wall-clock restore time below, then delete the
-   scratch project.
+The repeatable **local** preparation commands are:
 
-| Date | Restored from | Time to usable | Notes |
-|---|---|---|---|
-| _none yet_ | | | first rehearsal pending |
+```sh
+bash scripts/local-recovery-rehearsal.sh /tmp/drvn-recovery.json
+node scripts/local-rollback-rehearsal.mjs PREVIOUS_COMPATIBLE_COMMIT /tmp/drvn-rollback.json
+DRVN_COMMERCE_REPORT=/tmp/drvn-commerce.json npx vitest run --config vitest.operations.config.ts tests/operations/commerce-concurrency.test.ts
+```
+
+The first command creates and removes its own fresh source and restore
+containers, applies the complete migration chain, seeds synthetic users,
+commercial snapshots, operation identities, private records and queued work,
+and compares every application/Auth/Storage table after restore. It separately
+archives synthetic object bytes and verifies their checksum and restored row
+reference. Outbound job configuration is cleared and active schedules are
+forbidden. Existing containers with the same names are never replaced. Port
+55441 must be free. No existing application database is backed up or reset.
+
+The rollback command requires the isolated DRVN stack on 54321, an identical
+dependency lockfile, and a free port 3001. It copies the previous Git artifact
+into a temporary directory, runs six synthetic recovery suites against the
+current schema, builds it, and checks public pages plus denied anonymous admin
+access. It never rolls back schema or dispatches external money. Its temporary
+application is stopped and removed afterward. Read its log if it fails; do not
+weaken the lockfile or target checks to force compatibility.
+
+The concurrency test measures local reservation/replay behavior with eight
+simultaneous requests. It checks one order for exact retries and one winner
+for competing buyers. It does not establish hosted end-to-end capacity.
+
+Hosted acceptance still requires:
+
+1. Restore a verified database recovery point and the corresponding separately
+   archived object versions into an isolated target with outbound jobs disabled.
+2. Run `supabase/tests/restore_integrity.sql`, all current `*_guard.sql` suites,
+   and compare operation identities, immutable commercial snapshots, RLS,
+   private object references and object checksums.
+3. Reconcile provider activity since the recovery point before restarting money
+   workers. Reapply deletion/retention tombstones. Hold ambiguous effects for
+   operator review instead of creating replacement operations.
+4. Rehearse the previous compatible application with queued work, Auth,
+   provider callbacks and private downloads. Use a forward fix if the previous
+   application is incompatible; do not erase committed financial state.
+5. Record actual elapsed recovery time, unrecovered data and operator findings
+   against approved targets. Obtain hosted acceptance before releasing invitations.
+
+| Date | Rehearsal | Evidence and limits |
+|---|---|---|
+| 2026-09-06 | Local synthetic database + object archive | [Result](readiness-progress/evidence/2026-09-06-local-recovery.json); 104 migrations, 87 matching table fingerprints, object bytes/reference verified. Does not establish hosted RPO/RTO. |
+| Pending | Coordinated hosted restore and rollback | Requires isolated staging, provider reconciliation, approved targets and operator acceptance. |
 
 ## 7. Go-live checklist deltas
 

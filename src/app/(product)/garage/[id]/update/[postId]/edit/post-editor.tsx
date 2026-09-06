@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 
 import type { ActivityBlock } from "@/lib/activity-blocks";
 import { BuildStoryComposer, type ComposerServerAction } from "@/features/composer/composer";
@@ -36,11 +37,29 @@ export function PostEditor({
   mods: { id: string; label: string }[];
   publishAction: ComposerServerAction;
 }) {
-  const [deleteState, deleteAction, deletePending] = useActionState<ActionState, FormData>(
-    deleteActivityPost,
-    {}
-  );
+  const router = useRouter();
+  const deleting = useRef(false);
+  const [deleteState, setDeleteState] = useState<ActionState>({});
+  const [deletePending, setDeletePending] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  async function submitDelete(data: FormData) {
+    if (deleting.current) return;
+    deleting.current = true;
+    setDeletePending(true);
+    setDeleteState({});
+    try {
+      const result = await deleteActivityPost({}, data);
+      setDeleteState(result);
+      if (result.href) router.push(result.href);
+    } catch (error) {
+      unstable_rethrow(error);
+      setDeleteState({ error: "Couldn’t confirm the deletion. Try again to check the same entry." });
+    } finally {
+      deleting.current = false;
+      setDeletePending(false);
+    }
+  }
 
   return (
     <div className="grid gap-6">
@@ -76,7 +95,10 @@ export function PostEditor({
               >
                 Keep it
               </button>
-              <form action={deleteAction}>
+              <form onSubmit={(event) => {
+                event.preventDefault();
+                void submitDelete(new FormData(event.currentTarget));
+              }}>
                 <input type="hidden" name="post_id" value={postId} />
                 <input type="hidden" name="car_id" value={carId} />
                 <button type="submit" className="btn btn--live" disabled={deletePending}>

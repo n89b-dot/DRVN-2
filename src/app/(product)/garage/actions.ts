@@ -265,7 +265,7 @@ export async function deleteCar(
   // Deleting an already-absent id is the desired state after a response was
   // lost. RLS still prevents this call from changing anybody else's car.
   revalidatePath("/garage");
-  redirect("/garage");
+  return { ok: "Car deleted.", href: "/garage" };
 }
 
 export type ModItemInput = {
@@ -733,14 +733,42 @@ export async function deleteActivityPost(
 ): Promise<ActionState> {
   const { supabase, user } = await requireUser();
   const postId = String(formData.get("post_id") ?? "");
+  const requestedCarId = String(formData.get("car_id") ?? "");
   if (!postId) return { error: "Missing entry." };
 
-  const { data: post } = await supabase
+  const { data: post, error: postError } = await supabase
     .from("activity_posts")
     .select("id, car_id, author_id")
     .eq("id", postId)
     .maybeSingle();
-  if (!post || post.author_id !== user.id) return { error: "Entry not found." };
+  if (postError) {
+    reportError("[activity] delete lookup failed", { postId, error: postError });
+    return { error: "Couldn't confirm whether the entry was deleted. Try again." };
+  }
+  // An absent post is the desired state after a committed delete response was
+  // lost. The caller may only navigate back to the car id already present in
+  // its authenticated edit form; no row is changed in this replay branch.
+  if (!post) {
+    if (!requestedCarId) return { error: "Entry not found." };
+    const { data: ownedCar, error: ownedCarError } = await supabase
+      .from("cars")
+      .select("id")
+      .eq("id", requestedCarId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+    if (ownedCarError) {
+      reportError("[activity] delete replay car lookup failed", {
+        postId,
+        carId: requestedCarId,
+        error: ownedCarError,
+      });
+      return { error: "Couldn't confirm whether the entry was deleted. Try again." };
+    }
+    if (!ownedCar) return { error: "Entry not found." };
+    revalidatePath(`/garage/${requestedCarId}/edit`);
+    return { ok: "Entry deleted.", href: `/garage/${requestedCarId}/edit` };
+  }
+  if (post.author_id !== user.id) return { error: "Entry not found." };
 
   const { data: car } = await supabase
     .from("cars")
@@ -753,7 +781,7 @@ export async function deleteActivityPost(
 
   revalidatePath(`/garage/${post.car_id}/edit`);
   if (car) revalidatePath(`/cars/${car.slug}`);
-  redirect(`/garage/${post.car_id}/edit`);
+  return { ok: "Entry deleted.", href: `/garage/${post.car_id}/edit` };
 }
 
 export async function updateNotificationPrefs(

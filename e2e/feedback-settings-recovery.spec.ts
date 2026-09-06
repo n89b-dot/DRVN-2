@@ -156,3 +156,44 @@ test("profile success feedback clears when the saved fields change", async ({ pa
     await cleanupFixtureUser(user.id);
   }
 });
+
+test("settings reject invalid profile and account inputs without losing corrections", async ({ page }) => {
+  const user = await createUser("settings-invalid");
+  try {
+    await signIn(page, user);
+    await page.goto("/settings#keeper");
+    const displayName = page.getByRole("textbox", { name: "Display name" });
+    const bio = page.getByRole("textbox", { name: "Bio" });
+    await displayName.fill("N".repeat(81));
+    await page.getByRole("button", { name: "Save profile" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "display name under 80" })).toBeVisible();
+    await expect(displayName).toHaveValue("N".repeat(81));
+
+    await displayName.fill("Valid corrected name");
+    await bio.fill("B".repeat(1001));
+    await page.getByRole("button", { name: "Save profile" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "bio under 1000" })).toBeVisible();
+    await expect(bio).toHaveValue("B".repeat(1001));
+
+    await page.goto("/settings#account");
+    const current = page.getByLabel("Current password");
+    const next = page.getByLabel("New password", { exact: true });
+    const confirm = page.getByLabel("Confirm new password");
+    await current.fill(user.password);
+    await next.fill("Changed-password-1!");
+    await confirm.fill("Different-password-2!");
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "passwords don't match" })).toBeVisible();
+    await expect(current).toHaveValue(user.password);
+    await expect(next).toHaveValue("Changed-password-1!");
+    await expect(confirm).toHaveValue("Different-password-2!");
+
+    await next.fill("short");
+    await confirm.fill("short");
+    await next.evaluate((input) => { input.closest("form")!.noValidate = true; });
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "at least 8 characters" })).toBeVisible();
+  } finally {
+    await cleanupFixtureUser(user.id);
+  }
+});

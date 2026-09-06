@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-
 import { Button, TextArea, TextField } from "@/components/ui";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 import {
   cancelReturn,
   confirmReturnReceived,
@@ -43,11 +42,11 @@ export function ProposeReturnForm({
   orderId: string;
   items: { id: string; title: string; priceCents: number }[];
 }) {
-  const [state, action, pending] = useActionState<ReturnState, FormData>(proposeReturn, {});
+  const [state, action, pending] = useRecoverableAction<ReturnState>(proposeReturn);
   if (state.ok) return <Result state={state} />;
 
   return (
-    <form action={action} className="grid gap-2">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
       {items.length > 1 && (
         <fieldset className="grid gap-1 border-0 p-0">
@@ -82,23 +81,14 @@ export function ReturnShippingPanel({
   returnId: string;
   sellerPaysPostage: boolean;
 }) {
-  const [labelState, labelAction, labelPending] = useActionState<ReturnState, FormData>(
-    createReturnLabel,
-    {}
-  );
-  const [shipState, shipAction, shipPending] = useActionState<ReturnState, FormData>(
-    markReturnShipped,
-    {}
-  );
-  const [cancelState, cancelAction, cancelPending] = useActionState<ReturnState, FormData>(
-    cancelReturn,
-    {}
-  );
+  const [labelState, labelAction, labelPending] = useRecoverableAction<ReturnState>(createReturnLabel);
+  const [shipState, shipAction, shipPending] = useRecoverableAction<ReturnState>(markReturnShipped);
+  const [cancelState, cancelAction, cancelPending] = useRecoverableAction<ReturnState>(cancelReturn);
 
   return (
     <div className="grid gap-4">
       {sellerPaysPostage && (
-        <form action={labelAction} className="grid gap-2">
+        <form onSubmit={(event) => { event.preventDefault(); void labelAction(new FormData(event.currentTarget)); }} className="grid gap-2">
           <input type="hidden" name="return_id" value={returnId} />
           <Button type="submit" variant="live" loading={labelPending} pendingLabel="Preparing…">
             Get a prepaid return label
@@ -112,7 +102,7 @@ export function ReturnShippingPanel({
         </form>
       )}
 
-      <form action={shipAction} className="grid gap-2">
+      <form onSubmit={(event) => { event.preventDefault(); void shipAction(new FormData(event.currentTarget)); }} className="grid gap-2">
         <input type="hidden" name="return_id" value={returnId} />
         {!labelState.labelUrl && (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -139,7 +129,7 @@ export function ReturnShippingPanel({
         <Result state={shipState} />
       </form>
 
-      <form action={cancelAction}>
+      <form onSubmit={(event) => { event.preventDefault(); void cancelAction(new FormData(event.currentTarget)); }}>
         <input type="hidden" name="return_id" value={returnId} />
         <button type="submit" disabled={cancelPending} className="jumplink">
           {cancelPending ? "Withdrawing…" : "Changed your mind? Withdraw the return"}
@@ -152,18 +142,12 @@ export function ReturnShippingPanel({
 
 /** Seller, return delivered/in transit: confirm or contest (§27/§29). */
 export function ReturnInspectionPanel({ returnId }: { returnId: string }) {
-  const [confirmState, confirmAction, confirmPending] = useActionState<ReturnState, FormData>(
-    confirmReturnReceived,
-    {}
-  );
-  const [problemState, problemAction, problemPending] = useActionState<ReturnState, FormData>(
-    reportReturnProblem,
-    {}
-  );
+  const [confirmState, confirmAction, confirmPending] = useRecoverableAction<ReturnState>(confirmReturnReceived);
+  const [problemState, problemAction, problemPending] = useRecoverableAction<ReturnState>(reportReturnProblem);
 
   return (
     <div className="grid gap-4">
-      <form action={confirmAction} className="grid gap-2">
+      <form onSubmit={(event) => { event.preventDefault(); void confirmAction(new FormData(event.currentTarget)); }} className="grid gap-2">
         <input type="hidden" name="return_id" value={returnId} />
         <Button type="submit" variant="live" loading={confirmPending} pendingLabel="Confirming…">
           It&apos;s back and as expected — refund the buyer
@@ -175,7 +159,7 @@ export function ReturnInspectionPanel({ returnId }: { returnId: string }) {
         <summary className="jumplink cursor-pointer">
           Wrong item, damaged, or not what you sent?
         </summary>
-        <form action={problemAction} className="mt-3 grid gap-2">
+        <form onSubmit={(event) => { event.preventDefault(); void problemAction(new FormData(event.currentTarget)); }} className="mt-3 grid gap-2">
           <input type="hidden" name="return_id" value={returnId} />
           <TextArea
             id={`ret-problem-${returnId}`}
@@ -208,14 +192,11 @@ export function RequestShopReturnForm({
   windowDays: number;
   deadline: string;
 }) {
-  const [state, action, pending] = useActionState<ReturnState, FormData>(
-    requestShopReturn,
-    {}
-  );
+  const [state, action, pending] = useRecoverableAction<ReturnState>(requestShopReturn);
   if (state.ok) return <Result state={state} />;
 
   return (
-    <form action={action} className="grid gap-2">
+    <form onSubmit={(event) => { event.preventDefault(); void action(new FormData(event.currentTarget)); }} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
       <p className="field__hint">
         This shop takes change-of-mind returns for {windowDays} days after
@@ -239,25 +220,19 @@ export function RequestShopReturnForm({
 
 /** Shop, a requested preference return: approve or decline (§24B). */
 export function ShopReturnApprovalPanel({ returnId }: { returnId: string }) {
-  const [approveState, approveAction, approvePending] = useActionState<ReturnState, FormData>(
-    approveShopReturn,
-    {}
-  );
-  const [rejectState, rejectAction, rejectPending] = useActionState<ReturnState, FormData>(
-    rejectShopReturn,
-    {}
-  );
+  const [approveState, approveAction, approvePending] = useRecoverableAction<ReturnState>(approveShopReturn);
+  const [rejectState, rejectAction, rejectPending] = useRecoverableAction<ReturnState>(rejectShopReturn);
 
   return (
     <div className="grid gap-3">
-      <form action={approveAction} className="grid gap-2">
+      <form onSubmit={(event) => { event.preventDefault(); void approveAction(new FormData(event.currentTarget)); }} className="grid gap-2">
         <input type="hidden" name="return_id" value={returnId} />
         <Button type="submit" variant="live" loading={approvePending} pendingLabel="Approving…">
           Approve the return
         </Button>
         <Result state={approveState} />
       </form>
-      <form action={rejectAction}>
+      <form onSubmit={(event) => { event.preventDefault(); void rejectAction(new FormData(event.currentTarget)); }}>
         <input type="hidden" name="return_id" value={returnId} />
         <button type="submit" disabled={rejectPending} className="jumplink">
           {rejectPending ? "Declining…" : "Decline this request"}

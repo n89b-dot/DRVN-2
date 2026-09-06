@@ -57,9 +57,20 @@ test("gallery order retries converge and a failed description save keeps the dra
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       "base64"
     );
+    let loseUploadBytes = true;
+    await page.route("**/api/media/public-photo", async route => {
+      if (loseUploadBytes) {
+        loseUploadBytes = false;
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
     await gallery
       .locator('input[type="file"]')
       .setInputFiles({ name: "pending-attachment.png", mimeType: "image/png", buffer: png });
+    await expect(gallery.getByRole("alert")).toContainText(/failed|finish uploading/i);
+    expect((await admin.from("car_images").select("id").eq("car_id", car.data.id)).data).toHaveLength(2);
+    await gallery.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(gallery.getByRole("alert")).toContainText("photo uploaded, but the gallery save wasn't confirmed");
     await expect
       .poll(async () => {

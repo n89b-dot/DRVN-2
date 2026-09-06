@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { cx } from "@/lib/format";
 
@@ -34,6 +34,12 @@ export function DropZone({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const blocked = Boolean(busy) || !hydrated;
 
   return (
     <>
@@ -43,6 +49,7 @@ export function DropZone({
         accept={accept}
         multiple={multiple}
         hidden
+        disabled={blocked}
         onChange={(e) => {
           if (e.target.files?.length) onFiles(e.target.files);
           // Same file re-selected later must fire onChange again.
@@ -52,19 +59,19 @@ export function DropZone({
       <div
         role="button"
         tabIndex={0}
-        aria-disabled={busy || undefined}
+        aria-disabled={blocked || undefined}
         aria-busy={busy || undefined}
         aria-label={`${title} — click to choose files, or drag them here`}
-        onClick={() => !busy && fileRef.current?.click()}
+        onClick={() => !blocked && fileRef.current?.click()}
         onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && !busy) {
+          if ((e.key === "Enter" || e.key === " ") && !blocked) {
             e.preventDefault();
             fileRef.current?.click();
           }
         }}
         onDragOver={(e) => {
           e.preventDefault();
-          if (!busy) setDragOver(true);
+          if (!blocked) setDragOver(true);
         }}
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
@@ -72,7 +79,7 @@ export function DropZone({
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          if (!busy && e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+          if (!blocked && e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
         }}
         className={cx("drop", dragOver && "is-over", busy && "opacity-55 cursor-progress", className)}
       >

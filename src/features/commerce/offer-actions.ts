@@ -120,18 +120,15 @@ export async function respondToOffer(
 
   const { data: offer } = await admin
     .from("offers")
-    .select("id, listing_id, buyer_id, amount_cents, status, expires_at")
+    .select("id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at")
     .eq("id", offerId)
     .maybeSingle();
   if (!offer) return { error: "That offer no longer exists." };
-  if (!["open", "countered"].includes(offer.status)) {
-    return { error: "That offer has already been settled." };
-  }
   // The sweeper expires lapsed offers on a schedule, not instantly — a seller
   // can still land here between expiry and the next sweep. Accepting or
   // countering at that point would honour a price the buyer never agreed to
   // hold past 72 hours, so it's checked again here rather than trusted.
-  if (offer.expires_at && new Date(offer.expires_at) < new Date()) {
+  if (["open", "countered"].includes(offer.status) && offer.expires_at && new Date(offer.expires_at) < new Date()) {
     await admin
       .from("offers")
       .update({ status: "expired", responded_at: new Date().toISOString() })
@@ -150,6 +147,36 @@ export async function respondToOffer(
     .maybeSingle();
   if (!listing) return { error: "That listing no longer exists." };
   if (listing.seller_id !== user.id) return { error: "That isn't your listing." };
+
+  // A response can be committed while its Server Action response is lost.
+  // Treat an exact replay as confirmation of the saved decision.
+  if (decision === "declined" && offer.status === "declined") {
+    return { ok: "Offer declined." };
+  }
+  if (decision === "accepted" && offer.status === "accepted") {
+    const { data: existingOrder } = await admin
+      .from("orders")
+      .select("id")
+      .eq("origin_offer_id", offerId)
+      .maybeSingle();
+    return existingOrder
+      ? { ok: "Offer accepted — the buyer has 24 hours to complete checkout." }
+      : { error: "We couldn't confirm the accepted offer's order. Contact support before retrying." };
+  }
+  if (decision === "countered") {
+    const replayedCounter = Math.round(Number(String(formData.get("counter_amount") ?? "")) * 100);
+    if (!Number.isFinite(replayedCounter) || replayedCounter <= 0) {
+      return { error: "Enter the amount you'd accept." };
+    }
+    // Confirm the immutable decision before comparing it with mutable listing
+    // terms. The asking price may have changed after this counter committed.
+    if (offer.status === "countered" && offer.counter_amount_cents === replayedCounter) {
+      return { ok: "Counter sent." };
+    }
+  }
+  if (!["open", "countered"].includes(offer.status)) {
+    return { error: "That offer has already been settled." };
+  }
 
   if (decision === "declined") {
     const { data: declined, error } = await admin
@@ -177,7 +204,6 @@ export async function respondToOffer(
     if (counter <= offer.amount_cents) {
       return { error: "A counter should be above the buyer's offer." };
     }
-
     const { data: countered, error } = await admin
       .from("offers")
       .update({
@@ -291,6 +317,14 @@ export async function acceptCounter(
     .maybeSingle();
 
   if (!offer || offer.buyer_id !== user.id) return { error: "That isn't your offer." };
+  if (offer.status === "accepted") {
+    const { data: existingOrder } = await admin
+      .from("orders")
+      .select("id")
+      .eq("origin_offer_id", offerId)
+      .maybeSingle();
+    if (existingOrder) redirect(`/orders/${existingOrder.id}/checkout`);
+  }
   if (offer.status !== "countered" || !offer.counter_amount_cents) {
     return { error: "There's no counter to accept." };
   }
@@ -298,7 +332,7 @@ export async function acceptCounter(
   // clock is still the original offer's expires_at, so a buyer can't accept
   // a counter that outlived its 72-hour window just because the sweeper
   // hasn't run yet.
-  if (offer.expires_at && new Date(offer.expires_at) < new Date()) {
+  if (offer.status === "countered" && offer.expires_at && new Date(offer.expires_at) < new Date()) {
     await admin
       .from("offers")
       .update({ status: "expired", responded_at: new Date().toISOString() })

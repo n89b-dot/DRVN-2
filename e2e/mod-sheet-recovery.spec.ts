@@ -106,8 +106,18 @@ test("mod-sheet retry converges after a lost response and keeps adjacent draft e
 
     const details = page.locator("section").filter({ hasText: "Details — shown on the build page" });
     await details.getByLabel("Color").fill("Sepang Blue");
+    let loseCarEdit = true;
+    await page.route(`**${editPath}*`, async route => {
+      if (loseCarEdit && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        loseCarEdit = false;
+        expect((await route.fetch()).status()).toBe(200);
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
     await details.getByRole("button", { name: "Save changes" }).click();
-    await expect(details.getByRole("status")).toContainText("Changes saved.");
+    await expect(details.getByRole("alert")).toContainText("changes are still here");
+    await expect(details.getByLabel("Color")).toHaveValue("Sepang Blue");
     await expect
       .poll(async () => {
         const result = await admin.from("cars").select("color").eq("id", car.data.id).single();
@@ -115,6 +125,8 @@ test("mod-sheet retry converges after a lost response and keeps adjacent draft e
         return result.data.color;
       })
       .toBe("Sepang Blue");
+    await details.getByRole("button", { name: "Save changes" }).click();
+    await expect(details.getByRole("status")).toContainText("Changes saved.");
     await details.getByLabel("Color").fill("Sepang Blue Metallic");
     await expect(details.getByRole("status")).toHaveCount(0);
 
@@ -122,6 +134,18 @@ test("mod-sheet retry converges after a lost response and keeps adjacent draft e
     await danger.getByRole("button", { name: "Delete this car" }).click();
     const dialog = page.getByRole("dialog", { name: 'Delete "Mod recovery fixture"?' });
     await dialog.getByLabel(/Type Mod recovery fixture to confirm/).fill("Mod recovery fixture");
+    let loseCarDelete = true;
+    await page.route(`**${editPath}*`, async route => {
+      if (loseCarDelete && route.request().method() === "POST" && route.request().headers()["next-action"]) {
+        loseCarDelete = false;
+        expect((await route.fetch()).status()).toBe(200);
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
+    await dialog.getByRole("button", { name: "Delete this car" }).click();
+    await expect(dialog.getByRole("alert")).toContainText(/Couldn.t confirm the deletion/);
+    await expect(dialog.getByRole("button", { name: "Delete this car" })).toBeEnabled();
     await dialog.getByRole("button", { name: "Delete this car" }).click();
     await expect(page).toHaveURL(/\/garage$/);
     await expect(page.getByText("Mod recovery fixture", { exact: true })).toHaveCount(0);

@@ -1,10 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Dialog, TextField } from "@/components/ui";
 import type { AdminActionState } from "@/lib/admin/actions";
 import { cx } from "@/lib/format";
+
+import { announceAdminAction } from "./admin-action-toast";
 
 export type ActionField =
   | { kind: "text"; name: string; label: string; hint?: string }
@@ -47,7 +50,10 @@ export function ActionDialog({
   confirmNote?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [state, formAction, pending] = useActionState(action, null);
+  const router = useRouter();
+  const [state, setState] = useState<AdminActionState>(null);
+  const [pending, setPending] = useState(false);
+  const inFlight = useRef(false);
   const idBase = useId();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,22 +68,57 @@ export function ActionDialog({
     };
   }, [state]);
 
+  async function submit(formData: FormData) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setState(null);
+    setPending(true);
+    try {
+      const result = await action(state, formData);
+      setState(result);
+      if (result?.ok) {
+        announceAdminAction(result.ok);
+        router.refresh();
+      }
+    } catch (error) {
+      unstable_rethrow(error);
+      setState({
+        error:
+          "Couldn't confirm whether the command completed. Your confirmation details are still here; reload the console before trying again.",
+      });
+    } finally {
+      inFlight.current = false;
+      setPending(false);
+    }
+  }
+
   return (
     <>
       <button
         type="button"
         className={triggerClassName}
         disabled={triggerDisabled}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (closeTimer.current) clearTimeout(closeTimer.current);
+          setState(null);
+          setOpen(true);
+        }}
       >
         {trigger}
       </button>
-      <Dialog open={open} onClose={() => setOpen(false)} label={title} align="center">
+      <Dialog open={open} onClose={() => { if (!pending) setOpen(false); }} label={title} align="center">
         <div className="sheet">
           <h2 className="mb-1 font-display text-body font-semibold tracking-tight">{title}</h2>
           {confirmNote && <p className="mb-3 text-micro text-dim">{confirmNote}</p>}
 
-          <form action={formAction} className="grid gap-3">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit(new FormData(event.currentTarget));
+            }}
+            className="grid gap-3"
+          >
             {Object.entries(hidden).map(([name, value]) => (
               <input key={name} type="hidden" name={name} value={value} />
             ))}
@@ -144,11 +185,6 @@ export function ActionDialog({
             {state?.error && (
               <p role="alert" aria-live="polite" className="field__err">
                 {state.error}
-              </p>
-            )}
-            {state?.ok && (
-              <p role="status" aria-live="polite" className="chip chip--ok">
-                {state.ok}
               </p>
             )}
             {state?.results && state.results.failed.length > 0 && (

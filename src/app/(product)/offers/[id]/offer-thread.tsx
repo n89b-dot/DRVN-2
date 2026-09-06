@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Message, MessageThread, ResultNote } from "@/components/ui";
 import { MessageComposer } from "@/features/commerce/message-composer";
 import { expand } from "@/lib/motion";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 import {
   acceptCounter,
@@ -52,18 +53,10 @@ export function OfferThread({
   currentUserId: string;
   messages: ThreadMessage[];
 }) {
-  const [respondState, respond, responding] = useActionState<CommerceState, FormData>(
-    respondToOffer,
-    {}
-  );
-  const [withdrawState, withdraw, withdrawing] = useActionState<CommerceState, FormData>(
-    withdrawOffer,
-    {}
-  );
-  const [counterState, takeCounter, takingCounter] = useActionState<CommerceState, FormData>(
-    acceptCounter,
-    {}
-  );
+  const failure = "Couldn't confirm the offer update. Retry to check the saved result.";
+  const [respondState, respond, responding] = useRecoverableAction<CommerceState>(respondToOffer, failure);
+  const [withdrawState, withdraw, withdrawing] = useRecoverableAction<CommerceState>(withdrawOffer, failure);
+  const [counterState, takeCounter, takingCounter] = useRecoverableAction<CommerceState>(acceptCounter, failure);
   const [showCounter, setShowCounter] = useState(false);
 
   const live = status === "open" || status === "countered";
@@ -83,7 +76,7 @@ export function OfferThread({
         {incoming && live && (
           <>
             <div className="flex flex-wrap gap-2">
-              <form action={respond}>
+              <form onSubmit={(event) => { event.preventDefault(); void respond(new FormData(event.currentTarget)); }}>
                 <input type="hidden" name="offer_id" value={offerId} />
                 <input type="hidden" name="decision" value="accepted" />
                 <button type="submit" disabled={responding} className="btn btn--live">
@@ -98,7 +91,7 @@ export function OfferThread({
               >
                 Counter
               </button>
-              <form action={respond}>
+              <form onSubmit={(event) => { event.preventDefault(); void respond(new FormData(event.currentTarget)); }}>
                 <input type="hidden" name="offer_id" value={offerId} />
                 <input type="hidden" name="decision" value="declined" />
                 <button type="submit" disabled={responding} className="btn btn--ghost">
@@ -120,7 +113,7 @@ export function OfferThread({
                   exit="collapsed"
                   className="overflow-hidden"
                 >
-                  <form action={respond} className="composer__row">
+                  <form onSubmit={(event) => { event.preventDefault(); void respond(new FormData(event.currentTarget)); }} className="composer__row">
                     <input type="hidden" name="offer_id" value={offerId} />
                     <input type="hidden" name="decision" value="countered" />
                     <input
@@ -143,7 +136,7 @@ export function OfferThread({
         )}
 
         {!incoming && status === "countered" && counterAmountCents && (
-          <form action={takeCounter}>
+          <form onSubmit={(event) => { event.preventDefault(); void takeCounter(new FormData(event.currentTarget)); }}>
             <input type="hidden" name="offer_id" value={offerId} />
             <button type="submit" disabled={takingCounter} className="btn btn--live">
               {takingCounter ? "Confirming…" : `Accept counter ${money(counterAmountCents)}`}
@@ -152,7 +145,7 @@ export function OfferThread({
         )}
 
         {!incoming && live && (
-          <form action={withdraw}>
+          <form onSubmit={(event) => { event.preventDefault(); void withdraw(new FormData(event.currentTarget)); }}>
             <input type="hidden" name="offer_id" value={offerId} />
             <button type="submit" disabled={withdrawing} className="relbtn !static">
               Withdraw offer

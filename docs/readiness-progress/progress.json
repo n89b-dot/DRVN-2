@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-06T02:23:15.177587+00:00",
+  "updatedAt": "2026-09-06T04:30:03.017093+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Local checks cover 640 unit tests, 104 fresh migrations and 42 SQL guard suites. Full CI passed 190 browser cases and exposed one build-editor completion failure; its correction passes three repeated recovery runs. Current candidate CI is linked from PR #2. Hosted and remaining acceptance gates stay open.",
+  "current": "The remaining local remediation is implemented and verified: 27 expanded browser cases, 645 unit tests, restore, rollback and concurrent-checkout rehearsals pass. PR #2 checks record candidate-wide CI results. Remaining launch work requires hosted services, provider access, policy decisions or human acceptance.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -214,9 +214,9 @@
         },
         {
           "id": "hosted",
-          "label": "Two clean hosted candidate runs",
+          "label": "Candidate-wide GitHub verification",
           "state": "done",
-          "evidence": "All six GitHub checks, including release-gate, passed for PR #2 / e20c620 in run33992300864. Browser:168 passed,2 documented exclusions,0 flaky/unexpected; Stripe:10 passed."
+          "evidence": "All six jobs passed for commit 1ca2b27 in run 34006370148: 640 unit tests, 191 browser passes, two documented exclusions, zero retries/flakes, 10 Stripe tests. Subsequent acceptance work requires its own candidate run."
         },
         {
           "id": "protection",
@@ -413,7 +413,7 @@
       "why": "Make important actions understandable and usable with keyboard, screen reader, and mobile devices.",
       "before": "Focused fixes exist, but every critical form and assistive-technology path has not been verified.",
       "after": "Clear pending, success, and error states; reliable saved changes; tested focus, text scaling, touch, and screen-reader behavior.",
-      "next": "Review candidate-wide GitHub checks, then close the remaining command-family and manual-device acceptance in the action inventory.",
+      "next": "Complete physical-device/screen-reader and invited-user/operator acceptance when testers and hosted services are available.",
       "checkpoints": [
         {
           "id": "inventory",
@@ -430,14 +430,14 @@
         {
           "id": "mutations",
           "label": "Mutation feedback and recovery fixes",
-          "state": "doing",
-          "evidence": "Retained drafts, exact request identities and atomic related writes now cover checkout, listings/offers, messages/reports/questions, garage, order/return, account and social flows. Final selected browser lane: 34 passed with zero retries; 640 unit tests and 42 fresh-schema SQL guards pass. The action inventory preserves remaining command-family and hosted/manual acceptance."
+          "state": "done",
+          "evidence": "Expanded local matrix: 27 Chromium passes, zero retries, two documented SSRF exclusions. Includes offer/order/return/dispute, content/upload/import, settings/report/notification and admin command recovery. 645 unit tests pass. docs/readiness-progress/evidence/2026-09-06-local-acceptance-completion.md"
         },
         {
           "id": "automated",
           "label": "Expanded automated accessibility checks",
           "state": "done",
-          "evidence": "Final full GitHub browser lane:168 passes,2 documented exclusions,zero retries/flakes. Includes corrected small accent text, checkout/reflow, queued export, authenticated dialogs and MFA admin pages. Manual screen-reader/device acceptance remains separate."
+          "evidence": "Commit 1ca2b27 passed 191 browser cases, two documented exclusions, zero retries/flakes. Includes automated accessibility, checkout/reflow, authenticated dialogs and MFA admin pages. Expanded mutation acceptance is being verified separately; physical-device/screen-reader acceptance remains human work."
         },
         {
           "id": "manual",
@@ -499,7 +499,7 @@
       "why": "Prove the app can handle the beta and recover safely after an outage.",
       "before": "Local restore and small load checks exist, but coordinated hosted recovery remains unproven.",
       "after": "Measured capacity, matching database and file backups, reconciled payment recovery, and a rehearsed rollback.",
-      "next": "Agree load and recovery targets, then run production-equivalent staged drills.",
+      "next": "Obtain approved recovery/capacity targets and an isolated hosted environment, then repeat the documented restore, rollback, load and observation exercises there.",
       "checkpoints": [
         {
           "id": "budgets",
@@ -536,6 +536,24 @@
           "label": "Staging acceptance signed",
           "state": "todo",
           "evidence": ""
+        },
+        {
+          "id": "local_restore",
+          "label": "Local database and object restore rehearsal",
+          "state": "done",
+          "evidence": "2026-09-06: all 104 migrations; 87 restored table fingerprints match; synthetic object bytes and row reference match; outbound configuration cleared and no active schedules. Full local setup/restore: 50 seconds. evidence/2026-09-06-local-recovery.json"
+        },
+        {
+          "id": "local_rollback",
+          "label": "Previous build and queued-work rehearsal",
+          "state": "done",
+          "evidence": "Previous build 1ca2b27 passes six local recovery suites (seven tests), builds against the current local schema, serves four public routes and denies anonymous admin access. 62 seconds. evidence/2026-09-06-local-rollback.json"
+        },
+        {
+          "id": "local_commerce",
+          "label": "Concurrent checkout admission and retry rehearsal",
+          "state": "done",
+          "evidence": "Eight exact retries converge to one order; eight competing buyers yield one order and seven skipped results, with zero errors. Local admission/replay only, no hosted capacity claim. evidence/2026-09-06-local-commerce.json"
         }
       ]
     },
@@ -590,6 +608,16 @@
     }
   ],
   "activity": [
+    {
+      "at": "2026-09-06T04:30:03.017093+00:00",
+      "title": "Remaining local implementation and acceptance completed",
+      "detail": "27 expanded browser cases and 645 unit tests pass. Admin commands, offers/returns/disputes, uploads and settings recover from failures. Local restore, rollback and checkout contention evidence is recorded; hosted and human launch gates remain open."
+    },
+    {
+      "at": "2026-09-06T03:55:22.076628+00:00",
+      "title": "Local recovery rehearsals passed",
+      "detail": "Verified coordinated synthetic database/object restore, previous-build recovery compatibility, and eight-way checkout contention. Expanded browser failure/retry coverage is being debugged and verified before final CI."
+    },
     {
       "at": "2026-09-05T23:11:47.375403+00:00",
       "title": "Failure testing found and fixed more user-facing gaps",

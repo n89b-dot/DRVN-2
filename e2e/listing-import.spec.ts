@@ -85,10 +85,29 @@ test.describe("listing importer", () => {
     await page.getByLabel(/your existing post/i).fill(PASTE_POST);
     // First import: the one-time content-rights acknowledgement.
     await page.getByLabel(/this is my own listing/i).check();
+    let actionCount = 0;
+    let lostCommittedWorkerResponse = false;
+    await page.route("**/sell/import*", async route => {
+      if (route.request().method() !== "POST" || !route.request().headers()["next-action"]) {
+        return route.continue();
+      }
+      actionCount += 1;
+      // The first action creates the durable import. The next action advances
+      // one worker step; lose that response after it commits and let polling
+      // resume from the stored status.
+      if (actionCount === 2) {
+        const response = await route.fetch();
+        expect(response.status()).toBe(200);
+        lostCommittedWorkerResponse = true;
+        return route.abort("failed");
+      }
+      return route.continue();
+    });
     await page.getByRole("button", { name: /build my listing/i }).click();
 
     // Progress → review lands in the normal sell form, prefilled.
     await page.waitForURL(/\/sell\?import=/, { timeout: 45_000 });
+    expect(lostCommittedWorkerResponse).toBe(true);
     await expect(page.getByText(/imported from your pasted post/i).first()).toBeVisible();
     await expect(page.getByLabel(/asking price/i)).toHaveValue("450.00");
     await expect(page.getByLabel(/^title/i)).not.toHaveValue("");
@@ -197,11 +216,15 @@ test.describe("listing importer", () => {
   });
 
   test("mobile paste import works end to end", async ({ page }) => {
-    await signIn(page, user);
+    // Use a fresh account for this independent mobile journey. Repeated login
+    // attempts for the suite's shared account can hit the local Auth throttle
+    // before this final serial case and never reach the screen under test.
+    await signUp(page, makeUser("imob", Date.now()));
     await page.setViewportSize(VIEWPORTS.phone);
     await page.goto("/sell/import");
     await page.getByRole("button", { name: /paste your post instead/i }).click();
     await page.getByLabel(/your existing post/i).fill("FS: Bilstein B16 coilovers B8 S4, $900 obo, Austin TX");
+    await page.getByLabel(/this is my own listing/i).check();
     await page.getByRole("button", { name: /build my listing/i }).click();
     await page.waitForURL(/\/sell\?import=/, { timeout: 45_000 });
     await expect(page.getByLabel(/asking price/i)).toHaveValue("900.00");

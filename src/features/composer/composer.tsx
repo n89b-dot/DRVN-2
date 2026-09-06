@@ -568,6 +568,8 @@ export function BuildStoryComposer({
           <span className="microlabel !mb-0" aria-live="polite">
             {publishState.error || draftState.error ? (
               <span className="text-live" role="alert">{publishState.error ?? draftState.error}</span>
+            ) : publishState.ok ? (
+              <span role="status">{publishState.ok}</span>
             ) : saveState === "saving" ? (
               "Saving…"
             ) : saveState === "saved" ? (

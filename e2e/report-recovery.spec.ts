@@ -48,3 +48,47 @@ test("report keeps details after a lost response and retry creates one moderatio
     await fixture.cleanup();
   }
 });
+
+test("report rejects invalid and rate-limited submissions without losing the form", async ({ page }) => {
+  test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Rate-limit fixtures require the isolated local stack");
+  const admin = fixtureAdmin();
+  const fixture = await createDiscoveryFixture();
+  const email = `e2e-report-limit-${randomUUID()}@drvn.test`;
+  const password = `Report-${randomUUID()}!`;
+  const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  if (created.error || !created.data.user) throw created.error ?? new Error("Missing report fixture user");
+  const userId = created.data.user.id;
+  try {
+    const named = await admin.from("profiles").update({ username: `limit${randomUUID().replaceAll("-", "").slice(0, 18)}` }).eq("id", userId);
+    if (named.error) throw named.error;
+    await page.goto("/login");
+    await page.getByLabel(/^email$/i).fill(email);
+    await page.getByLabel(/^password$/i).fill(password);
+    await page.getByRole("button", { name: /log in|sign in/i }).click();
+    await page.waitForURL(/\/home/);
+    await page.goto(fixture.listingPath);
+    await page.getByRole("button", { name: "Report this listing" }).click();
+    const dialog = page.getByRole("dialog");
+    const details = `Preserve me ${randomUUID()}`;
+    await dialog.getByRole("textbox").fill(details);
+    await dialog.locator('input[name="subject_id"]').evaluate((input) => ((input as HTMLInputElement).value = ""));
+    await dialog.getByRole("button", { name: "Send report" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("Missing what you're reporting");
+    await expect(dialog.getByRole("textbox")).toHaveValue(details);
+
+    await page.reload();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const consumed = await admin.rpc("consume_rate_limit", { p_key: `report:${userId}`, p_limit: 5, p_window: "3600 seconds" });
+      if (consumed.error) throw consumed.error;
+    }
+    await page.getByRole("button", { name: "Report this listing" }).click();
+    await page.getByRole("dialog").getByRole("textbox").fill(details);
+    await page.getByRole("dialog").getByRole("button", { name: "Send report" }).click();
+    await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Limit: 5 per 60 minutes");
+    await expect(page.getByRole("dialog").getByRole("textbox")).toHaveValue(details);
+  } finally {
+    await admin.from("rate_limits").delete().eq("key", `report:${userId}`);
+    await cleanupFixtureUser(userId);
+    await fixture.cleanup();
+  }
+});

@@ -115,6 +115,24 @@ test("listing create, publish and delete retries converge after committed respon
     row = page.locator("tr.ledger__row").filter({ hasText: title });
     await expect(row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeVisible();
 
+    // Pause and reactivation are desired-state writes. Losing each committed
+    // response leaves the control retryable, and the replay converges.
+    loseStatus = true;
+    await row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ }).click();
+    await expect.poll(async () => (await admin.from("listings").select("status").eq("id", created.data[0].id).single()).data?.status).toBe("paused");
+    await expect(row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeEnabled();
+    await row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ }).click();
+    row = page.locator("tr.ledger__row").filter({ hasText: title });
+    await expect(row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ })).toBeVisible();
+
+    loseStatus = true;
+    await row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ }).click();
+    await expect.poll(async () => (await admin.from("listings").select("status").eq("id", created.data[0].id).single()).data?.status).toBe("active");
+    await expect(row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ })).toBeEnabled();
+    await row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ }).click();
+    row = page.locator("tr.ledger__row").filter({ hasText: title });
+    await expect(row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeVisible();
+
     let loseDelete = true;
     await page.route("**/listings*", async (route) => {
       if (

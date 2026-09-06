@@ -1,0 +1,40 @@
+{
+  "observedAt": "2026-09-06T03:43:05.121Z",
+  "scope": "Previous application artifact and six synthetic queued-work/recovery suites against current local schema; no schema rollback or external financial dispatch; hosted provider compatibility still requires staging",
+  "rollbackCommit": "1ca2b27b5c70b26ba36edf230a7b1b44ebed65e7",
+  "dependencyLockSha256": "22c456d46bfcec31fc25b925e359275fb7bcac0c408ea156ccf287e4be2b7026",
+  "elapsedSeconds": 62,
+  "routes": [
+    {
+      "route": "/",
+      "status": 200,
+      "elapsedMs": 55
+    },
+    {
+      "route": "/login",
+      "status": 200,
+      "elapsedMs": 8
+    },
+    {
+      "route": "/marketplace",
+      "status": 200,
+      "elapsedMs": 82
+    },
+    {
+      "route": "/explore",
+      "status": 200,
+      "elapsedMs": 46
+    }
+  ],
+  "anonymousAdminDenied": true,
+  "recoverySuites": [
+    "notification-read",
+    "export",
+    "deletion",
+    "dispute",
+    "social-consistency",
+    "privacy-completion"
+  ],
+  "queuedWorkCompatibility": "passed",
+  "result": "passed"
+}

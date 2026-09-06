@@ -191,11 +191,22 @@ export function SettingsPanel({
     window.location.hash = id;
   }, []);
 
+  const linkValue = (label: string) => profile.links.find((l) => l.label === label)?.url ?? "";
   const [state, action, pending] = useActionState<ActionState, FormData>(updateProfile, {});
   const [saved, setSaved] = useState(false);
-
-  const linkValue = (label: string) => profile.links.find((l) => l.label === label)?.url ?? "";
-
+  const [profileDraft, setProfileDraft] = useState(() => ({
+    display_name: profile.display_name,
+    headline: profile.headline,
+    location: profile.location,
+    bio: profile.bio,
+    link_website: linkValue("website"),
+    link_instagram: linkValue("instagram"),
+    link_youtube: linkValue("youtube"),
+  }));
+  const setProfileField = (field: keyof typeof profileDraft, value: string) => {
+    setProfileDraft(current => ({ ...current, [field]: value }));
+    setSaved(false);
+  };
   return (
     <div>
       <header className="pagehead pagehead--task">
@@ -274,25 +285,25 @@ export function SettingsPanel({
             onChange={() => setSaved(false)}
           >
             <DataRow label="Display name">
-              <input name="display_name" defaultValue={profile.display_name} required className="ctl" />
+              <input name="display_name" value={profileDraft.display_name} onChange={event => setProfileField("display_name", event.target.value)} required className="ctl" />
             </DataRow>
             <DataRow label="Headline">
-              <input name="headline" defaultValue={profile.headline} placeholder="e.g. B9 S4 owner, slowly going single-turbo" className="ctl" />
+              <input name="headline" value={profileDraft.headline} onChange={event => setProfileField("headline", event.target.value)} placeholder="e.g. B9 S4 owner, slowly going single-turbo" className="ctl" />
             </DataRow>
             <DataRow label="Location">
-              <input name="location" defaultValue={profile.location} className="ctl" />
+              <input name="location" value={profileDraft.location} onChange={event => setProfileField("location", event.target.value)} className="ctl" />
             </DataRow>
             <DataRow label="Bio">
-              <textarea name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
+              <textarea name="bio" value={profileDraft.bio} onChange={event => setProfileField("bio", event.target.value)} rows={3} className="ctl" />
             </DataRow>
             <DataRow label="Website">
-              <input name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="ctl" />
+              <input name="link_website" value={profileDraft.link_website} onChange={event => setProfileField("link_website", event.target.value)} placeholder="https://…" className="ctl" />
             </DataRow>
             <DataRow label="Instagram">
-              <input name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="ctl" />
+              <input name="link_instagram" value={profileDraft.link_instagram} onChange={event => setProfileField("link_instagram", event.target.value)} placeholder="https://instagram.com/…" className="ctl" />
             </DataRow>
             <DataRow label="YouTube">
-              <input name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl" />
+              <input name="link_youtube" value={profileDraft.link_youtube} onChange={event => setProfileField("link_youtube", event.target.value)} placeholder="https://youtube.com/…" className="ctl" />
             </DataRow>
             {state.error && (
               <p role="alert" aria-live="polite" className="field__err mt-3">
