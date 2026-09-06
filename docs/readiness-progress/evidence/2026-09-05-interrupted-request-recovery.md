@@ -39,7 +39,7 @@ from `e20c620`; it is separate from that commit's green CI evidence.
 
 Local verification is complete. Candidate-wide GitHub checks are attached to
 [PR #2](https://github.com/n89b-dot/DRVN-2/pull/2/checks); their status is separate
-from the local evidence below. The implementation commit is `b2105e2`.
+from the local evidence below. The initial implementation commit is `b2105e2`.
 
 - Final combined Chromium run: **34 passed**, zero retries, 3.7 minutes. It
   includes interrupted checkout, accepted offers, listings, messages, reports,
@@ -106,3 +106,24 @@ staging environment, repository protection, retention decisions, manual
 screen-reader/device testing, hosted restore/load/soak and invited-pilot approval
 remain open in the progress tracker. No live production fixtures, paid upgrades,
 or external messages were used for this batch.
+
+## Full-candidate CI follow-up
+
+[Run 34002155043](https://github.com/n89b-dot/DRVN-2/actions/runs/34002155043)
+on `62dc461` passed database, schema parity, unit/static/build and operations
+checks. Browser coverage selected 190 cases: 179 passed, two documented
+exclusions, two failures and seven dependent cases unrun, with zero retries.
+The release gate failed and the downstream Stripe job did not run.
+
+The traces showed a successful activity publish response while the composer
+remained pending, and WebKit losing an email entered before login hydration.
+The composer now handles confirmation/navigation directly; controlled login
+fields wait for initialization. A delayed-JavaScript regression accompanies
+the login fix. Follow-up local and CI results belong to the next candidate.
+
+The follow-up local run passed all **32 Chromium/WebKit cases**, zero retries,
+in 2.3 minutes. It includes normal activity publication, interrupted activity
+recovery, both full purchase journeys, Auth/security cases and delayed-JavaScript
+login initialization. All 640 unit tests, TypeScript and lint (zero errors,
+three existing warnings) still pass. Final candidate-wide results are attached
+to PR #2; the failed earlier run remains recorded above.

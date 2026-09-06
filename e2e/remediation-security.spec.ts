@@ -285,3 +285,28 @@ test("page CSP uses fresh nonces and blocks untrusted inline scripts", async ({ 
   expect(second?.headers()["content-security-policy"]).not.toBe(policy);
   await expect(page.getByRole("button", { name: /log in|sign in/i })).toBeVisible();
 });
+
+test("login keeps early input safe while its client code is loading", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await ready;
+    await route.continue();
+  });
+  try {
+    await page.goto("/login", { waitUntil: "commit" });
+    const email = page.getByLabel(/^email$/i);
+    const password = page.getByLabel(/^password$/i);
+    await expect(email).toBeDisabled();
+    await expect(password).toBeDisabled();
+    release();
+    await expect(email).toBeEnabled();
+    await email.fill("early-input@drvn.test");
+    await password.fill("Retain-this-input-123!");
+    await expect(email).toHaveValue("early-input@drvn.test");
+    await expect(password).toHaveValue("Retain-this-input-123!");
+    await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled();
+  } finally {
+    release();
+  }
+});

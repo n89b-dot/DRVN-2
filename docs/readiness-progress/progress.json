@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-06T00:46:07.330969+00:00",
+  "updatedAt": "2026-09-06T01:12:48.162987+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Implementation and local acceptance are complete: 640 unit tests, 104 fresh migrations, 42 SQL guard suites and 34 browser cases pass. Review the candidate-wide GitHub checks on PR #2 alongside this evidence. Hosted launch and remaining acceptance gates stay open.",
+  "current": "Local acceptance passes: 640 unit tests, 104 fresh migrations, 42 SQL guard suites, the 34-case recovery lane and a 32-case Chromium/WebKit follow-up. Full-CI findings in activity publishing and early login input are corrected. Review current candidate checks on PR #2; hosted and remaining acceptance gates stay open.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -554,7 +554,7 @@
           "id": "preflight",
           "label": "Production configuration and backup proof",
           "state": "doing",
-          "evidence": "Repository CI release gate passes on e20c620. Hosted configuration/provider/retention/recovery and pilot acceptance remain required; no production deployment performed."
+          "evidence": "The repository requires candidate-wide CI; current checks are attached to PR #2. Hosted configuration/provider/retention/recovery and pilot acceptance remain required; no production deployment performed."
         },
         {
           "id": "approval",

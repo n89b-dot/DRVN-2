@@ -5,8 +5,8 @@ import Suggestion from "@tiptap/suggestion";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
-import { useRouter } from "next/navigation";
-import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/format";
@@ -139,8 +139,8 @@ export function BuildStoryComposer({
   const draftActionRef = useRef(draftAction);
   // Publishing wins over the debounced autosave: the timer callback checks
   // this ref so a pending save can't land after the post and leave a
-  // duplicate draft behind. Synced (and the timer cleared) below, once
-  // useActionState provides the pending flag.
+  // duplicate draft behind. The explicit submit handler owns this flag and
+  // clears the pending timer before contacting the server.
   const publishingRef = useRef(false);
   useEffect(() => {
     titleRef.current = title;
@@ -361,48 +361,42 @@ export function BuildStoryComposer({
     [editor],
   );
 
-  const safePublish = useCallback<ComposerServerAction>(async (previous, formData) => {
+  const [publishState, setPublishState] = useState<ActionState>({});
+  const [draftState, setDraftState] = useState<ActionState>({});
+  const [publishing, setPublishing] = useState(false);
+  const [draftPending, setDraftPending] = useState(false);
+  const submittingRef = useRef(false);
+
+  async function submit(mode: "publish" | "draft", formData: FormData) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     publishingRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    setPublishState({});
+    setDraftState({});
+    const setResult = mode === "publish" ? setPublishState : setDraftState;
+    const setPending = mode === "publish" ? setPublishing : setDraftPending;
+    setPending(true);
     try {
-      return await publishAction(previous, formData);
-    } catch {
-      return { error: "The response was interrupted. Your draft is still here — try publishing again." };
-    }
-  }, [publishAction]);
-  const safeDraft = useCallback<ComposerServerAction>(async (previous, formData) => {
-    try {
-      return draftAction ? await draftAction(previous, formData) : {};
-    } catch {
-      return { error: "The response was interrupted. Your draft is still here — try saving again." };
-    }
-  }, [draftAction]);
-  const [publishState, publishFormAction, publishing] = useActionState<ActionState, FormData>(
-    safePublish,
-    {},
-  );
-  useEffect(() => {
-    publishingRef.current = publishing;
-    if (publishing && saveTimer.current) clearTimeout(saveTimer.current);
-  }, [publishing]);
-
-  const [draftState, draftFormAction, draftPending] = useActionState<ActionState, FormData>(
-    safeDraft,
-    {},
-  );
-
-  // A confirmed publish clears recovery before navigation. A lost response
-  // leaves it intact, including the stable operation UUID used by the retry.
-  useEffect(() => {
-    if (publishState.ok || draftState.ok) {
-      try {
-        localStorage.removeItem(localKey);
-      } catch {
-        /* noop */
+      const result = mode === "publish"
+        ? await publishAction({}, formData)
+        : draftAction ? await draftAction({}, formData) : {};
+      setResult(result);
+      if (result.ok) {
+        try { localStorage.removeItem(localKey); } catch { /* Storage may be unavailable. */ }
       }
+      // Act on the confirmed response directly. A revalidated server tree must
+      // not leave navigation waiting for a deferred action-state effect.
+      if (result.href) router.push(result.href);
+    } catch (error) {
+      unstable_rethrow(error);
+      setResult({ error: "The response was interrupted. Your draft is still here — try again." });
+    } finally {
+      publishingRef.current = false;
+      submittingRef.current = false;
+      setPending(false);
     }
-    if (publishState.href) router.push(publishState.href);
-  }, [publishState.href, publishState.ok, draftState.ok, localKey, router]);
+  }
 
   const showTemplates = !isEdit && isEmpty;
 
@@ -533,7 +527,11 @@ export function BuildStoryComposer({
         )}
       </div>
 
-      <form className="bsc__foot">
+      <form className="bsc__foot" onSubmit={(event) => {
+        event.preventDefault();
+        const mode = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "draft" ? "draft" : "publish";
+        void submit(mode, new FormData(event.currentTarget));
+      }}>
         <input type="hidden" name="car_id" value={carId} />
         {postId && <input type="hidden" name="post_id" value={postId} />}
         {!isEdit && <input type="hidden" name="operation_id" value={operationId} />}
@@ -546,10 +544,11 @@ export function BuildStoryComposer({
           <Button
             type="submit"
             variant="live"
-            formAction={publishFormAction}
+            name="intent"
+            value="publish"
             loading={publishing}
             pendingLabel={isEdit ? "Saving…" : "Publishing…"}
-            disabled={!title.trim()}
+            disabled={!title.trim() || draftPending}
           >
             {isEdit ? "Save changes" : "Publish"}
           </Button>
@@ -557,8 +556,10 @@ export function BuildStoryComposer({
             <Button
               type="submit"
               variant="ghost"
-              formAction={draftFormAction}
+              name="intent"
+              value="draft"
               loading={draftPending}
+              disabled={publishing}
               pendingLabel="Saving…"
             >
               Save draft
