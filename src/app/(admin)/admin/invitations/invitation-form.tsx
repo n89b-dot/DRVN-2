@@ -51,7 +51,9 @@ export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
       setPending(true);
       setState(null);
       try {
-        setState(await createBetaInvitation(null, data));
+        const result = await createBetaInvitation(null, data);
+        setState(result);
+        if (result?.ok) router.refresh();
       } catch (error) {
         unstable_rethrow(error);
         setState({ error: "Couldn't confirm invitation creation. Check recent invitations before issuing another." });

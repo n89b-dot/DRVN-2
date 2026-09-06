@@ -126,6 +126,10 @@ test("admin creates, copies and revokes an invitation while expired links fail c
       return result.data;
     }).toMatchObject({ revoked_by: adminUserId, revoke_reason: "Acceptance test revocation" });
 
+    await page.reload();
+    await expect(activeRow.getByText("revoked", { exact: true })).toBeVisible();
+    await expect(activeRow.getByText("Reason: Acceptance test revocation")).toBeVisible();
+
     const expired = await admin.from("beta_invitations").insert({
       email_normalized: expiredEmail,
       roles: ["buyer"],

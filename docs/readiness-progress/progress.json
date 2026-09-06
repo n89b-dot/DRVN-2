@@ -1,7 +1,7 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-06T04:30:03.017093+00:00",
+  "updatedAt": "2026-09-06T04:52:33.726237+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
@@ -608,6 +608,11 @@
     }
   ],
   "activity": [
+    {
+      "at": "2026-09-06T04:52:33.726237+00:00",
+      "title": "Full-suite invitation refresh issue corrected",
+      "detail": "The expanded CI run found a stale invitation row after revocation. Confirmed revocation is retained in the row despite older responses, and creation/revocation refresh the list; invitation and admin acceptance are verified on production builds. Concurrency fixtures now remove their invitation records. PR #2 carries final candidate-wide results."
+    },
     {
       "at": "2026-09-06T04:30:03.017093+00:00",
       "title": "Remaining local implementation and acceptance completed",

@@ -67,3 +67,17 @@ controlled email and monitoring delivery; actual provider-connected checkout,
 physical-device and screen-reader acceptance; approved capacity/recovery
 budgets, hosted recovery/load/observation; real invited pilot and launch approval.
 Local drills do not close these gates.
+
+## Candidate-wide follow-up
+
+The first expanded CI candidate passed 202 browser cases and reported one
+invitation-list refresh failure (two existing exclusions, zero retries).
+Confirmed creation/revocation explicitly refreshes its server-rendered list.
+Revocation also remains in the keyed client row after server confirmation, so
+an older overlapping response cannot revert it to unclaimed.
+The admin and invitation browser workflows pass together against a fresh build.
+After the monotonic row correction, all three repeated invitation journeys pass
+with zero retries, including persisted revocation after a full reload.
+The concurrency rehearsal also removes its synthetic invitation records after
+user cleanup. Its focused operations test passes. Final candidate-wide results
+remain linked from PR #2 checks above.

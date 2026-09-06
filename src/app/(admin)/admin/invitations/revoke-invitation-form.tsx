@@ -7,7 +7,7 @@ import { Button } from "@/components/ui";
 
 import { revokeBetaInvitation, type InvitationActionState } from "./actions";
 
-export function RevokeInvitationForm({ invitationId }: { invitationId: string }) {
+export function RevokeInvitationForm({ invitationId, onRevoked }: { invitationId: string; onRevoked?: (reason: string) => void }) {
   const [state, setState] = useState<InvitationActionState>(null);
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
@@ -22,7 +22,12 @@ export function RevokeInvitationForm({ invitationId }: { invitationId: string })
       setPending(true);
       setState(null);
       try {
-        setState(await revokeBetaInvitation(null, data));
+        const result = await revokeBetaInvitation(null, data);
+        setState(result);
+        if (result?.ok) {
+          onRevoked?.(String(data.get("reason") ?? "").trim());
+          router.refresh();
+        }
       } catch (error) {
         unstable_rethrow(error);
         setState({ error: "Couldn't confirm revocation. Check the invitation status and retry if needed." });

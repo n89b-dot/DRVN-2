@@ -24,6 +24,7 @@ async function timedPurchase(args: PurchaseArgs) {
 
 it("bounds local checkout contention to one reservation and replays one request exactly", async () => {
   const userIds: string[] = [];
+  const invitationIds: string[] = [];
   const orderIds: string[] = [];
   const stamp = crypto.randomUUID();
   try {
@@ -41,6 +42,7 @@ it("bounds local checkout contention to one reservation and replays one request 
         consumed_at: new Date().toISOString(),
         consumed_by: created.data.user.id,
       }).select("id").single().throwOnError();
+      invitationIds.push(invitation.data.id);
       await admin.from("beta_memberships").insert({
         user_id: created.data.user.id,
         invitation_id: invitation.data.id,
@@ -131,6 +133,9 @@ it("bounds local checkout contention to one reservation and replays one request 
     for (const userId of userIds.reverse()) {
       const deleted = await admin.auth.admin.deleteUser(userId);
       if (deleted.error) throw deleted.error;
+    }
+    if (invitationIds.length) {
+      await admin.from("beta_invitations").delete().in("id", invitationIds).throwOnError();
     }
   }
 }, 60_000);
