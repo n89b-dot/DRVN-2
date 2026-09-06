@@ -127,3 +127,16 @@ recovery, both full purchase journeys, Auth/security cases and delayed-JavaScrip
 login initialization. All 640 unit tests, TypeScript and lint (zero errors,
 three existing warnings) still pass. Final candidate-wide results are attached
 to PR #2; the failed earlier run remains recorded above.
+
+[Run 34003306418](https://github.com/n89b-dot/DRVN-2/actions/runs/34003306418)
+on `aa3b84a` passed the corrected activity and WebKit journeys. It selected
+193 browser cases: 186 passed, two documented exclusions, one failure and four
+dependent cases unrun. Database, unit/static/build and operations checks passed;
+the downstream Stripe lane remained gated by the browser failure.
+
+The remaining trace showed a correct listing response and title but an empty
+page body after overlapping partial-prefetch requests. Listing cards now fetch
+on activation by default. The feature regression asserts that navigation renders
+the heading and part number without speculative listing requests. Three complete
+local repetitions passed all **18 cases**, zero retries, in 1.0 minute. Unit tests
+remain 640 passing; TypeScript and lint still pass with the same three warnings.

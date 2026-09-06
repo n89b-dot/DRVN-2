@@ -41,13 +41,24 @@ test.describe.serial("feature regressions", () => {
   });
 
   test("marketplace search matches the raw part number", async ({ page }) => {
-    // Anonymous: search must work without an account.
+    // Anonymous: search must work without an account. Listing navigation
+    // must not reuse a racing partial-prefetch payload with an empty body.
+    const prefetchedListings: string[] = [];
+    page.on("request", (request) => {
+      const headers = request.headers();
+      if (/\/listings\/[0-9a-f-]+(?:\?|$)/.test(request.url()) &&
+          (headers["next-router-prefetch"] || headers["next-router-segment-prefetch"])) {
+        prefetchedListings.push(request.url());
+      }
+    });
     await page.goto(`/marketplace?q=${encodeURIComponent(PART_NUMBER)}`);
     await expect(page.locator(".mosaic").getByText(pnTitle)).toBeVisible();
     // The card no longer prints the part number (22 Aug 2026: the mosaic
     // card's top line is the source car); the listing page still does.
     await page.locator(".mosaic a.mcell__link", { hasText: pnTitle }).first().click();
+    await expect(page.getByRole("heading", { name: pnTitle, exact: true })).toBeVisible();
     await expect(page.getByText(PART_NUMBER).first()).toBeVisible();
+    expect(prefetchedListings).toEqual([]);
   });
 
   test("marketplace search matches the compact part number", async ({ page }) => {

@@ -443,7 +443,9 @@ export function ListingMosaicCell({
   listing,
   save,
   actions,
-  prefetch,
+  // Fetch this dynamic route on activation. Racing partial prefetch payloads
+  // can otherwise leave a navigation with metadata but an empty page body.
+  prefetch = false,
 }: {
   listing: ListingCardData;
   /** Renders the engagement strip (like · comment · share · save). */
