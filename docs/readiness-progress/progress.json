@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-06T01:35:58.490243+00:00",
+  "updatedAt": "2026-09-06T02:01:40.845921+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Local checks pass: 640 unit tests, 104 fresh migrations, 42 SQL guard suites, 34 recovery cases, a 32-case Chromium/WebKit follow-up and 18 repeated feature checks. CI findings in publishing, login initialization and listing navigation are corrected. Current candidate-wide results are attached to PR #2; hosted and remaining acceptance gates stay open.",
+  "current": "Local checks pass: 640 unit tests, 104 fresh migrations and 42 SQL guard suites. Recovery, cross-browser and repeated feature runs pass; the latest 34-case repetition verifies invitation and order confirmation fixes. Current full-CI results are attached to PR #2. Hosted and remaining acceptance gates stay open.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",

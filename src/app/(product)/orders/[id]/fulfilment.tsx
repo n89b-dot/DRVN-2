@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRef, useState } from "react";
 import { unstable_rethrow } from "next/navigation";
 
 import { MessageComposer } from "@/features/commerce/message-composer";
@@ -12,21 +12,32 @@ import {
   type CommerceState,
 } from "@/features/commerce/actions";
 
-function recoverableOrderAction(action: (previous: CommerceState, data: FormData) => Promise<CommerceState>) {
-  return async (previous: CommerceState, data: FormData): Promise<CommerceState> => {
+function useRecoverableOrderAction(action: (previous: CommerceState, data: FormData) => Promise<CommerceState>) {
+  const [state, setState] = useState<CommerceState>({});
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
+  async function submit(data: FormData) {
+    if (submitting.current) return;
+    submitting.current = true;
+    setPending(true);
+    setState({});
     try {
-      return await action(previous, data);
+      setState(await action({}, data));
     } catch (error) {
       unstable_rethrow(error);
-      return { error: "Couldn't confirm the update. Your details are still here; retry to check the saved result." };
+      setState({ error: "Couldn't confirm the update. Your details are still here; retry to check the saved result." });
+    } finally {
+      submitting.current = false;
+      setPending(false);
     }
-  };
+  }
+  return [state, submit, pending] as const;
 }
 
 /** Seller dispatch. Tracking is required for posted goods — without it the
  *  buyer has no visibility, which is the entire point of the step. */
 export function DispatchForm({ orderId, isCollection }: { orderId: string; isCollection: boolean }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(recoverableOrderAction(markShipped), {});
+  const [state, action, pending] = useRecoverableOrderAction(markShipped);
   const [carrier, setCarrier] = useState("");
   const [tracking, setTracking] = useState("");
   const label = isCollection ? "Mark ready for collection" : "Mark dispatched";
@@ -42,7 +53,7 @@ export function DispatchForm({ orderId, isCollection }: { orderId: string; isCol
             : "Add tracking so delivery can be confirmed",
         ]}
         confirmLabel={pending ? "Saving…" : label}
-        formAction={action}
+        onSubmit={action}
         hidden={{ order_id: orderId }}
         pending={pending}
         error={state.error}
@@ -69,7 +80,7 @@ export function DispatchForm({ orderId, isCollection }: { orderId: string; isCol
 }
 
 export function ReceivedButton({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<CommerceState, FormData>(recoverableOrderAction(markReceived), {});
+  const [state, action, pending] = useRecoverableOrderAction(markReceived);
 
   return (
     <div className="grid gap-2">
@@ -81,7 +92,7 @@ export function ReceivedButton({ orderId }: { orderId: string }) {
           "Limits later dispute options — report problems first if something's wrong",
         ]}
         confirmLabel={pending ? "Confirming…" : "Mark as received"}
-        formAction={action}
+        onSubmit={action}
         hidden={{ order_id: orderId }}
         pending={pending}
         error={state.error}
@@ -95,10 +106,7 @@ export function ReceivedButton({ orderId }: { orderId: string }) {
 
 export function CancelOrder({ orderId }: { orderId: string }) {
   const [reason, setReason] = useState("");
-  const [state, action, pending] = useActionState<CommerceState, FormData>(
-    recoverableOrderAction(requestCancellation),
-    {}
-  );
+  const [state, action, pending] = useRecoverableOrderAction(requestCancellation);
 
   return (
     <div className="grid gap-2">
@@ -111,7 +119,7 @@ export function CancelOrder({ orderId }: { orderId: string }) {
           "Can't be undone once confirmed",
         ]}
         confirmLabel={pending ? "Cancelling…" : "Confirm cancellation"}
-        formAction={action}
+        onSubmit={action}
         hidden={{ order_id: orderId }}
         pending={pending}
         error={state.error}

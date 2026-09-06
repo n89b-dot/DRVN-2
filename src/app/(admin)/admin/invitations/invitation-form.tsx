@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRef, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { Alert, Button, TextField } from "@/components/ui";
 
@@ -35,14 +36,31 @@ function CopyInvitationLink({ link }: { link: string }) {
 }
 
 export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
-  const [state, action, pending] = useActionState<InvitationActionState, FormData>(
-    createBetaInvitation,
-    null
-  );
+  const [state, setState] = useState<InvitationActionState>(null);
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
+  const router = useRouter();
   const link = state?.invitePath ? `${siteOrigin}${state.invitePath}` : null;
 
   return (
-    <form action={action} className="tile tile--deep grid gap-4">
+    <form className="tile tile--deep grid gap-4" onSubmit={async (event) => {
+      event.preventDefault();
+      if (submitting.current) return;
+      const data = new FormData(event.currentTarget);
+      submitting.current = true;
+      setPending(true);
+      setState(null);
+      try {
+        setState(await createBetaInvitation(null, data));
+      } catch (error) {
+        unstable_rethrow(error);
+        setState({ error: "Couldn't confirm invitation creation. Check recent invitations before issuing another." });
+        router.refresh();
+      } finally {
+        submitting.current = false;
+        setPending(false);
+      }
+    }}>
       <div>
         <span className="microlabel microlabel--ink">Issue an invitation</span>
         <p className="order__meta mt-1">
@@ -55,11 +73,12 @@ export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
         type="email"
         label="Invited email"
         autoComplete="off"
+        disabled={pending}
         required
       />
       <div className="field">
         <label htmlFor="invitation-days" className="microlabel">Expires in</label>
-        <select id="invitation-days" name="days" className="ctl" defaultValue="14">
+        <select id="invitation-days" name="days" disabled={pending} className="ctl" defaultValue="14">
           <option value="1">1 day</option>
           <option value="7">7 days</option>
           <option value="14">14 days</option>
@@ -67,7 +86,7 @@ export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
           <option value="90">90 days</option>
         </select>
       </div>
-      <fieldset className="field">
+      <fieldset className="field" disabled={pending}>
         <legend className="microlabel">Allowed commerce</legend>
         <label className="mt-2 flex items-center gap-2"><input name="buyer" type="checkbox" defaultChecked /> Buy</label>
         <label className="mt-2 flex items-center gap-2"><input name="seller" type="checkbox" defaultChecked /> Sell</label>

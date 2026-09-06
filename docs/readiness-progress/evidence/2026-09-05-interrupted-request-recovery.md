@@ -140,3 +140,22 @@ on activation by default. The feature regression asserts that navigation renders
 the heading and part number without speculative listing requests. Three complete
 local repetitions passed all **18 cases**, zero retries, in 1.0 minute. Unit tests
 remain 640 passing; TypeScript and lint still pass with the same three warnings.
+
+[Run 34004319348](https://github.com/n89b-dot/DRVN-2/actions/runs/34004319348)
+on `602d924` passed listing navigation but exposed two remaining pending-state
+failures in invitation creation and WebKit dispatch replay. Browser results:
+193 selected, 187 passed, two documented exclusions, two failures and two
+dependent cases unrun; zero retries. Database, unit/static/build and operations
+lanes passed; Stripe remained gated.
+
+Both traces contained completed server responses while their forms stayed
+pending. Invitation create/revoke and order dispatch/receipt/cancellation now
+own their submission state explicitly. The shared confirmation dialog supports
+this client submission path without changing existing form-action callers.
+Required fields and duplicate-submit guards remain enforced; transport errors
+retain entered details and show recovery guidance.
+
+The invitation and full purchase flows passed twice locally across Chromium
+and WebKit: **34 passed**, zero retries, 2.1 minutes. Unit/static checks remain
+640 passing tests, successful TypeScript, and zero lint errors (three existing
+warnings). The next candidate's full CI result remains attached to PR #2.

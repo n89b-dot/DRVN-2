@@ -1,23 +1,42 @@
 "use client";
 
-import { useActionState } from "react";
+import { useRef, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui";
 
 import { revokeBetaInvitation, type InvitationActionState } from "./actions";
 
 export function RevokeInvitationForm({ invitationId }: { invitationId: string }) {
-  const [state, action, pending] = useActionState<InvitationActionState, FormData>(
-    revokeBetaInvitation,
-    null
-  );
+  const [state, setState] = useState<InvitationActionState>(null);
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
+  const router = useRouter();
 
   return (
-    <form action={action} className="mt-3 flex flex-wrap gap-2">
+    <form className="mt-3 flex flex-wrap gap-2" onSubmit={async (event) => {
+      event.preventDefault();
+      if (submitting.current) return;
+      const data = new FormData(event.currentTarget);
+      submitting.current = true;
+      setPending(true);
+      setState(null);
+      try {
+        setState(await revokeBetaInvitation(null, data));
+      } catch (error) {
+        unstable_rethrow(error);
+        setState({ error: "Couldn't confirm revocation. Check the invitation status and retry if needed." });
+        router.refresh();
+      } finally {
+        submitting.current = false;
+        setPending(false);
+      }
+    }}>
       <input type="hidden" name="invitation_id" value={invitationId} />
       <input
         className="ctl min-w-[220px] flex-1"
         name="reason"
+        disabled={pending}
         aria-label="Reason for revocation"
         placeholder="Reason for revocation"
         required

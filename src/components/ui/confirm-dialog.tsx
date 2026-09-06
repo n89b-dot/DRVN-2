@@ -18,6 +18,8 @@ export type ConfirmDialogProps = {
   triggerDisabled?: boolean;
   /** Form-action mode: rendered as `<form action={formAction}>` inside the dialog. */
   formAction?: (formData: FormData) => void | Promise<void>;
+  /** Explicit client submission retains fields and owns completion feedback. */
+  onSubmit?: (formData: FormData) => void | Promise<void>;
   /** Hidden inputs for form-action mode, e.g. `{ order_id: id }`. */
   hidden?: Record<string, string>;
   /** Callback mode — used when there's no form to submit. */
@@ -50,6 +52,7 @@ export function ConfirmDialog({
   triggerClassName = "relbtn !static",
   triggerDisabled = false,
   formAction,
+  onSubmit,
   hidden,
   onConfirm,
   pending = false,
@@ -100,8 +103,8 @@ export function ConfirmDialog({
           {cancelLabel}
         </button>
         <button
-          type={formAction ? "submit" : "button"}
-          onClick={formAction ? undefined : () => onConfirm?.()}
+          type={formAction || onSubmit ? "submit" : "button"}
+          onClick={formAction || onSubmit ? undefined : () => onConfirm?.()}
           disabled={pending || confirmBlocked}
           className={destructive ? "btn btn--live" : "btn"}
         >
@@ -122,8 +125,12 @@ export function ConfirmDialog({
         {children}
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} label={title} align="center">
-        {formAction ? (
-          <form action={formAction}>
+        {formAction || onSubmit ? (
+          <form action={formAction} onSubmit={onSubmit ? (event) => {
+            event.preventDefault();
+            if (pending || confirmBlocked) return;
+            void onSubmit(new FormData(event.currentTarget));
+          } : undefined}>
             {Object.entries(hidden ?? {}).map(([name, value]) => (
               <input key={name} type="hidden" name={name} value={value} />
             ))}
