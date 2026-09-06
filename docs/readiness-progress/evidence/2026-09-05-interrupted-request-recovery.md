@@ -159,3 +159,7 @@ The invitation and full purchase flows passed twice locally across Chromium
 and WebKit: **34 passed**, zero retries, 2.1 minutes. Unit/static checks remain
 640 passing tests, successful TypeScript, and zero lint errors (three existing
 warnings). The next candidate's full CI result remains attached to PR #2.
+
+### Build-editor completion follow-up
+
+[CI run 34005403827](https://github.com/n89b-dot/DRVN-2/actions/runs/34005403827) selected 193 browser cases: 190 passed, two documented exclusions and one failure, with zero retries. The build editor showed Saved after a successful retry but its transition kept the save button disabled. Save pending state now ends explicitly when the action response completes, with a duplicate-submit guard and draft retention on uncertain responses. The recovery test additionally requires the save button to become enabled after each confirmed response. Three consecutive local Chromium runs passed (44.5 seconds including build/setup). The corrected candidate still requires full CI through PR #2.

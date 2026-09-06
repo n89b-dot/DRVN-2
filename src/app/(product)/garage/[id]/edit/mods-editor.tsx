@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useRef, useState, useTransition } from "react";
 
 import { ActionFooter, Button } from "@/components/ui";
 import type { ModItem } from "@/lib/database.types";
@@ -86,7 +87,10 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(initialMods.length === 0);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [unlinkPending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const pending = saving || unlinkPending;
   const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);
   // Passive post-save affordance (brief §W1): when a save meaningfully changed
   // the build, one quiet inline line offers to turn it into an update. Never a
@@ -117,7 +121,10 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     setRows((r) => r.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
-  function save() {
+  async function save() {
+    if (savingRef.current || unlinkPending) return;
+    savingRef.current = true;
+    setSaving(true);
     setStatus(null);
     const items: ModItemInput[] = rows.map((r, i) => ({
       id: r.id ?? r.key,
@@ -130,11 +137,12 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       raw_text: r.raw_text || `${r.brand} ${r.product}`.trim(),
       position: i,
     }));
-    startTransition(async () => {
+    try {
       let result: Awaited<ReturnType<typeof saveModItems>>;
       try {
         result = await saveModItems(carId, items);
-      } catch {
+      } catch (error) {
+        unstable_rethrow(error);
         // The request may have committed before its response disappeared. Keep
         // every draft value and the client UUIDs so retrying converges on the
         // same rows instead of forcing a reload or creating duplicates.
@@ -164,7 +172,10 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         const removed = [...before].filter((l) => !after.has(l)).slice(0, 3);
         setSuggestion(added.length || removed.length ? { added, removed } : null);
       }
-    });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (

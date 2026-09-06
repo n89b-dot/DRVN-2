@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-06T02:01:40.845921+00:00",
+  "updatedAt": "2026-09-06T02:23:15.177587+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Local checks pass: 640 unit tests, 104 fresh migrations and 42 SQL guard suites. Recovery, cross-browser and repeated feature runs pass; the latest 34-case repetition verifies invitation and order confirmation fixes. Current full-CI results are attached to PR #2. Hosted and remaining acceptance gates stay open.",
+  "current": "Local checks cover 640 unit tests, 104 fresh migrations and 42 SQL guard suites. Full CI passed 190 browser cases and exposed one build-editor completion failure; its correction passes three repeated recovery runs. Current candidate CI is linked from PR #2. Hosted and remaining acceptance gates stay open.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -45,7 +45,7 @@
           "id": "setup",
           "label": "Isolated hosted services",
           "state": "blocked",
-          "evidence": "User selected n89b-dot\u2019s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
+          "evidence": "User selected n89b-dot’s Org. Connector quote is $0/month on Free, but both active free project slots are occupied; no existing project was paused or upgraded."
         },
         {
           "id": "smoke",
@@ -188,7 +188,7 @@
       "title": "A green build you can trust",
       "category": "Release setup",
       "status": "partial",
-      "owner": "GPT-5.6 \u00b7 Release stream",
+      "owner": "GPT-5.6 · Release stream",
       "why": "Make passing checks mean required tests really passed, without relying on retries.",
       "before": "The current green browser run includes one test that passed only after a retry.",
       "after": "Flaky, skipped-required, and missing checks block release; the known fixture race is corrected and jobs have time limits.",
@@ -232,7 +232,7 @@
       "category": "Privacy",
       "status": "active",
       "owner": "Data and privacy stream",
-      "why": "Let members obtain all approved data about their account without exposing someone else\u2019s private information.",
+      "why": "Let members obtain all approved data about their account without exposing someone else’s private information.",
       "before": "Some data families are missing, some exports use broad field selections, and large exports can exceed request limits.",
       "after": "Explicit safe fields, complete approved sections, and resumable large exports with a completeness record.",
       "next": "Obtain retention policy and hosted archive acceptance; local export/purge regression checks pass.",

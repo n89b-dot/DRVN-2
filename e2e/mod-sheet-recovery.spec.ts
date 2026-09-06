@@ -88,9 +88,11 @@ test("mod-sheet retry converges after a lost response and keeps adjacent draft e
     await rows.nth(1).getByLabel("Product").fill("V3 coilovers");
     await editor.getByRole("button", { name: "Save the build" }).click();
     await expect(editor.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+    await expect(editor.getByRole("button", { name: "Save the build" })).toBeEnabled();
 
     await editor.getByRole("button", { name: "Save the build" }).click();
     await expect(editor.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+    await expect(editor.getByRole("button", { name: "Save the build" })).toBeEnabled();
     const replayed = await admin
       .from("mod_items")
       .select("id,brand,product,position")
