@@ -37,7 +37,9 @@ from `e20c620`; it is separate from that commit's green CI evidence.
 
 ## Verification record
 
-Local verification is complete; GitHub candidate verification is pending.
+Local verification is complete. Candidate-wide GitHub checks are attached to
+[PR #2](https://github.com/n89b-dot/DRVN-2/pull/2/checks); their status is separate
+from the local evidence below. The implementation commit is `b2105e2`.
 
 - Final combined Chromium run: **34 passed**, zero retries, 3.7 minutes. It
   includes interrupted checkout, accepted offers, listings, messages, reports,

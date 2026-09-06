@@ -1,11 +1,11 @@
 {
   "project": "DRVN",
   "scope": "Invited buyers & sellers",
-  "updatedAt": "2026-09-06T00:44:10.987644+00:00",
+  "updatedAt": "2026-09-06T00:46:07.330969+00:00",
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "Local acceptance is complete: 640 unit tests, 104 fresh migrations, 42 SQL guard suites and 34 browser cases pass. Interrupted checkout, content saves and postage recovery are implemented. The candidate is being committed for full GitHub verification; hosted launch gates remain open.",
+  "current": "Implementation and local acceptance are complete: 640 unit tests, 104 fresh migrations, 42 SQL guard suites and 34 browser cases pass. Review the candidate-wide GitHub checks on PR #2 alongside this evidence. Hosted launch and remaining acceptance gates stay open.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -192,7 +192,7 @@
       "why": "Make passing checks mean required tests really passed, without relying on retries.",
       "before": "The current green browser run includes one test that passed only after a retry.",
       "after": "Flaky, skipped-required, and missing checks block release; the known fixture race is corrected and jobs have time limits.",
-      "next": "Verify the new candidate in GitHub CI, then resolve private-repository branch-protection availability before release.",
+      "next": "Review PR #2 candidate checks and resolve private-repository branch-protection availability before release.",
       "checkpoints": [
         {
           "id": "review",
@@ -413,7 +413,7 @@
       "why": "Make important actions understandable and usable with keyboard, screen reader, and mobile devices.",
       "before": "Focused fixes exist, but every critical form and assistive-technology path has not been verified.",
       "after": "Clear pending, success, and error states; reliable saved changes; tested focus, text scaling, touch, and screen-reader behavior.",
-      "next": "Verify full GitHub browser coverage, then close the remaining command-family and manual-device acceptance in the action inventory.",
+      "next": "Review candidate-wide GitHub checks, then close the remaining command-family and manual-device acceptance in the action inventory.",
       "checkpoints": [
         {
           "id": "inventory",
