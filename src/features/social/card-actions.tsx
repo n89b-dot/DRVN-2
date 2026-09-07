@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type MouseEvent } from "react";
+import { useState, useTransition, type MouseEvent, type ReactNode } from "react";
 
 import { AnimatePresence, motion } from "motion/react";
 
@@ -59,6 +59,7 @@ export function CardEngagement({
   shareUrl,
   initialSaved,
   compact = false,
+  trailing,
 }: {
   target: EngagementTarget;
   /** Route the toggles revalidate — the page this card renders on. */
@@ -74,6 +75,9 @@ export function CardEngagement({
   initialSaved: boolean;
   /** Tighter paddings for the ledger-row cards. */
   compact?: boolean;
+  /** A context-owned control after the save button (a listing's cart
+   *  button). Rendered inside the strip so it shares its floor. */
+  trailing?: ReactNode;
 }) {
   const router = useRouter();
   const [liked, setLiked] = useState(initialLiked);
@@ -236,6 +240,7 @@ export function CardEngagement({
           <Icon name="bookmark" className="cardeng__ico" />
         </motion.span>
       </motion.button>
+      {trailing}
       {error && (
         <span role="alert" aria-live="polite" className="field__err">
           {error}

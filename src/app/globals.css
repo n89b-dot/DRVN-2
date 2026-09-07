@@ -2845,9 +2845,9 @@ video {
   --mgap: 12px;
   display: grid;
   grid-template-columns: repeat(var(--mcols), minmax(0, 1fr));
-  /* 1.5 puts an update card's photo (the deepest caption: two-line
-     title, two-line excerpt, vehicle, owner) near the marketplace card's
-     165px on a 271px desktop column, where 1.25 left it a 113px strip. */
+  /* 1.5: the fixed 12:7 plate plus the deepest caption (an update's
+     two-line title, two-line excerpt, vehicle and byline) plus the pinned
+     engagement strip, on a 271px desktop column — the Figma card's 280×437. */
   --mratio: 1.5;
   grid-auto-rows: calc(((100cqw - (var(--mcols) - 1) * var(--mgap)) / var(--mcols)) * var(--mratio));
   grid-auto-flow: dense;
@@ -2867,7 +2867,7 @@ video {
   .mosaic {
     --mcols: 2;
     --mgap: 8px;
-    --mratio: 2;
+    --mratio: 1.75;
   }
 }
 .mcell {
@@ -2878,7 +2878,12 @@ video {
   overflow: hidden;
   border-radius: var(--r);
   background: var(--tile);
-  padding: 10px 10px 8px;
+  box-shadow: inset 0 0 0 1px var(--rule-soft);
+  /* Phone-wall tile cells: 12px sides — 6px read cramped against the
+     ring, 16px spent width a 168px column doesn't have; only the sheet
+     card (its own inset) runs tighter. Wider walls: see the `wall` query
+     after the caption rules. */
+  padding: 8px 12px 6px;
   color: var(--ink);
   container-type: inline-size;
   transition:
@@ -3020,17 +3025,25 @@ video {
   padding: 2px 4px;
   box-shadow: 0 1px 6px var(--scrim);
 }
-/* Caption — ink on the tile, pinned under the plate. */
+/* Caption — ink on the tile, pinned under the plate. From 240px the plate
+   is a fixed frame and the caption takes the rest, so the engagement strip
+   sits on the card's floor (the Figma cards: content above, footer pinned).
+   Order, every kind: title → lede → value → price → detail → car → byline →
+   meta. */
 .mcell__cap {
   display: flex;
   flex-direction: column;
   flex: none;
   min-width: 0;
   padding-top: 8px;
+  /* Two steps: tight binds a line to the one above, group opens a new
+     one. Phone cells run 4/6, wider cells 6/12 (see the 232px query). */
+  --cap-tight: 4px;
+  --cap-group: 6px;
 }
 .mcell__title {
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
   letter-spacing: -0.008em;
   display: -webkit-box;
@@ -3041,124 +3054,49 @@ video {
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-.mcell__value {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  margin-top: 5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Caption rhythm — two steps, no more: 4px binds a line to the one above
-   it (the car to its title, a chip line to the fact it qualifies), 10px
-   opens a new group (the price after the identity, the meta after the
-   price). Every card kind follows the same two numbers so a wall of mixed
-   cards reads as one typographic system. */
-.mcell__cap {
-  --cap-tight: 4px;
-  --cap-group: 6px;
-}
-/* The car a part came off — a quiet mono line bound to the title, plain
-   text: the card is the only link. */
+/* THE REFERENCE LINE — the vehicle under a build's name, the car a part
+   came off, the vehicle under an update's excerpt. Mono, ink, one size:
+   it names the machine, so it reads as a label rather than a footnote. */
+.mcell__value,
 .mcell__car {
   display: block;
-  margin-top: var(--cap-tight);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Photo plate starts at the card's top edge when there's no eyebrow row. */
-.mcell__top + .mcell__img {
-  margin-top: 8px;
-}
-.mcell__img {
-  margin-top: 0;
-}
-.mcell__ship {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--dim);
-}
-/* The condition chip inside a listing's meta line — the `.chip` recipe a
-   size down and outlined, the same inset-ring pill as the BUILD eyebrow, so
-   "Used" reads as a tag against the 11.5px text beside it without a filled
-   block sinking into the night tile. */
-.mcell__meta .mcell__cond {
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  padding: 1px 6px;
-  vertical-align: 1px;
-  margin-right: 2px;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--dimline);
-  color: var(--dim);
-}
-/* Whatever follows the title is bound to it — the car on a listing, the
-   vehicle on a build, the owner line on a nameless build — the same 4px,
-   with the line-heights trimmed so the optical gap matches too. */
-.mcell__title + .mcell__value,
-.mcell__title + .mcell__meta {
-  margin-top: var(--cap-tight);
-}
-.mcell__value {
-  line-height: 1.3;
-}
-/* THE SECONDARY LINE — one voice for every card kind. The vehicle under a
-   build's name, the car a part came off, the owner · car under an update:
-   all the same mono, dim, one size. Only two things on a card are ink —
-   the title, and (on a listing) the price — so the eye lands on the name,
-   then the number, and reads the rest as context. */
-.mcell__car,
-.mcell__title + .mcell__value,
-.mcell__lede + .mcell__value {
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.35;
-  color: var(--dim);
-}
-/* A new group opens after the identity lines and after the price. */
-.mcell__car + .mcell__value,
-.mcell__value + .mcell__meta {
-  margin-top: var(--cap-group);
-}
-/* THE PRICE — a listing's one loud number: ink, medium, a full step above
-   everything else in the caption. */
-.mcell__car + .mcell__value {
-  font-size: 16px;
-  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* Always shown — it used to appear only in cells ≥240px wide, which came
-   and went as the wall changed column count, so the same card read
-   differently at 1280 (shown), 1024 (hidden) and 800 (shown again). One
-   truncating line is safe at every cell width. */
+/* THE PRICE — a listing's one loud number, in the live colour. */
+.mcell__price {
+  display: block;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--live);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Dim annotation lines: the excerpt, the condition line, the activity
+   line. One truncating line, always shown on photo cells so a row of
+   mixed kinds shares one caption height. */
 .mcell__meta {
   display: block;
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--dim);
-  margin-top: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* A listing's condition line — the meta voice above the seller. The price
-   opens the group before it (`.mcell__value + .mcell__meta`) and the
-   seller opens another under it, the way an update's owner line sits
-   under its vehicle: even groups down the caption. */
-.mcell__detail + .mcell__meta {
-  margin-top: var(--cap-group);
-}
-/* An update's excerpt — the meta voice, bound tight under the title, two
-   lines before it clamps; the vehicle line then opens its own group. */
+/* An update's excerpt — two lines before it clamps on wider cells. */
 .mcell__lede {
-  margin-top: var(--cap-tight);
-  /* A half step above the meta: the excerpt is copy, the byline under it
-     is annotation, and the two must not read as one dim block. */
-  font-size: 12px;
-  line-height: 1.45;
   white-space: normal;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -3166,74 +3104,236 @@ video {
   overflow-wrap: anywhere;
 }
 /* A narrow cell earns one excerpt line; the second is the wider cell's
-   room. Two lines on a 168px phone cell crushed the photo to a strip. */
-@container (max-width: 239px) {
+   room. Two lines on a 168px phone cell crushed the photo to a strip.
+   The rest of the phone cell's chrome is trimmed here too, so a 168px
+   cell fits a 4:3 plate, every caption line and the strip in a 1.7 row:
+   the byline drops its monogram plate (the 22px plate made a 12px line
+   22px tall), the caption starts 6px under the plate, and the strip is
+   a 36px band instead of 44. */
+@container (max-width: 231px) {
   .mcell__lede {
     -webkit-line-clamp: 1;
   }
+  .mcell__byline .monogram--xs {
+    display: none;
+  }
+  .mcell__byline {
+    line-height: 1.35;
+  }
+  .mcell__cap {
+    padding-top: 6px;
+  }
+  .mcell--sheet .mcell__cap {
+    margin-top: -20px;
+    padding: 12px var(--sheet-pad) 8px;
+  }
+  .mcell.mcell--sheet .cardeng {
+    padding: 8px var(--sheet-pad) 6px;
+  }
 }
 /* The phone wall's 2×1 wide cell shares the square's row height, so it
-   gets the square's one excerpt line too — two lines left a 343px-wide
-   plate 77px tall. Queried on the wall, not the cell, so a 271px desktop
-   cell is untouched. */
+   gets the square's one excerpt line too. Queried on the wall, not the
+   cell, so a 271px desktop cell is untouched. */
 @container wall (max-width: 600px) {
   .mcell--wide .mcell__lede {
     -webkit-line-clamp: 1;
   }
 }
-/* Under an excerpt the vehicle and the owner are one byline: the vehicle
-   opens the group after the copy, the owner binds tight beneath it. */
-.mcell__lede ~ .mcell__value + .mcell__meta {
+/* The condition chip on a listing's detail line — the OK tint, the way the
+   Figma card tags a used part, beside "· Grade B" in the meta voice. */
+.mcell__detail .mcell__cond {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  vertical-align: 1px;
+  margin-right: 2px;
+  background: var(--ok-tint);
+  color: var(--ok-text);
+  box-shadow: none;
+}
+/* THE BYLINE — who is behind the card: a monogram plate and the name. */
+.mcell__byline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--dim);
+}
+.mcell__byline .monogram--xs {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  background: var(--tile-2);
+  color: var(--dim);
+}
+.mcell__byline__name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Rhythm. Bound tight: the excerpt to its title, the price to its title,
+   the chip line to its price, the car to its chip, the byline to the car
+   it signs, the activity line to its byline. A group opens where the
+   subject changes: title block → reference/byline block. */
+.mcell__cap > * + * {
   margin-top: var(--cap-tight);
 }
-/* The byline's monogram sits on the text line, not above it. */
-.mcell__meta .monogram--xs {
-  vertical-align: -3px;
-  margin-right: 5px;
-}
-.mcell__lede + .mcell__value {
+.mcell__lede + .mcell__value,
+.mcell__title + .mcell__value,
+.mcell__title + .mcell__byline,
+.mcell__lede + .mcell__byline,
+.mcell__detail + .mcell__car,
+.mcell__price + .mcell__car,
+.mcell__title + .mcell__meta,
+.mcell__value + .mcell__meta {
   margin-top: var(--cap-group);
 }
-/* Wider cells earn roomier padding and a second headline line. */
-@container (min-width: 240px) {
-  .mcell {
-    padding: 14px 14px 10px;
+/* Wider cells: the Figma card. 12/16 padding, a 20px breath under the
+   eyebrow row, a fixed 12:7 plate, bigger type, wider steps. The query
+   reads the cell's CONTENT box (container queries do), so a 271px desktop
+   column with 16px sides is 239px — hence 232, not 240, on every cell
+   query below and above. */
+@container (min-width: 232px) {
+  .mcell__top + .mcell__img {
+    margin-top: 14px;
+  }
+  .mcell__cap {
+    flex: 1 1 auto;
+    padding-top: 14px;
+    --cap-tight: 6px;
+    --cap-group: 12px;
   }
   .mcell__title {
-    font-size: 15px;
+    font-size: 16px;
+    line-height: 1.35;
   }
-  .mcell__car,
-  .mcell__title + .mcell__value {
-    font-size: 14px;
-  }
-  /* With copy above it the vehicle is the byline, not the second line:
-     a size under the excerpt so the reference never outsizes the words. */
-  .mcell__lede {
-    font-size: 13px;
-  }
-  .mcell__lede + .mcell__value {
-    font-size: 12.5px;
-  }
-  .mcell__car + .mcell__value {
+  .mcell--story .mcell__title {
     font-size: 18px;
+    line-height: 1.25;
   }
-  .mcell__cap {
-    padding-top: 12px;
+  .mcell__lede {
+    font-size: 14px;
+    line-height: 1.25;
   }
-  /* Wider cells earn wider steps: 6px binds, 10px opens a group — the
-     same hierarchy on every kind, so a listing's title · car · price ·
-     condition · seller and an update's title · excerpt · vehicle · owner
-     read as one system. */
-  .mcell__cap {
-    --cap-tight: 6px;
-    --cap-group: 10px;
+  .mcell__price {
+    font-size: 20px;
   }
+  .mcell__meta {
+    font-size: 12px;
+  }
+  .mcell__byline .monogram--xs {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-ctl);
+  }
+}
+/* ---------- the sheet variant: a listing on the discovery wall ----------
+   The photo bleeds to the card's edges and the caption rides a raised
+   sheet that overlaps its foot — the Figma "for sale" card. The
+   engagement strip continues the sheet so the two read as one panel. */
+.mcell--sheet {
+  /* The outer tile stays: the sheet sits inside it on three sides (8px
+     on phone cells, 12px from 232px) and the photo bleeds over its top,
+     the way the Figma card frames it. A transparent outer left the tile's
+     ring drawn flush under the sheet as a stray line. */
+  --sheet-inset: 6px;
+  --sheet-pad: 8px;
+  padding: 0 0 var(--sheet-inset);
+}
+.mcell--sheet .mcell__link .mcell__img {
+  margin: 0;
+  border-radius: var(--r) var(--r) 0 0;
+}
+/* The sheet is two stacked boxes (the caption inside the link, the strip
+   outside it) painted as one: same fill, no margin between them, no ring
+   on either — the outer tile's ring frames the card. */
+.mcell--sheet {
+  /* The sheet's fill: the tile lifted a step toward ink, so it reads as
+     raised over the tile in both themes (tile-2 recedes). */
+  --sheet: color-mix(in srgb, var(--tile) 93%, var(--ink));
+}
+.mcell--sheet .mcell__cap {
+  /* Positioned so it paints over the plate's absolutely-positioned
+     images, which otherwise sit above a static sibling. */
+  position: relative;
+  z-index: 1;
+  margin: -24px var(--sheet-inset) 0;
+  padding: 16px var(--sheet-pad) 12px;
+  background: var(--sheet);
+  border-radius: var(--r) var(--r) 0 0;
+}
+.mcell.mcell--sheet .cardeng {
+  margin: 0 var(--sheet-inset);
+  padding: 12px var(--sheet-pad) 8px;
+  background: var(--sheet);
+  border-radius: 0 0 var(--r) var(--r);
+  border-top: 0;
+  position: relative;
+}
+.mcell--sheet .cardeng::before {
+  content: "";
+  position: absolute;
+  left: var(--sheet-pad);
+  right: var(--sheet-pad);
+  top: 0;
+  border-top: 1px solid var(--rule-soft);
+}
+.mcell--sheet .cardeng__act:first-child {
+  margin-left: -5px;
+}
+/* The cart control at the strip's end — a 32px live square, the one
+   commerce action a discovery card carries. */
+.cartbtn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 8px;
+  border-radius: var(--r-ctl);
+  background: var(--live);
+  color: var(--on-ink);
+  flex: none;
+  transition:
+    transform var(--t-fast) var(--spring),
+    filter var(--t-fast) ease;
+}
+.cartbtn:hover {
+  filter: brightness(1.08);
+}
+.cartbtn:active {
+  transform: scale(0.96);
+}
+.cartbtn:disabled {
+  opacity: 0.6;
+}
+.cartbtn__ico {
+  width: 14px;
+  height: 14px;
 }
 /* Engagement strip — the deck's, tightened. */
 .mcell .cardeng {
   margin-top: 10px;
   padding-top: 6px;
   gap: 0;
+}
+@container (min-width: 232px) {
+  .mcell .cardeng {
+    margin-top: 12px;
+    padding-top: 8px;
+    gap: 4px;
+  }
+  /* The sheet's strip is flush with its caption — one panel. */
+  .mcell--sheet .cardeng {
+    margin-top: 0;
+    padding-top: 12px;
+  }
+  .mcell .cardeng__act {
+    min-height: 32px;
+  }
 }
 .mcell .cardeng__act {
   min-height: 28px;
@@ -3248,6 +3348,25 @@ video {
 .mcell .cardeng__ico {
   width: 14px;
   height: 14px;
+}
+/* Phone cells: a 36px strip band instead of 44 (see the caption note).
+   On the sheet card the like goes: five controls plus the 32px cart
+   square overran a 168px cell and clipped the cart at the edge. */
+@container (max-width: 231px) {
+  .mcell .cardeng {
+    margin-top: 6px;
+    padding-top: 4px;
+  }
+  .mcell .cardeng__act {
+    min-height: 26px;
+    padding: 0 4px;
+  }
+  .mcell--sheet .cardeng > .cardeng__act:first-child {
+    display: none;
+  }
+  .mcell--sheet .cartbtn {
+    margin-left: 4px;
+  }
 }
 /* No photo: the caption rises to fill, headline allowed three lines. */
 .mcell--bare .mcell__cap {
@@ -7860,6 +7979,79 @@ video {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* From 240px the plate is a fixed frame — 12:7 on a tile card, 3:2 on
+   the bleeding sheet card — and the caption takes the rest (the Figma
+   cards). Placed after the link recipe above so it wins the cascade. */
+@container (min-width: 232px) {
+  .mcell .mcell__link .mcell__img {
+    flex: none;
+    aspect-ratio: 12 / 7;
+  }
+}
+/* Rules on the cell ITSELF resolve against the wall (a container query
+   looks at the element's nearest ancestor container, and the cell is its
+   own descendants' container, not its own). So the cell's padding and the
+   sheet's insets are set per wall width, not per cell width. */
+@container wall (min-width: 601px) {
+  .mcell {
+    padding: 12px 16px;
+  }
+  .mcell--sheet {
+    --sheet-inset: 12px;
+    --sheet-pad: 16px;
+    padding: 0 0 var(--sheet-inset);
+  }
+}
+/* The phone wall's 2×1 wide cell (builds and updates only — a listing is
+   always square, its part photos are often portrait) crosses the 232px
+   line but shares the square's row height, so it keeps the flexible plate: a fixed 12:7 on a
+   311px content box is 181px, which pushed its caption into the strip. */
+@container wall (max-width: 600px) {
+  .mcell.mcell--wide .mcell__link .mcell__img {
+    flex: 1 1 auto;
+    aspect-ratio: auto;
+  }
+  .mcell.mcell--wide .mcell__cap {
+    flex: none;
+  }
+  /* …and the phone wall is one type scale: a wide cell is a square cell
+     given width, not a desktop card, so it keeps the square's padding,
+     steps and sizes (a half step up on the title, which has the room). */
+  .mcell.mcell--wide {
+    padding: 8px 10px 6px;
+  }
+  .mcell--wide .mcell__top + .mcell__img {
+    margin-top: 8px;
+  }
+  .mcell.mcell--wide .mcell__cap {
+    padding-top: 8px;
+    --cap-tight: 4px;
+    --cap-group: 6px;
+  }
+  .mcell--wide .mcell__title,
+  .mcell--wide.mcell--story .mcell__title {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+  .mcell--wide .mcell__lede {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  .mcell--wide .mcell__meta {
+    font-size: 11.5px;
+  }
+  .mcell--wide .mcell__price {
+    font-size: 17px;
+  }
+  .mcell--wide .mcell__byline .monogram--xs {
+    width: 22px;
+    height: 22px;
+  }
+  .mcell.mcell--wide .cardeng {
+    margin-top: 10px;
+    padding-top: 6px;
+  }
+}
 /* Seller trust — wide cells only, like the meta line. */
 .mcell__trust {
   display: none;
@@ -7871,7 +8063,7 @@ video {
   font-size: 11.5px;
   color: var(--dim);
 }
-@container (min-width: 240px) {
+@container (min-width: 232px) {
   .mcell__trust {
     display: flex;
   }

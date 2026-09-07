@@ -430,7 +430,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "pattern",
     category: "card",
     status: "active",
-    description: "The card wall grid (`.mosaic`), commerce variant included. 1×1 cards, plus 2×1 wides on the two-column phone wall; there is no 2×2 shape (it filled a phone viewport with one card).",
+    description: "The card wall grid (`.mosaic`), commerce variant included. 1×1 cards, plus 2×1 wides on the two-column phone wall for builds and updates only — a listing is always square (part photos are often portrait; the wide shape letterboxes them); there is no 2×2 shape (it filled a phone viewport with one card).",
     use: "Container for MosaicCell families on browse surfaces.",
     cssRecipe: ".mosaic",
   },
@@ -442,9 +442,9 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     category: "card",
     status: "active",
     description:
-      "The single card primitive — eyebrow/kind, media, title, lede, provenance, value, detail, meta, trust, engagement slots.",
-    use: "Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Caption order is title → `lede` (an update's two-line excerpt) → `sub` (the car a part came off) → `value` (price, or the vehicle line) → `detail` (a listing's condition chip + grade) → `meta` (owner / seller). Two spacing steps only: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/10px from 240px).",
-    states: ["photo", "bare (no image — forced square)", "engagement strip"],
+      "The single card primitive — eyebrow/kind, media, title, lede, value, price, detail, provenance, byline, meta, engagement slots; `variant` = sheet (photo bleeds, caption on a raised sheet) or story (an update, title a size up).",
+    use: "Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Caption order is title → `lede` (an update's two-line excerpt) → `value` (the vehicle line, mono ink) → `price` (live) → `detail` (condition chip + grade) → `sub` (the car a part came off) → `byline` (monogram + name) → `meta` (activity). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/12px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale). From that width the plate is a fixed 12:7 (3:2 on the sheet) and the engagement strip sits on the card's floor.",
+    states: ["photo", "bare (no image — forced square)", "sheet", "story", "engagement strip"],
     cssRecipe: ".mcell",
   },
   {
@@ -454,7 +454,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "pattern",
     category: "card",
     status: "active",
-    description: "A listing as a mosaic card (price, shipping, provenance, seller trust).",
+    description: "A listing as a mosaic card: title → price + ship line → condition chip · fit · location → provenance → seller byline (name · rating).",
     use: "Via ListingCard.",
   },
   {
@@ -464,7 +464,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "pattern",
     category: "card",
     status: "active",
-    description: "A feed item (part / build / update) as a mosaic card. Update: title → excerpt (two lines from 240px, one on phone cells) → full vehicle label → owner byline (monogram + name). Part: title → source car → price alone (no ship line on the discovery wall) → condition chip + grade → seller. Build: name → vehicle → owner · activity. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline).",
+    description: "A feed item (part / build / update) as a mosaic card, the Figma card set. Update (story): title → excerpt (two lines on wider cells, one on phone cells) → full vehicle label → owner byline. Part (sheet, no eyebrow row, always 1×1): photo bleeds to the edges, then title → price alone (no ship line on the discovery wall) → condition chip + grade → source car → seller byline, with ListingCartButton at the end of the strip. Build: name → vehicle → owner byline → activity. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline).",
     use: "Explore and mixed feeds, via MasonryFeed.",
   },
   {
@@ -1224,6 +1224,17 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     status: "active",
     description: "Follow toggle with configurable labels.",
     use: "Profiles and car sheets.",
+  },
+  {
+    name: "ListingCartButton",
+    importPath: "@/features/commerce/quick-commerce",
+    file: "src/features/commerce/quick-commerce.tsx",
+    layer: "feature",
+    category: "commerce",
+    status: "active",
+    description: "One 32px live cart square at the end of a listing card's engagement strip — adds to cart in place, links to the cart once it's in.",
+    use: "The discovery wall's listing (sheet) card, via CardEngagement's `trailing` slot.",
+    cssRecipe: ".cartbtn",
   },
   {
     name: "ListingQuickCommerce",

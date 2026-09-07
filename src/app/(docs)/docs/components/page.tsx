@@ -789,41 +789,11 @@ export default function ComponentsPage() {
           </div>
         </Specimen>
         <Specimen
-          name="Feed captions"
-          klass="MosaicCell lede / detail / meta"
-          note="The three feed kinds on one rhythm. An update reads title → two-line excerpt (lede) → full vehicle label (value) → owner (meta); a part reads title → source car (sub) → price alone (value — the ship line stays on the marketplace) → condition chip + grade (detail) → seller (meta); a build reads name → vehicle → owner · activity. Tight steps bind a line to the one above, group steps open a new one; from 240px the steps widen from 4/6px to 6/10px."
+          name="Feed cards"
+          klass="MosaicCell variant / lede / price / detail / byline"
+          note="The three discovery kinds from the Figma card set, one anatomy. An update (story) reads title → two-line excerpt → vehicle (mono, ink) → byline; a build reads name → vehicle → byline → activity; a listing (sheet) bleeds its photo to the card's edges and rides a raised caption sheet: title → price (live) → condition chip + grade → source car → byline, with the cart square at the end of the engagement strip. From 240px the plate is a fixed 12:7 frame, the caption takes the rest and the strip sits on the card's floor."
         >
-          <div className="grid max-w-[800px] grid-cols-3 gap-3">
-            <MosaicCell
-              href="#commerce"
-              size="sq"
-              src="/seed/golf-r-1.jpg"
-              alt="First real pass in the quarter"
-              eyebrow="Update"
-              kind="update"
-              corner="4d ago"
-              headline="First real pass in the quarter"
-              lede="Stopped babying it. The flat-plane scream past the tree is worth the tire bill."
-              value="2023 Chevrolet Corvette Z06"
-              meta="Jade Whitfield"
-            />
-            <MosaicCell
-              href="#commerce"
-              size="sq"
-              src="/seed/golf-r-2.jpg"
-              alt="992 GT3 centre-lock wheels"
-              eyebrow="For sale"
-              kind="part"
-              headline="992 GT3 centre-lock wheels with Michelin Cup 2, set of four"
-              sub="2022 Porsche 911 GT3"
-              value="$5,200"
-              detail={
-                <>
-                  <span className="chip mcell__cond">Used</span> · Grade B
-                </>
-              }
-              meta="Felix Brandt"
-            />
+          <div className="grid max-w-[880px] grid-cols-3 gap-3">
             <MosaicCell
               href="#commerce"
               size="sq"
@@ -833,8 +803,40 @@ export default function ComponentsPage() {
               kind="car"
               corner="1w ago"
               headline="Gruene"
-              value={<span className="vref vref--value">2021 BMW M4 Competition</span>}
-              meta="Marcus Reid · 1 update"
+              value="2021 BMW M4 Competition"
+              byline={{ name: "Marcus Reid" }}
+              meta="3 updates · 2 parts for sale"
+            />
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-1.jpg"
+              alt="First real pass in the quarter"
+              eyebrow="Update"
+              kind="update"
+              corner="4d ago"
+              variant="story"
+              headline="First real pass in the quarter"
+              lede="Stopped babying it. The flat-plane scream past the tree is worth the tire bill."
+              value="2023 Chevrolet Corvette Z06"
+              byline={{ name: "Jade Whitfield" }}
+            />
+            <MosaicCell
+              href="#commerce"
+              size="sq"
+              src="/seed/golf-r-2.jpg"
+              alt="Audi 4.2 FSI V8 intake manifold"
+              variant="sheet"
+              kind="part"
+              headline="Audi 4.2 FSI V8 intake manifold (B7 RS4), used"
+              price="$120"
+              detail={
+                <>
+                  <span className="chip mcell__cond">Used</span> · Grade B
+                </>
+              }
+              sub="2007 Audi RS4 Avant"
+              byline={{ name: "Anjali Kumari" }}
             />
           </div>
         </Specimen>
