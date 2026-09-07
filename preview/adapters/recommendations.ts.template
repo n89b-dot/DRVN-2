@@ -1,0 +1,2 @@
+import {listingCards} from '@/preview/data';
+export async function recommendListings(..._args:any[]):Promise<any[]>{return listingCards.slice(0,3)}

@@ -1,0 +1,2 @@
+import {createDemoClient} from '@/preview/database';
+export function createClient():any{return createDemoClient()}

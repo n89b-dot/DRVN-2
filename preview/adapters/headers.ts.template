@@ -1,0 +1,2 @@
+export async function cookies():Promise<any>{return {get:()=>undefined,getAll:()=>[],has:()=>false,set:()=>{},delete:()=>{}}}
+export async function headers():Promise<any>{return new Headers()}

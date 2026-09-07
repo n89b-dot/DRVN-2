@@ -1,0 +1,3 @@
+export {platformFeeCents,PLATFORM_FEE_BPS} from '@/lib/payments/fee';
+export function paymentsAreLive(){return false}
+export function getPaymentProvider():any{return {name:'preview',isLive:false}}

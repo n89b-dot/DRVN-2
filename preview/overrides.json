@@ -1,0 +1,22 @@
+[
+  {
+    "target": "src/lib/supabase/server.ts",
+    "source": "adapters/server.ts.template"
+  },
+  {
+    "target": "src/lib/supabase/client.ts",
+    "source": "adapters/client.ts.template"
+  },
+  {
+    "target": "src/lib/supabase/admin.ts",
+    "source": "adapters/admin.ts.template"
+  },
+  {
+    "target": "src/lib/recommendations.ts",
+    "source": "adapters/recommendations.ts.template"
+  },
+  {
+    "target": "src/lib/payments/provider.ts",
+    "source": "adapters/payments.ts.template"
+  }
+]

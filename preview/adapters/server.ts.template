@@ -1,0 +1,2 @@
+import {createDemoClient} from '@/preview/database';
+export async function createClient(..._args:any[]):Promise<any>{return createDemoClient()}

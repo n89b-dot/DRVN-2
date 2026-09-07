@@ -1,0 +1,28 @@
+import {tables,USER,profiles} from './data';
+const failure={error:{message:'Interface demo — changes are not saved.'},data:null};
+export function createDemoClient():any {
+ const query=(table:string)=>{
+  let rows=[...(tables[table]||[])],single=false,head=false,mutation=false;
+  const result=()=>mutation?failure:{data:head?null:single?(rows[0]??null):rows.map(r=>({...r,profiles:profiles.find(p=>p.id===r.seller_id)||profiles[0]})),count:rows.length,error:null};
+  let proxy:any;
+  proxy=new Proxy({}, {get(_t,k){
+   if(k==='then')return (resolve:any,reject:any)=>Promise.resolve(result()).then(resolve,reject);
+   return (...args:any[])=>{
+    if(k==='select')head=!!args[1]?.head;
+    if(k==='single'||k==='maybeSingle')single=true;
+    if(k==='eq'&&!String(args[0]).includes('.'))rows=rows.filter(r=>r[args[0]]===args[1]);
+    if(k==='neq')rows=rows.filter(r=>r[args[0]]!==args[1]);
+    if(k==='in')rows=rows.filter(r=>args[1].includes(r[args[0]]));
+    if(k==='is')rows=rows.filter(r=>(r[args[0]]??null)===args[1]);
+    if(k==='not'&&args[1]==='is')rows=rows.filter(r=>(r[args[0]]??null)!==args[2]);
+    if(k==='limit')rows=rows.slice(0,args[0]);
+    if(k==='range')rows=rows.slice(args[0],args[1]+1);
+    if(['insert','update','upsert','delete'].includes(String(k)))mutation=true;
+    return proxy;
+   };
+  }});return proxy;
+ };
+ const auth={getUser:async()=>({data:{user:{id:USER,email:'alex@example.com',user_metadata:{}}},error:null}),getSession:async()=>({data:{session:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signOut:async()=>({error:null}),mfa:{listFactors:async()=>({data:{all:[],totp:[]},error:null})}};
+ const channel:any={on:()=>channel,subscribe:()=>channel,unsubscribe:()=>{}};
+ return {from:query,rpc:async()=>({data:[],error:null,count:0}),auth,channel:()=>channel,removeChannel:()=>{},storage:{from:()=>({getPublicUrl:(p:string)=>({data:{publicUrl:p}}),upload:async()=>failure})}};
+}
