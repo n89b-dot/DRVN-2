@@ -46,14 +46,18 @@ export default async function NewUpdatePage({
       .maybeSingle(),
     supabase
       .from("mod_items")
-      .select("id, brand, product, raw_text")
+      .select("id, brand, product, raw_text, status")
       .eq("car_id", car.id)
       .order("position"),
   ]);
   const draftBlocks = draft ? normalizeBlocks(draft.body) : null;
   const mods = (modRows ?? []).map((mod) => ({
     id: mod.id,
-    label: [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry",
+    // Parts that came off stay pickable and say so: an update is very often
+    // *about* the part that just left the car.
+    label:
+      ([mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "Build entry") +
+      (mod.status === "removed" ? " — off the car" : ""),
   }));
 
   // Passive-affordance seeds (§W): "Create an update from these changes" /

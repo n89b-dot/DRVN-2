@@ -54,8 +54,11 @@ export async function indexCarNow(carId: string, assertLease: () => Promise<void
   let cursor: string | undefined;
   for (;;) {
     await assertLease();
+    // Removed parts leave the index with the car: a build should not keep
+    // matching a part it no longer has. They stay readable on the build
+    // sheet under "came off this car" (see 20260919171500 for the SQL lane).
     let query = admin.from("mod_items").select("id, brand, product, part_number")
-      .eq("car_id", carId).order("id").limit(500);
+      .eq("car_id", carId).eq("status", "installed").order("id").limit(500);
     if (cursor) query = query.gt("id", cursor);
     const { data } = await query.throwOnError();
     const page = data ?? [];

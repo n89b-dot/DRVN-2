@@ -16,7 +16,7 @@ import {
   searchParts,
   searchUpdates,
 } from "@/lib/explore/search/query";
-import { fetchFeed, resolveFeedTab, visibleFeedTabs } from "@/lib/feed";
+import { FEED_TABS, fetchFeed, resolveFeedTab } from "@/lib/feed";
 import { createClient } from "@/lib/supabase/server";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
@@ -49,9 +49,9 @@ export default async function ExplorePage({
   const viewerId = user?.id ?? null;
 
   // The segments are the shared feed taxonomy (lib/feed.ts) — Home's
-  // Discovery reads the same list, so the two never disagree.
-  const visibleTabs = visibleFeedTabs(isLoggedIn);
-  const tab = resolveFeedTab(raw.tab, isLoggedIn);
+  // Discovery reads the same list, so the two never disagree. Every segment
+  // is public, parts included (PRD 2026-09 E-5).
+  const tab = resolveFeedTab(raw.tab);
   const params = parseExploreSearch(raw, tab);
 
   // Resolve the vehicle param once: labels for the chip/empty state, and an
@@ -65,13 +65,13 @@ export default async function ExplorePage({
   // Browse mode: page one of the feed renders here; the wall pulls the rest.
   const feed = searching
     ? null
-    : await fetchFeed(supabase, tab, isLoggedIn, { page: 1, viewerId });
+    : await fetchFeed(supabase, tab, { page: 1, viewerId });
 
   // Search mode: one scope's worth of work, nothing speculative.
   const partsPageNum = Math.max(1, Number(raw.page) || 1);
   const [allResults, scopePage, partsPage] = searching
     ? await Promise.all([
-        tab === "all" ? searchAll(supabase, params, { viewerId, isLoggedIn }) : null,
+        tab === "all" ? searchAll(supabase, params, { viewerId }) : null,
         tab === "cars"
           ? searchBuilds(supabase, params, { page: 1, viewerId })
           : tab === "updates"
@@ -137,7 +137,7 @@ export default async function ExplorePage({
           compatible search state and shed the rest (brief §30). */}
       <div className="explorebar">
         <FilterGroup label="Show" ariaLabel="Filter the feed" stack scroll>
-          {visibleTabs.map((t) => (
+          {FEED_TABS.map((t) => (
             <FilterLink
               key={t.key}
               href={exploreSearchHref(t.key, params)}

@@ -284,9 +284,11 @@ export function ModChangeView(props: NodeViewProps) {
           />
         </label>
       </div>
-      {action === "removed" && modItemId && (
+      {(action === "removed" || action === "replaced") && modItemId && (
         // The Build → Marketplace bridge (brief §I): everything DRVN knows
         // about this part prefills the listing. Quiet link, never a prompt.
+        // "Replaced" earns it as much as "removed" (A-3) — a replaced part is
+        // exactly the one sitting in a box waiting to be sold.
         <a
           className="jumplink mt-2 inline-block"
           href={`/sell?car=${ctx(props).carId}&mod=${modItemId}`}

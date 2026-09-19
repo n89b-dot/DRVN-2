@@ -7,6 +7,7 @@ import { ListingRow } from "@/components/commerce";
 import { ShowcaseExplorer, type ShowcasePin } from "@/features/garage/showcase";
 import { BuildEvolution, type EvolutionMilestone } from "@/features/garage/build-evolution";
 import {
+  DataRow,
   EmptyState,
   GalleryLightbox,
   KeyValueTable,
@@ -52,10 +53,31 @@ function money(value: string) {
  * express. Panels are all server-rendered and switched client-side — see
  * SheetTabs for why the state is URL-backed.
  */
+/** A build line's trailing state: its listing, or the owner's way to make one. */
+function ModState({ mod, carId, isOwner }: { mod: ModLine; carId: string; isOwner: boolean }) {
+  if (mod.listing) {
+    return (
+      <Link
+        href={`/listings/${mod.listing.id}`}
+        className={`chip ${mod.listing.status === "sold" ? "chip--spent" : "chip--live"}`}
+      >
+        {mod.listing.status === "sold" ? "Sold" : `For sale ${money(mod.listing.price)}`}
+      </Link>
+    );
+  }
+  if (!isOwner) return null;
+  return (
+    <Link href={`/sell?car=${carId}&mod=${mod.id}`} className="relbtn">
+      Sell it
+    </Link>
+  );
+}
+
 export function CarTabs({
   about,
   gallery,
   modGroups,
+  cameOff,
   wheelRows,
   activity,
   forSale,
@@ -71,6 +93,8 @@ export function CarTabs({
   about: string | null;
   gallery: GalleryImage[];
   modGroups: ModGroup[];
+  /** Parts that came off this car — still records, not deletions (A-2). */
+  cameOff: ModLine[];
   wheelRows: { label: string; value: string }[];
   activity: ActivityItem[];
   forSale: ForSaleItem[];
@@ -87,7 +111,7 @@ export function CarTabs({
 }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
 
-  const hasBuild = modGroups.length > 0 || wheelRows.length > 0;
+  const hasBuild = modGroups.length > 0 || wheelRows.length > 0 || cameOff.length > 0;
   const entryCount = modGroups.reduce((n, g) => n + g.items.length, 0) + wheelRows.length;
 
   const buildPanel = (
@@ -116,27 +140,15 @@ export function CarTabs({
                 <span className="microlabel microlabel--ink">{group.label}</span>
               </div>
               {group.items.map((mod) => (
-                <div key={mod.id} className={`bline ${isOwner ? "bline--own" : ""}`}>
-                  <span className="bline__label">{mod.brand ?? "Component"}</span>
-                  <span className="bline__val">{mod.product ?? mod.raw}</span>
-
-                  {/* Only states we can actually stand behind — this row once
-                      stamped "Fitted" on every entry regardless. */}
-                  {mod.listing ? (
-                    <Link
-                      href={`/listings/${mod.listing.id}`}
-                      className={`chip ${mod.listing.status === "sold" ? "chip--spent" : "chip--live"}`}
-                    >
-                      {mod.listing.status === "sold" ? "Sold" : `For sale ${money(mod.listing.price)}`}
-                    </Link>
-                  ) : isOwner ? (
-                    // "List this part" — .bline--own and .relbtn shipped in the
-                    // stylesheet and had no call site until now.
-                    <Link href={`/sell?car=${carId}&mod=${mod.id}`} className="relbtn">
-                      Sell it
-                    </Link>
-                  ) : null}
-                </div>
+                <DataRow
+                  key={mod.id}
+                  className={isOwner ? "bline--own" : undefined}
+                  label={mod.brand ?? "Component"}
+                  value={mod.product ?? mod.raw}
+                  /* Only states we can actually stand behind — this row once
+                     stamped "Fitted" on every entry regardless. */
+                  end={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
+                />
               ))}
             </div>
           ))}
@@ -146,6 +158,26 @@ export function CarTabs({
                 <span className="microlabel microlabel--ink">Wheels &amp; Tires</span>
               </div>
               <KeyValueTable rows={wheelRows} />
+            </div>
+          )}
+          {cameOff.length > 0 && (
+            /* A-2. The parts that left the car, kept on the sheet. This is
+               what makes a used part's provenance checkable: a buyer can read
+               the build that the part came off, and see that it says so. */
+            <div>
+              <div className="bsec">
+                <span className="microlabel microlabel--ink">Came off this car</span>
+                <span className="microlabel">{cameOff.length}</span>
+              </div>
+              {cameOff.map((mod) => (
+                <DataRow
+                  key={mod.id}
+                  className="bline--off"
+                  label={mod.brand ?? "Component"}
+                  value={mod.product ?? mod.raw}
+                  end={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
+                />
+              ))}
             </div>
           )}
         </section>

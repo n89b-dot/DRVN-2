@@ -11,6 +11,15 @@
 
 Source of truth: `src/lib/domain/states.ts` (PostgreSQL remains the enforcement — these maps document it).
 
+### Modification lines
+
+Enforced by: CHECK constraints mod_items_status_check + mod_items_removed_at_agrees_check (20260919170000); removed_at derived by save_mod_items
+
+| From | May move to |
+| --- | --- |
+| `installed` | `removed` |
+| `removed` | `installed` |
+
 ### Orders
 
 Enforced by: CHECK constraint (0007) + purchase RPCs + dispute paths (0014/0021)

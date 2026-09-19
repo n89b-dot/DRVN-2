@@ -181,7 +181,7 @@ export function LivesheetBar({
       <header className="bar">
         <div className="bar__inner">
           <Link className="bar__logo" href={signedIn ? "/home" : "/"} aria-label="DRVN home">
-            DRVN<em>.</em> <span className="microlabel">Parts marketplace</span>
+            DRVN<em>.</em> <span className="microlabel">Builds and parts</span>
           </Link>
 
           <nav className="bar__nav" aria-label="Primary">

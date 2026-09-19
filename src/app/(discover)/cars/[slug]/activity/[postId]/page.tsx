@@ -8,6 +8,7 @@ import { ACTIVITY_EMOJIS } from "@/features/activity/constants";
 import { createClient } from "@/lib/supabase/server";
 
 import { ActivityGallery } from "./activity-gallery";
+import { MarkRemovedOffer } from "./mark-removed-offer";
 
 function initialsFor(name: string) {
   return name
@@ -97,10 +98,14 @@ export default async function ActivityDetailPage({
   // (a live listing when the part is for sale, the build sheet otherwise).
   const modIds = blocks.flatMap((b) => (b.type === "mod" && b.modItemId ? [b.modItemId] : []));
   const modLinks: Record<string, { href: string; label: string }> = {};
+  // Parts this update says came off, that the sheet still has fitted (A-3).
+  const stillFitted: { id: string; label: string }[] = [];
   if (modIds.length) {
+    // Unfiltered by status on purpose: an update that says "took the old
+    // manifold off" has to keep naming and linking that part afterwards.
     const { data: mods } = await supabase
       .from("mod_items")
-      .select("id, linked_listing_id")
+      .select("id, linked_listing_id, status, brand, product, raw_text")
       .in("id", modIds)
       .eq("car_id", car.id);
     const listingIds = (mods ?? []).flatMap((m) => (m.linked_listing_id ? [m.linked_listing_id] : []));
@@ -113,6 +118,19 @@ export default async function ActivityDetailPage({
         listing?.status === "active"
           ? { href: `/listings/${listing.id}`, label: "For sale →" }
           : { href: `/cars/${slug}?view=build`, label: "View build entry →" };
+      const saysItCameOff = blocks.some(
+        (b) =>
+          b.type === "mod" &&
+          b.modItemId === mod.id &&
+          (b.action === "removed" || b.action === "replaced")
+      );
+      if (saysItCameOff && mod.status === "installed") {
+        stillFitted.push({
+          id: mod.id,
+          label:
+            [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "That part",
+        });
+      }
     }
   }
 
@@ -178,6 +196,10 @@ export default async function ActivityDetailPage({
         <div className="mt-8">
           <EmbeddedVideo url={post.video_url} />
         </div>
+      )}
+
+      {user?.id === car.owner_id && stillFitted.length > 0 && (
+        <MarkRemovedOffer carId={car.id} mods={stillFitted} />
       )}
 
       <ActivityEngagement

@@ -1,5 +1,37 @@
 # Applying migrations
 
+## September 19 — mod record identity (2026-09 direction, WS2/WS6/WS4)
+
+| File | Applied to |
+|---|---|
+| `20260919170000_mod_record_identity.sql` | shared dev project `drvn-v3` (`grunnjojhdevhuckujmc`) and the local isolated test database, 2026-09-19 |
+
+Additive and idempotent. `mod_items` gains `status` (installed / removed) and
+`removed_at`, so removing a part is a state rather than a delete — the row
+keeps its id, which is what lets a public build sheet say "came off this car"
+and lets a listing keep pointing at the line it was released from. The same
+file carries the columns the two neighbouring workstreams need, so
+`save_mod_items` is re-created once rather than three times: `product_url`,
+`image_url`, `source_domain`, `ref_price_cents` + `ref_price_currency` for
+"add a mod by pasting a link", and `source_order_item_id` (unique where set)
+for "add what I bought to my car".
+
+Two invariants are database-enforced rather than assumed: `removed_at` is set
+exactly when `status = 'removed'`, and a reference price without a currency is
+refused. `save_mod_items` derives `removed_at` itself and never takes it from
+the client, so re-saving a sheet doesn't drag the date a part came off forward
+to today. **The delete statement is byte-identical to `20260905224929`'s** —
+the editor keeps sending removed rows with their status, so omitting a row
+still means delete. `source_order_item_id` is deliberately absent from the
+function's column lists: leaving it out is what makes an ordinary sheet save
+preserve it.
+
+Covered by `supabase/tests/mod_sheet_atomic_guard.sql`, which gained a second
+block for record identity (remove keeps the id, replace files a new one in its
+position, re-saving doesn't move the removal date, an omitted row still
+deletes, a price with no currency and an unknown state are both refused). The
+whole guard suite passes locally.
+
 ## September 2026 remediation — local verification only
 
 `20260905011618_remediation_integrity.sql` was generated with the Supabase CLI and applied to the disposable local Supabase stack and the exact CI PostgreSQL 15 image. All ten SQL guard files pass there. It has **not** been applied to the shared/production project. The historic status entries below are unchanged and do not imply deployment of this migration.

@@ -6,9 +6,9 @@ Page-level patterns: how components compose into the product's surfaces.
 
 | Surface | Route | Composition |
 | --- | --- | --- |
-| Public landing | `/` | band stats, hero callouts + leaders, steps 01–03, sheets/parts strips |
+| Public landing | `/` | car-led pagehead + two equal actions (Add your car · Shop parts), hero media, steps 01–03 (garage → community → market), builds strip before parts strip, band stats, buyer protection |
 | Home (Sheet 01) | `/home` | greeting pagehead, KPI deck + livedims, work orders rowlist, garage tile, feed, week strip |
-| Explore | `/explore` | mixed car/part/fresh-entry tiles, filters |
+| Explore | `/explore` | mixed car/part/update tiles, segments (All · Builds · Updates · Parts — all public), search + filters |
 | Marketplace | `/marketplace` (+ `[category]`/`[subcategory]`) | search + fitment switch + filter row + `.mkt` grid (3→2→1 cols) |
 | Listing | `/listings/[id]` | measured spec table, buy box (capsule + buy/offer), off-this-car, keeper livedims, Q&A |
 | Car sheet | `/cars/[slug]` (+ `/activity/[postId]`) | hero callouts, jumprow, KPI tiles, for-sale rowlist, build blines, activity feed |
@@ -30,6 +30,17 @@ Page-level patterns: how components compose into the product's surfaces.
 | Legal | `/terms`, `/privacy`, `/fees`, `/protection` | `.prose` + `.toc` |
 | Admin console | `/admin/*` — 11 routes: admin, audit, disputes, listings, orders, orders/[id], payments, reports, settings, users, users/[id] | gated (404 to non-admins); own nav; same tokens |
 | This microsite | `/docs/*` | gated like the console; markdown twins at `/docs/md/*` |
+
+### Navigation order
+
+One register (`src/components/ui/nav-routes.ts`) feeds the desktop rail, the
+mobile index and the Selling family subnav. Signed in, the top level is fixed:
+**Home · Explore · Marketplace · Garage · Selling · Messages · Profile**, then
+Settings. Garage sits above the Selling family because the car is the middle of
+the product, while Selling is a workspace entered on purpose; the family's five
+children stay expanded beneath their group heading so none costs a second
+click. Signed out, the register advertises only Explore and Marketplace —
+management surfaces have no signed-out reading.
 
 ## Commerce patterns (Mobbin-derived, exact values)
 

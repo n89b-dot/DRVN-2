@@ -25,10 +25,26 @@ describe("domain state definitions", () => {
     }
   });
 
-  it("every domain has at least one terminal state", () => {
-    for (const { domain, transitions } of DOMAIN_STATES) {
+  it("every lifecycle domain has at least one terminal state", () => {
+    for (const { domain, transitions, cyclic } of DOMAIN_STATES) {
+      if (cyclic) continue;
       const terminals = Object.values(transitions).filter((targets) => targets.length === 0);
       expect(terminals.length, `${domain} has no terminal state`).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * The escape hatch above is narrow on purpose: a ladder that quietly
+   * declares itself cyclic would stop being checked for a dead end.
+   */
+  it("only a genuine toggle may declare itself cyclic", () => {
+    const cyclic = DOMAIN_STATES.filter((entry) => entry.cyclic);
+    expect(cyclic.map((entry) => entry.domain)).toEqual(["mod_item"]);
+    for (const { domain, transitions } of cyclic) {
+      expect(
+        Object.values(transitions).every((targets) => targets.length > 0),
+        `${domain} declares itself cyclic but has a dead end`,
+      ).toBe(true);
     }
   });
 

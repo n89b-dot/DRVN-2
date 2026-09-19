@@ -211,6 +211,9 @@ export type ListingImage = {
   created_at: string;
 };
 
+/** installed | removed. Removal is a state, not a delete (A-2). */
+export type ModStatus = "installed" | "removed";
+
 export type ModItem = {
   id: string;
   car_id: string;
@@ -223,6 +226,23 @@ export type ModItem = {
   linked_listing_id: string | null;
   confidence: number | null;
   position: number;
+  /** A removed line keeps its id so listings, updates and the public build
+   *  sheet can still name the part — see "came off this car". */
+  status: ModStatus;
+  /** Set exactly when status is "removed"; the database enforces the pair. */
+  removed_at: string | null;
+  /** The order item this mod was built from (C-1). Unique where set, so a
+   *  second "add to my car" adds nothing. */
+  source_order_item_id: string | null;
+  /** Where the owner pasted the part from — rendered as a plain link out. */
+  product_url: string | null;
+  /** Thumbnail imported from that link. Never a listing photo (L-4). */
+  image_url: string | null;
+  source_domain: string | null;
+  /** Shop price when the link was read. Reference only, never a DRVN price. */
+  ref_price_cents: number | null;
+  /** ISO-4217 for ref_price_cents. No currency means no price. */
+  ref_price_currency: string | null;
   created_at: string;
   updated_at: string;
 };

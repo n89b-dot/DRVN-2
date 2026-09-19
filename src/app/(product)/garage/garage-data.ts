@@ -54,7 +54,9 @@ export async function loadGarageSheets(
     { data: likes },
   ] = await Promise.all([
     supabase.from("car_images").select("car_id, url, position").in("car_id", ids).order("position"),
-    supabase.from("mod_items").select("car_id").in("car_id", ids),
+    // The garage's per-car mod count means fitted parts; the ones that came
+    // off are listed on the car's own sheet, not counted as build content.
+    supabase.from("mod_items").select("car_id").in("car_id", ids).eq("status", "installed"),
     supabase
       .from("activity_posts")
       .select("id, car_id, title, published_at")

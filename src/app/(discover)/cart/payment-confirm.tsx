@@ -15,13 +15,13 @@ function appearanceFromTokens(night: boolean) {
       ? getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
       : fallback;
   const live = token("--live", night ? "#ff4530" : "#c02c14");
-  const dim = token("--dim", night ? "#8f8c82" : "#565963");
+  const dim = token("--dim", night ? "#8a909b" : "#565963");
   return {
     theme: (night ? "night" : "stripe") as "night" | "stripe",
     variables: {
       colorPrimary: live,
-      colorBackground: token("--paper-deep", night ? "#100f0c" : "#e5e2d8"),
-      colorText: token("--ink", night ? "#f0eee5" : "#20232a"),
+      colorBackground: token("--paper-deep", night ? "#0c0e11" : "#e5e2d8"),
+      colorText: token("--ink", night ? "#eceef2" : "#20232a"),
       colorTextSecondary: dim,
       colorDanger: live,
       borderRadius: "10px",

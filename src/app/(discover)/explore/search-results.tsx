@@ -159,7 +159,7 @@ export function AllSearchResults({
           <GroupHead
             title="Parts"
             count={results.parts.length}
-            href={isLoggedIn ? exploreSearchHref("parts", params) : undefined}
+            href={exploreSearchHref("parts", params)}
           />
           <PartsGroup
             parts={results.parts}

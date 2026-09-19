@@ -135,8 +135,10 @@ the untouched Explore feed — search never replaces it silently.
 ### Autocomplete
 
 `GET /api/explore/suggest?q=` returns at most 3 builds + 3 updates + 2
-accounts + 3 parts (parts only for signed-in viewers, matching the feed
-taxonomy) as direct destinations. The client is `SuggestingSearchField`
+accounts + 3 parts as direct destinations. Every lane is public, parts
+included, matching the feed taxonomy (PRD 2026-09 E-5) — the endpoint reads no
+session at all. A part whose source car is private is still named; only the
+link to that car is withheld. The client is `SuggestingSearchField`
 (`src/components/ui/search-suggest.tsx`): ARIA combobox over the `.combo`
 popover, ≥2-character threshold enforced on both sides, 150 ms debounce,
 stale requests aborted, Enter without a selection submits the GET form.

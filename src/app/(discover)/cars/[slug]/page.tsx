@@ -174,9 +174,16 @@ export default async function CarPage({
     galleryByPost.set(img.post_id, list);
   }
 
+  // A-2. Removal is a state, so the sheet arrives holding both: what is on
+  // the car, and what came off it. The build reads as the car's current spec;
+  // the parts that left get their own section rather than vanishing, because
+  // they are the provenance behind every listing released off this build.
+  const fittedMods = (mods ?? []).filter((m) => m.status === "installed");
+  const removedMods = (mods ?? []).filter((m) => m.status === "removed");
+
   // Split mods: "Wheels & Tires" group becomes the key/value table.
-  const wheelMods = (mods ?? []).filter((m) => m.group_label === "Wheels & Tires");
-  const otherMods = (mods ?? []).filter((m) => m.group_label !== "Wheels & Tires");
+  const wheelMods = fittedMods.filter((m) => m.group_label === "Wheels & Tires");
+  const otherMods = fittedMods.filter((m) => m.group_label !== "Wheels & Tires");
   const groupOrder = ["Performance", "Suspension", "Exterior", "Interior", "Other"];
   const grouped = new Map<string, typeof otherMods>();
   for (const mod of otherMods) {
@@ -222,6 +229,14 @@ export default async function CarPage({
   const wheelRows = wheelMods.map((m) => ({
     label: m.brand ?? "Spec",
     value: m.product ?? m.raw_text ?? "",
+  }));
+
+  const cameOff: ModLine[] = removedMods.map((m) => ({
+    id: m.id,
+    brand: m.brand,
+    product: m.product,
+    raw: m.raw_text,
+    listing: listingForMod(m.linked_listing_id),
   }));
 
   // Covers for the released-parts list.
@@ -366,6 +381,7 @@ export default async function CarPage({
         about={car.about}
         gallery={gallery}
         modGroups={modGroups}
+        cameOff={cameOff}
         wheelRows={wheelRows}
         activity={activity}
         forSale={forSale}

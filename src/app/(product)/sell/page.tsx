@@ -181,6 +181,8 @@ export default async function SellPage({
     initialValues = { origin: "garage", carId: sourceCar.id };
 
     if (modParam) {
+      // Unfiltered by status: selling a part is what usually FOLLOWS taking
+      // it off, so a removed line is the normal case here, not the exception.
       const { data: mod } = await supabase
         .from("mod_items")
         .select("id, brand, product, raw_text, category, confidence, part_number, car_id")

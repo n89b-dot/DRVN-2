@@ -14,7 +14,7 @@ export async function loadFeedPage(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const feed = await fetchFeed(supabase, tab, Boolean(user), {
+  const feed = await fetchFeed(supabase, tab, {
     page: Math.max(1, page),
     viewerId: user?.id ?? null,
   });

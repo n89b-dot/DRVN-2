@@ -16,7 +16,7 @@ import { reportError } from "@/lib/monitoring";
 
 import { decodeVin } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
-import type { Car, CarImage, Json } from "@/lib/database.types";
+import type { Car, CarImage, Json, ModStatus } from "@/lib/database.types";
 
 export type ActionState = { error?: string; ok?: string; href?: string };
 
@@ -282,6 +282,22 @@ export type ModItemInput = {
   confidence?: number | null;
   raw_text: string;
   position: number;
+  /**
+   * Whether the part is still on the car. Removing is a state, not a delete
+   * (A-2): the editor keeps sending a removed line with its id, and the
+   * database keeps the record so the build sheet can say "came off this car".
+   * Omitting the line entirely is still how a true delete is expressed.
+   */
+  status?: ModStatus;
+  /** Link-added parts (L-1…L-4). Round-tripped by the editor because these
+   *  columns ARE in save_mod_items' column lists — dropping them from a save
+   *  would silently clear a thumbnail the owner imported. */
+  product_url?: string | null;
+  image_url?: string | null;
+  source_domain?: string | null;
+  ref_price_cents?: number | null;
+  /** No currency means no price; the database refuses the half-state. */
+  ref_price_currency?: string | null;
 };
 
 /**
@@ -323,6 +339,17 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
         ? Math.min(1, Math.max(0, item.confidence))
         : null,
     raw_text: item.raw_text,
+    // `removed_at` is deliberately absent: the function derives it, so a line
+    // that came off last month keeps that date through every later save.
+    status: item.status === "removed" ? "removed" : "installed",
+    product_url: item.product_url ?? null,
+    image_url: item.image_url ?? null,
+    source_domain: item.source_domain ?? null,
+    ref_price_cents:
+      typeof item.ref_price_cents === "number" && Number.isFinite(item.ref_price_cents)
+        ? Math.max(0, Math.round(item.ref_price_cents))
+        : null,
+    ref_price_currency: item.ref_price_currency ?? null,
   }));
   const { data, error } = await supabase.rpc(
     "save_mod_items" as never,

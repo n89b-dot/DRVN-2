@@ -8,21 +8,28 @@ import { money } from "@/lib/format";
 import { vehicleSubline } from "@/lib/vehicles/label";
 
 export const metadata = {
-  title: "DRVN — Buy and sell parts off modified cars",
+  title: "DRVN — The home for your car and its build",
   description:
-    "The marketplace for used and take-off parts from modified cars. Browse by category or car, see the build behind every listing, and sell the parts you pull off your own.",
+    "Document your car and its build, follow what everyone else is building, and buy or sell the parts that come off. Every part shows the car it came off.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "DRVN — buy and sell parts off modified cars",
+    title: "DRVN — the home for your car and its build",
     description:
-      "The marketplace for used and take-off parts from modified cars — with the build behind every listing.",
+      "Follow what people are building, and buy or sell the parts that come off — with the car behind every part.",
     url: "/",
     type: "website",
   },
 };
 
 /**
- * Public landing — the marketplace pitch.
+ * Public landing — what DRVN is, and both ways in (F-1, F-2).
+ *
+ * It used to open with the marketplace pitch alone, from the retired
+ * marketplace-first PRD. DRVN is car-centred with two front doors, so the
+ * page leads with the car and offers two equal actions — Add your car and
+ * Shop parts — and builds come before parts all the way down. Neither
+ * action is a ghost button: one is the accent, the other the ink fill, so
+ * they read as a genuine choice rather than a primary and an afterthought.
  *
  * Uses the real `LivesheetBar` (signed-out variant) rather than a hand-rolled
  * header: the bespoke one used `.bar__link`, which is `display:none` below
@@ -38,7 +45,12 @@ export default async function LandingPage() {
   const jar = await cookies();
   const night = jar.get("ls-theme")?.value === "night";
 
-  const [{ data: carRows }, { data: listingRows }, { count: liveListingCount }] = await Promise.all([
+  const [
+    { data: carRows },
+    { data: listingRows },
+    { count: liveListingCount },
+    { count: publicCarCount },
+  ] = await Promise.all([
     supabase
       .from("cars")
       .select("id, slug, name, make, model, year, cover_image_url")
@@ -53,11 +65,13 @@ export default async function LandingPage() {
       .order("created_at", { ascending: false })
       .limit(3),
     supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
+    supabase.from("cars").select("id", { count: "exact", head: true }).eq("is_public", true),
   ]);
 
   const cars = carRows ?? [];
   const listings = listingRows ?? [];
   const liveCount = liveListingCount ?? 0;
+  const carCount = publicCarCount ?? 0;
   const heroImage = cars[0]?.cover_image_url ?? null;
 
   return (
@@ -66,23 +80,21 @@ export default async function LandingPage() {
 
       <main className="wrap">
         <Rv as="section" className="pagehead">
-          <span className="microlabel">
-            DRVN — the marketplace for modified car parts
-          </span>
+          <span className="microlabel">DRVN — builds and parts</span>
           <h1>
-            Used parts, off real <span className="live-word">builds.</span>
+            The home for your car and its <span className="live-word">build.</span>
           </h1>
           <p className="sub">
-            Somebody out there needs the parts sitting in your garage. DRVN is where used parts
-            from modified cars get bought and sold — and where you can see the exact car a part
-            came off before you hand over a cent.
+            Put your car on DRVN and keep a record of what you&apos;ve done to it. Follow what
+            everyone else is building. And when something comes off, sell it here — where a
+            buyer can see the exact car it came off before they hand over a cent.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/marketplace" className="btn btn--live">
-              Browse parts
+            <Link href="/signup" className="btn btn--live">
+              Add your car
             </Link>
-            <Link href="/signup" className="btn btn--ghost">
-              Start selling
+            <Link href="/marketplace" className="btn">
+              Shop parts
             </Link>
           </div>
         </Rv>
@@ -93,42 +105,43 @@ export default async function LandingPage() {
           </Rv>
         )}
 
-        {/* How it works — buyer, trust, seller */}
+        {/* What DRVN is — the car first, then the community, then the market. */}
         <section className="deck deck--three">
           <Rv className="tile" stagger={0}>
             <div className="tile__head">
               <span className="microlabel">
-                <span className="mono">01</span> — Find the part
+                <span className="mono">01</span> — Your garage
               </span>
             </div>
             <p className="text-body leading-relaxed">
-              Search by name, brand or part number — or flip one switch and only see parts that
-              fit the car you actually drive.
+              Add your car, list what you&apos;ve done to it, and post an update when something
+              changes. That build page is your record of the car — and the provenance behind
+              anything you sell off it.
             </p>
           </Rv>
           <Rv className="tile" stagger={1}>
             <div className="tile__head">
               <span className="microlabel">
-                <span className="mono">02</span> — See the car it came off
+                <span className="mono">02</span> — Follow the builds
               </span>
-              <span className="chip">Build pages</span>
+              <span className="chip">Explore</span>
             </div>
             <p className="text-body leading-relaxed">
-              No more &quot;came off a clean car, trust me.&quot; Parts released off a documented
-              build link straight to its page — the mod list, the photos, the owner — and
-              they&apos;re badged, so you can tell provenance from a plain listing at a glance.
+              One feed of builds, updates and parts from everyone else on DRVN. Follow a car or
+              the person behind it and their next move turns up on your Home.
             </p>
           </Rv>
           <Rv className="tile" stagger={2}>
             <div className="tile__head">
               <span className="microlabel">
-                <span className="mono">03</span> — Sell what you take off
+                <span className="mono">03</span> — Buy and sell the parts
               </span>
               <span className="chip">Free to list</span>
             </div>
             <p className="text-body leading-relaxed">
-              List a part in a few minutes, straight off your own build. Take offers, get paid,
-              ship it. 10% when it sells — nothing to list, nothing to browse.
+              Parts come off cars. Sell yours straight off your build page, or buy someone
+              else&apos;s and see the car it came off first. Browsing and buying need no
+              account; 10% when a part sells, nothing to list.
             </p>
           </Rv>
         </section>
@@ -146,8 +159,9 @@ export default async function LandingPage() {
               <div className="tile">
                 <span className="microlabel">First builds landing</span>
                 <p className="text-body leading-relaxed text-dim">
-                  Garages are being documented right now. Add yours and your car&apos;s build
-                  page is the provenance behind every part you sell off it.
+                  Garages are being documented right now. Add yours and your car gets a build
+                  page — the record of what you&apos;ve done, and the provenance behind every
+                  part you sell off it.
                 </p>
                 <Link href="/signup" className="jumplink mt-2 inline-block">
                   Start your garage →
@@ -216,11 +230,20 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* The terms, stated plainly — real numbers only */}
+        {/* DRVN stated plainly — real numbers only, cars before parts. The
+            band is three columns by recipe, so the offer window lives on the
+            marketplace rather than crowding the front door. */}
         <section className="deck">
           <Rv className="band">
-            <span className="microlabel">How it works, in numbers</span>
+            <span className="microlabel">DRVN in numbers</span>
             <div className="band__stats">
+              <div>
+                <p className="num-giant">{carCount}</p>
+                <div className="bandrule" />
+                <span className="microlabel">
+                  Car{carCount === 1 ? "" : "s"} with a public build page
+                </span>
+              </div>
               <div>
                 <p className="num-giant">{liveCount}</p>
                 <div className="bandrule" />
@@ -233,13 +256,6 @@ export default async function LandingPage() {
                 <div className="bandrule" />
                 <span className="microlabel">
                   Seller fee when a part sells — free to list, free to browse
-                </span>
-              </div>
-              <div>
-                <p className="num-giant">72h</p>
-                <div className="bandrule" />
-                <span className="microlabel">
-                  Offer window — sellers accept, counter or pass
                 </span>
               </div>
             </div>
@@ -282,7 +298,7 @@ export default async function LandingPage() {
         </section>
 
         <Foot
-          left="DRVN — used parts from modified cars"
+          left="DRVN — the home for your car and its build"
           right={
             <>
               <Link href="/explore" className="hover:text-live">

@@ -15,6 +15,26 @@ for (const path of PAGES) {
   });
 }
 
+/**
+ * The night sheet is a token remap, so a palette change lands everywhere at
+ * once — and until the September 2026 cooler-paper switch (PRD §3) nothing in
+ * the suite ever rendered it. `colorScheme: "dark"` doesn't reach it either:
+ * the theme is a cookie, and `prefers-color-scheme` is only the first-visit
+ * default. This sets the cookie and runs the same axe pass, so a future
+ * retune can't quietly drop a pairing under 4.5:1.
+ */
+for (const path of PAGES) {
+  test(`axe (night): ${path}`, async ({ page, baseURL }) => {
+    await page.context().addCookies([
+      { name: "ls-theme", value: "night", url: baseURL ?? "http://localhost:3000" },
+    ]);
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await assertAccessible(page, `${path} (night)`);
+  });
+}
+
 test("live text uses its accessible token on the recessed surface", async ({ page }) => {
   await page.goto("/login");
   const sample = page.locator("#live-text-surface-regression");

@@ -86,3 +86,23 @@ Decisions already made on that basis:
 **WS14 Posting.** 14a: `activity_posts.title` nullable; `activity_post_listings`; re-create `write_activity_post` (`20260905230238_…:71–257`) with optional title, photo required on publish, `p_listing_ids`; `lib/activity-blocks.ts`, `features/composer/*`, `features/activity/blocks-view.tsx`; quick post + part picker; title fallbacks across ~12 readers via one `postHeadline()` helper. 14b: `car_id` nullable, `/posts/[postId]`, `postHref()` replacing 13 hand-built links, `feed_events`, search RPC, notification triggers, OG image.
 
 **WS15 Local** (H-2). `profiles.country`, `region`; `src/lib/geo/regions.ts`; settings and profile editor; `feed_events` + `owner_id`; `local_feed_rows` RPC; Home tab.
+
+## Design proof (run 2026-09-19)
+
+Two specimens on the docs component board (`/docs/components` → Commerce),
+measured against the running app rather than eyeballed. Findings:
+
+- **Marketplace/Store card, two across on a phone.** At 375px the columns land
+  at exactly 163.5px and the cards come out **523–571px tall** — one and a half
+  per screen, which scans worse than the single column the grid currently drops
+  to under 480px. `.marketplace-card__title` has **no line-clamp**, so real
+  titles run 3–6 lines and a worst case runs eight; the ragged bottoms follow
+  from that. The Save target survives at 130×44. **WS9 conclusion:** two-across
+  needs a 2-line title clamp and a shorter meta stack *before* brand, part
+  miles and the one-line description are added — otherwise M-4's phone column
+  should stay at one.
+- **Explore card family.** The wall is already two columns on a phone, but the
+  cells are **not one footprint** — a build cell sits shorter than the update
+  beside it and the rows run ragged, which is what E-1 rules out. **WS13
+  conclusion:** the caption block has to become a fixed height per kind rather
+  than a natural one; that is the first job, before the breakers.

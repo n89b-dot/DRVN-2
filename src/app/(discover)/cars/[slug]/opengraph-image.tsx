@@ -22,7 +22,13 @@ export default async function BuildCard({ params }: { params: Promise<{ slug: st
 
   const [{ count: modCount }, { count: updateCount }] = car
     ? await Promise.all([
-        supabase.from("mod_items").select("id", { count: "exact", head: true }).eq("car_id", car.id),
+        // Installed only: the share card's mod count is what the car has now,
+        // not a tally of everything ever bolted to it.
+        supabase
+          .from("mod_items")
+          .select("id", { count: "exact", head: true })
+          .eq("car_id", car.id)
+          .eq("status", "installed"),
         supabase
           .from("activity_posts")
           .select("id", { count: "exact", head: true })

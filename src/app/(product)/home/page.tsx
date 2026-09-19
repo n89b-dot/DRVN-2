@@ -15,10 +15,10 @@ import {
 import { FeedList } from "@/components/ui/feed-list";
 import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import {
+  FEED_TABS,
   fetchFeed,
   fetchFollowedFeed,
   resolveFeedTab,
-  visibleFeedTabs,
   type FeedItem,
   type FeedTab,
 } from "@/lib/feed";
@@ -76,8 +76,8 @@ export default async function HomePage({
 
   // Discovery's segment — the same taxonomy Explore filters by, validated
   // the same way, so "builds" means the same set on both surfaces.
-  const discover = resolveFeedTab(discoverParam, true);
-  const segments = visibleFeedTabs(true);
+  const discover = resolveFeedTab(discoverParam);
+  const segments = FEED_TABS;
 
   // All five only need user!.id, with no dependency on each other — including
   // recommendListings, which hits its own admin client — so they run together.
@@ -109,7 +109,7 @@ export default async function HomePage({
     const wantCount = followed.followsNothing
       ? FEED_PAGE_SIZE
       : Math.max(DISCOVERY_MIN, FEED_PAGE_SIZE - followed.items.length);
-    const discoveryFeed = await fetchFeed(supabase, discover, true, {
+    const discoveryFeed = await fetchFeed(supabase, discover, {
       page: 1,
       pageSize: wantCount + followed.items.length,
       viewerId: user!.id,

@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
-import { ActionFooter, Button } from "@/components/ui";
-import type { ModItem } from "@/lib/database.types";
+import { ActionFooter, Button, TileHead } from "@/components/ui";
+import type { ModItem, ModStatus } from "@/lib/database.types";
 import {
   isLowConfidence,
   MOD_CATEGORIES,
@@ -48,7 +49,50 @@ type Row = {
   raw_text: string;
   /** Set once this line has been released for sale — drives the Unlink control. */
   linked_listing_id: string | null;
+  /**
+   * Whether the part is still on the car (A-2). A removed row stays in the
+   * sheet and stays in the payload — that is what keeps its id, and what lets
+   * the public build sheet go on naming it under "came off this car".
+   * Dropping the row from this array is the one gesture that really deletes.
+   */
+  status: ModStatus;
+  /** Set by the database when the part came off; display only. */
+  removed_at: string | null;
+  /** Link-added parts (L-1…L-4). Carried through every save: these columns
+   *  are in save_mod_items' column lists, so not sending them clears them. */
+  product_url: string | null;
+  image_url: string | null;
+  source_domain: string | null;
+  ref_price_cents: number | null;
+  ref_price_currency: string | null;
 };
+
+function blankRow(group_label = "Other"): Row {
+  return {
+    key: crypto.randomUUID(),
+    id: null,
+    group_label,
+    brand: "",
+    product: "",
+    part_number: "",
+    category: null,
+    confidence: null,
+    raw_text: "",
+    linked_listing_id: null,
+    status: "installed",
+    removed_at: null,
+    product_url: null,
+    image_url: null,
+    source_domain: null,
+    ref_price_cents: null,
+    ref_price_currency: null,
+  };
+}
+
+/** What a row is called in prose — for the removal prompt and the record. */
+function rowLabel(row: Pick<Row, "brand" | "product" | "raw_text">): string {
+  return [row.brand, row.product].filter(Boolean).join(" ").trim() || row.raw_text.trim() || "this part";
+}
 
 /**
  * Heuristic paste parser (PRD §7.3 — the AI parse is the later upgrade path).
@@ -59,12 +103,7 @@ type Row = {
  * second look.
  */
 function parsePaste(text: string): Row[] {
-  return parsePasteText(text).map((r) => ({
-    key: crypto.randomUUID(),
-    id: null,
-    linked_listing_id: null,
-    ...r,
-  }));
+  return parsePasteText(text).map((r) => ({ ...blankRow(), ...r }));
 }
 
 const inputClass = "ctl";
@@ -82,6 +121,13 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       confidence: m.confidence,
       raw_text: m.raw_text ?? "",
       linked_listing_id: m.linked_listing_id,
+      status: m.status,
+      removed_at: m.removed_at,
+      product_url: m.product_url,
+      image_url: m.image_url,
+      source_domain: m.source_domain,
+      ref_price_cents: m.ref_price_cents,
+      ref_price_currency: m.ref_price_currency,
     }))
   );
   const [paste, setPaste] = useState("");
@@ -97,6 +143,75 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   // modal, never repeated — dismissing it (or saving again without changes)
   // clears it, and ignoring it costs nothing.
   const [suggestion, setSuggestion] = useState<{ added: string[]; removed: string[] } | null>(null);
+  // A-1's inline ask. One row at a time: "What happens to the old part?" is a
+  // question about a specific line, and two open at once would be a dialog
+  // pretending to be a row.
+  const [asking, setAsking] = useState<string | null>(null);
+  const router = useRouter();
+
+  const installed = rows.filter((r) => r.status === "installed");
+  const cameOff = rows.filter((r) => r.status === "removed");
+
+  /** Remove: the row keeps its id and its place in the payload (A-2). */
+  function markRemoved(key: string) {
+    setRows((r) => r.map((row) => (row.key === key ? { ...row, status: "removed" as ModStatus } : row)));
+    setAsking(null);
+  }
+
+  /** Put a part back on the car — the same gesture, undone. */
+  function markInstalled(key: string) {
+    setRows((r) =>
+      r.map((row) =>
+        row.key === key ? { ...row, status: "installed" as ModStatus, removed_at: null } : row
+      )
+    );
+  }
+
+  /**
+   * Replace is its own action because people were typing over rows, which
+   * silently rewrote history: the listing released from that line, and every
+   * past update naming it, ended up describing the new part. The old row is
+   * marked removed and keeps its id; a fresh row takes its position.
+   */
+  function replaceRow(key: string) {
+    setRows((r) => {
+      const index = r.findIndex((row) => row.key === key);
+      if (index < 0) return r;
+      const old = r[index];
+      const next = [...r];
+      next[index] = { ...old, status: "removed" as ModStatus };
+      next.splice(index, 0, blankRow(old.group_label));
+      return next;
+    });
+    setAsking(null);
+  }
+
+  /** The only true delete: drop the line, and save_mod_items removes it. */
+  function deleteRow(key: string) {
+    setRows((r) => r.filter((row) => row.key !== key));
+    setAsking(null);
+  }
+
+  /**
+   * A-4 / contract 3: commit the sheet, THEN open the sell form. Navigating
+   * first meant an abandoned form lost the removal as well as the listing;
+   * committing first leaves the part under "Came off this car" either way.
+   * A row that already has a listing opens that listing instead.
+   */
+  async function listIt(row: Row) {
+    if (row.linked_listing_id) {
+      router.push(`/listings/${row.linked_listing_id}`);
+      return;
+    }
+    const nextRows = rows.map((r) =>
+      r.key === row.key ? { ...r, status: "removed" as ModStatus } : r
+    );
+    setRows(nextRows);
+    setAsking(null);
+    const saved = await persist(nextRows);
+    if (!saved) return;
+    router.push(`/sell?car=${carId}&mod=${row.id ?? row.key}`);
+  }
 
   function unlink(row: Row) {
     if (!row.id) return;
@@ -121,12 +236,18 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     setRows((r) => r.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
-  async function save() {
-    if (savingRef.current || unlinkPending) return;
+  /**
+   * The one commit path. `save()` is the button; `listIt()` calls it too,
+   * because the sheet has to be on disk before the sell form opens. Takes the
+   * rows explicitly so a caller that just changed them doesn't have to wait
+   * for React to hand the new state back.
+   */
+  async function persist(rowsToSave: Row[]): Promise<boolean> {
+    if (savingRef.current || unlinkPending) return false;
     savingRef.current = true;
     setSaving(true);
     setStatus(null);
-    const items: ModItemInput[] = rows.map((r, i) => ({
+    const items: ModItemInput[] = rowsToSave.map((r, i) => ({
       id: r.id ?? r.key,
       group_label: r.group_label,
       brand: r.brand.trim() || null,
@@ -136,6 +257,12 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       confidence: r.confidence,
       raw_text: r.raw_text || `${r.brand} ${r.product}`.trim(),
       position: i,
+      status: r.status,
+      product_url: r.product_url,
+      image_url: r.image_url,
+      source_domain: r.source_domain,
+      ref_price_cents: r.ref_price_cents,
+      ref_price_currency: r.ref_price_currency,
     }));
     try {
       let result: Awaited<ReturnType<typeof saveModItems>>;
@@ -150,7 +277,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           kind: "error",
           message: "Couldn't confirm the save. Your changes are still here — try again.",
         });
-        return;
+        return false;
       }
       setStatus(
         result.error
@@ -166,17 +293,27 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         );
         const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
           [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
-        const before = new Set(initialMods.map((m) => label(m)).filter(Boolean));
-        const after = new Set(rows.map((r) => label(r)).filter(Boolean));
+        // "What changed" is now a question about state, not about presence: a
+        // part that came off is still in the sheet, so comparing the two sets
+        // of labels would report nothing removed.
+        const before = new Set(
+          initialMods.filter((m) => m.status === "installed").map((m) => label(m)).filter(Boolean)
+        );
+        const after = new Set(
+          rowsToSave.filter((r) => r.status === "installed").map((r) => label(r)).filter(Boolean)
+        );
         const added = [...after].filter((l) => !before.has(l)).slice(0, 3);
         const removed = [...before].filter((l) => !after.has(l)).slice(0, 3);
         setSuggestion(added.length || removed.length ? { added, removed } : null);
       }
+      return !result.error;
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
   }
+
+  const save = () => persist(rows);
 
   return (
     <section className="tile">
@@ -215,13 +352,13 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         </div>
       )}
 
-      {rows.length > 0 && (
+      {installed.length > 0 && (
         /* Phones close the gap to zero: each record already separates itself
            with its own top rule, and 8px on top of that reads as a stray band
            between lines rather than as a ruled sheet. */
         <div className="mt-4 flex flex-col gap-2 max-sm:gap-0">
           <p className="field__hint">Confirm or edit the parsed lines before saving.</p>
-          {rows.map((row, index) => (
+          {installed.map((row, index) => (
             /* Desktop: a ledger line. Phone: a labelled record — see `.modrow`
                in globals.css. The head/foot wrappers are `display: contents`
                on desktop, so this is one set of controls at both widths, not
@@ -302,47 +439,42 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 </span>
               )}
               <span className="modrow__foot">
-                {/* Release is only offered on a filed line: the listing links back
-                    to this row's id, so an unsaved row has nothing to attach to. */}
-                {row.id ? (
-                  row.linked_listing_id ? (
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      <Link
-                        href={`/listings/${row.linked_listing_id}`}
-                        className="chip chip--ok !static"
-                        title="See the listing this line released"
-                      >
-                        For sale
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => unlink(row)}
-                        disabled={pending && unlinkingKey === row.key}
-                        className="microlabel shrink-0 underline decoration-dotted transition hover:text-live disabled:opacity-50"
-                        title="Unlink this line from its listing — the listing itself stays as-is"
-                      >
-                        {pending && unlinkingKey === row.key ? "Unlinking…" : "Unlink"}
-                      </button>
-                    </span>
-                  ) : (
+                {row.linked_listing_id && (
+                  <span className="flex shrink-0 items-center gap-1.5">
                     <Link
-                      href={`/sell?car=${carId}&mod=${row.id}`}
-                      className="relbtn !static shrink-0"
-                      title="List this component for sale with its provenance attached"
+                      href={`/listings/${row.linked_listing_id}`}
+                      className="chip chip--ok !static"
+                      title="See the listing this line released"
                     >
-                      Release
+                      For sale
                     </Link>
-                  )
-                ) : (
-                  <span className="microlabel shrink-0" title="Save the sheet before releasing">
-                    Unfiled
+                    <button
+                      type="button"
+                      onClick={() => unlink(row)}
+                      disabled={pending && unlinkingKey === row.key}
+                      className="microlabel shrink-0 underline decoration-dotted transition hover:text-live disabled:opacity-50"
+                      title="Unlink this line from its listing — the listing itself stays as-is"
+                    >
+                      {pending && unlinkingKey === row.key ? "Unlinking…" : "Unlink"}
+                    </button>
                   </span>
                 )}
+                {/* Replace is offered on every line, including an unfiled one:
+                    it is an editing gesture, not a release. */}
                 <button
                   type="button"
-                  onClick={() => setRows((r) => r.filter((x) => x.key !== row.key))}
+                  onClick={() => replaceRow(row.key)}
+                  className="microlabel shrink-0 underline decoration-dotted transition hover:text-live"
+                  title="The old part comes off and keeps its record; a new line takes its place"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAsking(asking === row.key ? null : row.key)}
                   className="modrow__rm shrink-0 px-1"
-                  aria-label="Remove mod"
+                  aria-expanded={asking === row.key}
+                  aria-label={`Take ${rowLabel(row)} off this car`}
                 >
                   <span aria-hidden="true">✕</span>
                   <span className="modrow__rmtext" aria-hidden="true">
@@ -350,8 +482,114 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   </span>
                 </button>
               </span>
+              {asking === row.key && (
+                /* A-1. Asked inline, in the row, because the answer is about
+                   this part and nothing else. Neither answer loses the record:
+                   "Just remove it" still keeps the line under "Came off this
+                   car". Delete is only offered where it can't orphan a
+                   listing. */
+                <div className="modrow__ask" role="group" aria-label={`What happens to ${rowLabel(row)}?`}>
+                  <span className="microlabel">What happens to the old part?</span>
+                  <Button
+                    variant="ghost"
+                    onClick={() => listIt(row)}
+                    disabled={pending}
+                    title="Save the sheet, then open the sell form with this part filled in"
+                  >
+                    List it
+                  </Button>
+                  <Button variant="ghost" onClick={() => markRemoved(row.key)} disabled={pending}>
+                    Just remove it
+                  </Button>
+                  {!row.linked_listing_id && (
+                    <button
+                      type="button"
+                      onClick={() => deleteRow(row.key)}
+                      className="microlabel shrink-0 underline decoration-dotted transition hover:text-live"
+                      title="This line was never on the car — delete it outright"
+                    >
+                      Delete — added by mistake
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
+        </div>
+      )}
+
+      {cameOff.length > 0 && (
+        /* A-2. Removal is a state, so the parts that came off are still on the
+           sheet — listed, not hidden. Each one can still be sold, put back, or
+           (only where nothing points at it) deleted outright. */
+        <div className="mt-6">
+          <TileHead
+            label="Came off this car"
+            end={
+              <span className="microlabel">
+                {cameOff.length} part{cameOff.length === 1 ? "" : "s"}
+              </span>
+            }
+          />
+          <div className="mt-2 flex flex-col gap-2 max-sm:gap-0">
+            {cameOff.map((row) => (
+              <div key={row.key} className="modrow modrow--off">
+                <span className="modrow__head">
+                  <span className="modrow__n" aria-hidden="true">
+                    ✕
+                  </span>
+                  <span className="text-body font-medium">{rowLabel(row)}</span>
+                </span>
+                <span className="microlabel shrink-0">
+                  {row.removed_at
+                    ? `Off since ${new Date(row.removed_at).toLocaleDateString()}`
+                    : "Coming off when you save"}
+                </span>
+                <span className="modrow__foot">
+                  {row.linked_listing_id ? (
+                    <Link
+                      href={`/listings/${row.linked_listing_id}`}
+                      className="chip chip--ok !static"
+                      title="See the listing this part was released to"
+                    >
+                      For sale
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => listIt(row)}
+                      disabled={pending}
+                      className="relbtn !static shrink-0 disabled:opacity-50"
+                      title="List this part for sale with its provenance attached"
+                    >
+                      List it
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => markInstalled(row.key)}
+                    className="microlabel shrink-0 underline decoration-dotted transition hover:text-live"
+                    title="Put this part back on the car"
+                  >
+                    Put it back
+                  </button>
+                  {!row.linked_listing_id && (
+                    <button
+                      type="button"
+                      onClick={() => deleteRow(row.key)}
+                      className="modrow__rm shrink-0 px-1"
+                      aria-label={`Delete the record of ${rowLabel(row)}`}
+                    >
+                      <span aria-hidden="true">✕</span>
+                      <span className="modrow__rmtext" aria-hidden="true">
+                        Delete
+                      </span>
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -359,23 +597,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         aux={
           <button
             type="button"
-            onClick={() =>
-              setRows((r) => [
-                ...r,
-                {
-                  key: crypto.randomUUID(),
-                  id: null,
-                  group_label: "Other",
-                  brand: "",
-                  product: "",
-                  part_number: "",
-                  category: null,
-                  confidence: null,
-                  raw_text: "",
-                  linked_listing_id: null,
-                },
-              ])
-            }
+            onClick={() => setRows((r) => [...r, blankRow()])}
             className="jumplink"
           >
             + Add a line manually

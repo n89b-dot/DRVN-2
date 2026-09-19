@@ -9,15 +9,20 @@
 - The wordmark is set in IBM Plex Sans at weight 600 with tight tracking; it is
   typography, not a drawn logo. There is no separate icon mark — in tight
   spaces (favicons, monograms) use a `D` on an ink plate with radius 10px.
-- Beside the wordmark, chrome may carry the microlabel `PARTS MARKETPLACE`
-  (mono, 12px, uppercase, 0.14em tracking, dim).
+- Beside the wordmark, chrome may carry the microlabel `BUILDS AND PARTS`
+  (mono, 12px, uppercase, 0.14em tracking, dim). It names both front doors in
+  three words; it read `PARTS MARKETPLACE` until September 2026, when the
+  lockup stopped describing DRVN as only a marketplace (F-2).
 
 ## Positioning
 
-DRVN is **the marketplace for used and take-off parts from modified cars**.
-The differentiator is provenance — every part can point back at the build it
-came off — but provenance is a supporting fact, never the headline. The
-product leads; the story follows.
+DRVN is **the home for your car and its build** — follow what others are
+building, and buy or sell the parts that come off. One product, two front
+doors (Explore and the Marketplace), with the car in the middle. Provenance —
+every part pointing back at the build it came off — is what makes both doors
+work, and it is now load-bearing rather than a supporting fact. Marketplace
+routes keep marketplace wording for the people and search engines arriving to
+shop. The product leads; the story follows.
 
 ## Voice
 
@@ -68,22 +73,43 @@ status tone alongside `ok`/`warn`, never a call to action.
 
 ### NIGHT (the drawing office after hours)
 
+Cooler paper since September 2026 (PRD 2026-09 §3). The night sheet used to be
+warm sepia — a lit drawing board — which tinted the shadows of every car photo
+towards brown. It is now a cool graphite sheet. The accent, the status hues and
+the whole day palette are unchanged.
+
 | Token | Hex |
 | --- | --- |
-| `paper` | `#171511` |
-| `paper-deep` | `#100F0C` |
-| `tile` | `#201E18` |
-| `tile-2` | `#1B1914` |
-| `ink` | `#F0EEE5` |
-| `dim` | `#8F8C82` |
+| `paper` | `#121418` |
+| `paper-deep` | `#0C0E11` |
+| `tile` | `#1C1F25` |
+| `tile-2` | `#171A1F` |
+| `ink` | `#ECEEF2` |
+| `dim` | `#8A909B` |
 | `live` | `#FF4530` |
+| `live-tint` | `rgba(255, 69, 48, 0.2)` |
 | `ok` | `#57B983` |
+| `ok-tint` | `rgba(87, 185, 131, 0.18)` |
 | `warn` | `#D9A13C` |
-| `warn-tint` | `rgba(217, 161, 60, 0.14)` |
+| `warn-tint` | `rgba(217, 161, 60, 0.18)` |
 | `info` | `#6CB2DF` |
-| `info-tint` | `rgba(108, 178, 223, 0.16)` |
-| `on-ink` | `#171511` |
-| `img-fallback` | `#262319` |
+| `info-tint` | `rgba(108, 178, 223, 0.2)` |
+| `on-ink` | `#14161A` |
+| `img-fallback` | `#22262D` |
+| `ink-hover` | `#D7D8DC` |
+| `ghost-hover` | `#262A31` |
+| `scrim` | `rgba(5, 6, 7, 0.62)` |
+
+Alpha-ink tokens (`dimline`, `grid-line`, `rule-soft`, `rule-mid`, `ghost`,
+`ghost-strong`) are cut from `236, 238, 242` — the night ink — at the same
+alphas as before.
+
+Measured on the switch, against the new paper: ink 15.87:1 on `paper` and
+14.21:1 on `tile`; `dim` 5.74:1 on `paper` (up from 5.52) and 5.14:1 on `tile`
+(up from 4.95); `on-ink` 15.59:1 on ink and 5.30:1 on the live fill; each
+status text token clears 5.7:1 on its own tint over paper. Every pairing held
+or improved — the cooler sheet is very slightly darker, so secondary text
+gained a little room.
 
 ### Palette rules
 

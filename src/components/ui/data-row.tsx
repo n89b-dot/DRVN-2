@@ -13,11 +13,17 @@ import { cx } from "@/lib/format";
  *
  * Previously forked as route-local `CtlLine`/`ReadOnlyLine` in Settings and
  * a bespoke `bline--own` row on the car sheet.
+ *
+ * `end` is the third column the car sheet always needed: an action or a state
+ * chip that belongs to this row — "For sale £420", "Sell it". It is distinct
+ * from `note`, which is dim prose about the value; `end` is something you can
+ * click, and it keeps its own colour.
  */
 export function DataRow({
   label,
   value,
   note,
+  end,
   className,
   children,
 }: {
@@ -26,6 +32,8 @@ export function DataRow({
   value?: ReactNode;
   /** Dim trailing note (`.bline__note`). */
   note?: ReactNode;
+  /** Trailing action or state for this row — a chip, a link, a small button. */
+  end?: ReactNode;
   className?: string;
   /** A control (`.ctl` input/select) — switches to the labelled control row. */
   children?: ReactNode;
@@ -36,6 +44,7 @@ export function DataRow({
         <span className="bline__label">{label}</span>
         {children}
         {note && <span className="bline__note">{note}</span>}
+        {end}
       </label>
     );
   }
@@ -44,6 +53,7 @@ export function DataRow({
       <span className="bline__label">{label}</span>
       <span className="bline__val !text-body">{value}</span>
       {note && <span className="bline__note">{note}</span>}
+      {end}
     </div>
   );
 }

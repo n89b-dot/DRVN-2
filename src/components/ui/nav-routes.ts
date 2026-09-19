@@ -91,18 +91,27 @@ export type NavEntry =
   | ({ kind: "route" } & NavRoute & { child?: boolean })
   | { kind: "group"; label: string; note: string };
 
-/** Signed-in register, in rail/index order. */
+/**
+ * Signed-in register, in rail/index order (N-1): Home, Explore, Marketplace,
+ * Garage, Selling, Messages, Profile — then Settings, which is account
+ * plumbing rather than a place you go.
+ *
+ * Garage sits above the Selling family because the car is the middle of the
+ * product: your cars are a daily destination, while Selling is a workspace
+ * you enter when you have something to run. The five Selling children stay
+ * expanded beneath their group heading so none of them costs a second click.
+ */
 export const PRIMARY_NAV: NavEntry[] = [
   { kind: "route", href: "/home", label: "Home", note: "What's moved since you looked", icon: "home" },
   { kind: "route", href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
   { kind: "route", href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
+  { kind: "route", href: "/garage", label: "Garage", note: "Your cars and their builds", icon: "garage" },
   {
     kind: "group",
     label: "Selling",
     note: "Your shop: stock, offers, orders, payouts",
   },
   ...SELLING_FAMILY.map((route) => ({ kind: "route" as const, ...route, child: true })),
-  { kind: "route", href: "/garage", label: "Garage", note: "Your cars and their builds", icon: "garage" },
   { kind: "route", href: "/messages", label: "Messages", note: "Every order and offer thread, in one list", icon: "comment" },
   { kind: "route", href: "/profile", label: "Profile", note: "How buyers and sellers see you", icon: "user" },
   { kind: "route", href: "/settings", label: "Settings", note: "Account, notifications and payments", icon: "settings" },
@@ -123,5 +132,5 @@ export const BAR_ROUTES: NavRoute[] = PRIMARY_NAV.filter(
  */
 export const PUBLIC_ROUTES: NavRoute[] = [
   { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
-  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
+  { href: "/marketplace", label: "Marketplace", note: "Parts off real builds", icon: "market" },
 ];

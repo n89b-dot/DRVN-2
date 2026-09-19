@@ -4,7 +4,7 @@ import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPO
 
 describe("account export contract", () => {
   it("uses explicit projections and covers both sides of shared records", () => {
-    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-09-05.v2");
+    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-09-19.v3");
     expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
     const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
     expect(keys).toEqual(expect.arrayContaining([
@@ -12,6 +12,26 @@ describe("account export contract", () => {
       "dispute_evidence", "seller_adjustments", "transfers", "refunds", "refund_recredit_proofs", "order_snapshot_images",
       "shipments", "shipment_events",
     ]));
+  });
+
+  /**
+   * A member's export has to contain the whole record, and a mod line is now
+   * more than its text: whether the part is still on the car, when it came
+   * off, where it was bought and what the shop charged. Missing columns here
+   * are invisible — the export just quietly omits them — so the projection is
+   * asserted rather than trusted.
+   */
+  it("exports a modification line's state and provenance, not just its text", () => {
+    const mods = ACCOUNT_EXPORT_SECTIONS.find((section) => section.key === "mod_items");
+    expect(mods).toBeDefined();
+    const fields = mods!.projection.split(",").map((field) => field.trim());
+    for (const field of [
+      "status", "removed_at", "source_order_item_id",
+      "product_url", "image_url", "source_domain",
+      "ref_price_cents", "ref_price_currency",
+    ]) {
+      expect(fields, `mod_items export is missing ${field}`).toContain(field);
+    }
   });
 
   it("keeps provider secrets and unrelated counterparty profiles out", () => {

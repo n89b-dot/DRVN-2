@@ -1,7 +1,7 @@
 import { expect, test, type ConsoleMessage, type Request, type Response } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
-import { addCar, enableSellerPayouts, makeUser, publishListing, signIn, signUp } from "./helpers";
+import { addCar, cleanupE2eUsers, enableSellerPayouts, makeUser, publishListing, signIn, signUp } from "./helpers";
 
 /**
  * Unified Explore search (brief: Explore search, Aug 2026).
@@ -15,6 +15,16 @@ import { addCar, enableSellerPayouts, makeUser, publishListing, signIn, signUp }
  */
 
 test.describe.configure({ mode: "serial" });
+
+/**
+ * This spec seeds a build whose name shares a prefix with every other run's,
+ * and the suggestion groups are capped at three — so without a sweep the
+ * autocomplete assertions start matching last week's leftovers instead of
+ * this run's car. (27 stale accounts had accumulated before this was added.)
+ */
+test.afterAll(async () => {
+  await cleanupE2eUsers();
+});
 
 const stamp = Date.now();
 const user = makeUser("xsearch", stamp);
@@ -174,8 +184,6 @@ test("accounts are discoverable by identity in All results", async ({ page }) =>
 });
 
 test("the Parts scope reuses marketplace search with its refinements", async ({ page }) => {
-  // Parts are a signed-in scope (PRD §8.2) — each Playwright test gets a
-  // fresh context, so authenticate first.
   await signIn(page, user);
   await page.goto(`/explore?tab=parts&q=${encodeURIComponent(partTitle)}`);
   await expect(page.locator("article").filter({ hasText: partTitle }).first()).toBeVisible();
@@ -183,6 +191,45 @@ test("the Parts scope reuses marketplace search with its refinements", async ({ 
   // A price bound that excludes the listing produces the honest empty state.
   await page.goto(`/explore?tab=parts&q=${encodeURIComponent(partTitle)}&min=5000`);
   await expect(page.getByText(/no parts match/i)).toBeVisible();
+});
+
+/**
+ * Journey 3, first half (PRD 2026-09 E-5): the marketplace is a front door,
+ * so a stranger with no account finds a part in Explore, in the Parts
+ * segment, in search and in the suggestions — the v3.1 §8.2 gate is retired.
+ * This test deliberately never signs in; each Playwright test gets a fresh
+ * context, so the page is genuinely signed out.
+ */
+test("a signed-out visitor finds parts in the segment, in search and in suggestions", async ({
+  page,
+}) => {
+  // The segment is offered at all, in browse mode.
+  await page.goto("/explore");
+  await expect(page.getByRole("link", { name: /^parts$/i }).first()).toBeVisible();
+
+  // The Parts scope itself returns the listing.
+  await page.goto(`/explore?tab=parts&q=${encodeURIComponent(partTitle)}`);
+  await expect(page.locator("article").filter({ hasText: partTitle }).first()).toBeVisible();
+
+  // The federated All view groups it under Parts, with a working view-all.
+  // The group head's accessible name carries its count ("Parts 1"), so this
+  // anchors at the start rather than matching the whole name.
+  await page.goto(`/explore?q=${encodeURIComponent(partTitle)}`);
+  await expect(page.getByRole("heading", { name: /^parts/i }).first()).toBeVisible();
+  await expect(page.locator("article").filter({ hasText: partTitle }).first()).toBeVisible();
+
+  // And autocomplete offers it before the results page is reached. From a
+  // clean /explore: on the results page the field already holds the query, so
+  // filling it with the same text fires no input event and nothing is
+  // fetched. The parts lane resolves through the marketplace search provider,
+  // which matches whole terms rather than the builds lane's prefixes, so this
+  // types the title rather than a fragment of it.
+  await page.goto("/explore");
+  const input = page.getByRole("combobox", { name: /search drvn/i });
+  await input.click();
+  await input.fill(partTitle);
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await expect(page.getByRole("option", { name: new RegExp(partTitle, "i") })).toBeVisible();
 });
 
 test("scope transitions shed incompatible filters and keep compatible ones", async ({ page }) => {

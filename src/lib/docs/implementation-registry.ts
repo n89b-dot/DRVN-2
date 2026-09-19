@@ -287,6 +287,46 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Migration 0057 applied and RPC-smoke-tested against dev data; params/extractor unit tests green; full vitest suite, typecheck and lint green; anon visual QA on the dev server (search, autocomplete keyboard flow, filter-only vehicle search, chips, empty state); explore-search e2e spec covers signed-in Parts scope, privacy exclusions and scope transitions.",
   },
   {
+    id: "front-door",
+    name: "Front door — one product, two doors",
+    group: "discovery",
+    status: "implemented",
+    brief: "PRD 2026-09 F-1, F-2, N-1, E-5 (build plan WS1)",
+    existsToday:
+      "The landing page, the lockup and the root metadata described DRVN as a parts marketplace, and Explore hid the Parts segment, parts results and part suggestions from signed-out visitors.",
+    changing:
+      "The front door leads with the car and offers two equal actions (Add your car \u00b7 Shop parts), builds before parts; the lockup and root metadata describe the product rather than one door, while marketplace routes gain their own marketplace wording; the signed-out parts gate is lifted everywhere; and the rail's top level is reordered so Garage sits above the Selling family.",
+    surfaces: [
+      "/",
+      "src/app/layout.tsx",
+      "src/components/ui/nav-routes.ts",
+      "src/components/ui/livesheet-bar.tsx",
+      "src/lib/feed.ts",
+      "src/lib/explore/search/query.ts",
+      "src/app/api/explore/suggest/route.ts",
+      "src/lib/marketplace/metadata.ts",
+    ],
+    benefit:
+      "A first-time visitor understands DRVN at / and can go either way in one click; a stranger with no account can find a part in Explore, in the Parts segment, in search and in the suggestions, and buy it as a guest.",
+    approach:
+      "Copy, order and metadata only \u2014 no new components and no schema. The parts gate came from retired PRD v3.1 \u00a78.2 and lived in six places (FEED_TABS' loggedInOnly flag, kindsForTab, the legacy feed fallback, searchAll, the suggest route, and the All view's view-all link); lifting it made the isLoggedIn plumbing through fetchFeed dead, so it was removed rather than left as a re-gating hint. Category routes get generateMetadata from one shared helper, since both routes need identical wording.",
+    dependsOn: ["explore-search"],
+    uxRules: [
+      "Neither front-door action is a ghost button: one is the accent, the other the ink fill, so they read as a genuine choice.",
+      "Parts are public everywhere \u2014 feed, Parts segment, search, suggestions \u2014 signed in or not.",
+      "A part whose source car is private is still named; only the link to that car is withheld.",
+      "Marketplace routes keep marketplace wording for search engines; the root description describes the product.",
+    ],
+    decisions: [
+      "The lockup microlabel reads BUILDS AND PARTS \u2014 it names both doors in three words.",
+      "The landing band leads with public build pages before parts for sale; the offer window moved off the front door because the recipe is three columns.",
+      "Garage sits above Selling in the rail: the car is the middle of the product, Selling is a workspace entered on purpose. Settings stays last as account plumbing.",
+      "visibleFeedTabs() was deleted rather than kept as a zero-argument passthrough \u2014 callers read FEED_TABS directly.",
+    ],
+    validation:
+      "Full vitest suite (105 files), typecheck and lint green; feed-tabs and nav-routes tests rewritten to pin the public taxonomy and the N-1 order; explore-search e2e green including a new signed-out journey (segment, Parts scope, All view, autocomplete) and a cleanup sweep the spec previously lacked; landing visual baselines regenerated at five viewports (darwin); verified signed out and signed in on the dev server in both themes and at phone width.",
+  },
+  {
     id: "part-aliases",
     name: "Part aliases, supersessions & interchange (groundwork)",
     group: "discovery",
@@ -433,6 +473,44 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     uxRules: ["A useful connection, not a ledger — ordinary relational data only."],
     validation:
       "Three bridges live: build-line 'Sell it' (pre-existing), ?car=&mod= prefill carrying title/category/part number + inferred fitment row, and the composer's removed-mod block linking 'Sell this part →'. Exercised via the sell-form fitment prefill path; no ledger machinery anywhere.",
+  },
+
+  {
+    id: "mod-record-identity",
+    name: "Change a part — removal is a state",
+    group: "selling",
+    status: "implemented",
+    brief: "PRD 2026-09 A-1…A-3 (build plan WS2)",
+    existsToday:
+      "A mod line exists only while the part is on the car: the editor drops the row, save_mod_items deletes anything the payload omits, and the part is gone — along with the fact it was ever fitted, and along with the provenance behind any listing released off it. People also type over rows to record a replacement, which silently rewrites what past updates and live listings refer to.",
+    changing:
+      "mod_items gains status (installed / removed) and removed_at. Remove keeps the id and marks the row; Replace is its own editor action that marks the old line removed and files a new one in its position; editing in place stays what it is — a fix for typos; a true delete is still 'omit the row', and is only offered where nothing points at the line. Removing asks inline what happens to the old part: List it, or just remove it. The parts that came off get their own section on the editor and on the public build sheet.",
+    surfaces: [
+      "/garage/[id]/edit",
+      "/cars/[slug]",
+      "supabase/migrations/20260919170000_mod_record_identity.sql",
+      "supabase/migrations/20260919171500_car_search_installed_mods.sql",
+      "src/features/activity/mod-actions.ts",
+    ],
+    benefit:
+      "A used part's provenance becomes checkable: a buyer can read the build it came off and see that the build says so. The first loop of the product — change a part, sell the old one — stops destroying its own evidence.",
+    approach:
+      "One migration for the state plus the columns two neighbouring workstreams need, so save_mod_items is re-created once. Its delete statement is byte-identical to the previous version, because the editor keeps sending removed rows with their status. Every reader then had to choose: the build sheet and the garage show what came off, while search, the OG count and the index describe only what is fitted.",
+    dependsOn: ["remove-to-sell"],
+    uxRules: [
+      "Neither answer to 'what happens to the old part?' loses the record — 'just remove it' still keeps the line.",
+      "Delete is only offered on a line with no linked listing.",
+      "'List it' commits the sheet before opening the sell form, so abandoning the form leaves the part under 'came off this car' rather than losing both.",
+      "An update that says a part came off OFFERS to mark it off the sheet; it never does so silently.",
+    ],
+    decisions: [
+      "removed_at is derived by the database, never sent by the client — re-saving a sheet can't drag the date a part came off forward to today.",
+      "A part that came off is excluded from car search text and the search index: a build should not keep matching a part it no longer has.",
+      "The listing provenance line, post mod blocks and the sell prefill deliberately do NOT filter by status — a removed part is the normal case for all three.",
+      "markModRemoved lives in features/activity rather than the garage's actions because the surface that offers it is the public post page, and a route may not reach into another route's actions.",
+    ],
+    validation:
+      "Migration applied to the shared dev project and the local test database; mod_sheet_atomic_guard gained a record-identity block (remove keeps the id, replace files a new line in position, re-saving doesn't move the removal date, an omitted row still deletes, a price with no currency and an unknown state are both refused) and the whole SQL guard suite passes. Walked end to end on the dev server at desktop width: the inline ask renders in-row with 44px targets, the line moves to 'Came off this car', the save keeps the row's id and sets removed_at, the build sheet drops to six entries and grows a 'Came off this car' section carrying the owner's Sell it. Phone width for this editor was NOT visually confirmed this session.",
   },
 
   {
@@ -822,6 +900,37 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
   },
 
   // ── 10 · Design system ──────────────────────────────────────────────────
+  {
+    id: "cooler-dark",
+    name: "Cooler dark theme",
+    group: "design-system",
+    status: "implemented",
+    brief: "PRD 2026-09 \u00a73 (build plan WS7)",
+    existsToday:
+      "The night sheet is warm sepia \u2014 #15130c paper, #f0eee5 ink, alpha-ink cut from 240,238,229 \u2014 which tints the shadows of every car photo towards brown.",
+    changing:
+      "One token block moves to a cool graphite paper: #121418 paper, #0c0e11 recessed, #1c1f25 / #171a1f plates, #eceef2 ink, #8a909b secondary, #22262d media fallback, #14161a on-ink, #262a31 ghost hover, and alpha-ink cut from 236,238,242. The day theme, the accent and the status hues are unchanged.",
+    surfaces: [
+      "src/app/globals.css",
+      "src/app/(docs)/docs/brand/page.tsx",
+      "src/app/(discover)/cart/payment-confirm.tsx",
+    ],
+    benefit:
+      "Car photography sits on a neutral page instead of a warm one, so a blue car reads blue; secondary text also gained a little contrast in the move.",
+    approach:
+      "Night is a token remap, so the change is the one [data-theme=\"dark\"] block plus the three places that carry night hexes as literals \u2014 the brand page's swatches and night specimen, the Stripe appearance fallbacks, and the select chevron, which is an inline SVG and can't read a custom property.",
+    dependsOn: [],
+    uxRules: [
+      "Every pairing re-measured on the switch; nothing was allowed to drop below 4.5:1.",
+      "--photo-filter is unchanged: it answers how bright a photo sits on a dark page, not what colour the page is.",
+    ],
+    decisions: [
+      "--scrim and --ink-hover follow the palette although the PRD doesn't list them: they are derived (a step under paper-deep, and ink at the day sheet's ~0.91 step), and left warm they would have been the two brown edges on a cool sheet.",
+      "The status hues and their tints stay exactly as they were \u2014 accent unchanged is a ruling, and each status text token still clears 5.7:1 on its own tint over the new paper.",
+    ],
+    validation:
+      "Contrast computed for every pairing before the switch and recorded in the CSS and in brand.md: ink 15.87:1 on paper, 14.21:1 on tile; dim 5.74:1 on paper (up from 5.52) and 5.14:1 on tile (up from 4.95); on-ink 15.59:1 on ink, 5.30:1 on the live fill. A new night axe pass over the five public pages is green \u2014 the suite had never rendered the dark theme, because the theme is a cookie and Playwright's colorScheme only sets prefers-color-scheme. Light-theme visual baselines unmoved; full vitest, typecheck and lint green; walked Home, Explore, Marketplace and Garage in the dark on the dev server at desktop and phone widths.",
+  },
   {
     id: "storybook",
     name: "Storybook beside Livesheet",

@@ -21,15 +21,21 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+/**
+ * The root description is the product, not one door (F-2). DRVN is
+ * car-centred with two ways in, so the site-wide wording leads with the car
+ * and names both; marketplace routes override it with marketplace wording,
+ * which is what a parts search engine should find.
+ */
 const description =
-  "DRVN is the marketplace for used and take-off parts from modified cars. Search by part, category or car, see the build each part came off, and sell the parts you pull off your own.";
+  "DRVN is the home for your car and its build. Document what you've done, follow what others are building, and buy or sell the parts that come off — with the car behind every part.";
 
 export const metadata: Metadata = {
   // Without metadataBase every relative OpenGraph/Twitter URL resolves against
   // nothing, so shared links unfurled without artwork.
   metadataBase: new URL(siteUrl()),
   title: {
-    default: "DRVN — Buy and sell parts off modified cars",
+    default: "DRVN — The home for your car and its build",
     template: "%s",
   },
   description,

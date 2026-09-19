@@ -19,7 +19,8 @@ export async function GET() {
   const body = [
     "# DRVN documentation",
     "",
-    "> DRVN is the marketplace for used and take-off parts from modified cars.",
+    "> DRVN is the home for your car and its build — follow what others are",
+    "> building, and buy or sell the parts that come off.",
     "> This index lists every documentation page as raw markdown. The design",
     '> system is called Livesheet — "a drawing that knows what\'s happening."',
     "",

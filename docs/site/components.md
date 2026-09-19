@@ -144,7 +144,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ConfirmDialog` | Primitive | `@/components/ui` | Destructive confirmation with optional type-to-confirm gate. | Deletes and irreversible actions. |
 | `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
 | `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |
-| `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row. — `.bline` | Settings-style label/value and label/control lines. *Not for:* Full form fields with hints/errors — that's the `.field` family. |
+| `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row, with an optional trailing action (`end`). — `.bline` | Settings-style label/value and label/control lines, and build-sheet lines whose trailing slot carries a state chip or a 'Sell it' action. *Not for:* Full form fields with hints/errors — that's the `.field` family. |
 | `Dialog` | Primitive | `@/components/ui` | The sheet dialog — focus management, escape/backdrop dismissal. | Modal editing/confirmation surfaces. |
 | `DropZone` | Primitive | `@/components/ui` | Click/drag file target with busy state and keyboard support. — `.drop` | Every upload entry point (pair with lib/media-upload's uploadImages). |
 | `EmbeddedVideo` | Primitive | `@/components/ui` | External video as an ink plate with a play mark. | Video links in updates. |

@@ -44,7 +44,15 @@ one move.
 - NIGHT is a **token remap only**, declared once under
   `[data-theme="dark"]` on `<html>`. No component rule is duplicated for
   dark. The only dark-specific rules are the photo filter
-  (`brightness(0.86) contrast(1.05)` on img/video) and the theme-pip fill.
+  (`brightness(0.86) contrast(1.05)` on img/video), the theme-pip fill and
+  the `select` chevron, which is an inline SVG and so carries `dim` as a
+  literal in both themes.
+- NIGHT moved from warm sepia to a **cooler graphite paper** in September
+  2026 (PRD 2026-09 §3) — see the night table in
+  [brand](brand.md#night-the-drawing-office-after-hours) for the values and
+  the re-measured contrast. Because it is a remap, nothing outside the one
+  block changed: the day theme, the accent, the status hues and every
+  component rule are untouched.
 - Theme is a cookie (`ls-theme`, values `day` / `night`). An inline script in
   the root layout (`src/app/layout.tsx`) stamps `data-theme` before first
   paint so there is no flash, without forcing routes out of static rendering.

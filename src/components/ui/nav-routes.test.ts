@@ -81,6 +81,28 @@ describe("the register", () => {
     expect(listings?.label).toBe("My Listings");
   });
 
+  /**
+   * N-1. The rail's top level is a fixed order, and Garage sits above the
+   * Selling family — the car is the middle of the product, Selling is a
+   * workspace. Settings is account plumbing and stays last.
+   */
+  it("orders the top level Home · Explore · Marketplace · Garage · Selling · Messages · Profile", () => {
+    const sellingChildren = new Set(SELLING_FAMILY.map((r) => r.href));
+    const topLevel = PRIMARY_NAV.filter(
+      (e) => e.kind === "group" || !sellingChildren.has(e.href)
+    ).map((e) => (e.kind === "group" ? e.label : e.label));
+    expect(topLevel).toEqual([
+      "Home",
+      "Explore",
+      "Marketplace",
+      "Garage",
+      "Selling",
+      "Messages",
+      "Profile",
+      "Settings",
+    ]);
+  });
+
   it("keeps Marketplace a plain top-level route — discovery, not operations", () => {
     const market = PRIMARY_NAV.find((e) => e.kind === "route" && e.href === "/marketplace");
     expect(market && "child" in market ? market.child : undefined).toBeFalsy();

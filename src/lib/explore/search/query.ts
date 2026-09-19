@@ -230,14 +230,15 @@ export async function searchParts(
 
 /**
  * The federated All view (brief §9): each family searched and ranked on its
- * own, presented as bounded groups. Parts stay signed-in-only, matching the
- * feed taxonomy (PRD §8.2). Accounts only join in when there's a text query
- * — filters never retrieve people.
+ * own, presented as bounded groups. Parts are public, matching the feed
+ * taxonomy (PRD 2026-09 E-5) — a signed-out visitor searching for a part
+ * finds it here. Accounts only join in when there's a text query — filters
+ * never retrieve people.
  */
 export async function searchAll(
   supabase: SupabaseClient<Database>,
   params: ExploreSearchParams,
-  opts: { viewerId?: string | null; isLoggedIn: boolean }
+  opts: { viewerId?: string | null }
 ): Promise<ExploreAllResults> {
   const [builds, updates, accounts, parts] = await Promise.all([
     searchBuilds(supabase, params, {
@@ -251,9 +252,7 @@ export async function searchAll(
       viewerId: opts.viewerId,
     }),
     params.q ? searchAccounts(supabase, params.q) : Promise.resolve([]),
-    opts.isLoggedIn
-      ? searchParts(supabase, params, { page: 1, viewerId: opts.viewerId })
-      : Promise.resolve(null),
+    searchParts(supabase, params, { page: 1, viewerId: opts.viewerId }),
   ]);
 
   const partCards = (parts?.results ?? []).slice(0, ALL_GROUP_LIMITS.parts);

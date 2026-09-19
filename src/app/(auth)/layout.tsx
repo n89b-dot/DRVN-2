@@ -67,7 +67,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       </Suspense>
       <div className="authwrap">
         <Link href="/" className="bar__logo" aria-label="DRVN home">
-          DRVN<em>.</em> <span className="microlabel">Parts marketplace</span>
+          DRVN<em>.</em> <span className="microlabel">Builds and parts</span>
         </Link>
         <div className="authcard mt-8">{children}</div>
       </div>

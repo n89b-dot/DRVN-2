@@ -1630,11 +1630,19 @@ export type Database = {
           created_at: string
           group_label: string
           id: string
+          image_url: string | null
           linked_listing_id: string | null
           part_number: string | null
           position: number
           product: string | null
+          product_url: string | null
           raw_text: string | null
+          ref_price_cents: number | null
+          ref_price_currency: string | null
+          removed_at: string | null
+          source_domain: string | null
+          source_order_item_id: string | null
+          status: string
           updated_at: string
         }
         Insert: {
@@ -1645,11 +1653,19 @@ export type Database = {
           created_at?: string
           group_label?: string
           id?: string
+          image_url?: string | null
           linked_listing_id?: string | null
           part_number?: string | null
           position?: number
           product?: string | null
+          product_url?: string | null
           raw_text?: string | null
+          ref_price_cents?: number | null
+          ref_price_currency?: string | null
+          removed_at?: string | null
+          source_domain?: string | null
+          source_order_item_id?: string | null
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -1660,11 +1676,19 @@ export type Database = {
           created_at?: string
           group_label?: string
           id?: string
+          image_url?: string | null
           linked_listing_id?: string | null
           part_number?: string | null
           position?: number
           product?: string | null
+          product_url?: string | null
           raw_text?: string | null
+          ref_price_cents?: number | null
+          ref_price_currency?: string | null
+          removed_at?: string | null
+          source_domain?: string | null
+          source_order_item_id?: string | null
+          status?: string
           updated_at?: string
         }
         Relationships: [
@@ -1680,6 +1704,13 @@ export type Database = {
             columns: ["linked_listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mod_items_source_order_item_id_fkey"
+            columns: ["source_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
             referencedColumns: ["id"]
           },
         ]
@@ -4494,6 +4525,65 @@ export type Database = {
         }
         Returns: Json
       }
+      marketplace_browse_rows: {
+        Args: {
+          p_fit?: boolean
+          p_query?: string
+          p_vehicle?: string
+          p_viewer?: string
+          p_vyear?: number
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          allows_collection: boolean
+          category: string
+          compatibility_notes: string | null
+          condition: string | null
+          condition_checklist: Json | null
+          created_at: string
+          currency: string
+          description: string | null
+          grade: string | null
+          height_in: number | null
+          id: string
+          length_in: number | null
+          location: string | null
+          offer_floor_cents: number | null
+          part_number: string | null
+          part_number_compact: string | null
+          price_cents: number
+          removed_at: string | null
+          removed_reason: string | null
+          reserved_until: string | null
+          seller_id: string
+          shipping_cents: number
+          shipping_mode: string
+          sold_at: string | null
+          source_car_id: string | null
+          status: string
+          subcategory: string | null
+          title: string
+          updated_at: string
+          view_count: number
+          weight_oz: number | null
+          width_in: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "listings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      marketplace_category_counts: {
+        Args: never
+        Returns: {
+          category: string
+          subcategory: string
+          total: number
+        }[]
+      }
       marketplace_filtered_rows: {
         Args: {
           p_fit?: boolean
@@ -4545,6 +4635,16 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      marketplace_match_evidence: {
+        Args: {
+          p_listing: string
+          p_make: string
+          p_model: string
+          p_viewer?: string
+          p_year?: number
+        }
+        Returns: string
       }
       marketplace_search_rows: {
         Args: { p_query: string }
@@ -4823,6 +4923,10 @@ export type Database = {
           p_request: string
         }
         Returns: Json
+      }
+      save_marketplace_search: {
+        Args: { p_name: string; p_params: Json }
+        Returns: string
       }
       save_mod_items: {
         Args: { p_car_id: string; p_items: Json }

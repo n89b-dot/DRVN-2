@@ -12,10 +12,10 @@ import { vehicleSubline } from "@/lib/vehicles/label";
  * results page in a dropdown: at most 3 builds, 3 updates, 2 accounts and 3
  * parts per query, resolved through the same provider seams as the full
  * search so a suggestion always leads somewhere the results page agrees
- * with. Public data only; parts ride along only for signed-in viewers
- * (matching the feed taxonomy, PRD §8.2). Minimum query length lives here
- * AND in the client so a hand-crafted request can't turn one keystroke into
- * a fan-out.
+ * with. Public data only — parts included, for signed-out visitors too
+ * (matching the feed taxonomy, PRD 2026-09 E-5), so the endpoint never
+ * reads the session. Minimum query length lives here AND in the client so a
+ * hand-crafted request can't turn one keystroke into a fan-out.
  */
 
 export type SuggestItem = { id: string; label: string; sub: string | null; href: string };
@@ -32,21 +32,15 @@ export async function GET(request: Request): Promise<NextResponse<SuggestRespons
   if (q.length < MIN_QUERY) return NextResponse.json(empty);
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const provider = getExploreSearchProvider();
 
   const [carIds, updateIds, accounts, listingIds] = await Promise.all([
     provider.searchIds("car", q, { limit: 3 }).catch(() => []),
     provider.searchIds("update", q, { limit: 3 }).catch(() => []),
     searchAccounts(supabase, q, 2).catch(() => []),
-    user
-      ? getSearchProvider()
-          .searchIds(q, { limit: 3 })
-          .catch(() => [])
-      : Promise.resolve([]),
+    getSearchProvider()
+      .searchIds(q, { limit: 3 })
+      .catch(() => []),
   ]);
 
   const [carsRes, updatesRes, listingsRes] = await Promise.all([

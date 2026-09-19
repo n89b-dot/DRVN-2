@@ -176,23 +176,34 @@
   --foreground: var(--ink);
 }
 
-/* ============ NIGHT SHEET — the drawing office after hours ============ */
+/* ============ NIGHT SHEET — the drawing office after hours ============
+   Cooler paper since September 2026 (PRD 2026-09 §3). The night sheet used
+   to be warm sepia (#15130c paper, #f0eee5 ink) — a lit drawing board. It
+   now reads as a cool graphite sheet, which sits better under car
+   photography: warm paper tinted every photo's shadows towards brown.
+   The day theme, the accent and the status hues are unchanged.
+
+   Contrast re-measured against the new paper on the switch; every pairing
+   held or improved. Ink 15.87:1 on paper, 14.21:1 on tile; dim 5.74:1 on
+   paper (was 5.52) and 5.14:1 on tile (was 4.95); on-ink 15.59:1 on ink and
+   5.30:1 on the live fill; each status text token clears 5.7:1 on its own
+   tint over paper. */
 [data-theme="dark"] {
-  --paper: #15130c;
-  --paper-deep: #0f0d0a;
-  --tile: #201e18;
-  --tile-2: #1b1914;
-  --ink: #f0eee5;
-  --dim: #8f8c82;
-  --dimline: rgba(240, 238, 229, 0.3);
-  --grid-line: rgba(240, 238, 229, 0.035);
+  --paper: #121418;
+  --paper-deep: #0c0e11;
+  --tile: #1c1f25;
+  --tile-2: #171a1f;
+  --ink: #eceef2;
+  --dim: #8a909b;
+  --dimline: rgba(236, 238, 242, 0.3);
+  --grid-line: rgba(236, 238, 242, 0.035);
   --live: #ff4530;
   --live-tint: rgba(255, 69, 48, 0.2);
   --ok: #57b983;
   --ok-tint: rgba(87, 185, 131, 0.18);
   --warn: #d9a13c;
   --warn-tint: rgba(217, 161, 60, 0.18);
-  --info: #6cb2df; /* 7.9:1 on night paper */
+  --info: #6cb2df; /* 8.0:1 on night paper */
   --info-tint: rgba(108, 178, 223, 0.2);
   /* Chip text — brightened a step over the night status hues for legibility
      on the stronger night tints. */
@@ -201,28 +212,34 @@
   --warn-text: #e6b45e;
   --info-text: #8ec4ea;
   --destructive: var(--live);
-  --on-ink: #171511;
-  --scrim: rgba(6, 5, 3, 0.62);
-  --img-fallback: #262319;
-  --ink-hover: #dbd9cf;
+  --on-ink: #14161a;
+  /* Scrim and ink-hover aren't in the PRD's list because they aren't
+     decisions — they're derived: the scrim is a step under paper-deep, and
+     ink-hover is ink at the same ~0.91 step the day sheet uses. Left warm,
+     they would have been the two brown edges on a cool sheet. */
+  --scrim: rgba(5, 6, 7, 0.62);
+  --img-fallback: #22262d;
+  --ink-hover: #d7d8dc;
   --live-hover: #ff6047;
-  --ghost-hover: #2b2820;
-  --rule-soft: rgba(240, 238, 229, 0.09);
-  --rule-mid: rgba(240, 238, 229, 0.12);
+  --ghost-hover: #262a31;
+  --rule-soft: rgba(236, 238, 242, 0.09);
+  --rule-mid: rgba(236, 238, 242, 0.12);
+  /* Unchanged with the cooler paper: the filter answers how bright a photo
+     sits on a dark page, not what colour the page is. */
   --photo-filter: brightness(0.86) contrast(1.05);
-  --ghost: rgba(240, 238, 229, 0.06);
-  --ghost-strong: rgba(240, 238, 229, 0.11);
+  --ghost: rgba(236, 238, 242, 0.06);
+  --ghost-strong: rgba(236, 238, 242, 0.11);
 
   /* Tailwind scale tokens follow the remap */
-  --color-paper: #15130c;
-  --color-paper-deep: #0f0d0a;
-  --color-tile: #201e18;
-  --color-tile-2: #1b1914;
-  --color-ink: #f0eee5;
+  --color-paper: #121418;
+  --color-paper-deep: #0c0e11;
+  --color-tile: #1c1f25;
+  --color-tile-2: #171a1f;
+  --color-ink: #eceef2;
   /* --color-dim / --color-live / --color-ok derive from the :root tokens
      redefined above, so night values have a single source. */
-  --color-on-ink: #171511;
-  --color-img-fallback: #262319;
+  --color-on-ink: #14161a;
+  --color-img-fallback: #22262d;
 }
 
 /* `--live` remains the accent fill/border token. Tailwind's generated
@@ -5296,7 +5313,7 @@ video {
     background-size: 10px 6px;
   }
   [data-theme="dark"] select.ctl {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238f8c82' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a909b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   }
   /* Build Story Composer (features/composer) — the writing surface is bare
      paper: no chrome until you want it. Rich blocks ride in .cblock shells
@@ -5947,6 +5964,16 @@ video {
   .bline--own {
     grid-template-columns: 190px 1fr auto auto;
   }
+  /* A part that came off this car (A-2). Still a record, so it keeps the same
+     ruled line and the same columns — dimmed, not struck through: the part
+     isn't wrong, it's just no longer fitted. */
+  .bline--off {
+    grid-template-columns: 190px 1fr auto auto;
+    color: var(--dim);
+  }
+  .bline--off .bline__val {
+    color: var(--dim);
+  }
   .relbtn {
     grid-row: 1;
     grid-column: 4;
@@ -6028,6 +6055,35 @@ video {
   }
   .modrow__rm:hover {
     color: var(--live);
+  }
+
+  /* "What happens to the old part?" (A-1). A full-width band under the row it
+     belongs to, so the question is visibly about that line and not a dialog
+     wearing a row's clothes. It reads as a continuation of the record, hence
+     the shared left edge and the recessed plate rather than a bordered card. */
+  .modrow__ask {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+    padding: 10px 12px;
+    background: var(--tile-2);
+    border-radius: var(--r-ctl);
+  }
+
+  /* A part that came off. The record stays on the sheet — dimmed, not hidden,
+     because it is still the provenance behind a listing and behind every past
+     update that named it. */
+  .modrow--off {
+    padding: 10px 0;
+    border-top: 1px solid var(--rule-soft);
+    color: var(--dim);
+  }
+  .modrow--off .modrow__n {
+    display: inline;
+    color: var(--dim);
   }
 
   /* Matches Tailwind's `sm` boundary exactly (`sm:` is min-width 640px), so

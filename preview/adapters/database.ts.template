@@ -22,7 +22,7 @@ export function createDemoClient():any {
    };
   }});return proxy;
  };
- const auth={getUser:async()=>({data:{user:{id:USER,email:'alex@example.com',user_metadata:{}}},error:null}),getSession:async()=>({data:{session:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signOut:async()=>({error:null}),mfa:{listFactors:async()=>({data:{all:[],totp:[]},error:null})}};
+ const auth={getUser:async()=>({data:{user:{id:USER,email:'alex@example.com',user_metadata:{}}},error:null}),/* page-context reads the JWT claims rather than round-tripping to the auth server; the preview has no auth server, so it answers with the same fixture identity. */getClaims:async()=>({data:{claims:{sub:USER,email:'alex@example.com'}},error:null}),getSession:async()=>({data:{session:null},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signOut:async()=>({error:null}),mfa:{listFactors:async()=>({data:{all:[],totp:[]},error:null})}};
  const channel:any={on:()=>channel,subscribe:()=>channel,unsubscribe:()=>{}};
  return {from:query,rpc:async()=>({data:[],error:null,count:0}),auth,channel:()=>channel,removeChannel:()=>{},storage:{from:()=>({getPublicUrl:(p:string)=>({data:{publicUrl:p}}),upload:async()=>failure})}};
 }

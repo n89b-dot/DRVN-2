@@ -1,8 +1,10 @@
 # DRVN documentation
 
-DRVN is the marketplace for used and take-off parts from modified cars. Buyers
-search by part, category or car and can see the build each part came off;
-sellers list the parts they pull off their own cars.
+DRVN is the home for your car and its build — follow what others are building,
+and buy or sell the parts that come off. One product, two front doors (Explore
+and the Marketplace), with the car in the middle: a profile has a garage, each
+car has its updates and its parts, and the parts a member sells are their store.
+The marketplace is fully public, including for signed-out visitors.
 
 This microsite is the single front door to everything you need to know about
 the product's design and documentation. It is served in two forms:

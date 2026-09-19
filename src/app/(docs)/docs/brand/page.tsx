@@ -15,17 +15,19 @@ const DAY_SWATCHES = [
   { name: "img-fallback", hex: "#E2DFD5", role: "media fallback" },
 ];
 
+// Cooler paper since September 2026 (PRD 2026-09 §3); the accent and the
+// status hues are unchanged.
 const NIGHT_SWATCHES = [
-  { name: "paper", hex: "#15130C", role: "canvas" },
-  { name: "paper-deep", hex: "#0F0D0A", role: "recessed" },
-  { name: "tile", hex: "#201E18", role: "raised plate" },
-  { name: "tile-2", hex: "#1B1914", role: "secondary plate" },
-  { name: "ink", hex: "#F0EEE5", role: "text / inverted" },
-  { name: "dim", hex: "#8F8C82", role: "secondary text" },
+  { name: "paper", hex: "#121418", role: "canvas" },
+  { name: "paper-deep", hex: "#0C0E11", role: "recessed" },
+  { name: "tile", hex: "#1C1F25", role: "raised plate" },
+  { name: "tile-2", hex: "#171A1F", role: "secondary plate" },
+  { name: "ink", hex: "#ECEEF2", role: "text / inverted" },
+  { name: "dim", hex: "#8A909B", role: "secondary text" },
   { name: "live", hex: "#FF4530", role: "THE signal" },
   { name: "ok", hex: "#57B983", role: "settled / verified" },
   { name: "warn", hex: "#D9A13C", role: "held / due" },
-  { name: "img-fallback", hex: "#262319", role: "media fallback" },
+  { name: "img-fallback", hex: "#22262D", role: "media fallback" },
 ];
 
 function SwatchGrid({ swatches, onDark }: { swatches: typeof DAY_SWATCHES; onDark?: boolean }) {
@@ -38,7 +40,7 @@ function SwatchGrid({ swatches, onDark }: { swatches: typeof DAY_SWATCHES; onDar
             style={{
               background: swatch.hex,
               boxShadow: onDark
-                ? "inset 0 0 0 1px rgba(240,238,229,0.12)"
+                ? "inset 0 0 0 1px rgba(236,238,242,0.12)"
                 : "inset 0 0 0 1px rgba(32,35,42,0.09)",
             }}
           />
@@ -83,7 +85,7 @@ export default function BrandPage() {
             <span className="text-display font-semibold leading-none tracking-tight">
               DRVN<em className="not-italic" style={{ color: "var(--live)" }}>.</em>
             </span>
-            <span className="microlabel !mb-1">Parts marketplace</span>
+            <span className="microlabel !mb-1">Builds and parts</span>
           </div>
         </Specimen>
         <Specimen
@@ -141,16 +143,16 @@ export default function BrandPage() {
           <Specimen name="Day — paper" klass=":root">
             <SwatchGrid swatches={DAY_SWATCHES} />
           </Specimen>
-          <section className="tile" style={{ background: "#15130C" }}>
+          <section className="tile" style={{ background: "#121418" }}>
             <div className="tile__head">
-              <span className="microlabel !mb-0" style={{ color: "#8F8C82" }}>
+              <span className="microlabel !mb-0" style={{ color: "#8A909B" }}>
                 Night — the drawing office after hours
               </span>
-              <span className="kv" style={{ color: "#F0EEE5" }}>
+              <span className="kv" style={{ color: "#ECEEF2" }}>
                 [data-theme=&quot;dark&quot;]
               </span>
             </div>
-            <div style={{ color: "#8F8C82" }}>
+            <div style={{ color: "#8A909B" }}>
               <SwatchGrid swatches={NIGHT_SWATCHES} onDark />
             </div>
           </section>

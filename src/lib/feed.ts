@@ -98,32 +98,30 @@ export type FeedTab = "all" | "cars" | "updates" | "parts";
 /**
  * The feed's segmentation — one description read by Explore's filter row
  * and Home's Discovery segments, so the two surfaces can't drift apart on
- * what the kinds are called or who may see them.
+ * what the kinds are called.
  *
  * "Parts" *is* parts for sale: `kindsForTab` maps it to active listings and
  * nothing else, so a separate "For sale" segment would be the same set twice.
- * Listings are a signed-in view (PRD §8.2), hence `loggedInOnly`.
+ *
+ * Every segment is public. Parts used to carry a `loggedInOnly` flag, from
+ * PRD v3.1 §8.2 ("listings are a signed-in view"); that ruling is retired
+ * (PRD 2026-09 E-5) — the marketplace is a front door, so a signed-out
+ * visitor sees parts in the feed, in search and in suggestions. A part off a
+ * private car is still named but never linked (see `hydrateFeedItems`).
  */
-export const FEED_TABS: { key: FeedTab; label: string; loggedInOnly?: boolean }[] = [
+export const FEED_TABS: { key: FeedTab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "cars", label: "Builds" },
   { key: "updates", label: "Updates" },
-  { key: "parts", label: "Parts", loggedInOnly: true },
+  { key: "parts", label: "Parts" },
 ];
 
-/** The tabs this viewer may select. */
-export function visibleFeedTabs(isLoggedIn: boolean) {
-  return FEED_TABS.filter((t) => !t.loggedInOnly || isLoggedIn);
-}
-
 /**
- * Validates a `?tab=` / `?discover=` value server-side. Anything unknown — or
- * a signed-in-only tab requested while signed out — falls back to "all", so a
- * pasted link never renders an empty or forbidden segment.
+ * Validates a `?tab=` / `?discover=` value server-side; anything unknown
+ * falls back to "all", so a pasted link never renders an empty segment.
  */
-export function resolveFeedTab(value: unknown, isLoggedIn: boolean): FeedTab {
-  const allowed = visibleFeedTabs(isLoggedIn);
-  return allowed.find((t) => t.key === value)?.key ?? "all";
+export function resolveFeedTab(value: unknown): FeedTab {
+  return FEED_TABS.find((t) => t.key === value)?.key ?? "all";
 }
 
 export type FeedPage = {
@@ -463,18 +461,17 @@ export async function hydrateFeedItems(
   return items;
 }
 
-function kindsForTab(tab: FeedTab, isLoggedIn: boolean): FeedKind[] {
+function kindsForTab(tab: FeedTab): FeedKind[] {
   const kinds: FeedKind[] = [];
   if (tab === "all" || tab === "cars") kinds.push("car");
   if (tab === "all" || tab === "updates") kinds.push("update");
-  if ((tab === "all" || tab === "parts") && isLoggedIn) kinds.push("part");
+  if (tab === "all" || tab === "parts") kinds.push("part");
   return kinds;
 }
 
 /**
- * Explore feed (PRD §8.2): mixed feed of build updates, cars, and — for
- * logged-in viewers only — parts. Recency-ordered for MVP; personalization
- * comes later.
+ * Explore feed: a mixed feed of build updates, cars and parts, public to
+ * everyone. Recency-ordered for MVP; personalization comes later.
  *
  * Pagination: pages the `feed_events` view (migration 0032) — a single
  * globally-ordered UNION of public cars, published updates, and active
@@ -490,12 +487,11 @@ function kindsForTab(tab: FeedTab, isLoggedIn: boolean): FeedKind[] {
 export async function fetchFeed(
   supabase: SupabaseClient<Database>,
   tab: FeedTab,
-  isLoggedIn: boolean,
   opts: { page?: number; pageSize?: number; viewerId?: string | null } = {}
 ): Promise<FeedPage> {
   const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, opts.page ?? 1);
-  const kinds = kindsForTab(tab, isLoggedIn);
+  const kinds = kindsForTab(tab);
   if (!kinds.length) return { items: [], page, pageSize, hasMore: false };
 
   const from = (page - 1) * pageSize;
@@ -510,7 +506,7 @@ export async function fetchFeed(
 
   if (error || !data) {
     reportError("[feed] feed_events view unavailable, falling back to legacy merge", error);
-    return _legacyFetchFeed(supabase, tab, isLoggedIn, { page, pageSize, viewerId: opts.viewerId });
+    return _legacyFetchFeed(supabase, tab, { page, pageSize, viewerId: opts.viewerId });
   }
 
   const hasMore = data.length > pageSize;
@@ -554,7 +550,6 @@ export function interleaveKinds(items: FeedItem[]): FeedItem[] {
 async function _legacyFetchFeed(
   supabase: SupabaseClient<Database>,
   tab: FeedTab,
-  isLoggedIn: boolean,
   opts: { page: number; pageSize: number; viewerId?: string | null }
 ): Promise<FeedPage> {
   const { page, pageSize } = opts;
@@ -562,7 +557,7 @@ async function _legacyFetchFeed(
 
   const wantCars = tab === "all" || tab === "cars";
   const wantUpdates = tab === "all" || tab === "updates";
-  const wantParts = (tab === "all" || tab === "parts") && isLoggedIn;
+  const wantParts = tab === "all" || tab === "parts";
 
   const [carsRes, postsRes, listingsRes] = await Promise.all([
     wantCars

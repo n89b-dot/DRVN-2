@@ -1,10 +1,12 @@
 # DRVN
 
-A provenance-driven automotive enthusiast platform and peer-to-peer parts
-marketplace. Builders document their cars (digital garages, build updates,
-modification histories); parts listed for sale carry the provenance of the car
-they came off — what the vehicle was, how the part was used, what condition it
-is in, and what the seller disclosed. **Provenance creates trust.**
+The home for your car and its build — follow what others are building, and buy
+or sell the parts that come off. One product with two front doors (Explore and
+the Marketplace, both public) and the car in the middle: builders document
+their cars (digital garages, build updates, modification histories), and parts
+listed for sale carry the provenance of the car they came off — what the
+vehicle was, how the part was used, what condition it is in, and what the
+seller disclosed. **Provenance creates trust.**
 
 The product distinguishes three kinds of claim everywhere it speaks:
 *source-vehicle facts* (recorded from the car), *seller claims* (grades,

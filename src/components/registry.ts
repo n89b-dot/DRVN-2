@@ -333,10 +333,10 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     layer: "primitive",
     category: "data",
     status: "active",
-    description: "Ruled baseline row (`.bline`) — read-only value row or labelled control row.",
-    use: "Settings-style label/value and label/control lines.",
+    description: "Ruled baseline row (`.bline`) — read-only value row or labelled control row, with an optional trailing action (`end`).",
+    use: "Settings-style label/value and label/control lines, and build-sheet lines whose trailing slot carries a state chip or a 'Sell it' action.",
     avoid: "Full form fields with hints/errors — that's the `.field` family.",
-    variants: ["value row", "control row (children)"],
+    variants: ["value row", "control row (children)", "with end (trailing action)"],
     cssRecipe: ".bline",
   },
   {

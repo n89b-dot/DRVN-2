@@ -1,5 +1,6 @@
 import type {
   ListingImportStatus,
+  ModStatus,
   ListingStatus,
   OfferStatus,
   OrderStatus,
@@ -137,7 +138,20 @@ export const IMPORT_TRANSITIONS: TransitionMap<ListingImportStatus> = {
   expired: [],
 };
 
+/**
+ * Modification lines (20260919170000). Two states and both directions: a part
+ * comes off the car, and occasionally goes back on. The pair is deliberately
+ * small — "removed" is a state, not a delete, so the record survives to be
+ * the provenance behind a listing. A true delete is not a state at all: the
+ * row is omitted from the sheet and `save_mod_items` drops it.
+ */
+export const MOD_ITEM_TRANSITIONS: TransitionMap<ModStatus> = {
+  installed: ["removed"],
+  removed: ["installed"],
+};
+
 export type DomainName =
+  | "mod_item"
   | "order"
   | "listing"
   | "offer"
@@ -152,7 +166,24 @@ export const DOMAIN_STATES: {
   title: string;
   authority: string;
   transitions: TransitionMap<string>;
+  /**
+   * True when the domain is a toggle rather than a lifecycle ladder, and so
+   * genuinely has no terminal state. Only `mod_item` is one: a part can come
+   * off a car and go back on it indefinitely, and the way a modification line
+   * really ends is not a state at all — the row is omitted from the sheet and
+   * deleted. Declaring this is deliberate; the completeness test still
+   * demands a terminal state from everything else.
+   */
+  cyclic?: true;
 }[] = [
+  {
+    domain: "mod_item",
+    title: "Modification lines",
+    authority:
+      "CHECK constraints mod_items_status_check + mod_items_removed_at_agrees_check (20260919170000); removed_at derived by save_mod_items",
+    transitions: MOD_ITEM_TRANSITIONS,
+    cyclic: true,
+  },
   {
     domain: "order",
     title: "Orders",
