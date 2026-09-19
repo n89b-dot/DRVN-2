@@ -36,7 +36,9 @@ Deeper source documents, served verbatim:
 | Livesheet component & page inventory | `/docs/md/livesheet-inventory` |
 | Component design doc | `/docs/md/component-design-doc` |
 | Product overview | `/docs/md/product-overview` |
-| PRD v3.1 | `/docs/md/prd` |
+| PRD — September 2026 direction (current) | `/docs/md/prd` |
+| Build plan — September 2026 direction | `/docs/md/build-plan-2026-09` |
+| PRD v3.1 (historical, superseded) | `/docs/md/prd-v3-1` |
 | Production runbook | `/docs/md/production-runbook` |
 | Remediation status (Aug 2026 hardening pass, issues 1–54) | `/docs/md/remediation-status` |
 | Listing importer specification | `/docs/md/listing-importer-spec` |

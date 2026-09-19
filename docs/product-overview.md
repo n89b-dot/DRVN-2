@@ -1,5 +1,7 @@
 # DRVN — Product Overview & Design Rationale
 
+> **Direction changed (2026-09-19):** the authoritative spec is now [DRVN-PRD-2026-09.md](DRVN-PRD-2026-09.md) — one product, two front doors, the car in the middle. The "marketplace-first" framing in this document is out of date and gets rewritten as part of workstream 1 of the [build plan](plans/2026-09-direction-build-plan.md).
+
 > **What to read this for:** the plain-English "what and why" behind DRVN. The
 > [PRD (DRVN-PRD-v3.1.md)](DRVN-PRD-v3.1.md) is the authoritative spec; this document is the
 > narrative companion — what the app essentially is, what we're trying to build, and *why*

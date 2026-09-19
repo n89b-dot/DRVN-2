@@ -182,8 +182,23 @@ export const REFERENCE_DOCS: DocEntry[] = [
   },
   {
     slug: "prd",
-    title: "PRD v3.1",
-    description: "The full product requirements document.",
+    title: "PRD — September 2026 direction (current)",
+    description:
+      "The current product definition: one product, two front doors (Explore, Marketplace), the car in the middle. Supersedes v3.1.",
+    file: "docs/DRVN-PRD-2026-09.md",
+    kind: "reference",
+  },
+  {
+    slug: "build-plan-2026-09",
+    title: "Build plan — September 2026 direction",
+    description: "Workstreams, order of work, component-reuse decisions and documentation duties that deliver the current PRD.",
+    file: "docs/plans/2026-09-direction-build-plan.md",
+    kind: "reference",
+  },
+  {
+    slug: "prd-v3-1",
+    title: "PRD v3.1 (historical)",
+    description: "SUPERSEDED by the September 2026 PRD — retained as as-built history and design rationale.",
     file: "docs/DRVN-PRD-v3.1.md",
     kind: "reference",
   },

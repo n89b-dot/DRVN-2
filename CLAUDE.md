@@ -1,5 +1,9 @@
 @AGENTS.md
 
+## Product direction — read before planning product or UI work
+
+The current product definition is `docs/DRVN-PRD-2026-09.md`; the work that delivers it is `docs/plans/2026-09-direction-build-plan.md`. One product, two front doors (Explore, Marketplace), the car in the middle; a member's store is the Parts tab on their profile; every post is about a car or a part and has a photo. `docs/DRVN-PRD-v3.1.md` is superseded. The PRD's non-goals are rulings — do not re-propose them. Typeface (IBM Plex), accent and light theme do not change.
+
 ## Component system — non-negotiable workflow for any UI work
 
 DRVN's UI is a governed component platform (Livesheet). Before writing **any** JSX:
