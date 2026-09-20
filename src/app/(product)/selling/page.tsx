@@ -28,7 +28,7 @@ export default async function SellingPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [offersCount, tallyRes, questionsRes, toShipRes, ledger, canPublish] = await Promise.all([
+  const [offersCount, tallyRes, questionsRes, toShipRes, ledger, canPublish, soonestRes, viewRes] = await Promise.all([
     loadOffersNeedingAttention(supabase, user.id),
     supabase.rpc("seller_register_tally", { p_seller: user.id }),
     supabase.rpc("seller_open_questions", { p_seller: user.id }),
@@ -39,22 +39,25 @@ export default async function SellingPage() {
       .eq("status", "paid"),
     getSellerLedger(supabase, user.id),
     sellerCanPublish(user.id).catch(() => true),
+    // H-6: the two figures that were only on Home. They ride in the same
+    // round as everything else rather than waiting behind it.
+    supabase
+      .from("offers")
+      .select("expires_at, listings!inner(seller_id)")
+      .eq("listings.seller_id", user.id)
+      .eq("status", "open")
+      .not("expires_at", "is", null)
+      .order("expires_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("listings").select("view_count").eq("seller_id", user.id).eq("status", "active"),
   ]);
 
-  // H-6: the one figure that was only on Home. "Three offers waiting" is a
-  // number; "the oldest lapses in four hours" is the reason to act on it,
-  // and a seller's workspace is where that belongs.
-  const { data: soonestOffer } = offersCount > 0
-    ? await supabase
-        .from("offers")
-        .select("expires_at, listings!inner(seller_id)")
-        .eq("listings.seller_id", user.id)
-        .eq("status", "open")
-        .not("expires_at", "is", null)
-        .order("expires_at", { ascending: true })
-        .limit(1)
-        .maybeSingle()
-    : { data: null };
+  // "Three offers waiting" is a number; "the oldest lapses in four hours" is
+  // the reason to act on it.
+  const soonestOffer = offersCount > 0 ? soonestRes.data : null;
+  // Eyes on your parts: how many times the parts you have live were opened.
+  const views = (viewRes.data ?? []).reduce((sum, l) => sum + (l.view_count ?? 0), 0);
   if (tallyRes.error) reportError("[selling] seller_register_tally failed", tallyRes.error);
   const tally = Array.isArray(tallyRes.data) ? tallyRes.data[0] : tallyRes.data;
   const openQuestions = questionsRes.data ?? 0;
@@ -131,7 +134,14 @@ export default async function SellingPage() {
               {drafts > 0 ? `${drafts} draft${drafts === 1 ? "" : "s"} · ` : ""}Manage stock →
             </Link>
           }
-        />
+        >
+          {live > 0 && (
+            <LiveDim
+              label="Eyes on your parts"
+              value={views > 0 ? `${views.toLocaleString("en-US")} view${views === 1 ? "" : "s"}` : "None yet"}
+            />
+          )}
+        </MetricCard>
         <MetricCard
           label="Sold"
           value={sold || "—"}

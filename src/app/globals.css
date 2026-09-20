@@ -8935,6 +8935,15 @@ video {
   }
 }
 
+.marketplace-card__source {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: var(--text-micro);
+  color: var(--dim);
+}
+.marketplace-card__source a { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+.marketplace-card__source a:hover { color: var(--live); }
+@container mktgrid (max-width: 559px) { .marketplace-card__source { padding: 0 12px 10px; } }
 .marketplace-card__save { padding: 0 16px 16px; }
 .marketplace-card__save > button { min-height: 44px; width: 100%; }
 /* M-5 card additions. The title clamp is the design proof's finding, not a

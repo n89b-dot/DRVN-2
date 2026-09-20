@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { IntentLink } from "./intent-link";
 import { SaveButton } from "@/features/social/buttons";
@@ -156,11 +157,23 @@ export function ListingCard({
                 ) : null}
               </span>
             </span>
-            {listing.source_car_name && (
-              <span className="marketplace-card__meta">Off my {listing.source_car_name}</span>
-            )}
           </span>
         </IntentLink>
+        {/* M-5: "Off my {car}" opens the build the part came off. It sits
+            outside the card's link because a link can't hold a link; a car
+            that isn't public is named here without one (its slug never
+            reaches the card at all). */}
+        {listing.source_car_name && (
+          <p className="marketplace-card__source">
+            {listing.source_car_slug ? (
+              <Link href={`/cars/${listing.source_car_slug}`} prefetch={false}>
+                Off my {listing.source_car_name}
+              </Link>
+            ) : (
+              <>Off my {listing.source_car_name}</>
+            )}
+          </p>
+        )}
         {(save || actions) && (
           <div className="marketplace-card__foot">
             {save && <SaveButton targetType="listing" targetId={listing.id} itemLabel={listing.title} path={href} initialSaved={Boolean(listing.viewer_saved)} isLoggedIn={save.isLoggedIn} />}
