@@ -125,11 +125,15 @@ test.describe.serial("Marketplace family", () => {
     await signIn(page, seller);
     await page.goto("/home");
 
-    await page.getByRole("button", { name: /open the index/i }).click();
     const index = page.getByRole("dialog", { name: /navigation index/i });
-    // `evaluateAll` doesn't wait: read before the panel is up and the list
-    // is simply empty, which failed this test only under a loaded run.
-    await expect(index.locator('a[href="/marketplace"]')).toBeVisible();
+    // A click that lands before the bar has hydrated does nothing, and
+    // `evaluateAll` below doesn't wait — so open it until it IS open.
+    await expect(async () => {
+      if (!(await index.locator('a[href="/marketplace"]').isVisible())) {
+        await page.getByRole("button", { name: /open the index/i }).click();
+      }
+      await expect(index.locator('a[href="/marketplace"]')).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
 
     // The family reads as a heading with its four children directly beneath.
     const hrefs = await index.locator("a").evaluateAll((els) =>
