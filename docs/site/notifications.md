@@ -19,6 +19,25 @@ no workflow orchestration, and DRVN must not depend on a hosted notification
 service to function. The seam is `deliver.ts`; revisit when channels
 actually multiply.
 
+## Where a notification points
+
+Three trigger functions — `notify_on_save`, `notify_on_activity_comment`,
+`notify_on_activity_reaction` — used to build a post's permalink by hand as
+`'/cars/' || c.slug || '/activity/' || p.id`, joining `cars` INNER to get the
+slug. When `activity_posts.car_id` became nullable (W-5), that join found no
+row for a carless post: the owner variable stayed null, the branch that sends
+the notification never ran, and the save, comment or reaction **worked while
+the author was never told**. A silent nothing is the worst failure mode a
+notification can have.
+
+All three now call `public.post_href(post_id)` (migration 198000), the SQL
+twin of `postHref()` in `src/lib/activity/href.ts`. One function, two
+languages, one answer: `/cars/{slug}/activity/{id}` with a car,
+`/posts/{id}` without. `supabase/tests/carless_post_reach_guard.sql` asserts
+that a save, a comment and a reaction on a carless post each reach the author
+at that URL, and that no notification anywhere holds a `/cars//activity/`
+href.
+
 ## Adding a kind
 
 1. Register it in `NOTIFICATION_KINDS` (`src/lib/notifications/kinds.ts`) —

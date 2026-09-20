@@ -43,6 +43,7 @@ export {
 } from "./primitives";
 export { VehicleCard, type VehicleSummary } from "./vehicle-card";
 export { Button, ButtonLink, buttonClass, type ButtonVariant } from "./button";
+export { ShareButton } from "./share-button";
 export { Pagination } from "./pagination";
 export { FilterGroup, FilterLink, FilterButton, ActiveFilterChip } from "./filters";
 export { Finder, FinderLabel, FinderClear, SearchField } from "./finder";

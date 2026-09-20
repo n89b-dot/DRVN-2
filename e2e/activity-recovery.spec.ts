@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
-import { signIn, type TestUser } from "./helpers";
+import { addComposerPhoto, signIn, type TestUser } from "./helpers";
 
 async function createOwner(): Promise<TestUser & { id: string }> {
   const admin = fixtureAdmin();
@@ -60,6 +60,10 @@ test("activity restores a browser draft and a lost publish response cannot dupli
     await expect(page.getByLabel(/^title$/i)).toHaveValue(titleText);
     await expect(page.getByLabel("Update body")).toContainText(bodyText);
     await expect(page.getByText("Saved — only you can see it")).toBeVisible();
+
+    // W-2: a new publish needs a photo. Added after the recovery assertions
+    // so the interrupted publish below is the only thing under test.
+    await addComposerPhoto(page);
 
     let interrupted = false;
     await page.route(`**${editorPath}*`, async (route) => {

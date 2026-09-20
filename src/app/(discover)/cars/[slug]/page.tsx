@@ -6,11 +6,14 @@ import { Rv } from "@/components/livesheet";
 import { Foot, Media, MetadataTags } from "@/components/ui";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
 import { formatPrice } from "@/lib/payments/fee";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { CarTabs, type ForSaleItem, type ModLine } from "./car-tabs";
 import { reportError } from "@/lib/monitoring";
+import { listingHref, shoppingReturn } from "@/lib/marketplace/state";
 import { vehicleSubline } from "@/lib/vehicles/label";
+import { fetchModProvenance } from "@/lib/mods/provenance";
+import { postHeadline } from "@/lib/activity/headline";
 
 const TAB_KEYS = ["build", "forsale", "activity", "gallery"];
 
@@ -82,10 +85,12 @@ export default async function CarPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; fromListing?: string; from?: string }>;
 }) {
   const { slug } = await params;
-  const { view } = await searchParams;
+  const { view, fromListing, from } = await searchParams;
+  const returnTo = shoppingReturn(from);
+  const returnListing = typeof fromListing === "string" && /^[\da-f-]{36}$/i.test(fromListing) ? listingHref(fromListing, returnTo ?? undefined) : null;
   const supabase = await createClient();
 
   const { data: car, error: carError } = await supabase
@@ -100,6 +105,7 @@ export default async function CarPage({
   }
   if (!car) notFound();
 
+  const user = await getViewer();
   const [{ data: owner }, { data: images }, { data: mods }, { data: posts }, { data: released }] =
     await Promise.all([
       supabase
@@ -115,7 +121,7 @@ export default async function CarPage({
       supabase.from("mod_items").select("*").eq("car_id", car.id).order("position"),
       supabase
         .from("activity_posts")
-        .select("id, title, intro, published_at")
+        .select("id, title, body, intro, published_at")
         .eq("car_id", car.id)
         .order("published_at", { ascending: false })
         .limit(50),
@@ -131,42 +137,21 @@ export default async function CarPage({
         .limit(50),
     ]);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  let isSaved = false;
-  let isFollowing = false;
-  if (user) {
-    const [{ data: save }, { data: follow }] = await Promise.all([
-      supabase
-        .from("saves")
-        .select("target_id")
-        .eq("user_id", user.id)
-        .eq("target_type", "car")
-        .eq("target_id", car.id)
-        .maybeSingle(),
-      supabase
-        .from("follows")
-        .select("target_id")
-        .eq("follower_id", user.id)
-        .eq("target_type", "car")
-        .eq("target_id", car.id)
-        .maybeSingle(),
-    ]);
-    isSaved = Boolean(save);
-    isFollowing = Boolean(follow);
-  }
+  const postIds = (posts ?? []).map(p => p.id);
+  const linkedListingIds = (mods ?? []).map(m => m.linked_listing_id).filter((id): id is string => Boolean(id));
+  const releasedIds = (released ?? []).map(l => l.id);
+  const [{ data: save }, { data: follow }, { data: postImages }, { data: linkedListings }, { data: listingImages }, { data: hotspots }] = await Promise.all([
+    user ? supabase.from("saves").select("target_id").eq("user_id", user.id).eq("target_type", "car").eq("target_id", car.id).maybeSingle() : Promise.resolve({ data: null }),
+    user ? supabase.from("follows").select("target_id").eq("follower_id", user.id).eq("target_type", "car").eq("target_id", car.id).maybeSingle() : Promise.resolve({ data: null }),
+    postIds.length ? supabase.from("activity_images").select("post_id, url, alt, position").in("post_id", postIds).order("position") : Promise.resolve({ data: [] }),
+    linkedListingIds.length ? supabase.from("listings").select("id, price_cents, status").in("id", linkedListingIds) : Promise.resolve({ data: [] }),
+    releasedIds.length ? supabase.from("listing_images").select("listing_id, url, position").in("listing_id", releasedIds).order("position") : Promise.resolve({ data: [] }),
+    supabase.from("car_hotspots").select("id, image_url, x, y, mod_item_id, label").eq("car_id", car.id).order("created_at"),
+  ]);
+  const isSaved = Boolean(save);
+  const isFollowing = Boolean(follow);
 
-  // Activity images for the timeline.
-  const postIds = (posts ?? []).map((p) => p.id);
-  const { data: postImages } = postIds.length
-    ? await supabase
-        .from("activity_images")
-        .select("post_id, url, alt, position")
-        .in("post_id", postIds)
-        .order("position")
-    : { data: [] };
   const galleryByPost = new Map<string, { url: string; alt: string | null }[]>();
   for (const img of postImages ?? []) {
     const list = galleryByPost.get(img.post_id) ?? [];
@@ -191,21 +176,22 @@ export default async function CarPage({
     list.push(mod);
     grouped.set(mod.group_label, list);
   }
-  // Listings linked from a build line, so a mod row can show it as released.
-  const linkedListingIds = (mods ?? [])
-    .map((m) => m.linked_listing_id)
-    .filter((id): id is string => Boolean(id));
-  const { data: linkedListings } = linkedListingIds.length
-    ? await supabase
-        .from("listings")
-        .select("id, price_cents, status")
-        .in("id", linkedListingIds)
-    : { data: [] };
   const listingForMod = (modListingId: string | null) => {
     if (!modListingId) return null;
     const found = (linkedListings ?? []).find((l) => l.id === modListingId);
     if (!found) return null;
     return { id: found.id, price: formatPrice(found.price_cents), status: found.status };
+  };
+
+  // C-1: "Bought on DRVN · off {car}", read back from the frozen purchase
+  // record so a source build that has since gone private stops being named.
+  const provenance = await fetchModProvenance(
+    supabase,
+    (mods ?? []).flatMap((m) => (m.source_order_item_id ? [m.source_order_item_id] : []))
+  );
+  const boughtLine = (m: { source_order_item_id: string | null }) => {
+    const found = m.source_order_item_id ? provenance.get(m.source_order_item_id) : undefined;
+    return found ?? null;
   };
 
   const modGroups = [...grouped.entries()]
@@ -223,6 +209,10 @@ export default async function CarPage({
           product: m.product,
           raw: m.raw_text,
           listing: listingForMod(m.linked_listing_id),
+          bought: boughtLine(m),
+          productUrl: m.product_url,
+          imageUrl: m.image_url,
+          sourceDomain: m.source_domain,
         })
       ),
     }));
@@ -237,17 +227,12 @@ export default async function CarPage({
     product: m.product,
     raw: m.raw_text,
     listing: listingForMod(m.linked_listing_id),
+    bought: boughtLine(m),
+    productUrl: m.product_url,
+    imageUrl: m.image_url,
+    sourceDomain: m.source_domain,
   }));
 
-  // Covers for the released-parts list.
-  const releasedIds = (released ?? []).map((l) => l.id);
-  const { data: listingImages } = releasedIds.length
-    ? await supabase
-        .from("listing_images")
-        .select("listing_id, url, position")
-        .in("listing_id", releasedIds)
-        .order("position")
-    : { data: [] };
   const listingCover = new Map<string, string>();
   for (const img of listingImages ?? []) {
     if (!listingCover.has(img.listing_id)) listingCover.set(img.listing_id, img.url);
@@ -265,11 +250,6 @@ export default async function CarPage({
   // The annotated showcase (§U): one pinned photo, revealed on request. Each
   // pin leads to its live listing when the part is for sale, otherwise it just
   // names the part where it sits.
-  const { data: hotspots } = await supabase
-    .from("car_hotspots")
-    .select("id, image_url, x, y, mod_item_id, label")
-    .eq("car_id", car.id)
-    .order("created_at");
   const showcase =
     hotspots && hotspots.length
       ? {
@@ -298,7 +278,7 @@ export default async function CarPage({
     .map((p) => ({
       id: p.id,
       publishedAt: p.published_at as string,
-      title: p.title,
+      title: postHeadline(p),
       imageUrl: (galleryByPost.get(p.id) ?? [])[0].url,
       href: `/cars/${car.slug}/activity/${p.id}`,
     }));
@@ -306,7 +286,7 @@ export default async function CarPage({
   const activity = (posts ?? []).map((p) => ({
     id: p.id,
     date: formatDate(p.published_at),
-    title: p.title,
+    title: postHeadline(p),
     intro: p.intro,
     gallery: galleryByPost.get(p.id) ?? [],
   }));
@@ -318,6 +298,7 @@ export default async function CarPage({
 
   return (
     <div className="wrap">
+      {returnListing && <nav aria-label="Return to part" className="marketplace-breadcrumb"><Link href={returnListing}>← Back to the part</Link></nav>}
       <Rv as="header" className="pagehead">
         <span className="microlabel">
           Build page — public

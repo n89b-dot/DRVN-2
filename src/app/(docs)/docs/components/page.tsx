@@ -2,6 +2,7 @@ import { OrderPipeline, StatusChip } from "@/components/commerce";
 import { LiveDim } from "@/components/livesheet";
 import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
 import { DialogDemo } from "./dialog-demo";
+import { FinderDemo } from "./finder-demo";
 import { ComboDemo } from "./combo-demo";
 import {
   ActionFooter,
@@ -18,6 +19,8 @@ import {
   MessageThread,
   MetricCard,
   MosaicCell,
+  ListingCard,
+  Mosaic,
   ObjectRow,
   PageHead,
   Pagination,
@@ -80,7 +83,7 @@ export default function ComponentsPage() {
         >
           <div className="flex items-center justify-between rounded-ctl bg-paper px-4 py-3">
             <span className="bar__logo !text-body">
-              DRVN<em>.</em> <span className="microlabel">Parts marketplace</span>
+              DRVN<em>.</em> <span className="microlabel">Builds and parts</span>
             </span>
             <span className="flex gap-2">
               <span className="bar__link bar__link--text is-active">Explore</span>
@@ -753,6 +756,137 @@ export default function ComponentsPage() {
             </a>
           </div>
         </Specimen>
+        <Specimen name="Shopping comparison card" klass="ListingCard variant=shopping" note="Full comparison facts, independent Save, contained image frame and honest missing-data states. Feed remains the default variant.">
+          <div className="marketplace-grid"><Mosaic label="Shopping card specimens">
+            <ListingCard variant="shopping" listing={{ id: "00000000-0000-4000-8000-000000000001", title: "Porsche 992 GT3 carbon bucket seats — pair, mounting hardware included", price_cents: 1150000, shipping_cents: 35000, shipping_mode: "flat", condition: "used", location: "Cologne, DE", cover_url: null, part_number: "992.881.105", seller: { name: "Example seller" }, source_car_name: "2022 Porsche 911 GT3", match_evidence: { kind: "source_model", label: "From the same vehicle model", detail: "Source build only; confirm compatibility." } }} save={{ isLoggedIn: false, path: "/marketplace" }} />
+            <ListingCard variant="shopping" listing={{ id: "00000000-0000-4000-8000-000000000002", title: "Engine assembly with unknown part number", price_cents: 540000, shipping_mode: "pickup_only", condition: "for_parts", location: null, cover_url: null }} />
+          </Mosaic></div>
+        </Specimen>
+        {/* ---- September 2026 direction, design proof (build plan, alongside
+             M2). No production code: these two specimens exist to answer one
+             question before WS9/WS10 and WS13 commit to a card — does the
+             card survive the hardest case at the narrowest width it will ever
+             be asked to hold? Everything here is the shipped component under
+             deliberately brutal content. ---- */}
+        <Specimen
+          name="Two across on a phone — worst case"
+          klass="ListingCard variant=shopping @ 163px"
+          note="M-4 asks for four / three / two cards across; today the grid drops to ONE column under 480px, so two-across on a phone was unproven. MEASURED on /marketplace at 375px with the grid forced to two columns (2026-09-19): columns land at exactly 163.5px, and the cards come out 523–571px tall — a phone screen holds one and a half of them, which scans worse than the single column it replaces. Real titles run 3–6 lines and the worst case here runs eight, because .marketplace-card__title carries no line-clamp at all; the ragged bottoms are the direct consequence. The Save button survives at 130×44. WS9 has to add brand, part miles and a one-line description to this same box, so the honest conclusion is that two-across needs a title clamp (2 lines) and a shorter meta stack before the card can hold anything more — otherwise M-4's phone column should stay at one."
+        >
+          <div className="mx-auto w-[375px] border border-dashed border-[color:var(--rule-mid)] px-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <ListingCard
+                variant="shopping"
+                prefetch={false}
+                listing={{
+                  id: "00000000-0000-4000-8000-0000000000a1",
+                  title:
+                    "\u00d6hlins Road & Track coilover kit with DFV valving, 60N front springs and adjustable camber top mounts \u2014 complete",
+                  price_cents: 1150000,
+                  shipping_cents: 35000,
+                  shipping_mode: "flat",
+                  condition: "used",
+                  location: "Kingston upon Thames, Greater London",
+                  cover_url: null,
+                  part_number: "OHL-992-RT-0041-AB",
+                  seller: { name: "Aleksandra Wiśniewska-Nowak", rating: "4.9", review_count: 212 },
+                  source_car_name: "2018 Lamborghini Huracán Performante",
+                  match_evidence: {
+                    kind: "source_model",
+                    label: "From the same vehicle model",
+                    detail: "Source build only; confirm compatibility.",
+                  },
+                }}
+                save={{ isLoggedIn: false, path: "/marketplace" }}
+              />
+              <ListingCard
+                variant="shopping"
+                prefetch={false}
+                listing={{
+                  id: "00000000-0000-4000-8000-0000000000a2",
+                  title: "Downpipe",
+                  price_cents: 24000,
+                  shipping_mode: "pickup_only",
+                  condition: null,
+                  location: null,
+                  cover_url: null,
+                  status_flag: "reserved",
+                }}
+                save={{ isLoggedIn: true, path: "/u/example/parts" }}
+              />
+            </div>
+          </div>
+        </Specimen>
+        <Specimen
+          name="The Explore card family, one footprint"
+          klass="MosaicCell kind=car / update / part"
+          note="E-1: one wall, every card the same footprint with a fixed caption block \u2014 no double-width cells, no text-only cells. E-2: the kinds differ by label and one line only (build \u2192 car and counts; update \u2192 title or first line and the car; part \u2192 price, Off {car}, cart). Shown here at the phone wall's two-column width with the longest content each kind can carry, so the caption block is tested where it is tightest rather than on a comfortable desktop row. OBSERVED on /explore at 375px (2026-09-19): the wall is already two columns on a phone, but the cells are NOT one footprint \u2014 a build cell sits noticeably shorter than the update beside it and the rows run ragged, which is exactly what E-1 rules out. The caption block has to become a fixed height per kind, not a natural one, and that is WS13's first job."
+        >
+          <div className="mx-auto w-[375px] border border-dashed border-[color:var(--rule-mid)] px-4 py-4">
+            <div className="grid grid-cols-2 gap-3">
+              <MosaicCell
+                href="#commerce"
+                size="sq"
+                src="/seed/golf-r-3.jpg"
+                alt="Gruene"
+                eyebrow="Build"
+                kind="car"
+                corner="1w ago"
+                headline="Gruene"
+                value="2021 BMW M4 Competition xDrive"
+                byline={{ name: "Aleksandra Wiśniewska-Nowak" }}
+                meta="14 updates · 6 parts for sale"
+              />
+              <MosaicCell
+                href="#commerce"
+                size="sq"
+                src="/seed/golf-r-1.jpg"
+                alt="First real pass in the quarter"
+                eyebrow="Update"
+                kind="update"
+                corner="4d ago"
+                headline="First real pass in the quarter after the rebuild"
+                lede="Stopped babying it. The flat-plane scream past the tree is worth every penny of the tire bill."
+                byline={{ name: "Jade Whitfield" }}
+                sub="2023 Chevrolet Corvette Z06"
+              />
+              <MosaicCell
+                href="#commerce"
+                size="sq"
+                src="/seed/golf-r-2.jpg"
+                alt="Öhlins coilover kit"
+                eyebrow="For sale"
+                kind="part"
+                corner="1w ago"
+                headline="Öhlins Road & Track coilover kit with DFV valving, complete"
+                price="$11,500"
+                detail={
+                  <>
+                    <span className="chip mcell__cond">Used</span> · Grade B
+                  </>
+                }
+                detailBesidePrice
+                byline={{ name: "Anjali Kumari" }}
+                sub="2018 Lamborghini Huracán Performante"
+              />
+              <MosaicCell
+                href="#commerce"
+                size="sq"
+                src={undefined}
+                alt=""
+                eyebrow="For sale"
+                kind="part"
+                corner="2m ago"
+                headline="Downpipe"
+                price="$240"
+                detail={<span className="chip mcell__cond">Condition not given</span>}
+                detailBesidePrice
+                byline={{ name: "S" }}
+                sub="Private build"
+              />
+            </div>
+          </div>
+        </Specimen>
         <Specimen
           name="Before / after card"
           klass="MosaicCell compareSrc"
@@ -770,7 +904,7 @@ export default function ComponentsPage() {
               corner="6d ago"
               headline="Coilovers in — finally sits right"
               lede="HKS Hipermax in, alignment done, wheel gap gone."
-              value="1999 Nissan Silvia"
+              sub="1999 Nissan Silvia"
               meta="Kaito Nakamura"
             />
             <MosaicCell
@@ -783,15 +917,15 @@ export default function ComponentsPage() {
               corner="1w ago"
               headline="Track day, first launch"
               lede="New PB and a master cylinder on order."
-              value="2022 Porsche 911 GT3"
+              sub="2022 Porsche 911 GT3"
               meta="Felix Brandt"
             />
           </div>
         </Specimen>
         <Specimen
           name="Feed cards"
-          klass="MosaicCell variant / lede / price / detail / byline"
-          note="The three discovery kinds from the Figma card set, one anatomy. An update (story) reads title → two-line excerpt → vehicle (mono, ink) → byline; a build reads name → vehicle → byline → activity; a listing (sheet) bleeds its photo to the card's edges and rides a raised caption sheet: title → price (live) → condition chip + grade → source car → byline, with the cart square at the end of the engagement strip. From 240px the plate is a fixed 12:7 frame, the caption takes the rest and the strip sits on the card's floor."
+          klass="MosaicCell lede / price / detail / byline / foot"
+          note="The three discovery kinds from the Figma card set, one tile: kind pill and time, a fixed 5:3 plate, a caption head, and a foot anchored to the caption's floor. Build: name, then owner byline → activity line in the foot. Update: title → two-line excerpt, then owner byline → vehicle (mono) in the foot. For sale: title → price row (price in the OK colour, condition chip + grade beside it), then seller byline → source car in the foot, with the cart square at the end of the engagement strip. From a 232px content box the caption takes the rest of the row and the strip sits on the card's floor."
         >
           <div className="grid max-w-[880px] grid-cols-3 gap-3">
             <MosaicCell
@@ -815,19 +949,19 @@ export default function ComponentsPage() {
               eyebrow="Update"
               kind="update"
               corner="4d ago"
-              variant="story"
               headline="First real pass in the quarter"
               lede="Stopped babying it. The flat-plane scream past the tree is worth the tire bill."
-              value="2023 Chevrolet Corvette Z06"
               byline={{ name: "Jade Whitfield" }}
+              sub="2023 Chevrolet Corvette Z06"
             />
             <MosaicCell
               href="#commerce"
               size="sq"
               src="/seed/golf-r-2.jpg"
               alt="Audi 4.2 FSI V8 intake manifold"
-              variant="sheet"
+              eyebrow="For sale"
               kind="part"
+              corner="1w ago"
               headline="Audi 4.2 FSI V8 intake manifold (B7 RS4), used"
               price="$120"
               detail={
@@ -835,8 +969,9 @@ export default function ComponentsPage() {
                   <span className="chip mcell__cond">Used</span> · Grade B
                 </>
               }
-              sub="2007 Audi RS4 Avant"
+              detailBesidePrice
               byline={{ name: "Anjali Kumari" }}
+              sub="2007 Audi RS4 Avant"
             />
           </div>
         </Specimen>
@@ -898,6 +1033,7 @@ export default function ComponentsPage() {
 
       {/* ============ 08 COMMUNICATION & FEEDBACK ============ */}
       <SpecimenGroup id="comms" index="08" title="Communication & feedback">
+        <Specimen name="Finder with Apply and Cancel" klass="FinderRefineSheet" note="A draft changes the results only on Apply. Cancel, Escape and dismissal restore the applied values; the active count describes those applied values."><FinderDemo /></Specimen>
         <Specimen
           name="Bottom sheet"
           klass="BottomSheet / .bsheet"

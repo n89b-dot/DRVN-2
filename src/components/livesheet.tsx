@@ -70,7 +70,9 @@ export function Rv({
     return () => window.clearTimeout(failsafe);
   }, [stagger]);
 
-  const shown = reduce || inView || forced;
+  // Page headers must be readable before hydration/IntersectionObserver.
+  const immediate = as === "header";
+  const shown = immediate || reduce || inView || forced;
 
   return (
     <MotionTag
@@ -82,7 +84,7 @@ export function Rv({
       custom={stagger * 0.07}
       // Under reduced motion the content simply starts settled — no hidden
       // frame, no animation, matching the old `.rv` contract exactly.
-      initial={reduce ? false : "hidden"}
+      initial={immediate || reduce ? false : "hidden"}
       animate={shown ? "visible" : "hidden"}
     >
       {children}

@@ -262,11 +262,47 @@ export type Database = {
           },
         ]
       }
+      activity_post_listings: {
+        Row: {
+          created_at: string
+          listing_id: string
+          position: number
+          post_id: string
+        }
+        Insert: {
+          created_at?: string
+          listing_id: string
+          position?: number
+          post_id: string
+        }
+        Update: {
+          created_at?: string
+          listing_id?: string
+          position?: number
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_post_listings_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_post_listings_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "activity_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activity_posts: {
         Row: {
           author_id: string
           body: Json
-          car_id: string
+          car_id: string | null
           created_at: string
           draft_archived_at: string | null
           draft_key: string | null
@@ -275,14 +311,14 @@ export type Database = {
           publish_operation_id: string | null
           published_at: string | null
           search_text: string | null
-          title: string
+          title: string | null
           updated_at: string
           video_url: string | null
         }
         Insert: {
           author_id: string
           body?: Json
-          car_id: string
+          car_id?: string | null
           created_at?: string
           draft_archived_at?: string | null
           draft_key?: string | null
@@ -291,14 +327,14 @@ export type Database = {
           publish_operation_id?: string | null
           published_at?: string | null
           search_text?: string | null
-          title: string
+          title?: string | null
           updated_at?: string
           video_url?: string | null
         }
         Update: {
           author_id?: string
           body?: Json
-          car_id?: string
+          car_id?: string | null
           created_at?: string
           draft_archived_at?: string | null
           draft_key?: string | null
@@ -307,7 +343,7 @@ export type Database = {
           publish_operation_id?: string | null
           published_at?: string | null
           search_text?: string | null
-          title?: string
+          title?: string | null
           updated_at?: string
           video_url?: string | null
         }
@@ -1422,6 +1458,7 @@ export type Database = {
       listings: {
         Row: {
           allows_collection: boolean
+          brand: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -1435,6 +1472,8 @@ export type Database = {
           length_in: number | null
           location: string | null
           offer_floor_cents: number | null
+          part_miles: number | null
+          part_miles_unit: string | null
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
@@ -1456,6 +1495,7 @@ export type Database = {
         }
         Insert: {
           allows_collection?: boolean
+          brand?: string | null
           category: string
           compatibility_notes?: string | null
           condition?: string | null
@@ -1469,6 +1509,8 @@ export type Database = {
           length_in?: number | null
           location?: string | null
           offer_floor_cents?: number | null
+          part_miles?: number | null
+          part_miles_unit?: string | null
           part_number?: string | null
           part_number_compact?: string | null
           price_cents: number
@@ -1490,6 +1532,7 @@ export type Database = {
         }
         Update: {
           allows_collection?: boolean
+          brand?: string | null
           category?: string
           compatibility_notes?: string | null
           condition?: string | null
@@ -1503,6 +1546,8 @@ export type Database = {
           length_in?: number | null
           location?: string | null
           offer_floor_cents?: number | null
+          part_miles?: number | null
+          part_miles_unit?: string | null
           part_number?: string | null
           part_number_compact?: string | null
           price_cents?: number
@@ -2524,16 +2569,21 @@ export type Database = {
         Row: {
           avatar_url: string | null
           bio: string | null
+          country: string | null
           created_at: string
+          default_offer_floor_pct: number | null
           display_name: string | null
           headline: string | null
           id: string
           import_attested_at: string | null
           links: Json
           location: string | null
+          main_car_id: string | null
           notification_prefs: Json
           payouts_enabled: boolean
           profile_type: string
+          region: string | null
+          store_note: string | null
           stripe_account_id: string | null
           stripe_customer_id: string | null
           suspended_at: string | null
@@ -2544,16 +2594,21 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           bio?: string | null
+          country?: string | null
           created_at?: string
+          default_offer_floor_pct?: number | null
           display_name?: string | null
           headline?: string | null
           id: string
           import_attested_at?: string | null
           links?: Json
           location?: string | null
+          main_car_id?: string | null
           notification_prefs?: Json
           payouts_enabled?: boolean
           profile_type?: string
+          region?: string | null
+          store_note?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           suspended_at?: string | null
@@ -2564,16 +2619,21 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           bio?: string | null
+          country?: string | null
           created_at?: string
+          default_offer_floor_pct?: number | null
           display_name?: string | null
           headline?: string | null
           id?: string
           import_attested_at?: string | null
           links?: Json
           location?: string | null
+          main_car_id?: string | null
           notification_prefs?: Json
           payouts_enabled?: boolean
           profile_type?: string
+          region?: string | null
+          store_note?: string | null
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           suspended_at?: string | null
@@ -2581,7 +2641,15 @@ export type Database = {
           updated_at?: string
           username?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_main_car_id_fkey"
+            columns: ["main_car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase_attempts: {
         Row: {
@@ -4121,6 +4189,7 @@ export type Database = {
           happened_at: string | null
           id: string | null
           kind: string | null
+          owner_id: string | null
         }
         Relationships: []
       }
@@ -4420,7 +4489,7 @@ export type Database = {
         Returns: {
           author_id: string
           body: Json
-          car_id: string
+          car_id: string | null
           created_at: string
           draft_archived_at: string | null
           draft_key: string | null
@@ -4429,7 +4498,7 @@ export type Database = {
           publish_operation_id: string | null
           published_at: string | null
           search_text: string | null
-          title: string
+          title: string | null
           updated_at: string
           video_url: string | null
         }[]
@@ -4502,6 +4571,14 @@ export type Database = {
         Args: { p_listing_id: string; p_parent_id: string }
         Returns: boolean
       }
+      local_feed_rows: {
+        Args: { p_country: string; p_region?: string }
+        Returns: {
+          happened_at: string
+          id: string
+          kind: string
+        }[]
+      }
       mark_due_transfer_intents: { Args: never; Returns: number }
       mark_order_dispatched: {
         Args: {
@@ -4525,6 +4602,13 @@ export type Database = {
         }
         Returns: Json
       }
+      marketplace_brand_counts: {
+        Args: never
+        Returns: {
+          brand: string
+          total: number
+        }[]
+      }
       marketplace_browse_rows: {
         Args: {
           p_fit?: boolean
@@ -4537,6 +4621,7 @@ export type Database = {
         }
         Returns: {
           allows_collection: boolean
+          brand: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -4550,6 +4635,8 @@ export type Database = {
           length_in: number | null
           location: string | null
           offer_floor_cents: number | null
+          part_miles: number | null
+          part_miles_unit: string | null
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
@@ -4597,6 +4684,7 @@ export type Database = {
         }
         Returns: {
           allows_collection: boolean
+          brand: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -4610,6 +4698,8 @@ export type Database = {
           length_in: number | null
           location: string | null
           offer_floor_cents: number | null
+          part_miles: number | null
+          part_miles_unit: string | null
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
@@ -4650,6 +4740,7 @@ export type Database = {
         Args: { p_query: string }
         Returns: {
           allows_collection: boolean
+          brand: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -4663,6 +4754,8 @@ export type Database = {
           length_in: number | null
           location: string | null
           offer_floor_cents: number | null
+          part_miles: number | null
+          part_miles_unit: string | null
           part_number: string | null
           part_number_compact: string | null
           price_cents: number
@@ -4689,6 +4782,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      mod_purchase_sources: {
+        Args: { p_order_item_ids: string[] }
+        Returns: {
+          order_item_id: string
+          source_car_id: string
+        }[]
+      }
+      my_default_offer_floor: { Args: never; Returns: number }
       notify: {
         Args: {
           p_actor_id?: string
@@ -4717,6 +4818,7 @@ export type Database = {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }
         Returns: Json
       }
+      post_href: { Args: { p_post_id: string }; Returns: string }
       prepare_beta_signup: {
         Args: { p_email: string; p_token_hash: string }
         Returns: string
@@ -4937,6 +5039,13 @@ export type Database = {
       search_profile_ids: { Args: { p_query: string }; Returns: string[] }
       search_update_ids: { Args: { p_query: string }; Returns: string[] }
       search_user_messages: { Args: { p_query: string }; Returns: string[] }
+      seller_active_counts: {
+        Args: { p_sellers: string[] }
+        Returns: {
+          seller_id: string
+          total: number
+        }[]
+      }
       seller_listing_stats: {
         Args: {
           p_limit?: number
@@ -5010,6 +5119,31 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      suggested_builders: {
+        Args: { p_limit?: number; p_viewer?: string }
+        Returns: {
+          avatar_url: string
+          car_count: number
+          display_name: string
+          headline: string
+          id: string
+          update_count: number
+          username: string
+        }[]
+      }
+      sync_activity_post_listings: {
+        Args: { p_listing_ids: string[]; p_post_id: string }
+        Returns: undefined
+      }
+      trending_models: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          builds: number
+          make: string
+          model: string
+          updates: number
+        }[]
+      }
       worker_health_snapshot: { Args: never; Returns: Json }
       write_account_export: {
         Args: {
@@ -5029,6 +5163,7 @@ export type Database = {
           p_car_id: string
           p_image_urls?: string[]
           p_intro?: string
+          p_listing_ids?: string[]
           p_mode: string
           p_post_id: string
           p_title: string

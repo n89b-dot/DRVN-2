@@ -2,17 +2,16 @@ import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
+import { cartCount as getCartCount } from "@/lib/cart";
 import { loadShellCounts } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 // Public discovery surfaces (Explore, Marketplace, car and listing sheets) are
 // not auth-gated, but a signed-in visitor gets the same dashboard shell here as
 // anywhere else — the rail follows you across the whole app.
 export default async function DiscoverLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getViewer();
 
   const jar = await cookies();
   const night = jar.get("ls-theme")?.value === "night";
@@ -24,10 +23,8 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
   // /orders showed the count. The loader already computes it for a signed-in
   // user (and short-circuits to 0 for a visitor) — the shell just has to pass
   // it on.
-  const { cartCount, unreadCount, offersCount } = await loadShellCounts(
-    supabase,
-    user?.id ?? null
-  );
+  const counts = loadShellCounts(supabase, user?.id ?? null);
+  const cartCount = await getCartCount();
 
   return (
     <AppShell
@@ -36,8 +33,7 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
       initialRailOpen={railOpen}
       initialMktOpen={mktOpen}
       cartCount={cartCount}
-      unreadCount={unreadCount}
-      offersCount={offersCount}
+      counts={counts}
     >
       {/* No blanket footer here — every (discover) page renders its own
           contextual page-level <Foot> (see src/components/ui/livesheet-bar.tsx)

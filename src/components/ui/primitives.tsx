@@ -71,6 +71,7 @@ export function Media({
   role,
   sizes,
   focal,
+  eager = false,
 }: {
   src?: string;
   alt: string;
@@ -87,6 +88,8 @@ export function Media({
   /** Raw `sizes` escape hatch for a layout the role presets don't cover.
    *  Wins over `role` when both are passed. */
   sizes?: string;
+  /** Only the leading visible image should compete for early bandwidth. */
+  eager?: boolean;
   /** Non-destructive framing (0043): 0..1 focal point kept in frame at every
    *  crop via object-position. Null/undefined = centered as before. */
   focal?: { x: number | null; y: number | null } | null;
@@ -124,6 +127,8 @@ export function Media({
         alt={alt}
         fill
         sizes={resolvedSizes}
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : undefined}
         className="object-cover"
         style={
           focal && focal.x !== null && focal.y !== null

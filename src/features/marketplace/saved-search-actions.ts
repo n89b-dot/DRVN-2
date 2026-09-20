@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { capture } from "@/lib/analytics";
+import { SAVED_SEARCH_KEYS, savedSearchKey, writeSavedSearch } from "@/lib/marketplace/saved-search";
+import { normalizeMarketplaceState } from "@/lib/marketplace/state";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 
 /**
@@ -14,7 +16,7 @@ import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 
 export type SavedSearchState = { error?: string; ok?: string };
 
-const PARAM_KEYS = ["q", "category", "subcategory", "condition", "min", "max", "location", "fit"] as const;
+const PARAM_KEYS = SAVED_SEARCH_KEYS;
 
 function readParams(formData: FormData): Record<string, string> {
   const params: Record<string, string> = {};
@@ -22,7 +24,7 @@ function readParams(formData: FormData): Record<string, string> {
     const value = String(formData.get(`p_${key}`) ?? "").trim().slice(0, 200);
     if (value) params[key] = value;
   }
-  return params;
+  return Object.fromEntries(Object.entries(normalizeMarketplaceState(params)).filter((entry): entry is [string, string] => Boolean(entry[1])));
 }
 
 /** A human name for the saved state: the query, else the category, else "Everything". */
@@ -33,7 +35,7 @@ function nameFor(params: Record<string, string>): string {
     const sub = category?.subcategories.find((s) => s.slug === params.subcategory);
     return sub?.label ?? category?.label ?? params.category;
   }
-  if (params.fit === "1") return "Parts that fit my garage";
+  if (params.fit === "1") return "Potential matches for my garage";
   return "Everything on the marketplace";
 }
 
@@ -59,19 +61,17 @@ export async function createSavedSearch(
     .select("id, params")
     .eq("user_id", user.id)
     .limit(50);
-  const key = JSON.stringify(Object.fromEntries(Object.entries(params).sort()));
+  const key = savedSearchKey(params);
   if (
     (existing ?? []).some(
-      (row) => JSON.stringify(Object.fromEntries(Object.entries(row.params ?? {}).sort())) === key,
+      (row) => savedSearchKey(row.params) === key,
     )
   ) {
     return { ok: "Already saved — it's in Saved." };
   }
 
-  const { error } = await supabase.from("saved_searches").insert({
-    user_id: user.id,
-    name: nameFor(params).slice(0, 120),
-    params,
+  const { error } = await supabase.rpc("save_marketplace_search", {
+    p_name: nameFor(params).slice(0, 120), p_params: writeSavedSearch(params),
   });
   if (error) {
     return {
@@ -93,12 +93,12 @@ export async function setSavedSearchAlert(formData: FormData): Promise<SavedSear
   if (!user) return { error: "Sign in first." };
   const id = String(formData.get("id") ?? "");
   const alert = formData.get("alert") === "on";
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("saved_searches")
     .update({ alert })
     .eq("id", id)
-    .eq("user_id", user.id);
-  if (error) return { error: "Couldn't update alerts." };
+    .eq("user_id", user.id).select("id").maybeSingle();
+  if (error || !data) return { error: "Couldn't update alerts. Reload Saved and try again." };
   if (alert) capture(user.id, { event: "saved_search_alert_enabled" });
   revalidatePath("/saved");
   return { ok: alert ? "Alerts on — you'll hear when new inventory matches." : "Alerts off." };
@@ -111,12 +111,12 @@ export async function deleteSavedSearch(formData: FormData): Promise<SavedSearch
   } = await supabase.auth.getUser();
   if (!user) return { error: "Sign in first." };
   const id = String(formData.get("id") ?? "");
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("saved_searches")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
-  if (error) return { error: "Couldn't delete that." };
+    .eq("user_id", user.id).select("id").maybeSingle();
+  if (error || !data) return { error: "Couldn't delete that. Reload Saved and try again." };
   revalidatePath("/saved");
   return { ok: "Deleted." };
 }

@@ -25,6 +25,8 @@ export function FinderRefineSheet({
   activeCount = 0,
   aside,
   children,
+  onDismiss,
+  inline,
 }: {
   label?: string;
   /** How many refinements are currently applied — shown on the toggle. */
@@ -35,6 +37,11 @@ export function FinderRefineSheet({
    */
   aside?: React.ReactNode;
   children: React.ReactNode;
+  /** Discard an uncommitted draft when the sheet is closed without Apply. */
+  onDismiss?: () => void;
+  /** Where the sheet becomes a sidebar (M-3): "lg" keeps it a sheet below
+   *  1024px and renders the same fields inline at or above it. */
+  inline?: "sm" | "lg";
 }) {
   const [open, setOpen] = useState(false);
 
@@ -44,7 +51,7 @@ export function FinderRefineSheet({
           query field ~70px beside it. The accessible name never drops. */}
       <button
         type="button"
-        className={`${activeCount > 0 ? "fbtn is-on" : "fbtn"} gap-1.5`}
+        className={`${activeCount > 0 ? "fbtn is-on" : "fbtn"} gap-1.5${inline === "lg" ? " lg:hidden" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={activeCount > 0 ? `${label}, ${activeCount} active` : label}
@@ -55,7 +62,14 @@ export function FinderRefineSheet({
         {activeCount > 0 && <span className="n n--live">{activeCount}</span>}
       </button>
       {aside}
-      <BottomSheet open={open} onClose={() => setOpen(false)} label={label} align="center">
+      <BottomSheet
+        open={open}
+        onClose={() => { onDismiss?.(); setOpen(false); }}
+        closeLabel={onDismiss ? "Cancel" : "Done"}
+        label={label}
+        align={inline ? undefined : "center"}
+        inlineFrom={inline}
+      >
         <div className="finder__refine">{children}</div>
       </BottomSheet>
     </>

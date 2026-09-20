@@ -8,6 +8,7 @@ import { sellerCanPublish } from "@/lib/payments/connect";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { Countdown, LiveDim } from "@/components/livesheet";
 
 export const metadata = { title: "Selling - DRVN" };
 
@@ -39,6 +40,21 @@ export default async function SellingPage() {
     getSellerLedger(supabase, user.id),
     sellerCanPublish(user.id).catch(() => true),
   ]);
+
+  // H-6: the one figure that was only on Home. "Three offers waiting" is a
+  // number; "the oldest lapses in four hours" is the reason to act on it,
+  // and a seller's workspace is where that belongs.
+  const { data: soonestOffer } = offersCount > 0
+    ? await supabase
+        .from("offers")
+        .select("expires_at, listings!inner(seller_id)")
+        .eq("listings.seller_id", user.id)
+        .eq("status", "open")
+        .not("expires_at", "is", null)
+        .order("expires_at", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
   if (tallyRes.error) reportError("[selling] seller_register_tally failed", tallyRes.error);
   const tally = Array.isArray(tallyRes.data) ? tallyRes.data[0] : tallyRes.data;
   const openQuestions = questionsRes.data ?? 0;
@@ -97,7 +113,15 @@ export default async function SellingPage() {
               <span className="text-micro text-dim">Nothing waiting — nice.</span>
             )
           }
-        />
+        >
+          {soonestOffer?.expires_at && (
+            <LiveDim
+              label="Oldest offer lapses in"
+              value={<Countdown expiresAt={soonestOffer.expires_at} />}
+              live
+            />
+          )}
+        </MetricCard>
         <MetricCard
           label="Live listings"
           value={live || "—"}

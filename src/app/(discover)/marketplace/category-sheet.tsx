@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { BottomSheet, CategoryIcon } from "@/components/ui";
+import { categoryHref, type ListingFilters } from "@/lib/marketplace/state";
 import { cx } from "@/lib/format";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 
@@ -20,9 +21,11 @@ import { CATEGORIES } from "@/lib/marketplace/taxonomy";
 export function CategorySheet({
   currentCategory,
   currentSubcategory,
+  filters = {},
 }: {
   currentCategory?: string | null;
   currentSubcategory?: string | null;
+  filters?: ListingFilters;
 }) {
   const [open, setOpen] = useState(false);
   const current = CATEGORIES.find((c) => c.slug === currentCategory);
@@ -40,7 +43,7 @@ export function CategorySheet({
         aria-label={`Browse categories — currently ${label}`}
         onClick={() => setOpen(true)}
       >
-        Browse
+        Categories
       </button>
       <BottomSheet open={open} onClose={() => setOpen(false)} label="Browse by category">
         <div className="catsheet__head">
@@ -49,7 +52,7 @@ export function CategorySheet({
         </div>
         <nav className="catlist" aria-label="Categories">
           <Link
-            href="/marketplace"
+            href={categoryHref(filters)}
             className={cx("catrow", !current && "is-here")}
             aria-current={!current ? "page" : undefined}
           >
@@ -69,7 +72,7 @@ export function CategorySheet({
             return (
               <div key={c.slug}>
                 <Link
-                  href={`/marketplace/${c.slug}`}
+                  href={categoryHref(filters, c.slug)}
                   className={cx("catrow", here && !currentSubcategory && "is-here")}
                   aria-current={here && !currentSubcategory ? "page" : undefined}
                 >
@@ -93,7 +96,7 @@ export function CategorySheet({
                       return (
                         <Link
                           key={sub.slug}
-                          href={`/marketplace/${c.slug}/${sub.slug}`}
+                          href={categoryHref(filters, c.slug, sub.slug)}
                           className={cx("catrow catrow--sub", subHere && "is-here")}
                           aria-current={subHere ? "page" : undefined}
                         >

@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { leadingBeforeAfter, normalizeBlocks } from "@/lib/activity-blocks";
+import { followedFeedPage } from "@/lib/feed-merge";
 import type { Database } from "@/lib/database.types";
 import { buildGarageFitmentIndex, matchGarageFitment } from "@/lib/marketplace/fitment";
 import { fetchWatchCounts } from "@/lib/marketplace/query";
 import { reportError } from "@/lib/monitoring";
 import { vehicleLabel } from "@/lib/vehicles/label";
+import { postHeadline } from "@/lib/activity/headline";
 
 export type FeedItem =
   | {
@@ -14,12 +16,13 @@ export type FeedItem =
       created_at: string;
       title: string;
       intro: string | null;
-      carName: string;
-      carSlug: string;
+      /** Null on a carless post (W-5): there is no build to name. */
+      carName: string | null;
+      carSlug: string | null;
       /** The car's year/make/model for the vehicle line ("2023 Chevrolet
        *  Corvette Z06"). All null when the keeper never filled them; the
        *  card then falls back to the car's name. */
-      carVehicle: { year: number | null; make: string | null; model: string | null };
+      carVehicle: { year: number | null; make: string | null; model: string | null } | null;
       ownerName: string | null;
       cover_url: string | null;
       /** The "after" side when the post leads with a before/after plate —
@@ -197,7 +200,9 @@ export async function hydrateFeedItems(
   const listings = listingsRes.data ?? [];
   const garageIndex = buildGarageFitmentIndex(garageRes.data ?? []);
 
-  const postCarIds = [...new Set(posts.map((p) => p.car_id))];
+  // W-5: a post may have no car. The feed still carries it; it just has
+  // no build to name and no cover to borrow.
+  const postCarIds = [...new Set(posts.flatMap((p) => (p.car_id ? [p.car_id] : [])))];
   const ownerIds = [
     ...new Set([
       ...cars.map((c) => c.owner_id),
@@ -368,6 +373,7 @@ export async function hydrateFeedItems(
   const carUpdateCount = new Map<string, number>();
   const carLastActivity = new Map<string, string>();
   for (const row of carActivity ?? []) {
+    if (!row.car_id) continue;
     carUpdateCount.set(row.car_id, (carUpdateCount.get(row.car_id) ?? 0) + 1);
     const prev = carLastActivity.get(row.car_id);
     if (row.published_at && (!prev || row.published_at > prev)) {
@@ -387,21 +393,23 @@ export async function hydrateFeedItems(
     if (row.kind === "update") {
       const p = postById.get(row.id);
       if (!p) continue;
-      const car = postCarById.get(p.car_id);
-      if (!car?.is_public) continue; // author viewing own private-car post: not feed material
+      // A post with a car only reaches the feed when that car is public;
+      // one without a car has no such gate to fail (W-5).
+      const car = p.car_id ? postCarById.get(p.car_id) : null;
+      if (p.car_id && !car?.is_public) continue;
       items.push({
         kind: "update",
         id: p.id,
         created_at: p.published_at ?? row.happened_at,
-        title: p.title,
+        title: postHeadline(p),
         intro: p.intro,
-        carName: car.name,
-        carSlug: car.slug,
-        carVehicle: { year: car.year, make: car.make, model: car.model },
+        carName: car?.name ?? null,
+        carSlug: car?.slug ?? null,
+        carVehicle: car ? { year: car.year, make: car.make, model: car.model } : null,
         ownerName: ownerById.get(p.author_id) ?? null,
         cover_url: postCompare.get(p.id)?.beforeUrl ?? postCover.get(p.id) ?? null,
         compare_url: postCompare.get(p.id)?.afterUrl ?? null,
-        avatar_url: car.cover_image_url ?? null,
+        avatar_url: car?.cover_image_url ?? null,
         reactions: reactionCount.get(p.id) ?? 0,
         imageCount: postImageCount.get(p.id) ?? 0,
         viewerLiked: viewerLikedPosts.has(p.id),
@@ -611,6 +619,36 @@ async function _legacyFetchFeed(
   return { items, page, pageSize, hasMore };
 }
 
+/**
+ * H-2 — Local: the same feed, filtered to where somebody is.
+ *
+ * Shown as a Home tab only once a member has set a country, because a Local
+ * tab that greets you with "set your location first" is a tab that exists to
+ * ask for something. Region narrows it when they've given one; country alone
+ * is a perfectly good answer in a small market.
+ */
+export async function fetchLocalFeed(
+  supabase: SupabaseClient<Database>,
+  place: { country: string; region?: string | null },
+  opts: { page?: number; pageSize?: number; viewerId?: string | null } = {}
+): Promise<FeedPage> {
+  const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
+  const page = Math.max(1, opts.page ?? 1);
+  const { data, error } = await supabase.rpc("local_feed_rows", {
+    p_country: place.country,
+    p_region: place.region ?? undefined,
+  });
+  if (error || !data) {
+    reportError("[feed] local_feed_rows unavailable", error);
+    return { items: [], page, pageSize, hasMore: false };
+  }
+  const rows = data as FeedEventRow[];
+  const from = (page - 1) * pageSize;
+  const windowRows = rows.slice(from, from + pageSize);
+  const items = await hydrateFeedItems(supabase, windowRows, opts.viewerId);
+  return { items, page, pageSize, hasMore: rows.length > from + pageSize };
+}
+
 export type FollowedFeedPage = FeedPage & {
   /** True when this viewer follows nothing yet — the caller's cue to lean on Discovery instead. */
   followsNothing: boolean;
@@ -622,15 +660,20 @@ export type FollowedFeedPage = FeedPage & {
  * stays the global "everyone" feed (used by Explore and as Home's Discovery
  * fallback); this is the personalized layer on top of it.
  *
- * Same in-memory-merge caveat as `_legacyFetchFeed` (the followed set can't
- * be paged through `feed_events` — the view carries no follow edge), plus one
- * more: "followed" only covers cars and build updates (what `follows` can
- * target), not parts. A followed *seller's* new listing doesn't show up here
- * as a followed item; it would need a `follows` row per-seller-listing that
- * doesn't exist.
- * TODO: fold followed sellers' active listings in once `follows` learns a
- * seller-listing edge (or via a listings-by-followed-profile query) — left
- * out for now rather than adding another per-page fan-out.
+ * Three things count as followed (B-1): a car you follow, a person you
+ * follow, and — since the September 2026 direction — a **new listing** from
+ * either. A part reaches the people who care about that seller or that build
+ * without anyone having to follow a listing, which is not a thing you can do.
+ *
+ * Listings arrive from two directions at once: the seller is someone you
+ * follow, or the part came off a car you follow. The same listing therefore
+ * turns up twice, and `followedFeedPage` is what makes that one card —
+ * along with the stable ordering paging depends on and the per-seller run
+ * cap that stops one bulk lister owning the top of the feed. All of that
+ * lives in `feed-merge.ts`, pure and tested without a database.
+ *
+ * Same in-memory-merge caveat as `_legacyFetchFeed`: the followed set can't
+ * be paged through `feed_events`, because the view carries no follow edge.
  */
 export async function fetchFollowedFeed(
   supabase: SupabaseClient<Database>,
@@ -656,11 +699,14 @@ export async function fetchFollowedFeed(
     return { items: [], page, pageSize, hasMore: false, followsNothing: true };
   }
 
+  // Every lane breaks timestamp ties by id, the same way `feed-merge` does:
+  // a limit that lands inside a bulk insert must cut the same rows each time.
   let carsQuery = supabase
     .from("cars")
     .select("id, created_at")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(fetchLimit);
   const carClauses = [
     followedCarIds.length ? `id.in.(${followedCarIds.join(",")})` : null,
@@ -673,6 +719,7 @@ export async function fetchFollowedFeed(
     .select("id, published_at")
     .not("published_at", "is", null)
     .order("published_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(fetchLimit);
   const postClauses = [
     followedCarIds.length ? `car_id.in.(${followedCarIds.join(",")})` : null,
@@ -680,24 +727,65 @@ export async function fetchFollowedFeed(
   ].filter(Boolean) as string[];
   postsQuery = postClauses.length ? postsQuery.or(postClauses.join(",")) : postsQuery.eq("id", "");
 
-  const [carsRes, postsRes] = await Promise.all([carsQuery, postsQuery]);
+  // Active listings from followed sellers, and from followed cars. Two
+  // queries rather than one `or`, because the seller lane rides the new
+  // (seller_id, status, created_at desc) index and the car lane doesn't —
+  // an `or` across both would give up the index for the half that has one.
+  const listingsBySeller = followedProfileIds.length
+    ? supabase
+        .from("listings")
+        .select("id, created_at, seller_id")
+        .eq("status", "active")
+        .in("seller_id", followedProfileIds)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(fetchLimit)
+    : Promise.resolve({ data: [] as { id: string; created_at: string; seller_id: string | null }[] });
 
-  const rows: FeedEventRow[] = [
-    ...(postsRes.data ?? []).map((p) => ({
-      kind: "update" as const,
-      id: p.id,
-      happened_at: p.published_at!,
-    })),
-    ...(carsRes.data ?? []).map((c) => ({
-      kind: "car" as const,
-      id: c.id,
-      happened_at: c.created_at,
-    })),
-  ].sort((a, b) => (a.happened_at < b.happened_at ? 1 : -1));
+  const listingsByCar = followedCarIds.length
+    ? supabase
+        .from("listings")
+        .select("id, created_at, seller_id")
+        .eq("status", "active")
+        .in("source_car_id", followedCarIds)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(fetchLimit)
+    : Promise.resolve({ data: [] as { id: string; created_at: string; seller_id: string | null }[] });
 
-  const from = (page - 1) * pageSize;
-  const windowRows = rows.slice(from, from + pageSize);
-  const hasMore = rows.length > from + pageSize;
+  const [carsRes, postsRes, sellerListings, carListings] = await Promise.all([
+    carsQuery,
+    postsQuery,
+    listingsBySeller,
+    listingsByCar,
+  ]);
+
+  const asPart = (rows: { id: string; created_at: string; seller_id: string | null }[] | null) =>
+    (rows ?? []).map((l) => ({
+      kind: "part" as const,
+      id: l.id,
+      happened_at: l.created_at,
+      sellerId: l.seller_id,
+    }));
+
+  const { rows: windowRows, hasMore } = followedFeedPage(
+    [
+      (postsRes.data ?? []).map((p) => ({
+        kind: "update" as const,
+        id: p.id,
+        happened_at: p.published_at!,
+      })),
+      (carsRes.data ?? []).map((c) => ({
+        kind: "car" as const,
+        id: c.id,
+        happened_at: c.created_at,
+      })),
+      asPart(sellerListings.data),
+      asPart(carListings.data),
+    ],
+    page,
+    pageSize
+  );
   const items = await hydrateFeedItems(supabase, windowRows, userId);
   return { items, page, pageSize, hasMore, followsNothing: false };
 }

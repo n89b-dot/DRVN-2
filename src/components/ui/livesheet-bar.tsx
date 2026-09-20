@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { cx } from "@/lib/format";
+import { ButtonLink } from "./button";
 import { Icon, type IconName } from "./icons";
 import {
   BAR_ROUTES,
@@ -16,6 +17,7 @@ import {
   type NavEntry,
   type NavRoute,
 } from "./nav-routes";
+import { SuggestingSearchField } from "./search-suggest";
 
 type IconRoute = NavRoute & { icon: IconName };
 
@@ -51,6 +53,7 @@ export function LivesheetBar({
   cartCount = 0,
   unreadCount = 0,
   offersCount = 0,
+  messagesCount = 0,
 }: {
   initialNight?: boolean;
   signedIn?: boolean;
@@ -59,6 +62,8 @@ export function LivesheetBar({
   unreadCount?: number;
   /** Offers waiting on this user — badges the Offers row in the index. */
   offersCount?: number;
+  /** Unread conversations — badges the Messages row in the index (N-5). */
+  messagesCount?: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -184,6 +189,17 @@ export function LivesheetBar({
             DRVN<em>.</em> <span className="microlabel">Builds and parts</span>
           </Link>
 
+          {/* N-2: one search field on every page, not just Explore. It
+              submits to /explore, which is the federated view — searching
+              from the top bar shouldn't make you choose a scope first. */}
+          <form action="/explore" role="search" className="bar__search">
+            <SuggestingSearchField
+              label="Search DRVN"
+              placeholder="Search builds, parts, people…"
+              endpoint="/api/explore/suggest"
+            />
+          </form>
+
           <nav className="bar__nav" aria-label="Primary">
             {/* Signed-out visitors keep text links; signed-in navigation is the rail. */}
             {!signedIn &&
@@ -197,6 +213,16 @@ export function LivesheetBar({
                   {route.label}
                 </Link>
               ))}
+
+            {/* N-3. A Post button, not a create menu: there are two things
+                to make and one of them ("List a part") already lives in the
+                rail, so a menu would be a menu of one. */}
+            {signedIn && (
+              /* It opens the quick post, which lives on Home (H-3). */
+              <ButtonLink href="/home#quick-post" variant="live" className="bar__post">
+                Post
+              </ButtonLink>
+            )}
 
             {signedIn &&
               UTILITY_ROUTES.map((route) => {
@@ -282,6 +308,20 @@ export function LivesheetBar({
             </div>
             <div className="dimline-h" aria-hidden="true" />
 
+            {/* N-3 at compact widths: the bar has no room for the Post button
+                there, so it leads the menu instead of disappearing. */}
+            {signedIn && (
+              <ButtonLink
+                href="/home#quick-post"
+                variant="live"
+                className="index__post"
+                tabIndex={open ? undefined : -1}
+                onClick={() => setOpen(false)}
+              >
+                Post
+              </ButtonLink>
+            )}
+
             <nav className="index__rows" aria-label="All sections">
               {indexEntries.map((entry, i) => {
                 if (entry.kind === "group") {
@@ -298,7 +338,12 @@ export function LivesheetBar({
                 }
 
                 const here = isActive(entry.href);
-                const badge = entry.href === "/offers" ? offersCount : 0;
+                const badge =
+                  entry.href === "/offers"
+                    ? offersCount
+                    : entry.href === "/messages"
+                      ? messagesCount
+                      : 0;
                 return (
                   <Link
                     key={entry.href}

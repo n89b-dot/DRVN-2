@@ -10,7 +10,7 @@ import {
 } from "@/features/commerce/fulfillment";
 import { checklistFor, sanitizeChecklist } from "@/lib/marketplace/grading";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
-import { getCategory } from "@/lib/marketplace/taxonomy";
+import { getCategory, isValidListingCategory } from "@/lib/marketplace/taxonomy";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
 import { keepValidGalleryImages } from "@/lib/media-url";
@@ -65,6 +65,25 @@ async function readListingFields(formData: FormData, userId: string) {
   const partNumber = String(formData.get("part_number") ?? "").trim();
   if (partNumber.length > 120) return { error: "Keep the part number under 120 characters." };
 
+  // M-6: who made the part. Free text rather than an enum — the brand list
+  // grows every time somebody lists a part nobody has listed before.
+  const brand = String(formData.get("brand") ?? "").trim();
+  if (brand.length > 120) return { error: "Keep the brand under 120 characters." };
+
+  // M-7: how far this part has been driven. Optional, and refused on a new
+  // part, where it would be a contradiction rather than a detail.
+  const milesRaw = String(formData.get("part_miles") ?? "").trim();
+  const milesUnit = String(formData.get("part_miles_unit") ?? "mi").trim();
+  let partMiles: number | null = null;
+  if (milesRaw) {
+    const value = Number(milesRaw);
+    if (!Number.isInteger(value) || value < 0 || value > 2_000_000) {
+      return { error: "Miles on the part must be a whole number under 2,000,000." };
+    }
+    if (milesUnit !== "mi" && milesUnit !== "km") return { error: "Choose miles or kilometres." };
+    partMiles = value;
+  }
+
   // A source car is a provenance claim, so it must be a car this seller owns.
   // Without this check any seller could attach someone else's well-known build.
   const sourceCarId = String(formData.get("source_car_id") ?? "") || null;
@@ -81,6 +100,7 @@ async function readListingFields(formData: FormData, userId: string) {
   }
 
   const subcategory = String(formData.get("subcategory") ?? "") || null;
+  if (!isValidListingCategory(category, subcategory)) return { error: "Choose a part type from the selected category, or leave it unknown." };
   const condition = String(formData.get("condition") ?? "used") as
     | "new"
     | "like_new"
@@ -179,6 +199,9 @@ async function readListingFields(formData: FormData, userId: string) {
       location: String(formData.get("location") ?? "").trim() || null,
       compatibility_notes: compatibility || null,
       part_number: partNumber || null,
+      brand: brand || null,
+      part_miles: partMiles,
+      part_miles_unit: partMiles === null ? null : (milesUnit as "mi" | "km"),
       source_car_id: sourceCarId,
     },
   };
@@ -306,6 +329,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
         price_cents: parsed.fields.price_cents,
         shipping_cents: parsed.fields.shipping_cents,
         part_number: parsed.fields.part_number,
+        brand: parsed.fields.brand,
         location: parsed.fields.location,
       },
     });

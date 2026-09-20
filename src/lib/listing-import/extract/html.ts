@@ -33,6 +33,10 @@ export type JsonLdProduct = {
   conditionText?: string;
   availability?: string;
   partNumber?: string;
+  /** Schema.org `brand` — an Organization node or a bare string. DRVN needs
+   *  it for listings (M-6) and to confirm the brand on a link-added mod
+   *  (L-2); without it the brand has to be guessed from the title. */
+  brand?: string;
   images: string[];
 };
 
@@ -102,6 +106,14 @@ export function extractJsonLdProduct($: CheerioDoc, baseUrl: string): JsonLdProd
   const priceRaw = offers ? firstString(offers.price) ?? firstString(offers.lowPrice) : undefined;
   const condition = offers ? firstString(offers.itemCondition) : undefined;
 
+  // `brand` is either a bare string or an Organization/Brand node; both are
+  // common, so read the node's name rather than assuming either shape.
+  const brandNode = asArray(product.brand)[0];
+  const brand =
+    typeof brandNode === "object" && brandNode !== null && !Array.isArray(brandNode)
+      ? firstString((brandNode as Record<string, JsonValue>).name)
+      : firstString(brandNode);
+
   return {
     name: firstString(product.name),
     description: firstString(product.description),
@@ -112,6 +124,7 @@ export function extractJsonLdProduct($: CheerioDoc, baseUrl: string): JsonLdProd
       ? firstString(offers.availability)?.replace(/^https?:\/\/schema\.org\//i, "")
       : undefined,
     partNumber: firstString(product.mpn) ?? firstString(product.sku),
+    brand,
     images,
   };
 }

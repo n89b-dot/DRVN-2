@@ -6,6 +6,30 @@ These are the only tests that exercise the whole system together — RLS, the
 purchase RPC, the fulfilment state machine and the UI in one pass. Unit tests
 can't reach any of that.
 
+## The acceptance journeys
+
+`direction-journeys.spec.ts` holds the six journeys from
+`docs/plans/2026-09-direction-build-plan.md`. Each workstream has its own
+tests; these are the ones that only pass if several workstreams agree — the
+seams nobody owns, which is where a change lands that is individually correct
+and collectively wrong.
+
+1. Replace a part and list the old one — the old part keeps its id.
+2. That listing reaches followers once — following the seller *and* the car
+   still gives one card.
+3. A stranger finds it signed out — Explore, search, suggestions, item page,
+   with a private source car named but never linked.
+4. It sells and the store shows it — under Sold and All, never Active, and
+   `?status=draft` on somebody else's store shows nothing.
+5. Quick post without losing a long draft — release-blocking.
+6. The buyer finishes the loop — a delivered order becomes a build line, once.
+
+They run only against the isolated local stack
+(`E2E_TEST_PROJECT_REF=local-drvn-remediation`), serially, and they clean up
+their own accounts. Journeys 2, 3, 4 and 6 reach past the UI with the service
+role for setup the journey is not testing — an order in a delivered state, a
+car flipped private — never for the assertion itself.
+
 ## Prerequisites
 
 They talk to a real Supabase project, so they need one that is **not

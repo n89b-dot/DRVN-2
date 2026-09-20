@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { typesenseConfigured, typesenseDelete, typesenseUpsert } from "@/lib/search/typesense";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
+import { postHeadline } from "@/lib/activity/headline";
+
 import { activitySearchText } from "./extract";
 import {
   EXPLORE_COLLECTIONS,
@@ -106,7 +108,7 @@ export async function indexUpdateNow(postId: string, assertLease: () => Promise<
   const { data: car } = await admin
     .from("cars")
     .select("name, make, model, year, is_public, owner_id")
-    .eq("id", post.car_id)
+    .eq("id", post.car_id ?? "")
     .maybeSingle().throwOnError();
   const owner = car ? await admin.from("profiles").select("suspended_at").eq("id", car.owner_id).maybeSingle().throwOnError() : null;
   if (!car?.is_public || !owner?.data || owner.data.suspended_at) {
@@ -117,7 +119,7 @@ export async function indexUpdateNow(postId: string, assertLease: () => Promise<
 
   const doc: UpdateSearchDocument = {
     id: post.id,
-    title: post.title,
+    title: postHeadline(post),
     intro: post.intro ?? "",
     body_text: activitySearchText(post.body),
     vehicle: [

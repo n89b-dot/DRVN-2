@@ -21,11 +21,16 @@ export function ExploreWall({
   initialItems,
   initialHasMore,
   isLoggedIn,
+  breakers,
 }: {
   tab: FeedTab;
   initialItems: FeedItem[];
   initialHasMore: boolean;
   isLoggedIn: boolean;
+  /** E-4's full-width rows, keyed by the card index they follow. Rendered
+   *  by the server, which can query; each decides for itself whether it has
+   *  enough to show. */
+  breakers?: Record<number, React.ReactNode>;
 }) {
   const [items, setItems] = useState(initialItems);
   const [page, setPage] = useState(1);
@@ -69,7 +74,7 @@ export function ExploreWall({
   return (
     <>
       <section className="deck">
-        <MasonryFeed items={items} isLoggedIn={isLoggedIn} path="/explore" />
+        <MasonryFeed items={items} isLoggedIn={isLoggedIn} path="/explore" uniform breakers={breakers} />
       </section>
       <div ref={sentinel} aria-hidden="true" />
       {/* The wall itself stays unanimated on purpose: pages preload 800px

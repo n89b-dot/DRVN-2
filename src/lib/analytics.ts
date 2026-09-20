@@ -27,9 +27,15 @@ import { reportError } from "@/lib/monitoring";
  */
 
 export type AnalyticsEvent =
+  | { event: "marketplace_listing_opened"; props?: undefined }
+  | { event: "marketplace_results_viewed"; props: { results: number; zero: boolean; has_query: boolean; filters: number; category: boolean } }
   | { event: "vehicle_added"; props: { identity_source: "picker" | "vin" | "manual" } }
   | { event: "update_started"; props?: undefined }
   | { event: "update_published"; props: { blocks: number; automotive_blocks: number } }
+  /** W-1. Counted separately from update_published: the whole question the
+   *  quick box exists to answer is whether people post more when it costs
+   *  less, and merging the two would hide the answer. */
+  | { event: "quick_post_published"; props: { photos: number; tagged: number } }
   | { event: "listing_started"; props?: undefined }
   | { event: "listing_published"; props: { category: string; has_source_car: boolean; fitment_rows: number } }
   | { event: "search_performed"; props: { lane: "identifier" | "human"; results: number } }

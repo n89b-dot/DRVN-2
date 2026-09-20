@@ -8,14 +8,13 @@ import { cx } from "@/lib/format";
  * sub line — previously hand-assembled as `<Rv as="header" className="pagehead">`
  * on 40+ pages. Extra rows (actions, `.pagehead__row`) go in `children`.
  *
- * `reveal` is on by default (the app-wide convention); pass `reveal={false}`
- * for surfaces that render inside an already-revealed container.
+ * Headings are visible in server HTML. Opt into reveal only for secondary UI.
  */
 export function PageHead({
   eyebrow,
   title,
   sub,
-  reveal = true,
+  reveal = false,
   className,
   children,
 }: {

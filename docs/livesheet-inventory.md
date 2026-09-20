@@ -93,13 +93,14 @@ print final, ticks never start — countdowns keep running (information, not dec
 | Mockup | App route | Notes |
 |---|---|---|
 | `home.html` (public landing) | `/` | band stats, hero callouts, steps 01–03, sheets/parts strips |
-| `index.html` (Sheet 01) | `/home` | greeting head, KPI deck + livedims, work orders, garage tile, feed, week strip |
+| `index.html` (Sheet 01) | `/home` | 2026-09: two columns — the quick post box above the feed (Following · For you · Local) and a rail of what needs an answer. The KPI deck moved to `/selling` |
 | `dashboard.html` (Sheet 02 workbench) | `/home` (seller ops section) + `/orders` seller | listings-by-heat rowlist, jobs in motion + pipe, payout ledger |
-| `explore.html` | `/explore` | mixed car/part/fresh-entry tiles, filters |
+| `explore.html` | `/explore` | 2026-09: one wall, one cell footprint per kind, breakers at ≥3 results, segments, filters |
 | `market.html` | `/marketplace` (+ `[category]`) | search + fits-switch + drop capsule + fbtn row + mkt grid |
 | `listing.html` | `/listings/[id]` | measured spec table, buy box (capsule + buy/offer), off-this-car, keeper livedims, Q&A |
-| `car.html` (public sheet) | `/cars/[slug]` | hero callouts + leaders, jumprow, KPI tiles, for-sale rowlist, build blines by section, activity feed |
-| `garage.html` (owner desk) | `/garage` | owner hero callouts, release-a-part flow, blines `--own` + relbtn, documents, second-sheet upsell |
+| `car.html` (public sheet) | `/cars/[slug]` | hero callouts + leaders, jumprow, KPI tiles, for-sale rowlist, build blines by section (fitted, then "Came off this car"), activity feed |
+| — (no mockup) | `/posts/[postId]` | 2026-09 (W-5): a post with no car. Its own route — no build to sit inside, and the tagged parts are the subject |
+| `garage.html` (owner desk) | `/garage?car=` | 2026-09: a car switcher into a focused view — stat strip and Overview · Mods · Parts · Media tabs mounting the existing editors |
 | `add-car.html` | `/garage` add-car | steps, identify fields, photos drop, build seed entries, publish radios |
 | `sell.html` | `/sell` | draft autosave head, photos→part→provenance→condition→price→review; live preview card + completeness rail |
 | `orders.html` (job card) | `/orders` (seller job detail) | pipe + dispatch form + payout math + past jobs |
@@ -108,7 +109,7 @@ print final, ticks never start — countdowns keep running (information, not dec
 | `watchlist.html` | `/saved` | watched part tiles + saved searches + followed sheets |
 | `notifications.html` | `/notifications` | actionable rows, policy blines, mail previews, prefs pointer |
 | `messages.html` | `/messages` + `/messages/[orderId]` (shipped) | thread list + msg spine thread + composer + safety alert |
-| `profile.html` (keeper sheet) | `/u/[username]` + `/profile` | keeper record, grade blines, cars, live listings, reviews, activity |
+| `profile.html` (keeper sheet) | `/u/[username]` + `/profile` | 2026-09: banner + trust strip, then Overview · Garage · Updates · **Parts (the member's store)** · Reviews |
 | `settings.html` | `/settings` | config blines by section, signals matrix (sq checks), savebar, theme select |
 | `auth.html` | `/login`, `/signup`, reset, verify | authwrap 420px, field states, OAuth ghosts, verify listening capsule |
 | `first-run.html` | `/home` empty + `/onboarding` | blank-sheet hero (undrawn), KPI blanks ("—", $0), how-it-fills steps, ghost work orders |

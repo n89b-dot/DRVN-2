@@ -3,14 +3,13 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
+import { cartCount as getCartCount } from "@/lib/cart";
 import { loadShellCounts } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 export default async function ProductLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getViewer();
 
   if (!user) {
     redirect("/login");
@@ -23,7 +22,8 @@ export default async function ProductLayout({ children }: { children: ReactNode 
   const railOpen = jar.get("ls-rail")?.value !== "closed";
   const mktOpen = jar.get("ls-mkt")?.value !== "closed";
 
-  const { cartCount, unreadCount, offersCount } = await loadShellCounts(supabase, user.id);
+  const counts = loadShellCounts(supabase, user?.id ?? null);
+  const cartCount = await getCartCount();
 
   return (
     <AppShell
@@ -32,8 +32,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       initialRailOpen={railOpen}
       initialMktOpen={mktOpen}
       cartCount={cartCount}
-      unreadCount={unreadCount}
-      offersCount={offersCount}
+      counts={counts}
     >
       {children}
     </AppShell>

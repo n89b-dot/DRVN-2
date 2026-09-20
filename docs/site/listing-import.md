@@ -91,6 +91,35 @@ expensive user-triggerable action). DB-side: 20 in-progress imports per user
 (trigger), one live import per canonical URL per user (partial unique index).
 One-time content-rights attestation: `profiles.import_attested_at`.
 
+`RATE_LIMITS.fetchPartLink` — 30/hour/user. Deliberately three times the
+importer's allowance, because it does far less: one fetch, one HTML read, one
+thumbnail. Sharing the importer's limit would have made "add a part by
+pasting a link" feel rationed for no reason.
+
+## Adding a part by pasting a link (L-1…L-4)
+
+The build sheet's link flow reuses the importer's machinery rather than
+growing its own: `fetch/safe-fetch.ts` and `fetch/guard.ts` (SSRF posture
+unchanged), `extract/html.ts` (whose JSON-LD reader gained `brand`) and
+`adapters/images.ts`. `media/import-images.ts` takes the bucket and path as
+parameters so the same code re-hosts a mod thumbnail and a listing photo.
+
+What it writes is on `mod_items`, not `listings`: `product_url`,
+`image_url`, `source_domain`, and `ref_price_cents` **with**
+`ref_price_currency`. A price without a currency is refused by the database —
+"1299" is not a price, and guessing the currency from the shop's domain is
+how a €1,299 part becomes a $1,299 part on somebody's sheet.
+
+**A shop's photo never becomes a listing photo.** The sell form prefills
+everything else from the mod and deliberately leaves the images alone: the
+thumbnail is there so the owner recognises the line on their own build sheet,
+and republishing a manufacturer's product shot as the photo of a used part
+for sale is both a misrepresentation and somebody else's copyright.
+
+Brand extraction feeds the same curated list the marketplace filter uses
+(`KNOWN_BRANDS`), so a mod added by link, a listing published from it, and a
+listing backfilled from its title all agree on what the brand is called.
+
 ## Troubleshooting
 
 - **Import stuck in a `*_ing` state** — a poll crashed mid-step; the lease

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { ListingRow } from "@/components/commerce";
 import {
+  DataRow,
   EmptyState,
   HorizontalGallery,
   LinkedTitle,
@@ -14,6 +16,7 @@ import {
   type SheetTab,
 } from "@/components/ui";
 import type { ProfileView } from "@/lib/profile-data";
+import { postHref } from "@/lib/activity/href";
 
 type ProfileLink = { label: string; url: string };
 
@@ -45,7 +48,7 @@ function ActivityRows({ view }: { view: ProfileView }) {
     <div className="mt-5 grid gap-9">
       {view.activity.map((post) => (
         <TimelineRow key={post.id} date={post.date}>
-          <LinkedTitle href={`/cars/${post.carSlug}/activity/${post.id}`} label={post.title} />
+          <LinkedTitle href={postHref({ id: post.id, carSlug: post.carSlug })} label={post.title} />
           {post.intro && <p className="mt-1 max-w-[62ch] text-sm leading-6">{post.intro}</p>}
           {post.gallery.length > 0 && (
             <div className="mt-4">
@@ -137,11 +140,20 @@ function ReviewRows({ view, basePath }: { view: ProfileView; basePath: string })
 }
 
 /**
- * Profile body: About / For sale / Reviews / Activity.
+ * Profile body: Overview · Garage · Updates · Parts · Reviews (P-3).
  *
- * Now on SheetTabs, so tab state is real and URL-backed (`?view=`) — linking
- * someone to a seller's listings or reviews is a thing people do, and the
- * previous client-only state made it impossible.
+ * The old shape was About / For sale / Reviews / Activity, which read as a
+ * seller's page with some cars attached. The new one reads as a person with
+ * a garage, whose parts happen to be for sale — same content, opposite
+ * emphasis, and it matches how the rest of the product is now organised.
+ *
+ * The About tab is gone (P-1): a bio is one paragraph, and giving it a whole
+ * tab meant the first thing you saw on somebody's profile was prose rather
+ * than their cars. It moves into the header and the Overview.
+ *
+ * Tab state stays URL-backed (`?view=`), and the OLD keys still resolve —
+ * links to `?view=forsale` are out in the world, and breaking them to rename
+ * a tab would be a poor trade.
  */
 export function ProfileBody({
   bio,
@@ -149,6 +161,9 @@ export function ProfileBody({
   contactLinks,
   initialTab,
   basePath,
+  partsPanel,
+  partsCount,
+  storeNote,
 }: {
   bio: string | null;
   view: ProfileView;
@@ -156,6 +171,11 @@ export function ProfileBody({
   initialTab?: string;
   /** Profile URL ("/u/handle") — "Show more" links are built off this. */
   basePath: string;
+  /** The store grid (P-6) — rendered by the route, which can query. */
+  partsPanel?: ReactNode;
+  partsCount?: number | null;
+  /** One short line above the grid (P-8). */
+  storeNote?: string | null;
 }) {
   const aboutPanel = (
     <div className="mt-8 grid gap-12">
@@ -189,14 +209,78 @@ export function ProfileBody({
     </div>
   );
 
+  const overviewPanel = (
+    <div className="mt-8 grid gap-12">
+      {bio && <p className="max-w-[62ch] text-body leading-7">{bio}</p>}
+      <section>
+        {/* P-4: the car they lead with, then what they've been doing to it,
+            then what's for sale. The order is the product's own argument. */}
+        <SectionHeading>The garage</SectionHeading>
+        <VehicleRows view={view} />
+      </section>
+      {view.activity.length > 0 && (
+        <section>
+          <SectionHeading>Latest updates</SectionHeading>
+          <ActivityRows view={{ ...view, activity: view.activity.slice(0, 3) }} />
+        </section>
+      )}
+      {contactLinks.length > 0 && (
+        <section>
+          <SectionHeading>Contact</SectionHeading>
+          <div className="mt-2">
+            {contactLinks.map((link) => (
+              <DataRow
+                key={link.label}
+                label={link.label}
+                value={
+                  <a
+                    href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="transition-colors hover:text-live"
+                  >
+                    {link.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
+                  </a>
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+
+  const parts = partsPanel ?? <ListingRows view={view} basePath={basePath} />;
+
   const tabs: SheetTab[] = [
-    { key: "about", label: "About", panel: aboutPanel },
+    { key: "overview", label: "Overview", panel: overviewPanel },
     {
-      key: "forsale",
-      label: "For sale",
-      count: view.listings.filter((l) => l.status === "active").length || null,
+      key: "garage",
+      label: "Garage",
+      count: view.vehicles.length || null,
+      panel: (
+        <div className="mt-8">
+          <VehicleRows view={view} />
+        </div>
+      ),
+    },
+    {
+      key: "updates",
+      label: "Updates",
+      count: view.activity.length || null,
+      panel: <ActivityRows view={view} />,
+    },
+    {
+      key: "parts",
+      label: "Parts",
+      count: partsCount ?? view.listings.filter((l) => l.status === "active").length ?? null,
       live: true,
-      panel: <ListingRows view={view} basePath={basePath} />,
+      panel: (
+        <div className="mt-8">
+          {storeNote && <p className="storenote">{storeNote}</p>}
+          {parts}
+        </div>
+      ),
     },
     {
       key: "reviews",
@@ -204,13 +288,8 @@ export function ProfileBody({
       count: view.reviewCount || null,
       panel: <ReviewRows view={view} basePath={basePath} />,
     },
-    {
-      key: "activity",
-      label: "Activity",
-      count: view.activity.length || null,
-      panel: <ActivityRows view={view} />,
-    },
   ];
+  void aboutPanel;
 
   return (
     <div className="mt-8">

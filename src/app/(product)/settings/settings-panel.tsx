@@ -13,6 +13,7 @@ import { DeleteAccount } from "./delete-account";
 import { ExportAccount } from "./export-account";
 import { PaymentMethods } from "./payment-methods";
 import { PasswordSection } from "./password-section";
+import { COUNTRIES, countryByCode } from "@/lib/geo/regions";
 
 type ProfileLink = { label: string; url: string };
 export type SettingsProfile = {
@@ -22,6 +23,10 @@ export type SettingsProfile = {
   headline: string;
   bio: string;
   location: string;
+  country: string | null;
+  region: string | null;
+  default_offer_floor_pct: number | null;
+  store_note: string | null;
   links: ProfileLink[];
   notification_prefs: unknown;
 };
@@ -198,6 +203,15 @@ export function SettingsPanel({
     display_name: profile.display_name,
     headline: profile.headline,
     location: profile.location,
+    // H-2: coarse on purpose — a country and a region, never a town. Local
+    // wants the right ballpark; anything finer is location sharing.
+    country: profile.country ?? "",
+    region: profile.region ?? "",
+    // P-9: a default for the sell form, not a rule applied to live listings.
+    store_note: profile.store_note ?? "",
+    default_offer_floor_pct: profile.default_offer_floor_pct
+      ? String(profile.default_offer_floor_pct)
+      : "",
     bio: profile.bio,
     link_website: linkValue("website"),
     link_instagram: linkValue("instagram"),
@@ -292,6 +306,72 @@ export function SettingsPanel({
             </DataRow>
             <DataRow label="Location">
               <input name="location" value={profileDraft.location} onChange={event => setProfileField("location", event.target.value)} className="ctl" />
+            </DataRow>
+            <DataRow label="Country">
+              <select
+                name="country"
+                value={profileDraft.country}
+                onChange={(event) => {
+                  setProfileField("country", event.target.value);
+                  // A region belongs to its country; changing one clears the
+                  // other rather than leaving an impossible pair behind.
+                  setProfileField("region", "");
+                }}
+                className="ctl"
+              >
+                <option value="">Not saying</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </DataRow>
+            {(countryByCode(profileDraft.country)?.regions.length ?? 0) > 0 && (
+              <DataRow label="Region" note="Shows the Local tab on Home.">
+                <select
+                  name="region"
+                  value={profileDraft.region}
+                  onChange={(event) => setProfileField("region", event.target.value)}
+                  className="ctl"
+                >
+                  <option value="">Anywhere in the country</option>
+                  {countryByCode(profileDraft.country)!.regions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </DataRow>
+            )}
+            <DataRow
+              label="Lowest offer, by default"
+              note="Prefills the sell form. Never changes a listing that's already live."
+            >
+              <input
+                name="default_offer_floor_pct"
+                type="number"
+                min={10}
+                max={100}
+                inputMode="numeric"
+                value={profileDraft.default_offer_floor_pct}
+                onChange={(event) => setProfileField("default_offer_floor_pct", event.target.value)}
+                placeholder="e.g. 80 (% of the asking price)"
+                className="ctl"
+              />
+            </DataRow>
+            <DataRow
+              label="Store note"
+              note="One line above your parts — how you pack, when you post. Up to 180 characters."
+            >
+              <input
+                name="store_note"
+                maxLength={180}
+                value={profileDraft.store_note}
+                onChange={(event) => setProfileField("store_note", event.target.value)}
+                placeholder="e.g. Posted within two days, boxed properly."
+                className="ctl"
+              />
             </DataRow>
             <DataRow label="Bio">
               <textarea name="bio" value={profileDraft.bio} onChange={event => setProfileField("bio", event.target.value)} rows={3} className="ctl" />

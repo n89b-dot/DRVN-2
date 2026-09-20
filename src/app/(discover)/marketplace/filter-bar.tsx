@@ -1,13 +1,16 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useRef, type ReactNode } from "react";
 
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
-import { FinderRefineSheet, SearchField } from "@/components/ui";
+import { Button, FinderRefineSheet, SearchField } from "@/components/ui";
+import { refinementCount } from "@/lib/marketplace/state";
 
 import { SortSelect } from "./sort-select";
 
 /**
- * GET-form filter bar — server-rendered, no client JS needed.
- * Submits back to the current path with query params.
+ * GET-form filter bar with client-side draft cancellation and price validation.
+ * Search and Apply submit to the current path with query params.
  *
  * The Marketplace's control hierarchy, top to bottom:
  *
@@ -30,6 +33,7 @@ export function FilterBar({
   showFitToggle,
   fitCarLabel,
   browse,
+  brands = [],
 }: {
   action: string;
   filters: Record<string, string | undefined>;
@@ -39,13 +43,27 @@ export function FilterBar({
   /** The compact-width category browser (CategorySheet), placed in the
    *  toolbar beside Refine and Sort so browsing is one tap on a phone. */
   browse?: ReactNode;
+  /** Brands that actually have parts live, with their counts (M-6). */
+  brands?: { brand: string; total: number }[];
 }) {
-  const activeCount = [filters.condition, filters.location, filters.min, filters.max, filters.fit].filter(
-    Boolean
-  ).length;
+  const formRef = useRef<HTMLFormElement>(null);
+  const activeCount = refinementCount(filters);
 
   return (
-    <form action={action} method="get" className="finder" role="search">
+    <form ref={formRef} action={action} method="get" className="finder" role="search" onSubmit={event => {
+      const form = event.currentTarget;
+      const min = form.elements.namedItem("min") as HTMLInputElement;
+      const max = form.elements.namedItem("max") as HTMLInputElement;
+      if (min.value && max.value && Number(min.value) > Number(max.value)) {
+        event.preventDefault();
+        max.setCustomValidity("Maximum price must be at least the minimum price.");
+        max.reportValidity();
+      }
+    }} onInput={() => {
+      const max = formRef.current?.elements.namedItem("max") as HTMLInputElement | null;
+      max?.setCustomValidity("");
+    }}>
+      {["vehicle", "vyear", "ymin", "ymax"].map(key => filters[key] ? <input key={key} type="hidden" name={key} value={filters[key]} /> : null)}
       <div className="finder__main">
         <SearchField label="Search parts" defaultValue={filters.q ?? ""} placeholder="Search…" />
 
@@ -53,14 +71,20 @@ export function FilterBar({
             every width (see FinderRefineSheet) — a "Filters" control with a
             live count opens the sheet; the fields stay mounted either way,
             so they always submit with the search. Browse stays compact-only
-            (≥640px the CategoryNav tiles are the browser); Sort rides in the
+            (≥640px CategoryNav provides tiles or a category tree); Sort rides in the
             same row so the plate reads Search · Filters · Sort. */}
         <FinderRefineSheet
+          /* M-3: a sidebar at ≥1024px, the same fields as a sheet below it. */
+          inline="lg"
           activeCount={activeCount}
+          onDismiss={() => {
+            formRef.current?.reset();
+            (formRef.current?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity("");
+          }}
           aside={
             <>
               <span className="contents sm:hidden">{browse}</span>
-              <SortSelect value={filters.sort} />
+              <SortSelect value={filters.sort} filters={filters} />
             </>
           }
         >
@@ -78,12 +102,32 @@ export function FilterBar({
             </option>
           ))}
         </select>
+        {/* M-3 / M-6. A datalist rather than a select: the brand list grows
+            every time somebody lists a part nobody has listed before, so the
+            facet suggests what exists without refusing what doesn't. */}
+        <input
+          name="brand"
+          defaultValue={filters.brand ?? ""}
+          placeholder="Brand"
+          list="marketplace-brands"
+          className="ctl w-full max-w-none"
+          aria-label="Brand"
+        />
+        {brands.length > 0 && (
+          <datalist id="marketplace-brands">
+            {brands.map((b) => (
+              <option key={b.brand} value={b.brand}>
+                {b.total} for sale
+              </option>
+            ))}
+          </datalist>
+        )}
         <input
           name="location"
           defaultValue={filters.location ?? ""}
-          placeholder="Location"
+          placeholder="Seller location (text)"
           className="ctl w-full max-w-none"
-          aria-label="Location"
+          aria-label="Seller location (text)"
         />
         {/* The price bounds are one control in two halves, so they travel
             together — left loose they split across a wrap and read as two
@@ -91,6 +135,9 @@ export function FilterBar({
         <span className="flex w-full gap-2">
           <input
             name="min"
+            type="number"
+            min="0"
+            step="0.01"
             defaultValue={filters.min ?? ""}
             placeholder="Min $"
             inputMode="decimal"
@@ -99,6 +146,9 @@ export function FilterBar({
           />
           <input
             name="max"
+            type="number"
+            min="0"
+            step="0.01"
             defaultValue={filters.max ?? ""}
             placeholder="Max $"
             inputMode="decimal"
@@ -115,14 +165,23 @@ export function FilterBar({
               defaultChecked={filters.fit === "1"}
               className="sq"
             />
-            {fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for your garage"}
+            {fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for your current garage"}
           </label>
         )}
           {/* Inside the sheet the refinements apply with the search — say so,
               instead of leaving anyone to guess whether "Done" submits. */}
-          <button type="submit" className="btn w-full">
+          <Button type="button" variant="ghost" onClick={() => {
+            const form = formRef.current;
+            for (const key of ["condition", "brand", "location", "min", "max", "fit", "ymin", "ymax"]) {
+              const field = form?.elements.namedItem(key);
+              if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = false;
+              else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = "";
+            }
+            (form?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity("");
+          }}>Reset filters</Button>
+          <Button type="submit" className="w-full">
             Apply filters
-          </button>
+          </Button>
         </FinderRefineSheet>
       </div>
     </form>

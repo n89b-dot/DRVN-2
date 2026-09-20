@@ -10,6 +10,7 @@ import { ShowcaseEditor } from "./showcase-editor";
 import { ModsEditor } from "./mods-editor";
 import { ActivityComposer } from "./activity-composer";
 import { DangerZone } from "./danger-zone";
+import { postHeadline } from "@/lib/activity/headline";
 
 export const metadata = { title: "Manage car - DRVN" };
 
@@ -30,17 +31,18 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
 
   if (!car) notFound();
 
-  const [{ data: images }, { data: mods }, { data: posts }, { data: hotspots }] =
+  const [{ data: images }, { data: mods }, { data: posts }, { data: hotspots }, { data: profile }] =
     await Promise.all([
       supabase.from("car_images").select("*").eq("car_id", id).order("position"),
       supabase.from("mod_items").select("*").eq("car_id", id).order("position"),
       supabase
         .from("activity_posts")
-        .select("id, title, published_at")
+        .select("id, title, intro, body, published_at")
         .eq("car_id", id)
         .is("draft_archived_at", null)
         .order("published_at", { ascending: false }),
       supabase.from("car_hotspots").select("*").eq("car_id", id).order("created_at"),
+      supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle(),
     ]);
 
   return (
@@ -63,7 +65,7 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="deck">
-        <CarDetailsForm car={car} />
+        <CarDetailsForm car={car} isMain={profile?.main_car_id === car.id} />
         <GalleryManager
           carId={car.id}
           userId={user.id}
@@ -78,7 +80,10 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
           mods={mods ?? []}
           initial={hotspots ?? []}
         />
-        <ActivityComposer carId={car.id} posts={posts ?? []} />
+        <ActivityComposer
+          carId={car.id}
+          posts={(posts ?? []).map((p) => ({ ...p, title: postHeadline(p) }))}
+        />
         <DangerZone carId={car.id} carName={car.name} />
       </div>
     </div>

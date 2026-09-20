@@ -5,7 +5,7 @@ import { unstable_rethrow } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
-import { ActionFooter, Button, TileHead } from "@/components/ui";
+import { ActionFooter, Button, TextField, TileHead } from "@/components/ui";
 import type { ModItem, ModStatus } from "@/lib/database.types";
 import {
   isLowConfidence,
@@ -17,7 +17,7 @@ import {
 
 import { unlinkModListing } from "@/app/(product)/sell/actions";
 
-import { saveModItems, type ModItemInput } from "../../actions";
+import { readPartLink, saveModItems, type ModItemInput } from "../../actions";
 
 export { MOD_GROUPS };
 
@@ -65,6 +65,12 @@ type Row = {
   source_domain: string | null;
   ref_price_cents: number | null;
   ref_price_currency: string | null;
+  /** Came from a DRVN purchase (C-1). Like a listed line, it can be taken
+   *  off the car but not deleted — the save keeps it either way. */
+  bought: boolean;
+  /** Brand and product as loaded, so typing over a listed part can be told
+   *  apart from fixing a typo in it. */
+  loadedLabel: string;
 };
 
 function blankRow(group_label = "Other"): Row {
@@ -86,6 +92,8 @@ function blankRow(group_label = "Other"): Row {
     source_domain: null,
     ref_price_cents: null,
     ref_price_currency: null,
+    bought: false,
+    loadedLabel: "",
   };
 }
 
@@ -123,6 +131,8 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       linked_listing_id: m.linked_listing_id,
       status: m.status,
       removed_at: m.removed_at,
+      bought: Boolean(m.source_order_item_id),
+      loadedLabel: `${m.brand ?? ""} ${m.product ?? ""}`.trim().toLowerCase(),
       product_url: m.product_url,
       image_url: m.image_url,
       source_domain: m.source_domain,
@@ -131,7 +141,13 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     }))
   );
   const [paste, setPaste] = useState("");
-  const [showPaste, setShowPaste] = useState(initialMods.length === 0);
+  const [showPaste, setShowPaste] = useState(false);
+  // L-1: "Add mod" opens on a link. Typing stays first-class — the manual
+  // row is one click away and a failed fetch falls back to it — but pasting
+  // the shop page you just bought from is the fastest true thing to do.
+  const [link, setLink] = useState("");
+  const [linkPending, setLinkPending] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
   const [unlinkPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
@@ -232,6 +248,42 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     });
   }
 
+  async function addFromLink() {
+    const url = link.trim();
+    if (!url || linkPending) return;
+    setLinkPending(true);
+    setLinkError(null);
+    try {
+      const result = await readPartLink(url);
+      if (!result.ok) {
+        setLinkError(result.error);
+        return;
+      }
+      const p = result.part;
+      setRows((r) => [
+        ...r,
+        {
+          ...blankRow(),
+          brand: p.brand ?? "",
+          product: p.product ?? p.title,
+          part_number: p.part_number ?? "",
+          category: p.category,
+          raw_text: p.title,
+          product_url: p.product_url,
+          image_url: p.image_url,
+          source_domain: p.source_domain,
+          ref_price_cents: p.ref_price_cents,
+          ref_price_currency: p.ref_price_currency,
+        },
+      ]);
+      setLink("");
+    } catch {
+      setLinkError("Couldn't read that link. You can type the part in instead.");
+    } finally {
+      setLinkPending(false);
+    }
+  }
+
   function updateRow(key: string, patch: Partial<Row>) {
     setRows((r) => r.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
@@ -321,6 +373,36 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         <span className="microlabel microlabel--ink">The build — seed the lines</span>
         <Button variant="ghost" onClick={() => setShowPaste((s) => !s)}>
           Paste a list
+        </Button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <TextField
+          id="mods-link"
+          label="Paste a product link"
+          type="url"
+          inputMode="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void addFromLink();
+            }
+          }}
+          placeholder="https://shop.example.com/the-part-you-fitted"
+          hint="Fills in the title, brand, part number, photo and what the shop was charging. Everything stays editable, and typing it in yourself works just as well."
+          error={linkError ?? undefined}
+          fieldClassName="!mb-0 min-w-0 flex-1 basis-[280px]"
+          className="max-w-none"
+        />
+        <Button
+          onClick={() => void addFromLink()}
+          loading={linkPending}
+          pendingLabel="Reading…"
+          disabled={!link.trim()}
+        >
+          Add from link
         </Button>
       </div>
 
@@ -464,7 +546,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 <button
                   type="button"
                   onClick={() => replaceRow(row.key)}
-                  className="microlabel shrink-0 underline decoration-dotted transition hover:text-live"
+                  className="microlabel shrink-0 py-3 underline decoration-dotted transition hover:text-live"
                   title="The old part comes off and keeps its record; a new line takes its place"
                 >
                   Replace
@@ -482,6 +564,52 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   </span>
                 </button>
               </span>
+              {row.linked_listing_id &&
+                `${row.brand} ${row.product}`.trim().toLowerCase() !== row.loadedLabel && (
+                  /* A-2. This line is what a live listing says it came from,
+                     so typing a different part over it rewrites the listing's
+                     provenance. A typo fix is fine; a swap wants Replace. */
+                  <span className="modrow__via" role="status">
+                    <span className="microlabel">
+                      This part is listed for sale. Fixing a typo is fine — if it&rsquo;s a different
+                      part now, use{" "}
+                      <button
+                        type="button"
+                        onClick={() => replaceRow(row.key)}
+                        className="underline decoration-dotted transition hover:text-live"
+                      >
+                        Replace
+                      </button>{" "}
+                      so the listing keeps pointing at the right one.
+                    </span>
+                  </span>
+                )}
+              {(row.source_domain || row.ref_price_cents !== null) && (
+                /* What the link gave us, stated plainly so the owner can see
+                   it was captured — and correct it if the shop lied. */
+                <span className="modrow__via">
+                  {row.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={row.image_url} alt="" className="modrow__thumb" />
+                  )}
+                  {row.product_url ? (
+                    <a href={row.product_url} target="_blank" rel="nofollow noreferrer" className="jumplink">
+                      via {row.source_domain ?? "the shop"} →
+                    </a>
+                  ) : (
+                    <span className="microlabel">via {row.source_domain}</span>
+                  )}
+                  {row.ref_price_cents !== null && row.ref_price_currency && (
+                    <span className="microlabel">
+                      listed at{" "}
+                      {new Intl.NumberFormat("en", {
+                        style: "currency",
+                        currency: row.ref_price_currency,
+                      }).format(row.ref_price_cents / 100)}
+                    </span>
+                  )}
+                </span>
+              )}
               {asking === row.key && (
                 /* A-1. Asked inline, in the row, because the answer is about
                    this part and nothing else. Neither answer loses the record:
@@ -501,11 +629,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   <Button variant="ghost" onClick={() => markRemoved(row.key)} disabled={pending}>
                     Just remove it
                   </Button>
-                  {!row.linked_listing_id && (
+                  {!row.linked_listing_id && !row.bought && (
                     <button
                       type="button"
                       onClick={() => deleteRow(row.key)}
-                      className="microlabel shrink-0 underline decoration-dotted transition hover:text-live"
+                      className="microlabel shrink-0 py-3 underline decoration-dotted transition hover:text-live"
                       title="This line was never on the car — delete it outright"
                     >
                       Delete — added by mistake
@@ -568,12 +696,12 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   <button
                     type="button"
                     onClick={() => markInstalled(row.key)}
-                    className="microlabel shrink-0 underline decoration-dotted transition hover:text-live"
+                    className="microlabel shrink-0 py-3 underline decoration-dotted transition hover:text-live"
                     title="Put this part back on the car"
                   >
                     Put it back
                   </button>
-                  {!row.linked_listing_id && (
+                  {!row.linked_listing_id && !row.bought && (
                     <button
                       type="button"
                       onClick={() => deleteRow(row.key)}

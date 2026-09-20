@@ -109,7 +109,7 @@ begin
 
   perform set_config('role','postgres',true);
   insert into public.listings(id,seller_id,title,category,price_cents,status)
-  values((first_claim->>'listing_id')::uuid,seller,'Request guard listing','other',1000,'draft');
+  values((first_claim->>'listing_id')::uuid,seller,'Request guard listing','performance',1000,'draft');
 
   perform set_config('role','authenticated',true);
   perform set_config('request.jwt.claims',jsonb_build_object('sub',seller,'role','authenticated')::text,true);

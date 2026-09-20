@@ -4,47 +4,25 @@ import type { Database } from "@/lib/database.types";
 import type { ListingCardData } from "@/components/ui";
 import {
   buildGarageFitmentIndex,
-  matchFitmentClaims,
-  matchGarageFitment,
+  explainMatch,
+  type MatchEvidence,
   type GarageCar,
 } from "@/lib/marketplace/fitment";
 import { reportError } from "@/lib/monitoring";
-import { capture } from "@/lib/analytics";
-import { classifyQuery } from "@/lib/marketplace/search/normalize";
-import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
+import { resolveVehicleFilter, type VehicleFilterSelection } from "@/lib/vehicles/catalog";
 import { vehicleLabel } from "@/lib/vehicles/label";
+import { normalizeMarketplaceState, type ListingFilters, type ListingSort } from "./state";
+export type { ListingFilters, ListingSort } from "./state";
 
-export type ListingSort = "newest" | "price_asc" | "price_desc";
-
-export type ListingFilters = {
-  q?: string;
-  category?: string;
-  subcategory?: string;
-  condition?: string;
-  min?: string;
-  max?: string;
-  fit?: string;
-  location?: string;
-  /** Canonical catalog vehicle identity, "<makeId>" or "<makeId>-<modelId>"
-   *  (0041). Matches by the SAME seller-stated routes as `fit`: the listing's
-   *  declared fitment rows or its source car — never compatibility notes. */
-  vehicle?: string;
-  /** Model-year bounds on the SOURCE car (the build the part came off).
-   *  Listings with no source car can't answer and are excluded while set. */
-  ymin?: string;
-  ymax?: string;
-  sort?: string;
-  page?: string;
-};
-
-export type ListingPage = {
+type ListingPageContext = {
   searchTruncated?: boolean;
-  results: ListingCardData[];
-  total: number;
   page: number;
   pageSize: number;
-  hasMore: boolean;
 };
+export type ListingPage = ListingPageContext & (
+  | { status: "success"; results: ListingCardData[]; total: number; hasMore: boolean }
+  | { status: "error"; results: []; total: null; hasMore: false; errorReference: string }
+);
 
 export const PAGE_SIZE = 24;
 
@@ -79,14 +57,33 @@ export async function fetchWatchCounts(
   return counts;
 }
 
+/**
+ * The card shows ONE line of the seller's own description — their first
+ * sentence, not a paraphrase. A card that paraphrases is a card that can be
+ * wrong about somebody else's part.
+ */
+function firstLine(description: string | null | undefined): string | null {
+  const text = (description ?? "").trim();
+  if (!text) return null;
+  const line = text.split(/\n|(?<=[.!?])\s/)[0]?.trim() ?? "";
+  return line ? line.slice(0, 160) : null;
+}
+
 type HydratableListingRow = {
   id: string;
   title: string;
   price_cents: number;
   shipping_cents?: number | null;
+  allows_collection?: boolean;
+  shipping_mode?: string;
   condition: string | null;
   location: string | null;
   part_number?: string | null;
+  /** M-6 / M-7 / the card's one description line. */
+  brand?: string | null;
+  part_miles?: number | null;
+  part_miles_unit?: string | null;
+  description?: string | null;
   seller_id?: string | null;
   /** The build the part came off — hydrates the provenance line. */
   source_car_id?: string | null;
@@ -116,6 +113,7 @@ export async function hydrateListingCards(
     { data: sellerProfiles },
     { data: sellerReviews },
     { data: sourceCars },
+    { data: activeCounts },
   ] = await Promise.all([
       supabase
         .from("listing_images")
@@ -124,7 +122,10 @@ export async function hydrateListingCards(
         .order("position"),
       fetchWatchCounts(supabase, ids),
       sellerIds.length
-        ? supabase.from("profiles").select("id, display_name, username").in("id", sellerIds)
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, username, avatar_url")
+            .in("id", sellerIds)
         : Promise.resolve({ data: [] }),
       sellerIds.length
         ? supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", sellerIds)
@@ -134,6 +135,11 @@ export async function hydrateListingCards(
       // the build when it's public.
       sourceCarIds.length
         ? supabase.from("cars").select("id, year, make, model, slug, is_public").in("id", sourceCarIds)
+        : Promise.resolve({ data: [] }),
+      // M-5's "N for sale": one RPC for every seller on the page rather than
+      // a count query per card.
+      sellerIds.length
+        ? supabase.rpc("seller_active_counts", { p_sellers: sellerIds })
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -149,6 +155,13 @@ export async function hydrateListingCards(
     agg.n += 1;
     ratingBySeller.set(r.reviewee_id, agg);
   }
+  const activeBySeller = new Map(
+    ((activeCounts ?? []) as { seller_id: string; total: number }[]).map((row) => [
+      row.seller_id,
+      Number(row.total),
+    ])
+  );
+
   const sellerById = new Map(
     (sellerProfiles ?? []).map((p) => {
       const agg = ratingBySeller.get(p.id);
@@ -156,6 +169,9 @@ export async function hydrateListingCards(
         p.id,
         {
           name: p.display_name ?? (p.username ? `@${p.username}` : "Seller"),
+          username: p.username,
+          avatar_url: p.avatar_url,
+          active_count: activeBySeller.get(p.id) ?? 0,
           rating: agg ? (agg.sum / agg.n).toFixed(1) : null,
           review_count: agg?.n ?? 0,
         },
@@ -173,10 +189,18 @@ export async function hydrateListingCards(
       title: r.title,
       price_cents: r.price_cents,
       shipping_cents: r.shipping_cents,
+      allows_collection: r.allows_collection,
+      shipping_mode: r.shipping_mode === "flat" || r.shipping_mode === "drvn" || r.shipping_mode === "pickup_only" ? r.shipping_mode : undefined,
       condition: r.condition,
       location: r.location,
       cover_url: coverByListing.get(r.id) ?? null,
       part_number: r.part_number,
+      brand: r.brand ?? null,
+      part_miles: r.part_miles ?? null,
+      part_miles_unit: r.part_miles_unit ?? null,
+      // The seller's own first line, not a generated summary — a card that
+      // paraphrases is a card that can be wrong.
+      summary: firstLine(r.description),
       watch_count: watchCounts.get(r.id) ?? 0,
       seller: r.seller_id ? (sellerById.get(r.seller_id) ?? null) : null,
       seller_id: r.seller_id ?? null,
@@ -196,99 +220,75 @@ function parsePage(value: string | undefined): number {
   return Number.isInteger(page) && page > 0 ? page : 1;
 }
 
-/**
- * Fetches listings with cover images and (when logged in) a metadata-based
- * "fits your car" hint: the listing's source car shares make+model with a car in
- * the viewer's garage. Never derived from seller compatibility notes (PRD §7.1).
- *
- * Changes from the original: real pagination (it was a hard limit of 48 with no
- * offset, presented as if complete), sort control, a location filter, and search
- * across description and compatibility notes rather than title only.
- *
- * The "fits my car" filter is applied in the database via a pre-resolved id list
- * rather than after fetching a page — filtering post-fetch meant a filtered page
- * could come back empty while matches sat just beyond the cut-off.
- */
+/** Canonical filtered relation for browsing and saved-search workers. Workers
+ * pass their explicit owner; the database enforces shopper-visible evidence. */
+export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: ListingFilters, workerViewer?: string) {
+  const filters = normalizeMarketplaceState(raw);
+  let query = supabase.rpc("marketplace_browse_rows", {
+    p_query: filters.q ?? "", p_vehicle: filters.vehicle ?? "", p_vyear: Number(filters.vyear ?? 0),
+    p_ymin: Number(filters.ymin ?? 0), p_ymax: Number(filters.ymax ?? 9999), p_fit: filters.fit === "1",
+    ...(workerViewer ? { p_viewer: workerViewer } : {}),
+  }, { count: "exact" }).select("id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
+  if (filters.category) query = query.eq("category", filters.category);
+  if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
+  if (filters.condition) query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
+  // Exact, not ilike: the value comes from the brand facet, which is built
+  // from the brands actually stored, so a partial match would only ever
+  // widen the filter past what the member picked.
+  if (filters.brand) query = query.eq("brand", filters.brand);
+  if (filters.location) query = query.ilike("location", `%${filters.location.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
+  if (filters.min) query = query.gte("price_cents", Math.round(Number(filters.min) * 100));
+  if (filters.max) query = query.lte("price_cents", Math.round(Number(filters.max) * 100));
+  return query;
+}
+
+/** Fetch a page and hydrate the same evidence shown on listing detail. */
 export async function fetchListings(
   supabase: SupabaseClient<Database>,
   filters: ListingFilters,
-  viewerId?: string
+  viewerId?: string,
+  context?: {
+    garage: Promise<GarageCar[]>;
+    selection: Promise<VehicleFilterSelection | null>;
+  }
 ): Promise<ListingPage> {
+  const started = performance.now();
+  filters = normalizeMarketplaceState(filters);
   const searchTruncated = false;
   const sort = parseSort(filters.sort);
   const page = parsePage(filters.page);
   const from = (page - 1) * PAGE_SIZE;
 
-  // Resolve the viewer's garage first: the fitment filter needs to constrain the
-  // query itself, not the page it returns.
-  let garageByKey = new Map<string, string>();
-  let garageCars: GarageCar[] = [];
-
-  if (viewerId) {
-    const { data } = await supabase
-      .from("cars")
-      .select("name, make, model, year")
-      .eq("owner_id", viewerId);
-    garageCars = data ?? [];
-    garageByKey = buildGarageFitmentIndex(garageCars);
-
-  }
-
-  const selection = filters.vehicle ? await resolveVehicleFilter(filters.vehicle) : null;
-  const yearBound = (value: string | undefined, fallback: number) => {
-    const parsed = Number(value);
-    return value && Number.isInteger(parsed) && parsed >= 0 && parsed <= 9999 ? parsed : fallback;
-  };
-  let query = supabase.rpc("marketplace_filtered_rows", {
-    p_query: filters.q?.trim() ?? "", p_make: selection?.make ?? "", p_model: selection?.model ?? "",
-    p_make_id: selection?.makeId ?? 0, p_model_id: selection?.modelId ?? 0,
-    p_ymin: yearBound(filters.ymin, 0), p_ymax: yearBound(filters.ymax, 9999), p_fit: filters.fit === "1",
-  }, { count: "exact" }).select(
-    "id, title, created_at, price_cents, shipping_cents, condition, location, source_car_id, part_number, seller_id"
-  ).eq("status", "active");
-
-  if (filters.category) query = query.eq("category", filters.category);
-  if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
-  if (filters.condition) {
-    query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
-  }
-  if (filters.location) query = query.ilike("location", `%${filters.location}%`);
-
-  const min = Number(filters.min);
-  const max = Number(filters.max);
-  if (filters.min && Number.isFinite(min) && min >= 0) {
-    query = query.gte("price_cents", Math.round(min * 100));
-  }
-  if (filters.max && Number.isFinite(max) && max >= 0) {
-    query = query.lte("price_cents", Math.round(max * 100));
-  }
+  // The RPC applies filters in SQL. Garage/catalog reads only decorate cards,
+  // so run them alongside retrieval, reusing the page's reads when supplied.
+  const garagePromise = context?.garage ?? (viewerId
+    ? Promise.resolve(supabase.from("cars").select("name, make, model, year").eq("owner_id", viewerId)).then(({ data }) => data ?? [])
+    : Promise.resolve([] as GarageCar[]));
+  const selectionPromise = context?.selection ?? (filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null));
+  let query = listingRowsQuery(supabase, filters);
 
   if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
   else if (sort === "price_desc") query = query.order("price_cents", { ascending: false });
   else query = query.order("created_at", { ascending: false });
 
-  const { data: listings, count, error } = await query.order("id").range(from, from + PAGE_SIZE - 1);
-
-  // Product telemetry (§AE) — first page only, so pagination doesn't
-  // multiply one search into many events. Coarse properties only.
-  if (page === 1 && !error) {
-    if (filters.q?.trim()) {
-      capture(viewerId ?? null, {
-        event: "search_performed",
-        props: { lane: classifyQuery(filters.q).kind, results: count ?? 0 },
-      });
-    }
-    if (filters.fit === "1" && viewerId) {
-      capture(viewerId, { event: "fitment_filter_used" });
-    }
+  const [retrieval, garageCars, selection] = await Promise.all([
+    query.order("id").range(from, from + PAGE_SIZE - 1), garagePromise, selectionPromise,
+  ]);
+  const garageByKey = buildGarageFitmentIndex(garageCars);
+  let { data: listings, count, error } = retrieval;
+  if (error?.code === "PGRST103" && page > 1) {
+    const first = await listingRowsQuery(supabase, filters).order("id").range(0, 0);
+    if (!first.error) { listings = []; count = first.count; error = null; }
   }
+  console.info("[marketplace:retrieval]", { outcome: error ? "error" : count === 0 ? "zero" : "success", duration_ms: Math.round(performance.now() - started), count: error ? null : count, page });
 
   if (error) {
-    reportError("[marketplace] listing query failed", error);
-    return { searchTruncated, results: [], total: 0, page, pageSize: PAGE_SIZE, hasMore: false };
+    const errorReference = crypto.randomUUID();
+    reportError("[marketplace] listing query failed", { reference: errorReference, code: error.code, message: error.message });
+    return { status: "error", errorReference, results: [], total: null, page, pageSize: PAGE_SIZE, hasMore: false };
   }
   if (!listings?.length) {
-    return { searchTruncated, results: [], total: count ?? 0, page, pageSize: PAGE_SIZE, hasMore: false };
+    return { status: "success", searchTruncated, results: [], total: count ?? 0, page, pageSize: PAGE_SIZE, hasMore: false };
   }
 
   const ids = listings.map((l) => l.id);
@@ -298,37 +298,38 @@ export async function fetchListings(
   // The viewer's saves and likes over this page plus public like/question
   // counts, so each card's engagement strip renders pre-fired. All bounded
   // by the page's ids.
-  const viewerSavesPromise = viewerId
+  const viewerSavesPromise = Promise.resolve(viewerId
     ? supabase
         .from("saves")
         .select("target_id")
         .eq("user_id", viewerId)
         .eq("target_type", "listing")
         .in("target_id", ids)
-    : Promise.resolve({ data: [] as { target_id: string }[] });
-  const likesPromise = supabase
+    : { data: [] as { target_id: string }[] });
+  const likesPromise = Promise.resolve(supabase
     .from("likes")
     .select("target_id")
     .eq("target_type", "listing")
-    .in("target_id", ids);
-  const viewerLikesPromise = viewerId
+    .in("target_id", ids));
+  const viewerLikesPromise = Promise.resolve(viewerId
     ? supabase
         .from("likes")
         .select("target_id")
         .eq("user_id", viewerId)
         .eq("target_type", "listing")
         .in("target_id", ids)
-    : Promise.resolve({ data: [] as { target_id: string }[] });
-  const questionsPromise = supabase
+    : { data: [] as { target_id: string }[] });
+  const questionsPromise = Promise.resolve(supabase
     .from("listing_questions")
     .select("listing_id")
-    .in("listing_id", ids);
+    .in("listing_id", ids));
 
   // Fitment hint for the rows on this page — declared rows (0025) first,
   // source-car match as the fallback, mirroring the listing page's order.
   // (The provenance line itself comes from hydrateListingCards.)
   const fitByListing = new Map<string, string>();
-  if (viewerId && garageByKey.size) {
+  const evidenceByListing = new Map<string, MatchEvidence>();
+  if (selection || (viewerId && garageByKey.size)) {
     const sourceCarIds = listings.map((l) => l.source_car_id).filter(Boolean) as string[];
     const [{ data: pageClaims }, { data: sourceCars }] = await Promise.all([
       supabase
@@ -348,11 +349,20 @@ export async function fetchListings(
       claimsByListing.set(claim.listing_id, bucket);
     }
     for (const listing of listings) {
-      const declared = matchFitmentClaims(garageCars, claimsByListing.get(listing.id) ?? []);
-      const source = listing.source_car_id ? sourceById.get(listing.source_car_id) : null;
-      const match =
-        declared ?? (source ? matchGarageFitment(garageByKey, source.make, source.model) : null);
-      if (match) fitByListing.set(listing.id, match);
+      const source = listing.source_car_id ? sourceById.get(listing.source_car_id) ?? null : null;
+      const claims = claimsByListing.get(listing.id) ?? [];
+      if (selection) {
+        evidenceByListing.set(listing.id, explainMatch({ make: selection.make, model: selection.model, year: filters.vyear ? Number(filters.vyear) : null }, claims, source));
+      } else {
+        for (const car of garageCars) {
+          const evidence = explainMatch(car, claims, source);
+          if (["seller_stated", "source_model"].includes(evidence.kind)) {
+            fitByListing.set(listing.id, car.name);
+            evidenceByListing.set(listing.id, { ...evidence, label: `${evidence.label} · ${car.name}` });
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -360,6 +370,7 @@ export async function fetchListings(
   const [cards, { data: viewerSaves }, { data: likeRows }, { data: viewerLikes }, { data: questionRows }] =
     await Promise.all([cardsPromise, viewerSavesPromise, likesPromise, viewerLikesPromise, questionsPromise]);
   const savedIds = new Set((viewerSaves ?? []).map((s) => s.target_id));
+  console.info("[marketplace:complete]", { duration_ms: Math.round(performance.now() - started), page, count: cards.length });
   const likedIds = new Set((viewerLikes ?? []).map((l) => l.target_id));
   const likeCounts = new Map<string, number>();
   for (const row of likeRows ?? []) {
@@ -371,9 +382,11 @@ export async function fetchListings(
   }
 
   return {
+    status: "success",
     results: cards.map((card) => ({
       ...card,
       fits_car_name: fitByListing.get(card.id) ?? null,
+      match_evidence: evidenceByListing.get(card.id) ?? null,
       viewer_saved: savedIds.has(card.id),
       viewer_liked: likedIds.has(card.id),
       like_count: likeCounts.get(card.id) ?? 0,

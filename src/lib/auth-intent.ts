@@ -13,7 +13,7 @@
  * /login, the surface explains why and carries the intent through the whole
  * auth lifecycle.
  */
-export const AUTH_INTENTS = ["offer", "save", "follow", "sell"] as const;
+export const AUTH_INTENTS = ["offer", "save", "save_search", "follow", "sell"] as const;
 
 export type AuthIntent = (typeof AUTH_INTENTS)[number];
 
@@ -58,6 +58,13 @@ export const AUTH_INTENT_COPY: Record<AuthIntent, AuthIntentCopy> = {
     ],
     signIn: "Sign in and save",
     returnNote: "You'll come straight back to this page when you're in.",
+  },
+  save_search: {
+    title: "Sign in to save this search",
+    lead: "Keep these search criteria on your account for your next visit.",
+    reasons: ["Restore this category, vehicle and filters", "Alerts stay off unless you choose to enable them"],
+    signIn: "Sign in and save search",
+    returnNote: "You'll return to these results and the search will be saved.",
   },
   follow: {
     title: "Sign in to follow",

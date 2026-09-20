@@ -48,9 +48,8 @@ export type FitmentClaim = {
 /**
  * Matches structured seller-stated fitment rows against a garage. Exact
  * case-insensitive make+model; a claim with year bounds also requires the
- * car's year inside them (a car without a year matches year-bounded claims —
- * the claim is seller-stated either way, so the hint errs open and the badge
- * carries the label). Returns the first matching car's name, else null.
+ * car's known year inside them. An unknown year is not evidence for a bounded
+ * claim. Returns the first matching car's name, else null.
  */
 export function matchFitmentClaims(cars: GarageCar[], claims: FitmentClaim[]): string | null {
   for (const car of cars) {
@@ -58,6 +57,7 @@ export function matchFitmentClaims(cars: GarageCar[], claims: FitmentClaim[]): s
     const key = fitKey(car.make, car.model);
     for (const claim of claims) {
       if (fitKey(claim.make, claim.model) !== key) continue;
+      if (car.year === null && (claim.year_start !== null || claim.year_end !== null)) continue;
       if (car.year !== null) {
         if (claim.year_start !== null && car.year < claim.year_start) continue;
         if (claim.year_end !== null && car.year > claim.year_end) continue;
@@ -66,6 +66,28 @@ export function matchFitmentClaims(cars: GarageCar[], claims: FitmentClaim[]): s
     }
   }
   return null;
+}
+
+export type MatchEvidence = {
+  kind: "seller_stated" | "source_model" | "year_needed" | "outside_years" | "unknown";
+  label: string;
+  detail: string;
+};
+
+/** Shared card/detail explanation. Source provenance never becomes a fit guarantee. */
+export function explainMatch(car: Pick<GarageCar, "make" | "model" | "year"> | null, claims: FitmentClaim[], source: { make: string | null; model: string | null } | null): MatchEvidence {
+  const unknown: MatchEvidence = { kind: "unknown", label: "Compatibility not confirmed", detail: "Check the part number, measurements and seller's notes before buying." };
+  if (!car?.make) return unknown;
+  const same = (make: string | null, model: string | null) => Boolean(make && make.toLowerCase() === car.make!.toLowerCase() && (!car.model || model?.toLowerCase() === car.model.toLowerCase()));
+  const relevant = claims.filter(claim => same(claim.make, claim.model));
+  if (relevant.some(claim => (car.year !== null || (claim.year_start === null && claim.year_end === null)) && (car.year === null || ((claim.year_start === null || car.year >= claim.year_start) && (claim.year_end === null || car.year <= claim.year_end))))) {
+    return { kind: "seller_stated", label: car.model ? "Seller-stated vehicle match" : "Seller lists this make", detail: "The seller supplied compatible vehicle information. Confirm the exact model, year and part number before buying." };
+  }
+  if (relevant.length) return car.year === null
+    ? { kind: "year_needed", label: "Vehicle year needed", detail: "The seller's compatibility claim has year limits. Choose a year to check them." }
+    : { kind: "outside_years", label: "Outside the seller's stated years", detail: "Your selected year is outside the seller's listed range. Source-car similarity does not override this." };
+  if (source && same(source.make, source.model)) return { kind: "source_model", label: car.model ? "From the same vehicle model" : "From the same vehicle make", detail: "This describes the source build only. It is not verified compatibility for your vehicle." };
+  return unknown;
 }
 
 /** Returns the garage car's name if `make`+`model` matches one, else null. */

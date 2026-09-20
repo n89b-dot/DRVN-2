@@ -1,4 +1,6 @@
 "use client";
+import { useRouter } from "next/navigation";
+import { exploreSearchHref, type ExploreSearchParams } from "@/lib/explore/search/params";
 
 /**
  * Sort control for Explore search — scope-aware options (brief §19):
@@ -9,16 +11,19 @@
  */
 export function SearchSortSelect({
   scope,
+  params,
   value,
   hasQuery,
   searchActive,
 }: {
+  params: ExploreSearchParams;
   scope: "all" | "cars" | "updates" | "parts";
   value?: string;
   hasQuery: boolean;
   /** Any query or refinement on — browse mode keeps the feed's own order. */
   searchActive: boolean;
 }) {
+  const router = useRouter();
   // Browse mode has no sort (the feed is the feed), and without a query
   // there's no relevance to rank by — a one-option select is furniture.
   if (!searchActive) return null;
@@ -30,7 +35,7 @@ export function SearchSortSelect({
       defaultValue={value ?? ""}
       className="ctl !w-auto"
       aria-label="Sort results"
-      onChange={(event) => event.currentTarget.form?.requestSubmit()}
+      onChange={(event) => router.push(exploreSearchHref(scope, params, { sort: event.currentTarget.value }))}
     >
       {scope === "parts" ? (
         <>

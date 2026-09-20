@@ -2681,6 +2681,21 @@ video {
     /* An all-widths sheet floats as a centered dialog once there's room —
        a full-width strip pinned to a desktop's bottom edge reads as a
        toast, not a filter panel. */
+  }
+  /* M-3's filter sidebar. The same fields are a sheet below 1024px and a
+     column beside the results at or above it — one set of controls, two
+     presentations, never two rendered copies of the state. 1024 rather than
+     640 because a tablet has no room for a column beside four cards. */
+  @media (min-width: 1024px) {
+    .bsheet--inline-lg,
+    .bsheet--inline-lg .bsheet__panel {
+      display: contents;
+    }
+  }
+  @media (min-width: 640px) {
+    /* An all-widths sheet floats as a centered dialog once there's room —
+       a full-width strip pinned to a desktop's bottom edge reads as a
+       toast, not a filter panel. */
     .bsheet--center {
       align-items: center;
       padding: 24px;
@@ -2862,10 +2877,10 @@ video {
   --mgap: 12px;
   display: grid;
   grid-template-columns: repeat(var(--mcols), minmax(0, 1fr));
-  /* 1.5: the fixed 12:7 plate plus the deepest caption (an update's
+  /* 1.55: the fixed 5:3 plate plus the deepest caption (an update's
      two-line title, two-line excerpt, vehicle and byline) plus the pinned
      engagement strip, on a 271px desktop column — the Figma card's 280×437. */
-  --mratio: 1.5;
+  --mratio: 1.55;
   grid-auto-rows: calc(((100cqw - (var(--mcols) - 1) * var(--mgap)) / var(--mcols)) * var(--mratio));
   grid-auto-flow: dense;
   gap: var(--mgap);
@@ -2887,6 +2902,34 @@ video {
     --mratio: 1.75;
   }
 }
+/* E-1. A uniform wall: every cell one square footprint, one fixed caption
+   block, and no double-width cells. The variation the mosaic was built for
+   read as editorial when the wall was mostly builds; with parts and updates
+   mixed in it reads as inconsistency, and it made the wall impossible to
+   scan for one kind of thing. Rows align, so the eye can.
+
+   The only cell allowed to break the grid is a BREAKER — a full-width row
+   between the cards (E-4), which is deliberate and reads as one. */
+.mosaic--uniform > .mcell {
+  grid-column: span 1;
+  grid-row: span 1;
+}
+.mosaic--uniform .mcell__cap {
+  min-height: 0;
+}
+.mosaic--breaker {
+  grid-column: 1 / -1;
+  grid-row: span 1;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: clamp(14px, 2vw, 20px);
+  background: var(--tile);
+  border-radius: var(--r);
+}
+
 .mcell {
   position: relative;
   display: flex;
@@ -2896,10 +2939,9 @@ video {
   border-radius: var(--r);
   background: var(--tile);
   box-shadow: inset 0 0 0 1px var(--rule-soft);
-  /* Phone-wall tile cells: 12px sides — 6px read cramped against the
-     ring, 16px spent width a 168px column doesn't have; only the sheet
-     card (its own inset) runs tighter. Wider walls: see the `wall` query
-     after the caption rules. */
+  /* Phone-wall cells: 12px sides — 6px read cramped against the ring,
+     16px spent width a 168px column doesn't have. Wider walls: see the
+     `wall` query after the caption rules. */
   padding: 8px 12px 6px;
   color: var(--ink);
   container-type: inline-size;
@@ -2921,6 +2963,13 @@ video {
   .mcell--wide {
     grid-column: span 2;
   }
+}
+/* The head: the eyebrow row (kind pill left, time right). */
+.mcell__head {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
 }
 /* Eyebrow row — mono kind label left, annotation right; the card's first
    line, same as the deck. */
@@ -3060,7 +3109,7 @@ video {
 }
 .mcell__title {
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1.3;
   letter-spacing: -0.008em;
   display: -webkit-box;
@@ -3087,15 +3136,28 @@ video {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* THE PRICE — a listing's one loud number, in the live colour. */
+/* THE PRICE — a listing's one loud number, in the OK colour (the Figma
+   card's green), with the condition line beside it on the same row. */
+.mcell__pricerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.mcell__pricerow .mcell__detail {
+  flex: none;
+  max-width: 60%;
+}
 .mcell__price {
   display: block;
+  min-width: 0;
   font-family: var(--mono);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 500;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  color: var(--live);
+  color: var(--ok-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3123,31 +3185,23 @@ video {
 /* A narrow cell earns one excerpt line; the second is the wider cell's
    room. Two lines on a 168px phone cell crushed the photo to a strip.
    The rest of the phone cell's chrome is trimmed here too, so a 168px
-   cell fits a 4:3 plate, every caption line and the strip in a 1.7 row:
-   the byline drops its monogram plate (the 22px plate made a 12px line
-   22px tall), the caption starts 6px under the plate, and the strip is
-   a 36px band instead of 44. */
+   cell fits a 4:3 plate, every caption line and the strip in the row:
+   the byline's monogram steps down to 18px (the 22px plate made a 12px
+   line 22px tall), the caption starts 6px under the plate, and the strip
+   is a 36px band instead of 44. */
 @container (max-width: 231px) {
   .mcell__lede {
     -webkit-line-clamp: 1;
   }
-  .mcell__byline .monogram--xs {
-    display: none;
-  }
+  /* The monogram steps down to 18px here — see the unlayered byline
+     monogram rules beside `.vref`. */
   .mcell__byline {
+    gap: 6px;
     line-height: 1.35;
   }
   .mcell__cap {
     padding-top: 6px;
-  }
-  .mcell--sheet .mcell__cap {
-    margin-top: -20px;
-    padding: 12px var(--sheet-pad) 8px;
-  }
-  .mcell.mcell--sheet .cardeng {
-    padding: 8px var(--sheet-pad) 6px;
-  }
-}
+  }}
 /* The phone wall's 2×1 wide cell shares the square's row height, so it
    gets the square's one excerpt line too. Queried on the wall, not the
    cell, so a 271px desktop cell is untouched. */
@@ -3169,15 +3223,17 @@ video {
   color: var(--ok-text);
   box-shadow: none;
 }
-/* THE BYLINE — who is behind the card: a monogram plate and the name. */
+/* THE BYLINE — who is behind the card: a monogram plate and the name,
+   ink and medium — it leads the foot, the reference line under it. */
 .mcell__byline {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.3;
-  color: var(--dim);
+  color: var(--ink);
 }
 .mcell__byline .monogram--xs {
   width: 22px;
@@ -3192,22 +3248,24 @@ video {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Rhythm. Bound tight: the excerpt to its title, the price to its title,
-   the chip line to its price, the car to its chip, the byline to the car
-   it signs, the activity line to its byline. A group opens where the
-   subject changes: title block → reference/byline block. */
+/* Rhythm. The head (title, excerpt, vehicle-under-name, price row)
+   binds tight. The foot (byline, then the car or the activity line, in
+   ink) binds tight inside itself and is pushed to the caption's floor:
+   at least a group step under the head, more when the row has room —
+   the Figma cards' content block is justify-between. */
 .mcell__cap > * + * {
   margin-top: var(--cap-tight);
 }
-.mcell__lede + .mcell__value,
-.mcell__title + .mcell__value,
-.mcell__title + .mcell__byline,
-.mcell__lede + .mcell__byline,
-.mcell__detail + .mcell__car,
-.mcell__price + .mcell__car,
-.mcell__title + .mcell__meta,
-.mcell__value + .mcell__meta {
-  margin-top: var(--cap-group);
+.mcell__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cap-tight);
+  min-width: 0;
+  margin-top: auto;
+  padding-top: var(--cap-group);
+}
+.mcell__foot .mcell__meta {
+  color: var(--ink);
 }
 /* Wider cells: the Figma card. 12/16 padding, a 20px breath under the
    eyebrow row, a fixed 12:7 plate, bigger type, wider steps. The query
@@ -3215,94 +3273,33 @@ video {
    column with 16px sides is 239px — hence 232, not 240, on every cell
    query below and above. */
 @container (min-width: 232px) {
-  .mcell__top + .mcell__img {
-    margin-top: 14px;
+  .mcell__head + .mcell__img {
+    margin-top: 16px;
   }
   .mcell__cap {
     flex: 1 1 auto;
-    padding-top: 14px;
+    padding: 16px 0 4px;
     --cap-tight: 6px;
-    --cap-group: 12px;
+    --cap-group: 16px;
   }
   .mcell__title {
     font-size: 16px;
     line-height: 1.35;
   }
-  .mcell--story .mcell__title {
-    font-size: 18px;
-    line-height: 1.25;
-  }
   .mcell__lede {
-    font-size: 14px;
-    line-height: 1.25;
+    font-size: 13px;
+    line-height: 1.3;
   }
   .mcell__price {
-    font-size: 20px;
+    font-size: 22px;
   }
-  .mcell__meta {
-    font-size: 12px;
+  .mcell__byline {
+    font-size: 13px;
   }
-  .mcell__byline .monogram--xs {
-    width: 24px;
-    height: 24px;
-    border-radius: var(--r-ctl);
-  }
-}
-/* ---------- the sheet variant: a listing on the discovery wall ----------
-   The photo bleeds to the card's edges and the caption rides a raised
-   sheet that overlaps its foot — the Figma "for sale" card. The
-   engagement strip continues the sheet so the two read as one panel. */
-.mcell--sheet {
-  /* The outer tile stays: the sheet sits inside it on three sides (8px
-     on phone cells, 12px from 232px) and the photo bleeds over its top,
-     the way the Figma card frames it. A transparent outer left the tile's
-     ring drawn flush under the sheet as a stray line. */
-  --sheet-inset: 6px;
-  --sheet-pad: 8px;
-  padding: 0 0 var(--sheet-inset);
-}
-.mcell--sheet .mcell__link .mcell__img {
-  margin: 0;
-  border-radius: var(--r) var(--r) 0 0;
 }
 /* The sheet is two stacked boxes (the caption inside the link, the strip
    outside it) painted as one: same fill, no margin between them, no ring
-   on either — the outer tile's ring frames the card. */
-.mcell--sheet {
-  /* The sheet's fill: the tile lifted a step toward ink, so it reads as
-     raised over the tile in both themes (tile-2 recedes). */
-  --sheet: color-mix(in srgb, var(--tile) 93%, var(--ink));
-}
-.mcell--sheet .mcell__cap {
-  /* Positioned so it paints over the plate's absolutely-positioned
-     images, which otherwise sit above a static sibling. */
-  position: relative;
-  z-index: 1;
-  margin: -24px var(--sheet-inset) 0;
-  padding: 16px var(--sheet-pad) 12px;
-  background: var(--sheet);
-  border-radius: var(--r) var(--r) 0 0;
-}
-.mcell.mcell--sheet .cardeng {
-  margin: 0 var(--sheet-inset);
-  padding: 12px var(--sheet-pad) 8px;
-  background: var(--sheet);
-  border-radius: 0 0 var(--r) var(--r);
-  border-top: 0;
-  position: relative;
-}
-.mcell--sheet .cardeng::before {
-  content: "";
-  position: absolute;
-  left: var(--sheet-pad);
-  right: var(--sheet-pad);
-  top: 0;
-  border-top: 1px solid var(--rule-soft);
-}
-.mcell--sheet .cardeng__act:first-child {
-  margin-left: -5px;
-}
-/* The cart control at the strip's end — a 32px live square, the one
+   on either — the outer tile's ring frames the card. *//* The cart control at the strip's end — a 32px live square, the one
    commerce action a discovery card carries. */
 .cartbtn {
   display: inline-grid;
@@ -3339,14 +3336,13 @@ video {
 }
 @container (min-width: 232px) {
   .mcell .cardeng {
-    margin-top: 12px;
-    padding-top: 8px;
-    gap: 4px;
-  }
-  /* The sheet's strip is flush with its caption — one panel. */
-  .mcell--sheet .cardeng {
-    margin-top: 0;
+    margin-top: 16px;
     padding-top: 12px;
+    gap: 6px;
+  }
+  .mcell .cardeng__ico {
+    width: 16px;
+    height: 16px;
   }
   .mcell .cardeng__act {
     min-height: 32px;
@@ -3377,14 +3373,7 @@ video {
   .mcell .cardeng__act {
     min-height: 26px;
     padding: 0 4px;
-  }
-  .mcell--sheet .cardeng > .cardeng__act:first-child {
-    display: none;
-  }
-  .mcell--sheet .cartbtn {
-    margin-left: 4px;
-  }
-}
+  }}
 /* No photo: the caption rises to fill, headline allowed three lines. */
 .mcell--bare .mcell__cap {
   flex: 1 1 auto;
@@ -6073,6 +6062,55 @@ video {
     border-radius: var(--r-ctl);
   }
 
+  /* Profile banner (P-1): a car's cover behind the header, never a separate
+     upload. The scrim is a gradient rather than a flat wash so the photo
+     still reads as a photo at the top while the name stays legible at the
+     bottom — G-2 asks for the same thing on the garage's focused car. */
+  .profhead {
+    position: relative;
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--tile);
+  }
+  .profhead__banner {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+  .profhead__banner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--paper) 30%, transparent) 0%,
+      color-mix(in srgb, var(--paper) 78%, transparent) 55%,
+      var(--paper) 100%
+    );
+  }
+  .profhead__body {
+    position: relative;
+    padding: clamp(40px, 8vw, 88px) clamp(16px, 3vw, 28px) clamp(16px, 3vw, 24px);
+  }
+
+  /* What a pasted product link gave us, under the row it filled in. Quiet by
+     design: it is provenance for the line, not part of the line. */
+  .modrow__via {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: var(--dim);
+  }
+  .modrow__thumb {
+    width: 28px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: var(--r-ctl);
+    background: var(--img-fallback);
+  }
+
   /* A part that came off. The record stays on the sheet — dimmed, not hidden,
      because it is still the provenance behind a listing and behind every past
      update that named it. */
@@ -7934,6 +7972,32 @@ video {
 .vref--value {
   font-size: 13px;
 }
+/* A card foot's car line sets at the activity line's size and colour —
+   one reference voice under the byline, whatever the kind. Lives here,
+   unlayered beside `.vref`, because the mosaic recipes sit in the
+   components layer and an unlayered `.vref` would otherwise win. */
+.mcell__foot .mcell__car.vref {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+/* The byline's monogram plate, sized per cell — 24px on wider cells (the
+   Figma avatar), 18px on phone cells so a 12px name doesn't sit on a
+   22px line. Unlayered here for the same reason: `.monogram--xs` is. */
+@container (min-width: 232px) {
+  .mcell__byline .monogram--xs {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-ctl);
+  }
+}
+@container (max-width: 231px) {
+  .mcell__byline .monogram--xs {
+    width: 18px;
+    height: 18px;
+    font-size: 8.5px;
+  }
+}
 .vref--lg {
   font-size: 14px;
   line-height: 20px;
@@ -8035,29 +8099,23 @@ video {
   flex: 1 1 auto;
   min-height: 0;
 }
-/* From 240px the plate is a fixed frame — 12:7 on a tile card, 3:2 on
-   the bleeding sheet card — and the caption takes the rest (the Figma
-   cards). Placed after the link recipe above so it wins the cascade. */
+/* From a 232px content box the plate is a fixed 5:3 frame (150px on the
+   Figma card's 248px) and the caption takes the rest. Placed after the
+   link recipe above so it wins the cascade. */
 @container (min-width: 232px) {
   .mcell .mcell__link .mcell__img {
     flex: none;
-    aspect-ratio: 12 / 7;
+    aspect-ratio: 5 / 3;
   }
 }
 /* Rules on the cell ITSELF resolve against the wall (a container query
    looks at the element's nearest ancestor container, and the cell is its
-   own descendants' container, not its own). So the cell's padding and the
-   sheet's insets are set per wall width, not per cell width. */
+   own descendants' container, not its own). So the cell's padding is set
+   per wall width, not per cell width. */
 @container wall (min-width: 601px) {
   .mcell {
     padding: 12px 16px;
-  }
-  .mcell--sheet {
-    --sheet-inset: 12px;
-    --sheet-pad: 16px;
-    padding: 0 0 var(--sheet-inset);
-  }
-}
+  }}
 /* The phone wall's 2×1 wide cell (builds and updates only — a listing is
    always square, its part photos are often portrait) crosses the 232px
    line but shares the square's row height, so it keeps the flexible plate: a fixed 12:7 on a
@@ -8076,7 +8134,7 @@ video {
   .mcell.mcell--wide {
     padding: 8px 10px 6px;
   }
-  .mcell--wide .mcell__top + .mcell__img {
+  .mcell--wide .mcell__head + .mcell__img {
     margin-top: 8px;
   }
   .mcell.mcell--wide .mcell__cap {
@@ -8608,3 +8666,308 @@ video {
 @media (prefers-reduced-motion: reduce) {
   [data-reveal="true"] { opacity: 1 !important; transform: none !important; }
 }
+
+/* Marketplace's first browsing slice: compact context before inventory.
+   Scoped so Explore and the existing card/feed variants keep their rhythm. */
+.marketplace-page .marketplace-head { padding: 16px 0 20px; }
+.marketplace-page .marketplace-head h1 { margin-top: 0; }
+.marketplace-page .finder { margin-bottom: 16px; }
+.marketplace-page .catnav { margin: 16px 0 24px; }
+.marketplace-breadcrumb { padding-top: 16px; font-size: var(--text-micro); line-height: var(--text-micro--line-height); color: var(--dim); }
+.marketplace-breadcrumb ol { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.marketplace-breadcrumb li + li::before { content: '/'; margin-right: 10px; }
+.marketplace-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
+.marketplace-categories { margin: 16px 0 24px; border-block: 1px solid var(--rule-mid); }
+.marketplace-categories summary { cursor: pointer; padding: 12px 0; font-size: var(--text-body); }
+.marketplace-categories summary span { margin-left: 12px; color: var(--dim); }
+.marketplace-category-tree { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 8px 0 20px; }
+.marketplace-category-tree > a { grid-column: 1 / -1; }
+.marketplace-category-tree a { display: inline-flex; align-items: center; min-height: 36px; font-size: var(--text-body); }
+.marketplace-category-tree ul { padding-left: 12px; border-left: 1px solid var(--rule-mid); color: var(--dim); }
+.marketplace-category-tree a:hover, .marketplace-category-tree a[aria-current='page'] { color: var(--ink); text-decoration: underline; }
+.marketplace-results-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.marketplace-results-head h2 { font-size: var(--text-section); line-height: var(--text-section--line-height); font-weight: 600; }
+@media (max-width: 639px) {
+  .marketplace-page .marketplace-head { padding-bottom: 16px; }
+  .marketplace-page .finder .search { flex-basis: 100%; }
+  .marketplace-page .finder__main > .fbtn { min-height: 44px; }
+  .marketplace-page .finder__main > .fbtn > span.hidden { display: inline; }
+  .marketplace-page .finder { margin-bottom: 16px; }
+  .marketplace-page .deck { padding-bottom: 32px; }
+}
+
+/* P5 shopping variant: complete facts, separate Save, no feed overrides. */
+.marketplace-grid .mosaic, .marketplace-loading .mkt { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto; gap: 16px; }
+.marketplace-card { min-width: 0; display: flex; flex-direction: column; background: var(--tile); border: 1px solid var(--rule-mid); border-radius: var(--r); overflow: hidden; }
+.marketplace-card__link { flex: 1; display: flex; flex-direction: column; }
+.marketplace-card__image { position: relative; aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--tile-2); color: var(--dim); font-size: var(--text-micro); }
+.marketplace-card__image img { object-fit: contain !important; }
+.marketplace-card__status { position: absolute; top: 12px; left: 12px; padding: 4px 8px; background: var(--ink); color: var(--on-ink); }
+.marketplace-card__body { display: flex; flex: 1; flex-direction: column; gap: 8px; padding: 16px; overflow-wrap: anywhere; }
+.marketplace-card__title { font-size: var(--text-body); line-height: var(--text-body--line-height); font-weight: 600; }
+.marketplace-card__price { font-size: var(--text-section); line-height: var(--text-section--line-height); font-weight: 600; color: var(--ok); }
+.marketplace-card__meta, .marketplace-card__seller { font-size: var(--text-micro); line-height: var(--text-micro--line-height); color: var(--dim); }
+.marketplace-card__seller { margin-top: auto; padding-top: 8px; color: var(--ink); }
+/* G-1's switcher strip — thumbnails inside the filter links. */
+.garageswitch { margin-bottom: clamp(16px, 3vw, 24px); }
+.garageswitch__thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--img-fallback);
+  flex: none;
+}
+
+/* G-2. The focused car: its cover with a gradient scrim so the name reads on
+   any photo — a white car in direct sun and a black one at night both have
+   to work. No user text is ever drawn INTO the image; the scrim sits over
+   it and the text sits over the scrim, so the photo stays a photo. */
+.carfocus {
+  position: relative;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--tile);
+  min-height: clamp(220px, 34vw, 340px);
+  display: flex;
+  align-items: flex-end;
+}
+.carfocus__cover { position: absolute; inset: 0; display: block; }
+.carfocus__cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--paper) 10%, transparent) 0%,
+    color-mix(in srgb, var(--paper) 55%, transparent) 45%,
+    color-mix(in srgb, var(--paper) 92%, transparent) 100%
+  );
+}
+.carfocus__body {
+  position: relative;
+  padding: clamp(16px, 3vw, 28px);
+  width: 100%;
+}
+.carfocus__name {
+  font-size: clamp(26px, 4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 4px 0 0;
+}
+.carfocus__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* G-3. The strip renders only with three or more real values (the component
+   decides); this is just the shelf they sit on. */
+.carstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px 24px;
+  margin-top: clamp(16px, 3vw, 24px);
+}
+
+/* W-1's quick box: the photos it has so far, as a strip of thumbnails. Not
+   a gallery — they are pending state, and the post itself is where they
+   become a gallery. */
+.quickpost__photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.quickpost__thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-ctl);
+  background: var(--img-fallback);
+}
+
+/* H-4. Main column plus a rail — the `.deck` family's main+aside modifier
+   rather than a component, because it is a layout and nothing about it needs
+   state or behaviour.
+
+   H-5 is the interesting half: on phones there is no rail, and the tiles do
+   not simply stack underneath the whole feed (nobody would ever reach them).
+   They interleave — after the third post and after the eighth — which is
+   what `order` on a single-column grid buys us. Nothing scrolls sideways. */
+.deck--main {
+  display: grid;
+  gap: clamp(20px, 3vw, 28px);
+}
+.deck--main__aside {
+  display: grid;
+  gap: clamp(16px, 2vw, 20px);
+  align-content: start;
+}
+@media (min-width: 1024px) {
+  .deck--main {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+  .deck--main__aside {
+    position: sticky;
+    top: 88px;
+  }
+  .deck--main__feed { grid-column: 1; grid-row: 1 / span 2; }
+}
+@media (max-width: 1023.98px) {
+  /* One column, and the rail's tiles become full-width cards between
+     chunks of the feed. The order values are the interleave. */
+  .deck--main__feed--lead { order: 1; }
+  .deck--main__aside--first { order: 2; }
+  .deck--main__feed--rest { order: 3; }
+  .deck--main__aside--rest { order: 4; }
+}
+
+/* N-2's global search. It takes the middle of the bar and yields it back at
+   compact widths, where the lockup and the index button need every pixel —
+   searching from a phone starts on Explore, which is one tap away. */
+.bar__search {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  margin: 0 16px;
+}
+.bar__post {
+  flex: none;
+  padding: 9px 16px;
+}
+/* The menu's own Post button — only where the bar's one is hidden. */
+.index__post { display: none; margin: 12px 0 4px; }
+@media (max-width: 979.98px) {
+  .bar__search { display: none; }
+  .bar__post { display: none; }
+  .index__post { display: flex; }
+}
+
+/* P-8. One short line above a member's parts grid — their voice in a grid
+   that is otherwise all product. Quiet and short by design: it answers the
+   questions that would otherwise arrive as five messages, and anything
+   longer belongs in the returns and shipping settings where it is
+   enforceable. */
+.storenote {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--tile-2);
+  border-radius: var(--r-ctl);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--ink);
+}
+
+/* M-3, first half: from 1024px the refinements stop being a sheet and render
+   as a panel in the finder itself — one set of fields in two presentations,
+   switched by BottomSheet's inlineFrom="lg", never two copies of the state.
+   NOT yet the left column M-3 asks for: the panel and the results live in
+   different subtrees (form > finder > sheet, versus section.deck), so moving
+   it beside them needs page-content restructured around a sidebar slot. */
+@media (min-width: 1024px) {
+  .marketplace-page .finder__refine {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    padding: 16px;
+    background: var(--tile);
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r);
+    position: sticky;
+    top: 88px;
+  }
+}
+
+.marketplace-card__save { padding: 0 16px 16px; }
+.marketplace-card__save > button { min-height: 44px; width: 100%; }
+/* M-5 card additions. The title clamp is the design proof's finding, not a
+   preference: at the two-across phone width the column is 163.5px and real
+   titles ran to six lines, which pushed the price off the fold and left
+   every card a different height. Two lines, then ellipsis — the full title
+   is one tap away on the item page. */
+.marketplace-card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.marketplace-card__brand {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.marketplace-card__summary {
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  color: var(--dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.marketplace-card__seller { display: flex; align-items: center; gap: 8px; }
+.marketplace-card__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-ctl);
+  flex: none;
+}
+/* Save and add-to-cart sit together on the card's floor. Side by side so the
+   cart square keeps its own target rather than stacking two full-width bars
+   on a 163px column. */
+.marketplace-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.marketplace-card__foot > :first-child { flex: 1; min-width: 0; }
+.marketplace-card__foot button { min-height: 44px; }
+/* The grid counts its columns from the room IT has, not the window's: the
+   same grid sits full width on the marketplace, beside a filter sidebar
+   there, and inside a member's profile column as their store (P-6). Asked of
+   the viewport, the store got four 156px columns in a 720px column — narrower
+   than a phone's. The loading skeleton has no container of its own and keeps
+   the viewport rules. */
+.marketplace-grid { container: mktgrid / inline-size; }
+@container mktgrid (max-width: 819px) { .marketplace-grid .mosaic { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container mktgrid (max-width: 559px) { .marketplace-grid .mosaic { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container mktgrid (max-width: 307px) { .marketplace-grid .mosaic { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1279px) { .marketplace-loading .mkt { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 899px) { .marketplace-loading .mkt { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* M-4 asks for four / three / two across, and the phone column stayed at one
+   because the card was too tall to scan two-up. The design proof measured
+   that: 163.5px columns, 523–571px cards, one and a half per screen. With
+   the title clamped to two lines and the meta stack tightened the card fits,
+   so the phone gets its two columns: at 375px with 16px gutters and a 12px
+   gap each column is 165px, which is what the proof measured. Below 340px it
+   drops back to one — 320px would give 146px columns, where the price and
+   the cart square start fighting for the same row. */
+@media (max-width: 479px) {
+  .marketplace-grid .mosaic, .marketplace-loading .mkt { gap: 12px; }
+  .marketplace-grid .marketplace-card__body { padding: 12px; gap: 6px; }
+  .marketplace-grid .marketplace-card__foot { padding: 0 12px 12px; }
+}
+@media (max-width: 339px) { .marketplace-loading .mkt { grid-template-columns: minmax(0, 1fr); } }
+
+.marketplace-vehicle { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 16px; font-size: var(--text-micro); }
+.marketplace-vehicle button { min-height: 44px; }
+
+.marketplace-card__link:focus-visible { outline: 2px solid var(--live); outline-offset: -3px; }
+
+.marketplace-loading .gbox { aspect-ratio: 4 / 3; }
+.marketplace-loading .tile { min-height: 340px; }
+.marketplace-page:has([data-marketplace-pending="true"]) .marketplace-results-head { visibility: hidden; }
+.marketplace-page:has([data-marketplace-pending="true"]) .marketplace-grid { opacity: 0.6; }
+
+/* Long applied values must still expose their remove control at 200% text. */
+.marketplace-page .filterchips .chip--x { min-width: 0; max-width: 100%; min-height: 44px; }
+.marketplace-filter-label { min-width: 0; overflow-wrap: anywhere; }
+.marketplace-page .chip--x > [aria-hidden] { flex-shrink: 0; }
+.marketplace-page .marketplace-head h1 { overflow-wrap: anywhere; }

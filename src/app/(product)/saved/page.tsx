@@ -21,10 +21,12 @@ import { RelationshipRemove } from "@/features/social/remove-button";
 import { initialsOf } from "@/lib/format";
 import { withParams as buildParams } from "@/lib/url-params";
 import { hydrateListingCards } from "@/lib/marketplace/query";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 import { SavedSearchList } from "@/features/marketplace/saved-search-list";
 import { vehicleSubline } from "@/lib/vehicles/label";
+import { postHeadline } from "@/lib/activity/headline";
+import { postHref } from "@/lib/activity/href";
 
 export const metadata = { title: "Saved - DRVN" };
 
@@ -80,15 +82,13 @@ export default async function SavedPage({
   const from = (page - 1) * PAGE_SIZE;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   // Cheap either way — just the id columns — so both are fetched unbounded
   // to know the true shape of what a user has saved/followed, even though
   // only one tab's worth gets fully hydrated below.
-  const [{ data: saves, error: savesError }, { data: follows }, { data: savedSearches }] =
+  const [{ data: saves, error: savesError }, { data: follows }, { data: savedSearches, error: searchesError }] =
     await Promise.all([
       supabase
         .from("saves")
@@ -143,7 +143,7 @@ export default async function SavedPage({
   let listingsQuery = tab === "saved" && listingIds.length
     ? supabase
         .from("listings")
-        .select("id, title, price_cents, shipping_cents, condition, location, status, part_number, seller_id, source_car_id", { count: "exact" })
+        .select("id, title, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, status, part_number, seller_id, source_car_id", { count: "exact" })
         .in("id", listingIds)
     : null;
   if (listingsQuery && query) {
@@ -157,9 +157,9 @@ export default async function SavedPage({
     listingsQuery = listingsQuery.range(from, from + PAGE_SIZE - 1);
   }
 
-  const [{ data: listings, count: listingsTotal }, { data: cars }, { data: profiles }] =
+  const [{ data: listings, count: listingsTotal, error: listingsError }, { data: cars }, { data: profiles }] =
     await Promise.all([
-      listingsQuery ?? Promise.resolve({ data: [], count: 0 }),
+      listingsQuery ?? Promise.resolve({ data: [], count: 0, error: null }),
       allCarIds.length
         ? supabase
             .from("cars")
@@ -184,7 +184,11 @@ export default async function SavedPage({
           .in("id", savedPostIds)
           .not("published_at", "is", null)
       : { data: [] };
-  const savedPostCarIds = [...new Set((savedPosts ?? []).map((p) => p.car_id))];
+  // W-5: a saved post may have no car. It still belongs in the list — it
+  // just has no build to name beside it.
+  const savedPostCarIds = [
+    ...new Set((savedPosts ?? []).flatMap((p) => (p.car_id ? [p.car_id] : []))),
+  ];
   const [{ data: savedPostCars }, { data: savedPostImages }] = await Promise.all([
     savedPostCarIds.length
       ? supabase.from("cars").select("id, slug, name").in("id", savedPostCarIds)
@@ -202,16 +206,23 @@ export default async function SavedPage({
   for (const img of savedPostImages ?? []) {
     if (!savedPostCover.has(img.post_id)) savedPostCover.set(img.post_id, img.url);
   }
-  // Keep the save-order (newest first), and drop posts on private cars.
+  // Keep the save-order (newest first), and drop posts on private cars. A
+  // post with no car (W-5) has nothing to go private, so it stays.
   const savedUpdates = savedPostIds
     .map((id) => (savedPosts ?? []).find((p) => p.id === id))
     .filter((p): p is NonNullable<typeof p> => Boolean(p))
-    .map((p) => ({ ...p, car: savedPostCarById.get(p.car_id) }))
-    .filter((p) => p.car);
+    .map((p) => ({ ...p, car: p.car_id ? savedPostCarById.get(p.car_id) : undefined }))
+    .filter((p) => !p.car_id || p.car);
 
   // Same hydration as the Marketplace grid, so a saved part is the same card
   // it was when it was saved — cover, source car, seller trust, state flag.
   const savedCards = await hydrateListingCards(supabase, listings ?? []);
+  const visibleSaved = tab === "saved" && !query && !listingsError && (listingsTotal ?? 0) < listingIds.length
+    ? await supabase.from("listings").select("id").in("id", listingIds)
+    : null;
+  const visibleIds = new Set((visibleSaved?.data ?? []).map(row => row.id));
+  const unavailableIds = visibleSaved && !visibleSaved.error ? listingIds.filter(id => !visibleIds.has(id)) : [];
+
 
   const carById = new Map<string, CarRowData>((cars ?? []).map((c) => [c.id, c]));
   const savedCars = savedCarIds
@@ -223,7 +234,7 @@ export default async function SavedPage({
 
   const buildCount = totalCarSaves + totalFollowedCars;
   const sellerCount = totalFollowedProfiles;
-  const isEmpty = !totalListingSaves && !buildCount && !sellerCount;
+  const isEmpty = !savesError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !(savedSearches ?? []).length;
   const hasMoreListings = tab === "saved" && (listingsTotal ?? 0) > from + PAGE_SIZE;
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
@@ -288,6 +299,7 @@ export default async function SavedPage({
         </FilterLink>
       </FilterGroup>
 
+      {(savesError || searchesError) && <p role="alert" className="field__err">Some saved items couldn’t be loaded. Reload this page to try again.</p>}
       {isEmpty && (
         <section className="deck">
           <Rv className="undrawn undrawn--hero">
@@ -352,7 +364,7 @@ export default async function SavedPage({
               }
             />
 
-            {savedCards.length > 0 ? (
+            {listingsError ? <p role="alert" className="field__err">Saved parts couldn’t be loaded. Reload this page to try again.</p> : savedCards.length > 0 ? (
               <div className="mt-4">
                 <Mosaic label="Saved parts">
                   {savedCards.map((card) => (
@@ -368,10 +380,15 @@ export default async function SavedPage({
               </div>
             ) : (
               <p className="py-4 font-mono text-micro uppercase tracking-[0.1em] text-dim">
-                {query ? `No saved parts match "${query}"` : "Nothing saved yet"}
+                {query ? `No saved parts match "${query}"` : totalListingSaves > 0 ? "No viewable parts on this page" : "Nothing saved yet"}
               </p>
             )}
 
+            {unavailableIds.length > 0 && <div className="rowlist">
+              {unavailableIds.map(id => <ObjectRow key={id} actions={<RelationshipRemove kind="save" targetType="listing" targetId={id} label="Unsave" />}>
+                <span><span className="order__name block">Unavailable saved part</span><span className="order__meta">This part is no longer publicly available.</span></span>
+              </ObjectRow>)}
+            </div>}
             <Pagination
               page={page}
               hasMore={hasMoreListings}
@@ -394,12 +411,12 @@ export default async function SavedPage({
                   key={post.id}
                   media={
                     savedPostCover.get(post.id)
-                      ? { src: savedPostCover.get(post.id), alt: post.title }
+                      ? { src: savedPostCover.get(post.id), alt: postHeadline(post) }
                       : undefined
                   }
                   mediaHref={
                     savedPostCover.get(post.id)
-                      ? `/cars/${post.car!.slug}/activity/${post.id}`
+                      ? postHref({ id: post.id, carSlug: post.car?.slug ?? null })
                       : undefined
                   }
                   actions={
@@ -408,14 +425,14 @@ export default async function SavedPage({
                 >
                   <span className="min-w-0">
                     <Link
-                      href={`/cars/${post.car!.slug}/activity/${post.id}`}
+                      href={postHref({ id: post.id, carSlug: post.car?.slug ?? null })}
                       className="order__name block truncate transition-colors hover:text-live"
                     >
-                      {post.title}
+                      {postHeadline(post)}
                     </Link>
                     <span className="order__meta block truncate">
-                      {post.car!.name}
-                      {post.intro ? ` — ${post.intro}` : ""}
+                      {post.car?.name ?? ""}
+                      {post.intro ? `${post.car ? " — " : ""}${post.intro}` : ""}
                     </span>
                   </span>
                 </ObjectRow>

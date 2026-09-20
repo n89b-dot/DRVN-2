@@ -140,7 +140,9 @@ test.describe.serial("mobile layout @ 375x812", () => {
     await page.goto("/marketplace?condition=used&min=10");
     const chipsGroup = page.locator(".filterchips");
     await expect(chipsGroup).toBeVisible();
-    await expect(chipsGroup.getByRole("link", { name: /clear all/i })).toBeVisible();
+    // WS9 renamed this: "Clear filters" says what it clears, where "Clear
+    // all" read as if it might clear the search too.
+    await expect(chipsGroup.getByRole("link", { name: /clear filters/i })).toBeVisible();
 
     const chips = chipsGroup.locator(".chip--x");
     const count = await chips.count();

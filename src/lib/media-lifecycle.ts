@@ -41,6 +41,10 @@ async function isMediaReferenced(
       .from("order_item_snapshot_images")
       .select("id", { count: "exact", head: true })
       .eq("url", url),
+    // A mod's thumbnail, imported from the product link the owner pasted
+    // (L-2). Without this the 48h sweep would take it back out from under a
+    // build sheet that is still showing it.
+    admin.from("mod_items").select("id", { count: "exact", head: true }).eq("image_url", url),
   ];
   const results = await Promise.all(checks);
   for (const { count, error } of results) {

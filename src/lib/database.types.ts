@@ -23,6 +23,20 @@ export type Profile = {
   links: Json;
   notification_prefs: Json;
   profile_type: "user" | "shop";
+  /** The car this member actually means (P-5). Drives the featured car, the
+   *  default profile banner, car order everywhere, the Garage's focused view
+   *  and the first one-tap suggestion in the marketplace vehicle picker.
+   *  Null is the ordinary state — readers fall back to newest-first. */
+  main_car_id: string | null;
+  /** One short line above this member's parts grid (P-8). Voice, not policy
+   *  — the database caps it at 180 characters. */
+  store_note: string | null;
+  /** P-9: the lowest share of the asking price this seller will consider.
+   *  A DEFAULT for the sell form — never retroactive to a live listing. */
+  default_offer_floor_pct: number | null;
+  /** H-2. Coarse on purpose: Local needs the right ballpark, not a town. */
+  country: string | null;
+  region: string | null;
   /** Moderation suspension (migration 0018). Service-role-written; unreadable
    *  by client roles — read via is_suspended() or the service client. */
   suspended_at: string | null;
@@ -121,9 +135,14 @@ export type CarImage = {
 
 export type ActivityPost = {
   id: string;
-  car_id: string;
+  /** Optional since W-5: a post must be about a car, a tagged part, or both
+   *  — the database enforces the pair, not the composer. */
+  car_id: string | null;
   author_id: string;
-  title: string;
+  /** Optional since the 2026-09 direction (W-1): a quick post is a photo and
+   *  a caption, and inventing a heading would be writing on somebody's
+   *  behalf. Read it through `postHeadline()`, never directly. */
+  title: string | null;
   intro: string | null;
   body: Json;
   video_url: string | null;
@@ -166,6 +185,13 @@ export type Listing = {
   condition: "new" | "like_new" | "used" | "for_parts" | null;
   /** Manufacturer part number, seller-entered. Not platform-verified. */
   part_number: string | null;
+  /** Who made the part (M-6). Prefilled from the mod or the importer,
+   *  matched from the title otherwise, backfilled, always editable. */
+  brand: string | null;
+  /** How far this part has been driven (M-7). Used parts only; optional. */
+  part_miles: number | null;
+  /** "mi" | "km" — required by the database whenever part_miles is set. */
+  part_miles_unit: string | null;
   /** Generated (0033): lowercase, separators stripped — the searchable form. */
   part_number_compact: string | null;
   price_cents: number;
@@ -1088,8 +1114,11 @@ export type FeedEvent = {
   id: string;
   happened_at: string;
   /** The car the event hangs off: itself, the post's car, or the listing's
-   *  source car (null for listings without one). */
+   *  source car (null for listings without one, and for carless posts). */
   car_id: string | null;
+  /** Whose event it is — the car's owner, the post's author, the seller.
+   *  Added by 198000 so Local (H-2) can ask the timeline "near me". */
+  owner_id: string;
 };
 
 /** Shape returned by the `purchase_begin` RPC. */

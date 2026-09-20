@@ -225,7 +225,9 @@ test("a signed-out visitor finds parts in the segment, in search and in suggesti
   // which matches whole terms rather than the builds lane's prefixes, so this
   // types the title rather than a fragment of it.
   await page.goto("/explore");
-  const input = page.getByRole("combobox", { name: /search drvn/i });
+  // Two suggesting fields share the "Search DRVN" label since WS8 put one in
+  // the shell bar; the placeholder is what tells the page's own field apart.
+  const input = page.getByPlaceholder("Search builds, parts, people…");
   await input.click();
   await input.fill(partTitle);
   await expect(page.getByRole("listbox")).toBeVisible();
@@ -251,7 +253,7 @@ test("autocomplete suggests, supports the keyboard, and excludes private builds"
   page,
 }) => {
   await page.goto("/explore");
-  const input = page.getByRole("combobox", { name: /search drvn/i });
+  const input = page.getByPlaceholder("Search builds, parts, people…");
   await input.click();
   await input.fill(publicCar.slice(0, 12));
 
@@ -286,7 +288,7 @@ test("autocomplete suggests, supports the keyboard, and excludes private builds"
 
 test("plain Enter submits the query as a URL search", async ({ page }) => {
   await page.goto("/explore");
-  const input = page.getByRole("combobox", { name: /search drvn/i });
+  const input = page.getByPlaceholder("Search builds, parts, people…");
   await input.click();
   await input.fill(publicCar);
   // No option selected: Enter is a normal GET submit.

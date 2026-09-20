@@ -33,7 +33,14 @@ vi.mock("@/lib/supabase/server", () => ({
 import { createRichActivityPost, deleteActivityPost, saveActivityDraft } from "./actions";
 
 const OPERATION_ID = "12345678-1234-4234-8234-123456789012";
-const blocks = [{ type: "text", style: "normal", text: "A durable update" }];
+// W-2: a published update has a photo, so the fixture has one — in this
+// member's own storage folder, which is the only place a photo may live.
+process.env.NEXT_PUBLIC_SUPABASE_URL = "https://fixture.supabase.co";
+const PHOTO = "https://fixture.supabase.co/storage/v1/object/public/activity-images/owner/update.jpg";
+const blocks = [
+  { type: "text", style: "normal", text: "A durable update" },
+  { type: "images", urls: [PHOTO] },
+];
 
 function form() {
   const data = new FormData();
@@ -73,6 +80,14 @@ describe("durable activity actions", () => {
     }));
     expect(mocks.capture).toHaveBeenCalledOnce();
     expect(mocks.refresh).toHaveBeenCalledWith("/cars/activity-car");
+  });
+
+  it("asks for a photo in a sentence, before the database has to refuse", async () => {
+    const data = form();
+    data.set("blocks", JSON.stringify([{ type: "text", style: "normal", text: "Words only" }]));
+    const result = await createRichActivityPost({}, data);
+    expect(result.error).toBe("Add at least one photo before you publish.");
+    expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
   it("keeps a failed publish retryable and does not emit success side effects", async () => {

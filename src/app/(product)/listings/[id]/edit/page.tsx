@@ -120,6 +120,9 @@ export default async function EditListingPage({
             description: listing.description,
             category: listing.category,
             subcategory: listing.subcategory,
+            brand: listing.brand,
+            part_miles: listing.part_miles,
+            part_miles_unit: listing.part_miles_unit,
             condition: listing.condition,
             grade: listing.grade,
             condition_checklist: listing.condition_checklist as Record<

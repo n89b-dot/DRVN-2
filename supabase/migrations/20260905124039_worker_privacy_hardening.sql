@@ -15,8 +15,11 @@ revoke all on function public.profile_is_visible(uuid) from public;
 grant execute on function public.profile_is_visible(uuid) to anon,authenticated,service_role;
 
 -- Public visibility follows current suspension status, even with stale index hits.
+-- Repeatable when the focused marketplace repair was deployed first.
+drop policy if exists "suspended car visibility" on public.cars;
 create policy "suspended car visibility" on public.cars as restrictive for select to anon,authenticated
  using(owner_id=auth.uid() or public.profile_is_visible(owner_id));
+drop policy if exists "suspended listing visibility" on public.listings;
 create policy "suspended listing visibility" on public.listings as restrictive for select to anon,authenticated
  using(seller_id=auth.uid() or public.profile_is_visible(seller_id));
 

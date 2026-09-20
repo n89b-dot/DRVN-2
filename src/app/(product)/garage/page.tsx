@@ -3,11 +3,14 @@ import Link from "next/link";
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { AddCarForm } from "./add-car-form";
 import { loadGarageSheets } from "./garage-data";
 import { GarageSheetCard } from "./garage-sheet";
+import { GarageSwitcher } from "./garage-switcher";
+import { FocusedCar } from "./focused-car";
+import { GarageCarOverview, GarageCarParts } from "./focused-panels";
 
 export const metadata = { title: "Garage - DRVN" };
 
@@ -17,13 +20,20 @@ export const metadata = { title: "Garage - DRVN" };
  * carrying its open work orders. The page's job is "what's happening to
  * my cars and what do I do next", not "confirm I own a car".
  */
-export default async function GaragePage() {
+export default async function GaragePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ car?: string; view?: string; add?: string }>;
+}) {
+  const { car: carParam, view } = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getViewer();
 
   const sheets = await loadGarageSheets(supabase, user!.id);
+  // G-1: `?car=` focuses one car; without it the garage is the list it has
+  // always been. An unknown id falls back to the list rather than a 404 —
+  // a stale link from a deleted car should land somewhere useful.
+  const focused = carParam ? sheets.find((s) => s.id === carParam) : undefined;
 
   // The garage's own tally — what the whole drawer has done.
   const totals = sheets.reduce(
@@ -75,6 +85,34 @@ export default async function GaragePage() {
         )}
       </Rv>
 
+      <GarageSwitcher sheets={sheets} currentCarId={focused?.id} />
+
+      {focused ? (
+        <FocusedCar
+          sheet={focused}
+          initialTab={view}
+          panels={{
+            overview: <GarageCarOverview sheet={focused} />,
+            mods: (
+              <p className="mt-8 text-body text-dim">
+                The mod sheet lives in the car&apos;s editor.{" "}
+                <Link href={`/garage/${focused.id}/edit`} className="jumplink">
+                  Open the build →
+                </Link>
+              </p>
+            ),
+            parts: <GarageCarParts sheet={focused} />,
+            media: (
+              <p className="mt-8 text-body text-dim">
+                {focused.photos} photo{focused.photos === 1 ? "" : "s"}.{" "}
+                <Link href={`/garage/${focused.id}/edit`} className="jumplink">
+                  Manage the gallery →
+                </Link>
+              </p>
+            ),
+          }}
+        />
+      ) : (
       <section className="gsheets">
         {sheets.length > 0 ? (
           sheets.map((sheet, i) => <GarageSheetCard key={sheet.id} sheet={sheet} stagger={i} />)
@@ -92,6 +130,7 @@ export default async function GaragePage() {
           </Rv>
         )}
       </section>
+      )}
 
       <Foot
         left="DRVN — every part you list carries its car with it"

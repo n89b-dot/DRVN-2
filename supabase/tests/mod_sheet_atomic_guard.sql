@@ -144,6 +144,7 @@ declare
   replaced_id uuid := gen_random_uuid();
   fresh_id uuid := gen_random_uuid();
   doomed_id uuid := gen_random_uuid();
+  stale_listing_id uuid := gen_random_uuid();
   first_removed_at timestamptz;
   second_removed_at timestamptz;
   rejected boolean;
@@ -276,6 +277,33 @@ begin
     where schemaname = 'public' and indexname = 'mod_items_source_order_item_key'
   ) then
     raise exception 'The purchase-to-mod uniqueness index is missing';
+  end if;
+
+  -- A sheet left open in another tab omits rows it never loaded. A line that
+  -- has since been released for sale must survive that save (A-1), with its
+  -- link intact.
+  reset role;
+  insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, currency, status)
+  values (stale_listing_id, owner_id, 'Guard part', 'performance', 10000, 0, 'usd', 'draft');
+  update public.mod_items set linked_listing_id = stale_listing_id where id = kept_id;
+
+  perform set_config('role', 'authenticated', true);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', owner_id, 'role', 'authenticated')::text,
+    true
+  );
+  perform public.save_mod_items(v_car_id, jsonb_build_array(
+    jsonb_build_object('id', fresh_id, 'group_label', 'Other', 'brand', 'Guard', 'product', 'Replacement')
+  ));
+  perform set_config('role', 'none', true);
+  if not exists (
+    select 1 from public.mod_items where id = kept_id and linked_listing_id = stale_listing_id
+  ) then
+    raise exception 'A stale sheet erased a line that is listed for sale';
+  end if;
+  if exists (select 1 from public.mod_items where id = replaced_id) then
+    raise exception 'An omitted, unlisted line was not deleted';
   end if;
 
   raise notice 'all modification record identity checks passed';

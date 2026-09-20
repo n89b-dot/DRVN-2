@@ -23,6 +23,9 @@ export type SubmittedListingFields = {
   price_cents: number;
   shipping_cents: number;
   part_number: string | null;
+  /** M-6 — recorded so the importer's accuracy can be compared against what
+   *  the seller actually published, brand included. */
+  brand?: string | null;
   location: string | null;
 };
 

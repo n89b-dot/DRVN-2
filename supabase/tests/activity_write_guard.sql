@@ -11,8 +11,14 @@ declare
   first_body jsonb := '[{"type":"text","style":"normal","text":"First saved body"}]'::jsonb;
   final_body jsonb := '[{"type":"text","style":"normal","text":"Published body"}]'::jsonb;
 begin
-  if (select prosecdef from pg_proc where oid = 'public.write_activity_post(text,uuid,uuid,text,jsonb,text[],text,text)'::regprocedure)
+  -- Signature gained p_listing_ids with the quick-post work (20260919194000).
+  if (select prosecdef from pg_proc
+       where oid = 'public.write_activity_post(text,uuid,uuid,text,jsonb,text[],text,text,uuid[])'::regprocedure)
   then raise exception 'Activity write function bypasses caller RLS'; end if;
+  -- Exactly one arity: a leftover overload makes every call ambiguous.
+  if (select count(*) from pg_proc where proname = 'write_activity_post'
+        and pronamespace = 'public'::regnamespace) <> 1
+  then raise exception 'write_activity_post has more than one signature'; end if;
 
   insert into auth.users (id, email, raw_user_meta_data)
   values (v_member_id, 'activity-write-guard@drvn.test', '{}');

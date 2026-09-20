@@ -9,6 +9,7 @@ import { BuildEvolution, type EvolutionMilestone } from "@/features/garage/build
 import {
   DataRow,
   EmptyState,
+  ObjectRow,
   GalleryLightbox,
   KeyValueTable,
   SheetTabs,
@@ -24,6 +25,14 @@ export type ModLine = {
   raw: string | null;
   /** Set when this part has been listed for sale off this car. */
   listing: { id: string; price: string; status: string } | null;
+  /** Where the owner pasted this part from, and the thumbnail that came with
+   *  it (L-3). A row that has them reads as an object rather than a ruled
+   *  line — it has a picture and somewhere to go. */
+  productUrl?: string | null;
+  imageUrl?: string | null;
+  sourceDomain?: string | null;
+  /** Set when this part came from a DRVN purchase (C-1). */
+  bought?: { bought: true; sourceCar: { name: string; slug: string } | null } | null;
 };
 type ModGroup = { label: string; items: ModLine[] };
 type ActivityItem = {
@@ -53,6 +62,69 @@ function money(value: string) {
  * express. Panels are all server-rendered and switched client-side — see
  * SheetTabs for why the state is URL-backed.
  */
+/**
+ * One build line. A link-added part has a photo and a shop behind it, so it
+ * renders as an object row; a typed line stays a ruled baseline row. The
+ * difference is real — one has something to look at and somewhere to go —
+ * rather than two styles for the same thing.
+ */
+function ModRow({
+  mod,
+  carId,
+  isOwner,
+  off = false,
+}: {
+  mod: ModLine;
+  carId: string;
+  isOwner: boolean;
+  off?: boolean;
+}) {
+  const name = [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw || "Component";
+  // The line a buyer reads back on their own build sheet. A private source
+  // build is not named at all — same rule as every other source-car mention.
+  const bought = mod.bought ? (
+    <span className="microlabel">
+      Bought on DRVN
+      {mod.bought.sourceCar && (
+        <>
+          {" · off "}
+          <Link href={`/cars/${mod.bought.sourceCar.slug}`} className="jumplink">
+            {mod.bought.sourceCar.name}
+          </Link>
+        </>
+      )}
+    </span>
+  ) : null;
+  if (mod.imageUrl || mod.productUrl || mod.bought) {
+    return (
+      <ObjectRow
+        className={off ? "is-gone" : undefined}
+        media={mod.imageUrl ? { src: mod.imageUrl, alt: "" } : undefined}
+        title={name}
+        meta={
+          bought ?? (
+            mod.productUrl ? (
+              <a href={mod.productUrl} target="_blank" rel="nofollow noreferrer" className="jumplink">
+                {mod.sourceDomain ?? "View the product"} →
+              </a>
+            ) : null
+          )
+        }
+        actions={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
+      />
+    );
+  }
+  return (
+    <DataRow
+      className={off ? "bline--off" : isOwner ? "bline--own" : undefined}
+      label={mod.brand ?? "Component"}
+      value={mod.product ?? mod.raw}
+      note={bought}
+      end={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
+    />
+  );
+}
+
 /** A build line's trailing state: its listing, or the owner's way to make one. */
 function ModState({ mod, carId, isOwner }: { mod: ModLine; carId: string; isOwner: boolean }) {
   if (mod.listing) {
@@ -139,16 +211,10 @@ export function CarTabs({
                 {/* Group headings are taxonomy, not live state. */}
                 <span className="microlabel microlabel--ink">{group.label}</span>
               </div>
+              {/* Only states we can actually stand behind — this row once
+                  stamped "Fitted" on every entry regardless. */}
               {group.items.map((mod) => (
-                <DataRow
-                  key={mod.id}
-                  className={isOwner ? "bline--own" : undefined}
-                  label={mod.brand ?? "Component"}
-                  value={mod.product ?? mod.raw}
-                  /* Only states we can actually stand behind — this row once
-                     stamped "Fitted" on every entry regardless. */
-                  end={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
-                />
+                <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} />
               ))}
             </div>
           ))}
@@ -170,13 +236,7 @@ export function CarTabs({
                 <span className="microlabel">{cameOff.length}</span>
               </div>
               {cameOff.map((mod) => (
-                <DataRow
-                  key={mod.id}
-                  className="bline--off"
-                  label={mod.brand ?? "Component"}
-                  value={mod.product ?? mod.raw}
-                  end={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
-                />
+                <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} off />
               ))}
             </div>
           )}

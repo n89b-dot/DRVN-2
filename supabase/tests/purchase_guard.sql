@@ -45,7 +45,7 @@ begin
   insert into public.listings
     (seller_id, title, category, price_cents, shipping_cents, status, currency)
   values
-    (v_seller, 'Guard test coilovers', 'suspension', 50000, 1500, 'active', 'USD')
+    (v_seller, 'Guard test coilovers', 'brakes-suspension', 50000, 1500, 'active', 'USD')
   returning id into v_listing;
 
   -- ---------- 1. two buyers, one part ----------

@@ -1,5 +1,41 @@
 # Applying migrations
 
+## September 19 — security repairs from the direction-build review
+
+| File | Applied to |
+|---|---|
+| `20260919201000_direction_security_repairs.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919202000_post_edit_repairs.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919203000_mod_sheet_stale_delete.sql` | shared dev project and local test database, 2026-09-19 |
+
+Adds no feature; closes holes a review found in `…170000`–`…200000`.
+`profiles.default_offer_floor_pct` loses its client select grant (a column
+grant can't be narrowed to "your own row", so every buyer could read every
+seller's floor) and the owner reads it through `my_default_offer_floor()`.
+`write_activity_post` gets back the revoke it lost when its arity changed;
+`post_href` — security definer, and it named private car slugs — is now
+service-role only; `local_feed_rows` is signed-in only. `suggested_builders`
+filtered a column no client can read and failed on every call; it now asks
+`profile_is_visible()`. Tagged parts follow the post's visibility, are capped
+at three and active-only inside `sync_activity_post_listings` itself (a part
+already tagged keeps its tag, which is how a post comes to say Sold), and a
+carless post can't be emptied of its last part. A trigger stops a car owner
+claiming somebody else's order item onto a mod; `mod_purchase_sources()` lets
+the public build page show "Bought on DRVN"; and three check constraints
+bound what a pasted link may store. Covered by
+`supabase/tests/direction_security_guard.sql`.
+
+`…202000` re-creates `write_activity_post` so a published post can be edited
+whatever kind it is: `update` accepts a null car and matches with
+`is not distinct from` (a carless post could be published and never
+corrected), and a post with no title may stay without one (editing a quick
+post demanded a title it was never meant to have). `…203000` re-creates
+`save_mod_items` with one change to its delete: a row the payload omits is
+kept when it has a linked listing or a purchase source, because both are
+written from other screens and a sheet left open in a second tab would
+otherwise erase them. Covered by `activity_quick_post_guard.sql` and
+`mod_sheet_atomic_guard.sql`.
+
 ## September 19 — mod record identity (2026-09 direction, WS2/WS6/WS4)
 
 | File | Applied to |
@@ -31,6 +67,156 @@ block for record identity (remove keeps the id, replace files a new one in its
 position, re-saving doesn't move the removal date, an omitted row still
 deletes, a price with no currency and an unknown state are both refused). The
 whole guard suite passes locally.
+
+## September 19 — followers index and main car (WS3, WS5)
+
+| File | Applied to |
+|---|---|
+| `20260919180000_listings_seller_status_created_idx.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919181500_profiles_main_car.sql` | shared dev project and local test database, 2026-09-19 |
+
+Both additive and idempotent. The index answers "what is this seller selling,
+in this state, newest first?" — asked by the followed feed (B-1), the Store
+tab (P-6) and every card's "N for sale" count (M-5), and previously a
+seller-wide scan filtered in memory.
+
+`profiles.main_car_id` needs explicit column-level grants, because a new
+`profiles` column is invisible and unwritable until granted and a table-wide
+grant would re-expose the Stripe pointers 0017 deliberately hid. A BEFORE
+UPDATE trigger enforces that the car is the member's own: RLS governs who may
+update the row, not whether the value is theirs. Covered by
+`supabase/tests/security_guard.sql`.
+
+## September 19 — brand, miles, store (WS9, WS10)
+
+| File | Applied to |
+|---|---|
+| `20260919190000_listing_brand_and_miles.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919190500_save_listing_creation_brand.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919191000_seller_active_counts.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919192000_profiles_store_note.sql` | shared dev project and local test database, 2026-09-19 |
+
+All additive and idempotent. `listings` gains `brand`, `part_miles` and
+`part_miles_unit`; brand joins `search_listing_ids`; a conservative backfill
+matches the curated brand list anchored at the start of a title, longest name
+first, and leaves anything it can't match null. `marketplace_brand_counts`
+and `seller_active_counts` are the two facet/count RPCs the card and the
+filters need without a query per row.
+
+`save_listing_creation` was re-created because it enumerates its columns in
+**three** places — the insert list, the values parser and the replay-drift
+comparison. Updating fewer than three drops the field silently on publish.
+
+`profiles.store_note` takes explicit column grants and a 180-character check.
+
+## September 19 — Explore, quick posts, Local (WS13, WS14a, WS15, P-9)
+
+| File | Applied to |
+|---|---|
+| `20260919193000_suggested_builders.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919194000_quick_post_and_tagged_parts.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919195000_trending_models.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919196000_seller_defaults_and_region.sql` | shared dev project and local test database, 2026-09-19 |
+
+`194000` is the release-blocking one. `activity_posts.title` becomes
+nullable (W-1: a quick post is a photo and a caption; inventing a heading
+would be writing on somebody's behalf), `activity_post_listings` records the
+parts a post tags (W-3, at most three), and `write_activity_post` gains a
+`quick` mode plus `p_listing_ids`. **`quick` returns before the draft lookup
+that `publish` performs** — `publish` converts the car's existing unpublished
+draft into the published post, so without that early return a two-line quick
+post would silently consume and overwrite a half-written long update. The
+photo requirement (W-2) applies to `publish` and `quick` only, never to
+drafts and never to `update`, so a post published before the rule can still
+be edited. Adding a defaulted parameter created a second overload that made
+every existing call ambiguous, so the old eight-argument signature is dropped
+explicitly. Covered by `supabase/tests/activity_quick_post_guard.sql`, which
+proves the draft is byte-identical afterwards.
+
+`sync_activity_post_listings` is SECURITY DEFINER (it writes a table the
+author has no direct grant on) and therefore checks `v_author = auth.uid()`
+itself — otherwise a direct call could tag parts onto somebody else's post.
+
+`196000` adds `profiles.default_offer_floor_pct` (P-9 — a default for the
+sell form, never retroactive to a live listing), `country` and `region`
+(H-2), all with explicit column grants, and `local_feed_rows`.
+
+## September 19 — posting without a car (WS14b)
+
+| File | Applied to |
+|---|---|
+| `20260919197000_posts_without_a_car.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919198000_carless_posts_reach.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919199000_carless_quick_post.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919200000_carless_post_policies.sql` | shared dev project and local test database, 2026-09-19 |
+
+Four files rather than one, because dropping `activity_posts.car_id`'s NOT
+NULL is the small half of this change. Every reader, the writer and the RLS
+policies expressed the car requirement as a join or an EXISTS against `cars`,
+and each of them would have dropped a carless post **silently** — which to
+the member looks exactly like posting into nothing.
+
+- `197000` drops the NOT NULL and adds `guard_post_has_subject`, a constraint
+  trigger that requires a car, a tagged part, or both on publish. It is
+  `DEFERRABLE INITIALLY DEFERRED` because the post and its tagged parts are
+  written in the same transaction and the parts land second.
+- `198000` teaches the readers: `post_href()` (the SQL twin of `postHref()`
+  in `src/lib/activity/href.ts`) replaces the hand-built
+  `'/cars/' || slug || '/activity/' || id` in all three notification
+  functions, so a save, a comment or a reaction on a carless post reaches its
+  author instead of vanishing into a null owner. `feed_events` admits carless
+  updates and gains `owner_id` — Local needs to ask the timeline "whose is
+  this", and a second view would drift from this one. `local_feed_rows` and
+  `search_update_ids` make the same join outer.
+- `199000` re-creates `write_activity_post` from `pg_get_functiondef` with
+  three edits: the car is optional in `quick` mode only, a carless post must
+  tag at least one part (said up front so the composer can show a sentence),
+  and the replay lookup compares the car with `is not distinct from` so a
+  carless retry matches a carless post rather than every post.
+- `200000` is the **RLS** half. The insert policy required a car you own and
+  the select policy required a public car, so a carless post could not be
+  written at all and, had it existed, only its author could read it.
+  Restated, not widened: you must still own any car you name; a *published*
+  post with no car is public because there is no private car to hide behind
+  and publishing is the act of making it public; unpublished drafts stay
+  author-only. `activity_post_visible()` (shared by the comment and reaction
+  policies) and the `activity_images` select policy carry the same join, and
+  get the same treatment — without them nobody could comment on, react to, or
+  even load the photos of a carless post, including its author.
+
+Covered by `supabase/tests/carless_post_reach_guard.sql`: a carless post
+publishes, a post about neither a car nor a part is refused, the post appears
+in `feed_events` with the right owner, search finds it, Local finds it in the
+author's region and not in another, `post_href` gives `/posts/<id>` for it
+and leaves a post with a car at the address every existing link points at,
+and a save, a comment and a reaction each notify the author at that URL.
+
+## September 13 marketplace shopping contract — shared deployment
+
+The following focused migrations were rehearsed locally and applied to shared `drvn-v3` (`grunnjojhdevhuckujmc`):
+
+| Local file | Shared ledger version |
+|---|---|
+| `20260913132451_marketplace_shopping_contract.sql` | `20260913134641` |
+| `20260913134823_marketplace_consent_and_offers.sql` | `20260913135341` |
+| `20260913144218_marketplace_evidenced_part_types.sql` | `20260913144516` |
+
+These add invoker-rights listing retrieval/evidence/counts, complete saved-search definitions, idempotent saving, the existing exact-state social mutation, service-only worker records, consent preferences and atomic offer submission. They preserve the older browse functions and existing saved criteria. The offer migration includes a duplicate-live-offer preflight. Inventory reconciles to sixteen active parts after deployment. A final evidence-backed data migration classifies fourteen missing part types, corrects the KW coilovers parent and leaves the roof box unclassified. Exact reviewed title/description/category guards protect later seller edits; the assignment snapshot is retained in the acceptance record.
+
+The first **108 migrations and 44 SQL guards** pass in a fresh disposable PostgreSQL instance after updating four legacy test fixtures to valid catalog assignments. The subsequent data-only assignment migration also passed its separate rollback-isolated fixture guard, including repeatability and concurrent seller-edit protection. This verifies a fresh install plus the additional data repair; it does not reconcile the shared project's partial historical ledger. Run `marketplace-release-preflight.sql` before any app promotion: the shared database still lacks the newer checkout preparation, frozen cart identity and purchase analytics dependencies. The complete commerce chain needs the existing coordinated release procedure. **Do not apply the entire historical tree to the existing project.** See [the September 13 acceptance record](../docs/remediation-evidence/marketplace-2026-09-13/README.md).
+
+## September 12 marketplace repair — shared deployment
+
+Two focused, locally rehearsed repairs are now applied to shared project `drvn-v3` (`grunnjojhdevhuckujmc`). Supabase MCP assigned ledger versions independently of the CLI-generated local filenames:
+
+| Local file | Shared ledger version |
+|---|---|
+| `20260913012911_marketplace_retrieval_repair.sql` | `20260913014536` |
+| `20260913014222_marketplace_category_integrity.sql` | `20260913014621` |
+
+The first restores marketplace search/filter functions and their reviewed suspension-visibility dependencies. The second maps two supported legacy category assignments and validates parent/part-type integrity. Public browse/search probes now succeed, with 16 active listings at deployment. The original September 5 worker migration now tolerates the two pre-existing policy names; its unrelated worker changes have not been deployed by this repair.
+
+The shared ledger previously contained only 0001–0011 despite later schema objects being present. Reconcile schema and ledger explicitly; **do not replay historical migrations or apply a duplicate solely because a local timestamp differs**. Full deployment/test/rollback evidence is in [the marketplace implementation record](../docs/remediation-evidence/marketplace-2026-09-12/README.md).
 
 ## September 2026 remediation — local verification only
 

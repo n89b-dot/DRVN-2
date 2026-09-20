@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Avatar, EmbeddedVideo, Icon, NarrowColumn } from "@/components/ui";
+import { Avatar, EmbeddedVideo, Icon, NarrowColumn, ObjectRow } from "@/components/ui";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement, type CommentView, type ReactionState } from "@/features/activity/engagement";
 import { ACTIVITY_EMOJIS } from "@/features/activity/constants";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { ActivityGallery } from "./activity-gallery";
 import { MarkRemovedOffer } from "./mark-removed-offer";
@@ -29,6 +29,9 @@ function relative(iso: string) {
 }
 
 import { normalizeBlocks } from "@/lib/activity-blocks";
+import { postHeadline } from "@/lib/activity/headline";
+import { ListingCartButton } from "@/features/commerce/quick-commerce";
+import { formatPrice } from "@/lib/marketplace/taxonomy";
 
 export default async function ActivityDetailPage({
   params,
@@ -53,9 +56,7 @@ export default async function ActivityDetailPage({
     .single();
   if (!post) notFound();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getViewer();
 
   const [{ data: owner }, { data: images }, { data: reactionRows }, { data: commentRows }] =
     await Promise.all([
@@ -93,6 +94,9 @@ export default async function ActivityDetailPage({
   }));
 
   const blocks = normalizeBlocks(post.body);
+  // W-1: a quick post has no title; the heading falls back to the
+  // author's own first line rather than a sentence DRVN made up.
+  const headline = postHeadline(post);
 
   // Mod blocks reference real build entries — resolve where each should link
   // (a live listing when the part is for sale, the build sheet otherwise).
@@ -134,6 +138,38 @@ export default async function ActivityDetailPage({
     }
   }
 
+  // W-4: the parts this update tagged, read from the mirror table so the
+  // post keeps its own record of what it was about.
+  const { data: taggedRows } = await supabase
+    .from("activity_post_listings")
+    .select("listing_id, position")
+    .eq("post_id", postId)
+    .order("position");
+  const taggedIds = (taggedRows ?? []).map((r) => r.listing_id);
+  const { data: taggedListings } = taggedIds.length
+    ? await supabase
+        .from("listings")
+        .select("id, title, price_cents, status, seller_id")
+        .in("id", taggedIds)
+    : { data: [] };
+  const { data: taggedCovers } = taggedIds.length
+    ? await supabase
+        .from("listing_images")
+        .select("listing_id, url, position")
+        .in("listing_id", taggedIds)
+        .order("position")
+    : { data: [] };
+  const coverFor = new Map<string, string>();
+  for (const img of taggedCovers ?? []) {
+    if (!coverFor.has(img.listing_id)) coverFor.set(img.listing_id, img.url);
+  }
+  const taggedParts = taggedIds
+    .flatMap((id) => {
+      const listing = (taggedListings ?? []).find((l) => l.id === id);
+      return listing ? [{ ...listing, cover: coverFor.get(id) ?? null }] : [];
+    })
+    .filter((l) => l.status !== "draft");
+
   const gallery = images ?? [];
   const ownerName = owner?.display_name ?? (owner?.username ? `@${owner.username}` : "");
   const initials = (owner?.display_name ?? owner?.username ?? "?")
@@ -171,7 +207,7 @@ export default async function ActivityDetailPage({
         </span>
         <div className="mt-2 flex items-center gap-3">
           <Avatar size="sm" initials={initials} />
-          <h1 className="!mt-0 !text-[clamp(22px,3vw,32px)]">{post.title}</h1>
+          <h1 className="!mt-0 !text-[clamp(22px,3vw,32px)]">{headline}</h1>
         </div>
       </header>
       {post.intro && <p className="max-w-[62ch] text-body leading-7">{post.intro}</p>}
@@ -179,17 +215,43 @@ export default async function ActivityDetailPage({
       {gallery.length > 0 && (
         <ActivityGallery
           images={gallery.map((img) => ({ url: img.url, alt: img.alt }))}
-          title={post.title}
+          title={headline}
         />
       )}
 
       {blocks.length > 0 && (
         <ActivityBlocksView
           blocks={blocks}
-          title={post.title}
+          title={headline}
           modLinks={modLinks}
           className="mt-8 grid gap-6"
         />
+      )}
+
+      {taggedParts.length > 0 && (
+        /* W-4. A compact row per part under the photos — price and
+           add-to-cart, or "Sold" once it has gone. A post that sold its
+           part keeps saying so; that is the honest end of the story, and
+           quietly dropping the row would make the update read oddly. */
+        <section className="deck mt-8" aria-label="Parts in this update">
+          <div className="rowlist">
+            {taggedParts.map((part) => (
+              <ObjectRow
+                key={part.id}
+                href={`/listings/${part.id}`}
+                media={{ src: part.cover ?? undefined, alt: "" }}
+                title={part.title}
+                meta={part.status === "sold" ? "Sold" : formatPrice(part.price_cents)}
+                state={part.status === "sold" ? "gone" : undefined}
+                actions={
+                  part.status === "active" && part.seller_id !== user?.id ? (
+                    <ListingCartButton listingId={part.id} title={part.title} />
+                  ) : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {post.video_url && (

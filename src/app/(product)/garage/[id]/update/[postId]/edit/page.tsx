@@ -82,7 +82,7 @@ export default async function EditActivityPostPage({
         carId={carId}
         userId={user.id}
         postId={post.id}
-        title={post.title}
+        title={post.title ?? ""}
         intro={post.intro ?? ""}
         videoUrl={post.video_url ?? ""}
         initialBlocks={blocks}

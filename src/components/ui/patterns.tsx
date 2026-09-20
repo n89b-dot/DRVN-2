@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { cx } from "@/lib/format";
+
 import { Avatar, Media } from "./primitives";
 
 export type GalleryImage = { url: string; alt?: string | null };
@@ -60,6 +62,9 @@ export function ProfileHeader({
   action,
   avatarSquare = false,
   avatarUrl,
+  bannerUrl,
+  stats,
+  location,
 }: {
   initials: string;
   name: string;
@@ -69,25 +74,44 @@ export function ProfileHeader({
   action?: ReactNode;
   avatarSquare?: boolean;
   avatarUrl?: string | null;
+  /** A car's cover, borrowed (P-1). Never a separate upload — see
+   *  lib/cars/banner.ts for which photo, and why a private car's never is. */
+  bannerUrl?: string | null;
+  /** followers · following · cars, as already-formatted pairs. */
+  stats?: { label: string; value: string }[];
+  location?: string | null;
 }) {
   void avatarSquare; // everything on the sheet is a soft square plate
   const avatarClass = "h-22 w-22 shrink-0 rounded-ctl"; // 88px — the xl step of the avatar scale
-  return (
-    <header className="flex items-start gap-5">
+  const header = (
+    <header className={cx("flex items-start gap-5", bannerUrl && "profhead__body")}>
       {avatarUrl ? (
         <Media src={avatarUrl} alt={name} className={avatarClass} role="avatar" />
       ) : (
         <Avatar size="xl" initials={initials} />
       )}
       <div className="min-w-0 flex-1 pt-1.5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        {/* The name asks for 12rem before it shares the row, so a header with
+            several actions (P-2) drops them under the name rather than
+            squeezing it into a two-word column. */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-[1_1_12rem]">
             <h1 className="text-sub font-semibold leading-tight tracking-[-0.01em]">{name}</h1>
             {handle && <p className="kv mt-1 text-dim">{handle}</p>}
           </div>
-          {action && <div className="shrink-0">{action}</div>}
+          {action && <div className="max-w-full min-w-0">{action}</div>}
         </div>
         {tagline && <p className="mt-1.5 max-w-[52ch] text-body text-dim">{tagline}</p>}
+        {(location || stats?.length) && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            {location && <span className="kv text-dim">{location}</span>}
+            {stats?.map((stat) => (
+              <span key={stat.label} className="kv text-dim">
+                <b className="text-ink">{stat.value}</b> {stat.label}
+              </span>
+            ))}
+          </p>
+        )}
         {website && (
           <span className="mt-3 inline-flex">
             <WebsitePill label={website.label} href={website.href} />
@@ -95,6 +119,18 @@ export function ProfileHeader({
         )}
       </div>
     </header>
+  );
+
+  if (!bannerUrl) return header;
+  return (
+    <div className="profhead">
+      {/* The scrim is what lets a name sit on somebody's photo of a car in
+          direct sun. No user text is ever drawn onto the image itself. */}
+      <span className="profhead__banner">
+        <Media src={bannerUrl} alt="" className="h-full w-full" role="hero" />
+      </span>
+      {header}
+    </div>
   );
 }
 

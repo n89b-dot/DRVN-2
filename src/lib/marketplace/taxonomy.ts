@@ -104,6 +104,12 @@ export function getCategory(slug: string) {
   return CATEGORIES.find((c) => c.slug === slug);
 }
 
+/** Unknown part type is allowed; a leaf from another family is not. */
+export function isValidListingCategory(category: string, subcategory?: string | null): boolean {
+  const parent = getCategory(category);
+  return Boolean(parent && (!subcategory || parent.subcategories.some(s => s.slug === subcategory)));
+}
+
 export function conditionLabel(value: string | null) {
   return CONDITIONS.find((c) => c.value === value)?.label ?? "";
 }

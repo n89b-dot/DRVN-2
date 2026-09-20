@@ -13,6 +13,10 @@ const FOCUSABLE =
 
 /** Matches the stylesheet's compact boundary (Tailwind `sm`). */
 const COMPACT_QUERY = "(max-width: 639.98px)";
+/** The desktop filter sidebar's boundary. Below this the same fields are a
+ *  sheet; at or above it they are a column beside the results (M-3). One set
+ *  of fields, two presentations — never two rendered copies of the state. */
+const BELOW_LG_QUERY = "(max-width: 1023.98px)";
 
 /**
  * The compact-screen sheet — Material's bottom-sheet behavior in Livesheet's
@@ -42,20 +46,24 @@ export function BottomSheet({
   align,
   className,
   children,
+  closeLabel = "Done",
 }: {
   open: boolean;
   onClose: () => void;
   /** Accessible name for the sheet. */
   label: string;
-  /** When "sm", the sheet only exists on compact — wider widths render the
-   *  children inline where the component sits. Omit for an all-widths sheet. */
-  inlineFrom?: "sm";
+  /** Where the sheet stops being a sheet. "sm" dissolves it at ≥640px;
+   *  "lg" holds it all the way to 1024px, which is what a filter SIDEBAR
+   *  needs — a tablet has no room for a column beside four cards. Omit for
+   *  an all-widths sheet. */
+  inlineFrom?: "sm" | "lg";
   /** "center" floats the panel as a centered dialog ≥640px (compact stays a
    *  bottom sheet) — for all-widths sheets that would otherwise pin a
    *  full-width strip to a desktop viewport's bottom edge. */
   align?: "center";
   className?: string;
   children: React.ReactNode;
+  closeLabel?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -66,7 +74,7 @@ export function BottomSheet({
 
   useEffect(() => {
     if (inlineFrom == null) return;
-    const mq = window.matchMedia(COMPACT_QUERY);
+    const mq = window.matchMedia(inlineFrom === "lg" ? BELOW_LG_QUERY : COMPACT_QUERY);
     const sync = () => setIsCompact(mq.matches);
     sync();
     mq.addEventListener("change", sync);
@@ -143,6 +151,7 @@ export function BottomSheet({
         "bsheet",
         (open || present) && "is-open",
         inlineFrom === "sm" && "bsheet--inline-sm",
+        inlineFrom === "lg" && "bsheet--inline-lg",
         align === "center" && "bsheet--center"
       )}
       // While closed on compact, the chrome hides but the children stay in
@@ -189,7 +198,7 @@ export function BottomSheet({
             className="btn btn--ghost w-full"
             aria-label={`Close ${label}`}
           >
-            Done
+            {closeLabel}
           </button>
         )}
       </motion.div>

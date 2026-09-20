@@ -55,6 +55,7 @@ export type ExploreAllResults = {
   updates: FeedItem[];
   accounts: AccountResult[];
   parts: ListingCardData[];
+  partsErrorReference?: string;
   /** Whether any family returned anything at all. */
   empty: boolean;
 };
@@ -261,8 +262,9 @@ export async function searchAll(
     updates: updates.items,
     accounts,
     parts: partCards,
+    partsErrorReference: parts?.status === "error" ? parts.errorReference : undefined,
     empty:
-      !builds.items.length && !updates.items.length && !accounts.length && !partCards.length,
+      parts?.status !== "error" && !builds.items.length && !updates.items.length && !accounts.length && !partCards.length,
   };
 }
 

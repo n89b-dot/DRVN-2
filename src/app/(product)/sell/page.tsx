@@ -24,6 +24,7 @@ import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
 import { SellForm, type SellFormInitialValues } from "./sell-form";
 import { reportError } from "@/lib/monitoring";
+import { orderCars } from "@/lib/cars/order";
 
 export const metadata = { title: "Sell a part - DRVN" };
 
@@ -71,6 +72,7 @@ function importInitialValues(row: {
     condition: extraction.condition,
     description: extraction.description,
     partNumber: extraction.partNumber,
+    brand: extraction.brand,
     price: money(extraction.priceCents),
     shipping:
       extraction.shippingCents !== undefined
@@ -134,9 +136,8 @@ export default async function SellPage({
   const [{ data: cars, error }, makes, canPublish, fulfillment] = await Promise.all([
     supabase
       .from("cars")
-      .select("id, name, make, model, year")
-      .eq("owner_id", user.id)
-      .order("created_at"),
+      .select("id, name, make, model, year, created_at")
+      .eq("owner_id", user.id),
     getVehicleMakes(createAdminClient()),
     // Fail open for the UI gate only: a payments misconfig must not 500 the
     // sell page (resolvePaymentsMode throws by design). The server action
@@ -175,7 +176,17 @@ export default async function SellPage({
   }
 
   // Only honour the pre-fill if this really is the seller's own car.
-  const sourceCar = carParam ? cars?.find((c) => c.id === carParam) : undefined;
+  // P-5: main car first, so the picker's default is the car the seller
+  // actually means rather than whichever they added first.
+  const { data: sellerProfile } = await supabase
+    .from("profiles")
+    .select("main_car_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  // P-9: no client select grant on the floor; see `my_default_offer_floor`.
+  const { data: offerFloorPct } = await supabase.rpc("my_default_offer_floor");
+  const orderedCars = orderCars(cars ?? [], sellerProfile?.main_car_id);
+  const sourceCar = carParam ? orderedCars.find((c) => c.id === carParam) : undefined;
 
   if (!initialValues && sourceCar) {
     initialValues = { origin: "garage", carId: sourceCar.id };
@@ -183,12 +194,25 @@ export default async function SellPage({
     if (modParam) {
       // Unfiltered by status: selling a part is what usually FOLLOWS taking
       // it off, so a removed line is the normal case here, not the exception.
+      //
+      // L-4: `image_url` is deliberately NOT selected. A link-added mod
+      // carries the shop's own product photo, and that photo must never
+      // become a listing photo — it shows a new part in a studio, not the
+      // used one in this seller's garage, and it isn't theirs to republish.
+      // The seller photographs what they are actually selling. Not selecting
+      // the column is the guard: there is nothing here to pass along by
+      // accident, and `sell-form-prefill.test.ts` holds that line.
       const { data: mod } = await supabase
         .from("mod_items")
-        .select("id, brand, product, raw_text, category, confidence, part_number, car_id")
+        .select("id, brand, product, raw_text, category, confidence, part_number, car_id, linked_listing_id")
         .eq("id", modParam)
         .eq("car_id", sourceCar.id)
         .maybeSingle();
+
+      // A-1: a line that already has a listing — a draft counts — opens that
+      // listing. Starting a second one here would re-point the line at the
+      // new listing and orphan the first, with its photos and its offers.
+      if (mod?.linked_listing_id) redirect(`/listings/${mod.linked_listing_id}/edit`);
 
       if (mod) {
         const title = [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "";
@@ -201,6 +225,8 @@ export default async function SellPage({
           origin: "garage",
           carId: sourceCar.id,
           title: title.slice(0, 140),
+          // M-6: the sheet already knows who made it.
+          brand: mod.brand?.trim().slice(0, 80) || undefined,
           category,
           subcategory,
           modItemId: mod.id,
@@ -268,7 +294,8 @@ export default async function SellPage({
       </Rv>
 
       <SellForm
-        cars={cars ?? []}
+        defaultOfferFloorPct={offerFloorPct ?? null}
+        cars={orderedCars}
         makes={makes.map((m) => m.name)}
         userId={user.id}
         initialValues={initialValues}

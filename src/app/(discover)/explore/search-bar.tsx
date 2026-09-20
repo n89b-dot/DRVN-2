@@ -1,3 +1,6 @@
+"use client";
+
+import { useRef, useState } from "react";
 import { Button, FinderRefineSheet, SuggestingSearchField } from "@/components/ui";
 import type { FeedTab } from "@/lib/feed";
 import {
@@ -34,10 +37,18 @@ export function ExploreSearchBar({
   vehicle: VehicleFilterSelection | null;
   showFitToggle: boolean;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [vehicleDraft, setVehicleDraft] = useState(0);
   const isParts = tab === "parts";
 
   return (
-    <form action="/explore" method="get" className="finder" role="search">
+    <form ref={formRef} action="/explore" method="get" className="finder" role="search" onSubmit={event => {
+      const min = event.currentTarget.elements.namedItem("min") as HTMLInputElement | null;
+      const max = event.currentTarget.elements.namedItem("max") as HTMLInputElement | null;
+      if (min?.value && max?.value && Number(min.value) > Number(max.value)) {
+        event.preventDefault(); max.setCustomValidity("Maximum price must be at least the minimum price."); max.reportValidity();
+      }
+    }} onInput={() => (formRef.current?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity("")}>
       {tab !== "all" && <input type="hidden" name="tab" value={tab} />}
       <div className="finder__main">
         <SuggestingSearchField
@@ -49,9 +60,11 @@ export function ExploreSearchBar({
 
         <FinderRefineSheet
           activeCount={activeFilterCount(params)}
+          onDismiss={() => { formRef.current?.reset(); (formRef.current?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity(""); setVehicleDraft(value => value + 1); }}
           aside={
             <SearchSortSelect
               scope={tab}
+              params={params}
               value={params.sort}
               hasQuery={Boolean(params.q)}
               searchActive={hasActiveSearch(params)}
@@ -60,7 +73,7 @@ export function ExploreSearchBar({
         >
           <span className="microlabel filters__label">Filters</span>
 
-          <VehicleFilterField
+          <VehicleFilterField key={vehicleDraft}
             initial={
               vehicle
                 ? {
@@ -79,20 +92,20 @@ export function ExploreSearchBar({
             <input
               name="ymin"
               defaultValue={params.ymin}
-              placeholder="Year from"
+              placeholder={isParts ? "Source year from" : "Year from"}
               inputMode="numeric"
               maxLength={4}
               className="ctl min-w-0 max-w-none flex-1"
-              aria-label="Model year from"
+              aria-label={isParts ? "Source-car year from" : "Model year from"}
             />
             <input
               name="ymax"
               defaultValue={params.ymax}
-              placeholder="Year to"
+              placeholder={isParts ? "Source year to" : "Year to"}
               inputMode="numeric"
               maxLength={4}
               className="ctl min-w-0 max-w-none flex-1"
-              aria-label="Model year to"
+              aria-label={isParts ? "Source-car year to" : "Model year to"}
             />
           </span>
 
@@ -129,6 +142,7 @@ export function ExploreSearchBar({
               <span className="flex w-full gap-2">
                 <input
                   name="min"
+                  type="number" min="0" step="0.01"
                   defaultValue={params.min}
                   placeholder="Min $"
                   inputMode="decimal"
@@ -137,6 +151,7 @@ export function ExploreSearchBar({
                 />
                 <input
                   name="max"
+                  type="number" min="0" step="0.01"
                   defaultValue={params.max}
                   placeholder="Max $"
                   inputMode="decimal"
@@ -156,7 +171,7 @@ export function ExploreSearchBar({
                 defaultChecked={params.fit}
                 className="sq"
               />
-              Fits my garage
+              Potential matches for my current garage
             </label>
           )}
 
@@ -165,6 +180,15 @@ export function ExploreSearchBar({
           <Button type="submit" className="w-full">
             Apply filters
           </Button>
+          <Button type="button" variant="ghost" className="w-full" onClick={() => {
+            for (const name of ["condition", "min", "max", "fit", "ymin", "ymax"]) {
+              const input = formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null;
+              if (!input) continue;
+              if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = false;
+              else input.value = "";
+              input.setCustomValidity("");
+            }
+          }}>Reset filters</Button>
         </FinderRefineSheet>
       </div>
     </form>

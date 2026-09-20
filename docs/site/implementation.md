@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 54 initiatives — 12 implemented · 34 validated · 7 deferred · 1 blocked externally
+**Progress:** 68 initiatives — 24 implemented · 36 validated · 7 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -128,6 +128,55 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Decisions:** 0042: listing_part_numbers (seller-supplied 'also known as', RLS mirrors fitment) + part_number_links (internal typed graph, service-role only). Sell form gained one optional comma-separated field.
 - **Validation:** Identifier-lane expansion through part_number_links live in the provider; seller 'also known as' numbers persist from the sell form and match in search; migration applied twice; covered by the provider path the regression e2e exercises.
 
+#### Marketplace and its card — Implemented
+
+- **Brief:** PRD 2026-09 M-1…M-8 (build plan WS9)
+- **Exists today:** Brand exists only inside the free-text title, so the most common way people describe a part — 'Öhlins coilovers' — can't be filtered. The card carries no brand, no description line and no sense of who is selling; the phone column is one card wide because the card is too tall to scan two-up.
+- **Changing:** listings gains brand, part_miles and part_miles_unit. The card gets brand, a clamped title, condition with miles, one line of the seller's own description, their avatar and 'N for sale', 'Off my {car}' and add-to-cart. Brand joins the filters, the facet, the search text and saved searches.
+- **Surfaces:** `/marketplace`, `src/components/ui/listing-card.tsx`, `src/lib/marketplace/query.ts`, `supabase/migrations/20260919190000_listing_brand_and_miles.sql`, `supabase/migrations/20260919190500_save_listing_creation_brand.sql`, `supabase/migrations/20260919191000_seller_active_counts.sql`
+- **User benefit:** A used-parts marketplace you can shop by brand instead of by scrolling, on a card that answers the questions a buyer actually has — what is it, what state is it in, how far has it been driven, who is selling and what else have they got.
+- **Approach:** The design proof measured the card before it was rebuilt: 163.5px columns, 523–571px cards, titles running to six lines because nothing clamped them. The clamp came first; the two-across phone column followed from it.
+- **Depends on:** listings-to-followers, search-architecture
+- **UX rules:** No seller rating on a browse card — it invites comparing people rather than parts. It stays on the item page and the store's trust strip. Add to cart, never Buy now: deciding to buy happens on the item page. Miles are offered on used parts only — on a new part they would be a contradiction rather than a detail. One line of the seller's own description, never a generated summary: a card that paraphrases is a card that can be wrong about somebody else's part.
+- **Decisions:** save_listing_creation enumerates columns in three places; all three were updated in one migration. Missing one drops the field silently on publish while everything looks correct. brand joined SAVED_SEARCH_KEYS in the same change — without it a saved search drops the brand and the alert job, which runs the same query, mails the member about every coilover on the site. The backfill only matches the curated brand list anchored at the start of a title, longest name first. A wrong brand is worse than none: it silently excludes the listing from the filter its seller wanted. The brand filter is an exact match, not ilike — the value comes from a facet built out of the brands actually stored, so a partial match could only widen it. The phone column drops back to one below 340px, not 480px: at 375px the columns are 165px, which the proof showed works once the title is clamped.
+- **Validation:** Four migrations applied to the shared dev project and the local test database; types regenerated and hand-edited. Verified in the browser at 1280px and 375px: two columns on the phone with titles clamped to two lines and the price above the fold, 'N for sale' and the seller avatar rendering, the cart button present, and the filter panel inline rather than a sheet at desktop width. NOT done: M-3's left-column placement — the panel and the results live in different subtrees, so moving it beside them needs page-content restructured around a sidebar slot.
+
+#### A listing reaches the people following you — Implemented
+
+- **Brief:** PRD 2026-09 B-1 (build plan WS3)
+- **Exists today:** The followed feed carries cars and build updates only. A followed seller's new listing shows up nowhere: `follows` has no seller-listing edge, and the feed never asked the listings table.
+- **Changing:** A new listing reaches anyone following that seller or the car the part came off. Two queries feed it — seller lane and source-car lane — and one pure merge makes them a single ordered feed.
+- **Surfaces:** `src/lib/feed-merge.ts`, `src/lib/feed.ts`, `/home`, `supabase/migrations/20260919180000_listings_seller_status_created_idx.sql`
+- **User benefit:** Selling a part stops being an act of shouting into the marketplace: the people who already care about this build or this seller see it, which is the whole argument for the community and the marketplace being one product.
+- **Approach:** Two indexed queries rather than one `or`, because only the seller lane can use (seller_id, status, created_at desc) and an `or` would give up the index for the half that has one. Everything hard — dedupe, stable order, per-seller fairness — is a pure function with no database.
+- **Depends on:** front-door
+- **UX rules:** Following a seller AND the car a part came off gives one card, not two. At most three of one seller's listings sit together; the fourth waits for someone else and then returns.
+- **Decisions:** The per-seller cap defers rather than drops: a seller alone in your feed still shows you everything. It is a cap on adjacency, not on presence. Order breaks ties on id. Equal timestamps are ordinary — a bulk insert stamps rows together — and without a total order page one and page two disagree, which shows a card twice or skips it. No push or email for new listings (B-2). This is a feed, not a broadcast.
+- **Validation:** Seven unit tests on the merge, covering follow-both-see-once, ids colliding across kinds, identical output from differently-ordered inputs, a six-row page walk on one shared timestamp, and the run cap deferring rather than dropping. Index applied to the shared dev project and the local test database. Typecheck, lint and the full unit suite green; NOT yet walked with a real follow graph in the browser.
+
+#### Explore — one wall, one footprint — Implemented
+
+- **Brief:** PRD 2026-09 E-1…E-4 (build plan WS13)
+- **Exists today:** The wall was two columns on a phone but the cells were not one footprint — a build cell sat shorter than the update beside it and the rows ran ragged, which is exactly what the direction rules out.
+- **Changing:** A uniform cell footprint per kind, and breakers (trending models, builders worth following) woven into the wall at fixed positions. Legacy posts with no photo are left off the photo walls rather than borrowing a car's cover, and stay everywhere else.
+- **Surfaces:** `src/components/ui/mosaic.tsx`, `src/components/ui/masonry-feed.tsx`, `src/app/(discover)/explore/breakers.tsx`, `supabase/migrations/20260919195000_trending_models.sql`
+- **User benefit:** The wall scans. A ragged grid reads as a broken page, and the eye stops at the first gap.
+- **Approach:** The caption block is a fixed height per kind rather than a natural one — the design proof's finding, made before the breakers were built.
+- **UX rules:** A breaker renders only with at least three results. Two 'builders worth following' is not a section. A post with no photo is never given somebody else's photo.
+- **Validation:** Measured in the running app: one footprint (229x355) across twenty cells, one breaker rendered, the Builders breaker correctly suppressed below three. Full unit suite green.
+
+#### Local — what's happening near me — Implemented
+
+- **Brief:** PRD 2026-09 H-2 (build plan WS15)
+- **Exists today:** DRVN knew a member's free-text 'location' and did nothing with it. There was no way to see the builds and parts around you.
+- **Changing:** profiles gains country and region from a curated list, settings asks for them, and Home grows a Local tab backed by local_feed_rows.
+- **Surfaces:** `src/lib/geo/regions.ts`, `src/app/(product)/settings/settings-panel.tsx`, `src/app/(product)/home/page.tsx`, `supabase/migrations/20260919196000_seller_defaults_and_region.sql`
+- **User benefit:** Cars are a local hobby. The person with the part you need is often forty minutes away, and nothing in the product knew that.
+- **Approach:** Coarse on purpose — a country and a region, never a town. A build sheet plus a town is close to an address, and the PRD rules location tags out.
+- **UX rules:** Local only appears once the member has said where they are; it is never inferred. Changing the country clears the region rather than leaving an impossible pair.
+- **Decisions:** One more column on feed_events rather than a second view: Local is the same feed with one more filter, and two views would drift.
+- **Validation:** Verified in the running app: the country and region rows in settings, the dependent region select appearing on choosing a country, and Local on Home. Covered by the geo unit tests and carless_post_reach_guard's region assertions.
+
 ### 03 · Vehicle identity & fitment
 
 #### Canonical Add Car flow — Validated
@@ -167,6 +216,19 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Decisions:** ?car= deep links seed the picker with the source car's fitment row (editable like any typed row); choosing a source car in-form offers a passive one-tap '+ Fits {car}' chip — never an unexplained transformation. Manual qualifier entry (trim/engine/drivetrain) deliberately NOT built: it bloats the seller form for data the catalog/VIN can eventually fill automatically. Revisit when catalog variants exist.
 - **Validation:** Typecheck/lint/unit green; behavior exercised in the sell flow during Group 10's visual pass (pending).
 
+#### Main car — Implemented
+
+- **Brief:** PRD 2026-09 P-5, P-1, M-1 (build plan WS5)
+- **Exists today:** Four surfaces sort a member's cars and none of them agree — created ascending in the garage, model year descending on the profile, whatever the query returned on the sell form. Somebody with four cars sees a different 'first' car depending where they stand, and never gets to say which one they mean.
+- **Changing:** profiles.main_car_id, set from the car's own settings. It drives the featured car, the default profile banner, car order everywhere, the Garage's focused view, and the first one-tap suggestion in the marketplace vehicle picker.
+- **Surfaces:** `src/lib/cars/order.ts`, `src/lib/cars/banner.ts`, `/garage/[id]/edit`, `/marketplace`, `supabase/migrations/20260919181500_profiles_main_car.sql`
+- **User benefit:** The product stops guessing at the one thing the member could just tell it, and a profile gets a banner without anyone having to upload a second image.
+- **Approach:** One ordering helper replacing four different sorts, and one banner helper choosing from photos that already exist. Null stays the ordinary state: with no main car every surface falls back to newest-first, which is what they all did before.
+- **Depends on:** vehicle-catalog
+- **UX rules:** Offered, never applied: the marketplace shows 'Parts for my {car}' as a one-tap choice and an explicit or URL-supplied vehicle always wins. A cleared vehicle filter stays cleared — clearing is an answer, not an absence. The banner never borrows a private car's cover, main car or not. No banner is a fine outcome. A plain header beats a stretched placeholder, and neither is a setup step.
+- **Decisions:** The ownership trigger is the guard, not RLS: RLS says who may update the row and nothing about whether the VALUE is theirs, so without it a member could feature somebody else's car. The toggle saves on its own rather than with the car form — it is a garage-wide answer about this car, not one of the car's fields, and batching it would make unsetting feel like a rollback. New profiles columns are invisible until granted, so main_car_id has explicit column-level SELECT/UPDATE grants (the 0017 pattern) rather than riding a table-wide grant that would re-expose the Stripe pointers.
+- **Validation:** Ten unit tests across ordering and banner choice, including the two cases that matter most — no main car set behaves exactly as today, and a private car's cover is never borrowed. The ownership trigger is covered in security_guard.sql (another member's car refused, own car accepted, clearing accepted); the whole guard suite passes. Migration applied to the shared dev project and the local test database. Typecheck, lint and the full unit suite green; the marketplace offer was NOT clicked through in the browser this session.
+
 ### 04 · Selling
 
 #### Selling workspace & IA — Validated
@@ -204,6 +266,32 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **UX rules:** Neither answer to 'what happens to the old part?' loses the record — 'just remove it' still keeps the line. Delete is only offered on a line with no linked listing. 'List it' commits the sheet before opening the sell form, so abandoning the form leaves the part under 'came off this car' rather than losing both. An update that says a part came off OFFERS to mark it off the sheet; it never does so silently.
 - **Decisions:** removed_at is derived by the database, never sent by the client — re-saving a sheet can't drag the date a part came off forward to today. A part that came off is excluded from car search text and the search index: a build should not keep matching a part it no longer has. The listing provenance line, post mod blocks and the sell prefill deliberately do NOT filter by status — a removed part is the normal case for all three. markModRemoved lives in features/activity rather than the garage's actions because the surface that offers it is the public post page, and a route may not reach into another route's actions.
 - **Validation:** Migration applied to the shared dev project and the local test database; mod_sheet_atomic_guard gained a record-identity block (remove keeps the id, replace files a new line in position, re-saving doesn't move the removal date, an omitted row still deletes, a price with no currency and an unknown state are both refused) and the whole SQL guard suite passes. Walked end to end on the dev server at desktop width: the inline ask renders in-row with 44px targets, the line moves to 'Came off this car', the save keeps the row's id and sets removed_at, the build sheet drops to six entries and grows a 'Came off this car' section carrying the owner's Sell it. Phone width for this editor was NOT visually confirmed this session.
+
+#### Profile & Store — Implemented
+
+- **Brief:** PRD 2026-09 P-1…P-8 (build plan WS10)
+- **Exists today:** A profile is About / For sale / Reviews / Activity — a seller's page with some cars attached. Listings render as rows, which look nothing like the marketplace they came from.
+- **Changing:** Tabs become Overview · Garage · Updates · Parts · Reviews, with the old keys kept as aliases. Parts IS the store: the marketplace grid and card, filtered to one seller, including sold. The header gains a borrowed car-cover banner, followers and cars, and a store note.
+- **Surfaces:** `/u/[username]`, `src/lib/store/visible-statuses.ts`, `src/lib/store/query.ts`, `src/components/profile/profile-body.tsx`, `supabase/migrations/20260919192000_profiles_store_note.sql`
+- **User benefit:** A member's parts read as a shop without DRVN needing a shop entity, and the profile reads as a person with a garage rather than a seller with some cars.
+- **Approach:** The store runs its own rows query because it shows SOLD parts and the marketplace never does; bending the marketplace query to carry a seller key would put owner-visible state one URL parameter from every public browse surface. Everything after retrieval is shared — hydrateListingCards and ListingCard.
+- **Depends on:** marketplace-card, main-car
+- **UX rules:** Allowed statuses come from who is viewing, never from the URL. The tab can only narrow the viewer's own allowance. Sold parts are public: a store with twelve sold and two live is a different proposition from a new seller, and hiding the history would flatten them. The owner sees an edit link where a stranger sees add-to-cart — you can't buy your own part. The About tab is gone. A bio is one paragraph, and giving it a tab meant the first thing on somebody's profile was prose rather than their cars.
+- **Decisions:** Old tab keys (?view=forsale, about, activity) still resolve. Those links are in messages and bookmarks, and renaming a tab isn't a good enough reason to break them. Seller and status filter inside the query, before the count and the page window — filtering after fetching gives a count that disagrees with the rows and a silently short last page. The store note is capped at 180 characters in the database: it is voice, not policy, and policy belongs in the returns and shipping settings where it is enforceable.
+- **Validation:** Five unit tests on visibility, including the one that matters — ?status=draft on somebody else's store stays active+sold rather than listing their unpublished work. Verified in the browser: tabs render as Overview · Garage1 · Updates3 · Parts2 · Reviews, the banner renders from a car cover, and the Parts panel shows the marketplace card with price, shipping, condition and seller. NOT done: the trust strip (P-7) and the offer-floor default (P-9, deferred to M6).
+
+#### Add a part by pasting a link — Implemented
+
+- **Brief:** PRD 2026-09 L-1…L-4 (build plan WS6)
+- **Exists today:** A mod line is typed, or pasted as text and parsed heuristically. Everything the shop page already knows — the exact title, the brand, the part number, a photo, what it cost — is retyped or lost.
+- **Changing:** "Add mod" opens on a product link. One fetch fills title, brand, part number, category, a thumbnail and the shop's price; everything stays editable and typing stays first-class, so a failed fetch costs nothing. The public build page shows the thumbnail and a plain link out.
+- **Surfaces:** `src/lib/mods/part-link.ts`, `/garage/[id]/edit`, `/cars/[slug]`, `src/lib/listing-import/extract/html.ts`, `src/lib/listing-import/media/import-images.ts`
+- **User benefit:** A build sheet stops being a typing exercise, so it actually gets filled in — and a filled-in sheet is what makes the parts that come off it sellable with provenance.
+- **Approach:** The importer's plumbing at a fraction of its weight: the same SSRF guard, pinned DNS, byte caps and sharp re-encode, and none of the job ladder, AI extraction or twelve-photo gallery. The image importer's bucket and path became parameters so a mod thumbnail lands in car-images rather than listing-images.
+- **Depends on:** listing-importer, mod-record-identity
+- **UX rules:** Typing stays first-class; a failed fetch falls back to it with a sentence saying so, never an error page. What the link gave us is shown under the row it filled in — the shop, the thumbnail, the price — so the owner can see it and correct it. A reference price without a currency is not shown, stored or returned.
+- **Decisions:** L-4 is structural, not a promise: the thumbnail is uploaded to car-images, and the sell prefill does not select image_url at all. A test asserts the projection so widening it is a deliberate act. RATE_LIMITS.fetchPartLink is 30/hour — looser than the importer's 10, because one page fetch and one thumbnail is cheap and somebody filling in a sheet pastes a lot of links. Prices are refused rather than guessed: a European decimal comma (1.299,00) is ambiguous against a thousands comma, so both are read as no price. mod_items.image_url joined the media lifecycle's reference check, or the 48h sweep would take the thumbnail back out from under a build sheet still showing it.
+- **Validation:** Unit tests cover the price and currency rules, including the negative-price case they caught (a stripped minus sign read as a positive price). A projection guard holds L-4. Typecheck, lint and the full unit suite green. The remote fetch itself is exercised by the importer's existing safe-fetch coverage; a live paste was NOT walked in the browser this session.
 
 #### Existing Listing Importer — Implemented
 
@@ -289,6 +377,17 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Decisions:** Deliberately NOT built (§38): employees/roles, inventory, POS, CRM, wholesale, fulfillment routing.
 - **Validation:** 0056 self-checks (no client write policy; snapshot freezes the policy; profiles guard intact); frozen-policy reader covered by snapshot unit tests; full suite + build green.
 
+#### A seller's default lowest offer — Implemented
+
+- **Brief:** PRD 2026-09 P-9 (build plan P-9)
+- **Exists today:** Every listing asked for an offer floor from scratch, so a seller with a consistent policy re-typed it on every part.
+- **Changing:** profiles.default_offer_floor_pct prefills the sell form. It is a default, never a rule applied to listings that are already live.
+- **Surfaces:** `src/app/(product)/settings/settings-panel.tsx`, `src/app/(product)/sell/sell-form.tsx`, `supabase/migrations/20260919196000_seller_defaults_and_region.sql`
+- **User benefit:** A seller states their policy once instead of on every listing.
+- **Approach:** A prefill only. Changing the default cannot retroactively change what a buyer is already looking at.
+- **UX rules:** Never retroactive. A live listing keeps the floor it was published with.
+- **Validation:** Column grants applied with the H-2 migration; the settings field and the sell-form prefill verified in the running app; full unit suite and typecheck green.
+
 ### 05 · Build Story Composer
 
 #### Editor engine & DRVN-owned schema — Validated
@@ -362,6 +461,32 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Depends on:** unified-composer
 - **Validation:** Block rise-in on insert, hover-revealed tool rails (always-on for coarse pointers), live dropcursor, transition tokens from Livesheet; prefers-reduced-motion disables the entrance animation. Visual pass in Group 10.
 
+#### Quick post, the photo rule, tagging a part — Validated
+
+- **Brief:** PRD 2026-09 W-1…W-3 (build plan WS14a)
+- **Exists today:** Posting meant the full editor: a required title, blocks, a draft. 'New wheels turned up' had nowhere to go, and every post needed a heading whether or not the member had one in mind.
+- **Changing:** A quick box — photos, a caption, Post — with no title and no draft. A title becomes optional in the database and every reader goes through postHeadline() instead of assuming a string. A published post needs at least one photo. A post can tag up to three of the author's own active parts.
+- **Surfaces:** `src/features/composer/quick-post.tsx`, `src/features/composer/part-picker.tsx`, `src/lib/activity/headline.ts`, `supabase/migrations/20260919194000_quick_post_and_tagged_parts.sql`
+- **User benefit:** The gap between 'something happened to my car' and 'it is on DRVN' becomes about fifteen seconds.
+- **Approach:** A new `quick` write mode that returns before the draft lookup the publish path performs — the release-blocking contract, since publish converts a car's existing draft into the published post. Retry-safety comes from the same operation id publishing already uses.
+- **Depends on:** unified-composer
+- **UX rules:** A quick post never touches a saved draft. With no draft, 'Write a full update' carries the caption over; with one, the link says 'Continue your draft' and nothing is merged. The photo rule applies to new publishes only — a post published before the rule can still be edited without one. Three tagged parts at most. A post with eight is a shop window, and the feed is not the marketplace.
+- **Decisions:** No generated headings. 'Update from the Silvia' is DRVN's sentence, not the member's — the fallback is their own first line. sync_activity_post_listings is SECURITY DEFINER and checks the author itself, so a direct call can't tag parts onto somebody else's post.
+- **Validation:** activity_quick_post_guard.sql (release-blocking) proves the draft is byte-identical after a quick post, both posts exist, the quick post has no title, a replay returns 'replayed', a photoless publish is refused and a draft may still have none. Whole SQL guard suite green; full unit suite and typecheck green; the box verified in the running app.
+
+#### Posting without a car — Validated
+
+- **Brief:** PRD 2026-09 W-5 (build plan WS14b)
+- **Exists today:** activity_posts.car_id was NOT NULL, so a member who had sold their car, or who was selling parts before buying one, could not post at all. Principle 1 says the car gives context and is never a gate.
+- **Changing:** car_id becomes optional, and a post must be about a car, a tagged part, or both. A carless post lives at /posts/[postId] with its own share card, and postHref() replaces the hand-built permalink in every reader.
+- **Surfaces:** `src/app/(discover)/posts/[postId]/page.tsx`, `src/lib/activity/href.ts`, `supabase/migrations/20260919197000_posts_without_a_car.sql`, `supabase/migrations/20260919198000_carless_posts_reach.sql`, `supabase/migrations/20260919199000_carless_quick_post.sql`, `supabase/migrations/20260919200000_carless_post_policies.sql`
+- **User benefit:** Between cars, you are still a member. The gate that said otherwise is gone without weakening the rule that everything is about a car or a part.
+- **Approach:** Dropping the NOT NULL is the small half. Every reader, the writer and the RLS policies expressed the car requirement as a join or an EXISTS against cars, and each would have dropped a carless post silently — which to the member is indistinguishable from posting into nothing. Four migrations: the column and the subject rule, the readers, the writer, the policies.
+- **Depends on:** quick-post
+- **UX rules:** A post with a car keeps the URL it has always had — every link already in the world still resolves. 'No car — about a part' is the last option in the picker, not the first: it is the exception, not the default.
+- **Decisions:** A published post with no car is public. There is no private car to hide behind, and publishing is the act of making it public; the alternative is a post its author can see and nobody else can. The subject rule is a deferred constraint trigger rather than composer validation — a rule about what the product IS belongs where it can't be forgotten. The car stays required in the full editor: it is reached from a car sheet and its draft machinery is keyed by car.
+- **Validation:** carless_post_reach_guard.sql: a carless post publishes, one about neither a car nor a part is refused, it appears in feed_events with the right owner, search finds it, Local finds it in the author's region and not another, post_href gives /posts/<id> for it and leaves a post with a car untouched, and a save, a comment and a reaction each notify the author at that URL. Whole SQL guard suite green; full unit suite and typecheck green.
+
 ### 06 · Media & galleries
 
 #### Better upload queue — Implemented
@@ -407,6 +532,19 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Validation:** normalizePublicPhoto (orientation via createImageBitmap, 2560px cap, JPEG re-encode = EXIF/GPS strip, graceful fallback) wired into garage, sell and composer uploads; dispute evidence untouched by construction (its flow never passes normalize).
 
 ### 07 · Garage & build experience
+
+#### Add what you bought to your car — Implemented
+
+- **Brief:** PRD 2026-09 C-1 (build plan WS4)
+- **Exists today:** A completed purchase is a dead end. The part arrives, goes on the car, and the build sheet knows nothing about it — so the loop that makes DRVN one product rather than two stops at the doorstep.
+- **Changing:** A delivered or completed order offers 'Add to a car', per item. The mod line is built from the order item's frozen purchase record and reads back as 'Bought on DRVN · off {car}'.
+- **Surfaces:** `/orders/[id]`, `src/features/commerce/add-to-car-actions.ts`, `src/lib/mods/provenance.ts`, `src/lib/mods/category-map.ts`
+- **User benefit:** The third loop closes: a part sold off one build becomes a documented part of another, and the marketplace starts feeding the community that feeds it.
+- **Approach:** Read from order_items.commercial_snapshot (0049), never the live listing — by the time somebody fits a part the seller may have edited, re-shot, relisted or deleted it. Idempotent through the unique mod_items.source_order_item_id; a second tap answers 'already on this car' rather than erroring or duplicating.
+- **Depends on:** mod-record-identity, main-car
+- **UX rules:** Offered per item, not per order — an order can hold several parts going on different cars. Only once the part has arrived: delivered or completed, the same window the review and return flows use. A second tap adds nothing and says so. Same answer either way is what idempotent should feel like. A source build that has since gone private is not named at all.
+- **Decisions:** The provenance line is NOT written into the mod's text at insert. source_order_item_id is the durable fact and the source car is read back at render, where its CURRENT visibility can be checked — a sentence written once can't stop naming a car that later went private. The reverse category map answers null rather than guessing: 'engine' could be a turbo, a manifold or a long block, and a wrong category quietly mis-files the part on somebody's build sheet. The 'owners manage mods' policy is already `for all`, so this is a plain insert rather than another database function.
+- **Validation:** Category mapping unit-tested both directions including the round-trip and the deliberate nulls. Buyer, car ownership and order state are all checked server-side. The uniqueness index is asserted in mod_sheet_atomic_guard. Typecheck, lint and the full unit suite green. NOT yet walked end to end — that is acceptance journey 6, and a full order-fixture SQL guard for the double-tap is still to write.
 
 #### Annotated showcase image — Validated
 
@@ -464,6 +602,30 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Simplify-before-add rule; no intelligence dashboard.
 - **Decisions:** No garage intelligence dashboard (§Z honored): the existing sheet already answers 'what matters about this car right now'.
 - **Validation:** Reviewed against the simplify-before-add rule: the Aug-2026 garage sheet already leads with the car, its latest update, selling counts and a bounded work-order list — reorganizing further would only move furniture. Preserved deliberately; the passive suggestions (§W) are the only additions, and they live on the edit surfaces, not the sheet.
+
+#### Home — what changed since you were last here — Implemented
+
+- **Brief:** PRD 2026-09 H-1, H-4…H-6 (build plan WS11)
+- **Exists today:** Home was a wall of tiles: an attention list, seller KPIs, a prompt to post, and a feed underneath. It described the account rather than showing what had happened.
+- **Changing:** Two columns — the feed with the quick box on top, and a rail of the few things that genuinely need an answer. The seller KPIs move to /selling, where somebody actually goes to run a shop. Empty tiles don't render; a member with no car gets 'Add your car' instead of an empty garage tile; with fewer than three posts the first rail card follows the last post rather than sitting in a column of its own.
+- **Surfaces:** `src/app/(product)/home/page.tsx`, `src/app/(product)/selling/page.tsx`, `supabase/migrations/20260919193000_suggested_builders.sql`
+- **User benefit:** Home answers the question people actually open it with, and a sparse account looks deliberate rather than broken.
+- **Approach:** suggested_builders takes a nullable viewer so the same RPC serves a signed-out preview; the feed scrolls to load using the Explore wall's existing mechanism rather than a second one.
+- **Depends on:** app-shell
+- **UX rules:** A tile with nothing in it does not render. An empty box is a bug that looks like a design. Local only appears once the member has said where they are.
+- **Validation:** Verified in the running app: the two-column 605px/320px grid, the quick box on top of the feed, the rail's cards, and the sparse fallbacks. Full unit suite and typecheck green.
+
+#### Garage — one car at a time — Implemented
+
+- **Brief:** PRD 2026-09 G-1…G-5 (build plan WS12)
+- **Exists today:** The garage listed every car as a sheet, so a member with one car read a list of one and a member with six read six half-sheets and could work on none of them.
+- **Changing:** A switcher picks the car; the focused view gives that car its stat strip, its tabs (Overview, Mods, Parts, Media) and the existing editors mounted inside them. /garage/[id]/edit stays exactly where it was.
+- **Surfaces:** `src/app/(product)/garage/page.tsx`, `src/app/(product)/garage/garage-switcher.tsx`, `src/app/(product)/garage/focused-car.tsx`, `src/app/(product)/garage/focused-panels.tsx`
+- **User benefit:** The garage becomes a workspace for the car you are working on rather than an index of cars you own.
+- **Approach:** ?car= drives the selection, so the view is linkable and the back button works. The panels mount the editors that already exist rather than reimplementing them.
+- **Depends on:** main-car
+- **UX rules:** The main car leads the switcher; 'All cars' is always one tap away.
+- **Validation:** Verified in the running app: switcher, three-tile stat strip, and the four tabs with their counts. Full unit suite and typecheck green.
 
 ### 08 · Notifications
 
@@ -527,6 +689,17 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Storybook 9 static build; no paid visual-regression services; registry linkage documented.
 - **Decisions:** Storybook 9 + nextjs-vite beside the docs site — /docs stays the narrative + registry inventory, Storybook is the isolated-state lab. Local/static only, no paid services. Accepted dev-only advisory: image-size (DoS in ICNS/JXL parsers) inside vite-plugin-storybook-nextjs — no fix exists, devDependency only, never in the production bundle. Stories use local data-URI imagery — no network, no CSP surprises.
 - **Validation:** Static build green in ~4s; nine story files cover the priority list (Button states, ListingCard incl. no-photo/long-title/sold/fitment, order status chips+pipeline, MetricCard, Alert/EmptyState/Skeletons, ComboField, BeforeAfter, the full automotive block set, MessageThread); a11y addon on; day/night toolbar mirrors the app's data-theme; story render verified by screenshot.
+
+#### The shell — search, Post, unread — Implemented
+
+- **Brief:** PRD 2026-09 N-2, N-3, N-5 (build plan WS8)
+- **Exists today:** The bar carried a plain search input that went to a results page, no way to start a post from anywhere, and a Messages link that never said whether anyone had written.
+- **Changing:** The suggesting search field is mounted in the bar itself, a Post button sits beside it, and unread message counts stream into the rail and the menu as badges.
+- **Surfaces:** `src/components/ui/livesheet-bar.tsx`, `src/lib/shell-counts.ts`, `src/components/ui/app-shell.tsx`
+- **User benefit:** The two things a member does most often — look for something, say something — are one reach away on every page, and a message no longer waits to be discovered.
+- **Approach:** Counts stream through a Suspense boundary so the shell renders immediately and the badge arrives when the query does; nothing in the bar blocks first paint.
+- **UX rules:** A badge shows a number, never a dot with no meaning. The Post button goes to the quick box, not the full editor — the short path is the default.
+- **Validation:** Typecheck and the full unit suite green; verified in the running app at desktop and phone width in both themes.
 
 ### 11 · Documentation
 

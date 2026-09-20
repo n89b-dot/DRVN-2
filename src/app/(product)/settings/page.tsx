@@ -27,10 +27,14 @@ export default async function SettingsPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "username, display_name, headline, bio, location, links, notification_prefs, stripe_account_id, payouts_enabled, profile_type"
+      "username, display_name, headline, bio, location, country, region, store_note, links, notification_prefs, stripe_account_id, payouts_enabled, profile_type"
     )
     .eq("id", user!.id)
     .single();
+  // P-9: the floor has no client select grant — a buyer who could read it
+  // would bid exactly it — so the owner asks through a function that can
+  // only answer about themselves.
+  const { data: offerFloorPct } = await supabase.rpc("my_default_offer_floor");
 
   const { data: shopProfile } = await supabase
     .from("shop_profiles")
@@ -68,6 +72,10 @@ export default async function SettingsPage() {
           headline: profile?.headline ?? "",
           bio: profile?.bio ?? "",
           location: profile?.location ?? "",
+          country: profile?.country ?? null,
+          region: profile?.region ?? null,
+          default_offer_floor_pct: offerFloorPct ?? null,
+          store_note: profile?.store_note ?? null,
           links,
           notification_prefs: profile?.notification_prefs ?? {},
         }}

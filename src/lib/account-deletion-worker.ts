@@ -74,7 +74,7 @@ export async function processAccountDeletions() {
       }
         // Rows are removed before media checks. Frozen order/evidence references
         // remain authoritative and prevent deletion of retained transaction media.
-        const scrub = await admin.from("profiles").update({ avatar_url: null, display_name: "Deleted member", username: null, bio: null, headline: null, location: null, links: [] }).eq("id", uid);
+        const scrub = await admin.from("profiles").update({ avatar_url: null, display_name: "Deleted member", username: null, bio: null, headline: null, location: null, country: null, region: null, store_note: null, main_car_id: null, default_offer_floor_pct: null, links: [] }).eq("id", uid);
         if (scrub.error) throw new Error("Profile cleanup failed");
         for (const operation of [
           admin.from("activity_posts").delete().eq("author_id", uid),

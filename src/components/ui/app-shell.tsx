@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
+import { StreamedShellCounts, type ShellCounts } from "./streamed-shell-counts";
 
 import { cx } from "@/lib/format";
 import { Icon } from "./icons";
@@ -34,6 +35,7 @@ function AppRail({
   onToggle,
   initialMktOpen = true,
   offersCount = 0,
+  messagesCount = 0,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -42,6 +44,10 @@ function AppRail({
   /** Offers waiting on this user — shown next to the Offers row so the rail
    *  keeps saying what the old inline /orders microlabel used to. */
   offersCount?: number;
+  /** Conversations with something unread (N-5). A count, not a dot: a buyer
+   *  waiting on one answer and a seller with nine threads open are different
+   *  situations and the rail can say which. */
+  messagesCount?: number;
 }) {
   const [mktOpen, setMktOpen] = useState(initialMktOpen);
   const toggleMkt = () => {
@@ -191,19 +197,33 @@ function AppRail({
           if (entry.child) return null;
 
           const here = isActive(entry.href);
+          const badge = entry.href === "/messages" ? messagesCount : 0;
           return (
             <Link
               key={entry.href}
               href={entry.href}
               className={cx("railrow", here && "is-here")}
               aria-current={here ? "page" : undefined}
-              title={open ? undefined : entry.label}
+              title={open ? undefined : badge > 0 ? `${entry.label} (${badge})` : entry.label}
+              aria-label={
+                badge > 0
+                  ? `${entry.label}, ${badge} conversation${badge === 1 ? "" : "s"} with unread messages`
+                  : undefined
+              }
             >
               <span className="railrow__ico" aria-hidden="true">
                 <Icon name={entry.icon} className="h-[17px] w-[17px]" />
+                {/* The collapsed rail has no room for a count, so it keeps
+                    the dot — same information, one bit of it. */}
+                {badge > 0 && <span className="railrow__dot" />}
               </span>
               <span className="railrow__label flex items-center justify-between gap-2">
                 {entry.label}
+                {badge > 0 && (
+                  <span className="chip chip--live shrink-0" aria-hidden="true">
+                    {badge > 9 ? "9+" : badge}
+                  </span>
+                )}
               </span>
             </Link>
           );
@@ -230,7 +250,9 @@ export function AppShell({
   cartCount = 0,
   unreadCount = 0,
   offersCount = 0,
+  messagesCount = 0,
   children,
+  counts,
 }: {
   signedIn: boolean;
   initialNight: boolean;
@@ -241,7 +263,10 @@ export function AppShell({
   unreadCount?: number;
   /** Offers waiting on this user — badges the Offers row in the rail and index. */
   offersCount?: number;
+  /** Conversations with something unread — badges Messages (N-5). */
+  messagesCount?: number;
   children: ReactNode;
+  counts?: Promise<ShellCounts>;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
 
@@ -250,6 +275,14 @@ export function AppShell({
     setRailOpen(next);
     document.cookie = `ls-rail=${next ? "open" : "closed"}; path=/; max-age=31536000; SameSite=Lax`;
   };
+
+  const renderRail = (values: ShellCounts) => (
+    <AppRail open={railOpen} onToggle={toggleRail} initialMktOpen={initialMktOpen} offersCount={values.offersCount} messagesCount={values.messagesCount} />
+  );
+  const renderBar = (values: ShellCounts) => (
+    <LivesheetBar initialNight={initialNight} signedIn={signedIn} {...values} />
+  );
+  const initialCounts = { cartCount, unreadCount, offersCount, messagesCount };
 
   return (
     <div
@@ -262,21 +295,14 @@ export function AppShell({
         Skip to content
       </a>
       {signedIn && (
-        <AppRail
-          open={railOpen}
-          onToggle={toggleRail}
-          initialMktOpen={initialMktOpen}
-          offersCount={offersCount}
-        />
+        counts ? <Suspense fallback={renderRail(initialCounts)}>
+          <StreamedShellCounts counts={counts}>{renderRail}</StreamedShellCounts>
+        </Suspense> : renderRail(initialCounts)
       )}
       <div className="shell__body">
-        <LivesheetBar
-          initialNight={initialNight}
-          signedIn={signedIn}
-          cartCount={cartCount}
-          unreadCount={unreadCount}
-          offersCount={offersCount}
-        />
+        {counts ? <Suspense fallback={renderBar(initialCounts)}>
+          <StreamedShellCounts counts={counts}>{renderBar}</StreamedShellCounts>
+        </Suspense> : renderBar(initialCounts)}
         <main id="main" className="min-w-0">{children}</main>
       </div>
     </div>

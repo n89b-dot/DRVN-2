@@ -13,6 +13,8 @@ import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import type { FeedTab } from "@/lib/feed";
 import type { AccountResult, ExploreAllResults } from "@/lib/explore/search/query";
 import { exploreSearchHref, type ExploreSearchParams } from "@/lib/explore/search/params";
+import { MarketplaceRetrievalError } from "@/features/marketplace/retrieval-error";
+import { AccountRowList } from "@/components/commerce";
 
 /**
  * Explore search result blocks (brief §12): every family renders through its
@@ -44,34 +46,6 @@ function GroupHead({
         </Link>
       )}
     </Rv>
-  );
-}
-
-/** Compact identity rows — the whole Account result surface (brief §10). */
-export function AccountRowList({ accounts }: { accounts: AccountResult[] }) {
-  return (
-    <div className="rowlist">
-      {accounts.map((account) => {
-        const name = account.display_name ?? (account.username ? `@${account.username}` : "Account");
-        const meta = [
-          account.display_name && account.username ? `@${account.username}` : null,
-          account.profile_type === "shop" ? "Shop" : null,
-          account.headline,
-        ]
-          .filter(Boolean)
-          .join(" · ");
-        return (
-          <ObjectRow
-            key={account.id}
-            as="div"
-            href={account.username ? `/u/${account.username}` : undefined}
-            media={{ src: account.avatar_url ?? undefined, alt: name }}
-            title={name}
-            meta={meta || undefined}
-          />
-        );
-      })}
-    </div>
   );
 }
 
@@ -154,6 +128,7 @@ export function AllSearchResults({
           <AccountRowList accounts={results.accounts} />
         </>
       )}
+      {results.partsErrorReference && <MarketplaceRetrievalError reference={results.partsErrorReference} />}
       {results.parts.length > 0 && (
         <>
           <GroupHead

@@ -16,6 +16,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.N
 const isolatedLocal = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" && ["127.0.0.1", "localhost"].includes(host || "") && supabaseUrl?.port === "54321";
 
 const nextConfig: NextConfig = {
+  // Isolated production benchmarks can coexist with the development server.
+  distDir: process.env.DRVN_NEXT_DIST_DIR || ".next",
   // Listing-importer server deps that must stay native `require`s rather than
   // being bundled into server components: playwright-core is resolved
   // dynamically (optional rendering fallback — src/lib/listing-import/fetch/

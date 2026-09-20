@@ -135,3 +135,29 @@ export async function cleanupE2eUsers() {
     if (user.email) ownedEmails.delete(user.email);
   }
 }
+
+/**
+ * Puts one photo on the post open in the Build Story Composer.
+ *
+ * W-2 (2026-09): every NEW publish needs a photo, so a spec that publishes
+ * has to attach one. The insert menu is used rather than the empty-composer
+ * starter chips, because by the time a spec has typed a body the chips are
+ * gone.
+ */
+export async function addComposerPhoto(page: Page) {
+  await page.getByRole("button", { name: "+ Add something" }).click();
+  // The menu commits on pointerdown (it preventDefaults so the editor keeps
+  // its selection), and a real click lands on the popover instead.
+  await page.getByRole("menuitem", { name: "Photos" }).dispatchEvent("pointerdown");
+  await page.locator('input[type="file"]').last().setInputFiles({
+    name: "update.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64"
+    ),
+  });
+  // The queue uploads before the block holds a URL; the figure stops saying
+  // "Uploading…" when it has one.
+  await expect(page.getByText("Uploading…")).toHaveCount(0, { timeout: 30_000 });
+}

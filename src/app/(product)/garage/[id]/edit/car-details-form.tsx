@@ -7,8 +7,9 @@ import { Button, TextArea, TextField } from "@/components/ui";
 import type { Car } from "@/lib/database.types";
 
 import { updateCar, type ActionState } from "../../actions";
+import { MainCarToggle } from "./main-car-toggle";
 
-export function CarDetailsForm({ car }: { car: Car }) {
+export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
   const [state, setState] = useState<ActionState>({});
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
@@ -132,6 +133,10 @@ export function CarDetailsForm({ car }: { car: Car }) {
           <input type="checkbox" name="is_public" defaultChecked={car.is_public} className="sq" />
           Public sheet — anyone can read it
         </label>
+        {/* Saves on its own, not with the form: it is a garage-wide answer
+            about this car, not one of the car's own fields, and batching it
+            into "Save changes" would make unsetting it feel like a rollback. */}
+        <MainCarToggle carId={car.id} isMain={isMain} />
         {state.error && (
           <p role="alert" aria-live="polite" className="field__err">
             {state.error}

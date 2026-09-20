@@ -31,6 +31,9 @@ export type ListingDraft = {
   grade: string | null;
   condition_checklist: Record<string, ChecklistAnswer> | null;
   part_number: string | null;
+  brand: string | null;
+  part_miles: number | null;
+  part_miles_unit: string | null;
   price_cents: number;
   shipping_cents: number;
   /** 0053: 'flat' | 'drvn' | 'pickup_only'. */
@@ -67,6 +70,7 @@ export type SellFormInitialValues = {
   condition?: string;
   description?: string;
   partNumber?: string;
+  brand?: string;
   /** Dollar strings ("450.00"), matching the form's money inputs. */
   price?: string;
   shipping?: string;
@@ -100,6 +104,7 @@ export function SellForm({
   initialValues,
   canPublish = true,
   drvnShipping,
+  defaultOfferFloorPct,
 }: {
   cars: { id: string; name: string; make?: string | null; model?: string | null; year?: number | null }[];
   /** Canonical make names for the fitment picker's suggestions. */
@@ -115,6 +120,9 @@ export function SellForm({
   /** DRVN Shipping availability (0053): the flag/provider state plus whether
    *  this seller's ship-from profile is verified. Absent = feature off. */
   drvnShipping?: { enabled: boolean; profileReady: boolean };
+  /** P-9: the seller's own floor, as a percentage of the asking price.
+   *  Prefills this form and nothing else. */
+  defaultOfferFloorPct?: number | null;
 }) {
   const prefill = initialValues;
   const importReview = initialValues?.importReview;
@@ -151,6 +159,13 @@ export function SellForm({
   const [grade, setGrade] = useState(listing?.grade ?? "");
   const [attestAccurate, setAttestAccurate] = useState(false);
   const [price, setPrice] = useState(listing ? money(listing.price_cents) : prefill?.price ?? "");
+  // P-9: a seller default, applied to the FORM only. The listing keeps its
+  // own offer_floor_cents, so changing the setting later never alters what
+  // a live listing already accepts — that would be a silent repricing.
+  const suggestedFloor =
+    defaultOfferFloorPct && price && Number(price) > 0
+      ? money(Math.round((Number(price) * 100 * defaultOfferFloorPct) / 100))
+      : "";
   const [shipping, setShipping] = useState(
     listing ? money(listing.shipping_cents ?? 0) : prefill?.shipping ?? money(0)
   );
@@ -363,7 +378,7 @@ export function SellForm({
             label="Category"
             required
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => { setCategory(e.target.value); setSubcategory(""); }}
             className="max-w-none"
             fieldClassName="!mb-0"
             error={fieldErrors.category}
@@ -389,7 +404,7 @@ export function SellForm({
           <Select
             id="sell-subcategory"
             name="subcategory"
-            label="Subcategory"
+            label="Part type"
             optional
             value={subcategory}
             onChange={(e) => setSubcategory(e.target.value)}
@@ -397,7 +412,7 @@ export function SellForm({
             fieldClassName="!mb-0"
             disabled={!subcategories.length}
           >
-            <option value="">—</option>
+            <option value="">Not sure — keep in the main category</option>
             {subcategories.map((s) => (
               <option key={s.slug} value={s.slug}>
                 {s.label}
@@ -423,6 +438,18 @@ export function SellForm({
             ))}
           </Select>
           <TextField
+            id="sell-brand"
+            name="brand"
+            label="Brand"
+            optional
+            maxLength={120}
+            defaultValue={listing?.brand ?? prefill?.brand ?? ""}
+            placeholder="e.g. Öhlins"
+            className="max-w-none"
+            fieldClassName="!mb-0"
+            hint="Who made it. Buyers filter by this more than anything else."
+          />
+          <TextField
             id="sell-part_number"
             name="part_number"
             label="Part number"
@@ -435,6 +462,38 @@ export function SellForm({
             hint={issueFor("part_number") ?? "What a buyer cross-references. Seller-entered, not verified."}
           />
         </div>
+        {/* M-7. Used parts only: on a new part it would be a contradiction
+            rather than a detail, and a zero would read as a claim. */}
+        {condition !== "new" && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              id="sell-part_miles"
+              name="part_miles"
+              label="Miles on this part"
+              optional
+              type="number"
+              min={0}
+              max={2000000}
+              inputMode="numeric"
+              defaultValue={listing?.part_miles ?? ""}
+              placeholder="e.g. 18000"
+              className="max-w-none"
+              fieldClassName="!mb-0"
+              hint="How far it has been driven. A condition grade can't answer that."
+            />
+            <Select
+              id="sell-part_miles_unit"
+              name="part_miles_unit"
+              label="Unit"
+              defaultValue={listing?.part_miles_unit ?? "mi"}
+              className="max-w-none"
+              fieldClassName="!mb-0"
+            >
+              <option value="mi">Miles</option>
+              <option value="km">Kilometres</option>
+            </Select>
+          </div>
+        )}
         <TextField
           id="sell-alt_part_numbers"
           name="alt_part_numbers"
@@ -840,11 +899,16 @@ export function SellForm({
             label="Lowest offer you'd read"
             optional
             inputMode="decimal"
-            defaultValue={money(listing?.offer_floor_cents)}
+            defaultValue={money(listing?.offer_floor_cents) || suggestedFloor}
             placeholder="—"
             prefix="$"
             fieldClassName="!mb-0"
-            hint={issueFor("offers") ?? "Offers below this are declined automatically."}
+            hint={
+              issueFor("offers") ??
+              (defaultOfferFloorPct && !listing
+                ? `Offers below this are declined automatically. Prefilled at your ${defaultOfferFloorPct}% default — change it for this part if you like.`
+                : "Offers below this are declined automatically.")
+            }
           />
           <div className="field !mb-0">
             <label htmlFor="sell-location" className="microlabel">Location</label>

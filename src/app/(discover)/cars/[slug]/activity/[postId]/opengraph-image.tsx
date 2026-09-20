@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 
+import { postHeadline } from "@/lib/activity/headline";
 import { createPublicClient } from "@/lib/supabase/public";
 
 export const alt = "Build update on DRVN";
@@ -22,7 +23,7 @@ export default async function UpdateCard({
   const { data: post } = car
     ? await supabase
         .from("activity_posts")
-        .select("id, title, published_at")
+        .select("id, title, intro, body, published_at")
         .eq("id", postId)
         .eq("car_id", car.id)
         .maybeSingle()
@@ -89,7 +90,7 @@ export default async function UpdateCard({
                 letterSpacing: -1,
               }}
             >
-              {post?.title ?? "A build update on DRVN"}
+              {post ? postHeadline(post) : "A build update on DRVN"}
             </div>
             {car?.name && (
               <div style={{ display: "flex", fontSize: 22, color: "#a3a6ae" }}>{car.name}</div>

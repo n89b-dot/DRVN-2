@@ -9,6 +9,10 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Alternate build directories (`DRVN_NEXT_DIST_DIR`, the stub-payments
+    // build): generated bundles. Linting them reported thousands of errors
+    // in code nobody wrote, which made `npm run lint` fail on a clean tree.
+    ".next-*/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

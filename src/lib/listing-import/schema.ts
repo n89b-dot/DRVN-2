@@ -168,6 +168,8 @@ export type ListingImportExtraction = {
   allowsCollection?: boolean;
 
   partNumber?: string;
+  /** M-6 — who made the part, when the source page says so. */
+  brand?: string;
   location?: string;
   compatibilityNotes?: string;
 
@@ -313,6 +315,7 @@ export function parseExtraction(raw: unknown): ListingImportExtraction | null {
     acceptsOffers: bool(o.acceptsOffers),
     allowsCollection: bool(o.allowsCollection),
     partNumber: str(o.partNumber, 120),
+    brand: str(o.brand, 120),
     location: str(o.location, 120),
     compatibilityNotes: str(o.compatibilityNotes, 2000),
     rawFitmentMentions: mentions,

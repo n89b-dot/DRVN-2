@@ -19,8 +19,8 @@ import { PHONE_TIERS, VIEWPORTS } from "./viewports";
  *     addressable, and separate from the followed feed.
  *   · Categories are navigation: a tile grid ≥640px, a Browse sheet on
  *     phones, real /marketplace/[category] routes either way.
- *   · Marketplace cards carry Buy now / Add to cart (Explore cards don't),
- *     a guest can add from the card, and the card never nests interactives.
+ *   · Marketplace cards emphasize the part and Save; purchase continues on detail,
+ *     and the card never nests interactives.
  *   · Engagement icons name themselves on keyboard focus.
  */
 
@@ -122,15 +122,17 @@ test.describe.serial("discovery + marketplace remediation", () => {
     const grid = page.getByRole("navigation", { name: /browse by category/i });
     await expect(grid).toBeVisible();
     await expect(grid.getByRole("link", { name: /all parts/i })).toHaveAttribute("aria-current", "page");
-    await grid.getByRole("link", { name: /brakes & suspension/i }).click();
+    await page.getByRole("button", { name: /Browse categories/ }).click();
+    await page.getByRole("dialog", { name: "Browse by category" }).getByRole("link", { name: /brakes & suspension/i }).click();
     await expect(page).toHaveURL(/\/marketplace\/brakes-suspension$/);
     // Category page narrows to its subcategories, as tiles.
     const sub = page.getByRole("navigation", { name: /browse brakes & suspension/i });
     await expect(sub).toBeVisible();
-    await sub.getByRole("link", { name: /coilovers/i }).click();
+    await page.getByRole("button", { name: /Browse categories/ }).click();
+    await page.getByRole("dialog", { name: "Browse by category" }).getByRole("link", { name: /coilovers/i }).click();
     await expect(page).toHaveURL(/\/marketplace\/brakes-suspension\/coilovers$/);
-    // Leaf: siblings as a quiet row, no tiles.
-    await expect(page.getByRole("group", { name: /subcategories/i })).toBeVisible();
+    // Leaf: the category tree remains available without repeating tiles.
+    await expect(page.getByRole("navigation", { name: "Browse by category", exact: true })).toBeVisible();
     await expect(page.locator(".catgrid")).toHaveCount(0);
     // Search/refine survive on the category route.
     await page.getByLabel(/search parts/i).fill("coil");
@@ -141,7 +143,13 @@ test.describe.serial("discovery + marketplace remediation", () => {
     // Phones: the grid retires, the Browse sheet carries the whole taxonomy.
     await page.setViewportSize(VIEWPORTS.phone);
     await page.goto("/marketplace");
-    await expect(page.locator(".catgrid")).toBeHidden();
+    // Two grids are in the DOM now — the page's and the Browse sheet's own
+    // copy, which is rendered closed rather than mounted on open. What the
+    // rule is about is that neither is *shown* at this width.
+    const grids = page.locator(".catgrid");
+    for (let i = 0; i < (await grids.count()); i++) {
+      await expect(grids.nth(i)).toBeHidden();
+    }
     const browse = page.getByRole("button", { name: /browse categories/i });
     await expect(browse).toBeVisible();
     expect((await browse.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -162,44 +170,38 @@ test.describe.serial("discovery + marketplace remediation", () => {
   // ---------- quick commerce ----------
 
   for (const tier of PHONE_TIERS) {
-    test(`marketplace cards: buy controls, no nested interactives @ ${VIEWPORTS[tier].width}`, async ({
+    test(`marketplace cards: separate Save, no nested interactives @ ${VIEWPORTS[tier].width}`, async ({
       page,
     }) => {
       await page.context().clearCookies();
       await page.setViewportSize(VIEWPORTS[tier]);
       await page.goto(`/marketplace?q=${encodeURIComponent(partTitle)}`);
       await assertNoNestedInteractives(page, `/marketplace @ ${VIEWPORTS[tier].width}`);
-      const card = page.locator("article.mcell").first();
+      const card = page.locator("article.marketplace-card").first();
       await expect(card).toBeVisible();
-      const buy = card.getByRole("button", { name: /^buy now/i });
-      const add = card.getByRole("button", { name: /^add to cart/i });
-      await expect(buy).toBeVisible();
-      await expect(add).toBeVisible();
-      // Compact-sized like reference marketplaces, but still a thumb target
-      // on phones (40px; the 44px floor is for full-width controls).
-      expect((await buy.boundingBox())!.height).toBeGreaterThanOrEqual(40);
-      expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+      // M-5 (2026-09): add-to-cart belongs on the card — it is for the part
+      // you already recognised. Buy now does not: deciding to buy happens on
+      // the item page.
+      await expect(card.getByRole("button", { name: /^buy now|^like/i })).toHaveCount(0);
+      const cart = card.getByRole("button", { name: /add to cart/i });
+      await expect(cart).toBeVisible();
+      expect((await cart.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const save = card.getByRole("button", { name: /^save /i });
+      await expect(save).toBeVisible();
+      expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       // The card's own link is a real, large target beneath the photo.
-      const link = card.locator("a.mcell__link");
+      const link = card.locator("a.marketplace-card__link");
       expect((await link.boundingBox())!.height).toBeGreaterThan(120);
     });
   }
 
-  test("guest: Add to cart from the card stays on the page and badges the cart; Buy now goes to the cart", async ({
-    page,
-  }) => {
+  test("guest: opening a shopping card preserves context and Buy now continues to cart", async ({ page }) => {
     await page.context().clearCookies();
-    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/marketplace?q=${encodeURIComponent(partTitle)}`);
-    const card = page.locator("article.mcell").first();
-
-    await card.getByRole("button", { name: /^add to cart/i }).click();
-    await expect(card.getByRole("link", { name: /in cart/i })).toBeVisible();
-    await expect(page).toHaveURL(/\/marketplace\?q=/); // never navigated
-    // (The bar's cart badge is signed-in furniture; a guest's confirmation is
-    // the in-place swap above and the cart page itself below.)
-
-    await card.getByRole("button", { name: /^buy now/i }).click();
+    await page.locator("article.marketplace-card a.marketplace-card__link").first().click();
+    await expect(page).toHaveURL(/\/listings\/[^?]+\?from=/);
+    expect(new URL(page.url()).searchParams.get("from")).toContain("/marketplace?q=");
+    await page.getByRole("button", { name: /buy now/i }).first().click();
     await expect(page).toHaveURL(/\/cart\?buynow=1/);
     await expect(page.getByText(partTitle).first()).toBeVisible();
   });
@@ -207,11 +209,12 @@ test.describe.serial("discovery + marketplace remediation", () => {
   test("own listing: the seller sees no purchase controls on their own card", async ({ page }) => {
     await signIn(page, seller);
     await page.goto(`/marketplace?q=${encodeURIComponent(partTitle)}`);
-    const card = page.locator("article.mcell").first();
+    const card = page.locator("article.marketplace-card").first();
     await expect(card).toBeVisible();
     await expect(card.getByRole("button", { name: /buy now/i })).toHaveCount(0);
     await expect(card.getByRole("button", { name: /add to cart/i })).toHaveCount(0);
-    await expect(card.getByText(/your listing/i)).toBeVisible();
+    await card.locator("a.marketplace-card__link").click();
+    await expect(page.getByRole("button", { name: /buy now|add to cart/i })).toHaveCount(0);
   });
 
   test("Explore cards stay discovery-only and name their icons on focus", async ({ page }) => {

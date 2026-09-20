@@ -17,7 +17,7 @@ import {
   searchUpdates,
 } from "@/lib/explore/search/query";
 import { FEED_TABS, fetchFeed, resolveFeedTab } from "@/lib/feed";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
 import { ActiveSearchFilters } from "./active-search-filters";
@@ -25,6 +25,7 @@ import { ExploreSearchBar } from "./search-bar";
 import { AllSearchResults, SearchEmptyState } from "./search-results";
 import { SearchWall } from "./search-wall";
 import { ExploreWall } from "./explore-wall";
+import { BuildersBreaker, TrendingBreaker } from "./breakers";
 
 export const metadata = { title: "Explore - DRVN" };
 
@@ -42,9 +43,7 @@ export default async function ExplorePage({
 }) {
   const raw = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getViewer();
   const isLoggedIn = Boolean(user);
   const viewerId = user?.id ?? null;
 
@@ -61,6 +60,28 @@ export default async function ExplorePage({
   if (params.vehicle && !vehicle) params.vehicle = "";
 
   const searching = hasActiveSearch(params);
+
+  // E-4's two breakers, each with its own query. They render only when they
+  // have enough to show, which the components decide — so a quiet week
+  // simply has no breakers rather than two empty shells.
+  const [{ data: trendingRows }, { data: builderRows }] = searching
+    ? [{ data: [] }, { data: [] }]
+    : await Promise.all([
+        supabase.rpc("trending_models", { p_days: 45, p_limit: 10 }),
+        supabase.rpc("suggested_builders", { p_viewer: viewerId ?? undefined, p_limit: 4 }),
+      ]);
+  const trending = (trendingRows ?? []).map((t) => ({
+    make: t.make,
+    model: t.model,
+    builds: Number(t.builds),
+  }));
+  const builders = (builderRows ?? []).map((b) => ({
+    id: b.id,
+    username: b.username,
+    display_name: b.display_name,
+    avatar_url: b.avatar_url,
+    meta: `${b.car_count} car${Number(b.car_count) === 1 ? "" : "s"}`,
+  }));
 
   // Browse mode: page one of the feed renders here; the wall pulls the rest.
   const feed = searching
@@ -81,7 +102,7 @@ export default async function ExplorePage({
       ])
     : [null, null, null];
 
-  if (searching) {
+  if (searching && partsPage?.status !== "error" && !allResults?.partsErrorReference) {
     const resultCount = allResults
       ? allResults.builds.length +
         allResults.updates.length +
@@ -109,7 +130,7 @@ export default async function ExplorePage({
   const scopeEmpty =
     (allResults?.empty ?? false) ||
     (scopePage ? scopePage.items.length === 0 : false) ||
-    (partsPage ? partsPage.results.length === 0 : false);
+    (partsPage ? partsPage.status === "success" && partsPage.results.length === 0 : false);
 
   return (
     <div className="wrap">
@@ -126,7 +147,7 @@ export default async function ExplorePage({
 
       {/* The search command plate sits between the head and the scopes:
           searching is the page's primary verb once you know what you want. */}
-      <ExploreSearchBar
+      <ExploreSearchBar key={JSON.stringify(rawParams)}
         tab={tab}
         params={params}
         vehicle={vehicle}
@@ -160,6 +181,14 @@ export default async function ExplorePage({
           initialItems={feed.items}
           initialHasMore={feed.hasMore}
           isLoggedIn={isLoggedIn}
+          /* E-4: after the sixth card and the fourteenth. Far enough in
+             that the wall has established what it is, and far enough apart
+             that they don't read as a sidebar laid on its side. Each one
+             renders nothing at all when its query came back thin. */
+          breakers={{
+            5: <TrendingBreaker models={trending} />,
+            13: <BuildersBreaker builders={builders} />,
+          }}
         />
       )}
 
@@ -193,7 +222,7 @@ export default async function ExplorePage({
         />
       )}
 
-      {searching && partsPage && partsPage.results.length > 0 && (
+      {searching && partsPage && (partsPage.status === "error" || partsPage.results.length > 0) && (
         <section className="deck">
           <MarketplaceResults
             isLoggedIn={isLoggedIn}

@@ -19,26 +19,59 @@ import { reportError } from "@/lib/monitoring";
 export async function loadShellCounts(
   supabase: SupabaseClient<Database>,
   userId: string | null
-): Promise<{ cartCount: number; unreadCount: number; offersCount: number }> {
+): Promise<{
+  cartCount: number;
+  unreadCount: number;
+  offersCount: number;
+  messagesCount: number;
+}> {
   const cart = await cartCount();
-  if (!userId) return { cartCount: cart, unreadCount: 0, offersCount: 0 };
+  if (!userId) return { cartCount: cart, unreadCount: 0, offersCount: 0, messagesCount: 0 };
 
-  const [{ count, error }, offersCount] = await Promise.all([
+  const [{ count, error }, offersCount, messagesCount] = await Promise.all([
     supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .is("read_at", null),
     loadOffersNeedingAttention(supabase, userId),
+    loadUnreadMessages(supabase, userId),
   ]);
 
   if (error) {
     // A badge is not worth failing a page render over.
     reportError("[shell] unread count failed", error);
-    return { cartCount: cart, unreadCount: 0, offersCount };
+    return { cartCount: cart, unreadCount: 0, offersCount, messagesCount };
   }
 
-  return { cartCount: cart, unreadCount: count ?? 0, offersCount };
+  return { cartCount: cart, unreadCount: count ?? 0, offersCount, messagesCount };
+}
+
+/**
+ * Unread messages (N-5).
+ *
+ * Counts THREADS with something unread, not individual messages: "3" beside
+ * Messages should mean three conversations are waiting, which is what a
+ * reader assumes and what they can act on. Forty unread messages in one
+ * thread is one thing to deal with, not forty.
+ *
+ * Reads the denormalised per-user counter from 0031 rather than walking
+ * messages, so this stays one indexed count however long a thread runs.
+ */
+async function loadUnreadMessages(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("conversation_unreads")
+    .select("conversation_id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gt("unread_count", 0);
+  if (error) {
+    reportError("[shell] unread messages count failed", error);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 /**

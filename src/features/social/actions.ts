@@ -24,6 +24,7 @@ const ALLOWED_PATHS = [
 ];
 
 function revalidateIfAllowed(path: string) {
+  path = path.split("?")[0];
   if (ALLOWED_PATHS.some((pattern) => pattern.test(path))) {
     revalidatePath(path);
     return;

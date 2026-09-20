@@ -126,7 +126,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (78)
+### Primitives (79)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -188,6 +188,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `SectionHeading` | Primitive | `@/components/ui` | Mono microlabel section heading. — `.microlabel` | Section labels inside sheets/profiles. |
 | `SectionLabel` | Primitive | `@/components/ui` | Ink microlabel paragraph. — `.microlabel--ink` | Ink-toned section labels. |
 | `Select` | Primitive | `@/components/ui` | Native select in the field contract (platform picker on compact). — `.ctl` | Enumerated choices. |
+| `ShareButton` | Primitive | `@/components/ui` | Labelled share control: the system share sheet where one exists, the clipboard elsewhere, with a "Link copied" confirmation. | Sharing a whole page where there is room for a word — a profile header (P-2), a build page. *Not for:* The icon in a feed card's engagement strip — CardEngagement owns that. |
 | `SheetTabs` | Primitive | `@/components/ui` | URL-backed sheet tabs. | Profile/car sheet sections. |
 | `SkeletonCardGrid` | Primitive | `@/components/ui` | Card-grid placeholder matching the marketplace 3→2→1 grid. | loading.tsx for card-grid routes. |
 | `SkeletonLedger` | Primitive | `@/components/ui` | Console placeholder — pagehead + ledger ghost rows, no wrap. | Admin console loading. |
@@ -209,22 +210,23 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ValidationSummary` | Primitive | `@/components/ui` | Assertive submit-blocking error list with per-field jump links. | Above long forms on failed submit; fields keep their inline errors. |
 | `WebsitePill` | Primitive | `@/components/ui` | Quiet mono external-link pill. | Profile websites. |
 
-### Product patterns (19)
+### Product patterns (20)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
+| `AccountRowList` | Product pattern | `@/components/commerce` | People as compact identity rows — avatar, name, one line of who they are, optional trailing action. — `.rowlist / .order` | Anywhere a list of members is shown: Explore's account results, Explore's 'Builders to follow' breaker, Home's rail suggestions. *Not for:* A single member's header — that's ProfileHeader. |
 | `AuthIntentDialog` | Product pattern | `@/components/ui` | Signed-out interception — explains the action and routes to login with intent. | Any engagement control a guest can press. |
 | `CategoryIcon` | Product pattern | `@/components/ui` | Marketplace taxonomy category mark. | Category navigation and headers. |
 | `ConditionSummary` | Product pattern | `@/components/commerce` | Structured part-condition grid (grade + checklist). | PDP and sell preview condition blocks. |
 | `FeedList` | Product pattern | `@/components/ui/feed-list` | Feed items as dense `.order`-based rows (Home's list-shaped feed). — `.feedrow on .order` | Home feeds where the wall would be too loud. *Not for:* Browse surfaces — that's the mosaic family. |
-| `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card, the Figma card set. Update (story): title → excerpt (two lines on wider cells, one on phone cells) → full vehicle label → owner byline. Part (sheet, no eyebrow row, always 1×1): photo bleeds to the edges, then title → price alone (no ship line on the discovery wall) → condition chip + grade → source car → seller byline, with ListingCartButton at the end of the strip. Build: name → vehicle → owner byline → activity. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline). | Explore and mixed feeds, via MasonryFeed. |
-| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder's filters, sheeted at every width behind one sliders-icon trigger. | Finder filtering — a sliders-icon trigger ("Filters" label ≥640px, icon-only on compact) with a live count, opening the refinement sheet (bottom sheet on compact, centered dialog wider). |
-| `ListingCard` | Product pattern | `@/components/ui` | THE listing card — canonical marketplace/browse representation (delegates to ListingMosaicCell). | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
+| `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card, the Figma card set — one tile for all three. Update: title → excerpt (two lines on wider cells, one on phone cells), then owner byline → full vehicle label in the foot. Part (always 1×1): FOR SALE pill + time, title → price row (price alone, no ship line on the discovery wall; condition chip + grade beside it), then seller byline → source car in the foot, with ListingCartButton at the end of the strip. Build: name → vehicle, then owner byline → activity line in the foot. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline). | Explore and mixed feeds, via MasonryFeed. |
+| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder filters in a sheet at every width; optional onDismiss discards drafts and labels the close action Cancel. | Finder filtering — a sliders-icon trigger ("Filters" label ≥640px, icon-only on compact) with a live count, opening the refinement sheet (bottom sheet on compact, centered dialog wider). |
+| `ListingCard` | Product pattern | `@/components/ui` | Canonical listing card with two explicit contexts: feed (default, delegates to ListingMosaicCell) and shopping (contained photo, full title, separate item/delivery price, condition, identifier, evidence, seller/source and independent Save). | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
 | `ListingMosaicCell` | Product pattern | `@/components/ui` | A listing as a mosaic card: title → price + ship line → condition chip · fit · location → provenance → seller byline (name · rating). | Via ListingCard. |
 | `ListingRow` | Product pattern | `@/components/commerce` | A seller's listing as a dense ledger row — cover, title, price, Live/Sold chip. — `.order` | Seller-scoped lists (profile shopfront, car sheet parts). *Not for:* Marketplace browsing — that's ListingCard. |
 | `MasonryFeed` | Product pattern | `@/components/ui` | The Explore wall — FeedMosaicCells in a dense Mosaic, with its empty state. | Mixed-kind feed walls. |
 | `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. 1×1 cards, plus 2×1 wides on the two-column phone wall for builds and updates only — a listing is always square (part photos are often portrait; the wide shape letterboxes them); there is no 2×2 shape (it filled a phone viewport with one card). — `.mosaic` | Container for MosaicCell families on browse surfaces. |
-| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind, media, title, lede, value, price, detail, provenance, byline, meta, engagement slots; `variant` = sheet (photo bleeds, caption on a raised sheet) or story (an update, title a size up). — `.mcell` | Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Caption order is title → `lede` (an update's two-line excerpt) → `value` (the vehicle line, mono ink) → `price` (live) → `detail` (condition chip + grade) → `sub` (the car a part came off) → `byline` (monogram + name) → `meta` (activity). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/12px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale). From that width the plate is a fixed 12:7 (3:2 on the sheet) and the engagement strip sits on the card's floor. |
+| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind + time, a fixed 5:3 plate on wider cells, then a caption head (title, lede, value, price row) and a foot anchored to the caption's floor (byline, then the car or the activity line); engagement strip on the card's floor. — `.mcell` | Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Head order: title → `lede` (an update's two-line excerpt) → `value` (a build's vehicle under its name, mono ink) → `price` (OK colour) with `detail` (condition chip + grade) beside it when `detailBesidePrice` is set, else under it. Foot: `byline` (monogram + name, ink) → `sub` (the car: a part's source car, an update's vehicle) → `meta` (a build's activity line). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/16px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale). |
 | `OrderPipeline` | Product pattern | `@/components/commerce` | The order lifecycle as a `.pipe` stage rail, terminal states included. — `.pipe` | Order rows and order detail. |
 | `PaymentModeNotice` | Product pattern | `@/components/ui` | Test-mode payments banner. | Payment surfaces while Stripe runs in test mode. |
 | `ProfileHeader` | Product pattern | `@/components/ui` | Identity block — avatar plate, name, handle, tagline, website, action slot. | Profile and car sheet heads. |
@@ -233,7 +235,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity (name; vehicle line only when it adds to the name), pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
 
-### Features (14)
+### Features (13)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -244,11 +246,10 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `FollowButton` | Feature | `@/features/social/buttons` | Follow toggle with configurable labels. | Profiles and car sheets. |
 | `GarageSheetCard` | Feature | `@/app/(product)/garage/garage-sheet` | The Garage management sheet card (`.gsheet`) — dims, notes, latest update, orders. | Garage only. The public vehicle row is VehicleCard. |
 | `ImportFlow` | Feature | `@/app/(product)/sell/import/import-flow` | The Existing Listing Importer flow (0047): URL/paste source input, honest state-driven progress, paste fallback on the same import, multi-item picker — hands off to SellForm for review. | Feature-owned at /sell/import; it composes Alert/Stepper/TextField/TextArea/Button — extend those, don't fork this. *Not for:* Any other prefill path — Garage → Sell goes through SellFormInitialValues directly. |
-| `ListingCartButton` | Feature | `@/features/commerce/quick-commerce` | One 32px live cart square at the end of a listing card's engagement strip — adds to cart in place, links to the cart once it's in. — `.cartbtn` | The discovery wall's listing (sheet) card, via CardEngagement's `trailing` slot. |
+| `ListingCartButton` | Feature | `@/features/commerce/quick-commerce` | One 32px live cart square at the end of a listing card's engagement strip — adds to cart in place, links to the cart once it's in. — `.cartbtn` | The discovery wall's listing card, via CardEngagement's `trailing` slot. |
 | `ListingQuickCommerce` | Feature | `@/features/commerce/quick-commerce` | Card-level quick buy/offer actions. | Commerce mosaic walls. |
 | `ProfileBody` | Feature | `@/components/profile/profile-body` | The public profile's tabbed body (vehicles, activity, listings, reviews). | Profile routes. |
 | `SaveButton` | Feature | `@/features/social/buttons` | Full-size save toggle for detail pages. | PDP / car sheet headers. |
-| `SellerKpis` | Feature | `@/app/(product)/home/seller-kpis` | Seller KPI deck on Home — data fetching + MetricCard composition. | Home only. |
 | `SellForm` | Feature | `@/app/(product)/sell/sell-form` | The listing create/edit workflow (also used by Edit Listing). | Feature-owned; compose FormSection/ValidationSummary/fields from it, don't fork it. |
 | `ThreadView` | Feature | `@/app/(product)/messages/[orderId]/thread-view` | The order-messages surface: day buckets, windowed history, pinned composer. | Feature-owned; its grammar is Message/MessageThread/MessageComposer. |
 

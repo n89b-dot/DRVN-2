@@ -4,6 +4,7 @@ import type { FeedItem } from "@/lib/feed";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 
 import { Media } from "./primitives";
+import { postHref } from "@/lib/activity/href";
 
 function KindChip({ children, tone }: { children: string; tone: "live" | "ok" | "neutral" }) {
   // "live" renders ink, not red: a listed part is the feed's normal state
@@ -41,7 +42,7 @@ export function FeedList({ items }: { items: FeedItem[] }) {
           return (
             <Link
               key={`update-${item.id}`}
-              href={`/cars/${item.carSlug}/activity/${item.id}`}
+              href={postHref({ id: item.id, carSlug: item.carSlug })}
               className="order feedrow"
             >
               <span className="order__img feedrow__img" aria-hidden="true">

@@ -1,4 +1,4 @@
-export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-09-19.v3";
+export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-09-19.v4";
 export const ACCOUNT_EXPORT_PAGE_SIZE = 250;
 
 export type ExportAccess =
@@ -27,17 +27,18 @@ export type ExportSection = {
  * recovery detail, admin notes and unrelated counterparty profiles stay out.
  */
 export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
-  { key: "profiles", table: "profiles", projection: "id,username,display_name,avatar_url,headline,bio,location,links,notification_prefs,profile_type,created_at,updated_at", access: "owner", filter: "id", cursor: "id" },
+  { key: "profiles", table: "profiles", projection: "id,username,display_name,avatar_url,headline,bio,location,country,region,main_car_id,store_note,links,notification_prefs,profile_type,created_at,updated_at", access: "owner", filter: "id", cursor: "id" },
   { key: "account_emails", table: "account_emails", projection: "user_id,email,created_at,updated_at", access: "owner", filter: "user_id", cursor: "user_id", cutoffColumn: "created_at" },
   { key: "cars", table: "cars", projection: "id,owner_id,slug,name,make,model,year,color,about,tags,cover_image_url,is_public,vin,trim,engine,drivetrain,body_class,vin_decoded_at,catalog_make_id,catalog_model_id,identity_source,cover_focal_x,cover_focal_y,created_at,updated_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "car_images", table: "car_images", projection: "id,car_id,url,alt,position,created_at,cars!inner(owner_id)", access: "owner", filter: "cars.owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "car_hotspots", table: "car_hotspots", projection: "id,car_id,image_url,x,y,mod_item_id,label,created_at,cars!inner(owner_id)", access: "owner", filter: "cars.owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "mod_items", table: "mod_items", projection: "id,car_id,group_label,category,brand,product,part_number,raw_text,linked_listing_id,confidence,position,status,removed_at,source_order_item_id,product_url,image_url,source_domain,ref_price_cents,ref_price_currency,created_at,updated_at,cars!inner(owner_id)", access: "owner", filter: "cars.owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "activity_posts", table: "activity_posts", projection: "id,car_id,author_id,title,intro,body,video_url,published_at,created_at,updated_at", access: "author", filter: "author_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "activity_post_listings", table: "activity_post_listings", projection: "post_id,listing_id,position,activity_posts!inner(author_id)", access: "author", filter: "activity_posts.author_id", cursor: "post_id,listing_id" },
   { key: "activity_images", table: "activity_images", projection: "id,post_id,url,alt,position,created_at,activity_posts!inner(author_id)", access: "author", filter: "activity_posts.author_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "activity_comments", table: "activity_comments", projection: "id,post_id,author_id,body,created_at", access: "author", filter: "author_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "activity_reactions", table: "activity_reactions", projection: "post_id,user_id,emoji,created_at", access: "owner", filter: "user_id", cursor: "post_id,emoji", cutoffColumn: "created_at" },
-  { key: "listings", table: "listings", projection: "id,seller_id,source_car_id,title,description,category,subcategory,condition,price_cents,currency,location,compatibility_notes,status,shipping_cents,allows_collection,offer_floor_cents,sold_at,reserved_until,part_number,removed_at,grade,condition_checklist,shipping_mode,weight_oz,length_in,width_in,height_in,created_at,updated_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "listings", table: "listings", projection: "id,seller_id,source_car_id,title,description,category,subcategory,condition,price_cents,currency,location,compatibility_notes,status,shipping_cents,allows_collection,offer_floor_cents,sold_at,reserved_until,part_number,brand,part_miles,part_miles_unit,removed_at,grade,condition_checklist,shipping_mode,weight_oz,length_in,width_in,height_in,created_at,updated_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "listing_images", table: "listing_images", projection: "id,listing_id,url,alt,position,created_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "listing_fitments", table: "listing_fitments", projection: "id,listing_id,make,model,year_start,year_end,created_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "listing_part_numbers", table: "listing_part_numbers", projection: "id,listing_id,number,created_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at" },

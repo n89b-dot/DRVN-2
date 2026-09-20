@@ -6,6 +6,8 @@ import { getSearchProvider } from "@/lib/marketplace/search/provider";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 import { vehicleSubline } from "@/lib/vehicles/label";
+import { postHeadline } from "@/lib/activity/headline";
+import { postHref } from "@/lib/activity/href";
 
 /**
  * Explore autocomplete (brief §11) — a compact orientation aid, not the
@@ -54,7 +56,7 @@ export async function GET(request: Request): Promise<NextResponse<SuggestRespons
     updateIds?.length
       ? supabase
           .from("activity_posts")
-          .select("id, title, car_id, published_at")
+          .select("id, title, intro, body, car_id, published_at")
           .not("published_at", "is", null)
           .in("id", updateIds.slice(0, 3))
       : Promise.resolve({ data: [] }),
@@ -73,7 +75,9 @@ export async function GET(request: Request): Promise<NextResponse<SuggestRespons
 
   // The updates' owning cars, for the permalink and the "on <build>" line —
   // and the visibility gate: a post whose car isn't public never suggests.
-  const updateCarIds = [...new Set(updates.map((p) => p.car_id))];
+  // A post with no car at all (W-5) skips the gate: publishing it is the
+  // whole of its visibility.
+  const updateCarIds = [...new Set(updates.flatMap((p) => (p.car_id ? [p.car_id] : [])))];
   const { data: updateCars } = updateCarIds.length
     ? await supabase
         .from("cars")
@@ -105,15 +109,15 @@ export async function GET(request: Request): Promise<NextResponse<SuggestRespons
   if (buildItems.length) groups.push({ kind: "builds", label: "Builds", items: buildItems });
 
   const updateItems: SuggestItem[] = updates
-    .filter((p) => carById.has(p.car_id))
+    .filter((p) => !p.car_id || carById.has(p.car_id))
     .sort((a, b) => (updateOrder.get(a.id) ?? 99) - (updateOrder.get(b.id) ?? 99))
     .map((p) => {
-      const car = carById.get(p.car_id)!;
+      const car = p.car_id ? carById.get(p.car_id) : null;
       return {
         id: p.id,
-        label: p.title,
-        sub: car.name,
-        href: `/cars/${car.slug}/activity/${p.id}`,
+        label: postHeadline(p),
+        sub: car?.name ?? "Update",
+        href: postHref({ id: p.id, carSlug: car?.slug ?? null }),
       };
     });
   if (updateItems.length) groups.push({ kind: "updates", label: "Updates", items: updateItems });

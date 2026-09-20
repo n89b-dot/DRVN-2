@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { addCar, cleanupE2eUsers, enableSellerPayouts, makeUser, signUp } from "./helpers";
+import {
+  addCar,
+  addComposerPhoto,
+  cleanupE2eUsers,
+  enableSellerPayouts,
+  makeUser,
+  signUp,
+} from "./helpers";
 
 /**
  * Phase 6 authed flows, end to end against a real server + Supabase:
@@ -69,6 +76,8 @@ test("build updates: link-only section, composer publishes to the public post", 
   const body = page.getByLabel(/update body/i);
   await body.click();
   await page.keyboard.type("Cat-back on, tune flashed — pulls clean to redline.");
+  // W-2: every new publish carries a photo.
+  await addComposerPhoto(page);
   await expect(page.getByRole("button", { name: /^\[?\s*publish\s*\]?$/i })).toBeEnabled();
   await page.getByRole("button", { name: /^\[?\s*publish\s*\]?$/i }).click();
 

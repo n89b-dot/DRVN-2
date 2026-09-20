@@ -9,6 +9,8 @@ import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activ
 import { deleteMediaIfUnreferenced, finalizeMediaUrls } from "@/lib/media-lifecycle";
 import { isAllowedVideoUrl, isOwnedStorageUrl, keepValidImageUrls } from "@/lib/media-url";
 import { MOD_CATEGORIES, type ModCategory } from "@/lib/mods/parse";
+import { allowAction, rateLimitMessage, RATE_LIMITS } from "@/lib/rate-limit";
+import type { PartLinkFields } from "@/lib/mods/part-link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -17,6 +19,8 @@ import { reportError } from "@/lib/monitoring";
 import { decodeVin } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
 import type { Car, CarImage, Json, ModStatus } from "@/lib/database.types";
+import { isKnownPlace } from "@/lib/geo/regions";
+import { postHref } from "@/lib/activity/href";
 
 export type ActionState = { error?: string; ok?: string; href?: string };
 
@@ -325,7 +329,22 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     .maybeSingle();
   if (carError || !car || car.owner_id !== user.id) return { error: "Car not found." };
 
-  const payload = items.map((item) => ({
+  // These three render on the public build page, so none is taken as typed:
+  // the link must be http(s), the thumbnail must be one this member uploaded
+  // (an arbitrary host is a tracking pixel on somebody's build), and the
+  // domain shown beside the link is always the link's own.
+  const linkOf = (raw: string | null | undefined) => {
+    if (!raw) return null;
+    try {
+      const url = new URL(raw);
+      return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+    } catch {
+      return null;
+    }
+  };
+  const payload = items.map((item) => {
+    const link = linkOf(item.product_url);
+    return {
     id: item.id,
     group_label: item.group_label || "Other",
     brand: item.brand,
@@ -342,15 +361,16 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     // `removed_at` is deliberately absent: the function derives it, so a line
     // that came off last month keeps that date through every later save.
     status: item.status === "removed" ? "removed" : "installed",
-    product_url: item.product_url ?? null,
-    image_url: item.image_url ?? null,
-    source_domain: item.source_domain ?? null,
+    product_url: link ? link.toString() : null,
+    image_url: item.image_url && isOwnedStorageUrl(item.image_url, user.id) ? item.image_url : null,
+    source_domain: link ? link.hostname.replace(/^www\./, "").toLowerCase() : null,
     ref_price_cents:
       typeof item.ref_price_cents === "number" && Number.isFinite(item.ref_price_cents)
         ? Math.max(0, Math.round(item.ref_price_cents))
         : null,
     ref_price_currency: item.ref_price_currency ?? null,
-  }));
+    };
+  });
   const { data, error } = await supabase.rpc(
     "save_mod_items" as never,
     { p_car_id: carId, p_items: payload } as never
@@ -364,6 +384,71 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
   revalidatePath(`/garage/${carId}/edit`);
   revalidatePath(`/cars/${car.slug}`);
   return { ok: "Build saved." };
+}
+
+/**
+ * L-1: "Add mod" opens on *Paste a product link*.
+ *
+ * Throttled well below the listing importer's limit in cost but above it in
+ * count (`RATE_LIMITS.fetchPartLink`, 30/hour): one page fetch and one
+ * thumbnail is cheap, and somebody filling in a build sheet in one sitting
+ * pastes a lot of links. A refusal is never fatal — typing the part in stays
+ * first-class, which is why every failure here returns a sentence the editor
+ * can show beside the field rather than throwing.
+ */
+export async function readPartLink(url: string): Promise<
+  { ok: true; part: PartLinkFields } | { ok: false; error: string }
+> {
+  const { user } = await requireUser();
+  const trimmed = (url ?? "").trim();
+  if (!trimmed || trimmed.length > 2000) {
+    return { ok: false, error: "Paste a link to the part's page." };
+  }
+  if (!(await allowAction(RATE_LIMITS.fetchPartLink, user.id))) {
+    return { ok: false, error: rateLimitMessage(RATE_LIMITS.fetchPartLink) };
+  }
+  const { fetchPartLink } = await import("@/lib/mods/part-link");
+  const result = await fetchPartLink(trimmed, user.id);
+  if (!result.ok) return { ok: false, error: result.error };
+  const { ok, ...part } = result;
+  return { ok, part };
+}
+
+/**
+ * P-5. Which car this member actually means.
+ *
+ * The database refuses a car that isn't theirs (the 20260919181500 trigger);
+ * this checks first so the refusal is a sentence rather than a 500. Setting
+ * it to null is ordinary — "no main car" is a real answer, and every reader
+ * falls back to newest-first.
+ */
+export async function setMainCar(
+  _previous: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const { supabase, user } = await requireUser();
+  const raw = String(formData.get("car_id") ?? "").trim();
+  const carId = raw || null;
+
+  if (carId) {
+    const { data: car } = await supabase
+      .from("cars")
+      .select("id, owner_id")
+      .eq("id", carId)
+      .maybeSingle();
+    if (!car || car.owner_id !== user.id) return { error: "That car isn't in your garage." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ main_car_id: carId })
+    .eq("id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/garage");
+  revalidatePath("/home");
+  revalidatePath("/profile");
+  return { ok: carId ? "Main car set." : "Main car cleared." };
 }
 
 async function galleryChange(carId: string, operation: string, payload: Record<string, string | string[]>) {
@@ -504,6 +589,96 @@ export async function updateCarImageAlt(formData: FormData): Promise<ActionState
   return { ok: "Saved" };
 }
 
+/**
+ * W-1 — a quick post: pick a car, one to six photos, a caption, Post.
+ *
+ * It uses the database's `quick` write mode, which returns before the draft
+ * lookup that `publish` does. That is the whole point and it is
+ * release-blocking: somebody halfway through a long update must not lose it
+ * because they fired off a photo of their new wheels. The guard test
+ * (`supabase/tests/activity_quick_post_guard.sql`) proves the draft survives
+ * byte for byte.
+ *
+ * The operation id makes a lost response replay rather than double-post,
+ * exactly as the full publish path does.
+ */
+export async function createQuickPost(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const { supabase, user } = await requireUser();
+
+  // W-5: no car is a legitimate choice — the post is then about the parts it
+  // tags. The empty string is what the picker sends for "no car".
+  const carId = String(formData.get("car_id") ?? "") || null;
+  const operationId = String(formData.get("operation_id") ?? "");
+  const caption = String(formData.get("caption") ?? "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationId)) {
+    return { error: "Refresh this page before posting." };
+  }
+  if (caption.length > 2000) return { error: "Keep the caption under 2000 characters." };
+
+  const { data: car } = carId
+    ? await supabase.from("cars").select("id, slug, owner_id").eq("id", carId).maybeSingle()
+    : { data: null };
+  if (carId && (!car || car.owner_id !== user.id)) {
+    return { error: "That car isn't in your garage." };
+  }
+
+  // W-2: a photo is required. Checked here so the member gets a sentence
+  // rather than a database error, and again in SQL so it is actually true.
+  const photos = keepValidImageUrls(
+    String(formData.get("photos") ?? "")
+      .split("\n")
+      .map((u) => u.trim())
+      .filter(Boolean),
+    6,
+    user.id
+  );
+  if (!photos.length) return { error: "Add at least one photo." };
+
+  const listingIds = String(formData.get("listing_ids") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  // The rule that makes a carless post a post: it has to be about something.
+  if (!carId && !listingIds.length) {
+    return { error: "Pick a car, or tag a part this post is about." };
+  }
+
+  const blocks = caption ? [{ type: "text" as const, style: "normal" as const, text: caption }] : [];
+
+  const { data: post, error } = await supabase
+    .rpc("write_activity_post", {
+      p_mode: "quick",
+      p_post_id: operationId,
+      // Null is a real argument here, not a missing one (W-5) — Postgres
+      // can't express a nullable parameter, so the generated type says
+      // `string` for every argument and this is the one place it lies.
+      p_car_id: carId as unknown as string,
+      // A quick post has no title. The function treats an empty string as
+      // "none" (nullif) rather than storing a blank heading.
+      p_title: "",
+      p_body: activityBlocksJson(blocks),
+      p_image_urls: photos,
+      p_listing_ids: listingIds.length ? listingIds : undefined,
+    })
+    .single();
+  if (error || !post) {
+    reportError("[activity] quick post failed", { carId, operationId, error });
+    return { error: "Couldn't confirm the post. Try again — repeating it is safe." };
+  }
+
+  await finalizeMediaUrls(supabase, photos);
+  capture(user.id, { event: "quick_post_published", props: { photos: photos.length, tagged: listingIds.length } });
+
+  revalidatePath("/home");
+  if (car?.slug) revalidatePath(`/cars/${car.slug}`);
+  return { ok: "Posted.", href: postHref({ id: post.post_id, carSlug: car?.slug ?? null }) };
+}
+
 export async function createRichActivityPost(
   _prev: ActionState,
   formData: FormData
@@ -539,7 +714,13 @@ export async function createRichActivityPost(
   }
   if (blocks.length === 0) return { error: "Add at least one block." };
 
-  const imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
+  // W-2: every published update has a photo. Said here as a sentence,
+  // because the database's refusal reaches the member as "couldn't confirm
+  // this was published" — true, and no help at all. A before/after pair is
+  // a photo too: when there is no photo set, its sides stand as the cover.
+  let imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
+  if (!imageUrls.length) imageUrls = blockMediaUrls(blocks).slice(0, 24);
+  if (!imageUrls.length) return { error: "Add at least one photo before you publish." };
   const { data: post, error } = await supabase
     .rpc("write_activity_post", {
       p_mode: "publish",
@@ -648,21 +829,23 @@ export async function updateActivityPost(
 
   const postId = String(formData.get("post_id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
-  if (!postId || !title) return { error: "A title is required." };
+  if (!postId) return { error: "Update not found." };
   if (title.length > ACTIVITY_TITLE_MAX) return { error: `Keep the title under ${ACTIVITY_TITLE_MAX} characters.` };
 
   const { data: post } = await supabase
     .from("activity_posts")
-    .select("id, car_id, author_id")
+    .select("id, car_id, author_id, title, body")
     .eq("id", postId)
     .maybeSingle();
   if (!post || post.author_id !== user.id) return { error: "Update not found." };
+  // W-1: a quick post never had a title, and correcting one mustn't demand
+  // it. A post that has a title still can't be edited down to none.
+  if (!title && post.title?.trim()) return { error: "A title is required." };
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("slug")
-    .eq("id", post.car_id)
-    .maybeSingle();
+  // W-5: a post about a part has no car to look up.
+  const { data: car } = post.car_id
+    ? await supabase.from("cars").select("slug").eq("id", post.car_id).maybeSingle()
+    : { data: null };
 
   const videoUrl = String(formData.get("video_url") ?? "").trim();
   if (videoUrl && !isAllowedVideoUrl(videoUrl)) {
@@ -711,12 +894,24 @@ export async function updateActivityPost(
     } else {
       previousImages = previous.data ?? [];
     }
+
+    // A quick post's photos live in the gallery and in no block, so the
+    // editor never sees them and would hand back a body without them — and
+    // the save would then delete them from storage. Photos that were never
+    // in a block aren't the editor's to drop: they are carried through.
+    const { normalizeBlocks: normalizePrior } = await import("@/lib/activity-blocks");
+    const priorBlockUrls = new Set(
+      normalizePrior(post.body ?? []).flatMap((b) => (b.type === "images" ? b.urls : []))
+    );
+    const loose = previousImages.map((i) => i.url).filter((url) => !priorBlockUrls.has(url));
+    imageUrls = [...new Set([...loose, ...imageUrls])];
   }
 
   const { error } = await supabase.rpc("write_activity_post", {
     p_mode: "update",
     p_post_id: postId,
-    p_car_id: post.car_id,
+    // Null is a real argument for a carless post (W-5); see createQuickPost.
+    p_car_id: post.car_id as unknown as string,
     p_title: title,
     ...(body === undefined ? {} : {
       p_body: activityBlocksJson(body),
@@ -797,15 +992,18 @@ export async function deleteActivityPost(
   }
   if (post.author_id !== user.id) return { error: "Entry not found." };
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("slug")
-    .eq("id", post.car_id)
-    .maybeSingle();
+  const { data: car } = post.car_id
+    ? await supabase.from("cars").select("slug").eq("id", post.car_id).maybeSingle()
+    : { data: null };
 
   const { error } = await supabase.from("activity_posts").delete().eq("id", postId);
   if (error) return { error: error.message };
 
+  // W-5: a post about a part has no car sheet to go back to.
+  if (!post.car_id) {
+    revalidatePath("/home");
+    return { ok: "Entry deleted.", href: "/home" };
+  }
   revalidatePath(`/garage/${post.car_id}/edit`);
   if (car) revalidatePath(`/cars/${car.slug}`);
   return { ok: "Entry deleted.", href: `/garage/${post.car_id}/edit` };
@@ -867,6 +1065,44 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
     previousAvatarUrl = current?.avatar_url ?? null;
   }
 
+  // H-2: Settings carries country/region; the profile editor doesn't. Only
+  // write them when the submitting form actually holds them, so the shorter
+  // form can't blank a place the member set elsewhere.
+  let place: { country: string | null; region: string | null } | null = null;
+  if (formData.has("country")) {
+    const country = String(formData.get("country") ?? "").trim() || null;
+    const region = String(formData.get("region") ?? "").trim() || null;
+    if (country && !isKnownPlace(country, region)) {
+      return { error: "Pick a country and region from the list." };
+    }
+    place = { country, region: country ? region : null };
+  }
+
+  // P-9: a default for the sell form. Percent of the asking price, and a
+  // floor below 10% is a typo rather than an intent.
+  let offerFloor: { default_offer_floor_pct: number | null } | null = null;
+  if (formData.has("default_offer_floor_pct")) {
+    const raw = String(formData.get("default_offer_floor_pct") ?? "").trim();
+    if (!raw) {
+      offerFloor = { default_offer_floor_pct: null };
+    } else {
+      const pct = Number(raw);
+      if (!Number.isInteger(pct) || pct < 10 || pct > 100) {
+        return { error: "Lowest offer must be a whole number between 10 and 100." };
+      }
+      offerFloor = { default_offer_floor_pct: pct };
+    }
+  }
+
+  // P-8: one line above the parts grid. Voice, not policy — the database
+  // caps it at 180. Written only by a form that carries it, like the rest.
+  let storeNote: { store_note: string | null } | null = null;
+  if (formData.has("store_note")) {
+    const note = String(formData.get("store_note") ?? "").replace(/\s+/g, " ").trim();
+    if (note.length > 180) return { error: "Keep the store note under 180 characters." };
+    storeNote = { store_note: note || null };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -875,6 +1111,9 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
       bio: bio || null,
       location: String(formData.get("location") ?? "").trim() || null,
       links,
+      ...(place ?? {}),
+      ...(offerFloor ?? {}),
+      ...(storeNote ?? {}),
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     })
     .eq("id", user.id);
@@ -892,6 +1131,8 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
   // projection — resync. Location/bio changes are indexed nowhere (§22).
   revalidatePath("/profile");
   revalidatePath("/settings");
+  // Local reads the member's region, so a place change changes Home.
+  if (place) revalidatePath("/home");
 
   const { data: profile } = await supabase
     .from("profiles")

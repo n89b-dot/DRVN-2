@@ -7,12 +7,13 @@ Page-level patterns: how components compose into the product's surfaces.
 | Surface | Route | Composition |
 | --- | --- | --- |
 | Public landing | `/` | car-led pagehead + two equal actions (Add your car · Shop parts), hero media, steps 01–03 (garage → community → market), builds strip before parts strip, band stats, buyer protection |
-| Home (Sheet 01) | `/home` | greeting pagehead, KPI deck + livedims, work orders rowlist, garage tile, feed, week strip |
-| Explore | `/explore` | mixed car/part/update tiles, segments (All · Builds · Updates · Parts — all public), search + filters |
+| Home | `/home` | two columns: the quick post box on top of the feed (Following · For you · Local), and a rail of the few things needing an answer. Seller KPIs live on `/selling`; empty tiles don't render |
+| Explore | `/explore` | one uniform-footprint wall of car/part/update cells, segments (All · Builds · Updates · Parts — all public), breakers (trending models, builders) woven in at ≥3 results, search + filters |
 | Marketplace | `/marketplace` (+ `[category]`/`[subcategory]`) | search + fitment switch + filter row + `.mkt` grid (3→2→1 cols) |
 | Listing | `/listings/[id]` | measured spec table, buy box (capsule + buy/offer), off-this-car, keeper livedims, Q&A |
-| Car sheet | `/cars/[slug]` (+ `/activity/[postId]`) | hero callouts, jumprow, KPI tiles, for-sale rowlist, build blines, activity feed |
-| Garage | `/garage` (+ add car, `[id]/edit`; updates at `[id]/update/new` and `[id]/update/[postId]/edit`) | owner callouts, release-a-part flow, blines `--own` + relbtn, documents |
+| Car sheet | `/cars/[slug]` (+ `/activity/[postId]`) | hero callouts, jumprow, KPI tiles, for-sale rowlist, build blines (fitted, then "Came off this car"), activity feed |
+| Post without a car | `/posts/[postId]` | W-5. Its own route, not a second rendering of the car-sheet post page: no build to sit inside, no breadcrumb, and the tagged parts ARE the subject. A post that HAS a car redirects to its car URL — one canonical address per post |
+| Garage | `/garage?car=` (+ add car, `[id]/edit`; updates at `[id]/update/new` and `[id]/update/[postId]/edit`) | car switcher → focused view: stat strip and tabs (Overview · Mods · Parts · Media) mounting the existing editors. Main car leads |
 | Sell | `/sell` | draft autosave; photos → part → provenance → condition → price → review; live preview card + completeness rail |
 | Seller listings | `/listings` (seller register) + `/listings/[id]/edit` | ledger of the seller's listings; edit reuses the sell form |
 | Messages | `/messages` + `/messages/[orderId]` | per-order threads on the `.msg`/`.thread` idiom |
@@ -24,7 +25,7 @@ Page-level patterns: how components compose into the product's surfaces.
 | Checkout | `/checkout` (+ `/orders/[id]/checkout`) | 2-step stepper — see P21 |
 | Watchlist | `/saved` | watched part tiles + saved searches + followed sheets |
 | Notifications | `/notifications` | actionable rows, policy blines, mail previews |
-| Profile | `/u/[username]` + `/profile` | keeper record, grade blines, cars, live listings, reviews, activity |
+| Profile | `/u/[username]` + `/profile` | header with banner and trust strip (rating · sold · member since), then tabs — **Parts is the member's store**, rendered exactly like the marketplace, with the statuses decided server-side by who is looking |
 | Settings | `/settings` | rail + one section at a time (01–05 indices), signals matrix, savebar |
 | Auth | `/login`, `/signup`, `/login/forgot`, `/login/reset`, `/onboarding` | 420px authwrap, field states (there is no verify route) |
 | Legal | `/terms`, `/privacy`, `/fees`, `/protection` | `.prose` + `.toc` |

@@ -16,8 +16,12 @@ import type { ImportedImage, ImportImageCandidate } from "../schema";
  *   → sharp decode (magic bytes decide the format, never headers/extensions;
  *     pixel-count limit blocks decompression bombs; SVG/GIF refused)
  *   → re-encode to JPEG, EXIF/GPS stripped, auto-rotated, long edge ≤2560
- *   → upload into listing-images/{userId}/imported/{importId}/… (the seller's
- *     own folder, so isOwnedStorageUrl holds and every persist path accepts it)
+ *   → upload into {bucket}/{userId}/{prefix}/{importId}/… (the member's own
+ *     folder, so isOwnedStorageUrl holds and every persist path accepts it).
+ *     The bucket is a parameter because a mod thumbnail imported from a shop
+ *     link must NOT land in listing-images: a shop's product photo may never
+ *     become a listing photo (L-4), and keeping it out of the listing bucket
+ *     is the structural half of that rule rather than a promise in a comment.
  *   → staged_uploads ledger row (0029), so an abandoned import is swept by
  *     the SAME 48h GC as any hand-uploaded photo — one media lifecycle.
  *
@@ -44,12 +48,21 @@ export async function importListingImages({
   candidates,
   alreadyImported,
   allowPrivate,
+  bucket = "listing-images",
+  pathPrefix = "imported",
+  maxImages = MAX_IMAGES,
 }: {
   userId: string;
   importId: string;
   candidates: ImportImageCandidate[];
   alreadyImported: ImportedImage[];
   allowPrivate: boolean;
+  /** Storage bucket. Defaults to the listing gallery; a mod thumbnail passes
+   *  "car-images" so it can never be mistaken for a listing photo (L-4). */
+  bucket?: "listing-images" | "car-images";
+  /** Folder under the member's own id, so the two uses never collide. */
+  pathPrefix?: string;
+  maxImages?: number;
 }): Promise<ImportImagesResult> {
   const admin = createAdminClient();
   const done = new Map(alreadyImported.map((img) => [img.sourceUrl, img]));
@@ -59,7 +72,7 @@ export async function importListingImages({
   const { default: sharp } = await import("sharp");
 
   for (const candidate of candidates) {
-    if (images.length >= MAX_IMAGES) break;
+    if (images.length >= maxImages) break;
 
     const existing = done.get(candidate.url);
     if (existing) {
@@ -107,10 +120,10 @@ export async function importListingImages({
         .toBuffer();
 
       const hash = createHash("sha256").update(candidate.url).digest("hex").slice(0, 12);
-      const path = `${userId}/imported/${importId}/${hash}.jpg`;
+      const path = `${userId}/${pathPrefix}/${importId}/${hash}.jpg`;
 
       const { error: uploadError } = await admin.storage
-        .from("listing-images")
+        .from(bucket)
         .upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
       if (uploadError) {
         reportError("[listing-import] image upload failed", { importId, uploadError });
@@ -118,7 +131,7 @@ export async function importListingImages({
         continue;
       }
 
-      const { data: urlData } = admin.storage.from("listing-images").getPublicUrl(path);
+      const { data: urlData } = admin.storage.from(bucket).getPublicUrl(path);
       const url = urlData.publicUrl;
 
       // Same staging ledger as browser uploads (0029) — admin insert because
@@ -126,7 +139,7 @@ export async function importListingImages({
       const { error: stageError } = await admin
         .from("staged_uploads")
         .upsert(
-          { owner_id: userId, bucket: "listing-images", path, url },
+          { owner_id: userId, bucket, path, url },
           { onConflict: "path", ignoreDuplicates: true }
         );
       if (stageError) {

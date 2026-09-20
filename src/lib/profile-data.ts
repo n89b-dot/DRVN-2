@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import type { GalleryImage } from "@/components/ui";
 import { platformLabel } from "@/lib/vehicles/label";
+import { orderCars } from "@/lib/cars/order";
+import { postHeadline } from "@/lib/activity/headline";
 
 export type ProfileVehicle = {
   id: string;
@@ -96,15 +98,19 @@ export async function loadProfileView(
 ): Promise<ProfileView> {
   const listingsFrom = (Math.max(1, listingsPage) - 1) * PROFILE_LISTINGS_PAGE_SIZE;
   const reviewsFrom = (Math.max(1, reviewsPage) - 1) * PROFILE_REVIEWS_PAGE_SIZE;
+  // P-5: main car first, then newest. Sorting by model year had the
+  // profile lead with whichever car happened to be oldest on paper.
   let carsQuery = supabase
     .from("cars")
-    .select("id, slug, name, year, make, model, color, tags")
-    .eq("owner_id", profileId)
-    .order("year", { ascending: false, nullsFirst: false });
+    .select("id, slug, name, year, make, model, color, tags, created_at, cover_image_url, is_public")
+    .eq("owner_id", profileId);
   if (publicOnly) carsQuery = carsQuery.eq("is_public", true);
 
-  const { data: cars } = await carsQuery;
-  const carList = cars ?? [];
+  const [{ data: cars }, { data: mainCar }] = await Promise.all([
+    carsQuery,
+    supabase.from("profiles").select("main_car_id").eq("id", profileId).maybeSingle(),
+  ]);
+  const carList = orderCars(cars ?? [], mainCar?.main_car_id);
   const carIds = carList.map((c) => c.id);
 
   const [{ data: carImages }, { data: posts }] = await Promise.all([
@@ -118,7 +124,7 @@ export async function loadProfileView(
     carIds.length
       ? supabase
           .from("activity_posts")
-          .select("id, car_id, title, intro, published_at")
+          .select("id, car_id, title, body, intro, published_at")
           .in("car_id", carIds)
           .not("published_at", "is", null)
           .order("published_at", { ascending: false })
@@ -162,9 +168,9 @@ export async function loadProfileView(
 
   const activity: ProfileActivity[] = (posts ?? []).map((p) => ({
     id: p.id,
-    carSlug: slugByCar.get(p.car_id) ?? "",
+    carSlug: p.car_id ? (slugByCar.get(p.car_id) ?? "") : "",
     date: formatDate(p.published_at),
-    title: p.title,
+    title: postHeadline(p),
     intro: p.intro,
     gallery: galleryByPost.get(p.id) ?? [],
   }));

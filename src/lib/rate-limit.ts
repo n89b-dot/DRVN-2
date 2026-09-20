@@ -36,6 +36,10 @@ export const RATE_LIMITS = {
   /** Remote fetch + AI + media transfer — the most expensive user-triggered
    *  action in the product, so the tightest listing-side limit. */
   importListing: { action: "listing-import", limit: 10, windowSeconds: 60 * 60 },
+  /** Adding a mod by pasting a link (L-1). Far lighter than the importer —
+   *  one page fetch, one thumbnail, no AI — so it gets a looser limit: a
+   *  member filling in a build sheet in one sitting pastes a lot of links. */
+  fetchPartLink: { action: "part-link", limit: 30, windowSeconds: 60 * 60 },
   passwordReset: { action: "password-reset", limit: 5, windowSeconds: 60 * 30 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;

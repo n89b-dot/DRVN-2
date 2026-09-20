@@ -34,6 +34,8 @@ import {
 } from "./disputes";
 import { CancelOrder, DispatchForm, ReceivedButton } from "./fulfilment";
 import { BuyLabelPanel, LabelReadyPanel } from "./shipping-controls";
+import { AddToCar } from "@/features/commerce/add-to-car";
+import { orderCars } from "@/lib/cars/order";
 import {
   PickupPassPanel,
   ReadyForPickupButton,
@@ -236,6 +238,23 @@ export default async function OrderDetailPage({
     Boolean(shopReturnDeadline) &&
     new Date().getTime() < (shopReturnDeadline?.getTime() ?? 0);
 
+  // C-1: the buyer's own cars, main first, offered only once the part has
+  // arrived. A buyer with no garage sees nothing rather than an empty picker.
+  const canAddToCar = isBuyer && ["delivered", "completed"].includes(order.status);
+  const { data: garageRows } = canAddToCar
+    ? await supabase
+        .from("cars")
+        .select("id, name, created_at")
+        .eq("owner_id", user.id)
+    : { data: [] };
+  const { data: buyerProfile } = canAddToCar
+    ? await supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const garageCars = orderCars(garageRows ?? [], buyerProfile?.main_car_id).map((c) => ({
+    id: c.id,
+    name: c.name,
+  }));
+
   // Falls back to the snapshot label, so a deleted account still reads sensibly.
   const counterpartyName =
     counterparty?.display_name ??
@@ -384,6 +403,19 @@ export default async function OrderDetailPage({
                     src: frozenGallery.get(item.id)?.[0]?.url,
                     alt: item.title ?? "Part",
                   }}
+                  actions={
+                    /* C-1. Offered once the part has actually arrived, per
+                       item — an order can hold several parts and they may
+                       not all be going on the same car. Built from the
+                       frozen purchase record, not the live listing. */
+                    canAddToCar ? (
+                      <AddToCar
+                        orderItemId={item.id}
+                        title={item.title ?? "this part"}
+                        cars={garageCars}
+                      />
+                    ) : undefined
+                  }
                 >
                   <span className="min-w-0">
                     {item.listing_id ? (

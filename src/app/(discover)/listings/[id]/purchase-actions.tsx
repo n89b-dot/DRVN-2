@@ -31,6 +31,7 @@ export function PurchaseActions({
   priceCents,
   shippingCents,
   resumeAction = null,
+  returnPath,
 }: {
   listingId: string;
   isLoggedIn: boolean;
@@ -43,8 +44,10 @@ export function PurchaseActions({
   shippingCents: number;
   /** `?action=` on the URL — the intent this visitor authenticated to resume. */
   resumeAction?: AuthIntent | null;
+  returnPath?: string;
 }) {
   const router = useRouter();
+  const detailPath = returnPath ?? `/listings/${listingId}`;
   const idBase = useId();
   // Coming back from sign-in with `?action=offer` opens the dialog on first
   // render (initial state from props — no setState-in-effect); guarded on
@@ -85,10 +88,10 @@ export function PurchaseActions({
   // dialog forever. Ref-guarded — a pure side effect, no state involved.
   const strippedRef = useRef(false);
   useEffect(() => {
-    if (strippedRef.current || !resumeAction || !isLoggedIn) return;
+    if (strippedRef.current || resumeAction !== "offer" || !isLoggedIn) return;
     strippedRef.current = true;
-    router.replace(`/listings/${listingId}`, { scroll: false });
-  }, [resumeAction, isLoggedIn, listingId, router]);
+    window.history.replaceState(null, "", detailPath);
+  }, [resumeAction, isLoggedIn, detailPath, router]);
 
   if (isOwn || !isActive) return null;
 
@@ -113,7 +116,7 @@ export function PurchaseActions({
 
   function runBuyNow() {
     if (betaEnforced && !isLoggedIn) {
-      router.push(`/login?next=${encodeURIComponent(`/listings/${listingId}`)}`);
+      router.push(`/login?next=${encodeURIComponent(detailPath)}`);
       return;
     }
     if (!buyerEligible) {
@@ -216,7 +219,7 @@ export function PurchaseActions({
         open={authIntent !== null}
         onClose={() => setAuthIntent(null)}
         intent={authIntent ?? "offer"}
-        returnPath={`/listings/${listingId}`}
+        returnPath={detailPath}
       />
 
       {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll

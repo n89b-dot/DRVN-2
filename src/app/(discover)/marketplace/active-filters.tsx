@@ -1,10 +1,14 @@
 import Link from "next/link";
 
 import { conditionLabel } from "@/lib/marketplace/taxonomy";
+import { clearRefinements, marketplaceHref, refinementCount } from "@/lib/marketplace/state";
 
 type Filters = Record<string, string | undefined>;
 
 function href(basePath: string, filters: Filters, remove: string[]) {
+  if (basePath.startsWith("/marketplace")) {
+    return marketplaceHref(filters, Object.fromEntries([...remove, "page"].map(key => [key, undefined])));
+  }
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (!value || remove.includes(key) || key === "page") continue;
@@ -25,14 +29,18 @@ export function ActiveFilters({
   basePath,
   filters,
   fitCarLabel,
+  vehicleLabel,
 }: {
   basePath: string;
   filters: Filters;
   fitCarLabel?: string | null;
+  vehicleLabel?: string | null;
 }) {
   const chips: { keys: string[]; label: string }[] = [];
 
   if (filters.q) chips.push({ keys: ["q"], label: `“${filters.q}”` });
+  if (filters.vehicle) chips.push({ keys: ["vehicle"], label: vehicleLabel ?? "Selected vehicle" });
+  if (filters.ymin || filters.ymax) chips.push({ keys: ["ymin", "ymax"], label: `Source-car year: ${filters.ymin ?? "Any"}–${filters.ymax ?? "Any"}` });
   if (filters.condition) {
     const label = conditionLabel(filters.condition);
     if (label) chips.push({ keys: ["condition"], label });
@@ -50,7 +58,7 @@ export function ActiveFilters({
   if (filters.fit === "1") {
     chips.push({
       keys: ["fit"],
-      label: fitCarLabel ? `Fits ${fitCarLabel}` : "Fits your garage",
+      label: fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential garage matches",
     });
   }
 
@@ -66,13 +74,11 @@ export function ActiveFilters({
           className="chip chip--x"
           aria-label={`Remove filter: ${chip.label}`}
         >
-          {chip.label}
+          <span className="marketplace-filter-label">{chip.label}</span>
           <span aria-hidden="true">×</span>
         </Link>
       ))}
-      <Link href={basePath} className="jumplink">
-        Clear all
-      </Link>
+      {refinementCount(filters) > 0 && <Link href={marketplaceHref(clearRefinements(filters))} className="jumplink">Clear filters</Link>}
     </div>
   );
 }

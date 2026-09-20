@@ -1,9 +1,10 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { Foot, LivesheetBar } from "@/components/ui";
 import { loadShellCounts } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { cartCount as getCartCount } from "@/lib/cart";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 /**
  * Policy pages. Reachable signed in or out — mirrors how (discover)/layout.tsx
@@ -15,16 +16,14 @@ import { createClient } from "@/lib/supabase/server";
  * doesn't lie about whether you're signed in.
  */
 export default async function LegalLayout({ children }: { children: ReactNode }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { cartCount, unreadCount } = await loadShellCounts(supabase, user?.id ?? null);
+  const [supabase, user, cartCount] = await Promise.all([getPageClient(), getViewer(), getCartCount()]);
+  const counts = loadShellCounts(supabase, user?.id ?? null);
 
   return (
     <div className="min-h-screen">
-      <LivesheetBar signedIn={Boolean(user)} cartCount={cartCount} unreadCount={unreadCount} />
+      <Suspense fallback={<LivesheetBar signedIn={Boolean(user)} cartCount={cartCount} />}>
+        {counts.then(values => <LivesheetBar signedIn={Boolean(user)} {...values} />)}
+      </Suspense>
       <main className="wrap wrap--narrow pb-10">
         {children}
         <Foot

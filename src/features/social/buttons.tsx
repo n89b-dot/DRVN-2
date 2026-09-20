@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { motion } from "motion/react";
 
@@ -26,11 +26,15 @@ export function SaveButton({
   path,
   initialSaved,
   isLoggedIn,
+  resumeSave = false,
+  itemLabel,
 }: {
   targetType: SaveTargetType;
   targetId: string;
   path: string;
   initialSaved: boolean;
+  resumeSave?: boolean;
+  itemLabel?: string;
   isLoggedIn: boolean;
 }) {
   const [saved, setSaved] = useState(initialSaved);
@@ -40,6 +44,32 @@ export function SaveButton({
   // for and carries the return path — same pattern as Buy now / Make an offer,
   // rather than a bespoke redirect per button.
   const [askAuth, setAskAuth] = useState(false);
+
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (!resumeSave || !isLoggedIn || resumed.current) return;
+    resumed.current = true;
+    const clearIntent = () => {
+      const url = new URL(window.location.href);
+      if (url.pathname === path.split("?")[0] && url.searchParams.get("action") === "save") {
+        url.searchParams.delete("action");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      }
+    };
+    // An already-saved return also consumes the intent. Otherwise a later
+    // deliberate Unsave could be followed by an unintended automatic Save.
+    if (initialSaved) { clearIntent(); return; }
+    startTransition(async () => {
+      try {
+        const result = await toggleSave(targetType, targetId, path, true);
+        if ("saved" in result) {
+          setSaved(result.saved);
+          clearIntent();
+        }
+        else setError("Couldn't save this part. Try again.");
+      } catch { setError("Couldn't save this part. Try again."); }
+    });
+  }, [resumeSave, isLoggedIn, initialSaved, targetType, targetId, path]);
 
   function onClick() {
     if (!isLoggedIn) {
@@ -67,6 +97,7 @@ export function SaveButton({
         disabled={pending}
         className={toggleClass(saved)}
         aria-pressed={saved}
+        aria-label={itemLabel ? `${saved ? "Unsave" : "Save"} ${itemLabel}` : undefined}
         {...press}
       >
         {saved ? "Saved" : "Save"}

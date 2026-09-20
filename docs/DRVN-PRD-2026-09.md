@@ -98,7 +98,7 @@ Priority: **P0** the direction doesn't hold without it · **P1** needed for the 
 | E-1 | One vertical wall; every card the same footprint with a fixed caption block; no double-width or text-only cells | P0 | Change |
 | E-2 | Kinds differ only by label and one line: build → car + counts; update → title/first line + car; part → price + "Off {car}" + cart | P0 | Change |
 | E-3 | Icon segments: All · Builds · Parts · Updates · Builders | P1 | Change |
-| E-4 | Full-width breakers between rows: Trending now (wrapping chips); Builders to follow (stacked rows) | P1 | New |
+| E-4 | Full-width breakers between rows: Trending now (wrapping chips); Builders to follow (stacked rows). Each ships with its query and renders only when it has enough to show — never a placeholder | P1 | New |
 | E-5 | Parts visible on Explore, in search and in suggestions for signed-out visitors | P0 | Change |
 
 ### 4.4 Marketplace
@@ -107,25 +107,25 @@ Mock 4's layout with mock 3's card.
 
 | ID | Requirement | P | State |
 |---|---|---|---|
-| M-1 | Page head with "Find the part. See the car it came off.", search, and the vehicle control beside it (defaults to main car) | P1 | Change |
+| M-1 | Page head with "Find the part. See the car it came off.", search, and the vehicle control beside it. The main car is offered as the first one-tap choice — never applied for the visitor; an explicit or URL-supplied vehicle wins and a cleared filter stays cleared | P1 | Change |
 | M-2 | Category tiles stay icons with counts | P0 | Exists |
 | M-3 | Desktop left sidebar: Category, Brand, Condition, Price, Ships from, Fits my garage. Below desktop width: today's sheet, same fields | P0 | Change |
 | M-4 | Four / three / two cards across | P0 | Exists |
 | M-5 | Card: photo + bookmark · title · price · condition and grade · fitment · one line of description · seller photo, name, "N for sale" · "Off my {car}" → build · add-to-cart. No rating, no car thumbnail, no Buy now | P0 | Change |
 | M-6 | Brand on listings: prefilled from the mod or importer, matched from titles otherwise, backfilled, editable. Saved searches and their alerts understand it | P1 | New |
 | M-7 | Optional "miles on this part" for used parts | P1 | New |
-| M-8 | Item page, cart, guest checkout, offers, Q&A unchanged (item page gets its own session) | P0 | Exists |
+| M-8 | Item page, cart, guest checkout, offers, Q&A unchanged — with two named item-page exceptions: brand and miles join the record block (M-6, M-7) and "Posts about this part" (W-4). The item-page redesign is its own session | P0 | Exists |
 
 ### 4.5 Profile and Store
 
 | ID | Requirement | P | State |
 |---|---|---|---|
-| P-1 | Header: banner (defaults to main car's cover), avatar, name, bio, location, links; followers · following · cars. No About block | P1 | Change |
+| P-1 | Header: banner (main car's cover if public, else another public car's cover, else a plain header — no new setup step), avatar, name, bio, location, links; followers · following · cars. No About block | P1 | Change |
 | P-2 | Visitor actions: Follow (compact) · **Store** · share. No Message | P0 | New |
 | P-3 | Tabs: Overview · Garage · Updates · Parts · Reviews; owner also sees Saved. No Builds tab, no activity log | P0 | Change |
 | P-4 | Overview: main car · latest three updates · parts for sale | P1 | New |
-| P-5 | Main car: drives featured car, default banner, car order everywhere (main first, then newest), Garage focus, Marketplace vehicle | P1 | New |
-| P-6 | Parts tab = the store: the marketplace grid and card for this seller; All / Active / Sold; owner gets status badges and edit links | P0 | Change |
+| P-5 | Main car: drives featured car, default banner, car order everywhere (main first, then newest), Garage focus, and the first suggestion in the Marketplace vehicle picker | P1 | New |
+| P-6 | Parts tab = the store: the marketplace grid and card for this seller; All / Active / Sold; owner gets status badges and edit links. Allowed statuses are decided on the server from who is viewing (public: active + sold), never from the URL; seller and status filter before counting and paging | P0 | Change |
 | P-7 | Trust strip: rating · sold · member since | P1 | Change |
 | P-8 | Store note: one short line pinned above the grid | P1 | New |
 | P-9 | Seller default: offer floor as a % of price | P2 | New |
@@ -150,42 +150,42 @@ Mock 4's layout with mock 3's card.
 
 | ID | Requirement | P | State |
 |---|---|---|---|
-| A-1 | Removing or replacing a saved mod asks inline: "What happens to the old part?" → List it · Just remove it. "Delete — added by mistake" remains | P0 | New |
+| A-1 | Removing or replacing a saved mod asks inline: "What happens to the old part?" → List it · Just remove it. **Replace** is its own action: the old row keeps its id and is marked removed; the replacement is a new row. Editing in place is for typos. "Delete — added by mistake" remains, but is not offered on a row with a linked listing | P0 | New |
 | A-2 | Removal is a state, not a delete. "Came off this car" on the public build and in the Garage | P0 | New |
 | A-3 | Composer: sell link on "replaced" as well as "removed"; seeded blocks carry the mod id; publishing offers to mark the part removed | P0 | Change |
-| A-4 | "List it" opens the sell form prefilled from the mod and car | P0 | Exists |
+| A-4 | "List it" saves the sheet first, then opens the sell form prefilled from the mod and car. Abandoning leaves the part under "Came off this car". If the row already has a linked listing (including a draft), List it opens that listing | P0 | Exists |
 
 **B — A listing reaches the people following you**
 
 | ID | Requirement | P | State |
 |---|---|---|---|
-| B-1 | Following includes new listings from sellers and cars you follow; at most three in a row from one seller | P0 | New |
+| B-1 | Following includes new listings from sellers and cars you follow; a listing appears once however it is followed; order is stable across pages; at most three in a row from one seller | P0 | New |
 | B-2 | Feed only; no push or email for new listings | — | Decision |
 
 **C — Buy a part, add it to your car**
 
 | ID | Requirement | P | State |
 |---|---|---|---|
-| C-1 | Completed order → "Add to a car in your garage"; the mod line shows "Bought on DRVN · off {car}" when the source build is public | P1 | New |
+| C-1 | Delivered or completed order, per item → "Add to a car in your garage", built from the order item's frozen purchase record (not the live listing), once only; the mod line shows "Bought on DRVN · off {car}" when the source build is public | P1 | New |
 
 ### 4.8 Posting
 
 | ID | Requirement | P | State |
 |---|---|---|---|
-| W-1 | Quick post: pick a car → 1–6 photos → caption → Post. No title. "Write a full update →" carries everything into the editor | P1 | New |
-| W-2 | Every post needs a photo — quick or full. Drafts are exempt | P1 | Change |
+| W-1 | Quick post: pick a car → 1–6 photos → caption → Post. No title. **A quick post never touches a saved full-editor draft** (release-blocking). "Write a full update →" saves the content as the draft when none exists; when one exists the link is "Continue your draft" and nothing is merged | P1 | New |
+| W-2 | Every new post needs a photo — quick or full. Drafts are exempt. Posts published before the rule keep their pages and list placements, are left off the photo walls (Explore, Home), and can be edited without adding a photo | P1 | Change |
 | W-3 | Tag a part: a picker over your active listings (current car's first, type to filter, or paste your own listing link); up to three per post; available in the quick box and as a "Part for sale" block in the editor | P1 | New |
 | W-4 | Tagged parts render as a compact row under the photos with price and add-to-cart; "Sold" when sold; the listing page gains "Posts about this part" | P1 | New |
-| W-5 | Posting with no car: tag a part instead. A post must have a car, a tagged part, or both | P2 | New |
+| W-5 | Posting with no car: tag a part instead. A post must have a car, a tagged part, or both. Not available before this ships — W-1…W-4 require a car | P2 | New |
 
 ## 5. Data changes
 
 | Object | Change |
 |---|---|
-| `mod_items` | + `status` (installed / removed), `removed_at`, `source_listing_id`, `product_url`, `image_url`, `source_domain`, `ref_price_cents`; `save_mod_items` re-created once to carry them |
+| `mod_items` | + `status` (installed / removed), `removed_at`, `source_order_item_id` (unique), `product_url`, `image_url`, `source_domain`, `ref_price_cents` + `ref_price_currency`; `save_mod_items` re-created once to carry them |
 | `listings` | + `brand`, `part_miles`, `part_miles_unit`; `save_listing_creation` and the listing search text updated; new index `(seller_id, status, created_at desc)` |
 | `profiles` | + `main_car_id`, `store_note`; later `default_offer_floor_pct`, `country`, `region`. Each needs explicit column grants |
-| `activity_posts` | `title` nullable; publish requires a photo; new `listing` block + mirror table `activity_post_listings`. Later: `car_id` nullable with a "car or tagged part" rule |
+| `activity_posts` | `title` nullable; publish requires a photo; a `quick` write mode that never reads or alters drafts; new `listing` block + mirror table `activity_post_listings`. Later: `car_id` nullable with a "car or tagged part" rule |
 | `feed_events` view | Later: append `owner_id` so Local can filter by region |
 | Saved searches | `brand` added to `SAVED_SEARCH_KEYS` |
 | New RPCs | `suggested_builders`, `trending_models`, `seller_active_counts`, `marketplace_brand_counts`, `local_feed_rows` |

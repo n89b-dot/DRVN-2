@@ -54,7 +54,7 @@ begin
      condition, grade, compatibility_notes, part_number,
      price_cents, shipping_cents, allows_collection, status, currency)
   values
-    (v_seller, v_car, 'Guard turbo', 'Original description', 'engine', 'turbo',
+    (v_seller, v_car, 'Guard turbo', 'Original description', 'performance', 'turbo',
      'used', 'b', 'K03 only', '078145701S',
      30000, 2300, true, 'active', 'USD')
   returning id into v_listing;
@@ -88,7 +88,7 @@ begin
   end if;
   if v_snap->'listing'->>'title' <> 'Guard turbo'
      or v_snap->'listing'->>'description' <> 'Original description'
-     or v_snap->'listing'->>'category' <> 'engine' then
+     or v_snap->'listing'->>'category' <> 'performance' then
     raise exception 'FAIL: listing identity not frozen: %', v_snap->'listing';
   end if;
   if v_snap->'part'->>'part_number' <> '078145701S'

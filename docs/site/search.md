@@ -74,9 +74,12 @@ Canonical truth is three word-wise pg_trgm RPCs (migration 0057), mirroring
   number from `mod_items`) — so `Bilstein B16 Golf R` finds a build through a
   mod even though Explore exposes no Modification filter. Search interprets
   content broadly; filters constrain intentionally.
-- **`search_update_ids`** — published posts on public builds only. Matches
+- **`search_update_ids`** — published posts, on a public build **or on no
+  build at all** (W-5, migration 198000 — the cars join is outer). Matches
   title, intro, the extracted body text (below), and the owning car's
-  vehicle identity.
+  vehicle identity where there is one. `title` has been nullable since W-1,
+  so it is coalesced before scoring; a titleless quick post is found through
+  its caption, which is the body text.
 - **`search_profile_ids`** — a deliberately narrow identity projection:
   username, display name, headline. `@kaito` and `kaito` both work (the `@`
   is stripped). Suspended and nameless profiles never surface. **Never**
@@ -85,6 +88,11 @@ Canonical truth is three word-wise pg_trgm RPCs (migration 0057), mirroring
 
 **Parts on Explore are marketplace search wholesale** — same provider, same
 identifier semantics, same filters, same hydration (`fetchListings`).
+`search_listing_ids` matches `listings.brand` alongside the title, part
+number and description (M-6, migration 190000): brand is a column, a facet
+(`marketplace_brand_counts`) and a saved-search key, and adding it to the
+query without adding it to `SAVED_SEARCH_KEYS` would have made saved searches
+silently drop the refinement and their alerts over-match.
 
 ### Update body extraction
 
@@ -138,7 +146,9 @@ the untouched Explore feed — search never replaces it silently.
 accounts + 3 parts as direct destinations. Every lane is public, parts
 included, matching the feed taxonomy (PRD 2026-09 E-5) — the endpoint reads no
 session at all. A part whose source car is private is still named; only the
-link to that car is withheld. The client is `SuggestingSearchField`
+link to that car is withheld. An update with no car skips the public-car gate
+entirely — publishing it is the whole of its visibility — and is offered
+under its own headline with "Update" where the build name would go. The client is `SuggestingSearchField`
 (`src/components/ui/search-suggest.tsx`): ARIA combobox over the `.combo`
 popover, ≥2-character threshold enforced on both sides, 150 ms debounce,
 stale requests aborted, Enter without a selection submits the GET form.

@@ -1,7 +1,13 @@
 import "server-only";
+import { cache } from "react";
 
 import type { CatalogMake, CatalogModel } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createPublicClient } from "@/lib/supabase/public";
+
+// Catalog names are public reference data, with no cookies or user-specific
+// visibility. Revalidate every five minutes; purchasing still checks live data.
+const catalogClient = () => createPublicClient({ revalidate: 300, tags: ["vehicle-catalog"] });
 
 /**
  * The DRVN-owned vehicle catalog (0041) — reads for the Add Car picker.
@@ -18,25 +24,27 @@ export type CatalogMakeOption = Pick<CatalogMake, "id" | "name" | "popularity_de
 export type CatalogModelOption = Pick<CatalogModel, "id" | "name" | "aliases" | "popularity_decile">;
 
 export async function getCatalogMakes(): Promise<CatalogMakeOption[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
+  const catalog = catalogClient();
+  const { data, error } = await catalog
     .from("catalog_makes")
     .select("id, name, popularity_decile")
     .order("popularity_decile", { ascending: true, nullsFirst: false })
     .order("name", { ascending: true })
     .limit(1000);
+  if (error) throw new Error(`Vehicle catalog unavailable: ${error.code}`);
   return data ?? [];
 }
 
 export async function getCatalogModels(makeId: number): Promise<CatalogModelOption[]> {
-  const admin = createAdminClient();
-  const { data } = await admin
+  const catalog = catalogClient();
+  const { data, error } = await catalog
     .from("catalog_models")
     .select("id, name, aliases, popularity_decile")
     .eq("make_id", makeId)
     .order("popularity_decile", { ascending: true, nullsFirst: false })
     .order("name", { ascending: true })
     .limit(2000);
+  if (error) throw new Error(`Vehicle catalog unavailable: ${error.code}`);
   return data ?? [];
 }
 
@@ -85,18 +93,18 @@ export type VehicleFilterSelection = {
  * anything that doesn't name real catalog rows, so a mangled URL degrades to
  * "no vehicle filter" rather than an error.
  */
-export async function resolveVehicleFilter(
+export const resolveVehicleFilter = cache(async function resolveVehicleFilter(
   param: string | null | undefined,
 ): Promise<VehicleFilterSelection | null> {
   if (!param || !/^\d{1,10}(-\d{1,10})?$/.test(param)) return null;
   const [makeStr, modelStr] = param.split("-");
   const makeId = Number(makeStr);
   const modelId = modelStr ? Number(modelStr) : null;
-  const admin = createAdminClient();
+  const catalog = catalogClient();
   const [{ data: make }, { data: model }] = await Promise.all([
-    admin.from("catalog_makes").select("id, name").eq("id", makeId).maybeSingle(),
+    catalog.from("catalog_makes").select("id, name").eq("id", makeId).maybeSingle(),
     modelId
-      ? admin.from("catalog_models").select("id, make_id, name").eq("id", modelId).maybeSingle()
+      ? catalog.from("catalog_models").select("id, make_id, name").eq("id", modelId).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
   if (!make) return null;
@@ -108,7 +116,7 @@ export async function resolveVehicleFilter(
     model: model?.name ?? null,
     label: model ? `${make.name} ${model.name}` : make.name,
   };
-}
+});
 
 /** Resolve one make + model pair by id, for validating a picker submission. */
 export async function resolveCatalogSelection(

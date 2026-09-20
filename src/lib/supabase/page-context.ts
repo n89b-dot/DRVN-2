@@ -1,0 +1,16 @@
+import "server-only";
+
+import { cache } from "react";
+import { createClient } from "./server";
+
+/** React cache is scoped to one server render, never shared between users.
+ * Actions/route handlers keep using createClient and fresh authorization. */
+export const getPageClient = cache(() => createClient());
+
+/** Browsing needs a verified identity, not a remote user-record lookup. */
+export const getViewer = cache(async (): Promise<{ id: string } | null> => {
+  const supabase = await getPageClient();
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || typeof data?.claims.sub !== "string" || !data.claims.sub) return null;
+  return { id: data.claims.sub };
+});

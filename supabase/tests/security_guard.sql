@@ -81,7 +81,7 @@ begin
   insert into public.listings
     (seller_id, title, category, price_cents, shipping_cents, status, currency)
   values
-    (v_seller, 'Sec guard status-check part', 'suspension', 30000, 1000, 'active', 'USD')
+    (v_seller, 'Sec guard status-check part', 'brakes-suspension', 30000, 1000, 'active', 'USD')
   returning id into v_listing_status;
 
   -- A settled order (buyer/seller) to hang review + message assertions off.
@@ -551,6 +551,45 @@ begin
   raise notice 'PASS: saved searches invisible to other users';
 
   perform pg_temp.back_to_admin();
+  
+  -- ============================================================
+  -- Main car must be your own (20260919181500)
+  --
+  -- RLS says who may update the profile row; it says nothing about whether
+  -- the VALUE is theirs. Without the trigger, a member could feature
+  -- somebody else's car on their own public profile.
+  -- ============================================================
+  declare
+    v_a uuid := gen_random_uuid();
+    v_b uuid := gen_random_uuid();
+    v_car_b uuid := gen_random_uuid();
+    v_rejected boolean := false;
+  begin
+    insert into auth.users(id, email) values
+      (v_a, 'main-car-a@drvn.test'), (v_b, 'main-car-b@drvn.test');
+    insert into public.profiles(id, username) values (v_a, 'main_car_a'), (v_b, 'main_car_b')
+      on conflict (id) do update set username = excluded.username;
+    insert into public.cars(id, owner_id, slug, name)
+      values (v_car_b, v_b, 'main-car-guard-b', 'B''s car');
+
+    begin
+      update public.profiles set main_car_id = v_car_b where id = v_a;
+    exception when insufficient_privilege then
+      v_rejected := true;
+    end;
+    if not v_rejected then
+      raise exception 'A member set another member''s car as their main car';
+    end if;
+
+    -- Their own car is fine, and clearing it is fine.
+    insert into public.cars(id, owner_id, slug, name)
+      values (gen_random_uuid(), v_a, 'main-car-guard-a', 'A''s car');
+    update public.profiles set main_car_id = (
+      select id from public.cars where owner_id = v_a limit 1
+    ) where id = v_a;
+    update public.profiles set main_car_id = null where id = v_a;
+  end;
+
   raise notice '--- all security-guard checks passed ---';
 end $$;
 
