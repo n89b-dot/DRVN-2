@@ -305,9 +305,11 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     // feed and what's around it; a seller's to-dos are where they went to work.
     await signIn(page, seller);
     await page.goto("/selling");
-    const needsYou = page.locator("main").getByText(/needs you/i).first();
+    // The card's own label — the page's subtitle says "what needs you" too,
+    // and it is hidden at this width.
+    const needsYou = page.locator("main").getByText("Needs you", { exact: true }).first();
     await expect(needsYou).toBeVisible();
-    const offerRow = page.locator("main").getByRole("link", { name: /offer/i }).first();
+    const offerRow = page.locator("main").getByRole("link", { name: /offers? waiting on you/i }).first();
     await expect(offerRow).toBeVisible();
     expect((await offerRow.boundingBox())!.y).toBeLessThan(VIEWPORTS.phone.height);
 
