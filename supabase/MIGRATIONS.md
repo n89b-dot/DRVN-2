@@ -7,6 +7,7 @@
 | `20260919201000_direction_security_repairs.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919202000_post_edit_repairs.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919203000_mod_sheet_stale_delete.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919204000_brand_backfill_correction.sql` | shared dev project and local test database, 2026-09-19 |
 
 Adds no feature; closes holes a review found in `…170000`–`…200000`.
 `profiles.default_offer_floor_pct` loses its client select grant (a column
@@ -35,6 +36,11 @@ kept when it has a linked listing or a purchase source, because both are
 written from other screens and a sheet left open in a second tab would
 otherwise erase them. Covered by `activity_quick_post_guard.sql` and
 `mod_sheet_atomic_guard.sql`.
+
+`…204000` corrects what the 190000 brand backfill could get wrong on a real
+catalogue (category words as brands, prefix matches with no word boundary,
+two spellings of one maker). It only clears a brand on rows untouched since
+the backfill, so a brand a seller typed is never second-guessed.
 
 ## September 19 — mod record identity (2026-09 direction, WS2/WS6/WS4)
 

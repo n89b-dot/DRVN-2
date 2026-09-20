@@ -8862,14 +8862,40 @@ video {
   color: var(--ink);
 }
 
-/* M-3, first half: from 1024px the refinements stop being a sheet and render
-   as a panel in the finder itself — one set of fields in two presentations,
-   switched by BottomSheet's inlineFrom="lg", never two copies of the state.
-   NOT yet the left column M-3 asks for: the panel and the results live in
-   different subtrees (form > finder > sheet, versus section.deck), so moving
-   it beside them needs page-content restructured around a sidebar slot. */
+/* M-3 — the filter sidebar. Below 1024px nothing here applies: the layout
+   wrapper is an ordinary block and the refinements are a sheet. From 1024px
+   the wrapper is a grid — filters | results — and the search form, its row
+   and the sheet's wrappers all go `display: contents`, so the form's
+   children become cells of this grid. That is how the panel sits beside the
+   results while remaining inside the form that submits it.
+
+   The panel is placed first (`order: -1`) and spans every row; rows it
+   doesn't need are empty and, with no row gap, zero-height. Spacing between
+   the stacked cells on the right is each cell's own margin, as it was when
+   they were blocks. The query and the sort share the top row. */
 @media (min-width: 1024px) {
-  .marketplace-page .finder__refine {
+  .marketplace-layout {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr) auto;
+    column-gap: 32px;
+    row-gap: 0;
+    align-items: start;
+  }
+  .marketplace-layout > *,
+  .marketplace-layout .finder__main > * { grid-column: 2 / -1; }
+  .marketplace-layout > .finder,
+  .marketplace-layout .finder__main { display: contents; }
+  .marketplace-layout .finder .search {
+    grid-column: 2;
+    margin-bottom: 16px;
+  }
+  .marketplace-layout .finder__main > .sortsel,
+  .marketplace-layout .finder__main > select,
+  .marketplace-layout .finder__main > label { grid-column: 3; margin-bottom: 16px; }
+  .marketplace-layout .finder__refine {
+    order: -1;
+    grid-column: 1;
+    grid-row: 1 / span 12;
     display: grid;
     gap: 12px;
     align-content: start;

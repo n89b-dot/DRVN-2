@@ -54,6 +54,9 @@ export function ActiveFilters({
           : `Up to $${filters.max}`;
     chips.push({ keys: ["min", "max"], label });
   }
+  // M-6: a filter that is counted on the Filters control has to be
+  // removable where the others are, or "Filters 1" points at nothing.
+  if (filters.brand) chips.push({ keys: ["brand"], label: `Brand: ${filters.brand}` });
   if (filters.location) chips.push({ keys: ["location"], label: filters.location });
   if (filters.fit === "1") {
     chips.push({

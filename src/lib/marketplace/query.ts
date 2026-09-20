@@ -232,10 +232,12 @@ export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: Listin
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
   if (filters.condition) query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
-  // Exact, not ilike: the value comes from the brand facet, which is built
-  // from the brands actually stored, so a partial match would only ever
-  // widen the filter past what the member picked.
-  if (filters.brand) query = query.eq("brand", filters.brand);
+  // The whole brand, whatever its case. The field is a free-text box with
+  // suggestions, so "brembo" has to find Brembo — but still the WHOLE brand:
+  // a partial match would make "KW" find every brand containing those
+  // letters. `ilike` with its wildcards escaped is an exact match that
+  // ignores case.
+  if (filters.brand) query = query.ilike("brand", filters.brand.replace(/[\\%_]/g, (c) => `\\${c}`));
   if (filters.location) query = query.ilike("location", `%${filters.location.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
   if (filters.min) query = query.gte("price_cents", Math.round(Number(filters.min) * 100));
   if (filters.max) query = query.lte("price_cents", Math.round(Number(filters.max) * 100));

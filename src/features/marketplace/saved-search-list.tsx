@@ -19,6 +19,7 @@ function describe(params: Record<string, string>): string {
   const bits: string[] = [];
   if (params.condition) bits.push(params.condition.replace("_", " "));
   if (params.min || params.max) bits.push(`$${params.min ?? "0"}–${params.max ? `$${params.max}` : "any"}`);
+  if (params.brand) bits.push(params.brand);
   if (params.location) bits.push(params.location);
   if (params.fit === "1") bits.push("Potential matches for my current garage");
   if (params.vehicle) bits.push(`Vehicle selected${params.vyear ? ` · ${params.vyear}` : ""}`);

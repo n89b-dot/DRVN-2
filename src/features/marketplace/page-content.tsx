@@ -74,6 +74,13 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         </nav>
       )}
       <PageHead className="pagehead--task marketplace-head" title={title} sub={!category ? "Find parts from real builds. See where they came from." : undefined} reveal={false} />
+      {/* M-3. From 1024px this is a two-column sheet: the filters down the
+          left, everything else beside them. The filter fields never leave
+          the search form — the form and its wrappers go `display: contents`
+          at that width, so the panel becomes a cell of THIS grid while
+          staying a child of the form that submits it. One set of fields,
+          no second copy of the state, no `form=` attributes to forget. */}
+      <div className="marketplace-layout">
       <FilterBar
         key={`filters:${marketplaceHref(filters)}`}
         action={basePath}
@@ -103,6 +110,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         ))}
         </Suspense>
       </section>
+      </div>
       <Foot left="DRVN — marketplace" right={<><Link href={categoryHref(filters)}>All parts</Link><span aria-hidden="true"> · </span><Link href="/terms">Shopping policies</Link></>} />
     </div>
   );
