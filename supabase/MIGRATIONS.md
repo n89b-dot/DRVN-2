@@ -8,6 +8,7 @@
 | `20260919202000_post_edit_repairs.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919203000_mod_sheet_stale_delete.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919204000_brand_backfill_correction.sql` | shared dev project and local test database, 2026-09-19 |
+| `20260919205000_account_export_contract_v4.sql` | local test database only, 2026-09-19 — the shared dev project has no `account_export_requests` table: the 2026-09-05 privacy migrations were never applied there |
 
 Adds no feature; closes holes a review found in `…170000`–`…200000`.
 `profiles.default_offer_floor_pct` loses its client select grant (a column
@@ -41,6 +42,14 @@ otherwise erase them. Covered by `activity_quick_post_guard.sql` and
 catalogue (category words as brands, prefix matches with no word boundary,
 two spellings of one maker). It only clears a brand on rows untouched since
 the backfill, so a brand a seller typed is never second-guessed.
+
+`…205000` moves the account export to contract `2026-09-19.v4`. The version
+lives in two places — the constant in `src/lib/account-export-contract.ts`,
+and this database (a check constraint plus the literal
+`request_account_export()` stamps on each request). The constant had been
+bumped without a migration, so every request was stamped with the old
+version, the worker purged it as foreign, and no export completed.
+`account-export-contract.test.ts` now fails if the two disagree.
 
 ## September 19 — mod record identity (2026-09 direction, WS2/WS6/WS4)
 

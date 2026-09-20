@@ -7,7 +7,12 @@ import { createPublicClient } from "@/lib/supabase/public";
 
 // Catalog names are public reference data, with no cookies or user-specific
 // visibility. Revalidate every five minutes; purchasing still checks live data.
-const catalogClient = () => createPublicClient({ revalidate: 300, tags: ["vehicle-catalog"] });
+// Not cached on the isolated e2e stack: specs insert their own makes and
+// models at runtime, and whichever spec touched the picker first froze an
+// empty catalogue for the next five minutes of the run.
+const CATALOG_REVALIDATE_SECONDS = process.env.E2E_TEST_PROJECT_REF === "local-drvn-remediation" ? 0 : 300;
+const catalogClient = () =>
+  createPublicClient({ revalidate: CATALOG_REVALIDATE_SECONDS, tags: ["vehicle-catalog"] });
 
 /**
  * The DRVN-owned vehicle catalog (0041) — reads for the Add Car picker.

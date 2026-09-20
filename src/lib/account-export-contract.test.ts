@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPORT_SECTIONS, exportCursorFilter, exportDownloadDecision, nextExportCheckpoint } from "./account-export-contract";
@@ -41,6 +43,21 @@ describe("account export contract", () => {
       for (const field of forbidden) expect(fields, `${section.key} leaked ${field}`).not.toContain(field);
       expect(section.projection).not.toMatch(/profiles!/);
     }
+  });
+
+  it("is a version the database will actually accept and stamp", () => {
+    // The version lives in two places. The constant was once bumped without a
+    // migration: every request was stamped with the old version, the worker
+    // saw one that wasn't its own, purged it, and no export ever completed.
+    const dir = join(process.cwd(), "supabase/migrations");
+    const latest = readdirSync(dir)
+      .filter((file) => file.endsWith(".sql"))
+      .sort()
+      .reverse()
+      .map((file) => readFileSync(join(dir, file), "utf8"))
+      .find((sql) => sql.includes("function public.request_account_export"));
+    expect(latest, "no migration defines request_account_export").toBeDefined();
+    expect(latest).toContain(`'${ACCOUNT_EXPORT_CONTRACT_VERSION}'`);
   });
 
   it("resumes beyond two page boundaries without replaying a cursor page", () => {

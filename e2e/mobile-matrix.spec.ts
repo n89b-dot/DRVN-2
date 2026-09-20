@@ -98,7 +98,7 @@ for (const tier of PHONE_TIERS) {
       }
     });
 
-    test("marketplace: refine sheet keeps values and restores focus", async ({ page }) => {
+    test("marketplace: refine sheet discards a cancelled draft and restores focus", async ({ page }) => {
       await page.goto("/marketplace");
       const refine = page.getByRole("button", { name: /filters/i });
       await refine.click();
@@ -107,10 +107,14 @@ for (const tier of PHONE_TIERS) {
       await dialog.getByLabel(/location/i).fill("Portland");
       await page.keyboard.press("Escape");
       await expect(refine).toBeFocused();
-      // Values survive the sheet closing (kept-mounted children).
+      // Closing without Apply is Cancel, and Cancel discards the draft
+      // (2026-09-13: a filter you backed out of must not ride along with
+      // the next search). Applied values are what survive — see
+      // marketplace-browsing's "Cancel discards draft filters".
       await refine.click();
-      await expect(dialog.getByLabel(/location/i)).toHaveValue("Portland");
+      await expect(dialog.getByLabel(/location/i)).toHaveValue("");
       await page.keyboard.press("Escape");
+      await expect(refine).toBeFocused();
     });
 
     test("listing detail: price and actions precede record metadata", async ({ page }) => {
@@ -297,12 +301,13 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     // signed-in visitor straight back to /home.
     await page.context().clearCookies();
 
-    // Seller: Home leads with the attention stack (SYS-10)…
+    // Seller: the attention stack lives on Selling now (H-6) — Home is the
+    // feed and what's around it; a seller's to-dos are where they went to work.
     await signIn(page, seller);
-    await page.goto("/home");
+    await page.goto("/selling");
     const needsYou = page.locator("main").getByText(/needs you/i).first();
     await expect(needsYou).toBeVisible();
-    const offerRow = page.getByRole("link", { name: /offer.*your reply|offers? need/i }).first();
+    const offerRow = page.locator("main").getByRole("link", { name: /offer/i }).first();
     await expect(offerRow).toBeVisible();
     expect((await offerRow.boundingBox())!.y).toBeLessThan(VIEWPORTS.phone.height);
 
