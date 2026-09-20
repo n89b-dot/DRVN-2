@@ -73,41 +73,39 @@ test.describe.serial("discovery + marketplace remediation", () => {
     ).toContainText("My Listings");
   });
 
-  // ---------- Home Discovery segmentation ----------
+  // ---------- Home tabs (H-1) ----------
 
-  test("Home Discovery is segmented and URL-addressable", async ({ page }) => {
+  test("Home is one feed with URL-addressable tabs, and says nothing twice", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/home");
 
-    const segments = page.getByRole("group", { name: /discovery segments/i });
-    await expect(segments).toBeVisible();
-    await expect(segments.getByRole("link")).toHaveText(["All", "Builds", "Updates", "Parts"]);
-    await expect(segments.getByRole("link", { name: "All" })).toHaveAttribute("aria-current", "true");
+    const tabs = page.getByRole("group", { name: /which feed to show/i });
+    await expect(tabs).toBeVisible();
+    // Local only exists once a member has said where they are.
+    await expect(tabs.getByRole("link")).toHaveText(["Following", "For you"]);
 
-    await segments.getByRole("link", { name: "Parts" }).click();
-    await expect(page).toHaveURL(/\/home\?discover=parts$/);
+    await tabs.getByRole("link", { name: "For you" }).click();
     await expect(
-      page.getByRole("group", { name: /discovery segments/i }).getByRole("link", { name: "Parts" })
+      page.getByRole("group", { name: /which feed to show/i }).getByRole("link", { name: "For you" })
     ).toHaveAttribute("aria-current", "true");
-    // The segment renders either its rows or its own named empty state —
-    // never a blank section. Our seller's part is active, so rows here.
-    const discovery = page.locator("section[aria-labelledby='discovery-head']");
-    await expect(discovery.locator(".rowlist, .undrawn").first()).toBeVisible();
-    await expect(discovery.getByText(partTitle)).toBeVisible();
+    // Rows, or the tab's own named empty state — never a blank column.
+    await expect(page.locator(".deck--main__feed--lead").locator(".rowlist, .undrawn").first()).toBeVisible();
 
-    // Unknown segment falls back to All instead of an empty page.
-    await page.goto("/home?discover=for-sale");
-    await expect(
-      page.getByRole("group", { name: /discovery segments/i }).getByRole("link", { name: "All" })
-    ).toHaveAttribute("aria-current", "true");
+    // An unknown tab is the default, not an empty page.
+    await page.goto("/home?tab=for-sale");
+    await expect(page.getByRole("group", { name: /which feed to show/i })).toBeVisible();
 
-    // Phones: all four segments share one row.
+    // The new layout REPLACED the old one: one garage tile, and no Buy now
+    // anywhere on Home (a ruling — buying is decided on the part's page).
+    await expect(page.getByText("Your garage", { exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: /buy now/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /buy now/i })).toHaveCount(0);
+
+    // Phones: nothing scrolls sideways once the rail folds into the feed.
     await page.setViewportSize(VIEWPORTS.compactShort);
     await page.goto("/home");
-    const phoneSegments = page.getByRole("group", { name: /discovery segments/i }).getByRole("link");
-    await expect(phoneSegments).toHaveCount(4);
-    const rows = await phoneSegments.evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
-    expect(rows, "discovery segments must fit one row at 320px").toBe(1);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, "Home must not scroll sideways at 320px").toBeLessThanOrEqual(0);
   });
 
   // ---------- category navigation ----------

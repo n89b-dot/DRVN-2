@@ -8801,29 +8801,38 @@ video {
   display: grid;
   gap: clamp(20px, 3vw, 28px);
 }
+/* Two wrappers — the feed column and the rail — that only exist as boxes
+   from 1024px. Below it they dissolve and their children become cells of
+   `.deck--main` itself, so `order` can fold the rail's tiles into the feed.
+   (An earlier version placed both feed blocks in the same grid rows at
+   desktop widths, and the second painted over the first.) */
+.deck--main__feeds,
+.deck--main__rail,
 .deck--main__aside {
   display: grid;
   gap: clamp(16px, 2vw, 20px);
   align-content: start;
+  min-width: 0;
 }
 @media (min-width: 1024px) {
   .deck--main {
     grid-template-columns: minmax(0, 1fr) 320px;
     align-items: start;
   }
-  .deck--main__aside {
+  .deck--main__rail {
     position: sticky;
     top: 88px;
   }
-  .deck--main__feed { grid-column: 1; grid-row: 1 / span 2; }
 }
 @media (max-width: 1023.98px) {
-  /* One column, and the rail's tiles become full-width cards between
-     chunks of the feed. The order values are the interleave. */
+  .deck--main__feeds,
+  .deck--main__rail { display: contents; }
+  .deck--main__post { order: 0; }
   .deck--main__feed--lead { order: 1; }
   .deck--main__aside--first { order: 2; }
   .deck--main__feed--rest { order: 3; }
   .deck--main__aside--rest { order: 4; }
+  .deck--main__pager { order: 5; }
 }
 
 /* N-2's global search. It takes the middle of the bar and yields it back at
