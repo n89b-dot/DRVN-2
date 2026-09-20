@@ -161,7 +161,9 @@ export function CategorySidebarList({
   filters?: ListingFilters;
   counts?: Record<string, number>;
 }) {
-  const shown = CATEGORIES.filter((c) => !counts || (counts[c.slug] ?? 0) > 0 || c.slug === category?.slug);
+  // Every category, always: a list whose rows come and go with today's
+  // stock is a list nobody learns. An empty one is dimmed, not removed.
+  const empty = (key: string) => Boolean(counts) && (counts?.[key] ?? 0) === 0;
   return (
     <nav className="catside" aria-label="Browse by category">
       <span className="microlabel filters__label">Categories</span>
@@ -173,13 +175,13 @@ export function CategorySidebarList({
             {counts && <span className="catside__n">{counts.all ?? 0}</span>}
           </Link>
         </li>
-        {shown.map((c) => {
+        {CATEGORIES.map((c) => {
           const here = c.slug === category?.slug;
           return (
             <li key={c.slug}>
               <Link
                 href={categoryHref(filters, c.slug)}
-                className="catside__row"
+                className={cx("catside__row", empty(c.slug) && "is-empty")}
                 aria-current={here && !subcategory ? "page" : undefined}
               >
                 <span className="catside__ico" aria-hidden="true">
@@ -190,13 +192,11 @@ export function CategorySidebarList({
               </Link>
               {here && (
                 <ul className="catside__sub">
-                  {c.subcategories
-                    .filter((sub) => !counts || (counts[`${c.slug}/${sub.slug}`] ?? 0) > 0 || sub.slug === subcategory)
-                    .map((sub) => (
+                  {c.subcategories.map((sub) => (
                       <li key={sub.slug}>
                         <Link
                           href={categoryHref(filters, c.slug, sub.slug)}
-                          className="catside__row catside__row--sub"
+                          className={cx("catside__row catside__row--sub", empty(`${c.slug}/${sub.slug}`) && "is-empty")}
                           aria-current={sub.slug === subcategory ? "page" : undefined}
                         >
                           <span className="catside__label">{sub.label}</span>

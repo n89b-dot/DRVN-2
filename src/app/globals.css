@@ -8956,6 +8956,7 @@ video {
 .catside__row:hover { background: var(--tile-2); }
 .catside__row[aria-current="page"] { background: var(--ink); color: var(--paper); }
 .catside__row--sub { min-height: 30px; color: var(--dim); }
+.catside__row.is-empty:not([aria-current]) { opacity: 0.55; }
 .catside__ico { display: grid; place-items: center; width: 20px; height: 20px; flex: none; }
 .catside__ico svg { width: 18px; height: 18px; }
 .catside__label { flex: 1; min-width: 0; }

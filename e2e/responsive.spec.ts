@@ -105,7 +105,8 @@ for (const vp of VIEWPORTS) {
             page.locator(".tile__img"),
             page.locator(".tile"),
             page.locator(".mkt"),
-            ...(route === "/marketplace" ? [page.locator("main section.deck")] : []),
+            // The sidebar's category list carries live counts (M-3).
+            ...(route === "/marketplace" ? [page.locator("main section.deck"), page.locator(".catside__n")] : []),
             page.locator(".mosaic"),
           ],
           maxDiffPixelRatio: 0.02,
