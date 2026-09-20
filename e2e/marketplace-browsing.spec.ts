@@ -35,9 +35,11 @@ test("result totals, category navigation and breadcrumbs preserve the search and
   await page.goto(`/marketplace?${query}&min=100&max=500&sort=price_asc&page=2`);
   await expect(page.getByRole("heading", { name: "27 parts found" })).toBeVisible();
   await expect(page.getByText("Showing 25–27", { exact: true })).toBeVisible();
-  const categories = page.getByRole("navigation", { name: "Browse by category", exact: true });
-  await categories.locator("summary").click();
-  await categories.getByRole("link", { name: "Internals & Rotating Assembly", exact: true }).click();
+  // M-3: at this width categories are the sidebar's list. A category opens
+  // to its part types in place, and both steps carry the search with them.
+  await page.locator(".catside").getByRole("link", { name: /^Engine/ }).click();
+  await expect(page).toHaveURL(/\/marketplace\/engine\?/);
+  await page.locator(".catside").getByRole("link", { name: /Internals & Rotating Assembly/ }).click();
   await expect(page).toHaveURL(/\/marketplace\/engine\/internals\?/);
   expect(new URL(page.url()).searchParams.get("q")).toBe(title);
   expect(new URL(page.url()).searchParams.get("max")).toBe("500");

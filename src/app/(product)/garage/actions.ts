@@ -945,6 +945,9 @@ export async function updateActivityPost(
   if (car) {
     revalidatePath(`/cars/${car.slug}`);
     revalidatePath(`/cars/${car.slug}/activity/${postId}`);
+  } else {
+    // W-5: a carless post lives at its own address.
+    revalidatePath(`/posts/${postId}`);
   }
   return { ok: "Update saved." };
 }
@@ -971,6 +974,9 @@ export async function deleteActivityPost(
   // lost. The caller may only navigate back to the car id already present in
   // its authenticated edit form; no row is changed in this replay branch.
   if (!post) {
+    // A carless post's editor sends `no-car` here (W-5): there is no car
+    // sheet to go back to, so a replayed delete lands on Home.
+    if (requestedCarId === "no-car") return { ok: "Entry deleted.", href: "/home" };
     if (!requestedCarId) return { error: "Entry not found." };
     const { data: ownedCar, error: ownedCarError } = await supabase
       .from("cars")

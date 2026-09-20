@@ -16,12 +16,20 @@ export const metadata = { title: "Edit update - DRVN" };
  * Editing a filed build entry. Posts were create-only: a typo in a title was
  * permanent, and there was no way to remove one.
  */
+/** The URL segment that stands where a car id would, for a carless post. */
+const NO_CAR = "no-car";
+
 export default async function EditActivityPostPage({
   params,
 }: {
   params: Promise<{ id: string; postId: string }>;
 }) {
   const { id: carId, postId } = await params;
+  // W-5: a post about a part has no car, and this editor is addressed by
+  // car. `no-car` stands in the car's place in the URL — the same word the
+  // quick post already uses for such a post's photo folder — so a carless
+  // post can be corrected without a second copy of this page.
+  const carless = carId === NO_CAR;
 
   const supabase = await createClient();
   const {
@@ -39,22 +47,23 @@ export default async function EditActivityPostPage({
     reportError("[activity/edit] failed to load post", { postId, error });
     throw new Error("Could not load this update");
   }
-  if (!post || post.author_id !== user.id || post.car_id !== carId) notFound();
+  if (!post || post.author_id !== user.id) notFound();
+  if (carless ? post.car_id !== null : post.car_id !== carId) notFound();
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("name, slug")
-    .eq("id", carId)
-    .maybeSingle();
+  const { data: car } = carless
+    ? { data: null }
+    : await supabase.from("cars").select("name, slug").eq("id", carId).maybeSingle();
 
   // A post from the rich composer holds image and/or multiple blocks. Those
   const blocks = normalizeBlocks(post.body);
 
-  const { data: modRows } = await supabase
-    .from("mod_items")
-    .select("id, brand, product, raw_text, status")
-    .eq("car_id", carId)
-    .order("position");
+  const { data: modRows } = carless
+    ? { data: [] }
+    : await supabase
+        .from("mod_items")
+        .select("id, brand, product, raw_text, status")
+        .eq("car_id", carId)
+        .order("position");
   const mods = (modRows ?? []).map((mod) => ({
     id: mod.id,
     // Parts that came off stay pickable and say so: an update is very often
@@ -86,14 +95,20 @@ export default async function EditActivityPostPage({
         intro={post.intro ?? ""}
         videoUrl={post.video_url ?? ""}
         initialBlocks={blocks}
-        publicHref={car ? `/cars/${car.slug}/activity/${post.id}` : null}
+        publicHref={car ? `/cars/${car.slug}/activity/${post.id}` : carless ? `/posts/${post.id}` : null}
         mods={mods}
         publishAction={updateActivityPost}
       />
 
       <Foot
-        left="DRVN — edits show on the car's build page"
-        right={<Link href={`/garage/${carId}/edit`}>← Back to the car</Link>}
+        left={carless ? "DRVN — edits show on the post" : "DRVN — edits show on the car's build page"}
+        right={
+          carless ? (
+            <Link href={`/posts/${post.id}`}>← Back to the post</Link>
+          ) : (
+            <Link href={`/garage/${carId}/edit`}>← Back to the car</Link>
+          )
+        }
       />
     </div>
   );

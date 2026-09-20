@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { NarrowColumn, ObjectRow, PageHead } from "@/components/ui";
@@ -151,7 +152,10 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
       />
 
       {user?.id === post.author_id && (
-        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+        <div className="mt-8 flex flex-wrap items-center gap-4 border-t border-[color:var(--rule-soft)] pt-4">
+          <Link href={`/garage/no-car/update/${post.id}/edit`} className="jumplink">
+            Edit this post →
+          </Link>
           <DeletePostButton postId={post.id} />
         </div>
       )}

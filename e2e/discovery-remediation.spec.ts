@@ -110,28 +110,29 @@ test.describe.serial("discovery + marketplace remediation", () => {
 
   // ---------- category navigation ----------
 
-  test("categories are destinations: tiles on desktop, a Browse sheet on phones", async ({
+  test("categories are destinations: a sidebar list on desktop, a Browse sheet on phones", async ({
     page,
   }) => {
     await page.context().clearCookies();
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/marketplace");
 
-    const grid = page.getByRole("navigation", { name: /browse by category/i });
-    await expect(grid).toBeVisible();
-    await expect(grid.getByRole("link", { name: /all parts/i })).toHaveAttribute("aria-current", "page");
-    await page.getByRole("button", { name: /Browse categories/ }).click();
-    await page.getByRole("dialog", { name: "Browse by category" }).getByRole("link", { name: /brakes & suspension/i }).click();
+    // M-3: from 1024px categories live in the left column with the filters.
+    // The tiles still exist for narrower widths; here they are not shown.
+    const side = page.locator(".catside");
+    await expect(side).toBeVisible();
+    await expect(side.getByRole("link", { name: /all parts/i })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".catgrid").first()).toBeHidden();
+    await side.getByRole("link", { name: /brakes & suspension/i }).click();
     await expect(page).toHaveURL(/\/marketplace\/brakes-suspension$/);
-    // Category page narrows to its subcategories, as tiles.
-    const sub = page.getByRole("navigation", { name: /browse brakes & suspension/i });
-    await expect(sub).toBeVisible();
-    await page.getByRole("button", { name: /Browse categories/ }).click();
-    await page.getByRole("dialog", { name: "Browse by category" }).getByRole("link", { name: /coilovers/i }).click();
+    // The current category opens to its part types, in place.
+    await page.locator(".catside").getByRole("link", { name: /coilovers/i }).click();
     await expect(page).toHaveURL(/\/marketplace\/brakes-suspension\/coilovers$/);
-    // Leaf: the category tree remains available without repeating tiles.
-    await expect(page.getByRole("navigation", { name: "Browse by category", exact: true })).toBeVisible();
-    await expect(page.locator(".catgrid")).toHaveCount(0);
+    // Leaf: the list is still there, with the leaf marked as where you are.
+    await expect(page.locator(".catside").getByRole("link", { name: /coilovers/i })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
     // Search/refine survive on the category route.
     await page.getByLabel(/search parts/i).fill("coil");
     // The submit's accessible name carries the `[ ]` bracket glyphs.
