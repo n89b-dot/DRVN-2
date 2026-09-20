@@ -3,8 +3,6 @@ import { notFound } from "next/navigation";
 
 import {
   ButtonLink,
-  FilterGroup,
-  FilterLink,
   NarrowColumn,
   ProfileHeader,
   ShareButton,
@@ -17,11 +15,8 @@ import { ReportButton } from "@/features/moderation/report-button";
 import { loadProfileView } from "@/lib/profile-data";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
-import { MarketplaceResults } from "@/features/marketplace/results";
-import { fetchStorePage } from "@/lib/store/query";
-import { parseStoreTab, storeTabsFor, type StoreTab } from "@/lib/store/visible-statuses";
+import { StorePanel, forSaleCount } from "@/features/store/store-panel";
 import { profileBannerUrl } from "@/lib/cars/banner";
-import Link from "next/link";
 
 export async function generateMetadata({
   params,
@@ -73,17 +68,6 @@ const TAB_ALIASES: Record<string, string> = {
   forsale: "parts",
   activity: "updates",
 };
-
-/** Says what the count is a count of — "12 parts available" over a page of
- *  sold parts was simply untrue. */
-function storeHeading(tab: StoreTab, total: number): string {
-  const n = total.toLocaleString("en-US");
-  const parts = total === 1 ? "part" : "parts";
-  if (tab === "sold") return `${n} sold`;
-  if (tab === "hidden") return `${n} not live`;
-  if (tab === "all") return `${n} ${parts}, for sale and sold`;
-  return `${n} ${parts} for sale`;
-}
 
 function resolveTab(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -144,20 +128,9 @@ export default async function PublicProfilePage({
   // marketplace never does, and the allowed statuses come from who is
   // looking rather than from the URL.
   const isOwner = user?.id === profile.id;
-  const activeStoreTab = parseStoreTab(storeTab, isOwner);
   // The number on the Parts tab is what is FOR SALE — not the page's total,
   // which on "All" counts sold parts and, for the owner, drafts.
-  const { count: forSaleCount } = await supabase
-    .from("listings")
-    .select("id", { count: "exact", head: true })
-    .eq("seller_id", profile.id)
-    .eq("status", "active");
-  const storePage = await fetchStorePage(supabase, {
-    sellerId: profile.id,
-    isOwner,
-    tab: storeTab,
-    page: listingsPage,
-  });
+  const partsForSale = await forSaleCount(supabase, profile.id);
 
   // P-1: the banner is a car's cover, borrowed — never a separate upload.
   const { data: bannerCars } = await supabase
@@ -239,7 +212,7 @@ export default async function PublicProfilePage({
               />
             )}
             {/* Not while you are already standing in it. */}
-            {(forSaleCount ?? 0) > 0 && resolveTab(viewParam) !== "parts" && (
+            {(partsForSale ?? 0) > 0 && resolveTab(viewParam) !== "parts" && (
               <ButtonLink href={`/u/${profile.username}?view=parts`} variant="ghost">
                 Store
               </ButtonLink>
@@ -259,51 +232,17 @@ export default async function PublicProfilePage({
         }
         basePath={`/u/${profile.username}`}
         storeNote={profile.store_note}
-        partsCount={forSaleCount ?? null}
+        partsCount={partsForSale}
         partsPanel={
-          /* The same grid and the same card as the marketplace (P-6) — a
-             part should not look like a different object because of which
-             page it is on. */
-          <>
-          <FilterGroup ariaLabel="Which parts to show" scroll className="mb-4">
-            {storeTabsFor(isOwner).map((tab) => (
-              <FilterLink
-                key={tab.key}
-                href={
-                  tab.key === "active"
-                    ? `/u/${profile.username}?view=parts`
-                    : `/u/${profile.username}?view=parts&status=${tab.key}`
-                }
-                selected={activeStoreTab === tab.key}
-                scroll={false}
-              >
-                {tab.label}
-              </FilterLink>
-            ))}
-          </FilterGroup>
-          <MarketplaceResults
-            page={storePage}
-            basePath={`/u/${profile.username}`}
-            params={{ view: "parts", status: activeStoreTab === "active" ? undefined : activeStoreTab }}
-            store={{ pageParam: "listingsPage", heading: (total) => storeHeading(activeStoreTab, total) }}
-            isLoggedIn={Boolean(user)}
+          <StorePanel
+            supabase={supabase}
+            sellerId={profile.id}
+            isOwner={isOwner}
             viewerId={user?.id ?? null}
-            shopping
-            ownerActions={(listing) => (
-              /* P-6: the owner's own store gets the edit link where a
-                 stranger gets Add to cart — you can't buy your own part. */
-              <Link href={`/listings/${listing.id}/edit`} className="relbtn !static shrink-0">
-                Edit
-              </Link>
-            )}
-            emptyTitle={isOwner ? "Nothing listed yet" : "No parts for sale"}
-            emptyBody={
-              isOwner
-                ? "Parts you list — or release off a build — show up here."
-                : "When they list something, it shows up here."
-            }
+            basePath={`/u/${profile.username}`}
+            tab={storeTab}
+            page={listingsPage}
           />
-          </>
         }
       />
       {user?.id !== profile.id && (

@@ -11,6 +11,8 @@ import { GarageSheetCard } from "./garage-sheet";
 import { GarageSwitcher } from "./garage-switcher";
 import { FocusedCar } from "./focused-car";
 import { GarageCarOverview, GarageCarParts } from "./focused-panels";
+import { GalleryManager } from "./[id]/edit/gallery-manager";
+import { ModsEditor } from "./[id]/edit/mods-editor";
 
 export const metadata = { title: "Garage - DRVN" };
 
@@ -34,6 +36,22 @@ export default async function GaragePage({
   // always been. An unknown id falls back to the list rather than a 404 —
   // a stale link from a deleted car should land somewhere useful.
   const focused = carParam ? sheets.find((s) => s.id === carParam) : undefined;
+
+  // G-3: the focused car's mods and photos are edited here, in place — the
+  // same editors the full car page mounts, given the same rows. Loaded only
+  // when a car is focused; the list view needs none of it.
+  const [{ data: focusedCar }, { data: focusedImages }, { data: focusedMods }] = focused
+    ? await Promise.all([
+        supabase
+          .from("cars")
+          .select("id, cover_image_url, cover_focal_x, cover_focal_y")
+          .eq("id", focused.id)
+          .eq("owner_id", user!.id)
+          .maybeSingle(),
+        supabase.from("car_images").select("*").eq("car_id", focused.id).order("position"),
+        supabase.from("mod_items").select("*").eq("car_id", focused.id).order("position"),
+      ])
+    : [{ data: null }, { data: null }, { data: null }];
 
   // The garage's own tally — what the whole drawer has done.
   const totals = sheets.reduce(
@@ -79,7 +97,8 @@ export default async function GaragePage({
           </p>
         )}
         {sheets.length > 0 && (
-          <div className="mt-4">
+          /* The switcher's "+ Add vehicle" chip lands here. */
+          <div className="mt-4 scroll-mt-24" id="add-car">
             <AddCarForm quiet />
           </div>
         )}
@@ -94,21 +113,30 @@ export default async function GaragePage({
           panels={{
             overview: <GarageCarOverview sheet={focused} />,
             mods: (
-              <p className="mt-8 text-body text-dim">
-                The mod sheet lives in the car&apos;s editor.{" "}
-                <Link href={`/garage/${focused.id}/edit`} className="jumplink">
-                  Open the build →
-                </Link>
-              </p>
+              <div className="mt-6">
+                <ModsEditor carId={focused.id} initialMods={focusedMods ?? []} />
+              </div>
             ),
             parts: <GarageCarParts sheet={focused} />,
             media: (
-              <p className="mt-8 text-body text-dim">
-                {focused.photos} photo{focused.photos === 1 ? "" : "s"}.{" "}
-                <Link href={`/garage/${focused.id}/edit`} className="jumplink">
-                  Manage the gallery →
+              <div className="mt-6 grid gap-4">
+                <GalleryManager
+                  carId={focused.id}
+                  userId={user!.id}
+                  images={focusedImages ?? []}
+                  coverImageUrl={focusedCar?.cover_image_url ?? null}
+                  coverFocal={{
+                    x: focusedCar?.cover_focal_x ?? null,
+                    y: focusedCar?.cover_focal_y ?? null,
+                  }}
+                />
+                {/* Details, the showcase and deleting the car stay on the
+                    full page (G-5 keeps it) — they are occasional, and this
+                    view is for what changes week to week. */}
+                <Link href={`/garage/${focused.id}/edit`} className="jumplink justify-self-start">
+                  Car details, showcase and more →
                 </Link>
-              </p>
+              </div>
             ),
           }}
         />

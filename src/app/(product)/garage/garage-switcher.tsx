@@ -43,7 +43,7 @@ export function GarageSwitcher({
             {sheet.name}
           </FilterLink>
         ))}
-        <FilterLink href="/garage?add=1" selected={false}>
+        <FilterLink href="/garage#add-car" selected={false}>
           + Add vehicle
         </FilterLink>
       </FilterGroup>
