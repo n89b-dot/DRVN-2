@@ -127,6 +127,9 @@ test.describe.serial("Marketplace family", () => {
 
     await page.getByRole("button", { name: /open the index/i }).click();
     const index = page.getByRole("dialog", { name: /navigation index/i });
+    // `evaluateAll` doesn't wait: read before the panel is up and the list
+    // is simply empty, which failed this test only under a loaded run.
+    await expect(index.locator('a[href="/marketplace"]')).toBeVisible();
 
     // The family reads as a heading with its four children directly beneath.
     const hrefs = await index.locator("a").evaluateAll((els) =>
