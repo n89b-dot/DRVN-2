@@ -24,7 +24,13 @@ A review of the fifteen workstreams below found every one started and few finish
 
 **Garage and profile.** The focused car's Mods and Media tabs mount the real editors in place instead of linking out; "+ Add vehicle" lands on the add form. The store is one `StorePanel`, mounted by the public profile and by the member's own /profile, which had still been rendering the legacy parts list. "Eyes on your parts" lives on Selling, in the same query round as everything else. "Off my {car}" on a marketplace card links to the build.
 
-**Still open:** re-recording the marketplace visual snapshots and running the browser journeys (the Playwright config builds into `.next` and would clobber a running dev server, so both want a clean checkout); a carless post can be deleted but not edited from the UI, because the editor route is addressed by car; categories are still tiles above the results rather than a list in the Marketplace sidebar; Home loads by page rather than on scroll, and its feed is rows rather than photo cards.
+**The browser journeys were run**, from a clean worktree so the production build didn't touch the dev server. All six acceptance journeys pass. They found three things the fast tests couldn't: the sidebar's category list was in the document twice (handed to a client component as a prop, a Suspense boundary kept both its placeholder and its resolved list); hiding categories with nothing listed made the taxonomy change shape with today's stock, so every category now shows and an empty one is dimmed; and journey 4 had to learn that the store opens on For sale. The marketplace visual snapshots now hold the sidebar layout. One known artefact: `marketplace-shopping` fails when run after another spec, because the vehicle catalogue is cached for five minutes by design and an earlier spec loads it while the local catalogue is still empty — run alone, it passes.
+
+**Also since:** categories moved into the Marketplace sidebar; a post with no car can be edited (`no-car` stands where the car id would in the editor's URL); a member with one car gets "Add to {car}" with no dialog.
+
+Home's feed loads the next page as you reach its end (H-4), by the same mechanism as the Explore wall, with a More button as the keyboard path; there is no page number in Home's address any more.
+
+**Still open:** Home's feed is rows rather than photo cards; the global search is hidden below 980px.
 
 ## 2026-09-19 — Local, and a default lowest offer (WS15, P-9)
 

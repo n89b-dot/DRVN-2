@@ -9,7 +9,6 @@ import {
   FilterGroup,
   FilterLink,
   Foot,
-  Pagination,
   TileHead,
   VehicleCard,
 } from "@/components/ui";
@@ -23,7 +22,9 @@ import {
 import { recommendListings } from "@/lib/recommendations";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
+import { HomeFeedMore } from "./feed-more";
 import { Greeting } from "./greeting";
+import { HOME_FEED_PAGE_SIZE, type HomeTab } from "./tabs";
 import { PostUpdatePrompt } from "./post-update-prompt";
 import { orderCars } from "@/lib/cars/order";
 import { AccountRowList, ListingRow } from "@/components/commerce";
@@ -33,7 +34,6 @@ import { placeLabel } from "@/lib/geo/regions";
 
 export const metadata = { title: "Home - DRVN" };
 
-const FEED_PAGE_SIZE = 12;
 /** The garage tile shows this many cars before folding the rest behind an
  *  "All N cars" link — a two-car garage reads whole, a twenty-car garage
  *  never pushes the rail off the page. */
@@ -42,8 +42,6 @@ const HOME_GARAGE_MAX = 3;
  *  on a phone. With fewer posts than this it follows the last one. */
 const LEAD_POSTS = 3;
 
-/** H-1. One feed, three ways of asking for it. */
-type HomeTab = "following" | "foryou" | "local";
 
 const TAB_EMPTY: Record<HomeTab, { title: string; body: string }> = {
   following: {
@@ -63,10 +61,12 @@ const TAB_EMPTY: Record<HomeTab, { title: string; body: string }> = {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; tab?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
-  const { page: pageParam, tab: tabParam } = await searchParams;
-  const page = Math.max(1, Number(pageParam) || 1);
+  const { tab: tabParam } = await searchParams;
+  // The server renders the first page; the column loads the rest as it is
+  // read (H-4), so there is no page number in Home's address.
+  const page = 1;
 
   const supabase = await createClient();
   const user = await getViewer();
@@ -119,25 +119,24 @@ export default async function HomePage({
 
   const feed: { items: FeedItem[]; hasMore: boolean } =
     tab === "following"
-      ? await fetchFollowedFeed(supabase, user.id, { page, pageSize: FEED_PAGE_SIZE })
+      ? await fetchFollowedFeed(supabase, user.id, { page, pageSize: HOME_FEED_PAGE_SIZE })
       : tab === "local" && place
         ? await fetchLocalFeed(
             supabase,
             { country: place.country, region: place.region },
-            { page, pageSize: FEED_PAGE_SIZE, viewerId: user.id }
+            { page, pageSize: HOME_FEED_PAGE_SIZE, viewerId: user.id }
           )
-        : await fetchFeed(supabase, "all", { page, pageSize: FEED_PAGE_SIZE, viewerId: user.id });
+        : await fetchFeed(supabase, "all", { page, pageSize: HOME_FEED_PAGE_SIZE, viewerId: user.id });
 
   const tabs: { key: HomeTab; label: string }[] = [
     { key: "following", label: "Following" },
     { key: "foryou", label: "For you" },
     ...(place ? [{ key: "local" as const, label: place.label }] : []),
   ];
-  const hrefFor = (key: HomeTab, p = 1) => {
+  const hrefFor = (key: HomeTab) => {
     const params = new URLSearchParams();
     // The default tab needs no parameter, so a bare /home stays shareable.
     if (key !== (followsNothing ? "foryou" : "following")) params.set("tab", key);
-    if (p > 1) params.set("page", String(p));
     const query = params.toString();
     return query ? `/home?${query}` : "/home";
   };
@@ -272,34 +271,31 @@ export default async function HomePage({
             ) : (
               <EmptyState
                 mark="✎"
-                title={page > 1 ? "Nothing on this page" : TAB_EMPTY[tab].title}
+                title={TAB_EMPTY[tab].title}
                 action={
-                  tab === "following" && page === 1 ? (
+                  tab === "following" ? (
                     <ButtonLink href={hrefFor("foryou")} variant="ghost">
                       See what&apos;s new across DRVN
                     </ButtonLink>
                   ) : undefined
                 }
               >
-                {page > 1 ? "Go back a page to pick the feed up again." : TAB_EMPTY[tab].body}
+                {TAB_EMPTY[tab].body}
               </EmptyState>
             )}
           </div>
 
-          {restItems.length > 0 && (
-            <div className="deck--main__feed deck--main__feed--rest">
-              <Rv className="tile">
-                <FeedList items={restItems} />
-              </Rv>
-            </div>
+          {/* H-4: the feed carries on as you reach its end, keyed by tab so a
+              tab change starts a new column rather than appending to the old. */}
+          {leadItems.length > 0 && (
+            <HomeFeedMore
+              key={tab}
+              tab={tab}
+              initialItems={restItems}
+              seen={leadItems.map((i) => `${i.kind}-${i.id}`)}
+              initialHasMore={feed.hasMore}
+            />
           )}
-
-          <Pagination
-            page={page}
-            hasMore={feed.hasMore}
-            hrefFor={(p) => hrefFor(tab, p)}
-            className="deck--main__pager !mt-0"
-          />
         </div>
 
         <div className="deck--main__rail">
