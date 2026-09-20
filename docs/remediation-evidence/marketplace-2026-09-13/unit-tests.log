@@ -1,0 +1,13 @@
+
+> drvn-2@0.1.0 test
+> vitest run --maxWorkers=1
+
+
+ RUN  v4.1.10 /Users/neilbarrow/Desktop/Cursor Projects/DRVN 2
+
+
+ Test Files  103 passed (103)
+      Tests  673 passed (673)
+   Start at  10:56:26
+   Duration  14.78s (transform 1.15s, setup 0ms, import 3.65s, tests 2.68s, environment 5ms)
+

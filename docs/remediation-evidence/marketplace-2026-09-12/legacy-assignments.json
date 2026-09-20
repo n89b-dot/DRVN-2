@@ -1,0 +1,10 @@
+{
+  "observedAt": "2026-09-12 America/New_York",
+  "project": "drvn-v3",
+  "purpose": "Pre-migration assignments; never reverse automatically over later seller edits.",
+  "listings": [
+    {"id":"70dafda3-be12-4860-a3b5-33bd84f110f5","category":"brakes","subcategory":null,"status":"sold","mappedCategory":"brakes-suspension"},
+    {"id":"7a348e30-e66c-4cba-b134-f5579ed851eb","category":"interior","subcategory":null,"status":"active","mappedCategory":"interior-lighting"}
+  ],
+  "partTypes": "Unknown values stay null; no speculative classification was performed."
+}

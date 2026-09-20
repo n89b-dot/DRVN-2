@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-13",
+  "scope": "Revised marketplace core; hosted release blocked and conditional expansions deferred",
+  "unit": {
+    "files": 103,
+    "passed": 673,
+    "failed": 0,
+    "workers": 1
+  },
+  "browser": {
+    "other_scenarios_passed": 49,
+    "shopping_scenarios": 10,
+    "shopping_repetitions": 2,
+    "shopping_executions_passed": 20,
+    "shopping_retries": 0,
+    "unique_core_scenarios_verified": 59,
+    "one_clean_combined_final_run": false
+  },
+  "database": {
+    "fresh_migrations": 108,
+    "fresh_guards_passed": 44,
+    "additional_data_migration_guard_passed": true,
+    "shared_active_listings": 16,
+    "shared_classified_active": 15,
+    "unclassified_reason": "Roof box/rack has no suitable supported leaf"
+  },
+  "static": {
+    "typecheck": "passed",
+    "generated_database_types": "passed",
+    "lint_errors": 0,
+    "lint_preexisting_warnings": 3
+  },
+  "release": {
+    "hosted_app_promoted": false,
+    "blockers": [
+      "HTTPS staging not provisioned/linked",
+      "Shared commerce dependency chain incomplete",
+      "Existing provider and external-monitor acceptance pending"
+    ]
+  }
+}

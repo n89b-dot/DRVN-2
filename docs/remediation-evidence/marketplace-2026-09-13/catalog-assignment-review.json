@@ -1,0 +1,193 @@
+{
+  "observedAt": "2026-09-13T14:43:25.967Z",
+  "basis": "Seller-authored title and description, plus manufacturer model identification. No specifications or compatibility were inferred.",
+  "manufacturerReference": "https://www.garrettmotion.com/racing-and-performance/performance-catalog/turbo/gt2871r/",
+  "listings": [
+    {
+      "id": "cff127a1-e5c3-4871-9b35-be114461b54d",
+      "title": "992 GT3 centre-lock wheels with Michelin Cup 2, set of four",
+      "description": "Factory centre-locks with Cup 2s at about 5mm tread. Ring miles only, no kerb strikes. Centre-lock nuts included, wrench not.",
+      "category": "wheels-tires",
+      "subcategory": null,
+      "after": {
+        "category": "wheels-tires",
+        "subcategory": "wheels"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "daace295-f0ae-4e0c-adb1-df3c46abef06",
+      "title": "Akrapovič Evolution titanium exhaust, Huracán Performante",
+      "description": "Complete Evolution Line system — titanium mufflers, X-pipe, link pipes and carbon tips. One season, 3k miles. Light heat tint on the welds as expected, no dents or cracks. Removed for a full race system with headers.",
+      "category": "performance",
+      "subcategory": null,
+      "after": {
+        "category": "performance",
+        "subcategory": "exhaust"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "106e584e-7c6a-45e7-86d0-36b497efb10f",
+      "title": "Audi 4.2 FSI V8 intake manifold (B7 RS4), used",
+      "description": "Cast-aluminium intake manifold off my B7 RS4 4.2 FSI, removed during the carbon clean when I went to a spare. Surface oil staining as pictured, no cracks, all threads good. Flaps and runners move freely. Sold as-is for a rebuild or spare.",
+      "category": "performance",
+      "subcategory": "intake",
+      "after": null,
+      "reason": "Already classified; unchanged."
+    },
+    {
+      "id": "35195d25-196c-40fd-bef6-a13765efb224",
+      "title": "Big brake kit — 355mm rotors, 4-pot calipers, lines",
+      "description": "Complete front kit, one season of track use. Rotors have life left, calipers rebuilt with new seals before removal. Pads included are down to half.",
+      "category": "brakes-suspension",
+      "subcategory": null,
+      "after": {
+        "category": "brakes-suspension",
+        "subcategory": "big-brake-kits"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "f0cf8b5c-0ce3-4f68-a52d-bc40bc38fbd0",
+      "title": "Capristo valved exhaust, 458 Italia / Speciale",
+      "description": "Full Capristo system with valve controller, 8k miles. Replaced with a titanium setup. No cracks at the welds, tips show light heat colour only.",
+      "category": "performance",
+      "subcategory": null,
+      "after": {
+        "category": "performance",
+        "subcategory": "exhaust"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "36604617-5ff1-4595-ba1d-9777cd9f1285",
+      "title": "E46 M3 front sport seats, black leather, pair",
+      "description": "Out of the car for buckets. Driver bolster shows honest wear, photographed. Rails and airbag connectors intact, no rips or tears.",
+      "category": "interior-lighting",
+      "subcategory": null,
+      "after": {
+        "category": "interior-lighting",
+        "subcategory": "seats"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "8067c1aa-ab7c-4068-a379-6244c330b445",
+      "title": "Ferrari 458 Speciale forged 20in wheels, OEM set of four",
+      "description": "Factory forged wheels off the Speciale, removed for an aftermarket set. Two small kerb marks on the front-left, photographed. Straight and true, no repairs.",
+      "category": "wheels-tires",
+      "subcategory": null,
+      "after": {
+        "category": "wheels-tires",
+        "subcategory": "wheels"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "8368fe15-874b-4bf8-8fe8-bf0db36ab565",
+      "title": "Garrett GT2871R, 40k km, shaft play in spec",
+      "description": "Pulled during the build for a bigger single. Light shaft play well within spec, no contact marks on the wheels. Oil lines included, manifold not.",
+      "category": "performance",
+      "subcategory": null,
+      "after": {
+        "category": "performance",
+        "subcategory": "turbo"
+      },
+      "reason": "GT2871R is a turbocharger in the manufacturer's catalog; no fitment inference."
+    },
+    {
+      "id": "f149864e-5307-4dec-bf82-a72060a2c699",
+      "title": "Huracán Performante forged carbon rear wing, OEM",
+      "description": "Factory forged composite wing, removed for a taller aftermarket unit. No chips or cracks, ALA ducting intact. Comes with the mounting hardware.",
+      "category": "exterior-body",
+      "subcategory": null,
+      "after": {
+        "category": "exterior-body",
+        "subcategory": "spoilers"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "cec014e5-a3b2-4709-8e95-7a9cd1f21343",
+      "title": "IPD front + rear sway bar set, 850/S70/V70",
+      "description": "The classic upgrade. Bushings have life left, bars are straight with surface patina only. Sold because the new car came with them fitted.",
+      "category": "brakes-suspension",
+      "subcategory": null,
+      "after": {
+        "category": "brakes-suspension",
+        "subcategory": "sway-bars"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "95d81551-19bf-4490-9107-63d92baa0e1a",
+      "title": "KW Variant 2 coilovers — Delta HF fitment",
+      "description": "Coming off for the Bilstein alpine setup. Spring rate 8K front / 6K rear, damper travel 62 mm of 68 mm new. Top mounts, spanners, box included.",
+      "category": "performance",
+      "subcategory": null,
+      "after": {
+        "category": "brakes-suspension",
+        "subcategory": "coilovers"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "ba4afb1b-6656-4d13-8a99-c7e06a5a201b",
+      "title": "Öhlins Road & Track coilovers, 12k miles",
+      "description": "Off the Genny. Fresh service at 10k.",
+      "category": "brakes-suspension",
+      "subcategory": null,
+      "after": {
+        "category": "brakes-suspension",
+        "subcategory": "coilovers"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "9dc2a581-38f8-4ad0-b2ff-5c579eb7999d",
+      "title": "Porsche 992 GT3 full bucket seats, carbon, pair",
+      "description": "Factory carbon full buckets, removed for 18-way comfort seats for longer trips. Bolsters are unmarked, no sun fade. Side airbags and rails included.",
+      "category": "interior-lighting",
+      "subcategory": null,
+      "after": {
+        "category": "interior-lighting",
+        "subcategory": "seats"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "7303e978-af48-4e7f-adcc-98206aa6ac07",
+      "title": "Rays bronze 17x9 +22 square set, tires included",
+      "description": "Ran one season on the S15. Two wheels have light curb rash photographed up close. Tires are 240 treadwear with half life left. No bends, no repairs — holds pressure fine.",
+      "category": "wheels-tires",
+      "subcategory": null,
+      "after": {
+        "category": "wheels-tires",
+        "subcategory": "wheels"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "7a348e30-e66c-4cba-b134-f5579ed851eb",
+      "title": "Sabelt bucket seat — driver side",
+      "description": "Replaced by the Recaro. Driver side, wide pattern rails. One bolster scuff photographed.",
+      "category": "interior-lighting",
+      "subcategory": null,
+      "after": {
+        "category": "interior-lighting",
+        "subcategory": "seats"
+      },
+      "reason": "Existing title and description identify this part type."
+    },
+    {
+      "id": "d935d3e8-a367-4836-8978-4db74e344f8c",
+      "title": "Thule roof box + rack, fits most wagons",
+      "description": "Off the 850 after a camping summer. Sun-faded but no cracks, both locks work with keys. Rack feet included for square rails.",
+      "category": "exterior-body",
+      "subcategory": null,
+      "after": null,
+      "reason": "Roof box/rack has no suitable supported leaf; retained at Exterior & Body."
+    }
+  ]
+}

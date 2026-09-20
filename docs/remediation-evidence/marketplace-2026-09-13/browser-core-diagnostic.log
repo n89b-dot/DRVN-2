@@ -1,0 +1,149 @@
+[WebServer] (node:24545) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24545) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24561) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24563) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24993) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24989) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24991) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24992) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24994) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24990) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:24995) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:25024) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 59 tests using 1 worker
+
+(node:25035) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › e2e/discovery-remediation.spec.ts:40:7 › discovery + marketplace remediation › setup: a seller publishes a part (5.4s)
+  ✓   2 [chromium] › e2e/discovery-remediation.spec.ts:50:7 › discovery + marketplace remediation › the seller's register is called My Listings in the family nav, rail and index (2.1s)
+  ✓   3 [chromium] › e2e/discovery-remediation.spec.ts:78:7 › discovery + marketplace remediation › Home Discovery is segmented and URL-addressable (6.7s)
+  ✓   4 [chromium] › e2e/discovery-remediation.spec.ts:115:7 › discovery + marketplace remediation › categories are destinations: tiles on desktop, a Browse sheet on phones (5.0s)
+  ✓   5 [chromium] › e2e/discovery-remediation.spec.ts:167:9 › discovery + marketplace remediation › marketplace cards: separate Save, no nested interactives @ 320 (526ms)
+  ✓   6 [chromium] › e2e/discovery-remediation.spec.ts:167:9 › discovery + marketplace remediation › marketplace cards: separate Save, no nested interactives @ 390 (465ms)
+  ✓   7 [chromium] › e2e/discovery-remediation.spec.ts:167:9 › discovery + marketplace remediation › marketplace cards: separate Save, no nested interactives @ 430 (473ms)
+  ✓   8 [chromium] › e2e/discovery-remediation.spec.ts:186:7 › discovery + marketplace remediation › guest: opening a shopping card preserves context and Buy now continues to cart (1.3s)
+  ✓   9 [chromium] › e2e/discovery-remediation.spec.ts:197:7 › discovery + marketplace remediation › own listing: the seller sees no purchase controls on their own card (1.6s)
+  ✓  10 [chromium] › e2e/discovery-remediation.spec.ts:208:7 › discovery + marketplace remediation › Explore cards stay discovery-only and name their icons on focus (746ms)
+  ✓  11 [chromium] › e2e/feature-regression.spec.ts:27:7 › feature regressions › seller lists a part-numbered listing and a free-shipping listing (8.6s)
+  ✓  12 [chromium] › e2e/feature-regression.spec.ts:43:7 › feature regressions › marketplace search matches the raw part number (1.4s)
+  ✓  13 [chromium] › e2e/feature-regression.spec.ts:63:7 › feature regressions › marketplace search matches the compact part number (478ms)
+  ✓  14 [chromium] › e2e/feature-regression.spec.ts:72:7 › feature regressions › marketplace cards state the shipping cost (368ms)
+  ✓  15 [chromium] › e2e/feature-regression.spec.ts:85:7 › feature regressions › messages footer links to offers (1.5s)
+  ✓  16 [chromium] › e2e/feature-regression.spec.ts:91:7 › feature regressions › home greets by time of day (1.1s)
+  ✓  17 [chromium] › e2e/golden-path.spec.ts:58:7 › golden path › seller signs up and adds a car (2.5s)
+  ✓  18 [chromium] › e2e/golden-path.spec.ts:75:7 › golden path › seller lists a part off that car (3.7s)
+  ✓  19 [chromium] › e2e/golden-path.spec.ts:98:7 › golden path › the part appears on the car sheet's For sale tab (2.1s)
+  ✓  20 [chromium] › e2e/golden-path.spec.ts:111:7 › golden path › buyer finds the part and buys it (7.0s)
+  ✓  21 [chromium] › e2e/golden-path.spec.ts:159:7 › golden path › the listing is now sold, not buyable twice (851ms)
+  ✓  22 [chromium] › e2e/golden-path.spec.ts:174:7 › golden path › seller dispatches with tracking (3.2s)
+  ✓  23 [chromium] › e2e/golden-path.spec.ts:206:7 › golden path › buyer confirms receipt and reviews (3.8s)
+  ✓  24 [chromium] › e2e/golden-path.spec.ts:254:7 › golden path › the review shows on the seller's public profile (511ms)
+  ✓  25 [chromium] › e2e/marketplace-browsing.spec.ts:33:5 › result totals, category navigation and breadcrumbs preserve the search and budget (1.6s)
+  ✓  26 [chromium] › e2e/marketplace-browsing.spec.ts:51:5 › Cancel discards draft filters; sort only changes applied state (1.5s)
+  ✓  27 [chromium] › e2e/marketplace-browsing.spec.ts:72:5 › legacy category URLs resolve to the canonical category with their context (646ms)
+  ✓  28 [chromium] › e2e/marketplace-browsing.spec.ts:80:5 › Explore Parts uses the restored query and count (3.1s)
+  ✓  29 [chromium] › e2e/marketplace-browsing.spec.ts:107:5 › invalid draft prices explain the problem and Cancel restores a usable search (1.1s)
+  ✓  30 [chromium] › e2e/marketplace-browsing.spec.ts:122:7 › inventory stays legible and category access survives filtering at 320px (1.1s)
+  ✓  31 [chromium] › e2e/marketplace-browsing.spec.ts:122:7 › inventory stays legible and category access survives filtering at 390px (1.0s)
+  ✓  32 [chromium] › e2e/marketplace-browsing.spec.ts:122:7 › inventory stays legible and category access survives filtering at 768px (550ms)
+  ✓  33 [chromium] › e2e/marketplace-browsing.spec.ts:122:7 › inventory stays legible and category access survives filtering at 1440px (535ms)
+[WebServer] [marketplace] listing query failed {
+[WebServer]   reference: 'fd82139e-82bf-4271-9565-a9639f92aa4b',
+[WebServer]   code: '42501',
+[WebServer]   message: 'permission denied for function marketplace_browse_rows'
+[WebServer] }
+  ✓  34 [chromium] › e2e/marketplace-browsing.spec.ts:146:5 › RPC failure shows Retry, retains context and recovers without a false zero count (1.7s)
+[WebServer] [marketplace] listing query failed {
+[WebServer]   reference: '5cf030db-eb41-4485-a0be-cf786be3e9f1',
+[WebServer]   code: '42501',
+[WebServer]   message: 'permission denied for function marketplace_browse_rows'
+[WebServer] }
+[WebServer] [marketplace] listing query failed {
+[WebServer]   reference: 'd3d1757c-df0b-4621-8710-e5128d3ed3cb',
+[WebServer]   code: '42501',
+[WebServer]   message: 'permission denied for function marketplace_browse_rows'
+[WebServer] }
+  ✓  35 [chromium] › e2e/marketplace-browsing.spec.ts:163:5 › mobile empty and failed states remain distinct and usable (3.7s)
+  ✓  36 [chromium] › e2e/marketplace-family.spec.ts:39:7 › Marketplace family › seller publishes a part to negotiate over (3.9s)
+  ✓  37 [chromium] › e2e/marketplace-family.spec.ts:52:7 › Marketplace family › signed out: marketplace and listing sheets stay public (892ms)
+  ✓  38 [chromium] › e2e/marketplace-family.spec.ts:64:7 › Marketplace family › signed out: the management surfaces are gated and never advertised (934ms)
+  ✓  39 [chromium] › e2e/marketplace-family.spec.ts:92:7 › Marketplace family › signed in: every Selling child is one interaction away, from anywhere in the family (3.1s)
+  ✓  40 [chromium] › e2e/marketplace-family.spec.ts:121:7 › Marketplace family › signed in: the mobile index reaches Orders without going via Marketplace (1.0s)
+  ✓  41 [chromium] › e2e/marketplace-family.spec.ts:144:7 › Marketplace family › signed in: a public listing sheet reads as Marketplace, the seller's register as My Listings (1.8s)
+  ✓  42 [chromium] › e2e/marketplace-family.spec.ts:164:7 › Marketplace family › the ledger hands a listing to Offers rather than re-implementing offers (1.5s)
+  ✓  43 [chromium] › e2e/marketplace-family.spec.ts:185:7 › Marketplace family › Make an offer while signed out explains why an account is needed (833ms)
+  ✓  44 [chromium] › e2e/marketplace-family.spec.ts:202:7 › Marketplace family › signing in from the offer dialog returns to the listing with the offer form open (4.8s)
+  ✓  45 [chromium] › e2e/marketplace-family.spec.ts:224:7 › Marketplace family › creating an account from the offer dialog keeps the same intent (11.9s)
+  ✓  46 [chromium] › e2e/marketplace-family.spec.ts:248:7 › Marketplace family › the login/signup swap keeps the destination in both directions (2.2s)
+  ✓  47 [chromium] › e2e/marketplace-family.spec.ts:260:7 › Marketplace family › an off-site next is refused, not followed (3.2s)
+  ✓  48 [chromium] › e2e/marketplace-family.spec.ts:280:7 › Marketplace family › Orders drops the offers promo card and the offer-expiry footer (1.9s)
+  ✓  49 [chromium] › e2e/marketplace-family.spec.ts:290:7 › Marketplace family › Orders groups states and keeps raw states addressable (2.3s)
+  ✓  50 [chromium] › e2e/marketplace-shopping.spec.ts:67:5 › guest exact identifier, complete card facts, detail and source-build return (3.4s)
+  ✓  51 [chromium] › e2e/marketplace-shopping.spec.ts:85:5 › guest chooses a vehicle and unknown years stay uncertain (1.5s)
+  ✓  52 [chromium] › e2e/marketplace-shopping.spec.ts:108:5 › a buyer with two garage cars can select each explicitly (2.4s)
+  ✘  53 [chromium] › e2e/marketplace-shopping.spec.ts:120:5 › a leaf search saves all criteria, reopens from page one, and leaves alerts off (11.4s)
+(node:25336) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  54 [chromium] › e2e/marketplace-shopping.spec.ts:139:5 › guest Save resumes after sign-in without opening a different part (3.2s)
+  ✓  55 [chromium] › e2e/marketplace-shopping.spec.ts:153:5 › catalog failure is recoverable, and keyboard focus returns to the vehicle control (812ms)
+  ✓  56 [chromium] › e2e/marketplace-shopping.spec.ts:168:7 › shopping accessibility, long titles and 200% text at 320px in light (960ms)
+  ✓  57 [chromium] › e2e/marketplace-shopping.spec.ts:168:7 › shopping accessibility, long titles and 200% text at 320px in dark (1.2s)
+  ✓  58 [chromium] › e2e/marketplace-shopping.spec.ts:201:5 › guest Save search resumes the complete search after authentication (2.7s)
+  ✓  59 [chromium] › e2e/marketplace-shopping.spec.ts:213:5 › sold and unavailable saved parts stay understandable and can be removed (1.9s)
+
+
+  1) [chromium] › e2e/marketplace-shopping.spec.ts:120:5 › a leaf search saves all criteria, reopens from page one, and leaves alerts off 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText(/Saved — find it under Saved/)
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for getByText(/Saved — find it under Saved/)
+
+
+      124 |   await expect(page.getByRole("heading", { name: "1 part found" })).toBeVisible();
+      125 |   await page.getByRole("button", { name: "Save search", exact: true }).click();
+    > 126 |   await expect(page.getByText(/Saved — find it under Saved/)).toBeVisible();
+          |                                                               ^
+      127 |   const saved = await admin.from("saved_searches").select("params,alert").eq("user_id", buyer).single().throwOnError();
+      128 |   expect(saved.data.alert).toBe(false); expect(saved.data.params._version).toBe("2");
+      129 |   expect(saved.data.params.vyear).toBe("2018"); expect(saved.data.params.sort).toBe("price_desc");
+        at /Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/e2e/marketplace-shopping.spec.ts:126:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/release/marketplace-shopping-a-lea-a368d-e-one-and-leaves-alerts-off-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/release/marketplace-shopping-a-lea-a368d-e-one-and-leaves-alerts-off-chromium/error-context.md
+
+    Error Context: test-results/release/marketplace-shopping-a-lea-a368d-e-one-and-leaves-alerts-off-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/release/marketplace-shopping-a-lea-a368d-e-one-and-leaves-alerts-off-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/release/marketplace-shopping-a-lea-a368d-e-one-and-leaves-alerts-off-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/marketplace-shopping.spec.ts:120:5 › a leaf search saves all criteria, reopens from page one, and leaves alerts off 
+  58 passed (3.9m)

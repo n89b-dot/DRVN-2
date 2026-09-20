@@ -1,0 +1,63 @@
+{
+  "observedAt": "2026-09-13T14:35:37.042Z",
+  "project": "drvn-v3",
+  "scope": "Read-only schema compatibility; not a hosted release or transaction",
+  "checks": [
+    {
+      "check_name": "function:bind_cart_checkout_payment",
+      "ready": false
+    },
+    {
+      "check_name": "function:bind_checkout_analytics",
+      "ready": false
+    },
+    {
+      "check_name": "function:create_offer_with_message",
+      "ready": true
+    },
+    {
+      "check_name": "function:freeze_cart_checkout_shipping",
+      "ready": false
+    },
+    {
+      "check_name": "function:marketplace_browse_rows",
+      "ready": true
+    },
+    {
+      "check_name": "function:marketplace_category_counts",
+      "ready": true
+    },
+    {
+      "check_name": "function:marketplace_match_evidence",
+      "ready": true
+    },
+    {
+      "check_name": "function:prepare_payment_request",
+      "ready": false
+    },
+    {
+      "check_name": "function:record_worker_run",
+      "ready": true
+    },
+    {
+      "check_name": "function:save_marketplace_search",
+      "ready": true
+    },
+    {
+      "check_name": "function:set_analytics_consent",
+      "ready": true
+    },
+    {
+      "check_name": "function:set_social_relationship",
+      "ready": true
+    },
+    {
+      "check_name": "purchase analytics outbox",
+      "ready": false
+    },
+    {
+      "check_name": "purchase_begin accepts checkout identity",
+      "ready": false
+    }
+  ]
+}

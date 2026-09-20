@@ -1,0 +1,7 @@
+
+> drvn-2@0.1.0 db:types:check
+> node scripts/generate-database-types.mjs --check
+
+Connecting to 127.0.0.1 54322
+A new version of Supabase CLI is available: v2.117.0 (currently installed v2.116.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

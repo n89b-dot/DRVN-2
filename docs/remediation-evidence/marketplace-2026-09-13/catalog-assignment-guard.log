@@ -1,0 +1,13 @@
+BEGIN
+SELECT 1
+INSERT 0 1
+INSERT 0 16
+UPDATE 14
+UPDATE 0
+DO
+UPDATE 1
+UPDATE 1
+UPDATE 0
+psql:supabase/tests/marketplace_assignment_guard.sql:40: NOTICE:  all catalog assignment checks passed
+DO
+ROLLBACK
