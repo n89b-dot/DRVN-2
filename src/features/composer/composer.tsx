@@ -16,6 +16,7 @@ import { normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
 import { blocksToDoc, docToBlocks, type PmDoc } from "./doc";
 import { composerNodes, type ComposerContext } from "./extensions";
 import { INSERT_ITEMS, type InsertItem } from "./inserts";
+import { composerRecoveryKey } from "./recovery";
 
 /**
  * The Build Story Composer (brief §M–§R): one progressively enhanced editor
@@ -131,7 +132,7 @@ export function BuildStoryComposer({
   const [plusOpen, setPlusOpen] = useState(false);
   const [isEmpty, setIsEmpty] = useState(initialBlocks.length === 0 && !initialTitle);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const localKey = `drvn-composer:${postId ?? carId}`;
+  const localKey = composerRecoveryKey(postId ?? carId);
   // Latest title/draft-action for the debounced autosave closure.
   const titleRef = useRef(title);
   const blocksRef = useRef(initialBlocks);

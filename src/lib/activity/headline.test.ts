@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasTitle, postHeadline } from "./headline";
+import { hasTitle, pageHeadline, postHeadline } from "./headline";
 
 describe("what to call a post with no title (W-1)", () => {
   it("uses the author's title when there is one", () => {
@@ -49,5 +49,30 @@ describe("what to call a post with no title (W-1)", () => {
         body: [{ type: "mod", action: "installed", modItemId: null, label: "HKS Hipermax" }],
       })
     ).toBe("HKS Hipermax");
+  });
+});
+
+describe("pageHeadline", () => {
+  const text = (t: string) => ({ type: "text" as const, style: "normal" as const, text: t });
+
+  it("doesn't say a quick post's caption twice", () => {
+    const blocks = [text("New wheels turned up."), { type: "images" as const, urls: ["a.jpg"] }];
+    const page = pageHeadline({ title: null, body: null }, blocks);
+    expect(page.headline).toBe("New wheels turned up.");
+    expect(page.blocks).toEqual([blocks[1]]);
+  });
+
+  it("keeps every word of a caption too long to be a heading", () => {
+    const long = "word ".repeat(40).trim();
+    const page = pageHeadline({ title: null, body: null }, [text(long)]);
+    expect(page.headline).toBe("Update");
+    expect(page.blocks).toHaveLength(1);
+  });
+
+  it("leaves a titled post's body alone", () => {
+    const blocks = [text("First line.")];
+    const page = pageHeadline({ title: "Coilovers in", body: null }, blocks);
+    expect(page.headline).toBe("Coilovers in");
+    expect(page.blocks).toBe(blocks);
   });
 });

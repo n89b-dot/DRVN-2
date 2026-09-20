@@ -261,10 +261,13 @@ export default async function ListingPage({
   const { data: taggedPosts } = taggedPostIds.length
     ? await supabase
         .from("activity_posts")
-        .select("id, title, intro, body, car_id, published_at, cars!inner(slug, name, is_public)")
+        // A LEFT join: a post about this part may have no car at all (W-5),
+        // and an inner join dropped exactly those — the posts for which the
+        // part is the whole subject. Which posts may be seen is the post
+        // policy's business (a private build's posts never arrive here).
+        .select("id, title, intro, body, car_id, published_at, cars(slug, name, is_public)")
         .in("id", taggedPostIds)
         .not("published_at", "is", null)
-        .eq("cars.is_public", true)
         .order("published_at", { ascending: false })
         .limit(6)
     : { data: [] };
@@ -279,7 +282,14 @@ export default async function ListingPage({
   for (const img of taggedPostImages ?? []) {
     if (!postCover.has(img.post_id)) postCover.set(img.post_id, img.url);
   }
-  const postsAboutPart = (taggedPosts ?? []).map((post) => {
+  const postsAboutPart = (taggedPosts ?? [])
+    // Belt and braces beside the policy: a car that is there but not public
+    // is never named or linked from a public part page.
+    .filter((post) => {
+      const car = post.cars as unknown as { is_public: boolean } | null;
+      return !post.car_id || Boolean(car?.is_public);
+    })
+    .map((post) => {
     // A post that tags a part need not be about a car at all (W-5).
     const car = post.cars as unknown as { slug: string; name: string } | null;
     return {

@@ -9,6 +9,7 @@ import { createQuickPost } from "@/app/(product)/garage/actions";
 import { uploadImages } from "@/lib/media-upload";
 
 import { PartPicker, type TaggablePart } from "./part-picker";
+import { handOffToComposer } from "./recovery";
 
 export type QuickPostCar = { id: string; name: string };
 
@@ -208,9 +209,12 @@ export function QuickPost({
             Continue your draft →
           </Link>
         ) : (
+          /* W-1: what's typed here goes with you. It travels in the
+             composer's own browser copy, never in the URL. */
           <Link
-            href={`/garage/${carId}/update/new?caption=${encodeURIComponent(caption)}`}
+            href={`/garage/${carId}/update/new`}
             className="jumplink"
+            onClick={() => handOffToComposer(carId, caption, photos)}
           >
             Write a full update →
           </Link>
