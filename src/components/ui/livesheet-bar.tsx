@@ -17,6 +17,7 @@ import {
   type NavEntry,
   type NavRoute,
 } from "./nav-routes";
+import { SearchField } from "./finder";
 import { SuggestingSearchField } from "./search-suggest";
 
 type IconRoute = NavRoute & { icon: IconName };
@@ -307,6 +308,18 @@ export function LivesheetBar({
               <span className="microlabel">{indexRouteCount} sections</span>
             </div>
             <div className="dimline-h" aria-hidden="true" />
+
+            {/* N-2 at compact widths: the bar has no room for the search
+                field there, so it leads the menu instead of disappearing.
+                A plain field — suggestions need the width the bar gives
+                them — and it submits to the same federated /explore. */}
+            {/* Mounted only while the menu is open: the closed panel stays in
+                the document, and a field in it would still take a Tab stop. */}
+            {open && (
+              <form action="/explore" role="search" className="index__search">
+                <SearchField label="Search DRVN" placeholder="Search builds, parts, people…" />
+              </form>
+            )}
 
             {/* N-3 at compact widths: the bar has no room for the Post button
                 there, so it leads the menu instead of disappearing. */}

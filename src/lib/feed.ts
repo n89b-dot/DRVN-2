@@ -634,19 +634,25 @@ export async function fetchLocalFeed(
 ): Promise<FeedPage> {
   const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, opts.page ?? 1);
-  const { data, error } = await supabase.rpc("local_feed_rows", {
-    p_country: place.country,
-    p_region: place.region ?? undefined,
-  });
+  // One page, asked for as one page. The function returns every public car,
+  // update and part in the country, and slicing that here meant fetching all
+  // of it to show twelve. One row beyond the page answers "is there more?".
+  const from = (page - 1) * pageSize;
+  const { data, error } = await supabase
+    .rpc("local_feed_rows", {
+      p_country: place.country,
+      p_region: place.region ?? undefined,
+    })
+    .order("happened_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, from + pageSize);
   if (error || !data) {
     reportError("[feed] local_feed_rows unavailable", error);
     return { items: [], page, pageSize, hasMore: false };
   }
   const rows = data as FeedEventRow[];
-  const from = (page - 1) * pageSize;
-  const windowRows = rows.slice(from, from + pageSize);
-  const items = await hydrateFeedItems(supabase, windowRows, opts.viewerId);
-  return { items, page, pageSize, hasMore: rows.length > from + pageSize };
+  const items = await hydrateFeedItems(supabase, rows.slice(0, pageSize), opts.viewerId);
+  return { items, page, pageSize, hasMore: rows.length > pageSize };
 }
 
 export type FollowedFeedPage = FeedPage & {

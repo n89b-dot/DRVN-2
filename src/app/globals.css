@@ -8865,11 +8865,13 @@ video {
   flex: none;
   padding: 9px 16px;
 }
-/* The menu's own Post button — only where the bar's one is hidden. */
+/* The menu's own search and Post button — only where the bar's are hidden. */
+.index__search { display: none; margin: 12px 0 0; }
 .index__post { display: none; margin: 12px 0 4px; }
 @media (max-width: 979.98px) {
   .bar__search { display: none; }
   .bar__post { display: none; }
+  .index__search { display: block; }
   .index__post { display: flex; }
 }
 

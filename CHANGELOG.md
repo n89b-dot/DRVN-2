@@ -30,7 +30,9 @@ A review of the fifteen workstreams below found every one started and few finish
 
 Home's feed loads the next page as you reach its end (H-4), by the same mechanism as the Explore wall, with a More button as the keyboard path; there is no page number in Home's address any more.
 
-**Still open:** Home's feed is rows rather than photo cards; the global search is hidden below 980px.
+The Local feed asks the database for one page rather than fetching every public car, update and part in a country to show twelve. Below 980px, where the bar has no room for it, search leads the menu.
+
+**Still open:** Home's feed is rows rather than photo cards — a design decision, not a fault.
 
 ## 2026-09-19 — Local, and a default lowest offer (WS15, P-9)
 
