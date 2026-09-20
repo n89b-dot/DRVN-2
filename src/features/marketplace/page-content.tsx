@@ -57,7 +57,16 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
     counts.all = (counts.all ?? 0) + Number(row.total);
     return counts;
   }, {}));
-  const [vehicle, garage, brands] = await Promise.all([vehiclePromise, garagePromise, brandPromise]);
+  // The sidebar's category list is handed to a client component as a prop,
+  // where a Suspense boundary left BOTH its placeholder and its resolved
+  // list in the document. The counts are one small grouped query already in
+  // flight, so the list simply waits for them with everything else here.
+  const [vehicle, garage, brands, categoryCounts] = await Promise.all([
+    vehiclePromise,
+    garagePromise,
+    brandPromise,
+    categoryPromise,
+  ]);
   const garageChoices = (garage ?? []).flatMap(car => car.catalog_make_id ? [{ label: car.name, vehicle: `${car.catalog_make_id}${car.catalog_model_id ? `-${car.catalog_model_id}` : ""}`, year: car.year ? String(car.year) : "", isMain: car.isMain }] : []);
   const leaf = category?.subcategories.find(s => s.slug === filters.subcategory);
   const title = leaf?.label ?? category?.label ?? "Marketplace";
@@ -88,13 +97,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         showFitToggle={Boolean(user)}
         brands={brands}
         browse={<CategorySheet currentCategory={category?.slug} currentSubcategory={leaf?.slug} filters={filters} />}
-        sidebar={
-          <Suspense fallback={<CategorySidebarList category={category} subcategory={leaf?.slug} filters={filters} />}>
-            {categoryPromise.then((counts) => (
-              <CategorySidebarList counts={counts} category={category} subcategory={leaf?.slug} filters={filters} />
-            ))}
-          </Suspense>
-        }
+        sidebar={<CategorySidebarList counts={categoryCounts} category={category} subcategory={leaf?.slug} filters={filters} />}
       />
       <VehicleControl key={`vehicle-${filters.vehicle}-${filters.vyear}`} filters={filters} selection={vehicle} garage={garageChoices} />
       <ActiveFilters basePath={basePath} filters={filters} vehicleLabel={vehicle ? [filters.vyear, vehicle.label].filter(Boolean).join(" ") : undefined} />
