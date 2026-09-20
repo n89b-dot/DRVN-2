@@ -19,8 +19,9 @@ and collectively wrong.
    still gives one card.
 3. A stranger finds it signed out — Explore, search, suggestions, item page,
    with a private source car named but never linked.
-4. It sells and the store shows it — under Sold and All, never Active, and
-   `?status=draft` on somebody else's store shows nothing.
+4. It sells and the store shows it — under Sold and All, never under the
+   default For sale view, with no cart button; and `?status=draft` (or the
+   owner's own `hidden` tab) on somebody else's store shows nothing.
 5. Quick post without losing a long draft — release-blocking.
 6. The buyer finishes the loop — a delivered order becomes a build line, once.
 

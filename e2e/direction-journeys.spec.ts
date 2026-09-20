@@ -294,17 +294,27 @@ test("journey 4 — a sold part stays in the store, and drafts never leak", asyn
   // The tab key is `view=` — the old keys are aliases of it (P-3).
   const store = `/u/${seller.username}?view=parts`;
 
-  // Sold: present by default, present under Sold, absent from Active.
+  // The store opens on what is FOR SALE — that is what a visitor came for,
+  // and it is the number on the Parts tab. A sold part is one tap away under
+  // Sold and under All, and never under the default.
   await guest.goto(store);
-  await expect(guest.getByText(soldTitle)).toBeVisible({ timeout: 30_000 });
-  await guest.goto(`${store}&status=sold`);
-  await expect(guest.getByText(soldTitle)).toBeVisible({ timeout: 30_000 });
-  await guest.goto(`${store}&status=active`);
+  await expect(guest.getByRole("group", { name: /which parts to show/i })).toBeVisible({ timeout: 30_000 });
   await expect(guest.getByText(soldTitle)).toHaveCount(0);
+  await guest.getByRole("link", { name: "Sold", exact: true }).click();
+  await expect(guest.getByText(soldTitle)).toBeVisible({ timeout: 30_000 });
+  // A sold part on the store is a record, not an offer.
+  await expect(guest.getByRole("button", { name: /add .* to cart|add to cart/i })).toHaveCount(0);
+  await guest.goto(`${store}&status=all`);
+  await expect(guest.getByText(soldTitle)).toBeVisible({ timeout: 30_000 });
 
-  // The URL cannot widen what a stranger may see.
-  await guest.goto(`${store}&status=draft`);
-  await expect(guest.getByText(draftTitle)).toHaveCount(0);
+  // The URL cannot widen what a stranger may see — not with a status, and
+  // not with the owner's own worklist tab.
+  for (const attack of ["draft", "hidden", "paused"]) {
+    await guest.goto(`${store}&status=${attack}`);
+    await expect(guest.getByRole("group", { name: /which parts to show/i })).toBeVisible({ timeout: 30_000 });
+    await expect(guest.getByText(draftTitle)).toHaveCount(0);
+  }
+  await expect(guest.getByRole("link", { name: "Not live", exact: true })).toHaveCount(0);
 
   // And the sold part is unbuyable rather than merely unlabelled.
   await guest.goto(soldPath);
@@ -459,26 +469,24 @@ test("journey 6 — a delivered order becomes a line on the build sheet, once", 
   expect(item.error).toBeNull();
 
   await buyerPage.goto(`/orders/${order.data!.id}`);
-  const add = buyerPage.getByRole("button", { name: "Add to a car" }).first();
+  // One car in the garage, so there is nothing to choose: the button names
+  // the car and adds it. (With several cars it opens a picker instead.)
+  const add = buyerPage.getByRole("button", { name: "Add to Journey Six Buyer Car" }).first();
   await expect(add).toBeVisible({ timeout: 30_000 });
   await add.click();
-  await buyerPage
-    .getByRole("dialog")
-    .getByRole("button", { name: "Journey Six Buyer Car" })
-    .click();
-  await expect(buyerPage.getByRole("status").first()).toBeVisible({ timeout: 30_000 });
+  await expect(buyerPage.getByRole("status").filter({ hasText: /added to your build/i })).toBeVisible({
+    timeout: 30_000,
+  });
 
-  // A second tap adds nothing — idempotent through source_order_item_id.
+  // A second tap adds nothing — idempotent through source_order_item_id —
+  // and says so, rather than erroring or pretending it was added again.
   await buyerPage.reload();
-  const again = buyerPage.getByRole("button", { name: "Add to a car" }).first();
-  if (await again.count()) {
-    await again.click();
-    await buyerPage
-      .getByRole("dialog")
-      .getByRole("button", { name: "Journey Six Buyer Car" })
-      .click();
-    await expect(buyerPage.getByRole("status").first()).toBeVisible({ timeout: 30_000 });
-  }
+  const again = buyerPage.getByRole("button", { name: "Add to Journey Six Buyer Car" }).first();
+  await expect(again).toBeVisible({ timeout: 30_000 });
+  await again.click();
+  await expect(buyerPage.getByRole("status").filter({ hasText: /already on this car/i })).toBeVisible({
+    timeout: 30_000,
+  });
 
   const { data: buyerCar } = await admin
     .from("cars")

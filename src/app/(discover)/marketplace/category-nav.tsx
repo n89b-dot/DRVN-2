@@ -141,3 +141,75 @@ export function CategoryNav({
 }
 
 export { CategorySheet };
+
+/**
+ * The sidebar's category list (M-3): from 1024px "what kind of part" sits in
+ * the left column with the filters, so that column is the whole of "narrow
+ * this down" and the results start at the top of the page. One flat list —
+ * icons, not photos — with the current category opened to its part types.
+ * Still navigation, still plain links: choosing a category is going
+ * somewhere, not ticking a box.
+ */
+export function CategorySidebarList({
+  category,
+  subcategory,
+  filters = {},
+  counts,
+}: {
+  category?: Category | null;
+  subcategory?: string | null;
+  filters?: ListingFilters;
+  counts?: Record<string, number>;
+}) {
+  const shown = CATEGORIES.filter((c) => !counts || (counts[c.slug] ?? 0) > 0 || c.slug === category?.slug);
+  return (
+    <nav className="catside" aria-label="Browse by category">
+      <span className="microlabel filters__label">Categories</span>
+      <ul className="catside__list">
+        <li>
+          <Link href={categoryHref(filters)} className="catside__row" aria-current={!category ? "page" : undefined}>
+            <span className="catside__ico" aria-hidden="true">∀</span>
+            <span className="catside__label">All parts</span>
+            {counts && <span className="catside__n">{counts.all ?? 0}</span>}
+          </Link>
+        </li>
+        {shown.map((c) => {
+          const here = c.slug === category?.slug;
+          return (
+            <li key={c.slug}>
+              <Link
+                href={categoryHref(filters, c.slug)}
+                className="catside__row"
+                aria-current={here && !subcategory ? "page" : undefined}
+              >
+                <span className="catside__ico" aria-hidden="true">
+                  <CategoryIcon name={c.icon} />
+                </span>
+                <span className="catside__label">{c.label}</span>
+                {counts && <span className="catside__n">{counts[c.slug] ?? 0}</span>}
+              </Link>
+              {here && (
+                <ul className="catside__sub">
+                  {c.subcategories
+                    .filter((sub) => !counts || (counts[`${c.slug}/${sub.slug}`] ?? 0) > 0 || sub.slug === subcategory)
+                    .map((sub) => (
+                      <li key={sub.slug}>
+                        <Link
+                          href={categoryHref(filters, c.slug, sub.slug)}
+                          className="catside__row catside__row--sub"
+                          aria-current={sub.slug === subcategory ? "page" : undefined}
+                        >
+                          <span className="catside__label">{sub.label}</span>
+                          {counts && <span className="catside__n">{counts[`${c.slug}/${sub.slug}`] ?? 0}</span>}
+                        </Link>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}

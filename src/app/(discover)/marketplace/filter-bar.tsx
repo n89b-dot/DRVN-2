@@ -33,6 +33,7 @@ export function FilterBar({
   showFitToggle,
   fitCarLabel,
   browse,
+  sidebar,
   brands = [],
 }: {
   action: string;
@@ -43,6 +44,9 @@ export function FilterBar({
   /** The compact-width category browser (CategorySheet), placed in the
    *  toolbar beside Refine and Sort so browsing is one tap on a phone. */
   browse?: ReactNode;
+  /** The category list, shown at the top of the panel only where the panel
+   *  is a sidebar (≥1024px). In the sheet, categories have their own sheet. */
+  sidebar?: ReactNode;
   /** Brands that actually have parts live, with their counts (M-6). */
   brands?: { brand: string; total: number }[];
 }) {
@@ -88,6 +92,7 @@ export function FilterBar({
             </>
           }
         >
+          {sidebar && <div className="hidden lg:block">{sidebar}</div>}
           <span className="microlabel filters__label">Filters</span>
         <select
           name="condition"

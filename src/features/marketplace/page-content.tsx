@@ -7,7 +7,7 @@ import { CATEGORY_REDIRECTS, categoryHref, hasMarketplaceSearch, marketplaceHref
 import { getCategory } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { ActiveFilters } from "@/app/(discover)/marketplace/active-filters";
-import { CategoryNav, CategorySheet } from "@/app/(discover)/marketplace/category-nav";
+import { CategoryNav, CategorySheet, CategorySidebarList } from "@/app/(discover)/marketplace/category-nav";
 import { FilterBar } from "@/app/(discover)/marketplace/filter-bar";
 import { MarketplaceResults } from "./results";
 import { VehicleControl } from "./vehicle-control";
@@ -88,6 +88,13 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         showFitToggle={Boolean(user)}
         brands={brands}
         browse={<CategorySheet currentCategory={category?.slug} currentSubcategory={leaf?.slug} filters={filters} />}
+        sidebar={
+          <Suspense fallback={<CategorySidebarList category={category} subcategory={leaf?.slug} filters={filters} />}>
+            {categoryPromise.then((counts) => (
+              <CategorySidebarList counts={counts} category={category} subcategory={leaf?.slug} filters={filters} />
+            ))}
+          </Suspense>
+        }
       />
       <VehicleControl key={`vehicle-${filters.vehicle}-${filters.vyear}`} filters={filters} selection={vehicle} garage={garageChoices} />
       <ActiveFilters basePath={basePath} filters={filters} vehicleLabel={vehicle ? [filters.vyear, vehicle.label].filter(Boolean).join(" ") : undefined} />

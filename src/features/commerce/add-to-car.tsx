@@ -57,11 +57,21 @@ export function AddToCar({
     });
   }
 
+  // One car: there is nothing to choose, so the button names the car and
+  // does it. The dialog is for a garage where "which one?" is a question.
+  const only = cars.length === 1 ? cars[0] : null;
+
   return (
     <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
-        Add to a car
-      </Button>
+      {only ? (
+        <Button variant="ghost" onClick={() => add(only.id)} loading={pending} pendingLabel="Adding…">
+          Add to {only.name}
+        </Button>
+      ) : (
+        <Button variant="ghost" onClick={() => setOpen(true)}>
+          Add to a car
+        </Button>
+      )}
       {error && (
         <p role="alert" className="field__err">
           {error}

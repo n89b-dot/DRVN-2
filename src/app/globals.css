@@ -8919,6 +8919,10 @@ video {
   .marketplace-layout .finder__main > .sortsel,
   .marketplace-layout .finder__main > select,
   .marketplace-layout .finder__main > label { grid-column: 3; margin-bottom: 16px; }
+  /* The tiles and the tree are how categories are browsed BELOW this
+     width; here the sidebar's list does it, and the results start sooner. */
+  .marketplace-layout > .catnav,
+  .marketplace-layout > .marketplace-categories { display: none; }
   .marketplace-layout .finder__refine {
     order: -1;
     grid-column: 1;
@@ -8934,6 +8938,28 @@ video {
     top: 88px;
   }
 }
+
+/* The sidebar's category list. Rows, not tiles: a list is scanned down. */
+.catside { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--rule-soft); }
+.catside__list, .catside__sub { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.catside__sub { margin: 2px 0 6px 30px; }
+.catside__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: var(--r-ctl);
+  font-size: var(--text-micro);
+  color: var(--ink);
+}
+.catside__row:hover { background: var(--tile-2); }
+.catside__row[aria-current="page"] { background: var(--ink); color: var(--paper); }
+.catside__row--sub { min-height: 30px; color: var(--dim); }
+.catside__ico { display: grid; place-items: center; width: 20px; height: 20px; flex: none; }
+.catside__ico svg { width: 18px; height: 18px; }
+.catside__label { flex: 1; min-width: 0; }
+.catside__n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; opacity: 0.7; }
 
 .marketplace-card__source {
   margin: 0;
