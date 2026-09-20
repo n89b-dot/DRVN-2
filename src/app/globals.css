@@ -2910,20 +2910,25 @@ video {
 
    The only cell allowed to break the grid is a BREAKER — a full-width row
    between the cards (E-4), which is deliberate and reads as one. */
+.mosaic--uniform {
+  /* Rows size to their content so a breaker can be as short as it is. The
+     cards keep their one footprint by carrying the unit height themselves
+     (below) — with `grid-auto-rows` doing it, a row of chips was given a
+     whole card's height: 420px of tile around one line of links. */
+  grid-auto-rows: auto;
+}
 .mosaic--uniform > .mcell {
   grid-column: span 1;
   grid-row: span 1;
+  height: calc(((100cqw - (var(--mcols) - 1) * var(--mgap)) / var(--mcols)) * var(--mratio));
 }
 .mosaic--uniform .mcell__cap {
   min-height: 0;
 }
 .mosaic--breaker {
   grid-column: 1 / -1;
-  grid-row: span 1;
-  align-self: stretch;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 10px;
   padding: clamp(14px, 2vw, 20px);
   background: var(--tile);
@@ -8116,6 +8121,19 @@ video {
   .mcell {
     padding: 12px 16px;
   }}
+/* The design proof's finding: on a phone the photo took whatever the caption
+   left, so an update's photo was 102px beside a build's 151px and no two
+   rows of photos lined up. One frame for every card; the caption — whose
+   depth is what varies by kind — takes the rest. 3:2 is what leaves the
+   deepest caption (an update: title, excerpt, owner, vehicle) unclipped.
+   Unlayered, beside the plate recipe it overrides: a layered rule loses to
+   that one whatever its specificity. */
+@container wall (max-width: 600px) {
+  .mosaic--uniform .mcell .mcell__link .mcell__img {
+    flex: none;
+    aspect-ratio: 3 / 2;
+  }
+}
 /* The phone wall's 2×1 wide cell (builds and updates only — a listing is
    always square, its part photos are often portrait) crosses the 232px
    line but shares the square's row height, so it keeps the flexible plate: a fixed 12:7 on a

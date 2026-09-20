@@ -23,7 +23,9 @@ export function TrendingBreaker({
     <div className="mosaic--breaker" role="listitem">
       <span className="microlabel microlabel--ink">Trending now</span>
       <FilterGroup label="" ariaLabel="Trending models" stack>
-        {models.map((m) => (
+        {/* Six at most: on a phone ten chips stacked to half a screen of
+            links, which is a list, not a breaker. */}
+        {models.slice(0, 6).map((m) => (
           <FilterLink
             key={`${m.make}-${m.model}`}
             href={`/explore?q=${encodeURIComponent(`${m.make} ${m.model}`)}`}

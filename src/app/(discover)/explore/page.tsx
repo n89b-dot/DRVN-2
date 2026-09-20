@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { FilterGroup, FilterLink, Foot } from "@/components/ui";
+import { AccountRowList } from "@/components/commerce";
+import { EmptyState, FilterGroup, FilterLink, Foot, Icon, type IconName } from "@/components/ui";
 import { MarketplaceResults } from "@/features/marketplace/results";
 import {
   exploreSearchHref,
@@ -16,7 +17,7 @@ import {
   searchParts,
   searchUpdates,
 } from "@/lib/explore/search/query";
-import { FEED_TABS, fetchFeed, resolveFeedTab } from "@/lib/feed";
+import { FEED_TABS, fetchFeed, resolveFeedTab, type FeedTab } from "@/lib/feed";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
@@ -36,6 +37,13 @@ export const metadata = { title: "Explore - DRVN" };
  * the scope tabs carry compatible search state across (incompatible filters
  * drop by construction, §30).
  */
+const SEGMENT_ICONS: Record<FeedTab, IconName> = {
+  all: "compass",
+  cars: "garage",
+  updates: "image",
+  parts: "market",
+};
+
 export default async function ExplorePage({
   searchParams,
 }: {
@@ -60,6 +68,7 @@ export default async function ExplorePage({
   if (params.vehicle && !vehicle) params.vehicle = "";
 
   const searching = hasActiveSearch(params);
+  const showBuilders = !searching && raw.show === "builders";
 
   // E-4's two breakers, each with its own query. They render only when they
   // have enough to show, which the components decide — so a quiet week
@@ -68,7 +77,10 @@ export default async function ExplorePage({
     ? [{ data: [] }, { data: [] }]
     : await Promise.all([
         supabase.rpc("trending_models", { p_days: 45, p_limit: 10 }),
-        supabase.rpc("suggested_builders", { p_viewer: viewerId ?? undefined, p_limit: 4 }),
+        supabase.rpc("suggested_builders", {
+          p_viewer: viewerId ?? undefined,
+          p_limit: showBuilders ? 24 : 4,
+        }),
       ]);
   const trending = (trendingRows ?? []).map((t) => ({
     make: t.make,
@@ -80,11 +92,18 @@ export default async function ExplorePage({
     username: b.username,
     display_name: b.display_name,
     avatar_url: b.avatar_url,
-    meta: `${b.car_count} car${Number(b.car_count) === 1 ? "" : "s"}`,
+    meta: [
+      `${b.car_count} car${Number(b.car_count) === 1 ? "" : "s"}`,
+      Number(b.update_count) > 0
+        ? `${b.update_count} update${Number(b.update_count) === 1 ? "" : "s"}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
   }));
 
   // Browse mode: page one of the feed renders here; the wall pulls the rest.
-  const feed = searching
+  const feed = searching || showBuilders
     ? null
     : await fetchFeed(supabase, tab, { page: 1, viewerId });
 
@@ -162,11 +181,23 @@ export default async function ExplorePage({
             <FilterLink
               key={t.key}
               href={exploreSearchHref(t.key, params)}
-              selected={tab === t.key}
+              selected={!showBuilders && tab === t.key}
+              className="gap-1.5"
             >
+              {/* E-3: an icon per segment — the row is scanned, not read. */}
+              <Icon name={SEGMENT_ICONS[t.key]} className="h-4 w-4" />
               {t.label}
             </FilterLink>
           ))}
+          {/* E-3's fifth segment is people, not feed items, so it isn't a
+              feed tab: it has no search scope and nothing to page. Hidden
+              while searching — search has its own people results. */}
+          {!searching && (
+            <FilterLink href="/explore?show=builders" selected={showBuilders} className="gap-1.5">
+              <Icon name="user" className="h-4 w-4" />
+              Builders
+            </FilterLink>
+          )}
         </FilterGroup>
       </div>
 
@@ -174,7 +205,18 @@ export default async function ExplorePage({
         <ActiveSearchFilters tab={tab} params={params} vehicleLabel={vehicle?.label ?? null} />
       )}
 
-      {!searching && feed && (
+      {showBuilders &&
+        (builders.length > 0 ? (
+          <section className="deck" aria-label="Builders to follow">
+            <AccountRowList accounts={builders} />
+          </section>
+        ) : (
+          <EmptyState mark="✎" title="No builders to suggest yet">
+            People show up here once they&apos;ve put a car, with a photo, on DRVN.
+          </EmptyState>
+        ))}
+
+      {!searching && !showBuilders && feed && (
         <ExploreWall
           key={tab}
           tab={tab}
