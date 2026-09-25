@@ -1,15 +1,14 @@
 import { AnalyticsConsent } from "./analytics-consent";
 import { loadFulfillmentProfile } from "@/features/commerce/fulfillment";
 import { COUNTRIES } from "@/lib/geo/countries";
+import { getConnectAccountId } from "@/lib/payments/connect";
 import { listSavedCards } from "@/lib/payments/customers";
-import { getSellerLedger } from "@/lib/payments/ledger";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { logout } from "@/app/(auth)/actions";
 
-import { PayoutsSection } from "./payouts-section";
 import { SettingsPanel } from "./settings-panel";
 import { ShippingSection } from "./shipping-section";
 import { ShopSection } from "./shop-section";
@@ -27,10 +26,18 @@ export default async function SettingsPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "username, display_name, headline, bio, location, country, region, store_note, links, notification_prefs, stripe_account_id, payouts_enabled, profile_type"
+      "username, display_name, headline, bio, location, country, region, store_note, links, notification_prefs, payouts_enabled, profile_type"
     )
     .eq("id", user!.id)
     .single();
+  // `stripe_account_id` has no client select grant; asking for it in the
+  // query above made the whole row come back null (blank profile form that
+  // would save empty strings over the member's public profile). The pointer
+  // is read server-side instead, like every other Connect check.
+  const connectAccountId = await getConnectAccountId(user!.id).catch(() => null);
+  // Never render the profile form over a row that failed to load: its
+  // fields would seed as empty strings and Save would blank the profile.
+  if (!profile) throw new Error("Settings could not load your profile.");
   // P-9: the floor has no client select grant — a buyer who could read it
   // would bid exactly it — so the owner asks through a function that can
   // only answer about themselves.
@@ -43,9 +50,8 @@ export default async function SettingsPage() {
     .maybeSingle();
 
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
-  const [savedCards, ledger, fulfillment] = await Promise.all([
+  const [savedCards, fulfillment] = await Promise.all([
     listSavedCards(user!.id).catch(() => []),
-    getSellerLedger(supabase, user!.id),
     loadFulfillmentProfile(user!.id),
   ]);
 
@@ -56,13 +62,12 @@ export default async function SettingsPage() {
     // own — without it the section register scrolls with no bleed and stops
     // dead at the column edge, saying nothing about the sections to its right.
     <div className="mx-auto w-full max-w-[900px] px-6 pb-10 [--gutter:24px]">
-      <AnalyticsConsent />
       <SettingsPanel
         paymentsLive={paymentsAreLive()}
         savedCards={savedCards}
         connect={{
           stripeConfigured: getPaymentProvider().name === "stripe",
-          hasAccount: Boolean(profile?.stripe_account_id),
+          hasAccount: Boolean(connectAccountId),
           payoutsEnabled: profile?.payouts_enabled ?? false,
         }}
         profile={{
@@ -80,7 +85,7 @@ export default async function SettingsPage() {
           notification_prefs: profile?.notification_prefs ?? {},
         }}
         logout={logout}
-        payoutsSection={<PayoutsSection ledger={ledger} paymentsLive={paymentsAreLive()} />}
+        privacySection={<AnalyticsConsent />}
         shippingSection={
           <ShippingSection
             countries={COUNTRIES}

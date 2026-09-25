@@ -19,6 +19,11 @@ import { Icon } from "./icons";
  * The children stay mounted while closed (BottomSheet hides, never
  * unmounts), so inside a GET form every refinement still submits with the
  * search — URL behavior is unchanged.
+ *
+ * `actions` is the sheet's one footer: a quiet Reset on the left and the
+ * primary Apply on the right, in one row. With it the sheet drops its own
+ * dismiss button — the scrim, Escape and the drag close it (and discard the
+ * draft), so a third "Cancel" under Reset and Apply was one button too many.
  */
 export function FinderRefineSheet({
   label = "Filters",
@@ -27,7 +32,10 @@ export function FinderRefineSheet({
   children,
   onDismiss,
   inline,
+  actions,
 }: {
+  /** The footer row — `[Reset] … [Apply]` (see above). */
+  actions?: React.ReactNode;
   label?: string;
   /** How many refinements are currently applied — shown on the toggle. */
   activeCount?: number;
@@ -65,12 +73,15 @@ export function FinderRefineSheet({
       <BottomSheet
         open={open}
         onClose={() => { onDismiss?.(); setOpen(false); }}
-        closeLabel={onDismiss ? "Cancel" : "Done"}
+        closeLabel={actions ? null : onDismiss ? "Cancel" : "Done"}
         label={label}
         align={inline ? undefined : "center"}
         inlineFrom={inline}
       >
-        <div className="finder__refine">{children}</div>
+        <div className="finder__refine">
+          {children}
+          {actions && <div className="finder__actions">{actions}</div>}
+        </div>
       </BottomSheet>
     </>
   );

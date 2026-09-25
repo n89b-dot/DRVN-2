@@ -68,7 +68,7 @@ export function PartPicker({
       <Button variant="ghost" onClick={() => setOpen(true)}>
         {selected.length ? `Parts (${selected.length})` : "Tag a part"}
       </Button>
-      <BottomSheet open={open} onClose={() => setOpen(false)} label="Tag a part" align="center">
+      <BottomSheet open={open} onClose={() => setOpen(false)} label="Tag a part" align="center" closeLabel={null}>
         <h2 className="text-section">Tag a part</h2>
         <p className="text-body text-dim">
           Up to {MAX_TAGGED}. They show under the photos with a price and add-to-cart.

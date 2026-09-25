@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -41,6 +41,22 @@ export type SearchSuggestGroup = {
 
 const DEBOUNCE_MS = 150;
 
+/** Buyable results before chatter: parts are the only thing a suggestion can
+ *  sell, and on a phone they used to sit below the popover's cut, under
+ *  three updates. Unlisted kinds keep the endpoint's order after these. */
+const GROUP_ORDER = ["builds", "parts", "accounts", "updates"];
+
+/** Phones get two per group so every group fits the popover without a
+ *  hidden scroll; wider screens take what the endpoint sends. */
+const PHONE_QUERY = "(max-width: 639px)";
+const PHONE_CAP = 2;
+
+function subscribePhone(cb: () => void) {
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+
 export function SuggestingSearchField({
   label,
   name = "q",
@@ -76,15 +92,34 @@ export function SuggestingSearchField({
   // popover over results the server already delivered.
   const interactedRef = useRef(false);
 
-  const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  const phone = useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false
+  );
+  const shown = useMemo(() => {
+    const rank = (kind: string) => {
+      const i = GROUP_ORDER.indexOf(kind);
+      return i === -1 ? GROUP_ORDER.length : i;
+    };
+    return [...groups]
+      .sort((a, b) => rank(a.kind) - rank(b.kind))
+      .map((g) => ({ ...g, items: phone ? g.items.slice(0, PHONE_CAP) : g.items }))
+      .filter((g) => g.items.length > 0);
+  }, [groups, phone]);
+  const flat = useMemo(() => shown.flatMap((g) => g.items), [shown]);
   // Global option indices per group, precomputed so render never counts.
   const indexed = useMemo(() => {
     let i = 0;
-    return groups.map((group) => ({
+    return shown.map((group) => ({
       ...group,
       items: group.items.map((item) => ({ item, index: i++ })),
     }));
-  }, [groups]);
+  }, [shown]);
+  // The last option is always "Search for …" — the full results page, one
+  // tap away, where the capped groups end.
+  const allIndex = flat.length;
+  const optionCount = flat.length + 1;
 
   useEffect(() => {
     if (!interactedRef.current) return;
@@ -139,22 +174,29 @@ export function SuggestingSearchField({
     router.push(item.href);
   };
 
+  const searchAll = () => {
+    setOpen(false);
+    const form = rootRef.current?.closest("form");
+    if (form) form.requestSubmit();
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       if (!flat.length) return;
       event.preventDefault();
       if (!open) {
         setOpen(true);
-        setActiveIndex(event.key === "ArrowDown" ? 0 : flat.length - 1);
+        setActiveIndex(event.key === "ArrowDown" ? 0 : optionCount - 1);
         return;
       }
       const delta = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex((current) => (current + delta + flat.length) % flat.length);
+      setActiveIndex((current) => (current + delta + optionCount) % optionCount);
     } else if (event.key === "Enter") {
       if (open && activeIndex >= 0 && flat[activeIndex]) {
         event.preventDefault();
         commit(flat[activeIndex]);
       }
+      // The "Search for …" row, or no selection: the natural GET submit.
       // else: natural GET submit — the full results page is the answer.
     } else if (event.key === "Escape") {
       if (open) {
@@ -167,7 +209,10 @@ export function SuggestingSearchField({
   };
 
   return (
-    <div ref={rootRef} className={cx("combo w-full max-w-none flex-[1_1_220px]", className)}>
+    <div
+      ref={rootRef}
+      className={cx("combo combo--suggest w-full max-w-none flex-[1_1_220px]", className)}
+    >
       <label className="search">
         <Icon name="search" className="h-4 w-4 shrink-0" />
         <input
@@ -229,13 +274,27 @@ export function SuggestingSearchField({
                         }}
                         onPointerMove={() => setActiveIndex(index)}
                       >
-                        <span className="min-w-0 truncate">{item.label}</span>
+                        <span className="combo__optlabel">{item.label}</span>
                         {item.sub && <span className="combo__optnote">{item.sub}</span>}
                       </li>
                     ))}
                   </ul>
                 </li>
               ))}
+              <li
+                id={optionId(allIndex)}
+                role="option"
+                aria-selected={activeIndex === allIndex}
+                className={cx("combo__opt combo__all", activeIndex === allIndex && "is-active")}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  searchAll();
+                }}
+                onPointerMove={() => setActiveIndex(allIndex)}
+              >
+                <span className="combo__optlabel">Search for &ldquo;{query.trim()}&rdquo;</span>
+                <span aria-hidden="true">→</span>
+              </li>
             </ul>
           </motion.div>
         )}

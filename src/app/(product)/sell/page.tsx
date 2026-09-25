@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Rv } from "@/components/livesheet";
-import { ButtonLink, EmptyState, Foot } from "@/components/ui";
+import { Alert, Foot, PageHead } from "@/components/ui";
 import { getBetaAccess } from "@/lib/beta-access";
 import { capture } from "@/lib/analytics";
 import { sourceLabelFor } from "@/lib/listing-import/engine";
@@ -23,6 +22,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
 import { SellForm, type SellFormInitialValues } from "./sell-form";
+import { SellerAccessNotice } from "./seller-access-notice";
 import { reportError } from "@/lib/monitoring";
 import { orderCars } from "@/lib/cars/order";
 
@@ -119,19 +119,7 @@ export default async function SellPage({
   if (!user) redirect("/login");
 
   const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) {
-    return (
-      <div className="wrap pb-10">
-        <EmptyState
-          mark="β"
-          title="Selling is limited to invited members"
-          action={<ButtonLink href="/marketplace">Browse the marketplace</ButtonLink>}
-        >
-          Your account can keep working on existing orders. Creating or republishing listings requires active seller access.
-        </EmptyState>
-      </div>
-    );
-  }
+  if (!betaAccess.eligible) return <SellerAccessNotice />;
 
   const [{ data: cars, error }, makes, canPublish, fulfillment] = await Promise.all([
     supabase
@@ -259,16 +247,17 @@ export default async function SellPage({
 
   return (
     <div className="mx-auto w-full max-w-[860px] px-5 pb-10">
-      <Rv as="header" className="pagehead pagehead--task">
-        <span className="microlabel">
-          {isImportReview
+      <PageHead
+        className="pagehead--task"
+        eyebrow={
+          isImportReview
             ? `Imported from ${initialValues?.importReview?.sourceLabel} — not public yet`
             : initialValues?.modItemId
               ? `Listing a part off your ${sourceCar?.name}`
-              : "New listing — draft, not public yet"}
-        </span>
-        <h1>
-          {isImportReview ? (
+              : "New listing — draft, not public yet"
+        }
+        title={
+          isImportReview ? (
             <>
               Check your <span className="live-word">listing.</span>
             </>
@@ -276,22 +265,25 @@ export default async function SellPage({
             <>
               List a <span className="live-word">part.</span>
             </>
-          )}
-        </h1>
-        <p className="sub">
-          {isImportReview
+          )
+        }
+        sub={
+          isImportReview
             ? "We organized your existing post into a DRVN listing. Look it over — you publish, we never do."
-            : "Takes a few minutes. Link it to a car in your garage so buyers can see the build it came off — it's the difference between a listing and a shrug."}
-        </p>
-        {!isImportReview && (
-          <p className="sub">
-            Already posted this somewhere else?{" "}
-            <Link href="/sell/import" className="jumplink">
-              Import an existing listing →
-            </Link>
-          </p>
-        )}
-      </Rv>
+            : "Link it to a car in your garage and buyers see the build it came off."
+        }
+      />
+
+      {/* An alternative start, not body copy: it sat in the head as a second
+          paragraph before a single field. */}
+      {!isImportReview && (
+        <Alert ico="↗" title="Already posted it somewhere else?" className="mb-6">
+          Paste the link or the post and we&apos;ll do the formatting.{" "}
+          <Link href="/sell/import" className="jumplink">
+            Import an existing listing →
+          </Link>
+        </Alert>
+      )}
 
       <SellForm
         defaultOfferFloorPct={offerFloorPct ?? null}

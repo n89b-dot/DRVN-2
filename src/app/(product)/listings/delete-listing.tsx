@@ -16,9 +16,11 @@ import { deleteListing } from "../sell/actions";
 export function DeleteListing({
   listingId,
   triggerLabel = "Delete this listing",
+  triggerClassName = "relbtn !static",
 }: {
   listingId: string;
   triggerLabel?: string;
+  triggerClassName?: string;
 }) {
   const [state, formAction, pending] = useActionState(async (previous: Parameters<typeof deleteListing>[0], data: FormData) => {
     try {
@@ -44,7 +46,7 @@ export function DeleteListing({
       hidden={{ id: listingId }}
       pending={pending}
       error={state?.error}
-      triggerClassName="relbtn !static"
+      triggerClassName={triggerClassName}
     >
       {triggerLabel}
     </ConfirmDialog>

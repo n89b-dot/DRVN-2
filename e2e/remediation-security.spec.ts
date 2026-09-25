@@ -190,7 +190,7 @@ test("delivered password reset succeeds once while reused and expired links fail
     await page.getByLabel(/^email$/i).fill(user.email);
     await page.getByLabel(/^password$/i).fill(user.password);
     await page.getByRole("button", { name: /sign in/i }).click();
-    await expect(page.getByRole("alert").filter({ hasText: /invalid login credentials/i })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: /email and password don't match/i })).toBeVisible();
     await expect(page.getByLabel(/^email$/i)).toHaveValue(user.email);
     await expect(page.getByLabel(/^password$/i)).toHaveValue(user.password);
     await page.getByLabel(/^password$/i).fill(newPassword);

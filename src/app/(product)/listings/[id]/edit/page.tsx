@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot } from "@/components/ui";
-import { Alert } from "@/components/ui";
+import { Alert, ButtonLink, Foot, Media, PageHead } from "@/components/ui";
+import { formatPrice } from "@/lib/payments/fee";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
@@ -74,17 +74,49 @@ export default async function EditListingPage({
     ]);
 
   const locked = ["sold", "reserved"].includes(listing.status);
+  const statusLabel: Record<string, string> = {
+    draft: "Draft, not public",
+    active: "Live",
+    paused: "Paused",
+    archived: "Archived",
+    reserved: "Reserved",
+    sold: "Sold",
+  };
+  const sourceCar = (cars ?? []).find((c) => c.id === listing.source_car_id);
+  const cover = images?.[0]?.url;
 
   return (
     <div className="mx-auto w-full max-w-[860px] px-5 pb-10">
-      <Rv as="header" className="pagehead">
-        <span className="microlabel">
-          Editing · {listing.status === "draft" ? "draft, not public" : listing.status}
-        </span>
-        <h1>
-          Redraw the <span className="live-word">line.</span>
-        </h1>
-      </Rv>
+      {/* A task head names the thing being edited — photo, title, price,
+          where it came off — with a way back to the public page. */}
+      <PageHead
+        className="pagehead--task"
+        eyebrow={`Editing · ${statusLabel[listing.status] ?? listing.status}`}
+        title={listing.title}
+      >
+        <p className="sub sub--keep flex items-center gap-3">
+          <Media
+            src={cover}
+            alt={listing.title}
+            className="order__img"
+            role="thumb"
+          />
+          <span>
+            {formatPrice(listing.price_cents)}
+            {sourceCar && <> · Off {sourceCar.name}</>}
+          </span>
+        </p>
+        <div className="jumprow !mb-0 !mt-4">
+          {listing.status !== "draft" && (
+            <Link href={`/listings/${listing.id}`} className="jumplink">
+              View listing →
+            </Link>
+          )}
+          <Link href="/listings" className="jumplink">
+            All listings
+          </Link>
+        </div>
+      </PageHead>
 
       {saved === "draft" && (
         <Alert tone="ok" ico="✓" title="Draft saved" className="mb-6">
@@ -93,16 +125,15 @@ export default async function EditListingPage({
       )}
 
       {locked ? (
-        <Rv className="alert">
-          <h4>This part is {listing.status}</h4>
-          <p>
+        <>
+          <Alert title={`This part is ${listing.status}`}>
             A sold or reserved listing can&apos;t be edited — its details are part of an order
             record. List a replacement instead.
-          </p>
-          <Link href="/sell" className="btn btn--ghost">
+          </Alert>
+          <ButtonLink variant="ghost" href="/sell" className="mt-4">
             List another part
-          </Link>
-        </Rv>
+          </ButtonLink>
+        </>
       ) : (
         <SellForm
           cars={cars ?? []}
@@ -164,7 +195,7 @@ export default async function EditListingPage({
       </section>
 
       <Foot
-        left="DRVN / Livesheet — edits publish immediately"
+        left="DRVN — edits publish immediately"
         right={<Link href="/listings">← All your listings</Link>}
       />
     </div>

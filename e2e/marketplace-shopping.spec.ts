@@ -208,7 +208,7 @@ for (const scheme of ["light", "dark"] as const) {
 test("guest Save search resumes the complete search after authentication", async ({ page }) => {
   await page.goto(`/marketplace/performance/intake?q=${encodeURIComponent(prefix)}&max=300&sort=price_asc`);
   await page.getByRole("button", { name: "Save search", exact: true }).click();
-  await page.getByRole("dialog", { name: "Sign in to save this search", exact: true }).getByRole("link", { name: /Sign in and save search/ }).click();
+  await page.getByRole("dialog", { name: "Sign in to save this search", exact: true }).getByRole("link", { name: "Sign in", exact: true }).click();
   await page.getByLabel(/email/i).fill(email); await page.getByLabel(/^password$/i).fill(password);
   await page.getByRole("button", { name: /log in|sign in/i }).click();
   await expect(page).toHaveURL(/\/marketplace\/performance\/intake\?/);

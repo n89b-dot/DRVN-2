@@ -60,6 +60,23 @@ export function ExploreSearchBar({
 
         <FinderRefineSheet
           activeCount={activeFilterCount(params)}
+          /* The same footer as the Marketplace's: Reset quiet on the left,
+             Apply on the right, one row — the refinements apply with the
+             search, and the button says so. */
+          actions={
+            <>
+              <Button type="button" variant="quiet" onClick={() => {
+                for (const name of ["condition", "min", "max", "fit", "ymin", "ymax"]) {
+                  const input = formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null;
+                  if (!input) continue;
+                  if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = false;
+                  else input.value = "";
+                  input.setCustomValidity("");
+                }
+              }}>Reset</Button>
+              <Button type="submit">Apply filters</Button>
+            </>
+          }
           onDismiss={() => { formRef.current?.reset(); (formRef.current?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity(""); setVehicleDraft(value => value + 1); }}
           aside={
             <SearchSortSelect
@@ -175,20 +192,6 @@ export function ExploreSearchBar({
             </label>
           )}
 
-          {/* Inside the sheet the refinements apply with the search — say so,
-              instead of leaving anyone to guess whether "Done" submits. */}
-          <Button type="submit" className="w-full">
-            Apply filters
-          </Button>
-          <Button type="button" variant="ghost" className="w-full" onClick={() => {
-            for (const name of ["condition", "min", "max", "fit", "ymin", "ymax"]) {
-              const input = formRef.current?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null;
-              if (!input) continue;
-              if (input instanceof HTMLInputElement && input.type === "checkbox") input.checked = false;
-              else input.value = "";
-              input.setCustomValidity("");
-            }
-          }}>Reset filters</Button>
         </FinderRefineSheet>
       </div>
     </form>

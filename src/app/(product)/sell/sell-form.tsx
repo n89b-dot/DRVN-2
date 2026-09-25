@@ -6,7 +6,20 @@ import { unstable_rethrow } from "next/navigation";
 
 import { AnimatePresence, motion } from "motion/react";
 
-import { Button, FormSection, Media, Select, TextArea, TextField, ValidationSummary } from "@/components/ui";
+import {
+  ActionFooter,
+  Button,
+  Checkbox,
+  DropZone,
+  FormSection,
+  Media,
+  MobileActionBar,
+  Radio,
+  Select,
+  TextArea,
+  TextField,
+  ValidationSummary,
+} from "@/components/ui";
 import { expand } from "@/lib/motion";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
@@ -144,7 +157,8 @@ export function SellForm({
     listing?.shipping_mode ?? "flat"
   );
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  /** The photo whose alt-text field is open (one at a time). */
+  const [editingAlt, setEditingAlt] = useState<string | null>(null);
   // Kept for the lifetime of this form so a retry after a lost Server Action
   // response addresses the same listing creation request.
   const creationRequestId = useRef<string | null>(null);
@@ -157,7 +171,11 @@ export function SellForm({
   // uncontrolled defaultValue inputs so the checklist and readiness note can
   // read them live, without re-plumbing the rest of the form.
   const [grade, setGrade] = useState(listing?.grade ?? "");
-  const [attestAccurate, setAttestAccurate] = useState(false);
+  // The seller attested this disclosure when the listing was saved with its
+  // grade, so an edit that leaves grade and checklist alone doesn't ask
+  // again — changing a price used to fail on a checkbox two sections away.
+  // Touching the grade or any checklist answer clears it (below).
+  const [attestAccurate, setAttestAccurate] = useState(Boolean(listing?.grade));
   const [price, setPrice] = useState(listing ? money(listing.price_cents) : prefill?.price ?? "");
   // P-9: a seller default, applied to the FORM only. The listing keeps its
   // own offer_floor_cents, so changing the setting later never alters what
@@ -175,12 +193,19 @@ export function SellForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const usedNeedsGrade = condition !== "new";
+  // M-5/W-2: the photo is the unit of the product — a public listing needs
+  // at least one. Drafts are exempt; so is editing a listing that isn't live.
+  const publishesNow = !isEdit || listing?.status === "active";
 
   /** Mirrors the server's hard checks that a submitter can see before the
    *  round-trip — anything the server alone can validate (ownership, rate
    *  limits) stays server-side and still surfaces via state.error. */
   function validate(formData: FormData): Record<string, string> {
     const errors: Record<string, string> = {};
+    const asDraft = formData.get("save_draft") !== null;
+    if (publishesNow && !asDraft && images.length === 0) {
+      errors.photos = "Add at least one photo — a listing goes public with its picture.";
+    }
     const title = String(formData.get("title") ?? "").trim();
     if (!title) errors.title = "Title is required.";
     else if (title.length > 140) errors.title = "Keep the title under 140 characters.";
@@ -198,20 +223,43 @@ export function SellForm({
       errors.attest_accurate = "Confirm the condition disclosure is accurate before publishing.";
     }
 
+    if (String(formData.get("shipping_mode") ?? "") === "drvn") {
+      const dims: [string, string][] = [
+        ["weight_oz", "packed weight"],
+        ["length_in", "length"],
+        ["width_in", "width"],
+        ["height_in", "height"],
+      ];
+      for (const [field, label] of dims) {
+        const value = Number(String(formData.get(field) ?? "").trim());
+        if (!Number.isFinite(value) || value <= 0) errors[field] = `Enter the ${label}.`;
+      }
+    }
+
     return errors;
   }
 
   const fieldLabels: Record<string, string> = {
+    photos: "Photos",
     title: "Title",
     category: "Category",
     price: "Asking price",
     attest_accurate: "Condition disclosure confirmation",
+    weight_oz: "Packed weight",
+    length_in: "Length",
+    width_in: "Width",
+    height_in: "Height",
   };
   const fieldAnchors: Record<string, string> = {
+    photos: "sell-photos",
     title: "sell-title",
     category: "sell-category",
     price: "sell-price",
     attest_accurate: "sell-attest",
+    weight_oz: "sell-weight",
+    length_in: "sell-length",
+    width_in: "sell-width",
+    height_in: "sell-height",
   };
 
   // Upload queue (§S1): instant local previews, per-image status, retry —
@@ -231,7 +279,6 @@ export function SellForm({
     if (!files?.length) return;
     setUploadError(null);
     queue.addFiles(files);
-    if (fileRef.current) fileRef.current.value = "";
   }
 
   /** Reorder is a swap with a neighbour; moving index 0 changes the cover. */
@@ -271,8 +318,47 @@ export function SellForm({
 
   const errorEntries = Object.entries(fieldErrors);
 
+  // The four things a strong listing has, shown at the top and — on a phone,
+  // where the top scrolls away — in the pinned commit bar.
+  const readiness = [
+    { label: "Photos", done: images.length > 0 },
+    { label: "Condition", done: !usedNeedsGrade || Boolean(grade) },
+    { label: "Fitment", done: fitmentCount > 0 },
+    { label: "Shipping", done: shippingMode !== "flat" || shipping.trim() !== "" },
+  ];
+  const readyCount = readiness.filter((r) => r.done).length;
+
+  const publishBlocked = !isEdit && !canPublish;
+  const commitLabel = pending
+    ? isEdit
+      ? "Saving…"
+      : "Publishing…"
+    : isEdit
+      ? "Save changes"
+      : "Publish";
+  /** The primary submit — the in-flow row and the phone's pinned bar share it. */
+  const commitButton = (
+    // Gated publish stays focusable (a `disabled` button vanishes from the
+    // tab order, so its checklist reference would never be announced) —
+    // aria-disabled + a guarded click instead.
+    <Button
+      type="submit"
+      variant="live"
+      disabled={pending || uploading}
+      aria-disabled={publishBlocked ? true : undefined}
+      aria-describedby={publishBlocked ? "publish-checklist" : undefined}
+      onClick={(e) => {
+        if (publishBlocked) e.preventDefault();
+      }}
+      className={publishBlocked ? "opacity-55 cursor-not-allowed" : undefined}
+    >
+      {commitLabel}
+    </Button>
+  );
+
   return (
     <form
+      noValidate
       onSubmit={async (event) => {
         event.preventDefault();
         if (submitting.current) return;
@@ -280,6 +366,16 @@ export function SellForm({
         const errors = validate(formData);
         if (Object.keys(errors).length) {
           setFieldErrors(errors);
+          // Submitting from the pinned bar leaves the summary off-screen —
+          // take the reader to the first field that needs them.
+          const first = Object.keys(fieldAnchors).find((key) => errors[key]);
+          if (first) {
+            requestAnimationFrame(() => {
+              const target = document.getElementById(fieldAnchors[first]);
+              target?.scrollIntoView({ block: "center" });
+              target?.focus({ preventScroll: true });
+            });
+          }
           return;
         }
         setFieldErrors({});
@@ -343,29 +439,193 @@ export function SellForm({
       />
 
       {/* Completeness checklist — a lightweight, live-updating nudge toward a
-          strong listing. Nothing here blocks submit; the hard requirements
-          are enforced above and on the server. */}
+          strong listing. The hard requirements are enforced in validate()
+          and on the server. */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-micro uppercase tracking-[0.08em] text-dim">
-        <span>Photos {images.length > 0 ? "✓" : "—"}</span>
-        <span aria-hidden="true">·</span>
-        <span>Condition {!usedNeedsGrade || grade ? "✓" : "—"}</span>
-        <span aria-hidden="true">·</span>
-        <span>Fitment {fitmentCount > 0 ? "✓" : "—"}</span>
-        <span aria-hidden="true">·</span>
-        <span>Shipping {shippingMode !== "flat" || shipping.trim() !== "" ? "✓" : "—"}</span>
+        {readiness.map((r, index) => (
+          <span key={r.label} className="contents">
+            {index > 0 && <span aria-hidden="true">·</span>}
+            <span>
+              {r.label} {r.done ? "✓" : "—"}
+            </span>
+          </span>
+        ))}
       </div>
 
-      <FormSection step={1} title="The part — what you're releasing">
+      {/* Photos lead (M-5/W-2): the photo is what a buyer sees first on every
+          card, and a public listing needs one. */}
+      <FormSection
+        step={1}
+        title="Photos"
+        hint={
+          issueFor("photos") ??
+          "Up to 12. The first is the cover — drag to reorder (or use the arrows), ★ makes a photo the cover."
+        }
+      >
+        <div id="sell-photos" tabIndex={-1} className="flex flex-col gap-3 outline-none">
+          {(images.length > 0 || pendingUploads.length > 0) && (
+            <SortableGrid
+              ids={images.map((img) => img.url)}
+              onReorder={(urls) => {
+                const byUrl = new Map(images.map((img) => [img.url, img]));
+                setImages(urls.flatMap((url) => (byUrl.has(url) ? [byUrl.get(url)!] : [])));
+              }}
+              className="thumbs thumbs--edit thumbs--cover !mt-0 m-0 list-none p-0"
+            >
+              {images.map((img, index) => (
+                <SortableItem
+                  key={img.url}
+                  id={img.url}
+                  label={`Photo ${index + 1}`}
+                  className="thumb group"
+                >
+                  <Media
+                    src={img.url}
+                    alt={img.alt || `Photo ${index + 1}`}
+                    className="h-full w-full"
+                    role="thumb"
+                  />
+                  {index === 0 && (
+                    <span className="thumb__tag" aria-hidden="true">
+                      Cover
+                    </span>
+                  )}
+                  {/* The garage gallery's control bars: reorder + cover on
+                      top, describe + remove below. Visible on hover/focus,
+                      always on touch. */}
+                  <div className="thumb__ctl absolute inset-x-0 top-1 z-10 flex items-start justify-between px-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
+                    <div className="thumb__ctl flex">
+                      <button
+                        type="button"
+                        onClick={() => moveImage(index, -1)}
+                        disabled={index === 0}
+                        aria-label={`Move photo ${index + 1} earlier`}
+                        className="thumb__x !relative !top-0 !right-0 disabled:opacity-30"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveImage(index, 1)}
+                        disabled={index === images.length - 1}
+                        aria-label={`Move photo ${index + 1} later`}
+                        className="thumb__x !relative !top-0 !right-0 disabled:opacity-30"
+                      >
+                        →
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => makeCover(index)}
+                      disabled={index === 0}
+                      aria-label={index === 0 ? `Photo ${index + 1} is the cover` : `Set photo ${index + 1} as cover`}
+                      className="thumb__x !relative !top-0 !right-0 disabled:opacity-30"
+                    >
+                      ★
+                    </button>
+                  </div>
+                  <div className="thumb__ctl thumb__ctl--second absolute right-1 z-10 flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => setEditingAlt(editingAlt === img.url ? null : img.url)}
+                      aria-label={`Describe photo ${index + 1}`}
+                      aria-expanded={editingAlt === img.url}
+                      className="thumb__x !relative !top-0 !right-0"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editingAlt === img.url) setEditingAlt(null);
+                        removeImage(index);
+                      }}
+                      aria-label={`Remove photo ${index + 1}`}
+                      className="thumb__x !relative !top-0 !right-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </SortableItem>
+              ))}
+              {pendingUploads.map((item) => (
+                <div key={item.id} className="thumb">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.previewUrl} alt="" className="h-full w-full object-cover opacity-75" />
+                  <span className="thumb__tag">
+                    {item.status === "failed" ? "Failed" : "Uploading…"}
+                  </span>
+                </div>
+              ))}
+            </SortableGrid>
+          )}
+
+          {/* Failed uploads say why, with their own retry — beside the grid
+              rather than squeezed under a 100px tile. */}
+          {pendingUploads
+            .filter((item) => item.status === "failed")
+            .map((item) => (
+              <p key={item.id} className="field__err flex-wrap">
+                <span>{item.error}</span>
+                {item.retryable && (
+                  <button type="button" className="jumplink" onClick={() => queue.retry(item.id)}>
+                    Retry
+                  </button>
+                )}
+                <button type="button" className="jumplink" onClick={() => queue.remove(item.id)}>
+                  Remove
+                </button>
+              </p>
+            ))}
+
+          {editingAlt !== null &&
+            (() => {
+              const index = images.findIndex((img) => img.url === editingAlt);
+              if (index < 0) return null;
+              return (
+                <TextField
+                  id="sell-photo-alt"
+                  label={`Describe photo ${index + 1}`}
+                  optional
+                  value={images[index].alt ?? ""}
+                  onChange={(e) => updateAlt(index, e.target.value)}
+                  maxLength={200}
+                  placeholder="e.g. Both calipers, dust boots intact"
+                  hint="Read aloud to buyers using a screen reader."
+                  className="max-w-none"
+                />
+              );
+            })()}
+
+          {images.length + pendingUploads.length < 12 && (
+            <DropZone
+              onFiles={handleFiles}
+              busy={uploading}
+              title={images.length ? "Add more photos" : "Add photos"}
+              body={
+                images.length
+                  ? "Drop them here or choose files. Drag the tiles above to reorder."
+                  : "Drop them here or choose files. Show the actual part, from a few angles."
+              }
+            />
+          )}
+          {(fieldErrors.photos || uploadError) && (
+            <p role="alert" aria-live="polite" className="field__err">
+              {fieldErrors.photos ?? uploadError}
+            </p>
+          )}
+        </div>
+      </FormSection>
+
+      <FormSection step={2} title="The part — what you're releasing">
         <TextField
           id="sell-title"
           name="title"
           label="Title"
-          required
           maxLength={140}
           defaultValue={listing?.title ?? prefill?.title ?? ""}
           placeholder="e.g. 034 High-Flow Downpipe for B9 S4"
           className="max-w-none"
-          fieldClassName="!mb-0"
           error={fieldErrors.title}
           hint={issueFor("title") ?? "Clear titles sell faster — brand, model, then the car it fits."}
         />
@@ -376,11 +636,9 @@ export function SellForm({
             id="sell-category"
             name="category"
             label="Category"
-            required
             value={category}
             onChange={(e) => { setCategory(e.target.value); setSubcategory(""); }}
             className="max-w-none"
-            fieldClassName="!mb-0"
             error={fieldErrors.category}
             hint={
               issueFor("category") ??
@@ -409,7 +667,6 @@ export function SellForm({
             value={subcategory}
             onChange={(e) => setSubcategory(e.target.value)}
             className="max-w-none"
-            fieldClassName="!mb-0"
             disabled={!subcategories.length}
           >
             <option value="">Not sure — keep in the main category</option>
@@ -428,7 +685,6 @@ export function SellForm({
             value={condition}
             onChange={(e) => setCondition(e.target.value)}
             className="max-w-none"
-            fieldClassName="!mb-0"
             hint={issueFor("condition")}
           >
             {CONDITIONS.map((c) => (
@@ -446,26 +702,24 @@ export function SellForm({
             defaultValue={listing?.brand ?? prefill?.brand ?? ""}
             placeholder="e.g. Öhlins"
             className="max-w-none"
-            fieldClassName="!mb-0"
             hint="Who made it. Buyers filter by this more than anything else."
           />
-          <TextField
-            id="sell-part_number"
-            name="part_number"
-            label="Part number"
-            optional
-            maxLength={120}
-            defaultValue={listing?.part_number ?? prefill?.partNumber ?? ""}
-            placeholder="e.g. CP9660-2S4"
-            className="max-w-none"
-            fieldClassName="!mb-0"
-            hint={issueFor("part_number") ?? "What a buyer cross-references. Seller-entered, not verified."}
-          />
         </div>
+        <TextField
+          id="sell-part_number"
+          name="part_number"
+          label="Part number"
+          optional
+          maxLength={120}
+          defaultValue={listing?.part_number ?? prefill?.partNumber ?? ""}
+          placeholder="e.g. CP9660-2S4"
+          className="max-w-none"
+          hint={issueFor("part_number") ?? "What a buyer cross-references. Seller-entered, not verified."}
+        />
         {/* M-7. Used parts only: on a new part it would be a contradiction
             rather than a detail, and a zero would read as a claim. */}
         {condition !== "new" && (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="field--row">
             <TextField
               id="sell-part_miles"
               name="part_miles"
@@ -478,20 +732,28 @@ export function SellForm({
               defaultValue={listing?.part_miles ?? ""}
               placeholder="e.g. 18000"
               className="max-w-none"
-              fieldClassName="!mb-0"
               hint="How far it has been driven. A condition grade can't answer that."
             />
-            <Select
-              id="sell-part_miles_unit"
-              name="part_miles_unit"
-              label="Unit"
-              defaultValue={listing?.part_miles_unit ?? "mi"}
-              className="max-w-none"
-              fieldClassName="!mb-0"
-            >
-              <option value="mi">Miles</option>
-              <option value="km">Kilometres</option>
-            </Select>
+            {/* Two options, one visible choice — a segmented pair on the
+                input's baseline rather than a select that rendered taller
+                than the field beside it. */}
+            <fieldset className="field">
+              <legend className="microlabel">Unit</legend>
+              <span className="flex gap-5">
+                <Radio
+                  name="part_miles_unit"
+                  value="mi"
+                  label="Miles"
+                  defaultChecked={(listing?.part_miles_unit ?? "mi") === "mi"}
+                />
+                <Radio
+                  name="part_miles_unit"
+                  value="km"
+                  label="Kilometres"
+                  defaultChecked={listing?.part_miles_unit === "km"}
+                />
+              </span>
+            </fieldset>
           </div>
         )}
         <TextField
@@ -517,9 +779,11 @@ export function SellForm({
               name="grade"
               label="Grade — how honest sellers price"
               value={grade}
-              onChange={(e) => setGrade(e.target.value)}
+              onChange={(e) => {
+                setGrade(e.target.value);
+                setAttestAccurate(false);
+              }}
               className="max-w-none"
-              fieldClassName="!mb-0"
             >
               <option value="">Not graded</option>
               {GRADES.map((g) => (
@@ -529,55 +793,59 @@ export function SellForm({
               ))}
             </Select>
             {category && (
-              <fieldset className="field !mb-0">
+              <fieldset className="field">
                 <legend className="microlabel">
                   Condition checklist — each answer shows on the listing
                 </legend>
-                <div className="mt-1 flex flex-col gap-2">
+                <div
+                  className="flex flex-col"
+                  onChange={() => setAttestAccurate(false)}
+                >
                   {checklistFor(category, subcategory || null).map((q) => (
-                    <div key={q.key} className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-micro">{q.label}</span>
-                      <span className="flex gap-3" role="radiogroup" aria-label={q.label}>
+                    // Question, then its three answers directly beneath — at
+                    // desktop width a right-aligned group sat ~600px from the
+                    // question it answered.
+                    <div
+                      key={q.key}
+                      className="flex flex-col border-b border-[color:var(--rule-soft)] pb-1 pt-3 last:border-b-0"
+                    >
+                      <span className="text-body">{q.label}</span>
+                      <span className="flex flex-wrap gap-x-6" role="radiogroup" aria-label={q.label}>
                         {(["yes", "no", "unknown"] as const).map((answer) => (
-                          <label key={answer} className="flex items-center gap-1 font-mono text-micro uppercase tracking-[0.08em] text-dim">
-                            <input
-                              type="radio"
-                              name={`chk_${q.key}`}
-                              value={answer}
-                              defaultChecked={listing?.condition_checklist?.[q.key] === answer}
-                              className="accent-live"
-                            />
-                            {answer === "unknown" ? "Not sure" : answer}
-                          </label>
+                          <Radio
+                            key={answer}
+                            name={`chk_${q.key}`}
+                            value={answer}
+                            label={answer === "unknown" ? "Not sure" : answer === "yes" ? "Yes" : "No"}
+                            defaultChecked={listing?.condition_checklist?.[q.key] === answer}
+                          />
                         ))}
                       </span>
                     </div>
                   ))}
                 </div>
-                <span className="field__hint mt-1">
+                <span className="field__hint">
                   Answer what you know — honest &quot;not sure&quot; beats a wrong yes. These are
                   part of the sale record if there&apos;s ever a dispute.
                 </span>
               </fieldset>
             )}
             {grade && (
-              <label className="flex items-start gap-2 text-micro">
-                <input
-                  type="checkbox"
+              <div className={fieldErrors.attest_accurate ? "field is-invalid" : "field"}>
+                <Checkbox
                   id="sell-attest"
                   name="attest_accurate"
                   checked={attestAccurate}
                   onChange={(e) => setAttestAccurate(e.target.checked)}
-                  className="accent-live mt-0.5"
                   aria-describedby={fieldErrors.attest_accurate ? "sell-attest-error" : undefined}
+                  label="I confirm this condition disclosure is accurate."
                 />
-                <span>I confirm this condition disclosure is accurate.</span>
-              </label>
-            )}
-            {grade && fieldErrors.attest_accurate && (
-              <p id="sell-attest-error" className="field__err">
-                {fieldErrors.attest_accurate}
-              </p>
+                {fieldErrors.attest_accurate && (
+                  <p id="sell-attest-error" className="field__err">
+                    {fieldErrors.attest_accurate}
+                  </p>
+                )}
+              </div>
             )}
           </>
         )}
@@ -590,140 +858,7 @@ export function SellForm({
           defaultValue={listing?.description ?? prefill?.description ?? ""}
           placeholder="What is it, why is it coming off, anything a buyer should know."
           className="!max-w-none"
-          fieldClassName="!mb-0"
         />
-      </FormSection>
-
-      <FormSection
-        step={2}
-        title="Photos"
-        hint={
-          issueFor("photos") ??
-          "Up to 12 — the first frame is the cover. Reorder, set a cover, or add alt text below."
-        }
-      >
-        <SortableGrid
-          ids={images.map((img) => img.url)}
-          onReorder={(urls) => {
-            const byUrl = new Map(images.map((img) => [img.url, img]));
-            setImages(urls.flatMap((url) => (byUrl.has(url) ? [byUrl.get(url)!] : [])));
-          }}
-          className="thumbs !mt-0"
-        >
-          {images.map((img, index) => (
-            <SortableItem
-              key={img.url}
-              id={img.url}
-              label={`Photo ${index + 1}`}
-              className="flex flex-col gap-1.5"
-            >
-              <span className="thumb">
-                <Media
-                  src={img.url}
-                  alt={img.alt || `Photo ${index + 1}`}
-                  className="h-full w-full"
-                  role="thumb"
-                />
-                {index === 0 && <span className="thumb__tag">Cover</span>}
-                <button
-                  type="button"
-                  onClick={() => removeImage(index)}
-                  className="thumb__x pointer-coarse:!h-10 pointer-coarse:!w-10"
-                  aria-label={`Remove photo ${index + 1}`}
-                >
-                  ✕
-                </button>
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveImage(index, -1)}
-                  disabled={index === 0}
-                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-micro uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
-                  aria-label={`Move photo ${index + 1} earlier`}
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveImage(index, 1)}
-                  disabled={index === images.length - 1}
-                  className="rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-micro uppercase tracking-[0.08em] text-dim transition hover:text-ink disabled:opacity-30 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
-                  aria-label={`Move photo ${index + 1} later`}
-                >
-                  →
-                </button>
-                {index !== 0 && (
-                  <button
-                    type="button"
-                    onClick={() => makeCover(index)}
-                    className="flex-1 truncate rounded-[6px] border border-[var(--dimline)] px-1.5 py-0.5 font-mono text-micro uppercase tracking-[0.08em] text-dim transition hover:text-ink pointer-coarse:min-h-10"
-                  >
-                    Set cover
-                  </button>
-                )}
-              </div>
-              <input
-                value={img.alt ?? ""}
-                onChange={(e) => updateAlt(index, e.target.value)}
-                placeholder="Alt text — optional"
-                maxLength={200}
-                className="ctl max-w-none !py-1 text-micro pointer-coarse:min-h-10"
-                aria-label={`Alt text for photo ${index + 1}`}
-              />
-            </SortableItem>
-          ))}
-          {pendingUploads.map((item) => (
-            <div key={item.id} className="flex flex-col gap-1.5">
-              <span className="thumb">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.previewUrl}
-                  alt=""
-                  className="h-full w-full object-cover opacity-75"
-                />
-              </span>
-              {item.status === "failed" ? (
-                <span className="flex flex-wrap items-center gap-2 text-micro text-live">
-                  <span className="truncate">{item.error}</span>
-                  {item.retryable && (
-                    <button type="button" className="jumplink" onClick={() => queue.retry(item.id)}>
-                      Retry
-                    </button>
-                  )}
-                  <button type="button" className="jumplink" onClick={() => queue.remove(item.id)}>
-                    Remove
-                  </button>
-                </span>
-              ) : (
-                <span className="font-mono text-micro uppercase tracking-[0.08em] text-dim">
-                  Uploading…
-                </span>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="thumb thumb--ghost grid place-items-center self-start font-mono text-xs uppercase tracking-[0.1em] text-dim"
-          >
-            {uploading ? "Uploading…" : "+ Add"}
-          </button>
-        </SortableGrid>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-        {uploadError && (
-          <p role="alert" aria-live="polite" className="field__err">
-            {uploadError}
-          </p>
-        )}
       </FormSection>
 
       <FormSection
@@ -731,11 +866,18 @@ export function SellForm({
         title="Where it came from"
         hint="Optional — linking a car in your garage attaches the sheet's context to the listing."
       >
-        <select
+        <Select
+          id="sell-source_car"
           name="source_car_id"
+          label="Source car"
           value={sourceCarId}
           onChange={(event) => setSourceCarId(event.target.value)}
-          className="ctl max-w-none"
+          className="max-w-none"
+          hint={
+            prefill?.modItemId
+              ? "Released off a build line — the listing will show on that line of the car sheet."
+              : undefined
+          }
         >
           <option value="">Bought spare / never fitted — no car sheet behind it</option>
           {cars.map((car) => (
@@ -743,12 +885,7 @@ export function SellForm({
               Off my sheet — {car.name}
             </option>
           ))}
-        </select>
-        {prefill?.modItemId && (
-          <p className="spec-note">
-            Released off a build line — the listing will show on that line of the car sheet.
-          </p>
-        )}
+        </Select>
       </FormSection>
 
       <FormSection
@@ -775,20 +912,17 @@ export function SellForm({
           onCountChange={setFitmentCount}
         />
         {issueFor("fitment") && <p className="spec-note">{issueFor("fitment")}</p>}
-        <div className="field !mb-0">
-          <label htmlFor="sell-compatibility_notes" className="microlabel">
-            Notes — anything the rows can&apos;t say
-          </label>
-          <textarea
-            id="sell-compatibility_notes"
-            name="compatibility_notes"
-            rows={3}
-            maxLength={2000}
-            defaultValue={listing?.compatibility_notes ?? prefill?.compatibilityNotes ?? ""}
-            placeholder='e.g. "Needs the OEM bracket from a facelift car. Verify for RS5."'
-            className="ctl !max-w-none"
-          />
-        </div>
+        <TextArea
+          id="sell-compatibility_notes"
+          name="compatibility_notes"
+          label="Notes — anything the rows can't say"
+          optional
+          rows={3}
+          maxLength={2000}
+          defaultValue={listing?.compatibility_notes ?? prefill?.compatibilityNotes ?? ""}
+          placeholder='e.g. "Needs the OEM bracket from a facelift car. Verify for RS5."'
+          className="!max-w-none"
+        />
       </FormSection>
 
       <FormSection step={5} title="Price, shipping & location">
@@ -797,38 +931,56 @@ export function SellForm({
             id="sell-price"
             name="price"
             label="Asking price"
-            required
             inputMode="decimal"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             placeholder="0"
             prefix="$"
-            fieldClassName="!mb-0"
             error={fieldErrors.price}
             hint={issueFor("price")}
           />
-          <Select
-            id="sell-shipping-mode"
-            name="shipping_mode"
-            label="How it ships"
-            value={shippingMode}
-            onChange={(e) =>
-              setShippingMode(e.target.value as "flat" | "drvn" | "pickup_only")
-            }
-            fieldClassName="!mb-0"
+          <TextField
+            id="sell-offer_floor"
+            name="offer_floor"
+            label="Lowest offer you'd read"
+            optional
+            inputMode="decimal"
+            defaultValue={money(listing?.offer_floor_cents) || suggestedFloor}
+            placeholder=""
+            prefix="$"
             hint={
-              shippingMode === "drvn" && drvnShipping && !drvnShipping.profileReady
-                ? "Needs your verified ship-from address — Settings → Shipping."
-                : undefined
+              issueFor("offers") ??
+              (defaultOfferFloorPct && !listing
+                ? `Offers below this are declined automatically. Prefilled at your ${defaultOfferFloorPct}% default.`
+                : "Offers below this are declined automatically.")
             }
-          >
-            <option value="flat">Flat rate — I arrange shipping</option>
-            {drvnShipping?.enabled && (
-              <option value="drvn">DRVN Shipping — buyer sees live rates</option>
-            )}
-            <option value="pickup_only">Local pickup only</option>
-          </Select>
+          />
         </div>
+        {/* Full width, short options: the select used to share a row and
+            truncate its own first option. The detail lives in the hint. */}
+        <Select
+          id="sell-shipping-mode"
+          name="shipping_mode"
+          label="How it ships"
+          value={shippingMode}
+          onChange={(e) =>
+            setShippingMode(e.target.value as "flat" | "drvn" | "pickup_only")
+          }
+          className="max-w-none"
+          hint={
+            shippingMode === "drvn"
+              ? drvnShipping && !drvnShipping.profileReady
+                ? "Needs your verified ship-from address — Settings → Shipping."
+                : "Buyers see live carrier rates at checkout; the label comes back to you on the order."
+              : shippingMode === "pickup_only"
+                ? "No shipping — buyers collect in person."
+                : "You set the price and send it yourself."
+          }
+        >
+          <option value="flat">Flat rate</option>
+          {drvnShipping?.enabled && <option value="drvn">DRVN Shipping</option>}
+          <option value="pickup_only">Local pickup only</option>
+        </Select>
         {shippingMode === "flat" && (
           <TextField
             id="sell-shipping"
@@ -839,7 +991,6 @@ export function SellForm({
             onChange={(e) => setShipping(e.target.value)}
             placeholder="0"
             prefix="$"
-            fieldClassName="!mb-0"
             hint={issueFor("shipping") ?? "Leave at 0 for free shipping."}
           />
         )}
@@ -849,103 +1000,76 @@ export function SellForm({
               id="sell-weight"
               name="weight_oz"
               label="Packed weight (oz)"
-              required
               inputMode="decimal"
               defaultValue={listing?.weight_oz != null ? String(listing.weight_oz) : ""}
               placeholder="0"
+              error={fieldErrors.weight_oz}
               fieldClassName="!mb-0"
             />
             <TextField
               id="sell-length"
               name="length_in"
               label="Length (in)"
-              required
               inputMode="decimal"
               defaultValue={listing?.length_in != null ? String(listing.length_in) : ""}
               placeholder="0"
+              error={fieldErrors.length_in}
               fieldClassName="!mb-0"
             />
             <TextField
               id="sell-width"
               name="width_in"
               label="Width (in)"
-              required
               inputMode="decimal"
               defaultValue={listing?.width_in != null ? String(listing.width_in) : ""}
               placeholder="0"
+              error={fieldErrors.width_in}
               fieldClassName="!mb-0"
             />
             <TextField
               id="sell-height"
               name="height_in"
               label="Height (in)"
-              required
               inputMode="decimal"
               defaultValue={listing?.height_in != null ? String(listing.height_in) : ""}
               placeholder="0"
+              error={fieldErrors.height_in}
               fieldClassName="!mb-0"
             />
             <p className="field__hint sm:col-span-4 !mt-0">
               Measure the part boxed, as it will ship. Buyers see carrier rates
-              calculated from this at checkout; the label comes back to you on
-              the order sheet.
+              calculated from this at checkout.
             </p>
           </div>
         )}
-        <div className="field--row">
-          <TextField
-            id="sell-offer_floor"
-            name="offer_floor"
-            label="Lowest offer you'd read"
-            optional
-            inputMode="decimal"
-            defaultValue={money(listing?.offer_floor_cents) || suggestedFloor}
-            placeholder="—"
-            prefix="$"
-            fieldClassName="!mb-0"
-            hint={
-              issueFor("offers") ??
-              (defaultOfferFloorPct && !listing
-                ? `Offers below this are declined automatically. Prefilled at your ${defaultOfferFloorPct}% default — change it for this part if you like.`
-                : "Offers below this are declined automatically.")
-            }
-          />
-          <div className="field !mb-0">
-            <label htmlFor="sell-location" className="microlabel">Location</label>
-            <input id="sell-location"
-              name="location"
-              defaultValue={listing?.location ?? prefill?.location ?? ""}
-              placeholder="City, state"
-              className="ctl max-w-none"
-            />
-          </div>
-        </div>
+        <TextField
+          id="sell-location"
+          name="location"
+          label="Location"
+          optional
+          defaultValue={listing?.location ?? prefill?.location ?? ""}
+          placeholder="City, state"
+          className="max-w-none"
+        />
         {shippingMode === "pickup_only" ? (
-          <label className="flex items-center gap-2 text-micro">
-            <input type="checkbox" checked readOnly disabled className="accent-live" />
-            {/* Pickup-only implies collection; the server sets it regardless. */}
-            Buyers collect in person (pickup-only listing)
-          </label>
+          // Pickup-only implies collection; the server sets it regardless.
+          <Checkbox checked readOnly disabled label="Buyers collect in person (pickup-only listing)" />
         ) : (
-          <label className="flex items-center gap-2 text-micro">
-            <input
-              type="checkbox"
-              name="allows_collection"
-              defaultChecked={listing?.allows_collection ?? prefill?.allowsCollection ?? false}
-              className="accent-live"
-            />
-            Buyers may collect in person
-          </label>
+          <Checkbox
+            name="allows_collection"
+            defaultChecked={listing?.allows_collection ?? prefill?.allowsCollection ?? false}
+            label="Buyers may collect in person"
+          />
         )}
       </FormSection>
 
       {!isEdit &&
         (() => {
           const warnings: string[] = [];
-          if (images.length === 0) warnings.push("No photos yet — listings with photos sell faster.");
           if (usedNeedsGrade && !grade) warnings.push("No grade set for a used part — buyers weight this heavily.");
           if (shippingMode === "flat" && (!shipping.trim() || Number(shipping) === 0)) warnings.push("Shipping is $0 — confirm that's intentional, not just unset.");
-          const show = warnings.length > 0 || !canPublish;
+          const needsPhoto = images.length === 0;
+          const show = warnings.length > 0 || !canPublish || needsPhoto;
           // The checklist folds in and out as answers change — while typing,
           // an instant blink here read as the form glitching.
           return (
@@ -962,13 +1086,22 @@ export function SellForm({
             <div role="status" aria-live="polite" id="publish-checklist" className="tile !mb-0">
               <p className="microlabel microlabel--ink">Before you publish</p>
               <ul className="mt-1 list-disc pl-5 text-micro text-dim">
-                {/* The one real blocker leads: money needs somewhere to go. */}
+                {/* Blockers lead: money needs somewhere to go, and a public
+                    listing needs its picture. */}
                 {!canPublish && (
                   <li>
                     <b className="text-ink">Payouts aren&apos;t set up — required to publish.</b>{" "}
-                    <Link href="/settings#payments" className="jumplink">
+                    <Link href="/payouts" className="jumplink">
                       Set up payouts →
                     </Link>
+                  </li>
+                )}
+                {needsPhoto && (
+                  <li>
+                    <b className="text-ink">No photos yet — add at least one to publish.</b>{" "}
+                    <a href="#sell-photos" className="jumplink">
+                      Add photos →
+                    </a>
                   </li>
                 )}
                 {warnings.map((w) => (
@@ -976,9 +1109,9 @@ export function SellForm({
                 ))}
               </ul>
               <p className="field__hint mt-1">
-                {canPublish
-                  ? "These are nudges, not blockers — you can still publish or save a draft as-is."
-                  : "Drafts save any time — publishing unlocks once payouts are ready."}
+                {!canPublish || needsPhoto
+                  ? "Drafts save any time — publishing unlocks once the bold items are done."
+                  : "These are nudges, not blockers — you can still publish or save a draft as-is."}
               </p>
             </div>
                 </motion.div>
@@ -987,26 +1120,26 @@ export function SellForm({
           );
         })()}
 
-      {state.error && (
-        <p role="alert" aria-live="polite" className="field__err">
-          {state.error}
-        </p>
-      )}
-      {state.ok && (
-        <p role="status" aria-live="polite" className="chip chip--ok">
-          {state.ok}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="spec-note !mt-0 !border-t-0 !pt-0">
-          {isEdit ? (
-            <>Changes go live on the market immediately.</>
-          ) : (
-            <b>Save a draft and nothing reaches the market until you publish.</b>
-          )}
-        </span>
-        <span className="flex flex-wrap gap-2">
+      <ActionFooter
+        aux={
+          <span className="spec-note !mt-0 !border-t-0 !pt-0">
+            {isEdit ? (
+              <>Changes go live on the market immediately.</>
+            ) : (
+              <b>Save a draft and nothing reaches the market until you publish.</b>
+            )}
+          </span>
+        }
+        status={
+          state.error
+            ? { kind: "error", message: state.error }
+            : state.ok
+              ? { kind: "ok", message: state.ok }
+              : null
+        }
+        className="!mt-0"
+      >
+        <span className="flex flex-wrap justify-end gap-2">
           {!isEdit && (
             <Button
               type="submit"
@@ -1018,30 +1151,25 @@ export function SellForm({
               Save draft
             </Button>
           )}
-          {/* Gated publish stays focusable (a `disabled` button vanishes from
-              the tab order, so its checklist reference would never be
-              announced) — aria-disabled + a guarded click instead. */}
-          <Button
-            type="submit"
-            variant="live"
-            disabled={pending || uploading}
-            aria-disabled={!isEdit && !canPublish ? true : undefined}
-            aria-describedby={!isEdit && !canPublish ? "publish-checklist" : undefined}
-            onClick={(e) => {
-              if (!isEdit && !canPublish) e.preventDefault();
-            }}
-            className={!isEdit && !canPublish ? "opacity-55 cursor-not-allowed" : undefined}
-          >
-            {pending
-              ? isEdit
-                ? "Saving…"
-                : "Publishing…"
-              : isEdit
-                ? "Save changes"
-                : "Publish to market"}
-          </Button>
+          {commitButton}
         </span>
-      </div>
+      </ActionFooter>
+
+      {/* Compact widths: the commit is ~5 screens down, so it rides in a
+          pinned bar with the asking price and how complete the listing is.
+          (Save draft stays with the in-flow row.) */}
+      <MobileActionBar
+        label={isEdit ? "Save listing" : "Publish listing"}
+        totalLabel="Asking"
+        total={
+          price.trim() && Number.isFinite(Number(price))
+            ? `$${Number(price).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+            : "Not set"
+        }
+        ship={`${readyCount} of ${readiness.length} ready`}
+      >
+        {commitButton}
+      </MobileActionBar>
     </form>
   );
 }

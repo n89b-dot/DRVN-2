@@ -13,7 +13,7 @@ import type { ListingStatus } from "@/lib/database.types";
  * Now a client component so the outcome is SAID (Rev E item 8): the old
  * server-rendered forms called a void action, and a seller without payout
  * onboarding could click Publish and watch nothing happen. A refusal renders
- * inline, and the onboarding gate links straight to Settings → Payments.
+ * inline, and the onboarding gate links straight to /payouts.
  */
 export function ListingStatusActions({
   id,
@@ -69,7 +69,7 @@ export function ListingStatusActions({
           {state.needsOnboarding && (
             <>
               {" "}
-              <Link href="/settings#payments" className="jumplink">
+              <Link href="/payouts" className="jumplink">
                 Set up payouts →
               </Link>
             </>

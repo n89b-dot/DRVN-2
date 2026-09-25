@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, Media, MetadataTags } from "@/components/ui";
+import { Avatar, ButtonLink, Foot, Media, MetadataTags, TileHead } from "@/components/ui";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
 import { formatPrice } from "@/lib/payments/fee";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
@@ -166,12 +166,12 @@ export default async function CarPage({
   const fittedMods = (mods ?? []).filter((m) => m.status === "installed");
   const removedMods = (mods ?? []).filter((m) => m.status === "removed");
 
-  // Split mods: "Wheels & Tires" group becomes the key/value table.
-  const wheelMods = fittedMods.filter((m) => m.group_label === "Wheels & Tires");
-  const otherMods = fittedMods.filter((m) => m.group_label !== "Wheels & Tires");
-  const groupOrder = ["Performance", "Suspension", "Exterior", "Interior", "Other"];
-  const grouped = new Map<string, typeof otherMods>();
-  for (const mod of otherMods) {
+  // Every group, Wheels & Tires included, renders through the same build
+  // row — it used to become a key/value table with the product right-aligned
+  // in mono, which read as a price.
+  const groupOrder = ["Performance", "Suspension", "Brakes", "Wheels & Tires", "Exterior", "Interior", "Other"];
+  const grouped = new Map<string, typeof fittedMods>();
+  for (const mod of fittedMods) {
     const list = grouped.get(mod.group_label) ?? [];
     list.push(mod);
     grouped.set(mod.group_label, list);
@@ -216,11 +216,6 @@ export default async function CarPage({
         })
       ),
     }));
-  const wheelRows = wheelMods.map((m) => ({
-    label: m.brand ?? "Spec",
-    value: m.product ?? m.raw_text ?? "",
-  }));
-
   const cameOff: ModLine[] = removedMods.map((m) => ({
     id: m.id,
     brand: m.brand,
@@ -295,32 +290,44 @@ export default async function CarPage({
   // The line under the name: the vehicle when it adds information, then the
   // colour. A nameless car's label already leads, so only the colour remains.
   const carMeta = [vehicleSubline(car.name, car), car.color].filter(Boolean).join(" · ");
+  const isOwner = user?.id === car.owner_id;
+  const liveCount = forSale.filter((i) => i.status !== "sold").length;
+  // The at-a-glance line the garage has: what's on it, what's been posted,
+  // what you could buy off it. Zeroes are left out rather than shouted.
+  const glance = [
+    fittedMods.length ? `${fittedMods.length} mod${fittedMods.length === 1 ? "" : "s"}` : null,
+    activity.length ? `${activity.length} update${activity.length === 1 ? "" : "s"}` : null,
+    liveCount ? `${liveCount} part${liveCount === 1 ? "" : "s"} for sale` : null,
+    gallery.length ? `${gallery.length} photo${gallery.length === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
 
   return (
     <div className="wrap">
       {returnListing && <nav aria-label="Return to part" className="marketplace-breadcrumb"><Link href={returnListing}>← Back to the part</Link></nav>}
-      <Rv as="header" className="pagehead">
-        <span className="microlabel">
-          Build page — public
-          {user?.id === car.owner_id && (
-            <>
-              {" · "}
-              <Link href={`/garage/${car.id}/edit`} className="hover:text-live">
-                manage this car →
-              </Link>
-            </>
+      {/* The head holds who and what in one block — name, vehicle, owner,
+          Follow and Save, and the at-a-glance line — so the capped cover
+          below it and the tabs under that both reach the first screen. */}
+      <Rv as="header" className="pagehead carhead">
+        <span className="microlabel">{isOwner ? "Your build" : "Build"}</span>
+        <div className="carhead__row">
+          <div className="min-w-0">
+            <h1>{car.name}</h1>
+            {carMeta && <p className="kv mt-2 text-dim">{carMeta}</p>}
+          </div>
+          {/* The owner gets their tools where a visitor gets Follow · Save —
+              not just a link in the kicker. */}
+          {isOwner && (
+            <span className="carhead__actions">
+              <ButtonLink href={`/garage/${car.id}/update/new`} variant="ghost">
+                Post an update
+              </ButtonLink>
+              <ButtonLink href={`/garage/${car.id}/edit`} variant="ghost">
+                Manage
+              </ButtonLink>
+            </span>
           )}
-        </span>
-        <h1>{car.name}</h1>
-        {carMeta && <p className="kv mt-2 text-dim">{carMeta}</p>}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          {owner && (
-            <Link href={`/u/${owner.username}`} className="jumplink">
-              Built by {ownerName}
-            </Link>
-          )}
-          {user?.id !== car.owner_id && (
-            <span className="flex gap-2">
+          {!isOwner && (
+            <span className="carhead__actions">
               <FollowButton
                 targetType="car"
                 targetId={car.id}
@@ -338,10 +345,33 @@ export default async function CarPage({
             </span>
           )}
         </div>
+        <div className="byrow">
+          {owner && (
+            <Link href={`/u/${owner.username}`} className="byline">
+              <span className="byline__avatar">
+                {owner.avatar_url ? (
+                  <Media src={owner.avatar_url} alt="" className="h-full w-full" role="avatar" />
+                ) : (
+                  <Avatar size="sm" initials={ownerName.replace(/^@/, "").slice(0, 2).toUpperCase()} />
+                )}
+              </span>
+              <span>
+                <span className="text-dim">Built by </span>
+                {ownerName}
+              </span>
+            </Link>
+          )}
+          {glance.length > 0 && <span className="microlabel">{glance.join(" · ")}</span>}
+        </div>
+        {car.tags.length > 0 && (
+          <div className="mt-4">
+            <MetadataTags tags={car.tags} />
+          </div>
+        )}
       </Rv>
 
       {car.cover_image_url && (
-        <Rv className="hero-media mb-6">
+        <Rv className="hero-media carhero mb-6">
           <Media
             src={car.cover_image_url}
             alt={car.name}
@@ -352,29 +382,39 @@ export default async function CarPage({
         </Rv>
       )}
 
-      {car.tags.length > 0 && (
-        <div className="mb-6">
-          <MetadataTags tags={car.tags} />
-        </div>
-      )}
-
       <CarTabs
         about={car.about}
         gallery={gallery}
         modGroups={modGroups}
         cameOff={cameOff}
-        wheelRows={wheelRows}
         activity={activity}
         forSale={forSale}
         soldFrom={soldFrom}
         carName={car.name}
         carId={car.id}
         slug={car.slug}
-        isOwner={user?.id === car.owner_id}
+        isOwner={isOwner}
         initialTab={resolveView(view)}
         showcase={showcase}
         evolution={evolution}
       />
+
+      {/* The page people land on from a shared link — the moment to say the
+          visitor's own car could have one. Signed-out viewers only. */}
+      {!user && (
+        <section className="tile mt-10">
+          <TileHead label="Your car deserves a page like this" />
+          <p className="max-w-[56ch] text-body text-dim">
+            Put your car on DRVN: the build, the updates, and every part you sell off it — with the
+            car attached.
+          </p>
+          <div className="mt-4">
+            <ButtonLink href="/signup?next=%2Fgarage" variant="live">
+              Add your car
+            </ButtonLink>
+          </div>
+        </section>
+      )}
 
       <Foot
         left="DRVN — build page"

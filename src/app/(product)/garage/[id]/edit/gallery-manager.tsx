@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 
 import type { CarImage } from "@/lib/database.types";
 import { uploadImages } from "@/lib/media-upload";
-import { Button, ConfirmDialog, Dialog, DropZone, Media, SortableGrid, SortableItem } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, DropZone, Media, SortableGrid, SortableItem, TileHead } from "@/components/ui";
 
 import {
   addCarImage,
@@ -159,16 +159,19 @@ export function GalleryManager({
 
   return (
     <section className="tile">
-      <div className="tile__head">
-        <span className="microlabel microlabel--ink">
-          Photos — drag (or ↑↓) to reorder, ★ to set the cover
-        </span>
-        {currentCoverUrl && (
-          <button type="button" className="jumplink" onClick={() => setFraming(true)}>
-            Frame the cover
-          </button>
-        )}
-      </div>
+      {/* The instructions were the heading, and on a phone they pushed
+          "Frame the cover" into a three-line column beside them. */}
+      <TileHead
+        label="Photos"
+        end={
+          currentCoverUrl ? (
+            <button type="button" className="jumplink" onClick={() => setFraming(true)}>
+              Frame the cover
+            </button>
+          ) : undefined
+        }
+      />
+      <p className="field__hint -mt-2 mb-3">Drag (or ↑↓) to reorder, ★ to set the cover.</p>
 
       {currentCoverUrl && (
         <FramingDialog

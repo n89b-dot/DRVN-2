@@ -6,12 +6,11 @@ import {
   ListingCard,
   Mosaic,
   MasonryFeed,
-  ObjectRow,
 } from "@/components/ui";
 import { Rv } from "@/components/livesheet";
 import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
 import type { FeedTab } from "@/lib/feed";
-import type { AccountResult, ExploreAllResults } from "@/lib/explore/search/query";
+import type { ExploreAllResults } from "@/lib/explore/search/query";
 import { exploreSearchHref, type ExploreSearchParams } from "@/lib/explore/search/params";
 import { MarketplaceRetrievalError } from "@/features/marketplace/retrieval-error";
 import { AccountRowList } from "@/components/commerce";

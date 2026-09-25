@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { motion } from "motion/react";
 
 import { AuthIntentDialog } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
 import { cx } from "@/lib/format";
 import { press } from "@/lib/motion";
 
@@ -28,7 +29,12 @@ export function SaveButton({
   isLoggedIn,
   resumeSave = false,
   itemLabel,
+  variant = "button",
 }: {
+  /** `icon` — a bookmark square beside a card's cart square (the same glyph
+   *  the engagement strip uses), for places where a worded button would be
+   *  the loudest thing on the card. */
+  variant?: "button" | "icon";
   targetType: SaveTargetType;
   targetId: string;
   path: string;
@@ -95,12 +101,19 @@ export function SaveButton({
         type="button"
         onClick={onClick}
         disabled={pending}
-        className={toggleClass(saved)}
+        className={variant === "icon" ? cx("savebtn", saved && "is-on") : toggleClass(saved)}
         aria-pressed={saved}
-        aria-label={itemLabel ? `${saved ? "Unsave" : "Save"} ${itemLabel}` : undefined}
+        aria-label={
+          itemLabel
+            ? `${saved ? "Unsave" : "Save"} ${itemLabel}`
+            : variant === "icon"
+              ? saved ? "Saved — tap to remove" : "Save"
+              : undefined
+        }
+        data-tip={variant === "icon" ? (saved ? "Saved" : "Save") : undefined}
         {...press}
       >
-        {saved ? "Saved" : "Save"}
+        {variant === "icon" ? <Icon name="bookmark" className="savebtn__ico" /> : saved ? "Saved" : "Save"}
       </motion.button>
       {error && <span role="alert" aria-live="polite" className="field__err">{error}</span>}
       <AuthIntentDialog

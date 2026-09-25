@@ -1,31 +1,32 @@
-import Link from "next/link";
-
-import { EmptyState } from "@/components/ui";
+import { ButtonLink, PageHead, SuggestingSearchField } from "@/components/ui";
 
 export const metadata = { title: "Not found - DRVN" };
 
-/** Discovery-scoped 404: keeps the shell and points back at the market. */
+/** Discovery-scoped 404: keeps the shell, leads with search, then the two
+ *  doors — the same designed page as the root 404, not the dashed empty
+ *  plate (that recipe is for empty collections inside a page). */
 export default function DiscoverNotFound() {
   return (
-    <div className="wrap">
-      <EmptyState
-        mark="⌕"
-        title="Nothing here"
-        className="undrawn--hero"
-        action={
-          <div className="mt-4 flex flex-wrap justify-center gap-3">
-            <Link href="/marketplace" className="btn btn--live">
-              Browse parts
-            </Link>
-            <Link href="/explore" className="btn btn--ghost">
-              Explore builds
-            </Link>
-          </div>
-        }
+    <div className="wrap pb-16">
+      <PageHead
+        eyebrow="404"
+        title="Nothing at this address."
+        sub="This car, part or profile isn't around — it may have sold, been taken down, or never existed. Search for what you were after."
       >
-        This car, part or profile isn&apos;t around — it may have sold, been taken down, or
-        never existed.
-      </EmptyState>
+        <div className="notfound__actions">
+          <form action="/explore" role="search" className="notfound__search">
+            <SuggestingSearchField
+              label="Search DRVN"
+              placeholder="Search builds, parts, people"
+              endpoint="/api/explore/suggest"
+            />
+          </form>
+          <div className="flex flex-wrap gap-3">
+            <ButtonLink href="/explore">Explore builds</ButtonLink>
+            <ButtonLink href="/marketplace">Shop parts</ButtonLink>
+          </div>
+        </div>
+      </PageHead>
     </div>
   );
 }

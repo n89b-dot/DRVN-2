@@ -1,0 +1,351 @@
+/* Tokens and base — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Theme tokens, day/night palettes and element defaults. */
+
+/* ============================================================
+   LIVESHEET — DRVN design system (ported from
+   design-mockups/livesheet/livesheet.css — the source of truth).
+   "A drawing that knows what's happening."
+   DAY on :root, NIGHT as a token remap under [data-theme="dark"].
+   ============================================================ */
+
+/* ---------- scale tokens → Tailwind v4 utilities ---------- */
+@theme {
+  --color-paper: #efede6; /* canvas */
+  --color-paper-deep: #e5e2d8; /* recessed */
+  --color-tile: #f8f6f0; /* raised widget plate */
+  --color-tile-2: #f1efe8; /* secondary plate */
+  --color-ink: #20232a; /* text */
+  --color-dim: var(--dim); /* secondary text — derives from the R3-audited :root value */
+  --color-live: var(--live); /* THE signal — live states only; single source: :root --live */
+  --color-ok: var(--ok); /* terminal states: settled / done / verified; single source: :root --ok */
+  --color-on-ink: #f8f6f0; /* text on ink surfaces */
+  --color-img-fallback: #e2dfd5; /* media box before an image */
+
+  /* Legacy aliases — old utility names now resolve to Livesheet tones so the
+     whole app shifts palette in one move. Remove per-route as pages convert. */
+  --color-background: var(--color-paper);
+  --color-foreground: var(--color-ink);
+  --color-app: var(--color-paper);
+  --color-surface: var(--color-tile-2);
+  --color-raised: var(--color-tile);
+  --color-media: var(--color-img-fallback);
+  --color-border: var(--rule-mid);
+  --color-text-primary: var(--color-ink);
+  --color-text-secondary: var(--color-dim);
+  --color-text-muted: var(--color-dim);
+  --color-accent: var(--color-live);
+  --color-success: var(--color-ok);
+
+  /* State tokens beyond live/ok — `--live` was carrying primary CTA, "happening
+     now", unread and error/destructive all at once. These give error/warn/info
+     their own names without touching what's actually painted where nothing
+     else has changed yet: --warn and --info are genuinely new hues, while
+     --destructive stays the same red as --live on purpose (it's still "the
+     signal colour"), the DISTINCTION is semantic — components read
+     `.chip--danger` / `.btn--destructive` for "this is destructive", never
+     `.chip--live` / `.btn--live` for that meaning, even though the paint often
+     matches today. */
+  --color-warn: var(--warn);
+  --color-info: var(--info);
+  --color-destructive: var(--color-live);
+
+  --font-sans: var(--font-plex-sans), -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono: var(--font-plex-mono), "SF Mono", monospace;
+
+  /* Typography scale — a 4px grid with 8px display jumps. Every font size in
+     the product comes from this family (12/16/20/24/32/40/48/56/64); no
+     route-level invention. Utilities: text-micro, text-body, text-section,
+     text-sub, text-head, text-display{,-lg,-xl}. */
+  --text-micro: 12px;
+  --text-micro--line-height: 16px;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-section: 20px;
+  --text-section--line-height: 28px;
+  --text-sub: 24px;
+  --text-sub--line-height: 32px;
+  --text-head: 32px;
+  --text-head--line-height: 40px;
+  --text-display: 40px;
+  --text-display--line-height: 48px;
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 56px;
+  --text-display-xl: 64px;
+  --text-display-xl--line-height: 1.1;
+  /* Legacy font aliases (concept pages) */
+  --font-display: var(--font-plex-sans), sans-serif;
+  --font-ui: var(--font-plex-sans), sans-serif;
+  --font-brand: var(--font-plex-sans), sans-serif;
+
+  /* Geometry — radius descends with the size of the thing. Nothing is a pill. */
+  --radius-r: 16px; /* plates, tiles, sheets, hero frames, bands */
+  --radius-ctl: 10px; /* buttons, controls, inner media, monograms, callouts */
+  --radius-chip: 6px; /* chips, badges, small tags */
+  --radius-meter: 3px; /* bars and tracks */
+  /* Legacy radius aliases */
+  --radius-card: 16px;
+  --radius-tile: 16px;
+  --radius-input: 10px;
+  --radius-pill: 10px; /* pills are banned — soft rectangle instead */
+
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ---------- alpha + state tokens (theme-remapped, not utilities) ---------- */
+:root {
+  --paper: #efede6;
+  --paper-deep: #e5e2d8;
+  --tile: #f8f6f0;
+  --tile-2: #f1efe8;
+  --ink: #20232a;
+  /* R3 contrast pass: dim/live/ok are used as text on paper and tile, so all
+     three must clear WCAG 4.5:1 there. Measured: dim 5.97, live 4.96, ok 5.5
+     against --paper (higher on --tile). Dark theme was already passing. */
+  --dim: #565963;
+  --dimline: rgba(32, 35, 42, 0.28); /* dimension/leader lines only — never card borders */
+  --grid-line: rgba(32, 35, 42, 0.03);
+  --live: #c02c14;
+  --live-tint: rgba(203, 49, 24, 0.14);
+  --ok: #256b42;
+  --ok-tint: rgba(34, 128, 74, 0.16);
+  --warn: #8a5a00; /* held money, due work — attention without alarm; 5.1:1 on paper */
+  --warn-tint: rgba(196, 140, 20, 0.18);
+  --info: #1d5c8a; /* neutral explainer/status, never a call to action; 6.1:1 on paper */
+  --info-tint: rgba(38, 113, 163, 0.15);
+  /* Chip text — one step deeper than the status hues so type stays ≥4.5:1 on
+     the strengthened tints above (measured 5.0–5.9 on paper+tint). The base
+     status tokens keep their audited values because they double as button
+     fills and plain text on paper. */
+  --live-text: #a82410;
+  --ok-text: #145c35;
+  --warn-text: #6f4a00;
+  --info-text: #14527f;
+  --destructive: var(--live); /* same hue as --live by design — see @theme note */
+  --on-ink: #f8f6f0;
+  --scrim: rgba(32, 35, 42, 0.45);
+  /* Text laid over a photograph: the same in both themes, because the
+     photo underneath doesn't change with the theme. */
+  --photo-scrim: rgba(10, 11, 14, 0.74);
+  --on-photo: #ffffff;
+  /* The lightbox stage: near-opaque, so the page behind a photo is gone. */
+  --lightbox: #0a0b0e;
+  --on-photo-dim: rgba(255, 255, 255, 0.78);
+  --img-fallback: #e2dfd5;
+  --ink-hover: #33363e;
+  --live-hover: #a52410;
+  --ghost-hover: #dbd8cd;
+  /* Secondary (ghost) button fill: recessed on day paper. */
+  --ghost-fill: var(--paper-deep);
+  --rule-soft: rgba(32, 35, 42, 0.07);
+  --rule-mid: rgba(32, 35, 42, 0.09);
+  --photo-filter: none;
+  --ghost: rgba(32, 35, 42, 0.055);
+  --ghost-strong: rgba(32, 35, 42, 0.1);
+
+  --sans: var(--font-plex-sans), -apple-system, "Helvetica Neue", sans-serif;
+  --mono: var(--font-plex-mono), "SF Mono", monospace;
+
+  --r: 16px;
+  --r-ctl: 10px;
+  --r-chip: 6px;
+  --r-meter: 3px;
+
+  /* Motion timing — mirrored in src/lib/motion (the Motion for React
+     foundation); the two systems share one vocabulary. See /docs/motion. */
+  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --t-fast: 160ms;
+  --t-standard: 240ms;
+  --t-move: 380ms;
+  --t-draw: 650ms;
+
+  --maxw: 1200px;
+
+  /* Bottom-surface contract — one number every fixed bottom bar (buybar,
+     savebar, thread composer) and every page-clearance rule agree on: the
+     bar's own box is ≤64px tall, and content reserves 76px (bar + 12px of
+     air) plus the device safe-area. Only ONE bottom surface may own the
+     bottom edge on a route at a time. z-index ladder (bottom-relevant):
+     toast 120 > sheets 90 > savebar 50 > buybar/composer 40. */
+  --bottom-surface-h: 76px;
+
+  /* Legacy token aliases (pre-Livesheet product code) */
+  --bg-app: var(--paper);
+  --bg-surface: var(--tile-2);
+  --bg-raised: var(--tile);
+  --bg-media: var(--img-fallback);
+  --border-subtle: var(--rule-mid);
+  --text-primary: var(--ink);
+  --text-secondary: var(--dim);
+  --text-muted: var(--dim);
+  --accent-primary: var(--live);
+  --accent-success: var(--ok);
+  --bg-canvas: var(--tile);
+  --text-soft: var(--ink);
+  --text-tertiary: var(--dim);
+  --background: var(--paper);
+  --foreground: var(--ink);
+}
+
+/* ============ NIGHT SHEET — the drawing office after hours ============
+   Cooler paper since September 2026 (PRD 2026-09 §3). The night sheet used
+   to be warm sepia (#15130c paper, #f0eee5 ink) — a lit drawing board. It
+   now reads as a cool graphite sheet, which sits better under car
+   photography: warm paper tinted every photo's shadows towards brown.
+   The day theme, the accent and the status hues are unchanged.
+
+   Contrast re-measured against the new paper on the switch; every pairing
+   held or improved. Ink 15.87:1 on paper, 14.21:1 on tile; dim 5.74:1 on
+   paper (was 5.52) and 5.14:1 on tile (was 4.95); on-ink 15.59:1 on ink and
+   5.30:1 on the live fill; each status text token clears 5.7:1 on its own
+   tint over paper. */
+[data-theme="dark"] {
+  --paper: #121418;
+  --paper-deep: #0c0e11;
+  --tile: #1c1f25;
+  --tile-2: #171a1f;
+  --ink: #eceef2;
+  --dim: #8a909b;
+  --dimline: rgba(236, 238, 242, 0.3);
+  --grid-line: rgba(236, 238, 242, 0.035);
+  --live: #ff4530;
+  --live-tint: rgba(255, 69, 48, 0.2);
+  --ok: #57b983;
+  --ok-tint: rgba(87, 185, 131, 0.18);
+  --warn: #d9a13c;
+  --warn-tint: rgba(217, 161, 60, 0.18);
+  --info: #6cb2df; /* 8.0:1 on night paper */
+  --info-tint: rgba(108, 178, 223, 0.2);
+  /* Chip text — brightened a step over the night status hues for legibility
+     on the stronger night tints. */
+  --live-text: #ff7a66;
+  --ok-text: #6cc794;
+  --warn-text: #e6b45e;
+  --info-text: #8ec4ea;
+  --destructive: var(--live);
+  --on-ink: #14161a;
+  /* Scrim and ink-hover aren't in the PRD's list because they aren't
+     decisions — they're derived: the scrim is a step under paper-deep, and
+     ink-hover is ink at the same ~0.91 step the day sheet uses. Left warm,
+     they would have been the two brown edges on a cool sheet. */
+  --scrim: rgba(5, 6, 7, 0.62);
+  --img-fallback: #22262d;
+  --ink-hover: #d7d8dc;
+  --live-hover: #ff6047;
+  /* Night: a ghost button sits ABOVE the graphite, not below it — the
+     recessed paper-deep fill read as black slabs cut into the sheet. */
+  --ghost-fill: #242830;
+  --ghost-hover: #2e333b;
+  --rule-soft: rgba(236, 238, 242, 0.09);
+  --rule-mid: rgba(236, 238, 242, 0.12);
+  /* Unchanged with the cooler paper: the filter answers how bright a photo
+     sits on a dark page, not what colour the page is. */
+  --photo-filter: brightness(0.86) contrast(1.05);
+  --ghost: rgba(236, 238, 242, 0.06);
+  --ghost-strong: rgba(236, 238, 242, 0.11);
+
+  /* Tailwind scale tokens follow the remap */
+  --color-paper: #121418;
+  --color-paper-deep: #0c0e11;
+  --color-tile: #1c1f25;
+  --color-tile-2: #171a1f;
+  --color-ink: #eceef2;
+  /* --color-dim / --color-live / --color-ok derive from the :root tokens
+     redefined above, so night values have a single source. */
+  --color-on-ink: #14161a;
+  --color-img-fallback: #22262d;
+}
+
+/* `--live` remains the accent fill/border token. Tailwind's generated
+   `text-live` utility otherwise paints that same fill hue as small text,
+   which misses AA on recessed day surfaces. Text states use the separately
+   audited text token in base, important, hover, and group-hover forms. */
+.text-live {
+  color: var(--live-text);
+}
+.\!text-live {
+  color: var(--live-text) !important;
+}
+@media (hover: hover) {
+  .hover\:text-live:hover,
+  .group:hover .group-hover\:text-live {
+    color: var(--live-text);
+  }
+}
+
+[data-theme="dark"] img,
+[data-theme="dark"] video {
+  filter: var(--photo-filter);
+}
+
+/* ---------- base ---------- */
+html {
+  background: var(--paper);
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5; /* 24px — on the 4px grid */
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 40px);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--live);
+  color: var(--on-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+/* The search pill draws its own ring (`.search:focus-within`). This has to
+   sit unlayered beside the global rule above — the components-layer
+   `outline: none` loses to any unlayered style, so the red box still drew
+   inside the pill. */
+.search input:focus-visible {
+  outline: none;
+}
+
+/* The form-element font reset MUST sit in a layer. Unlayered CSS outranks
+   everything in `@layer components` regardless of specificity, so while this
+   lived outside a layer its `font` shorthand silently clobbered the font of
+   every classed control: `<button class="btn">` rendered 17px sans instead of
+   12px mono (its `<a class="btn">` twin rendered correctly), and every
+   `.ctl` select/input lost its mono. In `@layer base` the reset still catches
+   unclassed controls, and component classes now win as intended. */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+img,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+/* ============================================================
+   LIVESHEET COMPONENT LAYER — lifted from livesheet.css.
+   Grid recipes with responsive rearrangements stay as classes;
+   utilities handle one-off layout.
+   ============================================================ */

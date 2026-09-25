@@ -2,7 +2,7 @@
 
 > HTML twin: `/docs/motion`. Source of truth for values:
 > `src/lib/motion/index.ts` (Motion for React) and the `--spring` / `--t-*`
-> tokens in `src/app/globals.css` (CSS). The two systems share one timing
+> tokens in `src/app/styles/00-tokens-base.css` (CSS). The two systems share one timing
 > vocabulary — this page is the contract between them.
 
 ## 1. Philosophy

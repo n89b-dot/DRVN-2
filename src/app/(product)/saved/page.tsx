@@ -5,6 +5,7 @@ import { Rv } from "@/components/livesheet";
 import {
   Avatar,
   ButtonLink,
+  EmptyState,
   FilterGroup,
   FilterLink,
   Finder,
@@ -267,7 +268,8 @@ export default async function SavedPage({
   const tabParams = { q: query || undefined, sort: sort === "price" ? "price" : undefined };
 
   return (
-    <div className="wrap">
+    // One measure with Cart and Notifications (the bar's three icons).
+    <div className="wrap wrap--wide">
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Saved · {totalListingSaves} part{totalListingSaves === 1 ? "" : "s"} · {buildCount}{" "}
@@ -276,9 +278,9 @@ export default async function SavedPage({
         <h1>
           Everything you&apos;re
           <br />
-          keeping an <span className="live-word">eye on.</span>
+          keeping an eye on.
         </h1>
-        <p className="sub">
+        <p className="sub sub--keep">
           The parts you&apos;re watching, and the builds and sellers you follow. Sold listings stay
           here so you can see what things actually went for.
         </p>
@@ -300,24 +302,33 @@ export default async function SavedPage({
       </FilterGroup>
 
       {(savesError || searchesError) && <p role="alert" className="field__err">Some saved items couldn’t be loaded. Reload this page to try again.</p>}
+      {/* Nothing anywhere: one empty state, and nothing around it — no
+          section heads, search or sort over lists with nothing in them. */}
       {isEmpty && (
         <section className="deck">
-          <Rv className="undrawn undrawn--hero">
-            <span className="undrawn__mark" aria-hidden="true">
-              ◎
-            </span>
-            <h3>Nothing saved yet</h3>
-            <p>
+          <Rv>
+            <EmptyState
+              mark="◎"
+              className="undrawn--hero"
+              title="Nothing saved yet"
+              action={
+                <>
+                  <ButtonLink href="/marketplace" variant="live">
+                    Browse parts
+                  </ButtonLink>
+                  <ButtonLink href="/explore" variant="ghost">
+                    Explore builds
+                  </ButtonLink>
+                </>
+              }
+            >
               Save parts and follow builds and sellers as you browse — they all collect here.
-            </p>
-            <ButtonLink href="/marketplace" variant="ghost">
-              Browse the marketplace
-            </ButtonLink>
+            </EmptyState>
           </Rv>
         </section>
       )}
 
-      {tab === "saved" && (
+      {tab === "saved" && totalListingSaves > 0 && (
         <section className="deck">
           <div>
             <div className="tile__head">
@@ -533,14 +544,20 @@ export default async function SavedPage({
         </section>
       )}
 
-      {tab === "following" && followedCars.length === 0 && sellerCount === 0 && (
+      {!isEmpty && tab === "following" && followedCars.length === 0 && sellerCount === 0 && (
         <section className="deck">
-          <Rv className="undrawn">
-            <span className="undrawn__mark" aria-hidden="true">
-              ◎
-            </span>
-            <h3>Not following anyone yet</h3>
-            <p>Follow a build or a seller and their updates show up here.</p>
+          <Rv>
+            <EmptyState
+              mark="◎"
+              title="Not following anyone yet"
+              action={
+                <ButtonLink href="/explore" variant="ghost">
+                  Explore builds
+                </ButtonLink>
+              }
+            >
+              Follow a build or a seller and their updates show up here.
+            </EmptyState>
           </Rv>
         </section>
       )}

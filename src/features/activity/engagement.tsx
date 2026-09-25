@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useOptimistic, useRef, useState, useTransition } from "react";
 
 
-import { Message } from "@/components/ui";
+import { AuthIntentDialog, Button, Message } from "@/components/ui";
 
 import { addComment, toggleReaction, type CommentState } from "./actions";
 import { ACTIVITY_EMOJIS } from "./constants";
@@ -52,13 +52,17 @@ export function ActivityEngagement({
   const [, startTransition] = useTransition();
   const [state, action, pending] = useActionState<CommentState, FormData>(addComment, {});
   const formRef = useRef<HTMLFormElement>(null);
+  // Signed out, a reply or a reaction explains itself in the shared
+  // auth-intent dialog instead of bouncing straight to /login (which also
+  // threw away a typed reply).
+  const [askAuth, setAskAuth] = useState<"reply" | "react" | null>(null);
 
   function goLogin() {
     router.push(`/login?next=${encodeURIComponent(path)}`);
   }
 
   function onReact(emoji: string) {
-    if (!isLoggedIn) return goLogin();
+    if (!isLoggedIn) return setAskAuth("react");
     setReactError(null);
     startTransition(async () => {
       applyToggle(emoji);
@@ -90,26 +94,10 @@ export function ActivityEngagement({
         </div>
       )}
 
-      <p className="microlabel">Reply to {authorName} — posts publicly on this update</p>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <form
-          ref={formRef}
-          action={(fd) => {
-            if (!isLoggedIn) return goLogin();
-            fd.set("post_id", postId);
-            fd.set("path", path);
-            action(fd);
-            formRef.current?.reset();
-          }}
-          className="search min-w-[200px] flex-1 !py-2"
-        >
-          <input name="body" required placeholder="Reply directly…" />
-          <button type="submit" disabled={pending} className="font-mono text-dim" aria-label="Send reply">
-            ↵
-          </button>
-        </form>
-
+      {/* Reactions get their own row above the reply — four across fits a
+          phone, where they used to wrap one onto a line of its own beside
+          the input. */}
+      <div className="reactrow" role="group" aria-label="React to this update">
         {ACTIVITY_EMOJIS.map((emoji) => {
           const r = optimisticReactions[emoji] ?? { count: 0, reacted: false };
           return (
@@ -117,17 +105,43 @@ export function ActivityEngagement({
               key={emoji}
               type="button"
               onClick={() => onReact(emoji)}
+              aria-pressed={r.reacted}
               // Reacted = selection, and selection is ink in this system
               // (matching .fbtn.is-on) — red stays reserved for live-now.
-              className={`chip !gap-1 !py-2 text-base ${r.reacted ? "chip--ink" : ""}`}
+              className={`chip reactchip ${r.reacted ? "chip--ink" : ""}`}
             >
-              <span className="flex items-center gap-1">
-                {emoji}
-                {r.count > 0 && <span className="font-mono text-xs">{r.count}</span>}
-              </span>
+              <span className="reactchip__glyph">{emoji}</span>
+              {r.count > 0 && <span className="reactchip__n">{r.count}</span>}
             </button>
           );
         })}
+      </div>
+
+      <p className="microlabel mt-6">Reply to {authorName} — posts publicly on this update</p>
+
+      <div className="mt-3">
+        {!isLoggedIn ? (
+          <Button variant="ghost" className="w-full" onClick={() => setAskAuth("reply")}>
+            Sign in to reply
+          </Button>
+        ) : (
+          <form
+            ref={formRef}
+            action={(fd) => {
+              if (!isLoggedIn) return goLogin();
+              fd.set("post_id", postId);
+              fd.set("path", path);
+              action(fd);
+              formRef.current?.reset();
+            }}
+            className="search w-full !py-2"
+          >
+            <input name="body" required placeholder="Reply directly…" />
+            <button type="submit" disabled={pending} className="font-mono text-dim" aria-label="Send reply">
+              ↵
+            </button>
+          </form>
+        )}
       </div>
 
       {(state.error || reactError) && (
@@ -135,6 +149,14 @@ export function ActivityEngagement({
           {state.error ?? reactError}
         </p>
       )}
+
+      <AuthIntentDialog
+        open={askAuth !== null}
+        onClose={() => setAskAuth(null)}
+        intent={askAuth ?? "reply"}
+        returnPath={path}
+        resume={false}
+      />
     </div>
   );
 }

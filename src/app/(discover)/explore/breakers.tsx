@@ -1,5 +1,6 @@
 import { AccountRowList, type AccountRowAccount } from "@/components/commerce";
-import { FilterGroup, FilterLink } from "@/components/ui";
+import { ButtonLink, FilterGroup, FilterLink } from "@/components/ui";
+import { FollowButton } from "@/features/social/buttons";
 
 /**
  * E-4 — the full-width rows between the cards.
@@ -40,12 +41,55 @@ export function TrendingBreaker({
   );
 }
 
-export function BuildersBreaker({ builders }: { builders: AccountRowAccount[] }) {
+export function BuildersBreaker({
+  builders,
+  isLoggedIn = false,
+}: {
+  builders: AccountRowAccount[];
+  isLoggedIn?: boolean;
+}) {
   if (builders.length < MIN_ITEMS) return null;
   return (
-    <div className="mosaic--breaker" role="listitem">
+    <div className="mosaic--breaker peoplerows" role="listitem">
       <span className="microlabel microlabel--ink">Builders to follow</span>
-      <AccountRowList accounts={builders} />
+      {/* The breaker is literally "to follow", so each row can be acted on:
+          signed out, Follow explains why an account is needed. */}
+      <AccountRowList
+        accounts={builders}
+        action={(account) => (
+          <FollowButton
+            targetType="profile"
+            targetId={account.id}
+            path="/explore"
+            initialFollowing={false}
+            isLoggedIn={isLoggedIn}
+          />
+        )}
+      />
+    </div>
+  );
+}
+
+/**
+ * The visitor's join moment. Signed out, the wall used to have no line on
+ * what DRVN is and no invitation to make one of these pages — someone who
+ * arrived from a shared link had no reason to sign up. Signed-out only, and
+ * shaped like the other breakers (a full-width row), so it adds no layout.
+ */
+export function JoinBreaker() {
+  return (
+    <div className="mosaic--breaker" role="listitem">
+      <span className="microlabel microlabel--ink">Put your car on DRVN</span>
+      <p className="max-w-[60ch] text-body text-dim">
+        Every build on this wall started with someone adding their car. Yours gets a page like
+        these — the mods, the updates, and the car behind any part you sell off it.
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <ButtonLink href="/signup?next=%2Fgarage">Add your car</ButtonLink>
+        <ButtonLink href="/login?next=%2Fexplore" variant="ghost">
+          Sign in
+        </ButtonLink>
+      </div>
     </div>
   );
 }

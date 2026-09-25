@@ -25,7 +25,7 @@ Page-level patterns: how components compose into the product's surfaces.
 | Checkout | `/checkout` (+ `/orders/[id]/checkout`) | 2-step stepper — see P21 |
 | Watchlist | `/saved` | watched part tiles + saved searches + followed sheets |
 | Notifications | `/notifications` | actionable rows, policy blines, mail previews |
-| Profile | `/u/[username]` + `/profile` | header with banner and trust strip (rating · sold · member since), then tabs — **Parts is the member's store**, rendered exactly like the marketplace, with the statuses decided server-side by who is looking |
+| Profile | `/u/[username]` + `/profile` | full-width page: banner band with the avatar overlapping its foot, identity and followers · following · cars below it, actions on the right (Follow · Store · share; the owner gets Edit · Saved · share), trust strip (rating · sold · member since); tabs beside a rail of the garage and parts for sale (`.deck--aside`), rail following the panel below 1024px. Overview = featured build + latest updates as cards; Garage and Updates are card grids. **Parts is the member's store**, rendered exactly like the marketplace, with the statuses decided server-side by who is looking |
 | Settings | `/settings` | rail + one section at a time (01–05 indices), signals matrix, savebar |
 | Auth | `/login`, `/signup`, `/login/forgot`, `/login/reset`, `/onboarding` | 420px authwrap, field states (there is no verify route) |
 | Legal | `/terms`, `/privacy`, `/fees`, `/protection` | `.prose` + `.toc` |

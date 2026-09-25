@@ -124,12 +124,14 @@ export function ListingCard({
                 seller's own words, then who is selling. Title clamps to two
                 lines — the design proof measured real titles running to six,
                 which made a two-across phone column unreadable. */}
-            {listing.brand && <span className="marketplace-card__brand">{listing.brand}</span>}
             <span className="marketplace-card__title">{listing.title}</span>
             <span className="marketplace-card__price">{formatPrice(listing.price_cents)}</span>
-            <span className="marketplace-card__meta">{deliveryLabel(listing)}</span>
+            <span className="marketplace-card__meta marketplace-card__meta--ship">{deliveryLabel(listing)}</span>
             <span className="marketplace-card__meta">
+              {/* The brand joins the meta line: as an eyebrow on some cards
+                  and not others it pushed half a row of cards down a line. */}
               {[
+                listing.brand,
                 conditionLabel(listing.condition),
                 listing.part_miles !== null && listing.part_miles !== undefined && listing.part_miles_unit
                   ? `${new Intl.NumberFormat("en").format(listing.part_miles)} ${listing.part_miles_unit} on it`
@@ -139,23 +141,20 @@ export function ListingCard({
                 .filter(Boolean)
                 .join(" · ") || "Condition not provided"}
             </span>
-            <span className="marketplace-card__meta">{listing.match_evidence?.label ?? "Compatibility not confirmed"}</span>
-            {listing.summary && <span className="marketplace-card__summary">{listing.summary}</span>}
+            {/* Fitment only speaks when there is evidence. "Compatibility not
+                confirmed" on every card before a vehicle is even chosen was
+                noise, and a negative one. */}
+            {listing.match_evidence?.label && (
+              <span className="marketplace-card__meta marketplace-card__fit">{listing.match_evidence.label}</span>
+            )}
             <span className="marketplace-card__seller">
               {listing.seller?.avatar_url ? (
                 <Media src={listing.seller.avatar_url} alt="" className="marketplace-card__avatar" role="avatar" />
               ) : null}
-              <span className="min-w-0">
-                <span className="block truncate">{listing.seller?.name ?? "Seller on DRVN"}</span>
-                {/* No rating here on purpose (M-5): a seller score on a browse
-                    card invites comparing people rather than parts. It stays
-                    on the item page and the store's trust strip. */}
-                {listing.seller?.active_count ? (
-                  <span className="marketplace-card__meta block">
-                    {listing.seller.active_count} for sale
-                  </span>
-                ) : null}
-              </span>
+              {/* Face and name only. No rating (M-5: a seller score on a
+                  browse card invites comparing people rather than parts) and
+                  no "N for sale" — both live on the item page and the store. */}
+              <span className="block min-w-0 truncate">{listing.seller?.name ?? "Seller on DRVN"}</span>
             </span>
           </span>
         </IntentLink>
@@ -176,7 +175,7 @@ export function ListingCard({
         )}
         {(save || actions) && (
           <div className="marketplace-card__foot">
-            {save && <SaveButton targetType="listing" targetId={listing.id} itemLabel={listing.title} path={href} initialSaved={Boolean(listing.viewer_saved)} isLoggedIn={save.isLoggedIn} />}
+            {save && <SaveButton variant="icon" targetType="listing" targetId={listing.id} itemLabel={listing.title} path={href} initialSaved={Boolean(listing.viewer_saved)} isLoggedIn={save.isLoggedIn} />}
             {/* Add to cart, never Buy now — the PRD rules Buy now off cards,
                 because deciding to buy happens on the item page. */}
             {actions}

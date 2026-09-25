@@ -1,0 +1,523 @@
+/* navigation — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- tab strip — real tabs, .fbtn vocabulary ----------
+     Panel-switching tabs (car sheet, profile). Reuses the segmented control
+     already used by Explore and the marketplace rather than inventing a second
+     look, and keeps the radius on the tile scale (--r-ctl) instead of a fully
+     rounded capsule. Selection is ink, not signal red: red stays reserved for
+     things happening now. */
+  /* Page tabs read as navigation: Sans labels on a ruled baseline, the
+     current one inked with an accent underline. The filled mono blocks they
+     replaced looked like a row of buttons, and on a phone five of them ran
+     off-screen — hiding the Parts tab, which is the member's store. */
+  .tabstrip {
+    display: flex;
+    gap: 2px 18px;
+    flex-wrap: wrap;
+    margin: 24px 0 26px;
+    border-bottom: 1px solid var(--rule-mid);
+    /* SheetTabs scrolls the strip to the top on a phone tab change; this
+       keeps it clear of the sticky bar. */
+    scroll-margin-top: 88px;
+  }
+  .tabstrip [role="tab"] {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 10px 0 12px;
+    min-height: 44px;
+    margin-bottom: -1px;
+    color: var(--dim);
+    border-bottom: 2px solid transparent;
+  }
+  .tabstrip [role="tab"]:hover {
+    color: var(--ink);
+  }
+  .tabstrip [role="tab"][aria-selected="true"] {
+    background: transparent;
+    color: var(--ink);
+    border-bottom-color: var(--live);
+  }
+  .tabstrip .n {
+    margin-left: 4px;
+    opacity: 0.75;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Counts only turn red when the number really is live/new. */
+  .tabstrip .n--live {
+    color: var(--live);
+    opacity: 1;
+  }
+  /* Five tabs with counts fit a 358px phone column at this size, so the
+     whole strip — Parts included — is visible without scrolling. */
+  @media (max-width: 640px) {
+    .tabstrip {
+      column-gap: 14px;
+    }
+    .tabstrip [role="tab"] {
+      font-size: 14px;
+    }
+    .tabstrip .n {
+      font-size: 12px;
+      margin-left: 3px;
+    }
+  }
+  /* A phone gets one navigation axis, not a two-row chip wall. The strip holds
+     its line and scrolls sideways instead — the same recipe `.filters--scroll`
+     already uses for chip rows, so the two read as one vocabulary. Wrapping
+     "The build / For sale / Activity / Gallery" onto a second row pushed the
+     panel itself below the fold, which is the content the tabs exist to reach.
+     Desktop keeps wrapping: at that width there is nothing to wrap. */
+  @media (max-width: 760px) {
+    .tabstrip {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      /* Bleed to the page gutter so the row continues off-sheet rather than
+         stopping short, and so the trailing tab can scroll fully clear of the
+         edge. `--gutter` comes from .wrap; outside one it falls back to 0. */
+      margin-left: calc(var(--gutter, 0px) * -1);
+      margin-right: calc(var(--gutter, 0px) * -1);
+      /* 2px vertical keeps focus rings off the scroll container's shear line. */
+      padding: 2px var(--gutter, 0px);
+      scroll-padding-left: var(--gutter, 0px);
+      scroll-padding-right: var(--gutter, 0px);
+    }
+    .tabstrip::-webkit-scrollbar {
+      display: none;
+    }
+    .tabstrip [role="tab"] {
+      flex: none;
+      white-space: nowrap;
+    }
+  }
+
+  [role="tabpanel"]:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 3px;
+  }
+
+  /* ---------- Selling family nav — a contained local plate ----------
+     Selling · My Listings · Offers · Orders · Payouts on one recessed bar;
+     the sheet you're reading is raised onto the tile surface with the live
+     tick. One contiguous plate, never ink-filled chips, so it can't be
+     mistaken for a filter row — and quieter than the global bar above it.
+     This is the only definition: an older ruled-strip version used to sit
+     here with a second block near the end of the file overriding most of it.
+
+     Where it shows: wherever the rail doesn't already list the family. At
+     ≥1081px the signed-in rail carries the same five destinations (expanded,
+     or as the 68px icon rail), so the plate stands down rather than printing
+     the navigation twice (rule below, beside the rail). On phones it scrolls
+     away with the page — a sticky plate under the bar held ~270px of an
+     844px screen — and five members (plus an Offers badge) scroll sideways
+     under the shared edge fade instead of being squeezed into 375px. */
+  .familynav {
+    display: flex;
+    justify-content: center;
+    margin: clamp(4px, 1vw, 10px) 0 0;
+  }
+  .familynav__rows {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+    padding: 6px;
+    background: var(--paper-deep);
+    border-radius: var(--r-ctl);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .familynav__rows::-webkit-scrollbar {
+    display: none;
+  }
+  .familynav__item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: none;
+    white-space: nowrap;
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: calc(var(--r-ctl) - 4px);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .familynav__item:hover {
+    color: var(--ink);
+  }
+  .familynav__item.is-here {
+    background: var(--tile);
+    color: var(--ink);
+  }
+  /* The live tick under the current sheet. */
+  .familynav__item.is-here::after {
+    content: "";
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: 5px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--live);
+  }
+  .familynav__n {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--live);
+  }
+  @media (max-width: 640px) {
+    .familynav {
+      justify-content: flex-start;
+      margin-top: 4px;
+    }
+    .familynav__rows {
+      flex: 1 1 100%;
+      gap: 2px;
+      padding: 4px;
+    }
+    /* Members share spare width when they fit and scroll when they don't —
+       the touch floor holds at 44px either way. */
+    .familynav__item {
+      flex: 1 0 auto;
+      min-height: 44px;
+      padding: 0 10px;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+    .familynav__item.is-here::after {
+      left: 10px;
+      right: 10px;
+      bottom: 6px;
+    }
+  }
+
+  /* ---------- settings section register ----------
+     Above `md` this is the sticky vertical rail beside the sheet. Below it
+     the rail stands down for `.sectionjump` — a native select naming the
+     current section. The compact sideways strip it replaces showed two and a
+     half of eight sections at 390px, so the rest were undiscoverable. */
+  .sectionnav {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    /* Doubled class: the picker is a `.field`, whose own display rule sits
+       later in this layer. */
+    .field.sectionjump {
+      display: none;
+    }
+    .sectionnav {
+      display: flex;
+      position: sticky;
+      top: 80px;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sectionnav > * {
+      display: block;
+    }
+  }
+
+  /* ---------- quiet jump row — ref-links, not pills ---------- */
+  .jumprow {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    margin: 20px 0 8px;
+  }
+  .jumprow .microlabel {
+    flex: none;
+  }
+  .jumplink {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
+    border-bottom: 1px solid var(--dimline);
+    padding-bottom: 2px;
+    transition:
+      color var(--t-fast) ease,
+      border-color var(--t-fast) ease;
+  }
+  .jumplink:hover {
+    color: var(--live);
+    border-color: var(--live);
+  }
+
+  /* ---------- BUILD SHEET — ruled rows, no boxes ---------- */
+  .bsec {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 28px;
+    padding-bottom: 10px;
+  }
+  .bsec:first-of-type {
+    margin-top: 8px;
+  }
+  .bline {
+    display: grid;
+    grid-template-columns: 190px minmax(0, 1fr) auto;
+    gap: 5px 18px;
+    align-items: baseline;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .bline__label {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .bline__val {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+  .bline__note {
+    grid-column: 2;
+    font-size: 16px;
+    color: var(--dim);
+    line-height: 1.55;
+    max-width: 64ch;
+  }
+  .bline .chip {
+    justify-self: end;
+    align-self: center;
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  /* ---------- order pipeline dots ---------- */
+  .pipe {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pipe .pip {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--paper-deep);
+    position: relative;
+  }
+  .pipe .pip.is-on {
+    background: var(--live);
+  }
+  .pipe .pip + .pip::before {
+    content: "";
+    position: absolute;
+    right: 100%;
+    top: 4px;
+    width: 14px;
+    height: 1px;
+    background: var(--dimline);
+    margin-right: 3px;
+  }
+  .pipe .lbl {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    margin-left: 6px;
+    text-transform: uppercase;
+  }
+
+  /* ---------- FINDER — the search line ----------
+     The finder used to gather search and refinements onto one raised plate;
+     the plate boxed the search away from the content it searches. Now the
+     instrument sits on the canvas: one row — the query field (a raised
+     tile fill on the paper; Enter submits, there is no Search button), then
+     Filters and Sort beside it, the Rarible/Etsy idiom of controls placed
+     next to the field rather than around it. One recipe serves the
+     marketplace, category sheets, Explore and the console queues. */
+  .finder {
+    display: grid;
+    gap: clamp(10px, 1.2vw, 16px);
+    /* More air below than a section gap: the search is its own instrument,
+       the scope pills belong to the wall beneath them. */
+    margin-bottom: clamp(36px, 4vw, 56px);
+  }
+  .finder__main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  /* Inside the plate the query field sits on the recessed tone — on --tile
+     it would vanish into its own plate — and takes all the width the row
+     offers. */
+  .finder .search {
+    background: var(--tile);
+    /* 170px basis keeps the submit on the same row down to 375px viewports
+       (finder content at 375 is ~307px: 170 + 8 gap + ~123 button). At 240px
+       the button wrapped to its own full row on every phone; at 320 it still
+       does, which is acceptable. min-width: 0 lets the field actually shrink
+       to the basis: the input's intrinsic min-content otherwise holds the
+       label at ~235px and forces the wrap anyway. */
+    flex: 1 1 170px;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+  }
+  .finder .search input {
+    min-width: 0;
+  }
+  .finder__refine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+  }
+  /* The refine sheet's one footer: Reset quiet on the left, Apply on the
+     right, in one row (FinderRefineSheet `actions`). */
+  .finder__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .finder__actions > .btn:last-child {
+    flex: 1 1 auto;
+    max-width: 240px;
+  }
+  /* Chip rows ride inside the plate without their canvas margins. */
+  .finder .filters {
+    margin: 0;
+  }
+  /* A chip row introduces itself: "Browse by category", "Status" — the label
+     sits in the row, centred on the chips, and never wraps away from them. */
+  .filters__label {
+    align-self: center;
+    flex: none;
+    margin-right: 6px;
+  }
+
+  /* ---------- search field ---------- */
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 12px 18px;
+    font-family: var(--sans);
+    font-size: 15px;
+    /* Wide enough that the placeholder — the only documentation of what's
+       searchable — never clips. */
+    width: min(560px, 100%);
+  }
+  .search input {
+    border: 0;
+    background: none;
+    outline: none;
+    font: inherit;
+    color: var(--ink);
+    width: 100%;
+  }
+  .search input::placeholder {
+    color: var(--dim);
+  }
+  /* One focus ring, on the pill — not a box drawn inside it — and no
+     browser-blue clear glyph. */
+  .search:focus-within {
+    box-shadow: 0 0 0 2px var(--ink);
+  }
+  .search input:focus,
+  .search input:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+  .search input::-webkit-search-cancel-button,
+  .search input::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  /* Under 16px iOS zooms the page into a focused field — the compact input
+     stays at the threshold; only the placeholder (never typed into) steps
+     down, and truncates with an ellipsis instead of clipping mid-word. */
+  .search input {
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 639px) {
+    .search {
+      font-size: 16px;
+    }
+    .search input::placeholder {
+      font-size: 14px;
+    }
+  }
+
+  /* ---------- footer ---------- */
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 26px 0 44px;
+    border-top: 1px solid var(--rule-mid);
+    margin-top: 24px;
+  }
+
+  /* ---------- hero media ---------- */
+  .hero-media {
+    position: relative;
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--img-fallback);
+    aspect-ratio: 16 / 8.5;
+  }
+  .hero-media img,
+  .hero-media video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* ---------- toast — the sheet speaks back ---------- */
+  .toast {
+    position: fixed;
+    left: 50%;
+    /* Clear the home-indicator safe area — at bottom: 24px flat, a toast on a
+       notched phone sat half behind the indicator. */
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    z-index: 120;
+    /* Entry/exit rise + fade is Motion-driven (src/components/ui/toast.tsx),
+       including the -50% centering shift. */
+    pointer-events: none;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 20px;
+    border-radius: var(--r-ctl);
+    max-width: min(60ch, 92vw);
+    text-align: center;
+  }
+}

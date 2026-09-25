@@ -10,7 +10,7 @@ import { reportError } from "@/lib/monitoring";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 /**
- * Settings → Payments → "Set up payouts". Creates the seller's Express
+ * /payouts → "Set up payouts". Creates the seller's Express
  * account on first click, then sends them to Stripe-hosted onboarding.
  * Stripe returns to /settings/payouts/return, which syncs payouts_enabled.
  */

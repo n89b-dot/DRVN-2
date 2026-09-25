@@ -41,11 +41,15 @@ export function SheetTabs({
   initialTab,
   paramName = "view",
   label,
+  onChange,
 }: {
   tabs: SheetTab[];
   initialTab?: string;
   paramName?: string;
   label: string;
+  /** Told the new key on every switch — for a page whose surroundings
+   *  change with the tab (a rail that hides what the panel already shows). */
+  onChange?: (key: string) => void;
 }) {
   const keys = tabs.map((t) => t.key);
   const fallback = keys[0];
@@ -57,6 +61,7 @@ export function SheetTabs({
   const select = useCallback(
     (key: string, { focus = false }: { focus?: boolean } = {}) => {
       setActive(key);
+      onChange?.(key);
 
       const url = new URL(window.location.href);
       if (key === fallback) url.searchParams.delete(paramName);
@@ -72,8 +77,16 @@ export function SheetTabs({
       // every width wide enough not to scroll. Left at the default instant
       // behaviour deliberately: a motion-reduced user still needs the tab.
       el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      // On a phone a tall header can leave the strip near the foot of the
+      // screen, so a tapped panel opened entirely below the fold. Bring the
+      // strip up under the bar (its scroll-margin clears the sticky bar).
+      const strip = el?.parentElement;
+      if (strip && window.matchMedia("(max-width: 640px)").matches) {
+        const top = strip.getBoundingClientRect().top;
+        if (top > window.innerHeight * 0.4) strip.scrollIntoView({ block: "start" });
+      }
     },
-    [fallback, paramName]
+    [fallback, paramName, onChange]
   );
 
   // Initial render can land with the active tab past the strip's clipped

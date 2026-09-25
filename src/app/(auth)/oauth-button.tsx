@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -27,9 +28,9 @@ export function OAuthButton({ next }: { next?: string }) {
 
   return (
     <div>
-      <button type="button" onClick={signInWithGoogle} className="btn btn--ghost w-full">
-        Google
-      </button>
+      <Button variant="ghost" onClick={signInWithGoogle} className="w-full">
+        Continue with Google
+      </Button>
       {error && (
         <p role="alert" aria-live="polite" className="field__err mt-2">
           {error}

@@ -207,6 +207,9 @@ async function readListingFields(formData: FormData, userId: string) {
   };
 }
 
+const PHOTO_REQUIRED =
+  "Add at least one photo before publishing — a listing goes public with its picture. Drafts can save without one.";
+
 export async function createListing(_prev: SellState, formData: FormData): Promise<SellState> {
   const { supabase, user } = await requireUser();
 
@@ -224,6 +227,11 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   if (!uuid.test(requestId)) return { error: "Reload the listing form and try again." };
 
   const images = keepValidGalleryImages(safeParseJson(formData.get("image_urls")), 12, user.id);
+  // M-5/W-2: a public listing leads with its photo, so publishing needs one.
+  // Drafts are exempt — they're where the photos get added.
+  if (!asDraft && images.length === 0) {
+    return { error: PHOTO_REQUIRED };
+  }
   const modItemId = String(formData.get("mod_item_id") ?? "");
   const importId = String(formData.get("import_id") ?? "");
   const payloadHash = createHash("sha256")
@@ -276,7 +284,7 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   if (!claim.completed && !asDraft && !(await sellerCanPublish(user.id))) {
     return {
       error:
-        "Publishing needs payouts set up first (Settings → Payments), so a sale has somewhere to send your money. You can still save this as a draft.",
+        "Publishing needs payouts set up first (Selling → Payouts), so a sale has somewhere to send your money. You can still save this as a draft.",
     };
   }
 
@@ -378,6 +386,18 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
 
+  // A live listing can't be edited down to no photos (M-5/W-2) — the same
+  // rule publishing enforces. Drafts and paused listings may be photoless.
+  const imagesField = formData.get("image_urls");
+  if (
+    existing.status === "active" &&
+    typeof imagesField === "string" &&
+    imagesField &&
+    keepValidGalleryImages(safeParseJson(imagesField), 12, user.id).length === 0
+  ) {
+    return { error: PHOTO_REQUIRED };
+  }
+
   const { error } = await supabase.from("listings").update(parsed.fields).eq("id", id);
   if (error) return { error: error.message };
 
@@ -385,7 +405,6 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   // order carries reorder + cover choices (index 0 is the cover) and alt
   // text set in the editor, so a plain delete-and-reinsert on `position`
   // is enough — no separate reorder/cover/alt actions needed.
-  const imagesField = formData.get("image_urls");
   if (typeof imagesField === "string" && imagesField) {
     const images = keepValidGalleryImages(safeParseJson(imagesField), 12, user.id);
 
@@ -458,7 +477,7 @@ const SETTABLE_STATUSES: ListingStatus[] = ["draft", "active", "paused", "sold",
  * used to return void with bare-return guards, so a blocked Publish — the
  * primary seller conversion step — did nothing with nothing said. Now every
  * refusal says why, and the onboarding gate carries a flag the UI turns into
- * a link to Settings → Payments.
+ * a link to the Payouts page.
  */
 export type ListingActionState = {
   error?: string;
@@ -508,6 +527,15 @@ export async function setListingStatus(
   }
   if (existing.status === "removed") {
     return { error: "This listing was removed by moderation — check your notifications." };
+  }
+
+  // Same rule as createListing: a listing goes public with its photo.
+  if (status === "active") {
+    const { count: photoCount } = await supabase
+      .from("listing_images")
+      .select("listing_id", { count: "exact", head: true })
+      .eq("listing_id", id);
+    if (!photoCount) return { error: PHOTO_REQUIRED };
   }
 
   // Same gate as createListing: going live requires a payable seller.

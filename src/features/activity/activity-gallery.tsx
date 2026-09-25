@@ -33,8 +33,17 @@ export function ActivityGallery({ images, title }: { images: GalleryPhoto[]; tit
     <>
       {/* Single column below sm — the fixed two-up split previously squeezed
           the side stack to unreadably narrow tiles on a phone. */}
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_0.7fr]">
-        {tile(images[0], 0, "h-56 rounded-r")}
+      {/* One photo spans the column at a set ratio — in the two-up split it
+          sat in the left 60% beside an empty column, narrower than every
+          photo block below it. */}
+      <div
+        className={
+          images.length === 1
+            ? "mt-6 grid grid-cols-1"
+            : "mt-6 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_0.7fr]"
+        }
+      >
+        {tile(images[0], 0, images.length === 1 ? "aspect-[16/10] w-full rounded-r" : "h-56 rounded-r")}
         {images.length > 1 && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {images.slice(1, 3).map((image, i) => tile(image, i + 1, "h-[106px] rounded-ctl"))}

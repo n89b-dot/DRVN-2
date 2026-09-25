@@ -56,7 +56,7 @@ export function FocusedCar({
 
   return (
     <>
-      <section className="carfocus">
+      <section className={sheet.cover_image_url ? "carfocus carfocus--photo" : "carfocus"}>
         <span className="carfocus__cover">
           <Media src={sheet.cover_image_url ?? undefined} alt="" className="h-full w-full" role="hero" />
         </span>
@@ -68,7 +68,7 @@ export function FocusedCar({
           <h1 className="carfocus__name">{sheet.name}</h1>
           <div className="carfocus__actions">
             <ButtonLink href={`/garage/${sheet.id}/update/new`} variant="live">
-              Post an update
+              Post update
             </ButtonLink>
             <ButtonLink href={`/garage/${sheet.id}/edit`} variant="ghost">
               Edit the car

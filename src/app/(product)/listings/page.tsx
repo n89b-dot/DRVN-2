@@ -249,6 +249,10 @@ export default async function SellerListingsPage({
     };
   });
 
+  const secondary = SECONDARY_REGISTERS.filter(
+    (r) => tally(r.key) > 0 || r.key === register,
+  );
+
   const pageFrom = (clampedPage - 1) * PAGE_SIZE;
   const hasMore = pageFrom + rows.length < total;
 
@@ -281,50 +285,20 @@ export default async function SellerListingsPage({
           Who&apos;s looking, who&apos;s watching, and the best offer on the
           table — with the clock running on each one.
         </p>
-        <Link href="/settings#payouts" className="jumplink mt-2 inline-flex">
+        <Link href="/payouts" className="jumplink mt-2 inline-flex">
           View your payouts →
         </Link>
       </Rv>
-      {/* The seller's working state, in four numbers. Each one is a filter or
-          a queue — nothing here is a metric for its own sake. */}
-      <div className="tally" role="group" aria-label="Listing summary">
-        <Link
-          href={href({ register: "live" })}
-          scroll={false}
-          className="tally__cell"
-        >
-          <span className="tally__n">{tally("live")}</span>
-          <span className="tally__label">Live</span>
-        </Link>
-        <Link
-          href={href({ register: "offer" })}
-          scroll={false}
-          className="tally__cell"
-        >
-          <span
-            className={`tally__n ${tally("offer") > 0 ? "tally__n--live" : ""}`}
-          >
-            {tally("offer")}
-          </span>
-          <span className="tally__label">Under offer</span>
-        </Link>
-        <Link
-          href={href({ register: "draft" })}
-          scroll={false}
-          className="tally__cell"
-        >
-          <span className="tally__n">{tally("draft")}</span>
-          <span className="tally__label">Drafts</span>
-        </Link>
-        <span className="tally__cell">
-          <span
-            className={`tally__n ${openQuestions > 0 ? "tally__n--live" : ""}`}
-          >
-            {openQuestions}
-          </span>
-          <span className="tally__label">Questions to answer</span>
-        </span>
-      </div>
+      {/* The counts live on the filter chips below — they ARE the filters.
+          A separate tally strip above them printed the same numbers a third
+          time; the one figure the chips can't carry (questions waiting on
+          the seller) surfaces only when there is something to answer. */}
+      {openQuestions > 0 && (
+        <Alert tone="live" ico="?" title={`${openQuestions} question${openQuestions === 1 ? "" : "s"} to answer`} className="mb-6">
+          Buyers asked on {openQuestions === 1 ? "a listing" : "your listings"} — the rows below
+          carry a question chip that opens the thread.
+        </Alert>
+      )}
 
       {deleted && (
         <Alert tone="ok" ico="✓" title="Listing deleted" className="mb-6">
@@ -350,13 +324,17 @@ export default async function SellerListingsPage({
         ))}
       </div>
 
+      {/* The quieter statuses only when they hold something (or are the
+          filter in use) — four "0" chips over two live listings was chrome
+          with nothing behind it. */}
+      {secondary.length > 0 && (
       <div
         className="filters filters--sub filters--scroll"
         role="group"
         aria-label="Filter listings by other statuses"
       >
         <span className="microlabel filters__label">Status</span>
-        {SECONDARY_REGISTERS.map((r) => (
+        {secondary.map((r) => (
           <Link
             key={r.key}
             href={href({ register: r.key })}
@@ -368,6 +346,7 @@ export default async function SellerListingsPage({
           </Link>
         ))}
       </div>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState

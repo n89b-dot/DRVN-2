@@ -9,6 +9,7 @@ import { provenanceLine, vehicleLabel, vehicleSubline } from "@/lib/vehicles/lab
 import { ListingCartButton } from "@/features/commerce/quick-commerce";
 
 import type { ListingCardData } from "./listing-card";
+import { Badge, KindBadge } from "./badge";
 import { Media } from "./primitives";
 import { ratingLine } from "./rating";
 import { postHref } from "@/lib/activity/href";
@@ -109,13 +110,6 @@ export function Mosaic({
   );
 }
 
-/* Literal class strings: the CSS build drops rules whose selectors never
-   appear verbatim in source, so these can't be assembled from `kind`. */
-const KIND_PILL = {
-  part: "mcell__eyebrow mcell__eyebrow--part",
-  car: "mcell__eyebrow mcell__eyebrow--car",
-  update: "mcell__eyebrow mcell__eyebrow--update",
-} as const;
 
 export function MosaicCell({
   href,
@@ -155,9 +149,9 @@ export function MosaicCell({
   /** Mono kind label, top-left. Omit (with no flag/corner) to drop the top
    *  row entirely — the marketplace wall, where every cell is a part. */
   eyebrow?: string;
-  /** What the cell is — sets the eyebrow pill's tone so a part for sale, a
-   *  build and an update tell apart at a glance across the mixed wall.
-   *  Omit on a single-kind wall (the marketplace) for a plain mono eyebrow. */
+  /** What the cell is — renders the Kind badge (outline + icon, the same
+   *  on every card) in place of the eyebrow text. Omit on a single-kind
+   *  wall (the marketplace) for a plain mono eyebrow. */
   kind?: "part" | "car" | "update";
   /** Mono annotation, top-right (time, watch count). */
   corner?: string | null;
@@ -183,7 +177,7 @@ export function MosaicCell({
   price?: ReactNode;
   /** Who is behind the card: monogram plate + name, leading the foot with
    *  the reference line (car / activity) under it. */
-  byline?: { name: string; note?: string } | null;
+  byline?: { name: string; note?: string; avatarUrl?: string | null } | null;
   /** Put the detail line beside the price on one row (the discovery
    *  card's "$120 · USED · Grade B") instead of under it. */
   detailBesidePrice?: boolean;
@@ -201,8 +195,14 @@ export function MosaicCell({
   const bare = !src;
   const bylineNode = byline ? (
     <span className="mcell__byline">
+      {/* The person's photo when they have one — the same face the shop's
+          cards show — and their initials only when they don't. */}
       <span className="monogram monogram--xs" aria-hidden="true">
-        {initialsOf(byline.name)}
+        {byline.avatarUrl ? (
+          <Media src={byline.avatarUrl} alt="" className="h-full w-full" role="avatar" />
+        ) : (
+          initialsOf(byline.name)
+        )}
       </span>
       <span className="mcell__byline__name">
         {byline.name}
@@ -227,7 +227,14 @@ export function MosaicCell({
                 {flag ? (
                   <span className="mcell__flag">{flag}</span>
                 ) : (
-                  eyebrow && <span className={kind ? KIND_PILL[kind] : "mcell__eyebrow"}>{eyebrow}</span>
+                  // The kind is the one badge system's Kind badge — the same
+                  // outline and icon on every card; a plain eyebrow otherwise.
+                  eyebrow &&
+                  (kind ? (
+                    <KindBadge kind={kind} className="mcell__kind" />
+                  ) : (
+                    <span className="mcell__eyebrow">{eyebrow}</span>
+                  ))
                 )}
                 {corner && <span className="mcell__eyebrow mcell__eyebrow--corner">{corner}</span>}
               </span>
@@ -350,7 +357,7 @@ export function FeedMosaicCell({
           item.grade ? `Grade ${item.grade.toUpperCase()}` : null,
         ])}
         detailBesidePrice
-        byline={item.sellerName ? { name: item.sellerName } : null}
+        byline={item.sellerName ? { name: item.sellerName, avatarUrl: item.sellerAvatarUrl } : null}
         sub={provenanceLine(item.sourceCarName)}
         engagement={
           <CardEngagement
@@ -399,7 +406,7 @@ export function FeedMosaicCell({
         corner={item.lastActivityAt ? relativeTime(item.lastActivityAt) : null}
         headline={headline}
         value={subline ?? undefined}
-        byline={item.ownerName ? { name: item.ownerName } : null}
+        byline={item.ownerName ? { name: item.ownerName, avatarUrl: item.ownerAvatarUrl } : null}
         meta={activity || null}
         engagement={
           <CardEngagement
@@ -439,7 +446,7 @@ export function FeedMosaicCell({
       // update card.
       lede={item.title && item.intro ? item.intro : null}
       sub={vehicleLabel(item.carVehicle) || item.carName}
-      byline={item.ownerName ? { name: item.ownerName } : null}
+      byline={item.ownerName ? { name: item.ownerName, avatarUrl: item.ownerAvatarUrl } : null}
       engagement={
         <CardEngagement
           target={{ kind: "post", id: item.id }}
@@ -480,7 +487,7 @@ function listingMetaLine(condition: string | null | undefined, rest: (string | n
   if (!chip && !tail) return null;
   return (
     <>
-      {chip && <span className="chip mcell__cond">{chip}</span>}
+      {chip && <Badge className="mcell__cond">{chip}</Badge>}
       {chip && tail && " · "}
       {tail}
     </>
@@ -538,7 +545,7 @@ export function ListingMosaicCell({
       }
       detail={meta}
       sub={provenanceLine(listing.source_car_name)}
-      byline={seller ? { name: seller.name, note: sellerRating ?? undefined } : null}
+      byline={seller ? { name: seller.name, note: sellerRating ?? undefined, avatarUrl: seller.avatar_url } : null}
       actions={actions}
       engagement={
         save && (

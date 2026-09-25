@@ -45,3 +45,14 @@ with `tabular-nums`.
 - No additional families, no italics as a system voice, no faux weights.
 - Letter-spacing tightens as size grows (display -0.02em) and opens on small
   mono labels (up to 0.14em).
+- **Mono is for labels and data at 12px and under** — microlabels, counts,
+  timestamps, badges, chips, spec tags. Anything read or typed at reading size
+  is Plex Sans: inputs and selects (`.ctl`), search (`.search`), figures and
+  names (`.kv`, tabular), prices (ink, 600, tabular — never `--ok` green),
+  notes (`.spec-note`), and sentences anywhere.
+- **Buttons:** the brackets mark the primary action (`.btn--live`) only. Ink
+  buttons keep the mono caps voice without brackets; ghost and destructive
+  buttons and row actions (`.relbtn`) are Sans, sentence case as written.
+- **Tabs** (`.tabstrip`) are Sans on a ruled baseline with an accent
+  underline; filter chips (`.fbtn`) stay mono micro-labels in a hairline
+  outline.

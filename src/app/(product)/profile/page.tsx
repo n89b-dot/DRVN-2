@@ -1,6 +1,7 @@
 import Link from "next/link";
 
-import { NarrowColumn, ProfileHeader } from "@/components/ui";
+import { ProfileHeader, ShareButton } from "@/components/ui";
+import { profileBannerUrl } from "@/lib/cars/banner";
 import { ProfileBody } from "@/components/profile/profile-body";
 import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
@@ -29,19 +30,27 @@ export default async function ProfilePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase.from("profiles").select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, store_note, created_at, updated_at").eq("id", user!.id).single();
+  const { data: profile } = await supabase.from("profiles").select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, main_car_id, store_note, created_at, updated_at").eq("id", user!.id).single();
 
   const view = await loadProfileView(supabase, user!.id, {
     publicOnly: false,
     listingsPage: Math.max(1, Number(listingsPageParam) || 1),
     reviewsPage: Math.max(1, Number(reviewsPageParam) || 1),
   });
+  // Same banner the public page shows (P-1) — public cars only, so what you
+  // see here is what a visitor sees.
+  const { data: bannerCars } = await supabase
+    .from("cars")
+    .select("id, created_at, is_public, cover_image_url")
+    .eq("owner_id", user!.id)
+    .eq("is_public", true);
+  const bannerUrl = profileBannerUrl(bannerCars ?? [], profile?.main_car_id ?? null);
   const { website, rest } = splitLinks(profile?.links);
   const name = profile?.display_name ?? "Your profile";
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
 
   return (
-    <NarrowColumn>
+    <div className="wrap pb-6">
       <div className="pagehead pagehead--task !pb-4">
         <span className="microlabel">
           Your profile ·{" "}
@@ -57,8 +66,15 @@ export default async function ProfilePage({
         tagline={profile?.headline ?? undefined}
         location={profile?.location}
         avatarUrl={profile?.avatar_url}
+        bannerUrl={bannerUrl}
+        stats={[
+          { label: view.followerCount === 1 ? "Follower" : "Followers", value: String(view.followerCount) },
+          { label: "Following", value: String(view.followingCount) },
+          { label: view.vehicles.length === 1 ? "Car" : "Cars", value: String(view.vehicles.length) },
+        ]}
         website={website ? { label: website.url.replace(/^https?:\/\//, "").replace(/\/$/, ""), href: website.url } : undefined}
         action={
+          <div className="flex flex-wrap items-center gap-2">
           <ProfileEditor
             userId={user!.id}
             profile={{
@@ -70,9 +86,15 @@ export default async function ProfilePage({
               links,
             }}
           />
+          {/* Saved is a personal library, not a profile action — it lives
+              behind the bar's bookmark icon, so the head keeps two buttons. */}
+          <ShareButton url={`/u/${profile?.username}`} title={name} />
+          </div>
         }
       />
       <ProfileBody
+        /* A new tab from a link (?view=parts) remounts the tabs — see /u. */
+        key={viewParam ?? "overview"}
         bio={profile?.bio ?? null}
         view={view}
         contactLinks={rest}
@@ -101,6 +123,6 @@ export default async function ProfilePage({
           drvn.app/u/{profile?.username}
         </Link>
       </p>
-    </NarrowColumn>
+    </div>
   );
 }

@@ -197,7 +197,7 @@ export function QASection({
   return (
     <div className="mt-10">
       <TileHead
-        label="Questions for the seller"
+        label={isSeller ? "Buyers' questions" : "Questions for the seller"}
         end={topLevel.length > 0 ? <span className="chip">{topLevel.length}</span> : undefined}
       />
       <p className="spec-note !mt-1">
@@ -222,9 +222,16 @@ export function QASection({
           />
         ))}
         {topLevel.length === 0 && (
-          <EmptyState mark="?" title="No questions yet">
-            Ask the seller anything — answers appear here for everyone.
-          </EmptyState>
+          isSeller ? (
+            <EmptyState mark="?" title="No questions yet">
+              Buyers&apos; questions appear here, and you&apos;re notified when one arrives. Your answer is
+              public, so the next buyer sees it too.
+            </EmptyState>
+          ) : (
+            <EmptyState mark="?" title="No questions yet">
+              Ask the seller anything — answers appear here for everyone.
+            </EmptyState>
+          )
         )}
       </MessageThread>
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { ActionFooter, Button, TextField, TileHead } from "@/components/ui";
 import type { ModItem, ModStatus } from "@/lib/database.types";
@@ -18,6 +18,7 @@ import {
 import { unlinkModListing } from "@/app/(product)/sell/actions";
 
 import { readPartLink, saveModItems, type ModItemInput } from "../../actions";
+import { useUnsavedGuard } from "./use-unsaved";
 
 export { MOD_GROUPS };
 
@@ -116,6 +117,22 @@ function parsePaste(text: string): Row[] {
 
 const inputClass = "ctl";
 
+/** What a save would send, as one comparable string — the dirty check. */
+function snapshot(rows: Row[]): string {
+  return JSON.stringify(
+    rows.map((r) => [
+      r.id ?? r.key,
+      r.group_label,
+      r.brand.trim(),
+      r.product.trim(),
+      r.part_number.trim(),
+      r.category,
+      r.status,
+      r.product_url,
+    ])
+  );
+}
+
 export function ModsEditor({ carId, initialMods }: { carId: string; initialMods: ModItem[] }) {
   const [rows, setRows] = useState<Row[]>(
     initialMods.map((m) => ({
@@ -164,6 +181,25 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
   // pretending to be a row.
   const [asking, setAsking] = useState<string | null>(null);
   const router = useRouter();
+  // Dirty = differs from what was last loaded or saved. Marked beside Save,
+  // and leaving the page while dirty asks first (the page has other Saves).
+  const [savedSnap, setSavedSnap] = useState(() => snapshot(rows));
+  const dirty = snapshot(rows) !== savedSnap;
+  useUnsavedGuard(dirty);
+  // Phones fold every saved line to a one-row summary (five labelled fields
+  // per line made a five-part build 2,400px long); tapping one opens it.
+  // New, parsed and flagged lines always open unfolded.
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set());
+  const openRow = (key: string) => setOpenKeys((k) => new Set(k).add(key));
+  // Replace moves the old part to "Came off this car" and leaves a blank line
+  // where it was. Said out loud, with an undo, so it doesn't read as the
+  // part's details vanishing.
+  const [replaced, setReplaced] = useState<{ newKey: string; oldKey: string; label: string } | null>(
+    null
+  );
+  useEffect(() => {
+    if (replaced) document.getElementById(`${replaced.newKey}-brand`)?.focus();
+  }, [replaced]);
 
   const installed = rows.filter((r) => r.status === "installed");
   const cameOff = rows.filter((r) => r.status === "removed");
@@ -190,16 +226,28 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
    * marked removed and keeps its id; a fresh row takes its position.
    */
   function replaceRow(key: string) {
-    setRows((r) => {
-      const index = r.findIndex((row) => row.key === key);
-      if (index < 0) return r;
-      const old = r[index];
-      const next = [...r];
-      next[index] = { ...old, status: "removed" as ModStatus };
-      next.splice(index, 0, blankRow(old.group_label));
-      return next;
-    });
+    const index = rows.findIndex((row) => row.key === key);
+    if (index < 0) return;
+    const old = rows[index];
+    const fresh = blankRow(old.group_label);
+    const next = [...rows];
+    next[index] = { ...old, status: "removed" as ModStatus };
+    next.splice(index, 0, fresh);
+    setRows(next);
     setAsking(null);
+    setReplaced({ newKey: fresh.key, oldKey: old.key, label: rowLabel(old) });
+  }
+
+  /** Replace, undone: the blank line goes and the old part is back on. */
+  function undoReplace() {
+    if (!replaced) return;
+    const { newKey, oldKey } = replaced;
+    setRows((r) =>
+      r
+        .filter((row) => row.key !== newKey)
+        .map((row) => (row.key === oldKey ? { ...row, status: "installed" as ModStatus } : row))
+    );
+    setReplaced(null);
   }
 
   /** The only true delete: drop the line, and save_mod_items removes it. */
@@ -343,6 +391,8 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         setRows((current) =>
           current.map((row) => (row.id ? row : { ...row, id: row.key }))
         );
+        setSavedSnap(snapshot(rowsToSave));
+        setReplaced(null);
         const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
           [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
         // "What changed" is now a question about state, not about presence: a
@@ -383,7 +433,10 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           type="url"
           inputMode="url"
           value={link}
-          onChange={(e) => setLink(e.target.value)}
+          onChange={(e) => {
+            setLink(e.target.value);
+            if (linkError) setLinkError(null);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -391,20 +444,34 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
             }
           }}
           placeholder="https://shop.example.com/the-part-you-fitted"
-          hint="Fills in the title, brand, part number, photo and what the shop was charging. Everything stays editable, and typing it in yourself works just as well."
           error={linkError ?? undefined}
           fieldClassName="!mb-0 min-w-0 flex-1 basis-[280px]"
           className="max-w-none"
         />
+        {/* Level with the input (the hint moved below the row, where it used
+            to push the button 40px under the field it acts on), and never a
+            dead grey slab: empty, it says what it needs. */}
         <Button
-          onClick={() => void addFromLink()}
+          variant="ghost"
+          onClick={() => {
+            if (!link.trim()) {
+              setLinkError("Paste a product link first.");
+              document.getElementById("mods-link")?.focus();
+              return;
+            }
+            void addFromLink();
+          }}
           loading={linkPending}
           pendingLabel="Reading…"
-          disabled={!link.trim()}
+          aria-disabled={!link.trim() || undefined}
         >
           Add from link
         </Button>
       </div>
+      <p className="field__hint mt-2">
+        Fills in the title, brand, part number, photo and what the shop was charging. Everything
+        stays editable, and typing it in yourself works just as well.
+      </p>
 
       {showPaste && (
         <div className="mt-4">
@@ -440,12 +507,58 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
            between lines rather than as a ruled sheet. */
         <div className="mt-4 flex flex-col gap-2 max-sm:gap-0">
           <p className="field__hint">Confirm or edit the parsed lines before saving.</p>
-          {installed.map((row, index) => (
+          {/* Desktop column captions. The trailing controls are mirrored,
+              invisibly, so the flexible Product column lines up with the
+              rows below it. Phones caption each field instead. */}
+          <div className="modrow modrow--cols" aria-hidden="true">
+            <span className="modrow__col modrow__col--group">Group</span>
+            <span className="modrow__col modrow__col--short">Brand</span>
+            <span className="modrow__col modrow__col--grow">Product</span>
+            <span className="modrow__col modrow__col--short">Part no.</span>
+            <span className="modrow__col modrow__col--cat">Category</span>
+            <span className="invisible microlabel shrink-0">Replace</span>
+            <span className="invisible modrow__rm shrink-0 px-1">✕</span>
+          </div>
+          {installed.map((row, index) => {
+            const flagged = row.confidence !== null && isLowConfidence(row.confidence);
+            const retyped =
+              Boolean(row.linked_listing_id) &&
+              `${row.brand} ${row.product}`.trim().toLowerCase() !== row.loadedLabel;
+            const folded =
+              Boolean(row.id) &&
+              !openKeys.has(row.key) &&
+              asking !== row.key &&
+              !flagged &&
+              !retyped &&
+              replaced?.newKey !== row.key;
+            return (
             /* Desktop: a ledger line. Phone: a labelled record — see `.modrow`
                in globals.css. The head/foot wrappers are `display: contents`
                on desktop, so this is one set of controls at both widths, not
                two rendered copies of the same state. */
-            <div key={row.key} className="modrow">
+            <div key={row.key} className={folded ? "modrow modrow--folded" : "modrow"}>
+              {folded && (
+                /* Phone-only: the folded line. Hidden on desktop, where the
+                   ledger line is already one row. */
+                <button
+                  type="button"
+                  className="modrow__sum"
+                  onClick={() => openRow(row.key)}
+                  aria-label={`Edit ${rowLabel(row)}`}
+                >
+                  <span className="modrow__n">{String(index + 1).padStart(2, "0")}</span>
+                  <span className="modrow__sumtext">
+                    <span className="modrow__sumname">{rowLabel(row)}</span>
+                    <span className="modrow__sumgroup">
+                      {row.group_label}
+                      {row.linked_listing_id ? " · For sale" : ""}
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="modrow__sumgo">
+                    ›
+                  </span>
+                </button>
+              )}
               <span className="modrow__head">
                 <span className="modrow__n" aria-hidden="true">
                   {String(index + 1).padStart(2, "0")}
@@ -457,8 +570,14 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   id={`${row.key}-group`}
                   value={row.group_label}
                   onChange={(e) => updateRow(row.key, { group_label: e.target.value })}
-                  className="ctl w-full shrink-0 sm:w-[130px]"
+                  className="ctl min-w-0 flex-1 sm:w-[160px] sm:flex-none"
                 >
+                  {/* A parsed group outside the list (e.g. "Brakes") must
+                      still show as itself — otherwise the select silently
+                      displays the first option instead. */}
+                  {!(MOD_GROUPS as readonly string[]).includes(row.group_label) && row.group_label && (
+                    <option>{row.group_label}</option>
+                  )}
                   {MOD_GROUPS.map((g) => (
                     <option key={g}>{g}</option>
                   ))}
@@ -512,7 +631,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   </option>
                 ))}
               </select>
-              {row.confidence !== null && isLowConfidence(row.confidence) && (
+              {flagged && (
                 <span
                   className="chip chip--live mt-2 shrink-0 self-start sm:mt-0 sm:self-auto"
                   title="Low-confidence parse — check this line before saving"
@@ -564,8 +683,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   </span>
                 </button>
               </span>
-              {row.linked_listing_id &&
-                `${row.brand} ${row.product}`.trim().toLowerCase() !== row.loadedLabel && (
+              {retyped && (
                   /* A-2. This line is what a live listing says it came from,
                      so typing a different part over it rewrites the listing's
                      provenance. A typo fix is fine; a swap wants Replace. */
@@ -641,8 +759,23 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                   )}
                 </div>
               )}
+              {replaced?.newKey === row.key && (
+                <span className="modrow__via" role="status">
+                  <span className="microlabel">
+                    {replaced.label} moved to Came off this car ·{" "}
+                    <button
+                      type="button"
+                      onClick={undoReplace}
+                      className="underline decoration-dotted transition hover:text-live"
+                    >
+                      Undo
+                    </button>
+                  </span>
+                </span>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -731,8 +864,14 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
             + Add a line manually
           </button>
         }
-        status={status ? { kind: status.kind, message: status.message } : null}
+        // "Saved ✓" stops being true the moment the sheet changes again.
+        status={status && !(dirty && status.kind === "ok") ? { kind: status.kind, message: status.message } : null}
       >
+        {dirty && !pending && (
+          <span className="microlabel" role="status">
+            Unsaved changes
+          </span>
+        )}
         <Button variant="live" onClick={save} loading={pending} pendingLabel="Saving…">
           Save the build
         </Button>

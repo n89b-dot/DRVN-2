@@ -24,6 +24,8 @@ export type FeedItem =
        *  card then falls back to the car's name. */
       carVehicle: { year: number | null; make: string | null; model: string | null } | null;
       ownerName: string | null;
+      /** The author's profile photo — the card's byline plate. */
+      ownerAvatarUrl?: string | null;
       cover_url: string | null;
       /** The "after" side when the post leads with a before/after plate —
        *  cover_url is then the "before" side and the card draws a static
@@ -53,6 +55,8 @@ export type FeedItem =
       vehicle: { year: number | null; make: string | null; model: string | null };
       cover_url: string | null;
       ownerName: string | null;
+      /** The owner's profile photo — the card's byline plate. */
+      ownerAvatarUrl?: string | null;
       /** Published build updates on this car. */
       updateCount: number;
       /** When the most recent update was published, if any. */
@@ -78,6 +82,8 @@ export type FeedItem =
       grade: string | null;
       location: string | null;
       sellerName: string | null;
+      /** The seller's profile photo — the card's byline plate. */
+      sellerAvatarUrl?: string | null;
       partNumber: string | null;
       /** null = unknown (count failed), 0+ = actual watchers. */
       watchCount: number | null;
@@ -235,7 +241,7 @@ export async function hydrateFeedItems(
       ? supabase.from("cars").select("id, slug, name, year, make, model, is_public, cover_image_url").in("id", postCarIds)
       : Promise.resolve({ data: [] }),
     ownerIds.length
-      ? supabase.from("profiles").select("id, display_name, username").in("id", ownerIds)
+      ? supabase.from("profiles").select("id, display_name, username, avatar_url").in("id", ownerIds)
       : Promise.resolve({ data: [] }),
     listingIds.length
       ? supabase
@@ -346,6 +352,7 @@ export async function hydrateFeedItems(
   const ownerById = new Map(
     (owners ?? []).map((o) => [o.id, o.display_name ?? (o.username ? `@${o.username}` : null)])
   );
+  const avatarById = new Map((owners ?? []).map((o) => [o.id, o.avatar_url ?? null]));
   const sourceCarById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
 
   const listingCover = new Map<string, string>();
@@ -407,6 +414,7 @@ export async function hydrateFeedItems(
         carSlug: car?.slug ?? null,
         carVehicle: car ? { year: car.year, make: car.make, model: car.model } : null,
         ownerName: ownerById.get(p.author_id) ?? null,
+        ownerAvatarUrl: avatarById.get(p.author_id) ?? null,
         cover_url: postCompare.get(p.id)?.beforeUrl ?? postCover.get(p.id) ?? null,
         compare_url: postCompare.get(p.id)?.afterUrl ?? null,
         avatar_url: car?.cover_image_url ?? null,
@@ -429,6 +437,7 @@ export async function hydrateFeedItems(
         vehicle: { year: c.year, make: c.make, model: c.model },
         cover_url: c.cover_image_url,
         ownerName: ownerById.get(c.owner_id) ?? null,
+        ownerAvatarUrl: avatarById.get(c.owner_id) ?? null,
         updateCount: carUpdateCount.get(c.id) ?? 0,
         lastActivityAt: carLastActivity.get(c.id) ?? null,
         forSaleCount: carForSaleCount.get(c.id) ?? 0,
@@ -452,6 +461,7 @@ export async function hydrateFeedItems(
         grade: l.grade,
         location: l.location,
         sellerName: ownerById.get(l.seller_id) ?? null,
+        sellerAvatarUrl: avatarById.get(l.seller_id) ?? null,
         partNumber: l.part_number,
         watchCount: watchCounts.get(l.id) ?? 0,
         fitsCarName: sourceCar
@@ -495,7 +505,14 @@ function kindsForTab(tab: FeedTab): FeedKind[] {
 export async function fetchFeed(
   supabase: SupabaseClient<Database>,
   tab: FeedTab,
-  opts: { page?: number; pageSize?: number; viewerId?: string | null } = {}
+  opts: {
+    page?: number;
+    pageSize?: number;
+    viewerId?: string | null;
+    /** Leave this member's own cars, posts and parts out — a discovery feed
+     *  that shows you your own car reads as padded (H-1 "For you"). */
+    excludeOwnerId?: string | null;
+  } = {}
 ): Promise<FeedPage> {
   const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, opts.page ?? 1);
@@ -504,17 +521,21 @@ export async function fetchFeed(
 
   const from = (page - 1) * pageSize;
   // One extra row past the window answers `hasMore` without a count query.
-  const { data, error } = await supabase
-    .from("feed_events")
-    .select("kind, id, happened_at")
-    .in("kind", kinds)
+  let events = supabase.from("feed_events").select("kind, id, happened_at").in("kind", kinds);
+  if (opts.excludeOwnerId) events = events.neq("owner_id", opts.excludeOwnerId);
+  const { data, error } = await events
     .order("happened_at", { ascending: false })
     .order("id", { ascending: false }) // stable tiebreak for equal timestamps
     .range(from, from + pageSize);
 
   if (error || !data) {
     reportError("[feed] feed_events view unavailable, falling back to legacy merge", error);
-    return _legacyFetchFeed(supabase, tab, { page, pageSize, viewerId: opts.viewerId });
+    return _legacyFetchFeed(supabase, tab, {
+      page,
+      pageSize,
+      viewerId: opts.viewerId,
+      excludeOwnerId: opts.excludeOwnerId,
+    });
   }
 
   const hasMore = data.length > pageSize;
@@ -558,9 +579,10 @@ export function interleaveKinds(items: FeedItem[]): FeedItem[] {
 async function _legacyFetchFeed(
   supabase: SupabaseClient<Database>,
   tab: FeedTab,
-  opts: { page: number; pageSize: number; viewerId?: string | null }
+  opts: { page: number; pageSize: number; viewerId?: string | null; excludeOwnerId?: string | null }
 ): Promise<FeedPage> {
   const { page, pageSize } = opts;
+  const notMine = opts.excludeOwnerId ?? null;
   const fetchLimit = Math.min(LEGACY_MAX_FETCH_PER_TABLE, page * pageSize + 1);
 
   const wantCars = tab === "all" || tab === "cars";
@@ -571,7 +593,7 @@ async function _legacyFetchFeed(
     wantCars
       ? supabase
           .from("cars")
-          .select("id, created_at")
+          .select("id, created_at, owner_id")
           .eq("is_public", true)
           .order("created_at", { ascending: false })
           .limit(fetchLimit)
@@ -579,7 +601,7 @@ async function _legacyFetchFeed(
     wantUpdates
       ? supabase
           .from("activity_posts")
-          .select("id, published_at")
+          .select("id, published_at, author_id")
           .not("published_at", "is", null)
           .order("published_at", { ascending: false })
           .limit(fetchLimit)
@@ -587,25 +609,27 @@ async function _legacyFetchFeed(
     wantParts
       ? supabase
           .from("listings")
-          .select("id, created_at")
+          .select("id, created_at, seller_id")
           .eq("status", "active")
           .order("created_at", { ascending: false })
           .limit(fetchLimit)
       : Promise.resolve({ data: [] }),
   ]);
 
+  // The fallback filters the viewer's own rows in memory; the view path
+  // asks the database (feed_events.owner_id).
   const rows: FeedEventRow[] = [
-    ...(postsRes.data ?? []).map((p) => ({
+    ...(postsRes.data ?? []).filter((p) => !notMine || p.author_id !== notMine).map((p) => ({
       kind: "update" as const,
       id: p.id,
       happened_at: p.published_at!,
     })),
-    ...(carsRes.data ?? []).map((c) => ({
+    ...(carsRes.data ?? []).filter((c) => !notMine || c.owner_id !== notMine).map((c) => ({
       kind: "car" as const,
       id: c.id,
       happened_at: c.created_at,
     })),
-    ...(listingsRes.data ?? []).map((l) => ({
+    ...(listingsRes.data ?? []).filter((l) => !notMine || l.seller_id !== notMine).map((l) => ({
       kind: "part" as const,
       id: l.id,
       happened_at: l.created_at,

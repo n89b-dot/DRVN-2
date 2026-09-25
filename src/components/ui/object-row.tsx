@@ -64,12 +64,27 @@ export function ObjectRow({
     leading ?? null
   );
 
+  // Name over meta, as one text column. As two sibling flex children they
+  // sat side by side on desktop (the price floating mid-row) and landed in
+  // different grid columns on phones — which is why callers took to nesting
+  // meta spans inside `title`, where they inherited the name's weight.
+  const hasMeta = meta !== undefined && meta !== null;
+  const text = hasMeta ? (
+    <div className="min-w-0">
+      {title !== undefined && <p className="order__name">{title}</p>}
+      <p className="order__meta">{meta}</p>
+      {children}
+    </div>
+  ) : (
+    <>
+      {title !== undefined && <p className="order__name">{title}</p>}
+      {children}
+    </>
+  );
   const body = (
     <>
       {plate}
-      {title !== undefined && <p className="order__name">{title}</p>}
-      {meta !== undefined && meta !== null && <p className="order__meta">{meta}</p>}
-      {children}
+      {text}
       {actions && <div className="order__actions">{actions}</div>}
     </>
   );

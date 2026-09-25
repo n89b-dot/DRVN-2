@@ -35,6 +35,8 @@ import {
   TileHead,
   ThreadDivider,
   ValidationSummary,
+  Badge,
+  KindBadge,
 } from "@/components/ui";
 
 import { DocsJumprow, DocsPagehead, Specimen, SpecimenGroup } from "../../_components/docs-page";
@@ -1335,6 +1337,21 @@ export default function ComponentsPage() {
             <StatusChip status="pending" />
             <StatusChip status="cancelled" />
             <OrderPipeline status="shipped" />
+          </div>
+        </Specimen>
+        <Specimen
+          name="Badges — kind and state"
+          klass="Badge / KindBadge → @/components/ui"
+          note="One badge system for cards. Kind (Build · Update · For sale) is a neutral outline with the segment icon, the same everywhere. State is a tint: neutral for a plain fact (Used, Grade B), colour only for real state (live, sold)."
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <KindBadge kind="car" />
+            <KindBadge kind="update" />
+            <KindBadge kind="part" />
+            <Badge>Used</Badge>
+            <Badge>Grade B</Badge>
+            <Badge tone="live">Live</Badge>
+            <Badge tone="spent">Sold</Badge>
           </div>
         </Specimen>
       </SpecimenGroup>

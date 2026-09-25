@@ -59,7 +59,7 @@ The contract. When a change violates one of these, the change is wrong.
 ## Engineering conventions
 
 - **Tokens only.** Never hardcode a hex/radius/duration that has a token.
-  New values require a new token in `src/app/globals.css` *and* an update to
+  New values require a new token in `src/app/styles/00-tokens-base.css` *and* an update to
   the Livesheet contract (`design-mockups/livesheet/design.md`).
 - NIGHT is a token remap — never write a dark-specific component rule beyond
   the photo filter.

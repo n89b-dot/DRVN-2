@@ -8,6 +8,7 @@ import type { Car } from "@/lib/database.types";
 
 import { updateCar, type ActionState } from "../../actions";
 import { MainCarToggle } from "./main-car-toggle";
+import { useUnsavedGuard } from "./use-unsaved";
 
 export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
   const [state, setState] = useState<ActionState>({});
@@ -15,6 +16,7 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
   const submitting = useRef(false);
   const revision = useRef(0);
   const [dirty, setDirty] = useState(false);
+  useUnsavedGuard(dirty);
 
   return (
     <section className="tile">
@@ -58,6 +60,7 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
             name="year"
             defaultValue={car.year ?? ""}
             inputMode="numeric"
+            className="max-w-none"
             fieldClassName="!mb-0"
           />
           <TextField
@@ -65,6 +68,7 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
             label="Make"
             name="make"
             defaultValue={car.make ?? ""}
+            className="max-w-none"
             fieldClassName="!mb-0"
           />
           <TextField
@@ -72,6 +76,7 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
             label="Model"
             name="model"
             defaultValue={car.model ?? ""}
+            className="max-w-none"
             fieldClassName="!mb-0"
           />
         </div>
@@ -108,6 +113,7 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
             label="Color"
             name="color"
             defaultValue={car.color ?? ""}
+            className="max-w-none"
             fieldClassName="!mb-0"
           />
           <TextField
@@ -147,7 +153,12 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
             {state.ok}
           </p>
         )}
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-4">
+          {dirty && !pending && (
+            <span className="microlabel" role="status">
+              Unsaved changes
+            </span>
+          )}
           <Button type="submit" variant="live" loading={pending} pendingLabel="Saving…">
             Save changes
           </Button>

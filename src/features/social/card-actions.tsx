@@ -86,18 +86,22 @@ export function CardEngagement({
   const [shared, setShared] = useState(false);
   const [pending, startTransition] = useTransition();
   const [askAuth, setAskAuth] = useState(false);
+  // Which control asked: a like used to open "Sign in to save this —
+  // Saved parts live on your account" on a build.
+  const [authIntent, setAuthIntent] = useState<"like" | "save">("save");
   const [error, setError] = useState<string | null>(null);
 
-  function requireAuth(e: MouseEvent): boolean {
+  function requireAuth(e: MouseEvent, intent: "like" | "save"): boolean {
     if (isLoggedIn) return false;
     stop(e);
+    setAuthIntent(intent);
     setAskAuth(true);
     return true;
   }
 
   function onLike(e: MouseEvent) {
     stop(e);
-    if (requireAuth(e)) return;
+    if (requireAuth(e, "like")) return;
     // Optimistic: the row answers the tap; the action settles the truth.
     const next = !liked;
     setError(null);
@@ -146,7 +150,7 @@ export function CardEngagement({
 
   function onSave(e: MouseEvent) {
     stop(e);
-    if (requireAuth(e)) return;
+    if (requireAuth(e, "save")) return;
     const next = !saved;
     setError(null);
     setSaved(next);
@@ -249,8 +253,10 @@ export function CardEngagement({
       <AuthIntentDialog
         open={askAuth}
         onClose={() => setAskAuth(false)}
-        intent="save"
+        intent={authIntent}
+        subject={target.kind === "listing" ? "part" : target.kind === "car" ? "build" : "update"}
         returnPath={path}
+        resume={authIntent === "save"}
       />
     </span>
   );

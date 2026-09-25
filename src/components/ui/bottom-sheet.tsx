@@ -63,7 +63,9 @@ export function BottomSheet({
   align?: "center";
   className?: string;
   children: React.ReactNode;
-  closeLabel?: string;
+  /** Label of the phone-only dismiss control. `null` when the sheet's own
+   *  content already ends in a Done/Cancel, so the two never stack. */
+  closeLabel?: string | null;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -191,11 +193,11 @@ export function BottomSheet({
         className={cx("bsheet__panel", className)}
       >
         {children}
-        {isCompact && (
+        {isCompact && closeLabel !== null && (
           <button
             type="button"
             onClick={onClose}
-            className="btn btn--ghost w-full"
+            className="relbtn !static mx-auto mt-1 block min-h-[44px]"
             aria-label={`Close ${label}`}
           >
             {closeLabel}

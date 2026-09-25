@@ -62,7 +62,7 @@ different values — never a second stylesheet.
 | `img-fallback` | `#E2DFD5` | media box before an image |
 
 > **Trap avoidance — `:root` vs `@theme` diverge on DAY.** The R3 contrast
-> pass (see `src/app/globals.css`, ~line 79) darkened `--dim`, `--live` and
+> pass (see `src/app/styles/00-tokens-base.css`) darkened `--dim`, `--live` and
 > `--ok` on `:root` so text usage clears WCAG 4.5:1 on paper, while the
 > `@theme` scale tokens (`text-dim`, `text-live`, `text-ok` utilities) kept
 > the original hues. This is deliberate: check *which* layer you are reading

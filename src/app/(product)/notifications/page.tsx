@@ -2,7 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Alert, FilterGroup, FilterLink, Foot, NarrowColumn, Pagination } from "@/components/ui";
+import {
+  Alert,
+  ButtonLink,
+  EmptyState,
+  FilterGroup,
+  FilterLink,
+  Foot,
+  NarrowColumn,
+  Pagination,
+} from "@/components/ui";
 import { prefEnabled, prefKeyForKind } from "@/lib/notification-prefs";
 import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
@@ -68,7 +77,8 @@ function Section({
                     </span>
                   )}
                 </span>
-                {row.body && <span className="order__meta block">{row.body}</span>}
+                {/* A sentence, so the sans voice — mono is for labels and figures. */}
+                {row.body && <span className="mt-1 block text-micro text-dim">{row.body}</span>}
               </span>
             );
 
@@ -99,7 +109,7 @@ function Section({
           })}
         </ul>
       ) : (
-        <p className="py-2 font-mono text-micro uppercase tracking-[0.1em] text-dim">{empty}</p>
+        <p className="py-2 text-micro text-dim">{empty}</p>
       )}
     </Rv>
   );
@@ -140,7 +150,13 @@ export default async function NotificationsPage({
   if (section) query = query.eq("section", section);
   query = query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
 
-  const [{ data: rows, count, error }, { data: me }, { count: totalUnreadCount }] =
+  const filtered = unreadOnly || Boolean(section);
+  const [
+    { data: rows, count, error },
+    { data: me },
+    { count: totalUnreadCount },
+    { count: everCount },
+  ] =
     await Promise.all([
       query,
       supabase.from("profiles").select("notification_prefs").eq("id", user.id).maybeSingle(),
@@ -149,6 +165,14 @@ export default async function NotificationsPage({
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
         .is("read_at", null),
+      // Whether there is anything at all — with filters on, the page count
+      // above can't say. Unfiltered it is the same number, so no second trip.
+      filtered
+        ? supabase
+            .from("notifications")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", user.id)
+        : Promise.resolve({ count: null }),
     ]);
 
   if (error) {
@@ -166,6 +190,7 @@ export default async function NotificationsPage({
   const marketplace = visible.filter((r) => r.section === "marketplace");
   const unreadTotal = totalUnreadCount ?? 0;
   const total = count ?? 0;
+  const nothingEver = (filtered ? (everCount ?? 0) : total) === 0;
   const hasMore = from + PAGE_SIZE < total;
 
   const params = {
@@ -174,7 +199,9 @@ export default async function NotificationsPage({
   };
 
   return (
-    <NarrowColumn>
+    // The three header destinations (cart, notifications, saved) share one
+    // measure, so moving between the bar's icons doesn't jump the content.
+    <NarrowColumn width="wide">
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Notifications
@@ -186,7 +213,7 @@ export default async function NotificationsPage({
           )}
         </span>
         <h1>
-          While you were <span className="live-word">away.</span>
+          While you were away.
         </h1>
         <p className="sub">
           Activity on your builds in one list, marketplace business in the other — so an offer
@@ -205,14 +232,29 @@ export default async function NotificationsPage({
         </Alert>
       )}
 
+      {/* Nothing has ever arrived: one empty state that says what will,
+          instead of two filter rows over two empty group cards. */}
+      {nothingEver ? (
+        <EmptyState
+          mark="●"
+          title="You're all caught up"
+          action={
+            <ButtonLink href="/settings#signals" variant="ghost">
+              Choose what notifies you
+            </ButtonLink>
+          }
+        >
+          Follows, comments and saves on your builds, and offers, sales and questions on your parts, land here.
+        </EmptyState>
+      ) : (
+        <>
       {/* Two independent filter axes, not one five-way choice. Run together in
           a single wrapping row — separated only by a middot — a phone breaks
           them at whatever width runs out, and "Unread" can end up sitting
           beside "Marketplace" as though picking one replaced the other. They
           combine (`?filter=unread&section=marketplace`), so they are drawn as
-          two labelled groups: the primary register on top, the quieter
-          refinement beneath, using the `filters--stack` / `filters--sub` pair
-          the system already has for exactly this relationship. */}
+          two labelled groups on the same chip — two chip styles on one page
+          read as two different kinds of control. */}
       <FilterGroup label="Read state" ariaLabel="Filter by read state" stack>
         <FilterLink
           href={withParams(params, { filter: undefined, page: undefined })}
@@ -227,12 +269,12 @@ export default async function NotificationsPage({
           Unread
         </FilterLink>
       </FilterGroup>
-      <FilterGroup label="Type" ariaLabel="Filter by type" sub scroll>
+      <FilterGroup label="Type" ariaLabel="Filter by type" scroll className="!mt-0">
         <FilterLink
           href={withParams(params, { section: undefined, page: undefined })}
           selected={!section}
         >
-          Both
+          All
         </FilterLink>
         <FilterLink
           href={withParams(params, { section: "engagement", page: undefined })}
@@ -272,6 +314,9 @@ export default async function NotificationsPage({
           />
         )}
       </div>
+
+        </>
+      )}
 
       <Pagination
         page={page}

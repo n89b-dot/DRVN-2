@@ -17,7 +17,6 @@ import {
   type NavEntry,
   type NavRoute,
 } from "./nav-routes";
-import { SearchField } from "./finder";
 import { SuggestingSearchField } from "./search-suggest";
 
 type IconRoute = NavRoute & { icon: IconName };
@@ -37,7 +36,7 @@ function ThemeToggle({ night, toggle }: { night: boolean; toggle: () => void }) 
   return (
     <button
       type="button"
-      className="bar__link bar__link--ico"
+      className="bar__link bar__link--ico bar__theme"
       onClick={toggle}
       aria-pressed={night}
       aria-label={night ? "Switch to light theme" : "Switch to dark theme"}
@@ -181,6 +180,12 @@ export function LivesheetBar({
       ];
   const familyHere = isSellingFamily(pathname);
   const indexRouteCount = indexEntries.filter((e) => e.kind === "route").length;
+  // Explore and the Marketplace own a search field of their own, right under
+  // the bar; a second one in the bar (different placeholder, same target)
+  // left a visitor guessing which to use.
+  const pageOwnsSearch = ["/explore", "/marketplace"].some(
+    (href) => pathname === href || pathname.startsWith(`${href}/`)
+  );
 
   return (
     <>
@@ -193,13 +198,15 @@ export function LivesheetBar({
           {/* N-2: one search field on every page, not just Explore. It
               submits to /explore, which is the federated view — searching
               from the top bar shouldn't make you choose a scope first. */}
-          <form action="/explore" role="search" className="bar__search">
-            <SuggestingSearchField
-              label="Search DRVN"
-              placeholder="Search builds, parts, people…"
-              endpoint="/api/explore/suggest"
-            />
-          </form>
+          {!pageOwnsSearch && (
+            <form action="/explore" role="search" className="bar__search">
+              <SuggestingSearchField
+                label="Search DRVN"
+                placeholder="Search DRVN"
+                endpoint="/api/explore/suggest"
+              />
+            </form>
+          )}
 
           <nav className="bar__nav" aria-label="Primary">
             {/* Signed-out visitors keep text links; signed-in navigation is the rail. */}
@@ -305,19 +312,25 @@ export function LivesheetBar({
           <div className="wrap">
             <div className="index__head">
               <span className="microlabel">Menu</span>
-              <span className="microlabel">{indexRouteCount} sections</span>
+              {/* A section count is furniture to a visitor with three rows. */}
+              {signedIn && <span className="microlabel">{indexRouteCount} sections</span>}
             </div>
             <div className="dimline-h" aria-hidden="true" />
 
             {/* N-2 at compact widths: the bar has no room for the search
                 field there, so it leads the menu instead of disappearing.
-                A plain field — suggestions need the width the bar gives
-                them — and it submits to the same federated /explore. */}
+                It's a phone's only global search outside Explore, and the
+                panel is full width, so it suggests exactly like the bar's;
+                it submits to the same federated /explore. */}
             {/* Mounted only while the menu is open: the closed panel stays in
                 the document, and a field in it would still take a Tab stop. */}
             {open && (
               <form action="/explore" role="search" className="index__search">
-                <SearchField label="Search DRVN" placeholder="Search builds, parts, people…" />
+                <SuggestingSearchField
+                  label="Search DRVN"
+                  placeholder="Search builds, parts, people"
+                  endpoint="/api/explore/suggest"
+                />
               </form>
             )}
 

@@ -4862,6 +4862,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      profile_follow_counts: {
+        Args: { p_profile: string }
+        Returns: {
+          followers: number
+          following: number
+        }[]
+      }
       profile_is_visible: { Args: { p_id: string }; Returns: boolean }
       prune_rate_limits: { Args: never; Returns: undefined }
       purchase_begin: {

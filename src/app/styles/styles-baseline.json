@@ -1,0 +1,21 @@
+{
+  "total": 16,
+  "selectors": {
+    "@layer components| .railrow:hover .railrow__ico": 2,
+    "@layer components| .railrow.is-here .railrow__ico": 2,
+    "@layer components| .indexrow__ico": 2,
+    "@layer components| .ledger td": 2,
+    "@layer components| .gsheet__no": 2,
+    "@layer components| .gsheet__no--ledger": 2,
+    "@layer components| .gsheet__body": 2,
+    "@layer components| .gsheet__latest": 2,
+    "@layer components| .gsheet__orders": 2,
+    "@layer components| .search input": 2,
+    "@media (max-width: 640px)| .deck--kpi": 2,
+    "@container wall (max-width: 600px)| .mcell.mcell--wide .mcell__cap": 2,
+    ".marketplace-page .marketplace-head h1": 2,
+    ".marketplace-card__image": 2,
+    ".marketplace-card__title": 2,
+    ".marketplace-card__seller": 2
+  }
+}

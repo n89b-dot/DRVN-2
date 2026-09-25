@@ -73,15 +73,11 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           hint="We'll email the new address to confirm before anything changes."
         />
         <div>
-          <button
-            type="submit"
-            name="intent"
-            value="request"
-            disabled={emailPending}
-            className="btn btn--ghost"
-          >
+          {/* Each form's submit is its section's one solid button; resend is
+              the quiet alternative beside it. */}
+          <Button type="submit" name="intent" value="request" disabled={emailPending}>
             {emailPending ? "Sending…" : "Update email"}
-          </button>
+          </Button>
           {emailState.pendingEmail && (
             <Button
               type="submit"
@@ -172,9 +168,9 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           />
         </div>
         <div>
-          <button type="submit" disabled={passwordPending} className="btn btn--ghost">
+          <Button type="submit" disabled={passwordPending}>
             {passwordPending ? "Saving…" : "Change password"}
-          </button>
+          </Button>
         </div>
         <Feedback state={passwordState} />
       </form>

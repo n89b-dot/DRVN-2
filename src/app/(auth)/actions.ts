@@ -32,6 +32,34 @@ async function destinationForUser(userId: string, requested?: unknown): Promise<
   return safeRedirectPath(requested, "/home");
 }
 
+/**
+ * Supabase's messages ("Invalid login credentials") are written for
+ * developers. Known codes get a sentence a person can act on; anything else
+ * gets a neutral retry line rather than leaking provider wording.
+ */
+function authErrorCopy(error: { code?: string; message: string }): string {
+  switch (error.code) {
+    case "invalid_credentials":
+      return "That email and password don't match.";
+    case "email_not_confirmed":
+      return "Confirm your email first — the link is in your inbox.";
+    case "user_already_exists":
+    case "email_exists":
+      return "There's already an account with that email. Sign in instead.";
+    case "weak_password":
+      return "Pick a stronger password — longer is better.";
+    case "over_request_rate_limit":
+    case "over_email_send_rate_limit":
+      return "Too many attempts. Wait a minute and try again.";
+    default:
+      // Older Auth servers send the message without a code.
+      if (/invalid login credentials/i.test(error.message)) {
+        return "That email and password don't match.";
+      }
+      return "That didn't go through. Try again in a moment.";
+  }
+}
+
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -45,7 +73,7 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: error.message };
+    return { error: authErrorCopy(error) };
   }
 
   redirect(await destinationForUser(data.user.id, next));
@@ -78,7 +106,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: authErrorCopy(error) };
   }
 
   // In enforced mode, the Auth trigger is the authority: a direct Auth user
@@ -166,7 +194,10 @@ export async function completeOnboarding(
   // Username + display name are the account-search projection (brief §28) —
   // fire-and-forget index sync, never on the critical path.
 
-  redirect(safeRedirectPath(next, "/home"));
+  // No destination means a fresh account with nothing to resume: the first
+  // step is the car (the garage opens on the add-car form when it's empty).
+  // "Skip — just browsing" posts next=/home.
+  redirect(safeRedirectPath(next, "/garage"));
 }
 
 // ---------- Password reset ----------

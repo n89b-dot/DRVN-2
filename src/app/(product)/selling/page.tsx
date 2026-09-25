@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Alert, Foot, MetricCard, PageHead, SellingNav, TileHead } from "@/components/ui";
+import {
+  Alert,
+  ButtonLink,
+  Foot,
+  MetricCard,
+  PageHead,
+  SellingNav,
+  TileHead,
+} from "@/components/ui";
+import { ListingRow } from "@/components/commerce";
+import { formatPrice } from "@/lib/payments/fee";
 import { getSellerLedger } from "@/lib/payments/ledger";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { sellerCanPublish } from "@/lib/payments/connect";
@@ -28,7 +38,7 @@ export default async function SellingPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [offersCount, tallyRes, questionsRes, toShipRes, ledger, canPublish, soonestRes, viewRes] = await Promise.all([
+  const [offersCount, tallyRes, questionsRes, toShipRes, ledger, canPublish, soonestRes, viewRes, recentRes] = await Promise.all([
     loadOffersNeedingAttention(supabase, user.id),
     supabase.rpc("seller_register_tally", { p_seller: user.id }),
     supabase.rpc("seller_open_questions", { p_seller: user.id }),
@@ -51,6 +61,15 @@ export default async function SellingPage() {
       .limit(1)
       .maybeSingle(),
     supabase.from("listings").select("view_count").eq("seller_id", user.id).eq("status", "active"),
+    // The parts themselves, so the hub isn't four numbers about stock the
+    // seller never sees: the most recent working listings, cover first.
+    supabase
+      .from("listings")
+      .select("id, title, price_cents, status, listing_images(url, position)")
+      .eq("seller_id", user.id)
+      .in("status", ["active", "draft", "paused", "reserved"])
+      .order("created_at", { ascending: false })
+      .limit(4),
   ]);
 
   // "Three offers waiting" is a number; "the oldest lapses in four hours" is
@@ -65,11 +84,20 @@ export default async function SellingPage() {
   const live = tally?.live_count ?? 0;
   const sold = tally?.sold_count ?? 0;
   const drafts = tally?.draft_count ?? 0;
+  if (recentRes.error) reportError("[selling] recent listings failed", recentRes.error);
+  const recent = (recentRes.data ?? []).map((l) => ({
+    id: l.id,
+    title: l.title,
+    price: formatPrice(l.price_cents),
+    status: l.status,
+    cover:
+      [...(l.listing_images ?? [])].sort((a, b) => a.position - b.position)[0]?.url ?? null,
+  }));
 
   const attention: { label: string; href: string; count: number }[] = [
     { label: "Offers waiting on you", href: "/offers", count: offersCount },
     { label: "Questions to answer", href: "/listings", count: openQuestions },
-    { label: "Orders to dispatch", href: "/orders?tab=sales", count: toShip },
+    { label: "Orders to dispatch", href: "/orders?view=sales&status=paid", count: toShip },
   ].filter((item) => item.count > 0);
 
   return (
@@ -90,18 +118,18 @@ export default async function SellingPage() {
       {!canPublish && paymentsAreLive() && (
         <Alert tone="live" title="Payouts aren't set up yet">
           Publishing needs somewhere to send your money —{" "}
-          <Link href="/settings#payouts" className="underline">
-            set up payouts in Settings → Payments
+          <Link href="/payouts" className="underline">
+            set up payouts
           </Link>
           . Drafts still save.
         </Alert>
       )}
 
-      <section className="deck deck--kpi">
+      <section className="deck deck--kpi !pb-4">
         <MetricCard
           label="Needs you"
           live={attention.length > 0}
-          value={attention.reduce((sum, item) => sum + item.count, 0) || "—"}
+          value={attention.reduce((sum, item) => sum + item.count, 0)}
           blank={attention.length === 0}
           footer={
             attention.length > 0 ? (
@@ -127,7 +155,7 @@ export default async function SellingPage() {
         </MetricCard>
         <MetricCard
           label="Live listings"
-          value={live || "—"}
+          value={live}
           blank={live === 0}
           footer={
             <Link href="/listings" className="jumplink">
@@ -144,17 +172,17 @@ export default async function SellingPage() {
         </MetricCard>
         <MetricCard
           label="Sold"
-          value={sold || "—"}
+          value={sold}
           blank={sold === 0}
           footer={
-            <Link href="/orders?tab=sales" className="jumplink">
+            <Link href="/orders?view=sales" className="jumplink">
               Sales →
             </Link>
           }
         />
         <MetricCard
           label="Available to pay out"
-          value={ledger.availableCents > 0 ? money(ledger.availableCents) : "—"}
+          value={money(ledger.availableCents)}
           blank={ledger.availableCents === 0}
           footer={
             <Link href="/payouts" className="jumplink">
@@ -165,24 +193,42 @@ export default async function SellingPage() {
         />
       </section>
 
-      <section className="deck">
-        <div className="tile">
-          <TileHead
-            label="List something"
-            end={
-              <Link href="/sell" className="jumplink">
-                New listing →
-              </Link>
-            }
-          />
-          <p className="field__hint max-w-[62ch]">
+      {/* The parts and the way to add another, side by side at desktop —
+          stacked decks each carried their own 80px floor, which left a dead
+          band under the KPIs and a page that ended after one short tile. */}
+      <section className={recent.length > 0 ? "deck deck--two" : "deck"}>
+        {recent.length > 0 && (
+          <div className="tile">
+            <TileHead
+              label="Your parts"
+              end={
+                <Link href="/listings" className="jumplink">
+                  All listings →
+                </Link>
+              }
+            />
+            <div className="rowlist">
+              {recent.map((listing) => (
+                <ListingRow key={listing.id} listing={listing} />
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="tile flex flex-col">
+          <TileHead label="List something" />
+          <p className="max-w-[62ch] text-dim">
             Parts off a car in your garage carry the build&apos;s context automatically — open a
             car&apos;s build sheet and use &ldquo;Sell it&rdquo; on the line, or start from
-            scratch on the sell sheet. Already posted it on Facebook or a forum?{" "}
-            <Link href="/sell/import" className="jumplink">
-              Import the existing listing →
-            </Link>
+            scratch.
           </p>
+          <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-3 pt-5">
+            <ButtonLink variant="live" href="/sell">
+              New listing
+            </ButtonLink>
+            <Link href="/sell/import" className="jumplink">
+              Import an existing listing →
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -1,0 +1,964 @@
+/* actions rows — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- buttons — bracketed mono, press-in ---------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: center;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    /* CTAs carry the "do this" ask, so they get one weight step over the
+       ambient mono (tabs, chips, labels stay 400) — at 12px uppercase the
+       regular cut reads faint against filled ink/red fills. */
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 13px 20px;
+    border-radius: var(--r-ctl);
+    background: var(--ink);
+    color: var(--on-ink);
+    transition:
+      transform var(--t-fast) var(--spring),
+      background var(--t-fast) ease;
+  }
+  /* The brackets mark THE action on a surface. On every button they stopped
+     meaning anything ("[ SAVE ]", "[ RESET FILTERS ]"…), so only the live
+     (primary) variant keeps them; ink buttons stay mono caps without. */
+  .btn--live::before {
+    content: "[ ";
+    opacity: 0.5;
+    flex: none;
+  }
+  .btn--live::after {
+    content: " ]";
+    opacity: 0.5;
+    flex: none;
+  }
+  .btn:hover {
+    background: var(--ink-hover);
+  }
+  .btn:active {
+    transform: scale(0.97);
+  }
+  .btn--live {
+    background: var(--live);
+  }
+  .btn--live:hover {
+    background: var(--live-hover);
+  }
+  /* A switched-off primary (not a busy one — `loading` keeps the fill while
+     it narrates) reads as unavailable: the 55% salmon looked clickable. */
+  .btn--live:disabled:not([aria-busy]) {
+    background: var(--paper-deep);
+    color: var(--dim);
+    opacity: 1;
+  }
+  .btn--ghost {
+    background: var(--ghost-fill);
+    color: var(--ink);
+  }
+  /* Secondary and destructive actions read as words, not stamps: Plex Sans,
+     sentence case as authored. The mono caps voice is kept for the contained
+     actions, so hierarchy shows in the type as well as the fill. */
+  .btn--ghost,
+  .btn--destructive {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    padding: 12px 18px;
+  }
+  .btn--ghost:hover {
+    background: var(--ghost-hover);
+  }
+  /* Destructive action (cancel order, delete listing, remove card) — needs to
+     read as serious without competing with `.btn--live`, the one filled-red
+     button already spoken for as "the primary thing to do right now" (buy,
+     accept, list). Outline instead of fill keeps exactly one solid-red button
+     per surface, per the system's "one accent" rule. */
+  .btn--destructive {
+    background: transparent;
+    color: var(--live);
+    box-shadow: inset 0 0 0 1.5px var(--live);
+  }
+  .btn--destructive:hover {
+    background: var(--live-tint);
+  }
+
+  /* ---------- offer / work-order rows ---------- */
+  .order {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: 16px 18px;
+    transition:
+      transform var(--t-move) var(--spring),
+      opacity var(--t-move) ease,
+      background var(--t-fast) ease;
+  }
+  /* 10rem, not 17: in a 320px rail the text column couldn't sit beside a
+     56px thumbnail at 17rem, so every rail row stacked photo over title. */
+  .order > *:not(.order__img):not(.order__actions) {
+    flex: 1 1 10rem;
+    min-width: 0;
+  }
+  .order__img {
+    flex: none;
+    width: 56px;
+    height: 44px;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .order__img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .order__name {
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.35;
+  }
+  .order__meta {
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--dim);
+    margin-top: 4px;
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+  .order__meta .cd {
+    color: var(--live);
+    font-variant-numeric: tabular-nums;
+  }
+  .order__actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .order__actions .btn {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+  .order.is-done {
+    background: var(--ok-tint);
+  }
+  .order.is-done .order__meta {
+    color: var(--ok);
+  }
+  .order.is-gone {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  .order.is-invalid {
+    opacity: 0.55;
+  }
+  .order.is-invalid .order__name {
+    color: var(--dim);
+  }
+
+  /* ---------- vehicle presentation (Home + Garage) ----------
+     A car is a primary object: prominent section media, not an order
+     thumbnail, not a hero. `--row` keeps a compact dashboard rhythm on Home;
+     `--card` gives the Garage a generous leading image. */
+  .vehicle {
+    display: grid;
+    gap: 16px; /* unified card gutter — matches .deck/.mkt/.feedcols */
+    min-width: 0;
+  }
+  .vehicle__img {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .vehicle__name {
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.35;
+  }
+  .vehicle__name--lg {
+    font-size: 20px;
+    line-height: 28px;
+  }
+  .vehicle__meta {
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--dim);
+    margin-top: 4px;
+    line-height: 1.55;
+  }
+  /* The build's pulse on a row — updates posted and followers, drawn as a
+     quiet mono readout beneath the identity, not a badge cluster. Flex so a
+     narrow column wraps between the two facts, never mid-fact. */
+  .vehicle__stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 7px;
+    row-gap: 2px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-top: 8px;
+  }
+  .vehicle__stat {
+    white-space: nowrap;
+  }
+  .vehicle__statdot {
+    opacity: 0.55;
+  }
+  .vehicle--row {
+    grid-template-columns: clamp(120px, 36%, 176px) 1fr auto;
+    align-items: center;
+  }
+  a.vehicle--row:hover .vehicle__name {
+    color: var(--live);
+  }
+  .vehicle__go {
+    font-family: var(--mono);
+    color: var(--dim);
+    align-self: center;
+  }
+  .vehicle--card {
+    grid-template-columns: minmax(240px, 340px) 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .vehicle--card .vehicle__img {
+    aspect-ratio: 16 / 10;
+  }
+  .vehicle__actions {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  /* Management rows (Garage) — the garage's job is choosing a car to work
+     on, so on phones the car keeps a real 3:2 thumbnail (112px — bigger than
+     an order thumbnail, smaller than a spread) beside identity, state and
+     Manage, and at least two complete rows fit a phone viewport. ≥640px the
+     expressive card anatomy returns. */
+  .vehicle--manage {
+    grid-template-columns: minmax(240px, 340px) 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .vehicle--manage .vehicle__img {
+    aspect-ratio: 16 / 10;
+  }
+  /* Inline state flag beside the name — public/private is identity-level
+     information on a management row, not an action. */
+  .vehicle__flag {
+    margin-left: 8px;
+    vertical-align: 3px;
+  }
+  /* Ruled vehicle list — like .rowlist but for the larger vehicle rows. */
+  .vlist {
+    display: flex;
+    flex-direction: column;
+  }
+  .vlist > * + * {
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 16px;
+    margin-top: 16px;
+  }
+  @media (max-width: 640px) {
+    /* The garage card recomposes: image full-width above the identity,
+       rather than a squeezed side-by-side. */
+    .vehicle--card {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    /* Phone rows: the photo is a spine, not a thumbnail — it runs the full
+       height of the identity block beside it, however many lines the meta
+       takes, so the row reads as one drawn unit. Type steps down so the
+       meta and stats hold one line each in the narrow column. */
+    .vehicle--row {
+      grid-template-columns: 96px 1fr auto;
+      gap: 12px;
+      align-items: stretch;
+    }
+    .vehicle--row .vehicle__img {
+      aspect-ratio: auto;
+      height: 100%;
+      min-height: 88px;
+    }
+    .vehicle--row .vehicle__body,
+    .vehicle--row .vehicle__go {
+      align-self: center;
+    }
+    .vehicle--row .vehicle__name {
+      font-size: 15px;
+    }
+    .vehicle--row .vehicle__meta {
+      font-size: 13.5px;
+      line-height: 1.45;
+      margin-top: 2px;
+    }
+    .vehicle--row .vehicle__stats {
+      font-size: 10.5px;
+      letter-spacing: 0.06em;
+      margin-top: 6px;
+    }
+    .vehicle--manage {
+      grid-template-columns: 112px 1fr;
+      gap: 14px;
+    }
+    .vehicle--manage .vehicle__img {
+      aspect-ratio: 3 / 2;
+    }
+    .vehicle--manage .vehicle__name--lg {
+      font-size: 17px;
+      line-height: 1.3;
+    }
+    .vehicle--manage .vehicle__meta {
+      font-size: 14px;
+      margin-top: 2px;
+    }
+    .vehicle--manage .vehicle__actions {
+      margin-top: 10px;
+      gap: 8px;
+    }
+  }
+
+  /* ---------- rowlist: ruled rows inside a tile ---------- */
+  .rowlist {
+    display: block;
+  }
+  .rowlist .order,
+  .rowlist .jobrow {
+    background: transparent;
+    border-radius: 0;
+    border-top: 1px solid var(--rule-soft);
+    padding: 14px 2px;
+  }
+  .rowlist .order:first-child,
+  .rowlist .jobrow:first-child {
+    border-top: 0;
+    padding-top: 4px;
+  }
+  a.order:hover {
+    background: transparent;
+  }
+  .rowlist a.order:hover .order__name {
+    color: var(--live);
+  }
+  .jobrow {
+    display: block;
+  }
+
+  /* ---------- activity feed ---------- */
+  .feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .feed li {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    padding: 12px 0;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  .feed li + li {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .feed time {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    flex: none;
+    width: 74px;
+  }
+  /* The 74px date column is a desktop reservation, and on a narrow phone it is
+     paid for by the only thing on the row that carries meaning. Measured with
+     a real notification title ("Your offer on the KW V3 coilovers was countered
+     by the seller") inside the 720px column: 2 lines at 375px and up, but 3
+     lines at 360px and below, where the date is taking 21–23% of the row to
+     say "16 Aug". Below 375px the date stops holding a column and sits above
+     the content instead, which is the only change — it keeps its place, its
+     size and its order everywhere else. */
+  @media (max-width: 374.98px) {
+    .feed li {
+      flex-wrap: wrap;
+      gap: 2px 12px;
+    }
+    .feed time {
+      width: auto;
+      flex: 1 0 100%;
+    }
+  }
+  .feed .amt {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .feed .amt--live {
+    color: var(--live);
+  }
+
+  /* ---------- week strip ---------- */
+  .week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+  }
+  .week__day {
+    text-align: center;
+    padding: 12px 4px 10px;
+    border-radius: var(--r-ctl);
+    background: var(--paper-deep);
+  }
+  .week__day .microlabel {
+    display: block;
+    margin-bottom: 4px;
+  }
+  .week__day b {
+    font-size: 20px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    font-variant-numeric: tabular-nums;
+  }
+  .week__day--hot {
+    background: var(--live);
+    color: var(--on-ink);
+  }
+  .week__day--hot .microlabel {
+    color: var(--on-ink);
+    opacity: 0.8;
+  }
+  .week__day--hot .tag {
+    display: block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    margin-top: 3px;
+  }
+
+  /* ---------- THE LEDGER — a ruled data table ----------
+     For the one place a list genuinely is tabular: many short columns the
+     seller scans down (views, watchers, asking, top offer). Everywhere else
+     the ruled row is still the answer — this is not a general-purpose grid. */
+  .ledger {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .ledger th {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    text-align: left;
+    /* A wider gutter than the old 10px: adjacent heads used to fuse into one
+       phrase ("TOP OFFER STATUS"), and the figures beneath needed the same
+       rhythm to read as separate measures. */
+    padding: 0 24px 14px 0;
+    border-bottom: 1px solid var(--rule-mid);
+    white-space: nowrap;
+  }
+  .ledger td {
+    /* Rows carry stacked content — title, sub-line, actions — so they need
+       real height to separate from the next row, not just a rule. */
+    padding: 18px 24px 18px 0;
+    border-top: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  /* The last column already ends at the table edge; a trailing gutter there
+     just strands it away from the plate's own padding. */
+  .ledger th:last-child,
+  .ledger td:last-child {
+    padding-right: 0;
+  }
+  .ledger tbody tr:first-child td {
+    border-top: 0;
+  }
+  /* Tracking one row across six columns is the whole job of a ledger — give
+     the eye a rail. Tone only, matching the rest of the system's hover
+     language, and never on the expanded detail row. */
+  .ledger tbody tr:not(.ledger__detail):hover > td {
+    background: var(--ghost);
+  }
+  /* The hover band eases in and keeps the plate's own radius at both ends —
+     a square flash cutting across the tile's rounded corners read as a
+     rendering glitch, not a hover. */
+  .ledger td {
+    transition: background var(--t-fast) ease;
+  }
+  .ledger tbody tr:not(.ledger__detail) > td:first-child {
+    border-radius: var(--r-ctl) 0 0 var(--r-ctl);
+  }
+  .ledger tbody tr:not(.ledger__detail) > td:last-child {
+    border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+  }
+  /* the row you're looking at lifts by tone, never by shadow */
+  .ledger tbody tr.is-open > td {
+    background: var(--tile-2);
+  }
+
+  /* ---------- expandable ledger (the seller's listings) ----------
+     The whole row is the disclosure, so it says so with the cursor; the
+     working controls (Edit / Pause / Archive) appear when the row is engaged
+     — hover, keyboard focus, or open — instead of sitting in every row as
+     permanent furniture. Touch layouts keep them visible: there is no hover
+     to reveal them. */
+  .ledger--expand tbody tr:not(.ledger__detail) {
+    cursor: pointer;
+  }
+  /* The row band is the tile's content width, so without an inset the title
+     and the status chip sit hard against its rounded ends — the radius then
+     reads as a clipping artifact rather than a band. Padding on the outer
+     cells (heads too, so the columns stay aligned) gives the corners room to
+     be corners. */
+  .ledger--expand th:first-child,
+  .ledger--expand td:first-child {
+    padding-left: 14px;
+  }
+  .ledger--expand th:last-child,
+  .ledger--expand td:last-child {
+    padding-right: 14px;
+  }
+  /* The row carries one routine action (Edit) and it is always visible —
+     hover-only controls hid the one thing a seller came to the row to do.
+     Lifecycle actions (pause, archive, delete) sit in the opened row. */
+  .ledger__manage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  /* Sort in the column header, where every product table keeps it. The
+     active column is ink with a live arrow; the others take the arrow only
+     on hover, as an offer. */
+  .ledger__th {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .ledger__th:hover {
+    color: var(--ink);
+  }
+  .ledger__th .ledger__tharrow {
+    opacity: 0;
+    color: var(--live);
+    transition: opacity var(--t-fast) ease;
+  }
+  .ledger__th:hover .ledger__tharrow {
+    opacity: 0.5;
+  }
+  .ledger__th.is-on {
+    color: var(--ink);
+  }
+  .ledger__th.is-on .ledger__tharrow {
+    opacity: 1;
+  }
+
+  /* A status chip is a stamp — "UNDER / OFFER" across two lines read as a
+     wrapping bug, not a stamp. */
+  .ledger td .chip {
+    white-space: nowrap;
+  }
+  /* Figure columns and the status chip share one first-line box.
+     Left alone, a 17px figure line sat beside a 26px chip: the figures rode
+     ~6px high against the chip, and the second lines beneath them ("2 offers"
+     vs "Expires …") landed on different baselines. That mismatch across three
+     adjacent columns is what reads as an uneven layout. One shared height
+     puts every first line on one centre and every second line on one top. */
+  .ledger--expand .ledger__figure,
+  .ledger--expand tbody td:last-child > .chip {
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+  }
+  .ledger--expand .ledger__figure {
+    justify-content: flex-end;
+  }
+  .ledger--expand tbody td:last-child > .chip {
+    width: fit-content;
+  }
+
+  /* The second line of a figure column — "2 offers ▸", "Expires 71:39:15".
+     One class for both so they cannot drift apart again. */
+  .ledger__sub {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .ledger__offershint {
+    color: var(--live);
+  }
+
+  /* The table head disappears below 861px — this row stands in for the
+     column sort at those widths only. */
+  .ledger__sortbar {
+    display: none;
+  }
+  @media (max-width: 860px) {
+    .ledger__sortbar {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid var(--rule-mid);
+    }
+  }
+  /* The part column holds free text a seller typed; everything to its right is
+     figures they scan down. Uncapped, one rambling title ("-STOCK, lol, just
+     Cusco front and rear sways…") sets the row height and shoves the numbers
+     out of alignment, so the title clamps to two lines — the full text stays
+     in the link's title attribute and on the listing itself.
+
+     `width: 100%` makes this the one elastic column: in auto table layout
+     every other column then settles at its content width, which pulls the
+     figures into a tight block on the right instead of stranding "$150" and
+     three em-dashes in four sprawling columns of dead space. The eye travels
+     a short distance to compare them, which is the entire point of a ledger. */
+  .ledger__part {
+    width: 100%;
+  }
+  /* One line, like every product table that works (Shopify, Square): a title
+     is a handle, not a paragraph. Ellipsis past 38ch — the full text lives in
+     the tooltip and on the listing. The row then reads as three registers with
+     air between them: title / part number / actions. */
+  .ledger__title {
+    display: block;
+    /* Capped by the viewport as well: at 38ch alone an under-offer row
+       (chip + expiry clock in the last column) pushed the table past its
+       tile, and at 1280px past the page. */
+    max-width: min(38ch, 22vw);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ledger__part .order__meta {
+    margin-top: 7px;
+  }
+  /* Between the stacked cards and a wide desktop the eight columns don't fit
+     a tile: an under-offer row (offer count + expiry clock) pushed the table
+     ~100px past the page at 1280. The source car is the column a seller
+     scans least — it steps out until there is room — and the small sub-lines
+     under a figure may wrap. */
+  @media (min-width: 861px) and (max-width: 1359px) {
+    .ledger--expand thead th:nth-child(3),
+    .ledger--expand tr.ledger__row > td:nth-child(3) {
+      display: none;
+    }
+    .ledger--expand .ledger__sub {
+      white-space: normal;
+    }
+  }
+  @media (max-width: 860px) {
+    /* Rows stack below this — a percentage width would strand the title in a
+       narrow column of its own. */
+    .ledger__part {
+      width: auto;
+    }
+  }
+
+  .ledger__num {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .ledger__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: inherit;
+    transition: color var(--t-fast) ease;
+  }
+  .ledger__sort:hover {
+    color: var(--ink);
+  }
+  .ledger__sort.is-on {
+    color: var(--ink);
+  }
+  /* The disclosure caret — a drafting tick that turns, not a chevron icon.
+     Sized as a real control (the rail's section disclosure grammar): 28px
+     box, centred glyph, its own hover plate. At 12px of dim mono it was a
+     signpost nobody saw. */
+  .ledger__toggle {
+    color: var(--dim);
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-ctl);
+    /* The chevron points left at rest, so it starts rotated to point right —
+       closed — and turns to point down when open. */
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .ledger__toggle > svg {
+    transform: rotate(180deg);
+    transition: transform var(--t-move) var(--spring);
+  }
+  .ledger__toggle.is-on > svg {
+    transform: rotate(-90deg);
+  }
+  .ledger__toggle:hover {
+    color: var(--ink);
+    background: var(--ghost-strong);
+  }
+  /* The row is the disclosure, so the tick brightens with the whole row —
+     it reads as "this opens" before the pointer ever reaches it. */
+  .ledger--expand tr:hover .ledger__toggle {
+    color: var(--ink);
+  }
+  .ledger__toggle.is-on {
+    color: var(--live);
+  }
+  .ledger__detail > td {
+    border-top: 0;
+    padding-top: 0;
+  }
+  /* The offer situation on a listing — a decision line and at most two live
+     offers, then a hand-off to /offers. Not the negotiation itself. */
+  .ledgeroffers__line {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--dim);
+    padding: 6px 0 2px;
+  }
+  .ledgeroffers__line b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .ledgeroffers {
+    display: grid;
+    margin-top: 6px;
+  }
+  .ledgeroffers__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 2px;
+    border-top: 1px solid var(--rule-soft);
+    min-height: 44px;
+    transition: background var(--t-fast) ease;
+  }
+  .ledgeroffers__row:hover {
+    background: var(--ghost);
+  }
+  .ledgeroffers__row .kv {
+    margin-left: auto;
+  }
+  @media (max-width: 860px) {
+    /* Below this the table stops being scannable and starts being a maze;
+       the ledger becomes ruled rows carrying the same figures as labels. */
+    .ledger,
+    .ledger tbody,
+    .ledger tr,
+    .ledger td {
+      display: block;
+      width: 100%;
+    }
+    .ledger thead {
+      display: none;
+    }
+    .ledger tbody tr {
+      border-top: 1px solid var(--rule-soft);
+      padding: 12px 0;
+    }
+    .ledger tbody tr:first-child {
+      border-top: 0;
+    }
+    .ledger td {
+      border-top: 0;
+      padding: 2px 0;
+    }
+    .ledger__num {
+      text-align: left;
+    }
+    .ledger__num::before {
+      content: attr(data-label) " ";
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    /* Stacked, the caret's cell became a stranded one-glyph line above the
+       title. It pins to the row's top corner instead — still the disclosure,
+       now reading as the row's own mark. */
+    .ledger--expand tbody tr {
+      position: relative;
+    }
+    /* The caret's cell only — the opened detail row's single cell is also a
+       first child, and pinning it too floated the offers and Manage block
+       over the next listing. */
+    .ledger--expand tr.ledger__row > td:first-child {
+      position: absolute;
+      top: 6px;
+      right: 4px;
+      left: auto;
+      width: auto;
+      padding: 0;
+    }
+    /* A listing is one compact card, not a column of label/value lines
+       (each row ran ~700px on a phone). Title across the top, the car and
+       the status stamp under it, then the four figures side by side with
+       their labels above — so rows can be compared again. Cells by
+       position: caret, part, car, views, watch, asking, top offer, status. */
+    .ledger--expand tbody tr.ledger__row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      column-gap: 12px;
+      row-gap: 10px;
+      align-items: start;
+    }
+    .ledger--expand tr.ledger__row > td {
+      padding: 0;
+      width: auto;
+      min-width: 0;
+    }
+    .ledger--expand tr.ledger__row > td:nth-child(2) {
+      grid-column: 1 / -1;
+      padding-right: 28px;
+    }
+    .ledger--expand tr.ledger__row > td:nth-child(3) {
+      grid-column: 1 / span 3;
+      grid-row: 2;
+      align-self: center;
+    }
+    .ledger--expand tr.ledger__row > td:nth-child(8) {
+      grid-column: 4;
+      grid-row: 2;
+      justify-self: end;
+    }
+    .ledger--expand tr.ledger__row > .ledger__num {
+      grid-row: 3;
+    }
+    .ledger--expand tr.ledger__row > .ledger__num::before {
+      display: block;
+      font-size: 10.5px;
+      letter-spacing: 0.1em;
+      margin-bottom: 2px;
+    }
+    .ledger--expand tr.ledger__row .ledger__figure {
+      justify-content: flex-start;
+      min-height: 0;
+    }
+    .ledger--expand tr.ledger__row .ledger__sub {
+      white-space: normal;
+    }
+    /* A card's cells are a grid, not a band: the per-cell hover/open tint
+       painted a patchwork of grey blocks. The open card is marked by its
+       turned caret and the detail beneath it. */
+    .ledger--expand tbody tr.ledger__row > td,
+    .ledger--expand tbody tr.ledger__row:hover > td {
+      background: transparent;
+    }
+    .ledger--expand tr.ledger__detail > td {
+      padding: 0;
+    }
+  }
+
+  /* ---------- spec tables ---------- */
+  .spec {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .spec td {
+    padding: 11px 0;
+    font-size: 16px;
+    vertical-align: baseline;
+  }
+  .spec td:first-child {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    width: 40%;
+  }
+  .spec td:last-child {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 16px;
+  }
+  .spec tr + tr td {
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  /* Fees — the worked examples: sale total, fee, what the seller gets, each
+     number in its own right-aligned tabular column so they scan down. */
+  .feetable {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  .feetable th,
+  .feetable td {
+    padding: 12px 0 12px 12px;
+    text-align: right;
+    vertical-align: baseline;
+    font-size: var(--text-body);
+    font-weight: 400;
+  }
+  .feetable :is(th, td):first-child {
+    padding-left: 0;
+    text-align: left;
+  }
+  .feetable thead th {
+    padding-top: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dim);
+  }
+  .feetable tbody tr {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .feetable tbody th {
+    font-weight: 600;
+  }
+  .feetable__sub {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--dim);
+  }
+  .feetable .feetable__net {
+    font-weight: 600;
+  }
+}

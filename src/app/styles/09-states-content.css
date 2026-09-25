@@ -1,0 +1,1000 @@
+/* states content — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- EMPTY STATES — "the sheet is blank" ---------- */
+  .undrawn {
+    border: 1px dashed var(--dimline);
+    border-radius: var(--r);
+    background: var(--ghost);
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: clamp(24px, 5vw, 44px) 20px;
+    gap: 10px;
+  }
+  .undrawn__mark {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--r-ctl);
+    border: 1px dashed var(--dimline);
+    display: grid;
+    place-items: center;
+    color: var(--dim);
+    font-size: 20px;
+  }
+  .undrawn h3 {
+    font-size: 20px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    letter-spacing: -0.01em;
+  }
+  .undrawn p {
+    color: var(--dim);
+    font-size: 16px;
+    max-width: 42ch;
+    margin: 0 auto;
+  }
+  .undrawn--hero {
+    min-height: clamp(200px, 34vw, 320px);
+  }
+  /* 404 — recovery under the page head: search first, then the two doors. */
+  .notfound__actions {
+    display: grid;
+    gap: 16px;
+    margin-top: 24px;
+    max-width: 560px;
+  }
+  .notfound__search {
+    display: flex;
+  }
+  /* Phones: the two doors as one equal pair, edge to edge. */
+  @media (max-width: 639px) {
+    .notfound__actions .btn {
+      flex: 1 1 0;
+    }
+  }
+  /* Where the bar carries its own search, a second field would duplicate it. */
+  @media (min-width: 980px) {
+    .notfound__search {
+      display: none;
+    }
+  }
+  /* A ghost button's paper-deep fill all but vanishes on the plate's ghost
+     wash — inside the plate it stands on the tile surface with a hairline,
+     so the one action reads as a button rather than a line of text. */
+  .undrawn .btn--ghost {
+    background: var(--tile);
+    box-shadow: inset 0 0 0 1px var(--rule-mid);
+  }
+
+  /* ghost rows — the shape of rows that don't exist yet */
+  .ghostrow {
+    display: grid;
+    grid-template-columns: 56px 1fr 76px;
+    gap: 14px;
+    align-items: center;
+    padding: 13px 2px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .ghostrow:first-child {
+    border-top: 0;
+  }
+  .gbar {
+    height: 9px;
+    border-radius: var(--r-meter);
+    background: var(--ghost-strong);
+  }
+  .gbar--sm {
+    height: 7px;
+    background: var(--ghost);
+  }
+  .gbox {
+    width: 56px;
+    height: 44px;
+    border-radius: var(--r-ctl);
+    background: var(--ghost-strong);
+  }
+  .ghostrow .stack {
+    display: grid;
+    gap: 7px;
+  }
+  .ghostrow .stack .gbar:nth-child(1) {
+    width: min(58%, 260px);
+  }
+  .ghostrow .stack .gbar:nth-child(2) {
+    width: min(84%, 380px);
+  }
+
+  /* loading: the same ghosts, drawing themselves */
+  .is-loading .gbar,
+  .is-loading .gbox {
+    background: linear-gradient(90deg, var(--ghost) 0%, var(--ghost-strong) 50%, var(--ghost) 100%);
+    background-size: 200% 100%;
+    animation: draw 1.5s ease-in-out infinite;
+  }
+
+  /* catalog page furniture */
+  .spec-note {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--dim);
+    max-width: 76ch;
+    border-top: 1px solid var(--rule-soft);
+    margin-top: 14px;
+    padding-top: 10px;
+  }
+  .spec-note b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* ---------- stacked form field ---------- */
+  .field {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .field > .microlabel {
+    display: block;
+  }
+  .field__label {
+    display: block; /* recipe shared with .microlabel — see type utilities */
+  }
+  .field__hint {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+  /* Label row with a live character counter on the right — only on fields
+     with a real server-enforced limit ("12 of 160"). */
+  .field__labelrow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .field__count {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* Renders on presence: if the markup emits an error, it shows. This used to
+     default to display:none and be revealed only by .field.is-invalid, which
+     meant every server-action error site had to force it open with an inline
+     style. Empty errors are hidden via :empty instead. */
+  .field__err {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--live);
+    line-height: 1.5;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .field__err:empty {
+    display: none;
+  }
+  .field__err::before {
+    content: "▸";
+  }
+  .field.is-invalid .ctl {
+    border-color: var(--live);
+    background: var(--live-tint);
+  }
+  .field.is-ok .ctl {
+    border-color: var(--ok);
+  }
+  .field__ok {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ok);
+    display: none;
+  }
+  .field.is-ok .field__ok {
+    display: block;
+  }
+  /* Numbered form section (FormSection). The body's gap is the field
+     rhythm; fields and paired rows inside it drop their own bottom margin so
+     spacing is decided in one place, not per call site. Compact widths give
+     the controls the tile's side padding back. */
+  .formsec__body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 16px;
+  }
+  .formsec__body > .field,
+  .formsec__body > .field--row > .field {
+    margin-bottom: 0;
+  }
+  @media (max-width: 640px) {
+    .formsec {
+      padding: 18px 16px;
+    }
+  }
+  /* A prefixed control ("$") paints its whole plate on error, prefix
+     included — the input alone tinting left the "$" looking valid. */
+  .field.is-invalid .ctl__prefix {
+    border-color: var(--live);
+    background: var(--live-tint);
+  }
+  .field.is-invalid .ctl__prefix .ctl {
+    background: transparent;
+  }
+  /* Photo grid with the cover as a 2×2 slot — the cover is the listing's
+     face on every card, so it is edited at a size where you can judge it. */
+  .thumbs--cover > :first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+  /* A row of fields. It never declared a display, so bare wrappers (sell,
+     checkout, password, fulfilment) computed as blocks: no two-up layout
+     and 0–8px between stacked fields. The row gap matches .field's rhythm. */
+  .field--row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px 16px;
+  }
+  /* Paired fields share a row height; each keeps its label and control at
+     the top instead of spreading the spare height between them (a field
+     beside one with a two-line hint pushed its control down). */
+  .field--row > .field {
+    align-content: start;
+  }
+
+  .ctl--block {
+    width: 100%;
+  }
+  .ctl__prefix {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r-ctl);
+    background: var(--paper-deep);
+    overflow: hidden;
+  }
+  .ctl__prefix span {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    padding: 0 4px 0 14px;
+    flex: none;
+  }
+  .ctl__prefix .ctl {
+    border: 0;
+    background: transparent;
+    border-radius: 0;
+    padding-left: 4px;
+    width: 100%;
+  }
+  /* One ring around the whole field, "$" included — on the inner input it
+     wrapped 320px of a 436px control and the field looked broken. (The
+     inner input's reset is unlayered, beside `.peoplerows`: the global
+     `:focus-visible` ring is unlayered and would win from in here.) */
+  .ctl__prefix:focus-within {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
+
+  /* ---------- dropzone — the blank-sheet dashed language ---------- */
+  .drop {
+    border: 1px dashed var(--dimline);
+    border-radius: var(--r);
+    background: var(--ghost);
+    display: grid;
+    place-items: center;
+    text-align: center;
+    gap: 8px;
+    padding: clamp(20px, 4vw, 34px) 18px;
+    cursor: pointer;
+    transition:
+      border-color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .drop:hover,
+  .drop:focus-visible,
+  .drop.is-over {
+    border-color: var(--live);
+    background: var(--live-tint);
+  }
+  .drop__mark {
+    font-size: 24px;
+    color: var(--dim);
+  }
+  .drop h4 {
+    font-size: 16px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+  }
+  .drop p {
+    font-size: 16px;
+    color: var(--dim);
+  }
+
+  .thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+  /* Editable tiles carry three 44px hit targets across their first row. Give
+     that row enough width at every pointer type so the move and cover targets
+     cannot overlap and intercept one another. */
+  .thumbs--edit {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  /* Phones: two across, so each editable photo is wide enough for its five
+     controls to sit apart instead of covering a 110px thumbnail. */
+  @media (max-width: 640px) {
+    .thumbs--edit {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .thumb {
+    position: relative;
+    aspect-ratio: 4/3;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .thumb__x {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-size: 12px;
+    display: grid;
+    place-items: center;
+  }
+  /* Invisible hit extender: 24px visual, ~44px target at every pointer type
+     (the pointer-coarse upsizing still applies on touch). */
+  .thumb__x::before {
+    content: "";
+    position: absolute;
+    inset: -10px;
+  }
+  /* The overlay control bars on an editable photo tile. Their gap and vertical
+     offset live here rather than in utilities so the coarse-pointer rule below
+     has something to raise — a `gap-1` utility would outrank it. */
+  .thumb__ctl {
+    gap: 20px;
+  }
+  .thumb__ctl--second {
+    top: 48px;
+  }
+  /* Touch pointers get a bigger cell and real separation between controls.
+     The 84px cell is a mouse instrument: at 375px it packs three columns of
+     ~96px, and six 44px hit areas over a 96px tile cannot help but collide —
+     measured at twelve overlapping pairs before this. The badges stay 24px;
+     the icons were never the problem. What changes is the room around them, so
+     `.thumb__x`'s existing ±10px hit extender has somewhere to go without
+     meeting its neighbour: 20px between badges is the least that keeps two
+     44px targets apart, and the second bar drops to clear the first bar's hit
+     area (4px top + 24px badge + 20px) rather than merely its badge. */
+  @media (pointer: coarse) {
+  }
+  .thumb__tag {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--on-ink);
+    padding: 2px 6px;
+    border-radius: var(--r-chip);
+  }
+  .thumb--ghost {
+    border: 1px dashed var(--dimline);
+    background: var(--ghost);
+  }
+
+  /* A one-tap inference ("Suggested · Fits 2003 BMW M3 · + Add") — dashed
+     like every not-yet-real thing in the system, so it can't be mistaken
+     for a row already added or for the plain "Add" control beside it. */
+  .suggestchip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px dashed var(--dimline);
+    border-radius: var(--r-ctl);
+    background: transparent;
+    color: var(--ink);
+    font-size: 14px;
+    text-align: left;
+    transition:
+      border-color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .suggestchip:hover,
+  .suggestchip:focus-visible {
+    border-color: var(--live);
+    background: var(--live-tint);
+  }
+  .suggestchip__k {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .suggestchip__add {
+    font-weight: 500;
+    color: var(--live);
+  }
+
+  /* ---------- interactive gallery + lightbox (src/components/ui/gallery.tsx) ---------- */
+  .gallery__hero {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    cursor: zoom-in;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gallery__thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .gallery__thumb {
+    /* min 44px touch target even where the grid would otherwise pack tighter */
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity var(--t-fast) ease, outline-color var(--t-fast) ease;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+  .gallery__thumb:hover {
+    opacity: 0.85;
+  }
+  .gallery__thumb.is-active {
+    opacity: 1;
+    outline-color: var(--live);
+  }
+
+  /* A true full-screen stage: the page behind a photo is gone (a 45% scrim
+     left it readable, and the caption landed on the page's own labels). The
+     photo fills the stage; Close sits top-right; caption and count ride a
+     bar along the bottom. */
+  .sheetwrap:has(> .lightbox) {
+    padding: 0;
+    background: var(--lightbox);
+  }
+  .lightbox {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: none;
+    background: transparent;
+    padding: 56px 0 0;
+  }
+  .lightbox .dialogbox__close {
+    top: max(8px, env(safe-area-inset-top));
+    right: 8px;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 12px;
+    font-size: 14px;
+    color: var(--on-photo);
+  }
+  .lightbox .dialogbox__close:hover {
+    color: var(--on-photo);
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .lightbox__stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    flex: 1;
+    touch-action: pan-y;
+  }
+  .lightbox__img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(100dvh - 120px);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+    overflow: auto;
+  }
+  .lightbox__img img {
+    display: block;
+    max-width: 100%;
+    max-height: calc(100dvh - 120px);
+    width: auto;
+    height: auto;
+    border-radius: var(--r);
+    object-fit: contain;
+    transition: transform var(--t-move) var(--spring);
+  }
+  .lightbox__img.is-zoomed {
+    cursor: zoom-out;
+  }
+  .lightbox__img.is-zoomed img {
+    max-width: none;
+    max-height: none;
+    width: auto;
+    height: auto;
+    transform: scale(1.9);
+  }
+  .lightbox__nav {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 8px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-size: 24px;
+    line-height: 1;
+  }
+  .lightbox__nav:hover {
+    background: var(--live);
+  }
+  .lightbox__foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 64px;
+    padding: 16px 20px max(16px, env(safe-area-inset-bottom));
+    color: var(--on-photo);
+  }
+  .lightbox__alt {
+    font-size: 13px;
+    color: var(--on-photo-dim);
+    max-width: 62ch;
+  }
+  .lightbox__count {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--on-photo-dim);
+    white-space: nowrap;
+  }
+  .lightbox .relbtn {
+    align-self: flex-start;
+    color: var(--on-ink);
+    border-color: rgba(248, 246, 240, 0.4);
+  }
+  .lightbox .relbtn:hover {
+    color: var(--live);
+    border-color: var(--live);
+  }
+
+  /* ---------- numbered ruled steps ---------- */
+  .steps {
+    counter-reset: s;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 34px 1fr auto;
+    gap: 5px 14px;
+    align-items: baseline;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .step:first-child {
+    border-top: 0;
+  }
+  .step__n {
+    counter-increment: s;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+  .step__n::before {
+    content: "0" counter(s);
+  }
+  .step__t {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .step__d {
+    grid-column: 2;
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--dim);
+  }
+  .step.is-now .step__n {
+    color: var(--live);
+  }
+  .step.is-now .step__t {
+    color: var(--ink);
+  }
+  .step.is-done .step__t,
+  .step.is-done .step__d {
+    color: var(--dim);
+  }
+
+  /* ---------- message thread — annotations, not chat bubbles ---------- */
+  .thread {
+    display: grid;
+    gap: 2px;
+  }
+  .msg {
+    display: grid;
+    gap: 6px;
+    padding: 14px 0 14px 16px;
+    border-left: 2px solid var(--rule-mid);
+    position: relative;
+  }
+  .msg--me {
+    border-left-color: var(--live);
+  }
+  .msg--sys {
+    border-left-style: dashed;
+  }
+  .msg__who {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .msg--me .msg__who {
+    color: var(--live);
+  }
+  .msg__body {
+    font-size: 16px;
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+  .msg__meta {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .msg__attach {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    background: var(--paper-deep);
+    border-radius: var(--r-ctl);
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .composer {
+    display: grid;
+    gap: 10px;
+    margin-top: 6px;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 14px;
+  }
+  /* Conversation-native composer (message thread, handheld widths): the
+     reply row pins to the bottom of the viewport while the thread scrolls,
+     bleeding to its tile's edges so pinned messages pass behind an opaque
+     plate, with home-indicator clearance. Part of the bottom-surface
+     contract — a thread route must not also mount a buybar/savebar. ≥769px
+     the thread reads as a document again and the composer returns to flow. */
+  @media (max-width: 768px) {
+    .composer--pin {
+      position: sticky;
+      bottom: 0;
+      z-index: 40;
+      background: var(--tile);
+      margin: 0 -20px -20px;
+      padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid var(--rule-soft);
+    }
+  }
+  .composer__row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  /* Measured, not guessed. The row survives on one line all the way down to
+     320px — it never overflowed — but the field it leaves behind shrinks with
+     the viewport: 281px at 430, 229px at 375, 214px at 360, and 174px at 320,
+     which is about ten characters of 16px mono to write a message in. 360px is
+     the last width where the inline arrangement still pays for itself, so
+     below it the field takes the full column and Send becomes a full-width
+     action rather than a 106px chip crowding it. */
+  @media (max-width: 359.98px) {
+    .composer__row > .ctl,
+    .composer__row > .btn {
+      flex: 1 0 100%;
+      width: 100%;
+    }
+    .composer__row > .btn {
+      min-height: 44px;
+    }
+  }
+
+  /* ---------- email / transactional preview ---------- */
+  .mail {
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--tile);
+  }
+  .mail__bar {
+    display: grid;
+    gap: 3px;
+    padding: 12px 16px;
+    background: var(--paper-deep);
+    border-bottom: 1px solid var(--rule-mid);
+  }
+  .mail__subj {
+    font-size: 16px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+  }
+  .mail__body {
+    padding: 18px 16px;
+    display: grid;
+    gap: 12px;
+  }
+  .mail__body p {
+    font-size: 16px;
+    line-height: 1.6;
+    max-width: 58ch;
+  }
+  .mail__cta {
+    justify-self: start;
+  }
+  .mail__foot {
+    border-top: 1px solid var(--rule-soft);
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+
+  /* ---------- alert banner ---------- */
+  .alert {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    align-items: start;
+    padding: 14px 16px;
+    border-radius: var(--r-ctl);
+    background: var(--paper-deep);
+  }
+  .alert__ico {
+    font-size: 16px;
+    color: var(--dim);
+    grid-row: span 2;
+  }
+  .alert h4 {
+    font-size: 16px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+  }
+  .alert p {
+    font-size: 16px;
+    color: var(--dim);
+    line-height: 1.55;
+    max-width: 62ch;
+  }
+  .alert--live {
+    background: var(--live-tint);
+  }
+  .alert--live .alert__ico {
+    color: var(--live);
+  }
+  .alert--ok {
+    background: var(--ok-tint);
+  }
+  .alert--ok .alert__ico {
+    color: var(--ok);
+  }
+
+  /* ---------- price guidance bar ---------- */
+  .guide {
+    display: grid;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .guide__track {
+    height: 6px;
+    border-radius: var(--r-meter);
+    background: var(--ghost-strong);
+    position: relative;
+  }
+  .guide__band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--ok-tint);
+    border-radius: var(--r-meter);
+  }
+  .guide__you {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 14px;
+    background: var(--live);
+  }
+  .guide__scale {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  /* ---------- legal / long-form prose ---------- */
+  .prose {
+    max-width: 68ch;
+  }
+  .prose h2 {
+    font-size: 20px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    letter-spacing: -0.01em;
+    margin: 30px 0 10px;
+  }
+  .prose h2:first-child {
+    margin-top: 0;
+  }
+  .prose h3 {
+    font-size: 16px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    margin: 22px 0 8px;
+  }
+  .prose p,
+  .prose li {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+  .prose ul,
+  .prose ol {
+    padding-left: 20px;
+    margin-bottom: 12px;
+  }
+  .prose li {
+    margin-bottom: 6px;
+  }
+  .prose .microlabel {
+    display: block;
+    margin-top: 22px;
+  }
+  .toc {
+    display: grid;
+    gap: 2px;
+  }
+  .toc a {
+    font-family: var(--mono);
+    font-size: 16px;
+    padding: 8px 0;
+    color: var(--dim);
+    border-top: 1px solid var(--rule-soft);
+    transition: color var(--t-fast) ease;
+  }
+  .toc a:first-child {
+    border-top: 0;
+  }
+  .toc a:hover {
+    color: var(--live);
+  }
+
+  /* ---------- auth layout ---------- */
+  .authwrap {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: clamp(24px, 6vh, 60px) 0;
+    position: relative;
+    z-index: 1;
+  }
+  /* Live-marketplace backdrop behind the auth card (read.cv gate pattern:
+     the product itself is the pitch behind the dialog). Inert and
+     aria-hidden in markup; the scrim is the same token the sheets use. */
+  .authstage {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .authstage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--scrim);
+  }
+  .authcard {
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: clamp(20px, 4vw, 28px);
+  }
+  /* The gate's top row: lockup left, the way out right — each on a paper
+     plate so it stays legible over the scrimmed backdrop photos. */
+  .authtop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .authtop__plate {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 16px;
+    background: var(--tile);
+    color: var(--ink);
+    border-radius: var(--r-ctl);
+  }
+  .authtop__close {
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background var(--t-fast) ease;
+  }
+  .authtop__close span {
+    font-size: 18px;
+    line-height: 1;
+  }
+  .authtop__close:hover {
+    background: var(--tile-2);
+  }
+  .authswap {
+    display: flex;
+    gap: 16px;
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* ---------- edge-case helpers ---------- */
+  .clamp2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .clamp3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .trunc {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .order__name,
+  .mkt__name,
+  .bline__val {
+    overflow-wrap: anywhere;
+  }
+}

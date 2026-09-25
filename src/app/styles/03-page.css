@@ -1,0 +1,671 @@
+/* page — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- page head ---------- */
+  .pagehead {
+    /* The head must hold its content at arm's length from what follows —
+       18px below the standfirst read as one dense block with the section
+       underneath. */
+    padding: clamp(28px, 5vw, 52px) 0 clamp(28px, 3.5vw, 40px);
+  }
+  /* Under the Marketplace family nav the head has already been introduced by
+     the register above it, so it doesn't need to open the page from scratch.
+     Without this the family surfaces stack nav → head → finder → categories →
+     sort before a single part is on screen. */
+  .familynav + .pagehead,
+  .pagehead--under-nav {
+    padding-top: clamp(6px, 1.5vw, 14px);
+    padding-bottom: clamp(20px, 2.5vw, 28px);
+  }
+  /* The family nav now sits under the head (every page's name starts at
+     the same height, with or without a family); the head closes up to it
+     and the nav keeps the gap to the content below. */
+  /* The family nav is the first thing on the page — the register reads
+     before the headline, so the head beneath it opens with less runway. */
+  .familynav + .pagehead--task {
+    padding-top: clamp(18px, 2vw, 26px);
+  }
+  /* Working surfaces — an inbox, a short ledger — are glanced at, not
+     introduced. The display head spent ~290px of a 900px viewport before the
+     first row, which pushed a list of five conversations under the fold. Same
+     voice, less runway. */
+  .pagehead--tight {
+    padding: clamp(20px, 2.4vw, 28px) 0 clamp(14px, 1.8vw, 20px);
+  }
+  .pagehead h1 {
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    letter-spacing: -0.02em;
+    /* 1.05 set two-line headlines almost touching — display heads keep a
+       visible channel of air between their lines. */
+    line-height: 1.14;
+    font-size: clamp(32px, 4vw, 48px);
+    margin-top: 14px;
+    /* No one-word orphan on the second line ("That's / it."). */
+    text-wrap: balance;
+  }
+  .pagehead h1 .live-word {
+    color: var(--live);
+    position: relative;
+  }
+  .pagehead h1 .live-word::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0.18em;
+    bottom: 0.02em;
+    height: 3px;
+    background: var(--live);
+    border-radius: 2px;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--t-draw) var(--spring) 400ms;
+  }
+  .is-in .live-word::after,
+  .pagehead.is-in .live-word::after {
+    transform: scaleX(1);
+  }
+  .pagehead .sub {
+    color: var(--dim);
+    max-width: 52ch;
+    margin-top: 14px;
+  }
+  /* Variant scales live BELOW the base h1/.sub rules on purpose: the variant
+     selectors tie with the base on specificity (one class + element), so
+     source order is what lets them win. */
+  .pagehead--tight h1 {
+    font-size: clamp(26px, 2.6vw, 34px);
+    margin-top: 10px;
+  }
+  .pagehead--tight .sub {
+    font-size: 15px;
+    max-width: 60ch;
+    margin-top: 8px;
+  }
+  /* Task heads — the management and transaction surfaces (Home, Marketplace,
+     Garage, Listings, Offers, Orders, Messages, Notifications, Saved,
+     Settings, Payouts, Cart, Checkout, Sell) are instruments: the user
+     arrives mid-job and the first row of real content has to land inside the
+     first half of a phone viewport. Editorial surfaces (landing, Explore,
+     build sheets, public profiles) keep the display head. */
+  .pagehead--task {
+    /* The bottom runway matches the page's own section rhythm — at 20px the
+       standfirst sat closer to the first deck than any two sections sit to
+       each other, and the head read as part of the first tile row. */
+    padding: clamp(16px, 2.2vw, 26px) 0 clamp(26px, 3.5vw, 44px);
+  }
+  .pagehead--task h1 {
+    font-size: clamp(24px, 2.6vw, 34px);
+    line-height: 1.22;
+    margin-top: 10px;
+  }
+  .pagehead--task .sub {
+    font-size: 15px;
+    max-width: 60ch;
+    margin-top: 12px;
+  }
+  /* Home: one greeting line with the feed switch on the same row, and a
+     short runway to the composer. */
+  .pagehead--home {
+    padding-bottom: clamp(16px, 2vw, 24px);
+  }
+  .pagehead--home .pagehead__row {
+    align-items: center;
+  }
+  .pagehead--home h1 {
+    margin-top: 0;
+  }
+  .pagehead--home .filters {
+    margin: 0;
+  }
+  /* An item page (a listing): the title is a name, not a display head. */
+  .pagehead--item {
+    padding-bottom: clamp(20px, 2.4vw, 28px);
+  }
+  .pagehead--item h1 {
+    font-size: clamp(24px, 2.2vw, 32px);
+    line-height: 1.2;
+    max-width: 40ch;
+  }
+  /* On compact the standfirst is runway, not information. A head that must
+     keep its prose on a phone (state it can't show elsewhere) opts back in
+     with `.sub--keep`. */
+  @media (max-width: 640px) {
+    /* With the standfirst retired the headline was 12px off the first
+       plate; the head keeps a real margin below it instead. */
+    .pagehead--task {
+      padding-bottom: 28px;
+    }
+    .pagehead--task .sub:not(.sub--keep) {
+      display: none;
+    }
+  }
+  /* Title row with a right-aligned primary action; wraps when the title is
+     long, so the action never crushes the h1. */
+  .pagehead__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px 16px;
+  }
+  .pagehead__row > div {
+    min-width: 0;
+  }
+  /* Console pages are worked, not read. The product's display headings
+     (44px, tight tracking, 1.05 line-height) read as squished in a tool —
+     the console gets a calmer scale: smaller, looser, with real air between
+     title and standfirst, and the standfirst set dim so the H1 owns the row. */
+  .console-main .pagehead {
+    padding: 26px 0 26px;
+  }
+  .console-main .pagehead h1 {
+    font-size: clamp(24px, 2.6vw, 32px);
+    font-weight: 600; /* was 620 — not a loaded Plex Sans cut, silently snapped to 600 */
+    letter-spacing: -0.008em;
+    line-height: 1.25;
+    margin-top: 0;
+  }
+  .console-main .pagehead__sub {
+    color: var(--dim);
+    font-size: 16px;
+    line-height: 1.55;
+    max-width: 64ch;
+    margin-top: 8px;
+  }
+  /* Stat figures at dashboard scale, not poster scale: the product's
+     .num-giant (up to 64px) filled a KPI tile edge-to-edge and shouted.
+     A stat should be the loudest thing in its card by a step, not a wall. */
+  .console-main .num-giant {
+    font-size: clamp(24px, 2.1vw, 32px);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    margin: 6px 0 2px;
+  }
+  /* Console filter bars hold up to five controls (query, two dates, two
+     amounts) — let the bar grow and wrap instead of crushing the query
+     field, and keep the free-text input the widest thing in it. */
+  .console-main .search {
+    width: 100%;
+    max-width: 920px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .console-main .search input[type="search"] {
+    flex: 1 1 200px;
+    min-width: 180px;
+  }
+  .console-main .search input[type="date"],
+  .console-main .search input[type="number"] {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  /* The submit rides the right edge — of the row it lands on — instead of
+     dangling bottom-left when the controls wrap. */
+  .console-main .search .btn {
+    margin-left: auto;
+  }
+  /* Console nav: the pill row carries a small section icon beside each label. */
+  .console-nav .fbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  /* The console's index button borrows the product bar's `.indexbtn` styling
+     wholesale but runs its own promotion schedule: the pill row works down to
+     phone widths, so the index only takes over at ≤640px (the product's
+     ≤1080px rule must not surface it early — hence the compound selector). */
+  .indexbtn.console-indexbtn {
+    display: none;
+  }
+  @media (max-width: 640px) {
+    /* compound with .filters: its `display: flex` sits later in the file and
+       would win a single-class tie */
+    .filters.console-nav {
+      display: none;
+    }
+    .indexbtn.console-indexbtn {
+      display: inline-flex;
+    }
+  }
+  /* Section icon on an index row, sized to sit inside the 21px label line. */
+  .indexrow__ico {
+    width: 19px;
+    height: 19px;
+    display: inline-block;
+    vertical-align: -2.5px;
+    margin-right: 10px;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow.is-here .indexrow__ico,
+  .indexrow:hover .indexrow__ico,
+  .indexrow:focus-visible .indexrow__ico {
+    color: var(--live);
+  }
+  /* The marketing pages breathe between decks (48–80px); the console reads
+     top-to-bottom in one glance — header plus both KPI rows should fit a 13"
+     viewport, so decks sit close. */
+  .console-main .deck {
+    padding-bottom: 20px;
+  }
+  /* Row hover now ships with `.ledger` itself — every ledger in the app wants
+     the rail, not just the console's. The column gutter that used to break
+     fused column heads ("TOTAL MONEY") is likewise part of the base recipe. */
+  /* Audit log rows anchor on a fixed timestamp gutter so actor names stack in
+     a clean column no matter how long the action name runs. The action reads
+     as what it is — a machine identifier — in quiet lowercase mono; the
+     subject type compresses to a colour-keyed dot. */
+  .console-main .auditrow {
+    display: grid;
+    grid-template-columns: 17ch minmax(0, 1fr);
+    column-gap: 14px;
+  }
+  .console-main .auditrow__ts {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding-top: 3px;
+  }
+  .console-main .auditrow__actor {
+    font-weight: 640;
+    font-size: 16px;
+  }
+  .console-main .auditrow__action {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .console-main .auditrow__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .console-main .auditrow__dot--order {
+    background: var(--ink);
+  }
+  .console-main .auditrow__dot--dispute {
+    background: var(--live);
+  }
+  .console-main .auditrow__dot--payment {
+    background: var(--warn);
+  }
+  .console-main .auditrow__dot--user {
+    background: var(--ok);
+  }
+  .console-main .auditrow__dot--listing {
+    background: var(--dim);
+  }
+  .console-main .auditrow__dot--report {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--live);
+  }
+  @media (max-width: 640px) {
+    /* Narrow screens: the gutter costs too much width — stack it. */
+    .console-main .auditrow {
+      grid-template-columns: 1fr;
+      row-gap: 2px;
+    }
+  }
+  /* Identity stubs ("User a1b2c3d4"): an id wearing a name's clothes. Set
+     them dim mono so a real name and a placeholder never read as peers. */
+  .console-main .person--stub {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    font-weight: 400;
+    color: var(--dim);
+  }
+  /* Settings rows: label + explanation left, the control (or the value)
+     right — the settled grammar of every workspace settings page. */
+  .console-main .setrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 18px;
+    align-items: center;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .console-main .setrow:first-of-type {
+    border-top: 0;
+    padding-top: 10px;
+  }
+  .console-main .setrow__name {
+    font-size: 16px;
+    font-weight: 570;
+  }
+  .console-main .setrow__desc {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.5;
+    max-width: 48ch;
+  }
+  .console-main .setrow__ctl {
+    justify-self: end;
+    text-align: right;
+  }
+  /* Nominal states in console tables: same slot a chip would occupy, none of
+     the ink — a routine row should read as texture, an exception as signal. */
+  .console-main .status-plain {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  /* Corner arrow on linked KPI tiles: the tile is a door, say so. */
+  .tile__go {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    font-family: var(--mono);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      transform var(--t-fast) ease;
+  }
+  a.tile:hover .tile__go,
+  a.tile:focus-visible .tile__go {
+    color: var(--live);
+    transform: translateX(3px);
+  }
+
+  /* ---------- tiles (widgets-as-plates) ---------- */
+  .deck {
+    display: grid;
+    gap: 16px;
+    padding-bottom: clamp(48px, 7vw, 80px);
+  }
+  .deck > * {
+    min-width: 0;
+  }
+  .deck--kpi {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  /* Console overview's business row: five tiles wide on desktop; the
+     existing .deck--kpi breakpoints still collapse it to 2 / 1 columns. */
+  .deck--kpi-5 {
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .deck--two {
+    grid-template-columns: 1.35fr 1fr;
+  }
+  .deck--three {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .tile {
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: 20px;
+    position: relative;
+    transition:
+      transform var(--t-move) var(--spring),
+      background var(--t-fast) ease;
+  }
+  .tile--deep {
+    background: var(--tile-2);
+  }
+  .tile--hover:hover {
+    transform: translateY(-2px) scale(1.005);
+  }
+  a.tile:hover {
+    transform: translateY(-2px) scale(1.005);
+  }
+  .tile__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .tile__img {
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+    position: relative;
+  }
+  .tile__img img,
+  .tile__img video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* ---------- LIVE DIMENSION — the signature device ---------- */
+  .livedim {
+    position: relative;
+    padding-left: 18px;
+    margin-top: 14px;
+  }
+  .livedim::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--dimline);
+  }
+  .livedim::after {
+    content: "";
+    position: absolute;
+    left: -3px;
+    top: 0;
+    width: 7px;
+    height: 1px;
+    background: var(--dimline);
+  }
+  .livedim .livedim__tick {
+    position: absolute;
+    left: -3px;
+    bottom: 0;
+    width: 7px;
+    height: 1px;
+    background: var(--dimline);
+  }
+  .livedim .microlabel {
+    display: block;
+  }
+  .livedim .val {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .livedim--live .val {
+    color: var(--live);
+  }
+  .livedim--live .microlabel::after {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--live);
+    margin-left: 6px;
+    vertical-align: 1px;
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  .livedim--blank::before {
+    background: repeating-linear-gradient(to bottom, var(--dimline) 0 3px, transparent 3px 7px);
+  }
+  .livedim--blank .val {
+    color: var(--dim);
+  }
+
+  /* horizontal draw-in for dims inside revealed tiles */
+  .dimline-h {
+    height: 1px;
+    background: var(--dimline);
+    position: relative;
+    margin: 10px 0;
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform var(--t-draw) var(--spring) 120ms;
+  }
+  .dimline-h::before,
+  .dimline-h::after {
+    content: "";
+    position: absolute;
+    top: -3px;
+    width: 1px;
+    height: 7px;
+    background: var(--dimline);
+  }
+  .dimline-h::before {
+    left: 0;
+  }
+  .dimline-h::after {
+    right: 0;
+  }
+  .is-in .dimline-h {
+    transform: scaleX(1);
+  }
+
+  /* ---------- photo callouts ---------- */
+  .callout {
+    position: absolute;
+    z-index: 3;
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 7px 11px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    white-space: nowrap;
+    box-shadow: 0 1px 0 var(--dimline);
+  }
+  .callout .microlabel--live {
+    display: block;
+    letter-spacing: 0.08em;
+  }
+  .callout__leader {
+    position: absolute;
+    background: var(--live);
+    height: 1px;
+    transform-origin: left;
+    z-index: 2;
+  }
+  .callout__leader::after {
+    content: "";
+    position: absolute;
+    right: -2px;
+    top: -2.5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--live);
+  }
+
+  /* ---------- live capsule ---------- */
+  .capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--ink);
+    color: var(--on-ink);
+    border-radius: var(--r-ctl);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 16px;
+    letter-spacing: 0.06em;
+  }
+  .capsule .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--live);
+    animation: pulse 2.2s infinite;
+  }
+  .capsule .cd {
+    color: var(--live);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+  .capsule--paper {
+    background: var(--tile);
+    color: var(--ink);
+    box-shadow: 0 1px 0 var(--dimline);
+  }
+  .capsule--quiet {
+    background: var(--paper-deep);
+    color: var(--dim);
+  }
+  .capsule--quiet .dot {
+    background: var(--dim);
+    animation: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: var(--r-chip);
+    background: var(--paper-deep);
+    color: var(--dim);
+  }
+  .chip--live {
+    background: var(--live-tint);
+    color: var(--live-text);
+  }
+  .chip--ok {
+    background: var(--ok-tint);
+    color: var(--ok-text);
+  }
+  .chip--ink {
+    background: var(--ink);
+    color: var(--on-ink);
+  }
+  .chip--spent {
+    background: var(--ghost-strong);
+    color: var(--dim);
+  }
+  .chip--warn {
+    background: var(--warn-tint);
+    color: var(--warn-text);
+  }
+  .chip--info {
+    background: var(--info-tint);
+    color: var(--info-text);
+  }
+  /* Distinct from `.chip--live` (an active/"happening now" state, tint only):
+     danger marks a terminal negative — failed, cancelled, disputed against
+     you. Solid fill instead of tint gives it more weight than a live badge so
+     the two never read as the same signal at a glance. */
+  .chip--danger {
+    background: var(--live);
+    color: var(--on-ink);
+  }
+  /* What a thing IS (Build · Update · For sale) — a neutral outline, the
+     same on every card. Colour is kept for state (sold, used, live), never
+     spent on kind: three kinds in three paints made every card's corner
+     shout in a different voice. */
+  .chip--kind {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--rule-mid);
+    color: var(--dim);
+  }
+  /* A plain state — Used, Grade B: a neutral tint, ink text. Tones with
+     colour (--ok, --live, --spent) are for states that are news. */
+  .chip--state {
+    background: var(--tile-2);
+    color: var(--ink);
+  }
+  .chip__ico {
+    width: 1.15em;
+    height: 1.15em;
+    flex: none;
+  }
+}

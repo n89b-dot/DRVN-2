@@ -1,0 +1,97 @@
+/* Unlayered motion — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. @property, keyframes and helpers declared outside @layer on purpose (see the notes inside). */
+
+/* ---------- horizontal-rail edge fades (outside @layer: @property and
+   keyframes are top-level at-rules) ----------
+   A one-line scroller can look complete while more chips/tabs sit off-screen.
+   Where the browser supports scroll-driven animations, the rail's clipped
+   edge gets a 28px fade that exists only while content actually continues in
+   that direction: at rest only the right edge fades; fully scrolled, only
+   the left. Both custom properties start at 0, so a rail that doesn't
+   overflow (inactive timeline) — or a browser without support — shows no
+   mask at all. Purely decorative: gutter-bleed item cut-off remains the
+   baseline affordance everywhere. */
+@property --railfade-l {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+@property --railfade-r {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+@keyframes rail-edges {
+  0% {
+    --railfade-l: 0;
+    --railfade-r: 1;
+  }
+  100% {
+    --railfade-l: 1;
+    --railfade-r: 0;
+  }
+}
+@supports (animation-timeline: scroll(self inline)) {
+  .familynav__rows,
+  .sectionnav,
+  .filters--scroll,
+  .tabstrip {
+    mask-image: linear-gradient(
+      to right,
+      rgb(0 0 0 / calc(1 - var(--railfade-l))) 0,
+      rgb(0 0 0 / 1) 28px,
+      rgb(0 0 0 / 1) calc(100% - 28px),
+      rgb(0 0 0 / calc(1 - var(--railfade-r))) 100%
+    );
+    animation: rail-edges linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+/* ---------- keyframes (outside @layer so animation names resolve) ---------- */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes draw {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -20% 0;
+  }
+}
+
+/* ---------- responsive ---------- */
+/* ---------- the undrawn plate ----------
+   The same drafting-absence language the empty states use, scaled to sit
+   inside a card cover. A listing without a photograph is not an error and
+   not an empty box — it is a plate nobody has drawn yet, and it should say
+   so in the system's own voice rather than show a dead grey slab.
+
+   Declared outside `@layer components` deliberately: it has to outrank the
+   `bg-img-fallback` utility on the same element, and rules added to the
+   components layer are tree-shaken out of the build. */
+.plate-undrawn {
+  display: grid;
+  place-items: center;
+  background: var(--ghost);
+  /* Dashed, not solid. `--dimline` is the drafting/leader-line ink and the
+     system reserves it for construction lines — never for a card border. A
+     solid inset ring in this colour reads as a bordered plate, which is the
+     one thing the tile language does not do; dashed reads as an unfinished
+     drawing, exactly as `.undrawn` already does for empty collections. */
+  border: 1px dashed var(--dimline);
+}
+/* The mark inside the plate is `.undrawn__mark` itself — the same dashed badge
+   the empty states use — so nothing bespoke is introduced here. It only needs
+   its icon sized to sit where the text glyphs do. */
+.plate-undrawn .undrawn__mark svg {
+  width: 20px;
+  height: 20px;
+}

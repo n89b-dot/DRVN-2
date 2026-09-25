@@ -40,10 +40,12 @@ export function Dialog({ open, onClose, label, children, className = "", align =
     }}
     onCancel={(event) => { event.preventDefault(); onClose(); }}
     onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    {open && <motion.div className={className} initial={{ opacity: 0, y: 16 }}
+    {open && <motion.div className={`dialogbox ${className}`} initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0, transition: { ...springs.spatial, opacity: transitions.standard } }}>
       {children}
-      <button type="button" onClick={onClose} className="relbtn !static mt-3" aria-label={`Close ${label}`}>Close</button>
+      {/* Inside the panel's corner. After the children it floated on the
+          scrim below the sheet, and read as a second, stray control. */}
+      <button type="button" onClick={onClose} className="dialogbox__close" aria-label={`Close ${label}`}>Close</button>
     </motion.div>}
   </dialog>;
 }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-24 — Design review: P0, P1 and P2 fixes
+
+A full design, UI and UX review of every page at 1440 and 390 (signed in and out, dark, and the main interactions) found 261 issues, 20 of them breakages. All three rounds are in, each checked in the running app at both widths.
+
+**Breakages.** Home was 445px wide on a phone and clipped at 1440: the `.deck--main` grids had no track sizing. The sticky bar was see-through: the CSS build keeps only the last of a prefixed/unprefixed pair, and `-webkit-backdrop-filter` came last. Post pages rendered their text and photo twice (`postLead()` now drops what the blocks already show). The update editor's add menu opened 2px tall. `.field--row` never declared a grid, so paired fields in five forms collapsed. Part prices were truncated to "$5,…". Settings loaded a blank profile form, because it asked for a column signed-in users can't read, and saving it would have wiped the profile. The root 404 had no shell, and a new account's "Add your car" intent was lost at signup.
+
+**The system, once, in the components.** Mono is for 12px labels and data; inputs, search, figures, notes and row actions are Plex Sans (`docs/site/typography.md`). The brackets mark only the primary (`.btn--live`); ghost and destructive buttons read as words. One red fill per surface: cart buttons are outlined, and the rail's List a part is a ghost button. Prices are ink, never the `--ok` green. Tabs are underline tabs, and all five profile tabs fit on a phone, Parts (the store) included. The phone menu has 48px single-line rows. Dialog and sheet close controls sit inside the panel. Photos in heroes use a dark caption fade instead of the cream bleach. The new `Badge` / `KindBadge` component separates kind (outline) from state (tint). Controls on tiles are outlined, and dark-mode ghost buttons get their own `--ghost-fill`.
+
+**Pages.** Home is one line of head, a photo feed and a working rail. Marketplace cards are slimmer, with photos that fill the frame and no "Compatibility not confirmed". An owner's listing gets Edit and Offers. Garage, garage edit (column captions, Undo on Replace, unsaved guard) and the update editor (photo required, pinned Publish) are reworked. On profiles the store runs four across. On the sell form photos come first and publishing needs one. My listings is a compact card per listing on phones. Orders open on Sales for sellers, Payouts shows the Connect state, and Settings has a Privacy section. Empty states say one thing. Per-issue detail is in the review artifact.
+
+**Stylesheet.** `globals.css` is now an ordered list of 13 family files in `src/app/styles/`, and the compiled CSS is identical before and after. `styles-ratchet.test.ts` pins the import order and blocks new duplicated selectors (16 left to merge).
+
+**Database (shared dev).** The September 5–6 remediation chain and the export contract `v4` are applied, with a backup and a reconciliation log (`supabase/MIGRATIONS.md`), so dispatch, receipt, seller cancellation and cart checkout work on dev. Test data now includes orders, offers and threads for review.
+
+## 2026-09-20 — Profile and Garage laid out like the mocks
+
+The direction build had changed the profile's pieces — tabs, Store, share, counts — but left it in the narrow single column it started in, so none of the layout the mocks asked for existed. The profile is now a full-width page: a banner band (a car's cover, borrowed; a plain tile when there is none) with the avatar overlapping its foot, the name on paper below it, followers · following · cars and the actions on the right, and the tabs beside a rail of the garage and parts for sale (P-1, P-4). Overview leads with the featured build and the latest updates as photo cards; Garage and Updates are card grids; the store is four across because the column is finally wide enough. The owner's `/profile` is the same page — it had no banner or counts at all — with Edit profile, Saved and share. Follower and following counts come from a new read-only function, `profile_follow_counts`, because `follows` rows are private to the two people in them and a visitor counting through RLS saw 0 (migration `20260920090000`, applied to the shared dev project and the local test database).
+
+The Garage opens on the main car rather than the list (`?car=all` is the list), has one Add vehicle — at the end of the switcher — and its Overview is a two-column summary: recent updates, parts for sale, current mods, photos and what's next, each linking to its tab. No new components: `ProfileHeader` was restructured, the rest composes `Mosaic`/`MosaicCell`, `ObjectRow`, `ListingRow`, `TileHead` and `LiveDim`; new recipes are `.profhead*`, `.deck--aside` and `.featbuild`. Verified in the running app in both themes at desktop and phone width.
+
 ## 2026-09-19 — Review repairs: what the direction build left open
 
 A review of the fifteen workstreams below found every one started and few finished, plus holes the newest work opened. This entry is the repair pass. It adds no feature.

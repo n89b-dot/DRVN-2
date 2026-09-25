@@ -22,7 +22,7 @@ export function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className={cx("tile", className)}>
+    <section className={cx("tile formsec", className)}>
       <div className="flex items-baseline gap-3">
         {/* Step numerals are structure, not live state — signal red is
             reserved for things happening now. */}
@@ -36,7 +36,10 @@ export function FormSection({
           {hint && <p className="field__hint mt-0.5">{hint}</p>}
         </div>
       </div>
-      <div className="mt-4 flex flex-col gap-3">{children}</div>
+      {/* The body's gap owns the vertical rhythm — fields inside it drop
+          their own bottom margin (`.formsec__body` in globals.css), so no
+          caller has to pass `!mb-0` field by field. */}
+      <div className="formsec__body">{children}</div>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import {
   Avatar,
+  ButtonLink,
   EmptyState,
   Finder,
   Foot,
@@ -11,8 +12,9 @@ import {
   NarrowColumn,
   ObjectRow,
   Pagination,
+  TileHead,
 } from "@/components/ui";
-import { initialsOf } from "@/lib/format";
+import { cx, initialsOf } from "@/lib/format";
 import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
@@ -319,6 +321,24 @@ async function loadInboxLegacy(supabase: Supabase, userId: string, page: number,
 }
 
 /**
+ * How long ago, coarse and timezone-free. This renders on the server, so a
+ * clock time ("14:05") would be the server's zone, not the reader's — an
+ * elapsed interval is the same everywhere.
+ */
+function sinceLabel(iso: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  if (days < 60) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+/**
  * The inbox that never existed. Order and offer threads always worked, but
  * they only ever rendered on the surface that spawned them — an order detail
  * page, or a row on /orders — so a buyer with a question had to remember
@@ -350,9 +370,14 @@ export default async function MessagesPage({
 
   const { rows, totalUnread, totalThreads, clampedPage, hasMore, windowExhausted, search } = inbox;
   const params = { q: query || undefined };
+  // Nothing to search and nothing to frame: a brand-new inbox is one plate
+  // with somewhere to go, not a search box and a tile around an empty state.
+  const emptyInbox = totalThreads === 0 && !query;
 
   return (
-    <NarrowColumn>
+    // Wide, not narrow: an inbox is scanned, and a 640px strip centred in a
+    // 1170px content area made a busy seller's list needlessly thin.
+    <NarrowColumn width="wide">
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Messages
@@ -377,6 +402,26 @@ export default async function MessagesPage({
       {/* The house search idiom — the canonical Finder: the query field
           owning the row, Enter submits, Clear beside it while a query is
           active. Same field as Explore and the Marketplace. */}
+      {emptyInbox ? (
+        <EmptyState
+          mark="↔"
+          title="No conversations yet"
+          action={
+            <span className="flex flex-wrap justify-center gap-3">
+              <ButtonLink variant="ghost" href="/marketplace">
+                Browse the marketplace
+              </ButtonLink>
+              <ButtonLink variant="ghost" href="/listings">
+                My listings
+              </ButtonLink>
+            </span>
+          }
+        >
+          Questions on your listings and chats about your orders collect here — ask a seller from
+          any part&apos;s page, or answer buyers from your listings.
+        </EmptyState>
+      ) : (
+      <>
       <Finder
         action="/messages"
         className="mb-5"
@@ -386,10 +431,10 @@ export default async function MessagesPage({
       />
 
       <Rv className="tile" stagger={1}>
-        <div className="tile__head">
-          <span className="microlabel microlabel--ink">Conversations</span>
-          {totalThreads > 0 && <span className="chip">{totalThreads}</span>}
-        </div>
+        <TileHead
+          label="Conversations"
+          end={totalThreads > 0 ? <span className="chip">{totalThreads}</span> : undefined}
+        />
 
         {windowExhausted && (
           <p className="field__hint mt-2">
@@ -415,41 +460,48 @@ export default async function MessagesPage({
                 key={row.key}
                 href={row.href}
                 leading={
-                  row.counterpartyAvatar ? (
-                    <span className="h-11 w-11 shrink-0 overflow-hidden rounded-ctl bg-img-fallback">
-                      <Media src={row.counterpartyAvatar} alt={row.counterpartyName} className="h-full w-full" role="avatar" />
-                    </span>
-                  ) : (
-                    <Avatar size="sm" initials={initialsOf(row.counterpartyName)} />
-                  )
-                }
-                actions={
-                  <>
-                    <span className="microlabel">
-                      {row.lastAt
-                        ? new Date(row.lastAt).toLocaleString(undefined, {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : ""}
-                    </span>
-                    {row.unread > 0 && <span className="chip chip--live">{row.unread} new</span>}
-                  </>
-                }
-              >
-                <span className="min-w-0">
-                  <span className={row.unread > 0 ? "order__name block truncate font-medium" : "order__name block truncate"}>
-                    {row.counterpartyName}
-                    {row.unread > 0 && (
-                      <span className="microlabel--live ml-2" aria-label="unread">
-                        ●
+                  // `!flex-none`: `.order` flexes every non-plate child, which
+                  // stretched the 44px avatar across half a wide row.
+                  <span className="!flex-none">
+                    {row.counterpartyAvatar ? (
+                      <span className="block h-11 w-11 overflow-hidden rounded-ctl bg-img-fallback">
+                        <Media src={row.counterpartyAvatar} alt={row.counterpartyName} className="h-full w-full" role="avatar" />
                       </span>
+                    ) : (
+                      <Avatar size="sm" initials={initialsOf(row.counterpartyName)} />
                     )}
                   </span>
-                  <span className="order__meta block truncate">
-                    {row.listingTitle} — {row.preview}
+                }
+              >
+                {/* Three lines, each with one job: the part (what the
+                    conversation is about), who and when, then what was said.
+                    One line holding "title — preview" truncated the preview
+                    away on a phone. Unread is said once: weight plus the
+                    live dot. */}
+                <span className="min-w-0">
+                  <span className="microlabel block truncate">{row.listingTitle}</span>
+                  <span className="mt-0.5 flex items-baseline justify-between gap-3">
+                    <span
+                      className={cx(
+                        "order__name min-w-0 truncate",
+                        row.unread > 0 ? "font-semibold" : "font-medium",
+                      )}
+                    >
+                      {row.counterpartyName}
+                      {row.unread > 0 && (
+                        <span className="microlabel--live ml-2" aria-label={`${row.unread} unread`}>
+                          ●
+                        </span>
+                      )}
+                    </span>
+                    {row.lastAt && (
+                      <time dateTime={row.lastAt} className="order__meta shrink-0">
+                        {sinceLabel(row.lastAt)}
+                      </time>
+                    )}
+                  </span>
+                  <span className={cx("order__meta block truncate", row.unread > 0 && "text-ink")}>
+                    {row.preview}
                   </span>
                 </span>
               </ObjectRow>
@@ -473,6 +525,8 @@ export default async function MessagesPage({
           />
         )}
       </Rv>
+      </>
+      )}
 
       <Foot
         left="DRVN — messages"

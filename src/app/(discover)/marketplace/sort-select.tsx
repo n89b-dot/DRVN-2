@@ -19,18 +19,18 @@ export function SortSelect({ value, filters }: { value?: string; filters: Listin
     <select
       name="sort"
       value={value ?? "newest"}
-      className="ctl !w-auto"
+      className="ctl sortsel"
       aria-label="Sort results"
       aria-busy={pending}
       data-marketplace-pending={pending}
       onChange={(event) => { const sort = event.currentTarget.value; startTransition(() => router.push(marketplaceHref(filters, { sort, page: undefined }))); }}
     >
-      {/* Short labels on purpose: a native select sizes to its longest
-          option, and "Price: low to high" pushed the control wide enough to
-          wrap the compact toolbar at 375px. */}
+      {/* Words, not arrows. `.sortsel` sizes the control to the chosen
+          option where the browser can (field-sizing), so the longest label
+          no longer decides whether the toolbar fits one row. */}
       <option value="newest">Newest</option>
-      <option value="price_asc">Item price ↑</option>
-      <option value="price_desc">Item price ↓</option>
+      <option value="price_asc">Price: low to high</option>
+      <option value="price_desc">Price: high to low</option>
     </select>
     {pending && <span role="status" className="sr-only">Updating parts…</span>}
     </>

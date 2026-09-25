@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState, type FormEvent } from "react";
 
-import { Alert, Button, PasswordField, TextField } from "@/components/ui";
+import { Alert, Button, ButtonLink, PasswordField, TextField } from "@/components/ui";
 
 import { signup, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
@@ -18,7 +18,26 @@ export function SignupForm({
   betaEnforced: boolean;
 }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signup, {});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const carry = next ? `?next=${encodeURIComponent(next)}` : "";
+
+  // Validation speaks the Livesheet field-error language (the tinted field
+  // plus a line under it), not the browser's bubbles: the form is
+  // noValidate and an empty or malformed submit stops here, before the
+  // server action, with the reason under the field it belongs to.
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    const found = validateSignup(new FormData(event.currentTarget));
+    setErrors(found);
+    if (found.email || found.password) {
+      event.preventDefault();
+      const first = found.email ? "signup-email" : "signup-password";
+      document.getElementById(first)?.focus();
+    }
+  }
+
+  function clear(field: keyof FieldErrors) {
+    if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
+  }
 
   return (
     <div>
@@ -26,56 +45,86 @@ export function SignupForm({
       <h1 className="mt-2 text-[clamp(26px,4vw,36px)] font-[600] leading-[1.05] tracking-[-0.02em]">
         Join <span className="text-live">DRVN.</span>
       </h1>
-      <p className="mt-3 text-body text-dim">
-        {betaEnforced
-          ? "DRVN is in an invited beta. Use the email address this invitation was issued to."
-          : "Show your build. Sell your parts. Find what fits."}
-      </p>
+      {/* The reason to join stays in the card; beta mechanics live in the
+          notices below, not in its place. */}
+      <p className="mt-3 text-body text-dim">Show your build. Sell your parts. Find what fits.</p>
 
-      <form action={action} className="mt-6">
-        {next && <input type="hidden" name="next" value={next} />}
-        {invite && <input type="hidden" name="invite" value={invite} />}
-        {betaEnforced && !invite && (
-          <Alert className="mb-4" role="status" title="Invitation required">An invitation link is required while DRVN is in beta.</Alert>
-        )}
-        <TextField
-          id="signup-email"
-          label="Email"
-          name="email"
-          type="email"
-          required
-          placeholder="you@somewhere"
-          autoComplete="email"
-          className="max-w-none"
-          hint="Used for offers, orders and payouts. Never shown publicly."
-        />
-        <PasswordField
-          id="signup-password"
-          label="Password"
-          name="password"
-          required
-          minLength={8}
-          placeholder="At least 8 characters"
-          autoComplete="new-password"
-          className="max-w-none"
-          hint="8+ characters. Length is what really counts."
-          error={state.error}
-        />
-        <Button type="submit" variant="live" disabled={pending || (betaEnforced && !invite)} className="w-full">
-          {pending ? "Creating…" : betaEnforced ? "Accept invitation" : "Create account"}
-        </Button>
-        <p className="field__hint mt-3 text-center">
-          By creating an account you agree to the{" "}
-          <Link href="/terms" className="jumplink">
-            Terms
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="jumplink">
-            Privacy Policy
-          </Link>
-          .
-        </p>
-      </form>
+      {betaEnforced && !invite ? (
+        /* Invite-only and no invitation: the form used to stay on screen with
+           a disabled button, so every "Join" and "Add your car" ended at a
+           control that could never work. Say what's going on and keep the
+           visitor moving — browsing and the marketplace need no account. */
+        <div className="mt-6">
+          <Alert role="status" title="Joining is by invitation for now">
+            Accounts open with an invitation link while DRVN is in beta. If someone sent you one,
+            open it from that email. You can still browse every build and part without an account.
+          </Alert>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <ButtonLink href="/explore" variant="live">
+              Explore builds
+            </ButtonLink>
+            <ButtonLink href="/marketplace" variant="ghost">
+              Shop parts
+            </ButtonLink>
+          </div>
+        </div>
+      ) : (
+        <form action={action} onSubmit={onSubmit} noValidate className="mt-6">
+          {betaEnforced && (
+            <Alert className="mb-5" title="You've been invited">
+              Use the email address this invitation was sent to.
+            </Alert>
+          )}
+          {next && <input type="hidden" name="next" value={next} />}
+          {invite && <input type="hidden" name="invite" value={invite} />}
+          <TextField
+            id="signup-email"
+            label="Email"
+            name="email"
+            type="email"
+            required
+            placeholder="you@somewhere"
+            autoComplete="email"
+            className="max-w-none"
+            hint="Used for offers, orders and payouts. Never shown publicly."
+            error={errors.email}
+            onInput={() => clear("email")}
+          />
+          <PasswordField
+            id="signup-password"
+            label="Password"
+            name="password"
+            required
+            minLength={8}
+            placeholder="At least 8 characters"
+            autoComplete="new-password"
+            className="max-w-none"
+            hint="8+ characters. Length is what really counts."
+            error={errors.password ?? state.error}
+            onInput={() => clear("password")}
+          />
+          <Button
+            type="submit"
+            variant="live"
+            loading={pending}
+            pendingLabel="Creating…"
+            className="w-full"
+          >
+            {betaEnforced ? "Accept invitation" : "Create account"}
+          </Button>
+          <p className="field__hint mt-3 text-center">
+            By creating an account you agree to the{" "}
+            <Link href="/terms" className="jumplink">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="jumplink">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+        </form>
+      )}
 
       <div className="authswap">
         <Link href={`/login${carry}`} className="jumplink">
@@ -93,4 +142,18 @@ export function SignupForm({
       )}
     </div>
   );
+}
+
+type FieldErrors = { email?: string; password?: string };
+
+function validateSignup(data: FormData): FieldErrors {
+  const email = String(data.get("email") ?? "").trim();
+  const password = String(data.get("password") ?? "");
+  const errors: FieldErrors = {};
+  if (!email) errors.email = "Enter your email address.";
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    errors.email = "That doesn't look like an email address.";
+  if (!password) errors.password = "Choose a password.";
+  else if (password.length < 8) errors.password = "Use at least 8 characters.";
+  return errors;
 }

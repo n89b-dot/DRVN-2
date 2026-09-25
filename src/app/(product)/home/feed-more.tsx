@@ -72,11 +72,7 @@ export function HomeFeedMore({
 
   return (
     <div className="deck--main__feed deck--main__feed--rest">
-      {items.length > 0 && (
-        <div className="tile">
-          <FeedList items={items} />
-        </div>
-      )}
+      {items.length > 0 && <FeedList items={items} variant="cards" />}
       <div ref={sentinel} aria-hidden="true" />
       {hasMore ? (
         <p className="mt-4 flex justify-center">

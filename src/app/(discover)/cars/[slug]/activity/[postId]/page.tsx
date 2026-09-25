@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Avatar, EmbeddedVideo, Icon, NarrowColumn, ObjectRow } from "@/components/ui";
+import { Avatar, EmbeddedVideo, Icon, Media, NarrowColumn, ObjectRow } from "@/components/ui";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement } from "@/features/activity/engagement";
 import { loadPostEngagement } from "@/features/activity/load-engagement";
@@ -10,8 +10,8 @@ import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-co
 import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { MarkRemovedOffer } from "./mark-removed-offer";
 
-import { normalizeBlocks } from "@/lib/activity-blocks";
-import { pageHeadline, postHeadline } from "@/lib/activity/headline";
+import { normalizeBlocks, postLead } from "@/lib/activity-blocks";
+import { pageHeadline } from "@/lib/activity/headline";
 import { ListingCartButton } from "@/features/commerce/quick-commerce";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 
@@ -25,7 +25,7 @@ export default async function ActivityDetailPage({
 
   const { data: car } = await supabase
     .from("cars")
-    .select("id, name, slug, owner_id")
+    .select("id, name, slug, owner_id, year, make, model")
     .eq("slug", slug)
     .single();
   if (!car) notFound();
@@ -41,7 +41,7 @@ export default async function ActivityDetailPage({
   const user = await getViewer();
 
   const [{ data: owner }, { data: images }, { reactions, comments }] = await Promise.all([
-    supabase.from("profiles").select("display_name, username").eq("id", car.owner_id).single(),
+    supabase.from("profiles").select("display_name, username, avatar_url").eq("id", car.owner_id).single(),
     supabase.from("activity_images").select("url, alt, position").eq("post_id", postId).order("position"),
     loadPostEngagement(supabase, postId, user?.id ?? null),
   ]);
@@ -122,7 +122,9 @@ export default async function ActivityDetailPage({
     })
     .filter((l) => l.status !== "draft");
 
-  const gallery = images ?? [];
+  // Only what the blocks below don't already say (the editor writes both).
+  const lead = postLead(post.intro, images ?? [], blocks);
+  const gallery = lead.images;
   const ownerName = owner?.display_name ?? (owner?.username ? `@${owner.username}` : "");
   const initials = (owner?.display_name ?? owner?.username ?? "?")
     .split(" ")
@@ -157,12 +159,39 @@ export default async function ActivityDetailPage({
             </>
           )}
         </span>
-        <div className="mt-2 flex items-center gap-3">
-          <Avatar size="sm" initials={initials} />
-          <h1 className="!mt-0 !text-[clamp(22px,3vw,32px)]">{headline}</h1>
+        <h1 className="!text-[clamp(22px,3vw,32px)]">{headline}</h1>
+        {/* Whose update, when, and on which car — the car-centred model
+            leads with the car and its owner, not an initials tile. */}
+        <div className="byrow">
+          {owner?.username ? (
+            <Link href={`/u/${owner.username}`} className="byline">
+              <span className="byline__avatar">
+                {owner.avatar_url ? (
+                  <Media src={owner.avatar_url} alt="" className="h-full w-full" role="avatar" />
+                ) : (
+                  <Avatar size="sm" initials={initials} />
+                )}
+              </span>
+              {ownerName}
+            </Link>
+          ) : null}
+          {post.published_at && (
+            <time dateTime={post.published_at} className="kv text-dim">
+              {new Date(post.published_at).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </time>
+          )}
+          <Link href={`/cars/${slug}`} className="chip">
+            {[car.name, [car.year, car.make, car.model].filter(Boolean).join(" ")]
+              .filter(Boolean)
+              .join(" · ")}
+          </Link>
         </div>
       </header>
-      {post.intro && <p className="max-w-[62ch] text-body leading-7">{post.intro}</p>}
+      {lead.intro && <p className="max-w-[62ch] text-body leading-7">{lead.intro}</p>}
 
       {gallery.length > 0 && (
         <ActivityGallery

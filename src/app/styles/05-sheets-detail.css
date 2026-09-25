@@ -1,0 +1,378 @@
+/* sheets detail — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- buy sheet (2-step, notification-styled) ---------- */
+  .sheetwrap {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--scrim);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 20px;
+  }
+  .sheetwrap.is-open {
+    display: flex;
+  }
+  .sheet {
+    /* The one dialog width — no per-dialog overrides. Viewport-based, not
+       100%: inside the Dialog component the sheet sits in a shrink-to-fit
+       panel, where a percentage would collapse to content width. The 40px
+       subtraction mirrors .sheetwrap's 20px padding on each side. */
+    width: min(480px, calc(100vw - 40px));
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: 22px;
+    /* Entry/exit rise is Motion-driven on the Dialog panel
+       (src/components/ui/dialog.tsx); the sheet itself is static. */
+  }
+  /* Dialog close — a quiet word in the panel's top-right corner. */
+  .dialogbox {
+    position: relative;
+  }
+  .dialogbox__close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    min-height: 36px;
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dim);
+    border-radius: var(--r-ctl);
+  }
+  .dialogbox__close:hover {
+    color: var(--ink);
+    background: var(--tile-2);
+  }
+  .dialogbox > .sheet > :first-child {
+    padding-right: 56px;
+  }
+  .sheet__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 9px 0;
+    font-size: 16px;
+  }
+  .sheet__row + .sheet__row {
+    border-top: 1px solid var(--rule-soft);
+  }
+  /* Amounts at the label's size or larger — the figure is what's being read.
+     Sans tabular (one price voice), ink. The total is the biggest line on
+     the summary, over a rule, and never accent red (red read as an error). */
+  .sheet__row b {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .sheet__total {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-mid);
+    align-items: baseline;
+  }
+  .sheet__row + .sheet__total {
+    border-top-color: var(--rule-mid);
+  }
+  .sheet__total b {
+    font-size: 20px;
+    color: var(--ink);
+  }
+  .sheet__actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  /* Phones: two full-width buttons stacked beat two squeezed side by side. */
+  @media (max-width: 520px) {
+    .sheet__actions {
+      flex-wrap: wrap;
+    }
+    .sheet__actions > * {
+      flex: 1 1 100%;
+    }
+  }
+
+  /* ---------- bottom sheet — the dialog plate risen from the bottom edge.
+     Compact screens get the full-width sheet; the `--inline-sm` variant
+     dissolves entirely at ≥640px so its children flow back into the
+     surrounding layout (one DOM, two compositions). ---------- */
+  .bsheet {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: var(--scrim);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .bsheet.is-open {
+    display: flex;
+  }
+  .bsheet__panel {
+    width: min(640px, 100%);
+    max-height: 85dvh;
+    overflow-y: auto;
+    background: var(--tile);
+    border-radius: var(--r) var(--r) 0 0;
+    padding: 22px 22px calc(22px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    gap: 12px;
+    /* Rise/settle is Motion-driven (src/components/ui/bottom-sheet.tsx) —
+       the panel stays mounted while closed, so Motion animates the
+       always-present element instead of unmount/remount. */
+  }
+  @media (min-width: 640px) {
+    .bsheet--inline-sm,
+    .bsheet--inline-sm .bsheet__panel {
+      display: contents;
+    }
+    /* An all-widths sheet floats as a centered dialog once there's room —
+       a full-width strip pinned to a desktop's bottom edge reads as a
+       toast, not a filter panel. */
+  }
+  /* M-3's filter sidebar. The same fields are a sheet below 1024px and a
+     column beside the results at or above it — one set of controls, two
+     presentations, never two rendered copies of the state. 1024 rather than
+     640 because a tablet has no room for a column beside four cards. */
+  @media (min-width: 1024px) {
+    .bsheet--inline-lg,
+    .bsheet--inline-lg .bsheet__panel {
+      display: contents;
+    }
+  }
+  @media (min-width: 640px) {
+    /* An all-widths sheet floats as a centered dialog once there's room —
+       a full-width strip pinned to a desktop's bottom edge reads as a
+       toast, not a filter panel. */
+    .bsheet--center {
+      align-items: center;
+      padding: 24px;
+    }
+    .bsheet--center .bsheet__panel {
+      border-radius: var(--r);
+      /* A filter dialog is a short stack, not a page: narrower than the
+         compact sheet's 640px, and overflow stays visible so a combo's
+         option list can drop past the panel edge instead of spawning an
+         inner scrollbar. */
+      width: min(480px, 100%);
+      max-height: none;
+      overflow: visible;
+    }
+  }
+  /* Inside a sheet the finder's refinement row becomes a stack — one field
+     per line, the label a heading — instead of the inline flex row that
+     crammed labels beside fields. */
+  .bsheet__panel .finder__refine {
+    display: grid;
+    gap: 12px;
+  }
+
+  /* Why an account is needed — ruled reasons, the drawing's list voice. */
+  .authintent__why {
+    margin-top: 14px;
+    display: grid;
+    gap: 0;
+  }
+  .authintent__why li {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--dim);
+    padding: 9px 0 9px 18px;
+    border-top: 1px solid var(--rule-soft);
+    position: relative;
+  }
+  .authintent__why li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 17px;
+    width: 8px;
+    height: 1px;
+    background: var(--live);
+  }
+  .sheet .stamp {
+    font-family: var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--live);
+    border: 2px solid var(--live);
+    border-radius: var(--r-chip);
+    padding: 8px 14px;
+    display: inline-block;
+    transform: rotate(-3deg);
+    margin: 6px 0 4px;
+  }
+  .stamp--spent {
+    color: var(--dim);
+    border-color: var(--dimline);
+  }
+
+  /* ---------- reveals (spring + draw) ----------
+     The rise/fade itself is Motion-driven (Rv in src/components/livesheet.tsx,
+     recipe in src/lib/motion). CSS keeps only the `.is-in` draw cascade below
+     (dimline-h, live-word underline, gsheet spines). */
+
+  /* ---------- listing detail (PDP) sheet ----------
+     DOM order is the phone reading order: media → purchase rail → long-form
+     content → secondary trust tiles. Desktop re-places the same blocks into
+     the two-column sheet with grid coordinates — the rail spans rows 1–2 so
+     the right column reads continuously, and `.pdp__more` lands directly
+     beneath it while the content column keeps flowing on the left. */
+  .pdp {
+    display: grid;
+    gap: 16px;
+    padding-bottom: clamp(48px, 7vw, 80px);
+  }
+  .pdp > * {
+    min-width: 0;
+  }
+  /* The asking row: the label, and Save as a bookmark at its end. */
+  .pdp__ask {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+  }
+  /* The seller, as a person: their photo, their name (to their store), and
+     a track record — not a black monogram and a repeated city. */
+  .pdp__seller {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule-soft);
+    color: var(--ink);
+  }
+  .pdp__seller-face {
+    overflow: hidden;
+    flex: none;
+  }
+  .pdp__seller-name {
+    display: block;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.3;
+    transition: color var(--t-fast) ease;
+  }
+  a.pdp__seller:hover .pdp__seller-name {
+    color: var(--live);
+  }
+  .pdp__seller-meta {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--dim);
+  }
+  /* The car it came off — the thing only DRVN has — right under the seller. */
+  .pdp__source {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  /* Cart line: the name gets two lines, and Remove sits under the price. */
+  .cartline__name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  .cartline__remove {
+    display: block;
+    margin-top: 4px;
+  }
+  .cartline__remove .btn {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  @media (min-width: 981px) {
+    .pdp {
+      grid-template-columns: 1.35fr 1fr;
+      align-items: start;
+    }
+    .pdp__media {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .pdp__content {
+      grid-column: 1;
+      grid-row: 2 / span 2;
+    }
+    .pdp__rail {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+    .pdp__more {
+      grid-column: 2;
+      grid-row: 3;
+    }
+  }
+
+  /* Sticky phone purchase bar — fixed to the bottom edge while the real
+     purchase controls are off-screen. Desktop keeps the full rail instead. */
+  .buybar {
+    position: fixed;
+    z-index: 40;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px clamp(16px, 4vw, 24px) calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--tile);
+    border-top: 1px solid var(--rule-mid);
+    transition: transform var(--t-move) var(--spring), visibility var(--t-move);
+  }
+  .buybar[data-hidden="true"] {
+    transform: translateY(110%);
+    visibility: hidden;
+  }
+  .buybar__price {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+  .buybar__ship {
+    display: block;
+    font-family: var(--mono);
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  .buybar .btn {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  /* The bar retires wherever its page's real controls come back into view.
+     The PDP hands its rail a column at 981px (`.pdp`), so that is where the
+     plain bar stops. The cart and checkout stack until Tailwind's `lg`
+     (1024px), so `--wide` carries the same recipe those extra 43px further —
+     without that split, 981–1023px would show a one-column cart with its
+     checkout action stranded at the bottom and no bar to reach it. */
+  @media (min-width: 981px) {
+    .buybar:not(.buybar--wide) {
+      display: none;
+    }
+  }
+  @media (min-width: 1024px) {
+    .buybar--wide {
+      display: none;
+    }
+  }
+  /* Keep the page's last content reachable above the fixed bar. Keyed per
+     variant so each stops reserving the space exactly when its bar goes. */
+}

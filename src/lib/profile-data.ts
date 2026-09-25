@@ -14,11 +14,20 @@ export type ProfileVehicle = {
   colorLabel: string;
   tags: string[];
   gallery: GalleryImage[];
+  /** The card's photo: the chosen cover, else the first gallery image. */
+  cover: string | null;
+  /** Year make model — the line under the name on a garage card. */
+  platform: string;
 };
 
 export type ProfileActivity = {
   id: string;
   carSlug: string;
+  /** The car the update is about — the chip on its card. */
+  carName: string | null;
+  /** That car's cover — the card's photo when the post has none of its own
+   *  (legacy posts predate "every post has a photo"). */
+  carCover: string | null;
   date: string;
   title: string;
   intro: string | null;
@@ -53,6 +62,7 @@ export type ProfileView = {
   reviewCount: number;
   salesCount: number;
   followerCount: number;
+  followingCount: number;
   /** Pagination — "Show more" on the For sale / Reviews tabs. */
   listingsPage: number;
   listingsPageSize: number;
@@ -155,6 +165,10 @@ export async function loadProfileView(
   }
 
   const slugByCar = new Map(carList.map((c) => [c.id, c.slug]));
+  const nameByCar = new Map(carList.map((c) => [c.id, c.name]));
+  const coverByCar = new Map(
+    carList.map((c) => [c.id, c.cover_image_url ?? galleryByCar.get(c.id)?.[0]?.url ?? null])
+  );
 
   const vehicles: ProfileVehicle[] = carList.map((c) => ({
     id: c.id,
@@ -164,11 +178,15 @@ export async function loadProfileView(
     colorLabel: c.color ?? platformLabel(c),
     tags: c.tags ?? [],
     gallery: galleryByCar.get(c.id) ?? [],
+    cover: c.cover_image_url ?? galleryByCar.get(c.id)?.[0]?.url ?? null,
+    platform: platformLabel(c),
   }));
 
   const activity: ProfileActivity[] = (posts ?? []).map((p) => ({
     id: p.id,
     carSlug: p.car_id ? (slugByCar.get(p.car_id) ?? "") : "",
+    carName: p.car_id ? (nameByCar.get(p.car_id) ?? null) : null,
+    carCover: p.car_id ? (coverByCar.get(p.car_id) ?? null) : null,
     date: formatDate(p.published_at),
     title: postHeadline(p),
     intro: p.intro,
@@ -190,7 +208,7 @@ export async function loadProfileView(
     { data: listingRows, count: listingsTotal },
     { data: reviewRows, count: reviewsTotal },
     { count: salesCount },
-    { count: followerCount },
+    { data: followCounts },
   ] = await Promise.all([
     listingsQuery,
     supabase
@@ -204,11 +222,9 @@ export async function loadProfileView(
       .select("id", { count: "exact", head: true })
       .eq("seller_id", profileId)
       .in("status", ["paid", "shipped", "delivered", "completed"]),
-    supabase
-      .from("follows")
-      .select("target_id", { count: "exact", head: true })
-      .eq("target_type", "profile")
-      .eq("target_id", profileId),
+    // `follows` rows are private to the two people in them, so a visitor
+    // counting through RLS saw 0. The function returns the totals only.
+    supabase.rpc("profile_follow_counts", { p_profile: profileId }).maybeSingle(),
   ]);
 
   // Average rating has to look at every review, not just the current page —
@@ -270,7 +286,8 @@ export async function loadProfileView(
     rating,
     reviewCount: reviewsTotal ?? ratings.length,
     salesCount: salesCount ?? 0,
-    followerCount: followerCount ?? 0,
+    followerCount: Number(followCounts?.followers ?? 0),
+    followingCount: Number(followCounts?.following ?? 0),
     listingsPage: Math.max(1, listingsPage),
     listingsPageSize: PROFILE_LISTINGS_PAGE_SIZE,
     listingsHasMore: (listingsTotal ?? 0) > listingsFrom + PROFILE_LISTINGS_PAGE_SIZE,

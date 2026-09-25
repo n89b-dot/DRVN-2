@@ -43,6 +43,6 @@ export async function loadHomeFeedPage(
     );
     return { items: feed.items, hasMore: feed.hasMore };
   }
-  const feed = await fetchFeed(supabase, "all", { ...opts, viewerId: user.id });
+  const feed = await fetchFeed(supabase, "all", { ...opts, viewerId: user.id, excludeOwnerId: user.id });
   return { items: feed.items, hasMore: feed.hasMore };
 }

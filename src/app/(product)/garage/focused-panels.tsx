@@ -1,35 +1,246 @@
 import Link from "next/link";
 
-import { ObjectRow } from "@/components/ui";
+import { ListingRow } from "@/components/commerce";
+import { Media, MEDIA_SIZES, ObjectRow, TileHead } from "@/components/ui";
+import { postHeadline } from "@/lib/activity/headline";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createClient } from "@/lib/supabase/server";
 
 import type { GarageSheet } from "./garage-data";
+import { workOrders } from "./garage-sheet";
 
-/** G-4's Overview: what's happened, and the two links that follow from it. */
-export function GarageCarOverview({ sheet }: { sheet: GarageSheet }) {
+type OverviewMod = {
+  id: string;
+  brand: string | null;
+  product: string | null;
+  raw_text: string | null;
+  category: string | null;
+  group_label?: string | null;
+  image_url?: string | null;
+  status?: string | null;
+};
+
+/**
+ * G-4's Overview: the car at a glance, in two columns — what's been posted
+ * and what's for sale on the left; what's on the car, its photos and what
+ * needs doing on the right. Every tile is a summary of a tab (or a page) and
+ * links to it; a tile with nothing to show says so in one line rather than
+ * disappearing, because on your own car "nothing yet" is a prompt.
+ */
+export async function GarageCarOverview({
+  sheet,
+  mods,
+}: {
+  sheet: GarageSheet;
+  mods: OverviewMod[];
+}) {
+  const supabase = await createClient();
+  const [{ data: posts }, { data: listings }] = await Promise.all([
+    supabase
+      .from("activity_posts")
+      .select("id, title, intro, published_at")
+      .eq("car_id", sheet.id)
+      .not("published_at", "is", null)
+      .order("published_at", { ascending: false })
+      .limit(3),
+    supabase
+      .from("listings")
+      .select("id, title, price_cents, status")
+      .eq("source_car_id", sheet.id)
+      .in("status", ["active", "reserved"])
+      .order("created_at", { ascending: false })
+      .limit(4),
+  ]);
+  const postIds = (posts ?? []).map((p) => p.id);
+  const listingIds = (listings ?? []).map((l) => l.id);
+  const [{ data: postImages }, { data: listingImages }] = await Promise.all([
+    postIds.length
+      ? supabase.from("activity_images").select("post_id, url, position").in("post_id", postIds).order("position")
+      : Promise.resolve({ data: [] as { post_id: string; url: string }[] }),
+    listingIds.length
+      ? supabase.from("listing_images").select("listing_id, url, position").in("listing_id", listingIds).order("position")
+      : Promise.resolve({ data: [] as { listing_id: string; url: string }[] }),
+  ]);
+  const postCover = new Map<string, string>();
+  for (const img of postImages ?? []) if (!postCover.has(img.post_id)) postCover.set(img.post_id, img.url);
+  const listingCover = new Map<string, string>();
+  for (const img of listingImages ?? [])
+    if (!listingCover.has(img.listing_id)) listingCover.set(img.listing_id, img.url);
+
+  const installed = mods.filter((m) => m.status !== "removed");
+  const modsHavePhotos = installed.slice(0, 6).some((m) => m.image_url);
+  // Next says only what the tiles beside it don't: the hero already offers
+  // Post an update and the Parts tile already says nothing is listed.
+  const orders = workOrders(sheet).filter(
+    (o) => !o.href.endsWith("/update/new") && !o.href.startsWith("/sell")
+  );
+  const tab = (view: string) => `/garage?car=${sheet.id}&view=${view}`;
+
   return (
-    <div className="mt-8 grid gap-6">
-      {sheet.latestUpdate ? (
-        <ObjectRow
-          href={sheet.is_public ? `/cars/${sheet.slug}/activity/${sheet.latestUpdate.id}` : undefined}
-          media={{ src: sheet.latestUpdate.cover_url ?? undefined, alt: "" }}
-          title={sheet.latestUpdate.title}
-          meta={`Latest update · ${new Date(sheet.latestUpdate.published_at).toLocaleDateString()}`}
-        />
-      ) : (
-        <p className="text-body text-dim">
-          Nothing posted about this car yet.{" "}
-          <Link href={`/garage/${sheet.id}/update/new`} className="jumplink">
-            Write the first update →
-          </Link>
-        </p>
-      )}
-      {sheet.earnedCents > 0 && (
-        <p className="text-body text-dim">
-          {formatPrice(sheet.earnedCents)} earned from parts off this car.
-        </p>
-      )}
+    <div className="deck deck--two mt-8">
+      <div className="grid content-start gap-5">
+        <section className="tile">
+          {/* The hero already carries Post an update; this tile's link goes
+              to the whole log instead of repeating it a third time. */}
+          <TileHead
+            label="Recent updates"
+            end={
+              sheet.is_public && sheet.updates > 0 ? (
+                <Link href={`/cars/${sheet.slug}?view=activity`} className="jumplink">
+                  All updates →
+                </Link>
+              ) : undefined
+            }
+          />
+          {posts?.length ? (
+            <div className="rowlist">
+              {posts.map((post) => (
+                <ObjectRow
+                  key={post.id}
+                  href={sheet.is_public ? `/cars/${sheet.slug}/activity/${post.id}` : undefined}
+                  media={{ src: postCover.get(post.id), alt: "" }}
+                  title={<span className="block truncate">{postHeadline(post)}</span>}
+                  meta={new Date(post.published_at!).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-body text-dim">Nothing posted about this car yet.</p>
+          )}
+        </section>
+
+        <section className="tile">
+          <TileHead
+            label="Parts for sale"
+            end={
+              <Link href={tab("parts")} className="jumplink">
+                View all →
+              </Link>
+            }
+          />
+          {listings?.length ? (
+            <div className="rowlist">
+              {listings.map((l) => (
+                <ListingRow
+                  key={l.id}
+                  listing={{
+                    id: l.id,
+                    title: l.title,
+                    price: formatPrice(l.price_cents),
+                    cover: listingCover.get(l.id) ?? null,
+                    status: l.status,
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-body text-dim">
+              Nothing listed off this car.{" "}
+              <Link href={`/sell?car=${sheet.id}`} className="jumplink">
+                List a part →
+              </Link>
+            </p>
+          )}
+          {sheet.earnedCents > 0 && (
+            <p className="mt-3 text-body text-dim">
+              {formatPrice(sheet.earnedCents)} earned from parts off this car.
+            </p>
+          )}
+        </section>
+
+        {/* Photos sit on the left, under the parts, so the two columns end
+            nearer each other. One photo is shown wide, not as a quarter-width
+            square in an empty tile. */}
+        {sheet.photoUrls.length > 0 && (
+          <section className="tile">
+            <TileHead
+              label="Photos"
+              end={
+                <Link href={tab("media")} className="jumplink">
+                  View all →
+                </Link>
+              }
+            />
+            <div
+              className={
+                sheet.photoUrls.length === 1
+                  ? "grid grid-cols-1"
+                  : sheet.photoUrls.length === 2
+                    ? "grid grid-cols-2 gap-2"
+                    : "grid grid-cols-4 gap-2"
+              }
+            >
+              {sheet.photoUrls.slice(0, 4).map((url) => (
+                <Media
+                  key={url}
+                  src={url}
+                  alt=""
+                  className={
+                    sheet.photoUrls.length === 1
+                      ? "aspect-video w-full rounded-ctl"
+                      : sheet.photoUrls.length === 2
+                        ? "aspect-[4/3] w-full rounded-ctl"
+                        : "aspect-square w-full rounded-ctl"
+                  }
+                  sizes={sheet.photoUrls.length === 1 ? MEDIA_SIZES.vehicle : MEDIA_SIZES.row}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      <div className="grid content-start gap-5">
+        <section className="tile">
+          <TileHead
+            label={`Current mods${installed.length ? ` · ${installed.length}` : ""}`}
+            end={
+              <Link href={tab("mods")} className="jumplink">
+                {installed.length ? "View all →" : "Add a mod →"}
+              </Link>
+            }
+          />
+          {installed.length ? (
+            <div className="rowlist">
+              {installed.slice(0, 6).map((mod) => (
+                <ObjectRow
+                  key={mod.id}
+                  href={tab("mods")}
+                  /* Most typed lines have no picture. A column of blank
+                     plates read as failed loads, so the plates only appear
+                     when at least one line has a photo to put in one. */
+                  media={modsHavePhotos ? { src: mod.image_url ?? undefined, alt: "" } : undefined}
+                  title={
+                    <span className="block truncate">
+                      {[mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw_text || "A part"}
+                    </span>
+                  }
+                  meta={mod.group_label ?? mod.category ?? undefined}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-body text-dim">The mod list is empty.</p>
+          )}
+        </section>
+
+        {/* Kept from the old sheet for evaluation (G-4): what needs doing —
+            shown only when there is something the other tiles don't say. */}
+        {orders.length > 0 && (
+          <section className="tile">
+            <TileHead label="Next" />
+            <div className="rowlist">
+              {orders.map((order) => (
+                <ObjectRow key={order.label} href={order.href} title={order.label} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

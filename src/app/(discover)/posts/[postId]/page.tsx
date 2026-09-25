@@ -9,7 +9,7 @@ import { DeletePostButton } from "@/features/activity/delete-post-button";
 import { ActivityEngagement } from "@/features/activity/engagement";
 import { loadPostEngagement } from "@/features/activity/load-engagement";
 import { ListingCartButton } from "@/features/commerce/quick-commerce";
-import { normalizeBlocks } from "@/lib/activity-blocks";
+import { normalizeBlocks, postLead } from "@/lib/activity-blocks";
 import { pageHeadline, postHeadline } from "@/lib/activity/headline";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
@@ -98,6 +98,8 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
 
   // The caption is the heading OR the first line of the body — not both.
   const { headline, blocks } = pageHeadline(post, normalizeBlocks(post.body));
+  // The gallery shows only photos the blocks below don't already show.
+  const gallery = postLead(post.intro, images ?? [], blocks).images;
 
   return (
     <NarrowColumn>
@@ -109,9 +111,9 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
         reveal={false}
       />
 
-      {(images ?? []).length > 0 && (
+      {gallery.length > 0 && (
         <ActivityGallery
-          images={(images ?? []).map((img) => ({ url: img.url, alt: img.alt }))}
+          images={gallery.map((img) => ({ url: img.url, alt: img.alt }))}
           title={headline}
         />
       )}

@@ -2,7 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, SellingNav, Pagination, TileHead } from "@/components/ui";
+import {
+  Alert,
+  ButtonLink,
+  EmptyState,
+  Foot,
+  PageHead,
+  SellingNav,
+  Pagination,
+  TileHead,
+} from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -100,11 +109,11 @@ export default async function OffersPage({
     role === "received"
       ? supabase
           .from("offers")
-          .select("*, listings!inner(id, title, seller_id)", { count: "exact" })
+          .select("*, listings!inner(id, title, seller_id, price_cents)", { count: "exact" })
           .eq("listings.seller_id", user.id)
       : supabase
           .from("offers")
-          .select("*, listings!inner(id, title, seller_id)", { count: "exact" })
+          .select("*, listings!inner(id, title, seller_id, price_cents)", { count: "exact" })
           .eq("buyer_id", user.id);
 
   if (status) query = query.eq("status", status);
@@ -113,10 +122,24 @@ export default async function OffersPage({
   // by the seller's own listings via the join, `made` by their buyer_id.
   if (listingFilter) query = query.eq("listing_id", listingFilter);
 
+  // Everything this role has ever held, unfiltered — when it's nothing, the
+  // status filters have nothing to refine and stay off the page.
+  const roleTotalQuery =
+    role === "received"
+      ? supabase
+          .from("offers")
+          .select("id, listings!inner(id)", { count: "exact", head: true })
+          .eq("listings.seller_id", user.id)
+      : supabase
+          .from("offers")
+          .select("id", { count: "exact", head: true })
+          .eq("buyer_id", user.id);
+
   const [
     { data: offers, count, error },
     { count: receivedOpenCount },
     { count: madeCounteredCount },
+    { count: roleTotal },
   ] = await Promise.all([
     query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1),
     supabase
@@ -129,6 +152,7 @@ export default async function OffersPage({
       .select("id", { count: "exact", head: true })
       .eq("buyer_id", user.id)
       .eq("status", "countered"),
+    roleTotalQuery,
   ]);
 
   if (error) reportError("[offers] failed to load offers", error);
@@ -205,6 +229,7 @@ export default async function OffersPage({
       listing_id: o.listing_id,
       listing_title: listing?.title ?? "Listing",
       listing_cover_url: coverByListing.get(o.listing_id) ?? null,
+      asking_cents: listing?.price_cents ?? null,
       counterparty_name:
         role === "received"
           ? nameFor(o.buyer_id)
@@ -254,34 +279,31 @@ export default async function OffersPage({
   return (
     <div className="wrap">
       <SellingNav current="offers" offersCount={attentionCount} />
-      <Rv as="header" className="pagehead pagehead--task">
-        <span className="microlabel">
-          Negotiations
-          {(receivedOpenCount ?? 0) > 0 && (
-            <>
-              {" · "}
-              <span className="microlabel--live">
-                {receivedOpenCount} received open
-              </span>
-            </>
-          )}
-          {(madeCounteredCount ?? 0) > 0 && (
-            <>
-              {" · "}
-              <span className="microlabel--live">
-                {madeCounteredCount} countered on you
-              </span>
-            </>
-          )}
-        </span>
-        <h1>
-          Every offer, <span className="live-word">in one place.</span>
-        </h1>
-        <p className="sub">
-          Answer what&apos;s come in, track what you&apos;ve sent, and open any
-          thread.
-        </p>
-      </Rv>
+      {/* A plain task title: "Every offer, in one place." repeated the
+          Messages formula word for word. The counts that need the reader
+          ride in the eyebrow. */}
+      <PageHead
+        className="pagehead--task"
+        eyebrow={
+          <>
+            Negotiations
+            {(receivedOpenCount ?? 0) > 0 && (
+              <>
+                {" · "}
+                <span className="microlabel--live">{receivedOpenCount} received open</span>
+              </>
+            )}
+            {(madeCounteredCount ?? 0) > 0 && (
+              <>
+                {" · "}
+                <span className="microlabel--live">{madeCounteredCount} countered on you</span>
+              </>
+            )}
+          </>
+        }
+        title="Offers"
+        sub="Answer what's come in, track what you've sent, open any thread."
+      />
       {/* Arrived from a listing in the ledger: name the scope and give it an
           obvious way out, so a filtered list never reads as an empty inbox. */}
       {listingFilter && (
@@ -340,6 +362,10 @@ export default async function OffersPage({
         </Link>
       </div>
 
+      {/* Status refines a list; over a role with no offers at all it was
+          seven chips of chrome with nothing behind them. A status already in
+          the URL keeps its row so it can be cleared. */}
+      {((roleTotal ?? 0) > 0 || status) && (
       <div
         className="filters filters--sub filters--scroll"
         role="group"
@@ -367,12 +393,12 @@ export default async function OffersPage({
           </Link>
         ))}
       </div>
+      )}
 
       {error ? (
-        <div className="alert alert--live">
-          <h4>Couldn&apos;t load offers</h4>
-          <p>Try refreshing — if this keeps happening, it&apos;s on us.</p>
-        </div>
+        <Alert tone="live" title="Couldn't load offers">
+          Try refreshing — if this keeps happening, it&apos;s on us.
+        </Alert>
       ) : items.length > 0 ? (
         <Rv className="tile">
           <TileHead
@@ -399,34 +425,38 @@ export default async function OffersPage({
           </div>
         </Rv>
       ) : (
-        <Rv className="undrawn">
-          <span className="undrawn__mark" aria-hidden="true">
-            ⏱
-          </span>
-          <h3>No offers here</h3>
-          <p>
-            {listingFilter
-              ? "No offers match this filter on that listing."
-              : role === "received"
-                ? "When someone offers on one of your listings it lands here."
-                : "Offers you've made on other people's listings show up here."}
-          </p>
-          {listingFilter ? (
-            <Link
-              href={withParams("/offers", params, {
-                listing: undefined,
-                page: undefined,
-              })}
-              className="btn btn--ghost"
-            >
-              Show all offers
-            </Link>
-          ) : (
-            <Link href="/marketplace" className="btn btn--ghost">
-              Browse the marketplace
-            </Link>
-          )}
-        </Rv>
+        <EmptyState
+          mark="⏱"
+          title={listingFilter || status ? "No offers here" : role === "received" ? "No offers yet" : "You haven't made an offer"}
+          action={
+            listingFilter || status ? (
+              <ButtonLink
+                variant="ghost"
+                href={withParams("/offers", params, {
+                  listing: undefined,
+                  status: undefined,
+                  page: undefined,
+                })}
+              >
+                Show all offers
+              </ButtonLink>
+            ) : role === "received" ? (
+              <ButtonLink variant="ghost" href="/listings">
+                My listings
+              </ButtonLink>
+            ) : (
+              <ButtonLink variant="ghost" href="/marketplace">
+                Browse the marketplace
+              </ButtonLink>
+            )
+          }
+        >
+          {listingFilter || status
+            ? "Nothing matches this filter right now."
+            : role === "received"
+              ? "When someone offers on one of your listings it lands here. A lowest-offer floor on each listing (set it when you edit) declines lowballs for you."
+              : "Make an offer from any part's page and it's tracked here until the seller answers."}
+        </EmptyState>
       )}
 
       <Pagination
@@ -444,7 +474,7 @@ export default async function OffersPage({
           to be footed on /orders too, where it explained nothing. */}
       <Foot
         left="DRVN — offers expire 72 hours after they're made"
-        right={<Link href="/marketplace">Browse the marketplace →</Link>}
+        right={<Link href="/messages">Messages →</Link>}
       />
     </div>
   );

@@ -13,6 +13,9 @@ import { ScrollActiveIntoView } from "./scroll-active";
  *
  * One contained plate (`.familynav` in globals.css): a recessed bar with the
  * sheet you're reading raised onto the tile surface under the live tick.
+ * It is the family's navigation where the rail isn't — at desktop widths the
+ * rail lists the same five members and the plate stands down (CSS), and on
+ * phones it scrolls with the page rather than pinning under the bar.
  * Server-rendered — the active member is passed in rather than read from the
  * pathname, so a detail route can name its own family member (an offer thread
  * is Offers) without shipping a client bundle to do it.

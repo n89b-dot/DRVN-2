@@ -17,6 +17,9 @@ export async function loadFeedPage(
   const feed = await fetchFeed(supabase, tab, {
     page: Math.max(1, page),
     viewerId: user?.id ?? null,
+    // The mixed wall is for finding other people's things; your own car in
+    // it reads as padding. The single-kind segments keep everything.
+    excludeOwnerId: tab === "all" ? (user?.id ?? null) : null,
   });
   return { items: feed.items, hasMore: feed.hasMore };
 }

@@ -31,6 +31,7 @@ import { AccountRowList, ListingRow } from "@/components/commerce";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { QuickPost } from "@/features/composer/quick-post";
 import { placeLabel } from "@/lib/geo/regions";
+import { FollowButton } from "@/features/social/buttons";
 
 export const metadata = { title: "Home - DRVN" };
 
@@ -126,7 +127,14 @@ export default async function HomePage({
             { country: place.country, region: place.region },
             { page, pageSize: HOME_FEED_PAGE_SIZE, viewerId: user.id }
           )
-        : await fetchFeed(supabase, "all", { page, pageSize: HOME_FEED_PAGE_SIZE, viewerId: user.id });
+        : // For you is other people's things: your own car is already in the
+          // garage tile beside it.
+          await fetchFeed(supabase, "all", {
+            page,
+            pageSize: HOME_FEED_PAGE_SIZE,
+            viewerId: user.id,
+            excludeOwnerId: user.id,
+          });
 
   const tabs: { key: HomeTab; label: string }[] = [
     { key: "following", label: "Following" },
@@ -167,20 +175,39 @@ export default async function HomePage({
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(40),
-  ]).then(([drafts, listings]) => ({
-    hasDraftFor: (drafts.data ?? []).flatMap((d) => (d.car_id ? [d.car_id] : [])),
-    parts: (listings.data ?? []).map((l) => ({
-      id: l.id,
-      title: l.title,
-      price: formatPrice(l.price_cents),
-      cover: null,
-      sourceCarId: l.source_car_id,
-    })),
-  }));
+  ]).then(async ([drafts, listings]) => {
+    // The picker shows each part by its photo — without the covers every
+    // row was an empty grey square.
+    const ids = (listings.data ?? []).map((l) => l.id);
+    const { data: images } = ids.length
+      ? await supabase
+          .from("listing_images")
+          .select("listing_id, url, position")
+          .in("listing_id", ids)
+          .order("position")
+      : { data: [] };
+    const coverOf = new Map<string, string>();
+    for (const img of images ?? []) if (!coverOf.has(img.listing_id)) coverOf.set(img.listing_id, img.url);
+    return {
+      hasDraftFor: (drafts.data ?? []).flatMap((d) => (d.car_id ? [d.car_id] : [])),
+      parts: (listings.data ?? []).map((l) => ({
+        id: l.id,
+        title: l.title,
+        price: formatPrice(l.price_cents),
+        cover: coverOf.get(l.id) ?? null,
+        sourceCarId: l.source_car_id,
+      })),
+    };
+  });
 
+  // A suggestion with no photo and no name reads as a broken row (placeholder
+  // and test accounts), so only people who have put a face and a name on
+  // their profile are offered. Asked for a few more to cover the ones dropped.
   const buildersPromise = Promise.resolve(
-    supabase.rpc("suggested_builders", { p_viewer: user.id, p_limit: 4 })
-  ).then(({ data, error }) => (error ? [] : (data ?? [])));
+    supabase.rpc("suggested_builders", { p_viewer: user.id, p_limit: 8 })
+  ).then(({ data, error }) =>
+    (error ? [] : (data ?? [])).filter((b) => b.avatar_url && b.display_name?.trim()).slice(0, 4)
+  );
 
   const garage = orderCars(cars ?? [], profile?.main_car_id);
   const leadItems = feed.items.slice(0, LEAD_POSTS);
@@ -211,25 +238,25 @@ export default async function HomePage({
 
   return (
     <div className="wrap">
-      <Rv as="header" className="pagehead pagehead--task">
-        <span className="microlabel">Home</span>
-        <h1>
-          <Greeting />
-          {firstName ? `, ${firstName}` : ""}.
-          <br />
-          The garage is <span className="live-word">open.</span>
-        </h1>
+      {/* One line and the feed switch beside it: Home is a working surface,
+          and the composer should land in the first half of a phone screen. */}
+      <Rv as="header" className="pagehead pagehead--task pagehead--home">
+        <div className="pagehead__row">
+          <h1>
+            <Greeting />
+            {firstName ? `, ${firstName}` : ""}.
+          </h1>
+          {/* H-1. One feed, asked for three ways. Plain links, so a tab is an
+              address: it can be bookmarked, and Back returns to it. */}
+          <FilterGroup ariaLabel="Which feed to show">
+            {tabs.map((t) => (
+              <FilterLink key={t.key} href={hrefFor(t.key)} selected={tab === t.key}>
+                {t.label}
+              </FilterLink>
+            ))}
+          </FilterGroup>
+        </div>
       </Rv>
-
-      {/* H-1. One feed, asked for three ways. Plain links, so a tab is an
-          address: it can be bookmarked, and Back returns to it. */}
-      <FilterGroup ariaLabel="Which feed to show" scroll className="!mb-6">
-        {tabs.map((t) => (
-          <FilterLink key={t.key} href={hrefFor(t.key)} selected={tab === t.key}>
-            {t.label}
-          </FilterLink>
-        ))}
-      </FilterGroup>
 
       {/* H-4/H-5. Two columns from 1024px: the feed, and a rail beside it.
           Below that the two wrappers dissolve (`display: contents`) and
@@ -265,8 +292,8 @@ export default async function HomePage({
 
           <div className="deck--main__feed deck--main__feed--lead">
             {leadItems.length > 0 ? (
-              <Rv className="tile">
-                <FeedList items={leadItems} />
+              <Rv>
+                <FeedList items={leadItems} variant="cards" />
               </Rv>
             ) : (
               <EmptyState
@@ -325,7 +352,7 @@ export default async function HomePage({
                   </div>
                   <div className="mt-3">
                     {/* The overflow lives in the link, not the list. */}
-                    <Link href="/garage" className="jumplink">
+                    <Link href="/garage?car=all" className="jumplink">
                       {carCount > HOME_GARAGE_MAX
                         ? `All ${carCount} cars in the garage`
                         : "Manage the garage"}
@@ -350,16 +377,21 @@ export default async function HomePage({
             </Rv>
 
             {/* Rows that open the part — no Buy now here (a ruling): deciding
-                to buy happens on the part's own page. */}
+                to buy happens on the part's own page. The tile only claims
+                "for your cars" when a part really came off the same platform;
+                otherwise it says what the picks are. */}
             <Suspense fallback={null}>
-              {recommendations.then((recommended) =>
-                recommended.length > 0 ? (
+              {recommendations.then((recommended) => {
+                const fits = recommended.filter((l) => l.reason?.startsWith("Fits your"));
+                const shown = fits.length > 0 ? fits : recommended;
+                return shown.length > 0 ? (
                   <Rv className="tile" stagger={1}>
-                    <TileHead label="Parts for your cars" />
-                    <div className="mt-2 grid gap-2">
-                      {recommended.map((listing) => (
+                    <TileHead label={fits.length > 0 ? "Parts for your cars" : "Parts people are watching"} />
+                    <div className="mt-2 grid grid-cols-1 gap-2">
+                      {shown.map((listing) => (
                         <ListingRow
                           key={listing.id}
+                          showStatus={false}
                           listing={{
                             id: listing.id,
                             title: listing.title,
@@ -376,8 +408,8 @@ export default async function HomePage({
                       </Link>
                     </div>
                   </Rv>
-                ) : null
-              )}
+                ) : null;
+              })}
             </Suspense>
           </aside>
 
@@ -387,8 +419,17 @@ export default async function HomePage({
                 builders.length > 0 ? (
                   <Rv className="tile">
                     <TileHead label="Builders to follow" />
-                    <div className="mt-2">
+                    <div className="mt-2 peoplerows">
                       <AccountRowList
+                        action={(account) => (
+                          <FollowButton
+                            targetType="profile"
+                            targetId={account.id}
+                            path="/home"
+                            initialFollowing={false}
+                            isLoggedIn
+                          />
+                        )}
                         accounts={builders.map((b) => ({
                           id: b.id,
                           username: b.username,

@@ -2,27 +2,101 @@ import Link from "next/link";
 
 import type { FeedItem } from "@/lib/feed";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+import { vehicleSubline } from "@/lib/vehicles/label";
 
+import { KindBadge, type FeedKind } from "./badge";
 import { Media } from "./primitives";
 import { postHref } from "@/lib/activity/href";
 
-function KindChip({ children, tone }: { children: string; tone: "live" | "ok" | "neutral" }) {
-  // "live" renders ink, not red: a listed part is the feed's normal state
-  // (same demotion as the Explore cards) — red stays reserved for live-now.
-  const cls = tone === "live" ? "chip chip--ink" : tone === "ok" ? "chip chip--ok" : "chip";
-  return <span className={`${cls} feedrow__kind`}>{children}</span>;
+type Row = {
+  key: string;
+  href: string;
+  cover: string | null;
+  kind: FeedKind;
+  title: string;
+  /** One quiet line of context under the title. */
+  meta: React.ReactNode;
+  intro?: string | null;
+};
+
+function shipText(cents: number | null): string {
+  if (typeof cents !== "number") return "";
+  return cents > 0 ? ` · + ${formatPrice(cents)} shipping` : " · shipping included";
+}
+
+/** One description per item, read by both layouts — so a row and a card can
+ *  never disagree on what an item is called or what it says under its name. */
+function describe(item: FeedItem): Row {
+  if (item.kind === "update") {
+    return {
+      key: `update-${item.id}`,
+      href: postHref({ id: item.id, carSlug: item.carSlug }),
+      cover: item.cover_url,
+      kind: "update",
+      title: item.title,
+      meta: [item.carName, item.ownerName].filter(Boolean).join(" · "),
+      intro: item.intro,
+    };
+  }
+  if (item.kind === "car") {
+    // A nameless car is named by its model, so the model line would only say
+    // the title again ("2007 Audi RS4 Avant / 2007 Audi RS4 Avant · …").
+    const title = item.name.trim() || item.meta || "Build sheet";
+    const vehicle = vehicleSubline(title, item.vehicle);
+    const rest = [
+      item.ownerName,
+      item.forSaleCount > 0
+        ? `${item.forSaleCount} part${item.forSaleCount === 1 ? "" : "s"} for sale`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return {
+      key: `car-${item.id}`,
+      href: `/cars/${item.slug}`,
+      cover: item.cover_url,
+      kind: "car",
+      title,
+      meta: (
+        <>
+          {vehicle && <span className="vref vref--value">{vehicle}</span>}
+          {vehicle && rest ? " · " : ""}
+          {rest}
+        </>
+      ),
+    };
+  }
+  return {
+    key: `part-${item.id}`,
+    href: `/listings/${item.id}`,
+    cover: item.cover_url,
+    kind: "part",
+    title: item.title,
+    meta: (
+      <>
+        <span className="feedrow__price">{formatPrice(item.price_cents)}</span>
+        {shipText(item.shipping_cents)}
+        {item.sourceCarName ? (
+          <>
+            {" · "}
+            <span className="vref vref--value">{item.sourceCarName}</span>
+          </>
+        ) : null}
+      </>
+    ),
+  };
 }
 
 /**
- * Home's feed rows — one ruled row per item: a real thumbnail, a headline,
- * one quiet line of context, and the kind as a small chip at the end.
+ * Home's feed, in two layouts over one description of each item.
  *
- * Its own `.feedrow` recipe rather than the offers' `.order` row: an offer
- * row is a ledger line (56px thumb, mono 16px metadata), which read as a
- * wall of monospace here. Feed rows breathe — a 112×84 plate, a 15px
- * headline, 13px sans context, an update's intro clamped to two lines.
+ * - `cards` (Home's column) — photo first: a full-width plate, the kind as a
+ *   small outline tag, then the headline and one line of context. Every post
+ *   has a photo, so the column reads as cars rather than as an inbox.
+ * - `rows` — the ruled list: a 112×84 plate beside the text, the kind chip at
+ *   the end. For narrow contexts where a photo column would be too loud.
  */
-export function FeedList({ items }: { items: FeedItem[] }) {
+export function FeedList({ items, variant = "rows" }: { items: FeedItem[]; variant?: "rows" | "cards" }) {
   if (!items.length) {
     return (
       <div className="undrawn">
@@ -35,82 +109,45 @@ export function FeedList({ items }: { items: FeedItem[] }) {
     );
   }
 
-  return (
-    <div className="rowlist feedrows">
-      {items.map((item) => {
-        if (item.kind === "update") {
-          return (
-            <Link
-              key={`update-${item.id}`}
-              href={postHref({ id: item.id, carSlug: item.carSlug })}
-              className="order feedrow"
-            >
-              <span className="order__img feedrow__img" aria-hidden="true">
-                <Media src={item.cover_url ?? undefined} alt="" className="h-full w-full" role="row" />
-              </span>
-              <span className="feedrow__body">
-                <span className="feedrow__name">{item.title}</span>
-                <span className="feedrow__meta">
-                  {[item.carName, item.ownerName].filter(Boolean).join(" · ")}
-                </span>
-                {item.intro && <span className="feedrow__intro">{item.intro}</span>}
-              </span>
-              <span className="order__actions feedrow__end">
-                <KindChip tone="neutral">Update</KindChip>
-              </span>
-            </Link>
-          );
-        }
+  const rows = items.map(describe);
 
-        if (item.kind === "car") {
-          return (
-            <Link key={`car-${item.id}`} href={`/cars/${item.slug}`} className="order feedrow">
-              <span className="order__img feedrow__img" aria-hidden="true">
-                <Media src={item.cover_url ?? undefined} alt="" className="h-full w-full" role="row" />
-              </span>
-              <span className="feedrow__body">
-                <span className="feedrow__name">{item.name}</span>
-                <span className="feedrow__meta">
-                  {item.meta && <span className="vref vref--value">{item.meta}</span>}
-                  {item.meta && item.ownerName ? " · " : ""}
-                  {item.ownerName ?? ""}
-                </span>
-              </span>
-              <span className="order__actions feedrow__end">
-                <KindChip tone="neutral">Build</KindChip>
-              </span>
-            </Link>
-          );
-        }
-
-        return (
-          <Link key={`part-${item.id}`} href={`/listings/${item.id}`} className="order feedrow">
-            <span className="order__img feedrow__img" aria-hidden="true">
-              <Media src={item.cover_url ?? undefined} alt="" className="h-full w-full" role="row" />
+  if (variant === "cards") {
+    return (
+      <div className="feedcards">
+        {rows.map((row) => (
+          <Link key={row.key} href={row.href} className="feedcard">
+            <span className="feedcard__img" aria-hidden="true">
+              <Media src={row.cover ?? undefined} alt="" className="h-full w-full" role="feature" />
             </span>
-            <span className="feedrow__body">
-              <span className="feedrow__name">{item.title}</span>
-              <span className="feedrow__meta">
-                <span className="feedrow__price">{formatPrice(item.price_cents)}</span>
-                {typeof item.shipping_cents === "number"
-                  ? item.shipping_cents > 0
-                    ? ` · + ${formatPrice(item.shipping_cents)} shipping`
-                    : " · shipping included"
-                  : ""}
-                {item.sourceCarName ? (
-                  <>
-                    {" · "}
-                    <span className="vref vref--value">{item.sourceCarName}</span>
-                  </>
-                ) : null}
-              </span>
-            </span>
-            <span className="order__actions feedrow__end">
-              <KindChip tone="live">For sale</KindChip>
+            <span className="feedcard__body">
+              <KindBadge kind={row.kind} className="feedcard__kind" />
+              <span className="feedcard__title">{row.title}</span>
+              {row.meta && <span className="feedrow__meta">{row.meta}</span>}
+              {row.intro && <span className="feedrow__intro">{row.intro}</span>}
             </span>
           </Link>
-        );
-      })}
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rowlist feedrows">
+      {rows.map((row) => (
+        <Link key={row.key} href={row.href} className="order feedrow">
+          <span className="order__img feedrow__img" aria-hidden="true">
+            <Media src={row.cover ?? undefined} alt="" className="h-full w-full" role="row" />
+          </span>
+          <span className="feedrow__body">
+            <span className="feedrow__name">{row.title}</span>
+            {row.meta && <span className="feedrow__meta">{row.meta}</span>}
+            {row.intro && <span className="feedrow__intro">{row.intro}</span>}
+          </span>
+          <span className="order__actions feedrow__end">
+            <KindBadge kind={row.kind} className="feedrow__kind" />
+          </span>
+        </Link>
+      ))}
     </div>
   );
 }

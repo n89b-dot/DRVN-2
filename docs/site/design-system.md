@@ -6,7 +6,7 @@
 
 Source of truth: `design-mockups/livesheet/livesheet.css`, contracted in
 `design-mockups/livesheet/design.md` (served at `/docs/md/livesheet-design-md`).
-Production port lives in `src/app/globals.css` (Tailwind v4 `@theme` +
+Production port lives in `src/app/styles/00-tokens-base.css` (Tailwind v4 `@theme` +
 `:root` custom properties).
 
 ## 1. The concept
@@ -145,7 +145,7 @@ colors are never navigation.
 
 | Concern | File |
 | --- | --- |
-| Production tokens + all component CSS | `src/app/globals.css` |
+| Production tokens + all component CSS | `src/app/styles/*.css`, imported in order by `src/app/globals.css` |
 | Source mockups + contract | `design-mockups/livesheet/` (`design.md`, `design.html`, `livesheet.css`) |
 | React chrome + primitives | `src/components/ui/` |
 | Behavior components (Rv, LiveDim, Countdown) | `src/components/livesheet.tsx` |

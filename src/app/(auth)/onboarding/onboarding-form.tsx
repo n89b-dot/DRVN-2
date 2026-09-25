@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { Button, CountedField } from "@/components/ui";
+import { Button, CountedField, TextField } from "@/components/ui";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 
 import { completeOnboarding, type AuthState } from "../actions";
@@ -63,42 +63,32 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
       <form action={action} className="mt-6">
         {/* Where this account was headed before it had to pick a handle. */}
         {next && <input type="hidden" name="next" value={next} />}
-        {/* Kept manual: the live role="status" availability line (with its own
-            stable describedby id) has no TextField equivalent. */}
-        <div className={`field ${state.error ? "is-invalid" : ""}`}>
-          <label htmlFor="onb-username" className="microlabel">
-            Handle
-          </label>
-          <input
-            id="onb-username"
-            name="username"
-            required
-            placeholder="drossi.integrale"
-            autoComplete="username"
-            pattern="[a-zA-Z0-9_]{3,24}"
-            value={username}
-            onChange={(e) => handleUsernameChange(e.target.value)}
-            aria-describedby="onb-username-hint onb-username-status"
-            className="ctl max-w-none"
-          />
-          <span id="onb-username-hint" className="field__hint">
-            Letters, numbers, underscores. Usernames are permanent once set — choose
-            carefully.
-          </span>
-          <span id="onb-username-status" role="status" aria-live="polite" className="field__hint">
-            {availability === "checking" && "Checking availability…"}
-            {availability === "available" && "✓ Available"}
-            {availability === "taken" && "Already taken"}
-            {availability === "invalid" &&
-              username.length > 0 &&
-              "3-24 characters: letters, numbers, underscores"}
-          </span>
-          {state.error && (
-            <span role="alert" aria-live="polite" className="field__err">
-              {state.error}
-            </span>
-          )}
-        </div>
+        <TextField
+          id="onb-username"
+          label="Handle"
+          name="username"
+          required
+          prefix="@"
+          placeholder="drossi_integrale"
+          autoComplete="username"
+          pattern="[a-zA-Z0-9_]{3,24}"
+          value={username}
+          onChange={(e) => handleUsernameChange(e.target.value)}
+          className="max-w-none"
+          hint="Letters, numbers, underscores. Usernames are permanent once set — choose carefully."
+          error={state.error}
+          status={
+            availability === "checking"
+              ? "Checking availability…"
+              : availability === "available"
+                ? "✓ Available"
+                : availability === "taken"
+                  ? "Already taken"
+                  : availability === "invalid" && username.length > 0
+                    ? "3-24 characters: letters, numbers, underscores"
+                    : ""
+          }
+        />
         <CountedField
           id="onb-display-name"
           name="display_name"
@@ -109,9 +99,43 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
           autoComplete="name"
           hint="You can change this any time in settings."
         />
-        <Button type="submit" variant="live" disabled={pending} className="mt-4 w-full">
-          {pending ? "Saving…" : "Let's go"}
-        </Button>
+        {next ? (
+          <Button
+            type="submit"
+            variant="live"
+            loading={pending}
+            pendingLabel="Saving…"
+            className="mt-4 w-full"
+          >
+            Let&apos;s go
+          </Button>
+        ) : (
+          /* With no destination the product's first step is the car: the
+             action lands on the garage, which opens on the add-car form for
+             an empty garage. Browsing-only visitors skip straight to Home —
+             the submitter's `next` rides along with the form data. */
+          <div className="mt-4 grid gap-3">
+            <Button
+              type="submit"
+              variant="live"
+              loading={pending}
+              pendingLabel="Saving…"
+              className="w-full"
+            >
+              Next: add your car
+            </Button>
+            <Button
+              type="submit"
+              name="next"
+              value="/home"
+              variant="ghost"
+              disabled={pending}
+              className="w-full"
+            >
+              Skip — just browsing
+            </Button>
+          </div>
+        )}
       </form>
     </div>
   );

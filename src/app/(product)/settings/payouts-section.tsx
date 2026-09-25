@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { TileHead } from "@/components/ui";
+
 import { formatPrice } from "@/lib/payments/fee";
 import { CLEARING_HOLD_DAYS, type SellerLedger, type LedgerState } from "@/lib/payments/ledger";
 
@@ -49,26 +51,26 @@ export function PayoutsSection({
 
   return (
     <section id="payouts" className="tile tile--deep">
-      <div className="tile__head">
-        <span className="microlabel microlabel--ink">Payouts — what you&apos;ve earned</span>
-        {!paymentsLive && <span className="chip">Test mode</span>}
-      </div>
+      <TileHead
+        label="What you've earned"
+        end={!paymentsLive ? <span className="chip whitespace-nowrap">Test mode</span> : undefined}
+      />
+      {/* The page head already says what this is; the tile states the rule. */}
       <p className="field__hint max-w-[62ch]">
-        Every delivered sale, with the fee already taken out — clearing for {CLEARING_HOLD_DAYS}{" "}
-        days after delivery, then available.
-        {!paymentsLive && " Payments are in test mode, so nothing here has moved any money."}
+        Clears {CLEARING_HOLD_DAYS} days after delivery.
+        {!paymentsLive && " Test mode — no real money has moved."}
       </p>
 
       <div className="mt-3">
-        <div className="sheet__row">
+        <div className="sheet__row items-baseline">
           <span>Clearing</span>
           <b>{compactMoney(ledger.clearingCents)}</b>
         </div>
-        <div className="sheet__row">
+        <div className="sheet__row items-baseline">
           <span>Available</span>
           <b>{compactMoney(ledger.availableCents)}</b>
         </div>
-        <div className="sheet__row">
+        <div className="sheet__row items-baseline">
           <span>Lifetime net</span>
           <b>{compactMoney(lifetimeCents)}</b>
         </div>

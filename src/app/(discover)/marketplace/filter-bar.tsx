@@ -3,7 +3,7 @@
 import { useRef, type ReactNode } from "react";
 
 import { CONDITIONS } from "@/lib/marketplace/taxonomy";
-import { Button, FinderRefineSheet, SearchField } from "@/components/ui";
+import { Button, Checkbox, FinderRefineSheet, FormField, SearchField, Select, TextField } from "@/components/ui";
 import { refinementCount } from "@/lib/marketplace/state";
 
 import { SortSelect } from "./sort-select";
@@ -80,6 +80,21 @@ export function FilterBar({
         <FinderRefineSheet
           /* M-3: a sidebar at ≥1024px, the same fields as a sheet below it. */
           inline="lg"
+          /* One footer row: Reset quiet on the left, Apply on the right. */
+          actions={
+            <>
+              <Button type="button" variant="quiet" onClick={() => {
+                const form = formRef.current;
+                for (const key of ["condition", "brand", "location", "min", "max", "fit", "ymin", "ymax"]) {
+                  const field = form?.elements.namedItem(key);
+                  if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = false;
+                  else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = "";
+                }
+                (form?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity("");
+              }}>Reset</Button>
+              <Button type="submit">Apply filters</Button>
+            </>
+          }
           activeCount={activeCount}
           onDismiss={() => {
             formRef.current?.reset();
@@ -94,99 +109,85 @@ export function FilterBar({
         >
           {sidebar && <div className="hidden lg:block">{sidebar}</div>}
           <span className="microlabel filters__label">Filters</span>
-        <select
-          name="condition"
-          defaultValue={filters.condition ?? ""}
-          className="ctl w-full max-w-none"
-          aria-label="Condition"
-        >
-          <option value="">Any condition</option>
-          {CONDITIONS.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        {/* M-3 / M-6. A datalist rather than a select: the brand list grows
-            every time somebody lists a part nobody has listed before, so the
-            facet suggests what exists without refusing what doesn't. */}
-        <input
-          name="brand"
-          defaultValue={filters.brand ?? ""}
-          placeholder="Brand"
-          list="marketplace-brands"
-          className="ctl w-full max-w-none"
-          aria-label="Brand"
-        />
-        {brands.length > 0 && (
-          <datalist id="marketplace-brands">
-            {brands.map((b) => (
-              <option key={b.brand} value={b.brand}>
-                {b.total} for sale
+          {/* Labelled fields: a placeholder that is the only label vanishes
+              the moment you type, and "Seller location (te…" truncated. */}
+          <Select id="mkt-condition" label="Condition" name="condition" defaultValue={filters.condition ?? ""} className="w-full max-w-none" fieldClassName="!mb-0">
+            <option value="">Any condition</option>
+            {CONDITIONS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
               </option>
             ))}
-          </datalist>
-        )}
-        <input
-          name="location"
-          defaultValue={filters.location ?? ""}
-          placeholder="Seller location (text)"
-          className="ctl w-full max-w-none"
-          aria-label="Seller location (text)"
-        />
-        {/* The price bounds are one control in two halves, so they travel
-            together — left loose they split across a wrap and read as two
-            unrelated fields. */}
-        <span className="flex w-full gap-2">
-          <input
-            name="min"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={filters.min ?? ""}
-            placeholder="Min $"
-            inputMode="decimal"
-            className="ctl min-w-0 max-w-none flex-1"
-            aria-label="Minimum price"
+          </Select>
+          {/* M-3 / M-6. A datalist rather than a select: the brand list grows
+              every time somebody lists a part nobody has listed before, so the
+              facet suggests what exists without refusing what doesn't. */}
+          <TextField
+            id="mkt-brand"
+            label="Brand"
+            name="brand"
+            defaultValue={filters.brand ?? ""}
+            placeholder="Any brand"
+            list="marketplace-brands"
+            className="w-full max-w-none"
+            fieldClassName="!mb-0"
           />
-          <input
-            name="max"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={filters.max ?? ""}
-            placeholder="Max $"
-            inputMode="decimal"
-            className="ctl min-w-0 max-w-none flex-1"
-            aria-label="Maximum price"
+          {brands.length > 0 && (
+            <datalist id="marketplace-brands">
+              {brands.map((b) => (
+                <option key={b.brand} value={b.brand}>
+                  {b.total} for sale
+                </option>
+              ))}
+            </datalist>
+          )}
+          <TextField
+            id="mkt-location"
+            label="Ships from"
+            name="location"
+            defaultValue={filters.location ?? ""}
+            placeholder="City, region or country"
+            className="w-full max-w-none"
+            fieldClassName="!mb-0"
           />
-        </span>
-        {showFitToggle && (
-          <label className="flex basis-full items-center gap-2 font-mono text-micro uppercase tracking-[0.1em] text-dim">
-            <input
-              type="checkbox"
+          {/* The price bounds are one control in two halves, so they travel
+              together — left loose they split across a wrap and read as two
+              unrelated fields. */}
+          <FormField id="mkt-min" label="Price" className="!mb-0">
+            <span className="flex w-full gap-2">
+              <input
+                id="mkt-min"
+                name="min"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={filters.min ?? ""}
+                placeholder="Min $"
+                inputMode="decimal"
+                className="ctl min-w-0 max-w-none flex-1"
+                aria-label="Minimum price"
+              />
+              <input
+                name="max"
+                type="number"
+                min="0"
+                step="0.01"
+                defaultValue={filters.max ?? ""}
+                placeholder="Max $"
+                inputMode="decimal"
+                className="ctl min-w-0 max-w-none flex-1"
+                aria-label="Maximum price"
+              />
+            </span>
+          </FormField>
+          {showFitToggle && (
+            <Checkbox
               name="fit"
               value="1"
               defaultChecked={filters.fit === "1"}
-              className="sq"
+              label={fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for my garage"}
             />
-            {fitCarLabel ? `Potential matches for ${fitCarLabel}` : "Potential matches for your current garage"}
-          </label>
-        )}
-          {/* Inside the sheet the refinements apply with the search — say so,
-              instead of leaving anyone to guess whether "Done" submits. */}
-          <Button type="button" variant="ghost" onClick={() => {
-            const form = formRef.current;
-            for (const key of ["condition", "brand", "location", "min", "max", "fit", "ymin", "ymax"]) {
-              const field = form?.elements.namedItem(key);
-              if (field instanceof HTMLInputElement && field.type === "checkbox") field.checked = false;
-              else if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = "";
-            }
-            (form?.elements.namedItem("max") as HTMLInputElement | null)?.setCustomValidity("");
-          }}>Reset filters</Button>
-          <Button type="submit" className="w-full">
-            Apply filters
-          </Button>
+          )}
         </FinderRefineSheet>
       </div>
     </form>

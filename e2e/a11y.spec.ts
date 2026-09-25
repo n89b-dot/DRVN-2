@@ -99,7 +99,7 @@ test("keyboard-only signup order and announced authentication error", async ({ p
   await page.getByLabel(/^email$/i).fill(`missing-${Date.now()}@example.test`);
   await page.getByLabel(/^password$/i).fill("valid-but-incorrect-password");
   await page.getByRole("button", { name: /sign in/i }).click();
-  const error = page.getByRole("alert").filter({ hasText: /invalid login credentials/i });
+  const error = page.getByRole("alert").filter({ hasText: /email and password don't match/i });
   await expect(error, "invalid login feedback is announced").toBeVisible();
   await assertAccessible(page, "login server-auth error");
 });

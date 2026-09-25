@@ -1,5 +1,62 @@
 # Applying migrations
 
+## September 24 — invited-beta boundaries reach the shared dev project
+
+| File | Applied to |
+|---|---|
+| `20260905190032_invited_beta_boundaries.sql` | shared dev project, 2026-09-24 — rollout row inserted with `enforced = false` |
+| `20260905203301_retain_consumed_beta_invitation_history.sql` | shared dev project, 2026-09-24 |
+
+`getBetaAccess()` fails closed when `beta_access_status` is missing, so
+without these the dev site told every account, including sellers with live
+listings, that selling was invite-only. Enforcement stays off until an
+operator flips `beta_access_config.enforced`.
+
+## September 24 — the September 5–6 remediation chain reaches the shared dev project
+
+Applied to shared dev `drvn-v3` (`grunnjojhdevhuckujmc`) on 2026-09-24, owner-approved:
+every `20260905*` and `20260906*` file in filename order (the two beta files
+above were already in), then `20260919205000_account_export_contract_v4.sql`,
+which had been local-only because it needs the September 5 privacy tables.
+The app code already called several of these functions (`mark_order_dispatched`,
+`mark_order_received`, `settle_seller_cancellation`, `bind_cart_checkout_payment`,
+`prepare_payment_request`…), so dispatch, receipt, seller cancellation and cart
+checkout were failing on dev before this.
+
+**How, not a replay.** Backup first: `pg_dump` of `public` + `private`
+(schema and data) plus a snapshot of every function a later migration also
+defines, kept outside the repo in `~/drvn-db-backups/`. The files were applied
+through `.reconcile-migrations.mjs` (untracked runner): each file in its own
+transaction; where an earlier focused repair had already created an object,
+only that statement was made idempotent and the file retried. The repo files
+are unchanged. Adjustments made:
+
+| File | Reconciled |
+|---|---|
+| `20260905011618_remediation_integrity.sql` | `worker_runs` table + `worker_runs_family_time` index already existed (created identically by `20260913132451`) |
+| `20260905124840_consent_purchase_outbox.sql` | `analytics_consents` table and its "own analytics preference" policy already existed (`20260913134823`) |
+| `20260905233517_durable_listing_creation_request.sql` | `save_listing_creation` already existed in its newer `20260919190500` form |
+| `20260905235246_durable_offer_submission.sql` | `offers_one_live_buyer_listing` index and `create_offer_with_message` already existed (`20260913134823`) |
+
+**Newer definitions restored.** Fourteen functions are defined both by the
+September 5 chain and by a later, already-applied migration. After the chain,
+each was compared with its pre-chain snapshot and, where the chain had
+overwritten it, the later definition was put back — the same final state a
+fresh install reaches in filename order: `record_worker_run`,
+`save_listing_creation`, `save_mod_items`, `search_car_ids`,
+`search_update_ids` were restored; the other nine were unchanged. No policy,
+view or trigger names overlap.
+
+**Checks.** `supabase/marketplace-release-preflight.sql`: all 14 checks
+ready. No duplicate payment rows existed before the one-payment-per-order
+index. Every signed-in and signed-out route loads.
+
+**Operator settings still to do on this project** (from
+`docs/remediation-rollout.md`; schema alone doesn't do them): Auth TOTP for
+admin MFA, the canonical Site URL/redirects, SMTP + magic-link template, the
+`job_config` worker URL and CRON_SECRET for the money/search/deletion
+workers, and the `/api/health/workers` monitor.
+
 ## September 19 — security repairs from the direction-build review
 
 | File | Applied to |
@@ -9,6 +66,7 @@
 | `20260919203000_mod_sheet_stale_delete.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919204000_brand_backfill_correction.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919205000_account_export_contract_v4.sql` | local test database only, 2026-09-19 — the shared dev project has no `account_export_requests` table: the 2026-09-05 privacy migrations were never applied there |
+| `20260920090000_profile_follow_counts.sql` | shared dev project and local test database, 2026-09-20 — read-only definer function for profile header counts |
 
 Adds no feature; closes holes a review found in `…170000`–`…200000`.
 `profiles.default_offer_floor_pct` loses its client select grant (a column

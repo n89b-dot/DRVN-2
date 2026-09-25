@@ -106,7 +106,7 @@ test("analytics preference reports an interrupted save, retries, and persists af
   const user = await createUser("analytics");
   try {
     await signIn(page, user);
-    await page.goto("/settings");
+    await page.goto("/settings#privacy");
     const checkbox = page.getByRole("checkbox", { name: /Allow optional product analytics/ });
     await checkbox.check();
 

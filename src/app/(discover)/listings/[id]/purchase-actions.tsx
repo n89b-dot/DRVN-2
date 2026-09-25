@@ -15,7 +15,6 @@ import {
   Dialog,
   PaymentModeNotice,
   TextField,
-  Toast,
 } from "@/components/ui";
 import type { AuthIntent } from "@/lib/auth-intent";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
@@ -30,9 +29,12 @@ export function PurchaseActions({
   paymentsLive,
   priceCents,
   shippingCents,
+  offerFloorCents = null,
   resumeAction = null,
   returnPath,
 }: {
+  /** The seller's lowest acceptable offer, when they set one. */
+  offerFloorCents?: number | null;
   listingId: string;
   isLoggedIn: boolean;
   betaEnforced: boolean;
@@ -168,25 +170,20 @@ export function PurchaseActions({
 
   return (
     <div ref={actionsRef} className="mt-5 flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">
-        <Button variant="live" disabled={pending} onClick={runBuyNow} className="flex-1">
-          {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => guard("offer", () => setOfferOpen(true))}
-          className="flex-1"
-        >
-          Make an offer
-        </Button>
-      </div>
+      {/* One primary, one secondary, one quiet: Buy now, then Add to cart at
+          the same width, then the offer as a text action — four equal
+          buttons made none of them the obvious next step. */}
+      <Button variant="live" disabled={pending} onClick={runBuyNow} className="w-full">
+        {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
+      </Button>
       {cartState?.ok ? (
-        <a href="/cart" className="btn btn--ghost">
+        <a href="/cart" className="btn btn--ghost w-full">
           In cart ✓ — view cart
         </a>
       ) : (
         <Button
           variant="ghost"
+          className="w-full"
           disabled={pending || cartPending}
           onClick={() =>
             startCartTransition(async () => {
@@ -206,12 +203,21 @@ export function PurchaseActions({
           {cartPending ? "Adding…" : "Add to cart"}
         </Button>
       )}
+      <Button
+        variant="quiet"
+        onClick={() => guard("offer", () => setOfferOpen(true))}
+        className="self-center"
+      >
+        Make an offer
+      </Button>
       {cartState?.error && (
         <p role="alert" aria-live="polite" className="field__err">
           {cartState.error}
         </p>
       )}
-      {cartState?.ok && <Toast message="Added to cart ✓" />}
+      {/* No toast: the button turns into "In cart ✓ — view cart" and the
+          bar's cart badge counts it; a toast said it a third time, over the
+          dispatch terms. */}
       <PaymentModeNotice live={paymentsLive} />
 
       {/* Signed out: say why an account is needed before asking for one. */}
@@ -240,10 +246,11 @@ export function PurchaseActions({
               name="amount"
               required
               inputMode="decimal"
-              placeholder="0"
               value={offerAmount}
               onChange={(event) => setOfferAmount(event.target.value)}
-              hint="The seller can accept, counter once, or let it lapse. Offers expire after 72 hours."
+              hint={`Asking ${formatPrice(priceCents)}${
+                offerFloorCents !== null ? ` · offers from ${formatPrice(offerFloorCents)}` : ""
+              }. The seller can accept, counter once, or let it lapse. Offers expire after 72 hours.`}
               error={offerState.error}
               ok={offerState.ok}
             />
@@ -262,11 +269,10 @@ export function PurchaseActions({
               />
             </div>
             <div className="sheet__actions">
+              {/* The dialog's own corner Close dismisses it; a second Close
+                  beside Send read as a duplicate. */}
               <Button type="submit" variant="live" disabled={offerPending} className="flex-1">
                 {offerPending ? "Sending…" : "Send offer"}
-              </Button>
-              <Button variant="ghost" onClick={() => setOfferOpen(false)}>
-                Close
               </Button>
             </div>
           </form>
@@ -291,10 +297,13 @@ export function PurchaseActions({
         <Button variant="live" disabled={pending} onClick={runBuyNow} className="min-w-0 flex-1">
           {pending ? "Processing…" : betaEnforced && !isLoggedIn ? "Sign in to buy" : "Buy now"}
         </Button>
+        {/* Offer takes its own width and Buy takes the rest, so the
+            visitor's "Sign in to buy" keeps its bracket furniture instead of
+            being squeezed to half the bar. */}
         <Button
           variant="ghost"
           onClick={() => guard("offer", () => setOfferOpen(true))}
-          className="min-w-0 flex-1"
+          className="flex-none !px-5"
         >
           Offer
         </Button>

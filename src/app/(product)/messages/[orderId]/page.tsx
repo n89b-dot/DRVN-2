@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, NarrowColumn } from "@/components/ui";
+import { Foot, Media, NarrowColumn, PageHead } from "@/components/ui";
+import { StatusChip } from "@/components/commerce";
 import { createClient } from "@/lib/supabase/server";
 import { markThreadMessagesRead } from "@/features/commerce/actions";
 
@@ -69,8 +70,20 @@ export default async function OrderThreadPage({
           .maybeSingle()
       : Promise.resolve({ data: null }),
     messagesQuery,
-    supabase.from("order_items").select("title").eq("order_id", orderId).limit(1),
+    supabase.from("order_items").select("id, title").eq("order_id", orderId).limit(1),
   ]);
+  // The part as bought (0049's frozen gallery) — the thread is about a
+  // thing, so its header shows the thing.
+  const leadItem = items?.[0];
+  const { data: cover } = leadItem
+    ? await supabase
+        .from("order_item_snapshot_images")
+        .select("url")
+        .eq("order_item_id", leadItem.id)
+        .order("position")
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
   // Started above alongside the other reads — already in flight, so this
   // just joins it rather than adding a serial round trip.
   await markRead;
@@ -97,26 +110,37 @@ export default async function OrderThreadPage({
 
   return (
     <NarrowColumn>
-      <Rv as="header" className="pagehead pagehead--task">
-        <span className="microlabel">
+      <PageHead
+        className="pagehead--task"
+        eyebrow={
           <Link href="/messages" className="hover:text-live">
-            Messages
+            ← Messages
           </Link>
-          {" · "}
-          {items?.[0]?.title ?? "Order"}
-        </span>
-        <h1>{counterpartyName}</h1>
-        {/* Order linkage + status is thread context, not runway — it stays on
-            compact (sub--keep). */}
-        <p className="sub sub--keep">
-          About{" "}
-          <Link href={`/orders/${orderId}`} className="jumplink">
-            order {orderId.slice(0, 8)}
-          </Link>
-          {" — "}
-          {order.status.replace("_", " ")}
+        }
+        title={counterpartyName}
+      >
+        {/* What the conversation is about is thread context, not runway — it
+            stays on compact (sub--keep). A part and its state, not a UUID. */}
+        <p className="sub sub--keep flex items-center gap-3">
+          <Media
+            src={cover?.url}
+            alt={leadItem?.title ?? "The part"}
+            className="order__img"
+            role="thumb"
+          />
+          <span className="min-w-0">
+            <span className="block">
+              About{" "}
+              <Link href={`/orders/${orderId}`} className="underline underline-offset-4 hover:text-live">
+                {leadItem?.title ? `the ${leadItem.title}` : "this order"}
+              </Link>
+            </span>
+            <span className="mt-1 block">
+              <StatusChip status={order.status} />
+            </span>
+          </span>
         </p>
-      </Rv>
+      </PageHead>
 
       <Rv className="tile" stagger={1}>
         <ThreadView

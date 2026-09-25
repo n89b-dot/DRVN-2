@@ -241,3 +241,31 @@ export function blockHasContent(block: ActivityBlock): boolean {
       return block.value > 0;
   }
 }
+
+const squash = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/**
+ * A post page shows a lead (intro line + photo gallery) and then the blocks.
+ * The editor writes the same first paragraph and photos into both, so the
+ * lead keeps only what the blocks don't already show — otherwise every post
+ * reads paragraph, photo, paragraph, photo. Legacy posts with no blocks keep
+ * their whole lead.
+ */
+export function postLead<T extends { url: string }>(
+  intro: string | null | undefined,
+  images: readonly T[],
+  blocks: readonly ActivityBlock[]
+): { intro: string | null; images: T[] } {
+  const texts = new Set<string>();
+  const urls = new Set<string>();
+  for (const block of blocks) {
+    if (block.type === "text") texts.add(squash(block.text));
+    if (block.type === "images") block.urls.forEach((url) => urls.add(url));
+    if (block.type === "before_after") [block.beforeUrl, block.afterUrl].forEach((url) => url && urls.add(url));
+  }
+  const lead = intro?.trim() ? intro : null;
+  return {
+    intro: lead && !texts.has(squash(lead)) ? lead : null,
+    images: images.filter((image) => !urls.has(image.url)),
+  };
+}

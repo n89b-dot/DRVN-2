@@ -1,0 +1,1362 @@
+/* Unlayered refinements — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Registers that must outrank the component layer they refine; order matters. */
+
+/* ============================================================
+   DISCOVERY + MARKETPLACE REMEDIATION (22 Aug 2026) — unlayered so these
+   registers outrank the component layer they refine.
+   ============================================================ */
+
+/* ---------- vehicle reference text ----------
+   The one voice for a vehicle named in running text: year · make · model,
+   mono, dim, and — deliberately — no text-transform and no tracking, because
+   BMW / GTI / 911 GT3 / GR Corolla carry their own casing. Size follows the
+   context; the tone never does. */
+.vref {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+}
+.vref--value {
+  font-size: 13px;
+}
+/* A card foot's car line sets at the activity line's size and colour —
+   one reference voice under the byline, whatever the kind. Lives here,
+   unlayered beside `.vref`, because the mosaic recipes sit in the
+   components layer and an unlayered `.vref` would otherwise win. */
+.mcell__foot .mcell__car.vref {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+/* The byline's monogram plate, sized per cell — 24px on wider cells (the
+   Figma avatar), 18px on phone cells so a 12px name doesn't sit on a
+   22px line. Unlayered here for the same reason: `.monogram--xs` is. */
+@container (min-width: 232px) {
+  .mcell__byline .monogram--xs {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-ctl);
+  }
+}
+@container (max-width: 231px) {
+  .mcell__byline .monogram--xs {
+    width: 18px;
+    height: 18px;
+    font-size: 8.5px;
+  }
+}
+/* At reading size a vehicle reference is Sans (mono stays ≤12px). */
+.vref--lg {
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 20px;
+}
+.vref--xl {
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* ---------- tooltip — name an icon on hover and on keyboard focus ----------
+   `data-tip` is the visible name; the control keeps its aria-label. Drawn as
+   a pseudo-element above the control so it never takes layout room, and only
+   on hover-capable pointers — a thumb can't hover and the 44px target already
+   carries the name for assistive tech. Focus shows it everywhere. */
+[data-tip] {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translate(-50%, 3px);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 6px 8px;
+  border-radius: var(--r-chip);
+  background: var(--ink);
+  color: var(--on-ink);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition:
+    opacity var(--t-fast) ease,
+    transform var(--t-fast) var(--spring);
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-tip]:hover::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 160ms;
+  }
+}
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* The card clips its own box, so the strip's end actions pin to their edge
+   instead of centring off it. */
+.cardeng__act:first-child[data-tip]::after {
+  left: 0;
+  transform: translate(0, 3px);
+}
+.cardeng__act--end[data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: translate(0, 3px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cardeng__act:first-child[data-tip]:hover::after,
+  .cardeng__act--end[data-tip]:hover::after {
+    transform: translate(0, 0);
+  }
+}
+.cardeng__act:first-child[data-tip]:focus-visible::after,
+.cardeng__act--end[data-tip]:focus-visible::after {
+  transform: translate(0, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-tip]::after {
+    transition: none;
+  }
+}
+
+/* ---------- listing card — interaction architecture ----------
+   The cell is an <article>; `.mcell__link` is the one large target (eyebrow,
+   photo, caption) and everything after it is its own control. Nothing
+   interactive nests, so the DOM validates and keyboard order is link →
+   provenance → actions → engagement. */
+.mcell__link {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  color: inherit;
+  border-radius: var(--r-ctl);
+}
+/* The card clips at its edge, so the ring draws inside it. */
+.mcell__link:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: -3px;
+}
+.mcell__link .mcell__img {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* From a 232px content box the plate is a fixed 5:3 frame (150px on the
+   Figma card's 248px) and the caption takes the rest. Placed after the
+   link recipe above so it wins the cascade. */
+@container (min-width: 232px) {
+  .mcell .mcell__link .mcell__img {
+    flex: none;
+    aspect-ratio: 5 / 3;
+  }
+}
+/* Rules on the cell ITSELF resolve against the wall (a container query
+   looks at the element's nearest ancestor container, and the cell is its
+   own descendants' container, not its own). So the cell's padding is set
+   per wall width, not per cell width. */
+@container wall (min-width: 601px) {
+  .mcell {
+    padding: 12px 16px;
+  }}
+/* The design proof's finding: on a phone the photo took whatever the caption
+   left, so an update's photo was 102px beside a build's 151px and no two
+   rows of photos lined up. One frame for every card; the caption — whose
+   depth is what varies by kind — takes the rest. 3:2 is what leaves the
+   deepest caption (an update: title, excerpt, owner, vehicle) unclipped.
+   Unlayered, beside the plate recipe it overrides: a layered rule loses to
+   that one whatever its specificity. */
+@container wall (max-width: 600px) {
+  .mosaic--uniform .mcell .mcell__link .mcell__img {
+    flex: none;
+    aspect-ratio: 3 / 2;
+  }
+}
+/* On a uniform wall every photo is one frame, 4:3, so a row of cards
+   reads as a row: the plate used to absorb the caption's spare height, and
+   neighbouring photos came out at different heights. */
+.mosaic--uniform .mcell .mcell__link .mcell__img {
+  flex: none;
+  aspect-ratio: 4 / 3;
+}
+.mosaic--uniform .mcell .mcell__link .mcell__cap {
+  flex: none;
+}
+/* The phone wall's 2×1 wide cell (builds and updates only — a listing is
+   always square, its part photos are often portrait) crosses the 232px
+   line but shares the square's row height, so it keeps the flexible plate: a fixed 12:7 on a
+   311px content box is 181px, which pushed its caption into the strip. */
+@container wall (max-width: 600px) {
+  .mcell.mcell--wide .mcell__link .mcell__img {
+    flex: 1 1 auto;
+    aspect-ratio: auto;
+  }
+  .mcell.mcell--wide .mcell__cap {
+    flex: none;
+  }
+  /* …and the phone wall is one type scale: a wide cell is a square cell
+     given width, not a desktop card, so it keeps the square's padding,
+     steps and sizes (a half step up on the title, which has the room). */
+  .mcell.mcell--wide {
+    padding: 8px 10px 6px;
+  }
+  .mcell--wide .mcell__head + .mcell__img {
+    margin-top: 8px;
+  }
+  .mcell.mcell--wide .mcell__cap {
+    padding-top: 8px;
+    --cap-tight: 4px;
+    --cap-group: 6px;
+  }
+  .mcell--wide .mcell__title,
+  .mcell--wide.mcell--story .mcell__title {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+  .mcell--wide .mcell__lede {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  .mcell--wide .mcell__meta {
+    font-size: 11.5px;
+  }
+  .mcell--wide .mcell__price {
+    font-size: 17px;
+  }
+  .mcell--wide .mcell__byline .monogram--xs {
+    width: 22px;
+    height: 22px;
+  }
+  .mcell.mcell--wide .cardeng {
+    margin-top: 10px;
+    padding-top: 6px;
+  }
+}
+/* Seller trust — wide cells only, like the meta line. */
+.mcell__trust {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+@container (min-width: 232px) {
+  .mcell__trust {
+    display: flex;
+  }
+}
+.mcell__actions {
+  margin-top: 10px;
+}
+/* A wall whose cells carry an action row grows its unit so the photo keeps
+   its share of the card. `.mcell` clips its overflow, so this has to cover
+   the *tallest* action block — now two stacked 38–40px controls rather than
+   one 34px row (see `.qcom`). */
+.mosaic--commerce {
+  --mratio: 1.76;
+}
+@container (max-width: 900px) {
+  .mosaic--commerce {
+    --mratio: 1.95;
+  }
+}
+@container (max-width: 600px) {
+  .mosaic--commerce {
+    --mratio: 2.45;
+  }
+  /* A 2-wide, 1-tall listing on a phone was a 343×50 letterbox: the
+     caption plus two action rows ate the whole unit. On the commerce wall
+     the wide shape folds back to a square. */
+  .mosaic--commerce .mcell--wide {
+    grid-column: span 1;
+  }
+}
+
+/* ---------- quick commerce — Buy now · Add to cart on a marketplace card ----------
+   Drawn the way the marketplaces that own this pattern draw it (Amazon's
+   card pill, eBay's fill-then-outline pair, Depop's stacked item actions):
+   two full-width controls, one under the other, primary filled and
+   secondary outlined in the *same* neutral — not a loud fill beside a
+   mystery icon square.
+
+   Three things the old pair got wrong, and why this is built the way it is:
+
+   · Filled red on every card. `--live` is the system's one-accent-per-surface
+     colour (see `.btn--destructive`); fifteen red Buy nows on one wall spent
+     it, and left the page's real accents — the headline's live word, List a
+     part — competing with the inventory. Ink fill is the neutral primary;
+     red stays owned by the listing sheet, where Buy now *is* the page.
+   · The cart label was behind `@container (min-width: 300px)`, and a card on
+     the marketplace wall is ~245px — so the label never rendered at any
+     width and the control shipped as an unlabelled square. Both buttons now
+     carry their words at every width.
+   · Two half-width controls can't hold `ADD TO CART` in 10.5px mono at a
+     two-column phone width. Stacked, each one gets the whole card and a
+     40px thumb target. No bracket decoration — the card is too small for
+     the btn's stage directions. */
+.qcom {
+  display: grid;
+  gap: 6px;
+}
+.qcom__row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.qcom .btn {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 10.5px;
+  /* 500 is Plex Mono's heaviest loaded cut — 600+ would faux-bold. */
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  border-radius: var(--r-ctl);
+}
+.qcom .btn::before,
+.qcom .btn::after {
+  display: none;
+}
+.qcom__buy {
+  min-width: 0;
+  white-space: nowrap;
+}
+/* The references rank their two actions as fill-then-outline (eBay's blue
+   pair, Depop's black-then-bordered). DRVN ranks them the same way but in
+   its own grammar: the system separates *tonally* — "no borders, no shadows"
+   (design-system §4) — so the secondary is a tonal step down onto
+   `--paper-deep` rather than a ruled outline. Same hierarchy, no new
+   material. */
+.qcom__cart {
+  gap: 7px;
+}
+.qcom__ico {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.qcom__label {
+  display: inline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: none), (pointer: coarse) {
+  .qcom .btn {
+    min-height: 40px;
+  }
+}
+@media (max-width: 640px) {
+  .qcom .btn {
+    min-height: 40px;
+  }
+}
+.qcom__err {
+  display: block;
+  margin: 0;
+}
+
+/* ---------- category navigation — destinations, not refinements ----------
+   Desktop: a tile grid (icon · label · subcategory hint). Compact: the same
+   set as a browse sheet's ruled rows. Both are links to the real
+   /marketplace/[category] routes; the current one is inked. */
+.catnav {
+  margin: clamp(22px, 2.6vw, 34px) 0 clamp(26px, 3vw, 38px);
+}
+.catnav__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.catgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 12px;
+}
+.cattile {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--tile);
+  color: var(--ink);
+  transition:
+    transform var(--t-move) var(--spring),
+    background var(--t-fast) ease;
+}
+.cattile:hover {
+  transform: translateY(-2px);
+}
+.cattile__ico {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-chip);
+  background: var(--paper-deep);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.cattile__ico svg {
+  width: 20px;
+  height: 20px;
+}
+.cattile__label {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cattile__hint {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cattile.is-here {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.cattile.is-here .cattile__ico {
+  background: var(--ghost-strong);
+  color: var(--on-ink);
+}
+.cattile.is-here .cattile__hint {
+  color: var(--on-ink);
+  opacity: 0.7;
+}
+/* The browse sheet's rows (compact). */
+.catlist {
+  display: grid;
+  gap: 4px;
+}
+.catrow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 52px;
+  padding: 6px 8px;
+  border-radius: var(--r-ctl);
+  color: var(--ink);
+  transition: background var(--t-fast) ease;
+}
+.catrow:hover {
+  background: var(--ghost);
+}
+.catrow.is-here {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.catrow.is-here .cattile__ico {
+  background: var(--ghost-strong);
+  color: var(--on-ink);
+}
+.catrow.is-here .cattile__hint {
+  color: var(--on-ink);
+  opacity: 0.7;
+}
+.catrow__go {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+}
+.catrow.is-here .catrow__go {
+  color: var(--on-ink);
+}
+.catsheet__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+/* Subcategory tiles and rows carry no icon — the category above them
+   already said what kind of part this is. */
+.cattile--sub {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 52px;
+}
+.cattile--sub > * {
+  grid-column: 1 / -1;
+}
+.catlist--sub {
+  margin: 2px 0 8px 24px;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule-soft);
+}
+.catrow--sub {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 44px;
+}
+.catrow--sub .cattile__label {
+  font-weight: 500;
+}
+
+/* ---------- home feed rows ----------
+   The Discovery / followed list on Home. A ruled row, but set like a feed,
+   not a ledger: a plate you can actually read (112×84), a 15px headline, one
+   13px sans line of context, an intro clamped to two lines, the kind chip
+   quiet at the end. Overrides the `.order` ledger metrics it sits on. */
+.feedrows .feedrow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 18px;
+  padding: 16px 2px;
+}
+.feedrows .feedrow:first-child {
+  padding-top: 6px;
+}
+.feedrow__img {
+  flex: none;
+  width: 112px;
+  height: 84px;
+  border-radius: var(--r-ctl);
+}
+.feedrow__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.feedrow__name {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.008em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  transition: color var(--t-fast) ease;
+}
+.feedrows a.feedrow:hover .feedrow__name {
+  color: var(--live);
+}
+.feedrow__meta {
+  display: block;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+  max-width: 60ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.feedrow__meta .vref {
+  font-size: 12.5px;
+}
+.feedrow__price {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.feedrow__intro {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--dim);
+  max-width: 60ch;
+}
+.feedrow__end {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+}
+.feedrow__kind {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+}
+
+/* ---------- home feed cards ----------
+   Home's column, photo first. Every post has a photo, so the feed leads with
+   it: a full-width plate on the tile, then the kind as a small outline tag,
+   the headline, and one quiet line of context (the `.feedrow__meta` /
+   `__intro` voices, shared with the rows). One card per item, a gap between
+   — the column reads as cars, not as an inbox. */
+.feedcards {
+  display: grid;
+  gap: clamp(14px, 2vw, 20px);
+}
+.feedcard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--r);
+  background: var(--tile);
+  color: var(--ink);
+  transition: background var(--t-fast) ease;
+}
+.feedcard__img {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: var(--img-fallback);
+  overflow: hidden;
+}
+.feedcard__img > * {
+  position: absolute;
+  inset: 0;
+}
+.feedcard__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feedcard__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px clamp(14px, 2vw, 20px) 18px;
+  min-width: 0;
+}
+.feedcard__body > * {
+  max-width: 100%;
+}
+.feedcard__kind {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+}
+.feedcard__title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color var(--t-fast) ease;
+}
+a.feedcard:hover .feedcard__title {
+  color: var(--live);
+}
+
+/* The prefixed field's input fills its plate and draws no ring of its own —
+   `.ctl__prefix:focus-within` rings the whole control. */
+.ctl__prefix .ctl {
+  max-width: none;
+}
+.ctl__prefix .ctl:focus,
+.ctl__prefix .ctl:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ---------- people rows (Builders to follow) ----------
+   AccountRowList inside a list of people: the avatar, the name with who
+   they are under it in the sans voice (not 16px mono), then Follow at the
+   end — on a phone too, where the ledger's `.order:has(...)` grid dropped
+   the action under the text. (Child selectors: they have to outrank it.) */
+.peoplerows .rowlist > .order {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  column-gap: 14px;
+  align-items: center;
+  padding: 10px 0;
+  background: transparent;
+}
+.peoplerows .rowlist > .order > .order__img {
+  width: 44px;
+  height: 44px;
+}
+.peoplerows .order__name {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.peoplerows .order__meta {
+  margin-top: 2px;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.peoplerows .rowlist > .order > .order__actions {
+  grid-column: 3;
+  align-self: center;
+  margin: 0;
+}
+.peoplerows .order__actions .btn {
+  min-height: 40px;
+  padding: 8px 14px;
+}
+@media (max-width: 640px) {
+  .feedrows .feedrow {
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .feedrow__img {
+    width: 84px;
+    height: 64px;
+  }
+  .feedrow__name {
+    font-size: 14.5px;
+  }
+  .feedrow__meta,
+  .feedrow__intro {
+    font-size: 12.5px;
+  }
+  /* The chip tucks under the text on a phone; the row stays one line of
+     thumb + words. */
+  .feedrow__end {
+    display: none;
+  }
+}
+
+/* ---------- skip link (R3): visually hidden until focused ---------- */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--ink);
+  color: var(--on-ink);
+  border-radius: var(--r-ctl);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: none;
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
+}
+
+
+
+
+
+/* Reduced-motion content is settled even before client hydration. */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal="true"] { opacity: 1 !important; transform: none !important; }
+}
+
+/* Marketplace's first browsing slice: compact context before inventory.
+   Scoped so Explore and the existing card/feed variants keep their rhythm. */
+.marketplace-page .marketplace-head { padding: 16px 0 20px; }
+.marketplace-page .marketplace-head h1 { margin-top: 0; }
+.marketplace-page .finder { margin-bottom: 16px; }
+.marketplace-page .catnav { margin: 16px 0 24px; }
+.marketplace-breadcrumb { padding-top: 16px; font-size: var(--text-micro); line-height: var(--text-micro--line-height); color: var(--dim); }
+.marketplace-breadcrumb ol { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.marketplace-breadcrumb li + li::before { content: '/'; margin-right: 10px; }
+.marketplace-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
+.marketplace-categories { margin: 16px 0 24px; border-block: 1px solid var(--rule-mid); }
+.marketplace-categories summary { cursor: pointer; padding: 12px 0; font-size: var(--text-body); }
+.marketplace-categories summary span { margin-left: 12px; color: var(--dim); }
+.marketplace-category-tree { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 8px 0 20px; }
+.marketplace-category-tree > a { grid-column: 1 / -1; }
+.marketplace-category-tree a { display: inline-flex; align-items: center; min-height: 36px; font-size: var(--text-body); }
+.marketplace-category-tree ul { padding-left: 12px; border-left: 1px solid var(--rule-mid); color: var(--dim); }
+.marketplace-category-tree a:hover, .marketplace-category-tree a[aria-current='page'] { color: var(--ink); text-decoration: underline; }
+.marketplace-results-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.marketplace-results-head h2 { font-size: var(--text-section); line-height: var(--text-section--line-height); font-weight: 600; }
+@media (max-width: 639px) {
+  .marketplace-page .marketplace-head { padding-bottom: 16px; }
+  .marketplace-page .finder .search { flex-basis: 100%; }
+  .marketplace-page .finder__main > .fbtn { min-height: 44px; }
+  .marketplace-page .finder__main > .fbtn > span.hidden { display: inline; }
+  .marketplace-page .finder { margin-bottom: 16px; }
+  .marketplace-page .deck { padding-bottom: 32px; }
+}
+
+/* P5 shopping variant: complete facts, separate Save, no feed overrides. */
+.marketplace-grid .mosaic, .marketplace-loading .mkt { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: auto; gap: 16px; }
+.marketplace-card { min-width: 0; display: flex; flex-direction: column; background: var(--tile); border: 1px solid var(--rule-mid); border-radius: var(--r); overflow: hidden; }
+.marketplace-card__link { flex: 1; display: flex; flex-direction: column; }
+.marketplace-card__image { position: relative; aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--tile-2); color: var(--dim); font-size: var(--text-micro); }
+.marketplace-card__image { overflow: hidden; }
+/* Photos fill the plate. Letterboxed (contain) they floated in grey bands
+   and the grid read as unfinished; a 4:3 crop keeps the part in frame. */
+.marketplace-card__image img { object-fit: cover !important; }
+.marketplace-card__status { position: absolute; top: 12px; left: 12px; padding: 4px 8px; background: var(--ink); color: var(--on-ink); }
+.marketplace-card__body { display: flex; flex: 1; flex-direction: column; gap: 8px; padding: 16px; overflow-wrap: anywhere; }
+.marketplace-card__title { font-size: var(--text-body); line-height: var(--text-body--line-height); font-weight: 600; }
+.marketplace-card__price { font-size: var(--text-section); line-height: var(--text-section--line-height); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.marketplace-card__meta, .marketplace-card__seller { font-size: var(--text-micro); line-height: var(--text-micro--line-height); color: var(--dim); }
+.marketplace-card__seller { margin-top: auto; padding-top: 8px; color: var(--ink); }
+/* G-1's switcher strip — thumbnails inside the filter links. */
+.garageswitch { margin-bottom: clamp(16px, 3vw, 24px); }
+/* Thumbnail and name need air between them, and the chip centres both. */
+.garageswitch .fbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* The garage head is a task head: the switcher is the page's first control,
+   so the runway above it is short (it was ~80px of empty grid). */
+.pagehead.garagehead {
+  padding-bottom: clamp(12px, 1.6vw, 18px);
+}
+.garageswitch__thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--img-fallback);
+  flex: none;
+}
+
+/* G-2. The focused car: its cover with a gradient scrim so the name reads on
+   any photo — a white car in direct sun and a black one at night both have
+   to work. No user text is ever drawn INTO the image; the scrim sits over
+   it and the text sits over the scrim, so the photo stays a photo. */
+.carfocus {
+  position: relative;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--tile);
+  min-height: clamp(220px, 34vw, 340px);
+  display: flex;
+  align-items: flex-end;
+}
+.carfocus__cover { position: absolute; inset: 0; display: block; }
+/* With a photo, a dark fade rises under the name and actions only; the top
+   of the car stays untouched. The cream paper fade it replaced bleached the
+   whole photo in the light theme. */
+.carfocus--photo .carfocus__cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--photo-scrim) 0%, transparent 62%);
+}
+.carfocus--photo .carfocus__body {
+  color: var(--on-photo);
+}
+.carfocus--photo .carfocus__body > .microlabel,
+.carfocus--photo .carfocus__body .jumplink {
+  color: var(--on-photo-dim);
+}
+.carfocus__body {
+  position: relative;
+  padding: clamp(16px, 3vw, 28px);
+  width: 100%;
+}
+.carfocus__name {
+  font-size: clamp(26px, 4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 4px 0 0;
+}
+.carfocus__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+/* Phones: the two buttons share one row at equal width and the build-page
+   link sits under them, and the hero is tall enough that the car shows
+   above the controls instead of behind them. */
+@media (max-width: 640px) {
+  .carfocus { min-height: 340px; }
+  .carfocus__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .carfocus__actions .btn { padding-inline: 10px; }
+  .carfocus__actions .jumplink { grid-column: 1 / -1; justify-self: start; margin-top: 4px; }
+}
+
+/* The public build page's head: name and vehicle with Follow · Save beside
+   them, then the owner (avatar + name, not a 12px mono link) and a one-line
+   at-a-glance count. The cover under it is capped so the tabs and the
+   first of the build reach the first screen on a laptop. */
+.carhead__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.carhead__actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+/* A row of who/when/what under a page title — the owner or author, then
+   dates, counts or a car chip. Shared by the build page and the post page. */
+.byrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-top: 14px;
+}
+/* The person as a byline: a small photo plate and the name, not a 12px
+   mono link. */
+.byline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--ink);
+  transition: color var(--t-fast) ease;
+}
+a.byline:hover {
+  color: var(--live);
+}
+.byline__avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background: var(--img-fallback);
+}
+.byline__avatar > .monogram {
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+}
+/* Reactions on a post: one row of equal 44px chips above the reply. The
+   glyphs are desaturated until you pick one, so four colour emoji don't
+   out-shout a monochrome page. */
+.reactrow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 72px));
+  gap: 8px;
+}
+.reactchip {
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+.reactchip__glyph {
+  filter: grayscale(1);
+  opacity: 0.8;
+  transition: filter var(--t-fast) ease, opacity var(--t-fast) ease;
+}
+.reactchip:hover .reactchip__glyph,
+.reactchip[aria-pressed="true"] .reactchip__glyph {
+  filter: none;
+  opacity: 1;
+}
+.reactchip__n {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* Explicit width: with aspect-ratio and an auto width, max-height would
+   shrink the width to keep the ratio instead of cropping the photo. */
+.carhero {
+  width: 100%;
+  max-height: min(50vh, 520px);
+}
+@media (min-width: 641px) {
+  .carhead.pagehead {
+    padding-bottom: clamp(20px, 2.4vw, 28px);
+  }
+}
+
+/* G-3. The strip renders only with three or more real values (the component
+   decides); this is just the shelf they sit on. */
+.carstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 4px 24px;
+  margin-top: clamp(16px, 3vw, 24px);
+}
+/* Phones: three across and compact — one short row of facts, not three
+   tall dimension blocks. */
+@media (max-width: 640px) {
+  .carstats {
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 0 12px;
+  }
+  .carstats .livedim { margin-top: 8px; padding-left: 12px; }
+  .carstats .livedim .microlabel {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .carstats .livedim .val { font-size: 15px; font-weight: 600; }
+}
+
+/* W-1's quick box: the photos it has so far, as a strip of thumbnails. Not
+   a gallery — they are pending state, and the post itself is where they
+   become a gallery. */
+.quickpost__photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.quickpost__thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-ctl);
+  background: var(--img-fallback);
+}
+
+/* H-4. Main column plus a rail — the `.deck` family's main+aside modifier
+   rather than a component, because it is a layout and nothing about it needs
+   state or behaviour.
+
+   H-5 is the interesting half: on phones there is no rail, and the tiles do
+   not simply stack underneath the whole feed (nobody would ever reach them).
+   They interleave — after the third post and after the eighth — which is
+   what `order` on a single-column grid buys us. Nothing scrolls sideways. */
+.deck--main {
+  display: grid;
+  /* An explicit fraction track: without one the implicit column sized to
+     the widest min-content child (the composer's nowrap button row), and
+     Home ran 445px wide on a 390px phone. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 28px);
+}
+/* Two wrappers — the feed column and the rail — that only exist as boxes
+   from 1024px. Below it they dissolve and their children become cells of
+   `.deck--main` itself, so `order` can fold the rail's tiles into the feed.
+   (An earlier version placed both feed blocks in the same grid rows at
+   desktop widths, and the second painted over the first.) */
+.deck--main__feeds,
+.deck--main__rail,
+.deck--main__aside {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 20px);
+  align-content: start;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .deck--main {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+  /* The rail runs the feed's full height and only its LAST tile sticks.
+     Sticking the whole rail pinned a 1320px column in a 900px window, so
+     "Builders to follow" sat below the fold for the length of an endless
+     feed. Now the garage and parts tiles scroll away with the page and the
+     last tile holds at the top. */
+  .deck--main__rail {
+    align-self: stretch;
+  }
+  .deck--main__aside--rest {
+    position: sticky;
+    top: 88px;
+  }
+}
+@media (max-width: 1023.98px) {
+  .deck--main__feeds,
+  .deck--main__rail { display: contents; }
+  .deck--main__post { order: 0; }
+  .deck--main__feed--lead { order: 1; }
+  .deck--main__aside--first { order: 2; }
+  .deck--main__feed--rest { order: 3; }
+  .deck--main__aside--rest { order: 4; }
+}
+
+/* N-2's global search. It takes the middle of the bar and yields it back at
+   compact widths, where the lockup and the index button need every pixel —
+   searching from a phone starts on Explore, which is one tap away. */
+.bar__search {
+  flex: 1;
+  min-width: 0;
+  /* It used to stop at 420px with half the bar empty beside it. */
+  max-width: 560px;
+  margin: 0 16px;
+}
+/* Signed in on desktop the rail carries the wordmark, so the search is the
+   bar's first thing — its edge sits on the content column's edge below. */
+@media (min-width: 1081px) {
+  .shell[data-signed-in="true"] .bar__search {
+    margin-left: 0;
+  }
+}
+.bar__post {
+  flex: none;
+  padding: 9px 16px;
+}
+/* The menu's own search and Post button — only where the bar's are hidden. */
+.index__search { display: none; margin: 12px 0 0; }
+.index__post { display: none; margin: 12px 0 4px; }
+@media (max-width: 979.98px) {
+  .bar__search { display: none; }
+  .bar__post { display: none; }
+  /* The menu carries the theme switch at these widths — one is enough. */
+  .bar__theme { display: none; }
+  .index__search { display: block; }
+  .index__post { display: flex; }
+}
+
+/* P-8. One short line above a member's parts grid — their voice in a grid
+   that is otherwise all product. Quiet and short by design: it answers the
+   questions that would otherwise arrive as five messages, and anything
+   longer belongs in the returns and shipping settings where it is
+   enforceable. */
+.storenote {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--tile-2);
+  border-radius: var(--r-ctl);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--ink);
+}
+
+/* M-3 — the filter sidebar. Below 1024px nothing here applies: the layout
+   wrapper is an ordinary block and the refinements are a sheet. From 1024px
+   the wrapper is a grid — filters | results — and the search form, its row
+   and the sheet's wrappers all go `display: contents`, so the form's
+   children become cells of this grid. That is how the panel sits beside the
+   results while remaining inside the form that submits it.
+
+   The panel is placed first (`order: -1`) and spans every row; rows it
+   doesn't need are empty and, with no row gap, zero-height. Spacing between
+   the stacked cells on the right is each cell's own margin, as it was when
+   they were blocks. The query and the sort share the top row. */
+@media (min-width: 1024px) {
+  .marketplace-layout {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr) auto;
+    column-gap: 32px;
+    row-gap: 0;
+    align-items: start;
+  }
+  .marketplace-layout > *,
+  .marketplace-layout .finder__main > * { grid-column: 2 / -1; }
+  .marketplace-layout > .finder,
+  .marketplace-layout .finder__main { display: contents; }
+  .marketplace-layout .finder .search {
+    grid-column: 2;
+    margin-bottom: 16px;
+  }
+  .marketplace-layout .finder__main > .sortsel,
+  .marketplace-layout .finder__main > select,
+  .marketplace-layout .finder__main > label { grid-column: 3; margin-bottom: 16px; }
+  /* The tiles and the tree are how categories are browsed BELOW this
+     width; here the sidebar's list does it, and the results start sooner. */
+  .marketplace-layout > .catnav,
+  .marketplace-layout > .marketplace-categories { display: none; }
+  .marketplace-layout .finder__refine {
+    order: -1;
+    grid-column: 1;
+    grid-row: 1 / span 12;
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    padding: 16px;
+    background: var(--tile);
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r);
+    position: sticky;
+    top: 88px;
+  }
+}
+
+/* The sidebar's category list. Rows, not tiles: a list is scanned down. */
+.catside { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--rule-soft); }
+.catside__list, .catside__sub { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.catside__sub { margin: 2px 0 6px 30px; }
+.catside__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: var(--r-ctl);
+  font-size: var(--text-micro);
+  color: var(--ink);
+}
+.catside__row:hover { background: var(--tile-2); }
+.catside__row[aria-current="page"] { background: var(--ink); color: var(--paper); }
+/* Night: a selected row or chip is a raised plate with an accent edge, not a
+   white-inverted block glaring out of the graphite sheet. */
+[data-theme="dark"] .catside__row[aria-current="page"],
+[data-theme="dark"] .fbtn.is-on:not([role="tab"]) {
+  background: var(--tile);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--rule-mid), inset 3px 0 0 var(--live);
+}
+.catside__row--sub { min-height: 30px; color: var(--dim); }
+.catside__row.is-empty:not([aria-current]) { opacity: 0.55; }
+.catside__ico { display: grid; place-items: center; width: 20px; height: 20px; flex: none; }
+.catside__ico svg { width: 18px; height: 18px; }
+.catside__label { flex: 1; min-width: 0; }
+.catside__n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; opacity: 0.7; }
+
+.marketplace-card__source {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: var(--text-micro);
+  color: var(--dim);
+}
+.marketplace-card__source a { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+.marketplace-card__source a:hover { color: var(--live); }
+@container mktgrid (max-width: 559px) { .marketplace-card__source { padding: 0 12px 10px; } }
+.marketplace-card__save { padding: 0 16px 16px; }
+.marketplace-card__save > button { min-height: 44px; width: 100%; }
+/* M-5 card additions. The title clamp is the design proof's finding, not a
+   preference: at the two-across phone width the column is 163.5px and real
+   titles ran to six lines, which pushed the price off the fold and left
+   every card a different height. Two lines, then ellipsis — the full title
+   is one tap away on the item page. */
+.marketplace-card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.marketplace-card__brand {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.marketplace-card__summary {
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  color: var(--dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.marketplace-card__seller { display: flex; align-items: center; gap: 8px; }
+.marketplace-card__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-ctl);
+  flex: none;
+}
+/* Save and add-to-cart sit together on the card's floor. Side by side so the
+   cart square keeps its own target rather than stacking two full-width bars
+   on a 163px column. */
+.marketplace-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+/* Save is a bookmark square beside the cart square — the worded, bracketed
+   button was the loudest thing on the card after the price. */
+.marketplace-card__foot .cartbtn { margin-left: 0; }
+/* Phone-width grid cells keep what a shopper compares — photo, title,
+   price, condition · place, seller — and drop the delivery line and the
+   seller's blurb, which are one tap away on the item page. */
+@container mktgrid (max-width: 559px) {
+  .marketplace-card__summary,
+  .marketplace-card__meta--ship { display: none; }
+  .marketplace-card__body { gap: 6px; padding: 12px; }
+  .marketplace-card__foot { padding: 0 12px 12px; }
+}
+/* The grid counts its columns from the room IT has, not the window's: the
+   same grid sits full width on the marketplace, beside a filter sidebar
+   there, and inside a member's profile column as their store (P-6). Asked of
+   the viewport, the store got four 156px columns in a 720px column — narrower
+   than a phone's. The loading skeleton has no container of its own and keeps
+   the viewport rules. */
+.marketplace-grid { container: mktgrid / inline-size; }
+@container mktgrid (max-width: 819px) { .marketplace-grid .mosaic { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container mktgrid (max-width: 559px) { .marketplace-grid .mosaic { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container mktgrid (max-width: 307px) { .marketplace-grid .mosaic { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1279px) { .marketplace-loading .mkt { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 899px) { .marketplace-loading .mkt { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* M-4 asks for four / three / two across, and the phone column stayed at one
+   because the card was too tall to scan two-up. The design proof measured
+   that: 163.5px columns, 523–571px cards, one and a half per screen. With
+   the title clamped to two lines and the meta stack tightened the card fits,
+   so the phone gets its two columns: at 375px with 16px gutters and a 12px
+   gap each column is 165px, which is what the proof measured. Below 340px it
+   drops back to one — 320px would give 146px columns, where the price and
+   the cart square start fighting for the same row. */
+@media (max-width: 479px) {
+  .marketplace-grid .mosaic, .marketplace-loading .mkt { gap: 12px; }
+  .marketplace-grid .marketplace-card__body { padding: 12px; gap: 6px; }
+  .marketplace-grid .marketplace-card__foot { padding: 0 12px 12px; }
+}
+@media (max-width: 339px) { .marketplace-loading .mkt { grid-template-columns: minmax(0, 1fr); } }
+
+.marketplace-vehicle { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 16px; font-size: var(--text-micro); }
+.marketplace-vehicle button { min-height: 44px; }
+/* On the count's row the vehicle picker is the row's end, not a band of its
+   own: it sits right, and on a phone it keeps only its button (the prompt
+   "Shopping for a vehicle?" is the button's job there). */
+.marketplace-results-head__end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 16px; margin-left: auto; }
+.marketplace-results-head .marketplace-vehicle { margin: 0; justify-content: flex-end; }
+@media (max-width: 639.98px) {
+  .marketplace-results-head { align-items: center; }
+  .marketplace-results-head .marketplace-vehicle { flex-wrap: nowrap; }
+  .marketplace-results-head .marketplace-vehicle > span:not([role]) { display: none; }
+  .marketplace-results-head .marketplace-vehicle button { min-height: 40px; padding: 8px 12px; white-space: nowrap; }
+}
+/* The category's part types, as a wrapping chip row on phones. */
+.marketplace-page .marketplace-subcats { margin: 0 0 16px; }
+/* Sort as a compact control on the Filters/Categories row: sized to the
+   chosen option where the browser can, so it doesn't claim a row alone. */
+.sortsel {
+  width: auto;
+  max-width: 100%;
+  field-sizing: content;
+  min-height: 40px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 14px;
+}
+
+.marketplace-card__link:focus-visible { outline: 2px solid var(--live); outline-offset: -3px; }
+
+.marketplace-loading .gbox { aspect-ratio: 4 / 3; }
+.marketplace-loading .tile { min-height: 340px; }
+.marketplace-page:has([data-marketplace-pending="true"]) .marketplace-results-head > :not(.marketplace-results-head__end) { visibility: hidden; }
+.marketplace-page:has([data-marketplace-pending="true"]) .marketplace-grid { opacity: 0.6; }
+
+/* Long applied values must still expose their remove control at 200% text. */
+.marketplace-page .filterchips .chip--x { min-width: 0; max-width: 100%; min-height: 44px; }
+.marketplace-filter-label { min-width: 0; overflow-wrap: anywhere; }
+.marketplace-page .chip--x > [aria-hidden] { flex-shrink: 0; }
+.marketplace-page .marketplace-head h1 { overflow-wrap: anywhere; }

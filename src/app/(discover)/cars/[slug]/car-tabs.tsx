@@ -7,11 +7,9 @@ import { ListingRow } from "@/components/commerce";
 import { ShowcaseExplorer, type ShowcasePin } from "@/features/garage/showcase";
 import { BuildEvolution, type EvolutionMilestone } from "@/features/garage/build-evolution";
 import {
-  DataRow,
   EmptyState,
   ObjectRow,
   GalleryLightbox,
-  KeyValueTable,
   SheetTabs,
   VehicleGallery,
   type GalleryImage,
@@ -63,27 +61,36 @@ function money(value: string) {
  * SheetTabs for why the state is URL-backed.
  */
 /**
- * One build line. A link-added part has a photo and a shop behind it, so it
- * renders as an object row; a typed line stays a ruled baseline row. The
- * difference is real — one has something to look at and somewhere to go —
- * rather than two styles for the same thing.
+ * One build line, as an object row: the part's name, then a dim line with
+ * its group (in a flat list), where it was bought or the shop it came from,
+ * and its state at the end. Typed lines used to be a spreadsheet row — a
+ * 200px brand column and an empty two-thirds — beside photo rows that
+ * looked like a different list.
+ *
+ * `plate` is decided per list: when any line has a photo every line gets a
+ * plate (the empty ones draw the undrawn fallback), so the names align.
  */
 function ModRow({
   mod,
   carId,
   isOwner,
   off = false,
+  group,
+  plate = false,
 }: {
   mod: ModLine;
   carId: string;
   isOwner: boolean;
   off?: boolean;
+  /** The line's group, when the list is flat rather than under headings. */
+  group?: string;
+  plate?: boolean;
 }) {
   const name = [mod.brand, mod.product].filter(Boolean).join(" ") || mod.raw || "Component";
   // The line a buyer reads back on their own build sheet. A private source
   // build is not named at all — same rule as every other source-car mention.
-  const bought = mod.bought ? (
-    <span className="microlabel">
+  const source = mod.bought ? (
+    <>
       Bought on DRVN
       {mod.bought.sourceCar && (
         <>
@@ -93,34 +100,27 @@ function ModRow({
           </Link>
         </>
       )}
-    </span>
+    </>
+  ) : mod.productUrl ? (
+    <a href={mod.productUrl} target="_blank" rel="nofollow noreferrer" className="jumplink">
+      {mod.sourceDomain ?? "View the product"} →
+    </a>
   ) : null;
-  if (mod.imageUrl || mod.productUrl || mod.bought) {
-    return (
-      <ObjectRow
-        className={off ? "is-gone" : undefined}
-        media={mod.imageUrl ? { src: mod.imageUrl, alt: "" } : undefined}
-        title={name}
-        meta={
-          bought ?? (
-            mod.productUrl ? (
-              <a href={mod.productUrl} target="_blank" rel="nofollow noreferrer" className="jumplink">
-                {mod.sourceDomain ?? "View the product"} →
-              </a>
-            ) : null
-          )
-        }
-        actions={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
-      />
+  const meta =
+    group && source ? (
+      <>
+        {group} · {source}
+      </>
+    ) : (
+      (group ?? source)
     );
-  }
   return (
-    <DataRow
-      className={off ? "bline--off" : isOwner ? "bline--own" : undefined}
-      label={mod.brand ?? "Component"}
-      value={mod.product ?? mod.raw}
-      note={bought}
-      end={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
+    <ObjectRow
+      className={off ? "opacity-60" : undefined}
+      media={plate ? { src: mod.imageUrl ?? undefined, alt: "" } : undefined}
+      title={name}
+      meta={meta ?? undefined}
+      actions={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
     />
   );
 }
@@ -139,7 +139,7 @@ function ModState({ mod, carId, isOwner }: { mod: ModLine; carId: string; isOwne
   }
   if (!isOwner) return null;
   return (
-    <Link href={`/sell?car=${carId}&mod=${mod.id}`} className="relbtn">
+    <Link href={`/sell?car=${carId}&mod=${mod.id}`} className="relbtn !static">
       Sell it
     </Link>
   );
@@ -150,7 +150,6 @@ export function CarTabs({
   gallery,
   modGroups,
   cameOff,
-  wheelRows,
   activity,
   forSale,
   soldFrom,
@@ -167,7 +166,6 @@ export function CarTabs({
   modGroups: ModGroup[];
   /** Parts that came off this car — still records, not deletions (A-2). */
   cameOff: ModLine[];
-  wheelRows: { label: string; value: string }[];
   activity: ActivityItem[];
   forSale: ForSaleItem[];
   soldFrom: number;
@@ -183,8 +181,13 @@ export function CarTabs({
 }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
 
-  const hasBuild = modGroups.length > 0 || wheelRows.length > 0 || cameOff.length > 0;
-  const entryCount = modGroups.reduce((n, g) => n + g.items.length, 0) + wheelRows.length;
+  const hasBuild = modGroups.length > 0 || cameOff.length > 0;
+  const entryCount = modGroups.reduce((n, g) => n + g.items.length, 0);
+  // A heading per group only pays when groups hold a few lines each. When
+  // most hold one, five parts became ten rows — so the list goes flat and
+  // each line carries its group in its label instead.
+  const flat = modGroups.length > 0 && entryCount / modGroups.length < 2;
+  const buildHasPhotos = modGroups.some((g) => g.items.some((m) => m.imageUrl));
 
   const buildPanel = (
     <div className="mt-2">
@@ -201,30 +204,39 @@ export function CarTabs({
 
       {hasBuild ? (
         <section className={about ? "mt-8" : ""}>
-          <div className="bsec">
-            <span className="microlabel microlabel--ink">The build</span>
-            <span className="microlabel">{entryCount} entries</span>
-          </div>
-          {modGroups.map((group) => (
-            <div key={group.label}>
-              <div className="bsec">
-                {/* Group headings are taxonomy, not live state. */}
-                <span className="microlabel microlabel--ink">{group.label}</span>
-              </div>
-              {/* Only states we can actually stand behind — this row once
-                  stamped "Fitted" on every entry regardless. */}
-              {group.items.map((mod) => (
-                <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} />
-              ))}
+          {/* No "The build" heading: the tab is already called that. */}
+          {flat ? (
+            <div className="rowlist">
+              {modGroups.flatMap((group) =>
+                group.items.map((mod) => (
+                  <ModRow
+                    key={mod.id}
+                    mod={mod}
+                    carId={carId}
+                    isOwner={isOwner}
+                    group={group.label}
+                    plate={buildHasPhotos}
+                  />
+                ))
+              )}
             </div>
-          ))}
-          {wheelRows.length > 0 && (
-            <div>
-              <div className="bsec">
-                <span className="microlabel microlabel--ink">Wheels &amp; Tires</span>
+          ) : (
+            modGroups.map((group) => (
+              <div key={group.label}>
+                <div className="bsec">
+                  {/* Group headings are taxonomy, not live state. */}
+                  <span className="microlabel microlabel--ink">{group.label}</span>
+                  <span className="microlabel">{group.items.length}</span>
+                </div>
+                {/* Only states we can actually stand behind — this row once
+                    stamped "Fitted" on every entry regardless. */}
+                <div className="rowlist">
+                  {group.items.map((mod) => (
+                    <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} plate={buildHasPhotos} />
+                  ))}
+                </div>
               </div>
-              <KeyValueTable rows={wheelRows} />
-            </div>
+            ))
           )}
           {cameOff.length > 0 && (
             /* A-2. The parts that left the car, kept on the sheet. This is
@@ -235,9 +247,18 @@ export function CarTabs({
                 <span className="microlabel microlabel--ink">Came off this car</span>
                 <span className="microlabel">{cameOff.length}</span>
               </div>
-              {cameOff.map((mod) => (
-                <ModRow key={mod.id} mod={mod} carId={carId} isOwner={isOwner} off />
-              ))}
+              <div className="rowlist">
+                {cameOff.map((mod) => (
+                  <ModRow
+                    key={mod.id}
+                    mod={mod}
+                    carId={carId}
+                    isOwner={isOwner}
+                    off
+                    plate={cameOff.some((m) => m.imageUrl)}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </section>

@@ -6,6 +6,7 @@ import {
   ButtonLink,
   EmptyState,
   Foot,
+  Icon,
   MobileActionBar,
   ObjectRow,
   PaymentModeNotice,
@@ -136,17 +137,17 @@ export default async function CartPage() {
         <span className="microlabel">
           Cart · {active.length} part{active.length === 1 ? "" : "s"}
         </span>
-        <h1>Check it over before you pay.</h1>
+        <h1>{ids.length === 0 ? "Your cart is empty." : "Check it over before you pay."}</h1>
       </Rv>
 
       {ids.length === 0 ? (
         <Rv>
           <EmptyState
-            mark="⌕"
+            mark={<Icon name="cart" className="h-5 w-5" />}
             className="undrawn--hero"
             title="Nothing in the cart"
             action={
-              <ButtonLink href="/marketplace" variant="ghost">
+              <ButtonLink href="/marketplace" variant="live">
                 Browse the marketplace
               </ButtonLink>
             }
@@ -155,7 +156,7 @@ export default async function CartPage() {
           </EmptyState>
         </Rv>
       ) : (
-        <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+        <section className="grid items-start gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="deck">
           {invalid.length > 0 && (
             <Rv className="tile">
@@ -223,14 +224,15 @@ export default async function CartPage() {
                     <ObjectRow
                       key={listing.id}
                       media={{ src: cover.get(listing.id) ?? undefined, alt: listing.title }}
-                      actions={
-                        <CartRemoveButton listingId={listing.id} />
-                      }
                     >
+                      {/* The name is what you're buying, so it gets two lines
+                          rather than an ellipsis; Remove sits under the price
+                          instead of beside the title, where it cost the name
+                          half the row on a phone. */}
                       <span className="min-w-0">
                         <Link
                           href={`/listings/${listing.id}`}
-                          className="order__name block truncate transition-colors hover:text-live"
+                          className="order__name cartline__name transition-colors hover:text-live"
                         >
                           {listing.title}
                         </Link>
@@ -239,6 +241,9 @@ export default async function CartPage() {
                           {listing.shipping_cents > 0
                             ? ` + ${formatPrice(listing.shipping_cents)} shipping`
                             : " · free shipping"}
+                        </span>
+                        <span className="cartline__remove">
+                          <CartRemoveButton listingId={listing.id} />
                         </span>
                       </span>
                     </ObjectRow>

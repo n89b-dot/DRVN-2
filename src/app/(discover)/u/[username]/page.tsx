@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 
 import {
   ButtonLink,
-  NarrowColumn,
   ProfileHeader,
   ShareButton,
   ratingLine,
@@ -158,7 +157,10 @@ export default async function PublicProfilePage({
   const verifiedShop = shopProfile?.verification_status === "verified";
 
   return (
-    <NarrowColumn>
+    /* The profile is a hub, not a form: full page width, a banner band, and
+       a rail beside the tabs. The narrow column it used to sit in made the
+       store two cards wide and the banner a thumbnail. */
+    <div className="wrap pb-6">
       <div className="pagehead !pb-4">
         <span className="microlabel">
           {isShop ? "Shop" : "Profile"}
@@ -195,8 +197,9 @@ export default async function PublicProfilePage({
         bannerUrl={bannerUrl}
         location={profile.location}
         stats={[
-          { label: `follower${view.followerCount === 1 ? "" : "s"}`, value: String(view.followerCount) },
-          { label: `car${view.vehicles.length === 1 ? "" : "s"}`, value: String(view.vehicles.length) },
+          { label: view.followerCount === 1 ? "Follower" : "Followers", value: String(view.followerCount) },
+          { label: "Following", value: String(view.followingCount) },
+          { label: view.vehicles.length === 1 ? "Car" : "Cars", value: String(view.vehicles.length) },
         ]}
         website={website ? { label: website.url.replace(/^https?:\/\//, "").replace(/\/$/, ""), href: website.url } : undefined}
         action={
@@ -213,7 +216,7 @@ export default async function PublicProfilePage({
             )}
             {/* Not while you are already standing in it. */}
             {(partsForSale ?? 0) > 0 && resolveTab(viewParam) !== "parts" && (
-              <ButtonLink href={`/u/${profile.username}?view=parts`} variant="ghost">
+              <ButtonLink href={`/u/${profile.username}?view=parts`} variant="live">
                 Store
               </ButtonLink>
             )}
@@ -222,6 +225,10 @@ export default async function PublicProfilePage({
         }
       />
       <ProfileBody
+        /* Remount on a server-side tab change (the Store button links to
+           ?view=parts): the tabs hold their own state, and without a new key
+           the URL changed but the Overview stayed on screen. */
+        key={resolveTab(viewParam) ?? "overview"}
         bio={profile.bio}
         view={view}
         contactLinks={rest}
@@ -255,6 +262,6 @@ export default async function PublicProfilePage({
           />
         </div>
       )}
-    </NarrowColumn>
+    </div>
   );
 }

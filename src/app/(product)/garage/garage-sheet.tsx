@@ -44,7 +44,7 @@ type WorkOrder = { label: string; href: string; live?: boolean };
  * build page's gaps come before a reminder to post. Stops at three so the
  * list is a plan, not a backlog. Empty when the sheet is in good order.
  */
-function workOrders(s: GarageSheet): WorkOrder[] {
+export function workOrders(s: GarageSheet): WorkOrder[] {
   const out: WorkOrder[] = [];
   if (s.openOffers > 0)
     out.push({
@@ -83,6 +83,12 @@ export function GarageSheetCard({
   const s = sheet;
   const meta = vehicleSubline(s.name, s);
   const orders = workOrders(s);
+  const dims = [
+    { label: "Updates", value: s.updates },
+    { label: "Parts live", value: s.partsLive, live: s.openOffers > 0 },
+    { label: "Sold", value: s.partsSold },
+    { label: "Following", value: s.followers },
+  ].filter((d) => d.value > 0);
   const sheetNo = String(s.index).padStart(2, "0");
 
   return (
@@ -126,32 +132,16 @@ export function GarageSheetCard({
             .filter(Boolean)
             .join(" · ")}
         >
-          {/* The measured car — four dimensions, drawn the way the sheet
-            dimensions anything. Blank spines for zero: nothing to measure
-            is a fact, not a failure. */}
-          <div className="gsheet__dims">
-            <LiveDim
-              label="Updates"
-              value={s.updates}
-              blank={s.updates === 0}
-            />
-            <LiveDim
-              label="Parts live"
-              value={s.partsLive}
-              blank={s.partsLive === 0}
-              live={s.openOffers > 0}
-            />
-            <LiveDim
-              label="Sold"
-              value={s.partsSold}
-              blank={s.partsSold === 0}
-            />
-            <LiveDim
-              label="Following"
-              value={s.followers}
-              blank={s.followers === 0}
-            />
-          </div>
+          {/* The measured car — only the dimensions it has. Zeroes were
+              drawn as blank spines under a digest line that had just said
+              the same numbers, so a new car showed four empty measures. */}
+          {dims.length > 0 && (
+            <div className="gsheet__dims">
+              {dims.map((d) => (
+                <LiveDim key={d.label} label={d.label} value={d.value} live={d.live} />
+              ))}
+            </div>
+          )}
 
           <div className="gsheet__notes">
             {/* Latest — the last thing that happened to this car. */}
@@ -199,8 +189,12 @@ export function GarageSheetCard({
                         href={o.href}
                         className={`gsheet__order${o.live ? " gsheet__order--live" : ""}`}
                       >
-                        <span className="gsheet__box" aria-hidden="true" />
+                        {/* A derived state that links to its fix — not a
+                            task to tick, so no checkbox. */}
                         {o.label}
+                        <span className="gsheet__ordergo" aria-hidden="true">
+                          →
+                        </span>
                       </Link>
                     </li>
                   ))}

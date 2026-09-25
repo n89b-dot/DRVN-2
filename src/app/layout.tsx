@@ -63,7 +63,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Browsers hide a nonce from the DOM once the script has run, so the
+            client always sees "" — expected, not a mismatch worth a warning
+            on every page load (it buried real hydration errors). */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full">
         <MotionPolicy>{children}</MotionPolicy>

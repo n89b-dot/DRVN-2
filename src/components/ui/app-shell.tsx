@@ -22,13 +22,15 @@ import {
  * it keeps the stroke icons, which is how the margin indexes itself when
  * there's no room for words.
  *
- * Marketplace is a collapsible *section*: the parent row is a real link to
- * /marketplace, styled like every other top-level page, with a disclosure
- * beside it for the three management children (Listings, Offers, Orders).
- * Open by default and remembered per browser, so the disclosure is a way to
- * quiet the rail — never a gate a child hides behind: /listings, /offers and
- * /orders stay one click away via the family subnav on every family surface,
- * and reopening is one tap here.
+ * Selling is a collapsible *section*: the parent row is a real link to
+ * /selling, styled like every other top-level page, with a disclosure beside
+ * it for the management children (Listings, Offers, Orders, Payouts).
+ * Folded by default and unfolded on the selling routes themselves: most of a
+ * member's day is Home, Explore and the garage, where four seller rows were
+ * a third of the rail. The disclosure is never a gate a child hides behind —
+ * every family surface carries the family subnav, the Offers count rides on
+ * the folded parent, and unfolding is one tap here (held until the reader
+ * moves between selling and non-selling pages).
  */
 function AppRail({
   open,
@@ -39,7 +41,7 @@ function AppRail({
 }: {
   open: boolean;
   onToggle: () => void;
-  /** Whether the Marketplace section starts expanded (cookie-backed). */
+  /** Deprecated: the Selling section now follows the route (see above). */
   initialMktOpen?: boolean;
   /** Offers waiting on this user — shown next to the Offers row so the rail
    *  keeps saying what the old inline /orders microlabel used to. */
@@ -49,13 +51,20 @@ function AppRail({
    *  situations and the rail can say which. */
   messagesCount?: number;
 }) {
-  const [mktOpen, setMktOpen] = useState(initialMktOpen);
-  const toggleMkt = () => {
-    const next = !mktOpen;
-    setMktOpen(next);
-    document.cookie = `ls-mkt=${next ? "open" : "closed"}; path=/; max-age=31536000; SameSite=Lax`;
-  };
   const pathname = usePathname();
+  const familyHere = isSellingFamily(pathname);
+  // null = follow the route (unfolded on selling pages, folded elsewhere);
+  // a tap overrides that until the reader crosses into or out of the family.
+  // `initialMktOpen` (the old per-browser cookie) no longer decides it.
+  void initialMktOpen;
+  const [mktChoice, setMktChoice] = useState<boolean | null>(null);
+  const [choiceFamily, setChoiceFamily] = useState(familyHere);
+  if (choiceFamily !== familyHere) {
+    setChoiceFamily(familyHere);
+    setMktChoice(null);
+  }
+  const mktOpen = mktChoice ?? familyHere;
+  const toggleMkt = () => setMktChoice(!mktOpen);
   const isActive = (href: string) => {
     // Family members overlap on prefix (/listings vs /listings/<id>), so they
     // resolve through the family matcher rather than a bare startsWith.
@@ -63,7 +72,6 @@ function AppRail({
     if (familyKey) return matchesFamily(pathname, familyKey);
     return pathname === href || pathname.startsWith(`${href}/`);
   };
-  const familyHere = isSellingFamily(pathname);
 
   return (
     <aside className="rail" aria-label="Sections">
@@ -231,7 +239,9 @@ function AppRail({
       </nav>
 
       <div className="rail__foot">
-        <Link href="/sell" className="btn btn--live rail__cta" title="List a part">
+        {/* Outlined, not red: the top bar's Post is the shell's one filled
+            accent, so a page's own primary action has room to lead. */}
+        <Link href="/sell" className="btn btn--ghost rail__cta" title="List a part">
           <span className="rail__cta-full">List a part</span>
           <span className="rail__cta-mark" aria-hidden="true">
             +

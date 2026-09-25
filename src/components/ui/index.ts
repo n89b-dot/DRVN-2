@@ -29,6 +29,7 @@ export {
   type GalleryImage,
 } from "./patterns";
 export { MasonryFeed } from "./masonry-feed";
+export { Badge, KindBadge, type BadgeTone, type FeedKind } from "./badge";
 export { Mosaic, MosaicCell, FeedMosaicCell, ListingMosaicCell, mosaicSize, type MosaicSize } from "./mosaic";
 export {
   NarrowColumn,

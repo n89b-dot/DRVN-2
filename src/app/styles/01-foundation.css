@@ -1,0 +1,93 @@
+/* foundation — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  .wrap {
+    /* Published as a variable so a full-bleed child (a sideways-scrolling
+       chip row) can cancel exactly this gutter rather than guessing at 20px
+       and overflowing the page at 320px. */
+    --gutter: clamp(16px, 4vw, 40px);
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+  /* Width steps for the wrapper, gutter unchanged. A number of narrow
+     single-column pages (auth, legal, forms) hard-coded their own
+     `max-w-[Npx] px-5`, which fixes the gutter at 20px instead of following
+     the responsive clamp above — pair one of these with `.wrap` instead:
+     `wrap wrap--narrow` (720px — auth, legal, single-column forms),
+     `wrap wrap--medium` (900px — settings, sell/edit forms),
+     `wrap wrap--wide` (1060px — cart, checkout). */
+  .wrap--narrow {
+    max-width: 720px;
+  }
+  .wrap--medium {
+    max-width: 900px;
+  }
+  .wrap--wide {
+    max-width: 1060px;
+  }
+
+  /* ---------- type utilities ---------- */
+  .mono {
+    font-family: var(--mono);
+  }
+  /* .field__label shares the recipe: it's the label voice for transactional
+     forms (checkout, orders, settings, auth). It was referenced by eight call
+     sites but never defined, so those surfaces silently rendered 16px sans
+     labels — grouped here so the two label classes can never drift apart. */
+  .microlabel,
+  .field__label {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--dim);
+  }
+  .microlabel--ink {
+    color: var(--ink);
+  }
+  /* Section headings. The heading-position microlabel (ink, leading a
+     tile__head or bsec row) used to render at microlabel scale — smaller than
+     the buttons in its own section. In heading position it now sets at true
+     heading scale: sans, sentence case, clearly the largest text in the
+     section. Dim microlabels beside it stay micro — they're metadata. */
+  .tile__head > .microlabel--ink,
+  .bsec > .microlabel--ink {
+    font-family: var(--sans);
+    font-size: 20px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    letter-spacing: -0.01em;
+    text-transform: none;
+    line-height: 1.3;
+  }
+  .microlabel--live {
+    color: var(--live);
+  }
+  .num-giant {
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    font-size: clamp(40px, 5.4vw, 64px);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Nothing counted yet: a real zero in the dim ink, at full numeral size.
+     The old 45% opacity turned the figure (usually "—") into a faint grey
+     bar that read as a loading skeleton — a new seller's hub looked like it
+     was still loading. */
+  .num-giant--blank {
+    color: var(--dim);
+  }
+  /* Figures and names at reading size are Sans with tabular numerals: mono
+     at 16px read like code ("BMW M4 Competition", "$5,480"). Mono stays for
+     12px-and-under labels and data. */
+  .kv {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .kv b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+}

@@ -31,7 +31,7 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
 
   if (!car) notFound();
 
-  const [{ data: images }, { data: mods }, { data: posts }, { data: hotspots }, { data: profile }] =
+  const [{ data: images }, { data: mods }, postsResult, { data: hotspots }, { data: profile }] =
     await Promise.all([
       supabase.from("car_images").select("*").eq("car_id", id).order("position"),
       supabase.from("mod_items").select("*").eq("car_id", id).order("position"),
@@ -44,6 +44,19 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
       supabase.from("car_hotspots").select("*").eq("car_id", id).order("created_at"),
       supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle(),
     ]);
+  // An error here was read as "no posts", so a car with three published
+  // updates said "Nothing posted yet". Where the archive column isn't there
+  // (a database behind its migrations) nothing can have been archived, so
+  // the unfiltered list is the right one.
+  let posts = postsResult.data;
+  if (postsResult.error) {
+    const { data: fallback } = await supabase
+      .from("activity_posts")
+      .select("id, title, intro, body, published_at")
+      .eq("car_id", id)
+      .order("published_at", { ascending: false });
+    posts = fallback;
+  }
 
   return (
     <div className="wrap">
@@ -57,7 +70,7 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
             view build page →
           </Link>
         </span>
-        <h1>Manage the {car.name}.</h1>
+        <h1>Manage {car.name}</h1>
         <p className="sub">
           Everything here shows on the car&apos;s public build page — and on any part you list off
           it.

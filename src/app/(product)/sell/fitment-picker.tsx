@@ -163,9 +163,12 @@ export function FitmentPicker({
             row.make.trim().toLowerCase() === suggestion.make.trim().toLowerCase() &&
             row.model.trim().toLowerCase() === suggestion.model.trim().toLowerCase(),
         ) && (
-          <Button
-            variant="ghost"
-            className="self-start"
+          // A suggestion, not a control twin of "Add a vehicle": dashed, and
+          // it says it's a suggestion — the identical ghost buttons left it
+          // unclear whether the car was already on the list.
+          <button
+            type="button"
+            className="suggestchip self-start"
             onClick={() =>
               setRows((current) => [
                 ...current,
@@ -178,13 +181,16 @@ export function FitmentPicker({
               ])
             }
           >
-            + Fits {suggestion.label}
-          </Button>
+            <span className="suggestchip__k">Suggested</span>
+            Fits {suggestion.label}
+            <span className="suggestchip__add" aria-hidden="true">+ Add</span>
+          </button>
         )}
 
       {rows.length < MAX_FITMENT_ROWS && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          className="self-start"
           onClick={() =>
             setRows((current) => [
               ...current,
@@ -192,10 +198,9 @@ export function FitmentPicker({
               { make: current.at(-1)?.make ?? "", model: "", year_start: null, year_end: null },
             ])
           }
-          className="btn btn--ghost self-start"
         >
           + Add a vehicle it fits
-        </button>
+        </Button>
       )}
       <p className="field__hint !mt-0">
         Years optional — leave blank if it fits every year of that model. Buyers with a matching

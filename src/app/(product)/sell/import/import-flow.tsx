@@ -211,10 +211,10 @@ export function ImportFlow({
               label="Your existing post"
               rows={8}
               maxLength={20000}
-              placeholder={'Paste the whole post — e.g. "FS: IE intercooler mk7 GTI/R, some bent fins, $450 shipped OBO, Fort Lauderdale…"'}
+              placeholder="Paste the whole post"
               className="!max-w-none"
               error={pasteState?.error}
-              hint="Any format, any mess — we'll organize it. You'll add photos on the next screen."
+              hint={'Any format, any mess — e.g. "FS: IE intercooler mk7 GTI/R, some bent fins, $450 shipped OBO". We\'ll organize it; you add photos on the next screen.'}
             />
             {attestField}
             <div className="flex flex-wrap items-center gap-3">

@@ -1,0 +1,744 @@
+/* shell — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- top bar (persistent nav) ---------- */
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: color-mix(in srgb, var(--paper) 86%, transparent);
+    /* Prefixed first: the CSS build keeps only the last of the pair, and
+       Chrome ignores the -webkit- form (the bar rendered see-through). */
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+  .bar__inner {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 14px clamp(16px, 4vw, 40px);
+    display: flex;
+    align-items: center;
+    gap: clamp(12px, 3vw, 32px);
+  }
+  .bar__logo {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    font-size: 16px;
+  }
+  .bar__logo em {
+    font-style: normal;
+    color: var(--live);
+  }
+  .bar__logo .microlabel {
+    margin-left: 8px;
+  }
+  .bar__nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+  .bar__link {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: var(--r-ctl);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+    position: relative;
+  }
+  .bar__link:hover {
+    color: var(--ink);
+    background: var(--paper-deep);
+  }
+  /* Signed-out text links: centred in a 44px box on the same line as the
+     Join button, search and logo (display:block left them top-aligned). */
+  .bar__link--text {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .bar__link.is-active {
+    color: var(--on-ink);
+    background: var(--ink);
+  }
+  /* icon-only furniture: square hit area, no text metrics to fight */
+  .bar__link--ico {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+  .bar__cta {
+    margin-left: 4px;
+  }
+  /* Count badge on cart and notifications. A number in the signal colour is
+     legitimate here: it *is* something live — parts waiting, or news unread. */
+  .barbadge {
+    position: absolute;
+    top: 2px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--live);
+    color: var(--on-ink);
+    /* A paper ring lifts the badge off the glyph it sits on. */
+    box-shadow: 0 0 0 2px var(--paper);
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar__link .dot {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--live);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+
+  .bar__theme {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 13px;
+    border-radius: var(--r-ctl);
+    background: var(--paper-deep);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .bar__theme:hover {
+    color: var(--ink);
+  }
+  .bar__theme b {
+    color: var(--live);
+    font-weight: 500;
+  }
+  .bar__theme .sw {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--live);
+    background: transparent;
+    transition: background var(--t-fast) ease;
+  }
+  [data-theme="dark"] .bar__theme .sw {
+    background: var(--live);
+  }
+
+  /* ---------- THE REGISTER RAIL — the drawing's left margin ----------
+     Signed-in desktop only. Collapsed it keeps the register numbers, which
+     is how a drawing indexes itself when there's no room for words. */
+  .shell {
+    --rail-w: 232px;
+    min-height: 100vh;
+  }
+  .shell[data-rail="closed"] {
+    --rail-w: 68px;
+  }
+  .rail {
+    display: none;
+  }
+
+  .rail__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 14px 0 20px;
+    flex: none;
+  }
+  .rail__logo {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    font-size: 16px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+  }
+  .rail__logo em {
+    font-style: normal;
+    color: var(--live);
+  }
+  .rail__logo-mark {
+    display: none;
+  }
+
+  .rail__rows {
+    display: block;
+    margin-top: 18px;
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+  .railrow {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    position: relative;
+    white-space: nowrap;
+    transition: background var(--t-fast) ease;
+  }
+  .railrow:hover {
+    background: var(--tile-2);
+  }
+  /* The margin column: a stroke icon where the register number used to be.
+     Icons survive the collapsed rail, which bare digits never did. */
+  .railrow__ico {
+    position: relative;
+    display: grid;
+    place-items: center;
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      transform var(--t-move) var(--spring);
+  }
+  .railrow:hover .railrow__ico {
+    transform: translateX(2px);
+  }
+  .railrow.is-here .railrow__ico {
+    transform: none;
+  }
+  /* Attention, said small enough to survive collapse: a live dot riding the
+     icon. The full count lives in the label's chip when the rail is open. */
+  .railrow__dot {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--live);
+    /* A paper ring so the dot reads against any icon stroke behind it. */
+    box-shadow: 0 0 0 2px var(--paper);
+  }
+  /* Weight belongs to the row you're on. Every row used to be 16/600, which
+     spent the emphasis before anything was selected and left parents and
+     children indistinguishable. */
+  .railrow__label {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    color: var(--ink);
+    overflow: hidden;
+    opacity: 1;
+    transition:
+      opacity var(--t-fast) ease 80ms,
+      transform var(--t-move) var(--spring);
+  }
+  /* Every row keeps one height. The page chip is 26px tall, which pushed a
+     badged row (Marketplace holding a count, Offers) 5px past its neighbours
+     and broke the rail's pitch — in the rail it's a count pill, sized to sit
+     inside the label's line box. */
+  .railrow .chip {
+    height: 18px;
+    min-width: 18px;
+    justify-content: center;
+    padding: 0 5px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+  .railrow:hover .railrow__ico {
+    color: var(--ink);
+  }
+  /* the register you're on: a raised plate, live margin ink, and the one
+     weight step the rail reserves for it */
+  .railrow.is-here {
+    background: var(--tile);
+  }
+  .railrow.is-here .railrow__ico {
+    color: var(--live);
+  }
+  .railrow.is-here .railrow__label {
+    font-weight: 600;
+  }
+  .railrow.is-here::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    margin-top: -9px;
+    background: var(--live);
+  }
+
+  /* ---------- rail section heading — the Marketplace family ----------
+     A caption on the four rows beneath it, never a link and never a
+     disclosure: every child stays one click from anywhere in the app. It
+     carries the family's active state so the rail says which *section* you're
+     in as well as which sheet. */
+  /* Parent row + disclosure. The link fills the row at top-level weight;
+     the chevron is its own 28px control so expanding never risks a
+     navigation, and vice versa. */
+  /* The family is one block in the rail's rhythm: the same air above the
+     parent row as below the last child, folded or open. The old margin sat on
+     the parent row alone, so Marketplace hung 6px low and its children ran
+     straight into Garage. */
+  /* No margin: Marketplace is an ordinary top-level row, so it must sit on
+     exactly the same rhythm as Home/Explore/Garage/Messages. A 6px band above
+     and below put it in a slot 12px taller than every other row, which reads
+     as a row that isn't quite aligned with its neighbours. The family reads as
+     a group from the indent and margin rule on its children, not from air. */
+  .railfamily {
+    margin: 0;
+  }
+  .railfam {
+    position: relative;
+  }
+  .railfam__link {
+    padding-right: 44px;
+  }
+  .railfam__toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-ctl);
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .railfam__toggle:hover {
+    color: var(--ink);
+    background: var(--ghost);
+  }
+  /* The back-chevron points left; open rotates it to point down, closed to
+     point right — the same grammar as every disclosure since the dawn of
+     sidebars. */
+  .railfam__toggle > svg {
+    transform: rotate(180deg);
+    transition: transform var(--t-move) var(--spring);
+  }
+  .railfam__toggle.is-open > svg {
+    transform: rotate(-90deg);
+  }
+  /* Passing through the family with the section folded: the parent holds the
+     live margin ink without claiming aria-current. */
+  .railrow.is-holding .railrow__ico {
+    color: var(--live);
+  }
+  .railrow.is-holding::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 3px;
+    height: 18px;
+    margin-top: -9px;
+    background: var(--live);
+    opacity: 0.55;
+  }
+
+  /* The disclosure body: rows stay mounted so the collapsed icon rail can
+     always show them; the fold is a grid-rows collapse, which animates
+     without measuring heights. */
+  .railkids {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--t-move) var(--spring);
+  }
+  .railkids__in {
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* Air at the ends of the open list, so the children sit *inside* the
+     section instead of butting against the parent row and Garage. It rides on
+     the first/last rows rather than the container, so a 0fr fold still
+     collapses to nothing. */
+  .railkids__in > .railrow--child:first-child {
+    margin-top: 4px;
+  }
+  .railkids.is-folded {
+    grid-template-rows: 0fr;
+  }
+
+  /* Kept for the mobile index, which still uses the caption-style heading. */
+  .railgroup {
+    display: block;
+    padding: 18px 20px 6px;
+    white-space: nowrap;
+  }
+  .railgroup__label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    overflow: hidden;
+  }
+  .railgroup.is-family .railgroup__label {
+    color: var(--live);
+  }
+  /* Children step down, not sideways: one size below the top-level rows,
+     dimmer ink at rest, under a hairline margin rule. The old version indented
+     them but kept 16/600 — they read as five more top-level pages. */
+  .railrow--child {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 32px;
+  }
+  .railrow--child .railrow__label {
+    font-size: 13px;
+    font-weight: 400; /* loaded Plex cuts only — 450 would synthesize */
+    color: var(--dim);
+  }
+  .railrow--child:hover .railrow__label {
+    color: var(--ink);
+  }
+  .railrow--child.is-here .railrow__label {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .railrow--child .railrow__ico > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .railrow--child::after {
+    content: "";
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--rule-soft);
+  }
+  .railrow--child.is-here::after {
+    background: var(--rule-mid);
+  }
+
+  .rail__foot {
+    flex: none;
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px 0;
+    border-top: 1px solid var(--rule-soft);
+    margin-top: 12px;
+  }
+  .rail__cta-mark {
+    display: none;
+  }
+  .railtoggle {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--r-ctl);
+    flex: none;
+    color: var(--dim);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .railtoggle:hover {
+    color: var(--ink);
+    background: var(--paper-deep);
+  }
+
+  /* ---------- THE INDEX — mobile/compact navigation ----------
+     A second sheet unrolls over the page: numbered registers on ruled rows.
+     The trigger is a stack of drafting rules that folds into a cross-out. */
+  .indexbtn {
+    display: none; /* promoted at ≤1080px */
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: var(--r-ctl);
+    color: var(--ink);
+    background: var(--paper-deep);
+    transition:
+      color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .indexbtn:hover {
+    background: var(--ghost-hover);
+  }
+  .indexbtn.is-open {
+    background: var(--ink);
+    color: var(--on-ink);
+  }
+  .indexbtn__rules {
+    position: relative;
+    width: 16px;
+    height: 12px;
+    flex: none;
+  }
+  .indexbtn__rules i {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: currentColor;
+    transition:
+      transform var(--t-move) var(--spring),
+      opacity var(--t-fast) ease;
+  }
+  .indexbtn__rules i:nth-child(1) {
+    top: 0;
+  }
+  .indexbtn__rules i:nth-child(2) {
+    top: 5px;
+  }
+  .indexbtn__rules i:nth-child(3) {
+    top: 10px;
+  }
+  /* the rules fold into a cross — a line struck through the drawing */
+  .indexbtn.is-open .indexbtn__rules i:nth-child(1) {
+    transform: translateY(5px) rotate(45deg);
+  }
+  .indexbtn.is-open .indexbtn__rules i:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  .indexbtn.is-open .indexbtn__rules i:nth-child(3) {
+    transform: translateY(-5px) rotate(-45deg);
+  }
+
+  .indexwrap {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .indexwrap.is-open {
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .indexsheet {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 78px 0 calc(40px + env(safe-area-inset-bottom, 0px));
+    background-color: var(--paper);
+    background-image:
+      repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 40px),
+      repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 40px);
+    /* the sheet unrolls downward */
+    clip-path: inset(0 0 100% 0);
+    transition: clip-path var(--t-move) var(--spring);
+  }
+  .indexwrap.is-open .indexsheet {
+    clip-path: inset(0 0 0 0);
+  }
+
+  .index__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .index__rows {
+    display: block;
+    margin-top: 4px;
+  }
+
+  .indexrow {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 2px 14px;
+    align-items: center;
+    /* A menu, not a document: one line per destination at a 48px row.
+       With a mono description under every label the phone index ran to
+       ~2,000px and Settings sat six screens down. */
+    min-height: 48px;
+    padding: 6px 2px;
+    border-top: 1px solid var(--rule-soft);
+    position: relative;
+    /* staggered draw-in, index passed as --i */
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  .indexwrap.is-open .indexrow {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--t-move) ease calc(var(--i, 0) * 45ms),
+      transform var(--t-move) var(--spring) calc(var(--i, 0) * 45ms);
+  }
+  /* Register number — still used by surfaces that kept the numeric margin
+     (the admin console's nav, the docs specimens). */
+  .indexrow__n {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow.is-here .indexrow__n {
+    color: var(--live);
+  }
+  /* The margin column: a stroke icon where the register number used to be.
+     Baseline-aligned grids drop icon glyphs, so it self-centers on the first
+     row instead. */
+  .indexrow__ico {
+    display: grid;
+    place-items: center;
+    align-self: center;
+    grid-row: 1;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow__label {
+    font-size: 17px;
+    font-weight: 600; /* was 650, not a loaded Plex Sans cut */
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    transition: color var(--t-fast) ease;
+  }
+  .indexrow__note {
+    display: none;
+  }
+  .indexrow__end {
+    grid-row: 1;
+    grid-column: 3;
+    align-self: center;
+  }
+  .indexrow:hover .indexrow__label,
+  .indexrow:focus-visible .indexrow__label {
+    color: var(--live);
+  }
+  /* the register you're on carries a live tick in the margin */
+  .indexrow.is-here .indexrow__ico {
+    color: var(--live);
+  }
+  /* Family children step down a size from the top-level rows — the same
+     hierarchy the rail draws, spoken at the index's scale. */
+  .indexrow--child .indexrow__label {
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .indexrow--child .indexrow__ico > svg {
+    width: 16px;
+    height: 16px;
+  }
+  .indexrow.is-here::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    width: 6px;
+    height: 1px;
+    background: var(--live);
+  }
+
+  /* ---------- index section heading — the Marketplace family ----------
+     Same contract as the rail's: a caption, not a link. Its children follow it
+     as ordinary index rows so Index → Orders stays one tap. */
+  .indexgroup {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 2px 14px;
+    padding: 14px 2px 4px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .indexgroup__label {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .indexgroup__note {
+    display: none;
+  }
+  .indexgroup.is-family .indexgroup__label {
+    color: var(--live);
+  }
+  .indexrow--child {
+    padding-left: 14px;
+    min-height: 44px;
+  }
+  .indexrow--child::after {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--rule-soft);
+  }
+
+  /* the lighting switch, spelled out — the bar's version is icon-only */
+  .indexlight {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .indexlight:hover {
+    color: var(--ink);
+  }
+  .indexlight b {
+    color: var(--live);
+    font-weight: 500;
+  }
+
+  .index__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule-mid);
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  .indexwrap.is-open .index__foot {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--t-move) ease 420ms,
+      transform var(--t-move) var(--spring) 420ms;
+  }
+
+  .cat-ico {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-ctl);
+    display: grid;
+    place-items: center;
+    background: var(--paper-deep);
+    color: var(--ink);
+    font-size: 20px;
+  }
+}

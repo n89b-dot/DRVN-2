@@ -3,7 +3,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { EmptyState, Foot, Gallery, ListingCard, Mosaic, ObjectRow, ratingLine, TileHead } from "@/components/ui";
+import {
+  Badge,
+  ButtonLink,
+  EmptyState,
+  Foot,
+  Gallery,
+  ListingCard,
+  Media,
+  Mosaic,
+  ObjectRow,
+  ratingLine,
+  TileHead,
+  VehicleCard,
+} from "@/components/ui";
 import { DISPUTE_WINDOW_DAYS, SELLER_RESPONSE_DAYS } from "@/features/commerce/disputes";
 import { MarketplaceViewEvent } from "@/features/marketplace/view-events";
 import { SaveButton } from "@/features/social/buttons";
@@ -120,14 +133,14 @@ export default async function ListingPage({
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, display_name, location")
+      .select("username, display_name, location, avatar_url")
       .eq("id", listing.seller_id)
       .single(),
     supabase.from("listing_images").select("*").eq("listing_id", id).order("position"),
     listing.source_car_id
       ? supabase
           .from("cars")
-          .select("slug, name, make, model, year, is_public")
+          .select("id, slug, name, make, model, year, is_public, cover_image_url")
           .eq("id", listing.source_car_id)
           .single()
       : Promise.resolve({ data: null }),
@@ -192,7 +205,15 @@ export default async function ListingPage({
   // Second group: each of these depends only on results already in hand
   // above (user, or ids derived from listing/questions/moreFromSeller), not
   // on each other, so they can also run concurrently.
-  const [{ data: save }, garageFitment, { data: qaAuthors }, moreFromSellerCards] =
+  const isOwn = user?.id === listing.seller_id;
+  const [
+    { data: save },
+    garageFitment,
+    { data: qaAuthors },
+    moreFromSellerCards,
+    { count: soldCount },
+    { count: openOfferCount },
+  ] =
     await Promise.all([
       user
         ? supabase
@@ -212,6 +233,20 @@ export default async function ListingPage({
       // Same card shape as the search grid — the rails previously selected a
       // thinner row and rendered a visibly different card on the same page.
       hydrateListingCards(supabase, moreFromSeller ?? []),
+      // Track record for the seller line: parts they've actually sold here.
+      supabase
+        .from("listings")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_id", listing.seller_id)
+        .eq("status", "sold"),
+      // The owner panel's one open question: offers waiting on them.
+      isOwn
+        ? supabase
+            .from("offers")
+            .select("id", { count: "exact", head: true })
+            .eq("listing_id", id)
+            .in("status", ["open", "countered"])
+        : Promise.resolve({ count: 0 }),
     ]);
   const isSaved = Boolean(save);
 
@@ -241,12 +276,20 @@ export default async function ListingPage({
   }));
 
   const category = getCategory(listing.category);
+  const sellerName = seller?.display_name ?? (seller?.username ? `@${seller.username}` : "Seller on DRVN");
   const sellerInitials = (seller?.display_name ?? seller?.username ?? "?")
     .split(" ")
     .map((w: string) => w[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const sold = soldCount ?? 0;
+  const sellerRecord = [
+    avgRating ? ratingLine(avgRating, (reviews ?? []).length) : null,
+    sold > 0 ? `${sold} sold on DRVN` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const gallery = images ?? [];
 
@@ -305,7 +348,9 @@ export default async function ListingPage({
     <div className="wrap">
       <MarketplaceViewEvent viewKey={`listing:${listing.id}`} entry={{ kind: "listing" }} />
       {returnTo && <nav aria-label="Return to results" className="marketplace-breadcrumb"><Link href={returnTo}>← Back to results</Link></nav>}
-      <Rv as="header" className="pagehead">
+      {/* An item title, not a display head: ~28–32px, so the gallery starts
+          right under it instead of under two lines of 52px type. */}
+      <Rv as="header" className="pagehead pagehead--item">
         <span className="microlabel">
           <Link href="/marketplace" className="hover:text-live">
             Marketplace
@@ -351,42 +396,21 @@ export default async function ListingPage({
           <Rv className="tile" stagger={1}>
             {listing.status !== "active" && (
               <p className="mb-3">
-                <span className="chip chip--spent">This listing is {listing.status}</span>
+                <Badge tone="spent">This listing is {listing.status}</Badge>
               </p>
             )}
-            <span className="microlabel">Asking</span>
-            <p className="num-giant mt-1">{formatPrice(listing.price_cents)}</p>
-            {/* Shipping was charged at checkout but never shown here, so a
-                buyer met the real total only after committing. */}
-            <p className="kv mt-1">
-              {deliveryLabel(listing)}
-              {listing.shipping_mode === "flat" && listing.shipping_cents > 0 && <> · <b>{formatPrice(listing.price_cents + listing.shipping_cents)} item + shipping</b></>}
-              <span className="spec-note block">Any applicable tax and your selected delivery are confirmed at checkout.</span>
-            </p>
-            <p className="kv mt-2 text-dim">
-              {[conditionLabel(listing.condition), listing.location].filter(Boolean).join(" · ")}
-            </p>
-            {listing.offer_floor_cents !== null && listing.status === "active" && (
-              <p className="spec-note mt-2">
-                Offers accepted from {formatPrice(listing.offer_floor_cents)}.
+            {isOwn && listing.status === "active" && (
+              <p className="mb-3">
+                <Badge tone="live">Your listing · Live</Badge>
               </p>
             )}
-            <PurchaseActions
-              listingId={listing.id}
-              isLoggedIn={Boolean(user)}
-              betaEnforced={betaBuyerAccess.enforced}
-              buyerEligible={betaBuyerAccess.eligible}
-              isOwn={user?.id === listing.seller_id}
-              isActive={listing.status === "active"}
-              paymentsLive={paymentsAreLive()}
-              priceCents={listing.price_cents}
-              shippingCents={listing.shipping_cents}
-              resumeAction={resumeAction}
-              returnPath={detailPath}
-            />
-            {user?.id !== listing.seller_id && (
-              <div className="mt-3">
+            <div className="pdp__ask">
+              <span className="microlabel">Asking</span>
+              {/* Save is a bookmark beside the price, not a fourth full-width
+                  button under Buy / Cart / Offer. */}
+              {!isOwn && (
                 <SaveButton
+                  variant="icon"
                   itemLabel={listing.title}
                   targetType="listing"
                   targetId={listing.id}
@@ -395,22 +419,95 @@ export default async function ListingPage({
                   initialSaved={isSaved}
                   isLoggedIn={Boolean(user)}
                 />
-              </div>
+              )}
+            </div>
+            <p className="num-giant mt-1">{formatPrice(listing.price_cents)}</p>
+            {/* Shipping was charged at checkout but never shown here, so a
+                buyer met the real total only after committing. */}
+            <p className="kv mt-1">
+              {deliveryLabel(listing)}
+              {listing.shipping_mode === "flat" && listing.shipping_cents > 0 && <> · <b>{formatPrice(listing.price_cents + listing.shipping_cents)} item + shipping</b></>}
+            </p>
+            <p className="mt-1 text-micro text-dim">Any applicable tax and your selected delivery are confirmed at checkout.</p>
+            {/* The condition here; the place is on the seller line below. */}
+            {listing.condition && <p className="kv mt-2 text-dim">{conditionLabel(listing.condition)}</p>}
+            {listing.offer_floor_cents !== null && listing.status === "active" && !isOwn && (
+              <p className="spec-note mt-2">
+                Offers accepted from {formatPrice(listing.offer_floor_cents)}.
+              </p>
             )}
-            {seller && (
-              <Link href={`/u/${seller.username}`} className="mt-5 flex items-center gap-3 border-t border-[color:var(--rule-soft)] pt-5">
-                <span className="monogram monogram--sm">{sellerInitials}</span>
+            {isOwn ? (
+              /* The owner's panel: what they came to their own listing to do.
+                 Status changes (pause, archive) stay in My Listings, which
+                 owns that workflow and its payout checks. */
+              <div className="mt-5 grid gap-2">
+                <ButtonLink href={`/listings/${listing.id}/edit`} className="w-full">
+                  Edit listing
+                </ButtonLink>
+                <ButtonLink href={`/offers?listing=${listing.id}`} variant="ghost" className="w-full">
+                  {(openOfferCount ?? 0) > 0 ? `Offers (${openOfferCount})` : "Offers"}
+                </ButtonLink>
+                <Link href="/listings" className="jumplink mt-1 justify-self-start">
+                  Pause or archive in My Listings
+                </Link>
+              </div>
+            ) : (
+              <PurchaseActions
+                listingId={listing.id}
+                isLoggedIn={Boolean(user)}
+                betaEnforced={betaBuyerAccess.enforced}
+                buyerEligible={betaBuyerAccess.eligible}
+                isOwn={false}
+                isActive={listing.status === "active"}
+                paymentsLive={paymentsAreLive()}
+                priceCents={listing.price_cents}
+                shippingCents={listing.shipping_cents}
+                offerFloorCents={listing.offer_floor_cents}
+                resumeAction={resumeAction}
+                returnPath={detailPath}
+              />
+            )}
+
+            {/* Who is selling, and the car it came off — the reason to buy
+                here rather than anywhere else, so it sits with the price, not
+                at the foot of the page. */}
+            {seller && !isOwn && (
+              <Link
+                href={seller.username ? `/u/${seller.username}?tab=parts` : "#"}
+                className="pdp__seller"
+              >
+                <span className="monogram monogram--sm pdp__seller-face" aria-hidden="true">
+                  {seller.avatar_url ? (
+                    <Media src={seller.avatar_url} alt="" className="h-full w-full" role="avatar" />
+                  ) : (
+                    sellerInitials
+                  )}
+                </span>
                 <span className="min-w-0">
-                  <span className="order__name block">{seller.display_name ?? (seller.username ? `@${seller.username}` : "Seller on DRVN")}</span>
-                  <span className="order__meta block">
-                    {avgRating
-                      ? // avgRating is already a display string ("4.8") —
-                        // ratingLine only interpolates it, so the cast is safe.
-                        ratingLine(avgRating, (reviews ?? []).length)
-                      : (seller.location ?? "Seller on DRVN")}
+                  <span className="pdp__seller-name">{sellerName}</span>
+                  <span className="pdp__seller-meta">
+                    {[listing.location ?? seller.location, sellerRecord || "Seller on DRVN"].filter(Boolean).join(" · ")}
                   </span>
                 </span>
               </Link>
+            )}
+            {sourceCar?.is_public && (
+              <div className="pdp__source">
+                <span className="microlabel microlabel--ink">
+                  {modLineName ? `Came off this car — ${modLineName}` : "Came off this car"}
+                </span>
+                <VehicleCard
+                  vehicle={{
+                    id: sourceCar.id,
+                    slug: sourceCar.slug,
+                    name: sourceCar.name,
+                    year: sourceCar.year,
+                    make: sourceCar.make,
+                    model: sourceCar.model,
+                    cover_image_url: sourceCar.cover_image_url,
+                  }}
+                />
+              </div>
             )}
 
             {/* The record, after the decision: watchers, part number, dispatch
@@ -418,15 +515,20 @@ export default async function ListingPage({
                 short phone viewport none of them belongs between the price
                 and Buy/Offer (SYS-09). */}
             <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-3">
-              {/* What the sheet has seen of this part — watchers are live,
-                  views are cumulative, so only the watcher line carries the
-                  live dot. */}
-              <LiveDim
-                label="Watching"
-                value={watchCount > 0 ? `${watchCount} watching` : "—"}
-                live={watchCount > 0}
-                blank={watchCount === 0}
-              />
+              {/* Watchers only when there are some: an empty metric with a
+                  dash read as a value that failed to load. The owner sees
+                  their numbers, zeros included — that is the answer. */}
+              {(watchCount > 0 || isOwn) && (
+                <LiveDim
+                  label="Watching"
+                  value={`${watchCount} watching`}
+                  live={watchCount > 0}
+                  blank={watchCount === 0}
+                />
+              )}
+              {isOwn && (
+                <LiveDim label="Views" value={String(listing.view_count ?? 0)} blank={!listing.view_count} />
+              )}
               {/* M-8's two named exceptions to "the item page is unchanged":
                   brand and miles join the record block, because they are what
                   a buyer checks a used part against. */}
@@ -442,10 +544,12 @@ export default async function ListingPage({
               )}
               {listing.status === "active" && (
                 <p className="spec-note mt-2">
-                  Sellers are expected to dispatch within 3 working days of a sale.
+                  {isOwn
+                    ? "Dispatch within 3 working days of a sale."
+                    : "Sellers are expected to dispatch within 3 working days of a sale."}
                 </p>
               )}
-              {user?.id !== listing.seller_id && (
+              {!isOwn && (
                 <div className="mt-3">
                   <ReportButton
                     subjectType="listing"
@@ -458,14 +562,18 @@ export default async function ListingPage({
             </div>
           </Rv>
 
-          <Rv className="tile" stagger={3}>
-            <span className="microlabel microlabel--ink">Compatibility</span>
-            {selectedVehicle && <p className="kv mt-2">Selected: {[shoppingState.vyear, selectedVehicle.label].filter(Boolean).join(" ")}</p>}
-            {!selectedVehicle && bestGarage && <p className="kv mt-2">Your garage: {bestGarage.car.name}</p>}
-            <p className="mt-2"><strong>{evidence.label}</strong></p>
-            <p className="spec-note mt-1">{evidence.detail}</p>
-            {!selectedVehicle && <Link href={returnTo ?? `/marketplace/${listing.category}`} className="jumplink mt-3 inline-block">Choose a vehicle in the marketplace</Link>}
-          </Rv>
+          {/* Compatibility is a buyer's question — the seller's own garage
+              matching their own part says nothing. */}
+          {!isOwn && (
+            <Rv className="tile" stagger={3}>
+              <TileHead label="Compatibility" />
+              {selectedVehicle && <p className="kv mt-2">Selected: {[shoppingState.vyear, selectedVehicle.label].filter(Boolean).join(" ")}</p>}
+              {!selectedVehicle && bestGarage && <p className="kv mt-2">Your garage: {bestGarage.car.name}</p>}
+              <p className="mt-2"><strong>{evidence.label}</strong></p>
+              <p className="spec-note mt-1">{evidence.detail}</p>
+              {!selectedVehicle && <Link href={returnTo ?? `/marketplace/${listing.category}`} className="jumplink mt-3 inline-block">Choose a vehicle in the marketplace</Link>}
+            </Rv>
+          )}
         </div>
 
         {/* Content: long-form facts + Q&A */}
@@ -486,7 +594,7 @@ export default async function ListingPage({
               <span className="microlabel microlabel--ink">Condition — seller-declared</span>
               {listing.grade && (
                 <p className="mt-2 text-body">
-                  <span className="chip chip--ok">{gradeLabel(listing.grade)}</span>{" "}
+                  <Badge>{gradeLabel(listing.grade)}</Badge>{" "}
                   <span className="text-dim">{gradeMeaning(listing.grade)}</span>
                 </p>
               )}
@@ -553,50 +661,34 @@ export default async function ListingPage({
             listingId={listing.id}
             items={qaItems}
             isLoggedIn={Boolean(user)}
-            isSeller={user?.id === listing.seller_id}
+            isSeller={isOwn}
           />
         </div>
 
-        {/* Secondary: protection + provenance — trust context that shouldn't
-            outrank the description on a phone. */}
-        <div className="pdp__more flex min-w-0 flex-col gap-4 self-start">
-          {/* Buyer protection summary — the dispute rules live on /protection;
-              this is the short version so a buyer sees the guarantee before
-              they need it, not only after something goes wrong. */}
-          <Rv className="tile" stagger={2}>
-            <span className="microlabel microlabel--ink">Buyer protection</span>
-            <p className="kv mt-2 text-dim">
-              Covered: item never arrives, arrives damaged, is significantly not as described, or
-              is the wrong item.
-            </p>
-            <p className="spec-note mt-2">
-              Report a problem within {DISPUTE_WINDOW_DAYS} days of delivery and the seller has{" "}
-              {SELLER_RESPONSE_DAYS} days to respond before DRVN can step in.
-            </p>
-            <Link href="/protection" className="jumplink mt-2 inline-flex">
-              How protection &amp; disputes work
-            </Link>
-          </Rv>
-
-          {sourceCar?.is_public && (
-            <Rv className="tile tile--deep" stagger={4}>
-              <div className="tile__head">
-                <span className="microlabel microlabel--ink">
-                  {modLineName ? `Came off ${sourceCar.name}` : "Came off this car"}
-                </span>
-                <span className="chip chip--ok">Build page</span>
-              </div>
-              <Link href={`/cars/${sourceCar.slug}?fromListing=${encodeURIComponent(id)}${returnTo ? `&from=${encodeURIComponent(returnTo)}` : ""}`} className="order !bg-transparent !p-0">
-                <span>
-                  <span className="order__name block">
-                    {modLineName ? `${sourceCar.name} — ${modLineName}` : sourceCar.name}
-                  </span>
-                  <span className="order__meta block">See the full build — mods, photos, history →</span>
-                </span>
+        {/* Secondary: protection — trust context that shouldn't outrank the
+            description on a phone. Buyers only: the seller's side of a
+            dispute is explained where they list. */}
+        {!isOwn && (
+          <div className="pdp__more flex min-w-0 flex-col gap-4 self-start">
+            {/* Buyer protection summary — the dispute rules live on /protection;
+                this is the short version so a buyer sees the guarantee before
+                they need it, not only after something goes wrong. */}
+            <Rv className="tile" stagger={2}>
+              <TileHead label="Buyer protection" />
+              <p className="text-body mt-2">
+                Covered: the item never arrives, arrives damaged, is significantly not as described,
+                or is the wrong item.
+              </p>
+              <p className="spec-note mt-2">
+                Report a problem within {DISPUTE_WINDOW_DAYS} days of delivery and the seller has{" "}
+                {SELLER_RESPONSE_DAYS} days to respond before DRVN can step in.
+              </p>
+              <Link href="/protection" className="jumplink mt-2 inline-flex">
+                How protection &amp; disputes work
               </Link>
             </Rv>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {postsAboutPart.length > 0 && (
@@ -627,9 +719,9 @@ export default async function ListingPage({
         <section className="deck">
           <div className="marketplace-grid">
             <div className="tile__head">
-              <span className="microlabel microlabel--ink">More from this seller</span>
+              <span className="microlabel microlabel--ink">{isOwn ? "Your other listings" : "More from this seller"}</span>
             </div>
-            <Mosaic label="More from this seller">
+            <Mosaic label={isOwn ? "Your other listings" : "More from this seller"}>
               {moreFromSellerCards.map((card) => (
                 <ListingCard key={card.id} listing={card} variant="shopping" />
               ))}

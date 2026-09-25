@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { AccountRowList } from "@/components/commerce";
+import { FollowButton } from "@/features/social/buttons";
 import { EmptyState, FilterGroup, FilterLink, Foot, Icon, type IconName } from "@/components/ui";
 import { MarketplaceResults } from "@/features/marketplace/results";
 import {
@@ -26,7 +27,7 @@ import { ExploreSearchBar } from "./search-bar";
 import { AllSearchResults, SearchEmptyState } from "./search-results";
 import { SearchWall } from "./search-wall";
 import { ExploreWall } from "./explore-wall";
-import { BuildersBreaker, TrendingBreaker } from "./breakers";
+import { BuildersBreaker, JoinBreaker, TrendingBreaker } from "./breakers";
 
 export const metadata = { title: "Explore - DRVN" };
 
@@ -79,7 +80,7 @@ export default async function ExplorePage({
         supabase.rpc("trending_models", { p_days: 45, p_limit: 10 }),
         supabase.rpc("suggested_builders", {
           p_viewer: viewerId ?? undefined,
-          p_limit: showBuilders ? 24 : 4,
+          p_limit: showBuilders ? 24 : 8,
         }),
       ]);
   const trending = (trendingRows ?? []).map((t) => ({
@@ -87,7 +88,12 @@ export default async function ExplorePage({
     model: t.model,
     builds: Number(t.builds),
   }));
-  const builders = (builderRows ?? []).map((b) => ({
+  // Only people with a face and a name are suggested: a blank plate with a
+  // handle (placeholder and test accounts) read as a broken first row.
+  const builders = (builderRows ?? [])
+    .filter((b) => b.avatar_url && b.display_name?.trim())
+    .slice(0, showBuilders ? 24 : 4)
+    .map((b) => ({
     id: b.id,
     username: b.username,
     display_name: b.display_name,
@@ -105,7 +111,12 @@ export default async function ExplorePage({
   // Browse mode: page one of the feed renders here; the wall pulls the rest.
   const feed = searching || showBuilders
     ? null
-    : await fetchFeed(supabase, tab, { page: 1, viewerId });
+    : await fetchFeed(supabase, tab, {
+        page: 1,
+        viewerId,
+        // The mixed wall leaves your own things out (see loadFeedPage).
+        excludeOwnerId: tab === "all" ? viewerId : null,
+      });
 
   // Search mode: one scope's worth of work, nothing speculative.
   const partsPageNum = Math.max(1, Number(raw.page) || 1);
@@ -176,7 +187,7 @@ export default async function ExplorePage({
       {/* One control band for the scope filters. Scope links carry
           compatible search state and shed the rest (brief §30). */}
       <div className="explorebar">
-        <FilterGroup label="Show" ariaLabel="Filter the feed" stack scroll>
+        <FilterGroup label="Show" ariaLabel="Filter the feed" stack fit>
           {FEED_TABS.map((t) => (
             <FilterLink
               key={t.key}
@@ -207,8 +218,19 @@ export default async function ExplorePage({
 
       {showBuilders &&
         (builders.length > 0 ? (
-          <section className="deck" aria-label="Builders to follow">
-            <AccountRowList accounts={builders} />
+          <section className="deck peoplerows" aria-label="Builders to follow">
+            <AccountRowList
+              accounts={builders}
+              action={(account) => (
+                <FollowButton
+                  targetType="profile"
+                  targetId={account.id}
+                  path="/explore?show=builders"
+                  initialFollowing={false}
+                  isLoggedIn={isLoggedIn}
+                />
+              )}
+            />
           </section>
         ) : (
           <EmptyState mark="✎" title="No builders to suggest yet">
@@ -229,7 +251,9 @@ export default async function ExplorePage({
              renders nothing at all when its query came back thin. */
           breakers={{
             5: <TrendingBreaker models={trending} />,
-            13: <BuildersBreaker builders={builders} />,
+            // Signed out: the join moment, between the two content breakers.
+            ...(isLoggedIn ? {} : { 9: <JoinBreaker /> }),
+            13: <BuildersBreaker builders={builders} isLoggedIn={isLoggedIn} />,
           }}
         />
       )}

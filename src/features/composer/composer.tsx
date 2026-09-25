@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
-import { normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
+import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
 
 import { blocksToDoc, docToBlocks, type PmDoc } from "./doc";
 import { composerNodes, type ComposerContext } from "./extensions";
@@ -401,12 +401,31 @@ export function BuildStoryComposer({
 
   const showTemplates = !isEdit && isEmpty;
 
+  // W-2: the server refuses to publish without a photo. Said up front, next
+  // to Publish, instead of as an error after the member has written it all.
+  const hasPhoto = useMemo(() => {
+    try {
+      return blockMediaUrls(JSON.parse(blocksJson) as ActivityBlock[]).length > 0;
+    } catch {
+      return false;
+    }
+  }, [blocksJson]);
+  const missing = [!title.trim() && "a title", !isEdit && !hasPhoto && "a photo"].filter(Boolean);
+  const publishReason = missing.length ? `Add ${missing.join(" and ")} to publish` : null;
+  const titleInput = useRef<HTMLInputElement>(null);
+  const addPhotos = useCallback(() => {
+    if (!editor) return;
+    editor.commands.focus("end");
+    INSERT_ITEMS.find((item) => item.key === "photos")?.insert(editor);
+  }, [editor]);
+
   return (
     <div className="bsc">
       <label htmlFor="composer-title" className="microlabel">
         Title
       </label>
       <input
+        ref={titleInput}
         id="composer-title"
         className="bsc__title"
         placeholder="Title your update"
@@ -427,7 +446,7 @@ export function BuildStoryComposer({
             <button
               key={template.key}
               type="button"
-              className="chip chip--ink bsc__starter"
+              className="chip bsc__starter"
               title={template.explain}
               onClick={() => applyTemplate(template)}
             >
@@ -473,6 +492,12 @@ export function BuildStoryComposer({
       )}
 
       <div className="bsc__addwrap">
+        {/* Photos first while there are none — publishing needs one. */}
+        {!isEdit && !hasPhoto && (
+          <Button variant="ghost" onClick={addPhotos}>
+            + Add photos
+          </Button>
+        )}
         <button
           type="button"
           className="btn btn--ghost"
@@ -481,7 +506,6 @@ export function BuildStoryComposer({
         >
           + Add something
         </button>
-        <span className="text-micro text-dim">or type / anywhere</span>
         {plusOpen && (
           <div className="combo__pop bsc__plus" role="menu" aria-label="Add a block">
             <ul className="combo__list">
@@ -531,6 +555,14 @@ export function BuildStoryComposer({
       <form className="bsc__foot" onSubmit={(event) => {
         event.preventDefault();
         const mode = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "draft" ? "draft" : "publish";
+        // Publish stays a full-colour button (aria-disabled, not disabled) so
+        // it reads as the primary action; pressing it early takes you to
+        // what's missing instead of doing nothing.
+        if (mode === "publish" && publishReason) {
+          if (!title.trim()) titleInput.current?.focus();
+          else addPhotos();
+          return;
+        }
         void submit(mode, new FormData(event.currentTarget));
       }}>
         <input type="hidden" name="car_id" value={carId} />
@@ -549,7 +581,9 @@ export function BuildStoryComposer({
             value="publish"
             loading={publishing}
             pendingLabel={isEdit ? "Saving…" : "Publishing…"}
-            disabled={!title.trim() || draftPending}
+            disabled={draftPending}
+            aria-disabled={publishReason ? true : undefined}
+            aria-describedby="composer-status"
           >
             {isEdit ? "Save changes" : "Publish"}
           </Button>
@@ -566,20 +600,22 @@ export function BuildStoryComposer({
               Save draft
             </Button>
           )}
-          <span className="microlabel !mb-0" aria-live="polite">
+          <span id="composer-status" className="microlabel !mb-0" aria-live="polite">
             {publishState.error || draftState.error ? (
               <span className="text-live" role="alert">{publishState.error ?? draftState.error}</span>
             ) : publishState.ok ? (
               <span role="status">{publishState.ok}</span>
             ) : saveState === "saving" ? (
               "Saving…"
+            ) : publishReason && saveState !== "error" && saveState !== "recovered" ? (
+              publishReason
             ) : saveState === "saved" ? (
               "Saved — only you can see it"
             ) : saveState === "error" ? (
               <span className="text-live">Autosave failed — use Save draft</span>
             ) : saveState === "recovered" ? (
               "Recovered a newer browser draft — save or publish when ready"
-            ) : null}
+) : null}
           </span>
         </div>
       </form>

@@ -25,11 +25,13 @@ export function MetricCard({
   label: ReactNode;
   /** Paints the microlabel live — something on this tile needs the reader. */
   live?: boolean;
-  /** The giant numeral. Pass "—" (or set `blank`) when there is nothing to count. */
+  /** The giant numeral. With nothing to count, pass the real zero ("0",
+   *  "$0") and set `blank` — a dim figure reads as a settled answer, where a
+   *  dash read as a loading skeleton. */
   value: ReactNode;
   /** Paints the numeral itself live (rare — a count demanding action now). */
   valueLive?: boolean;
-  /** Dim the numeral (`.num-giant--blank`) — nothing measured yet. */
+  /** Dim the numeral (`.num-giant--blank`) — nothing counted yet. */
   blank?: boolean;
   stagger?: number;
   /** Floor-pinned slot — a `jumplink` to the surface being measured. */

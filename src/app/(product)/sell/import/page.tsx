@@ -6,6 +6,7 @@ import { resolveImportConfig } from "@/lib/listing-import/config";
 import { getBetaAccess } from "@/lib/beta-access";
 import { createClient } from "@/lib/supabase/server";
 
+import { SellerAccessNotice } from "../seller-access-notice";
 import { ImportFlow } from "./import-flow";
 
 export const metadata = { title: "Import a listing - DRVN" };
@@ -24,15 +25,7 @@ export default async function ImportPage({
   if (!user) redirect("/login");
 
   const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) {
-    return (
-      <div className="wrap pb-10">
-        <EmptyState mark="β" title="Listing imports are limited to invited sellers">
-          Existing orders remain available, but this account cannot start new selling activity.
-        </EmptyState>
-      </div>
-    );
-  }
+  if (!betaAccess.eligible) return <SellerAccessNotice />;
 
   const [{ data: profile }, config] = await Promise.all([
     supabase.from("profiles").select("import_attested_at").eq("id", user.id).maybeSingle(),

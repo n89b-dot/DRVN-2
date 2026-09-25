@@ -21,6 +21,13 @@ import { cx } from "@/lib/format";
  * - `sub`          — a quieter secondary axis beneath a primary one.
  * - `scroll`       — compact widths scroll sideways in the page gutter
  *                    instead of wrapping; pair with `sub` for dense axes.
+ * - `fit`          — a short, fixed set of segments (Explore's five) that
+ *                    must all be visible on a phone: below 640px they share
+ *                    the row in equal columns, icon over word, and the
+ *                    leading label steps aside. Never a sideways scroll.
+ *
+ * A scrolling row also drops its leading label below 640px — on a phone the
+ * label cost ~100px and pushed real choices off-screen.
  */
 export function FilterGroup({
   label,
@@ -28,6 +35,7 @@ export function FilterGroup({
   stack = false,
   sub = false,
   scroll = false,
+  fit = false,
   className,
   children,
 }: {
@@ -38,6 +46,7 @@ export function FilterGroup({
   stack?: boolean;
   sub?: boolean;
   scroll?: boolean;
+  fit?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -48,6 +57,7 @@ export function FilterGroup({
         stack && "filters--stack",
         sub && "filters--sub",
         scroll && "filters--scroll",
+        fit && "filters--fit",
         className
       )}
       role="group"

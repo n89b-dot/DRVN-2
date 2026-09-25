@@ -21,7 +21,11 @@ export function MarketplaceResults({
   shopping,
   store,
   ownerActions,
+  headEnd,
 }: {
+  /** A control that belongs on the count's row — the Marketplace's vehicle
+   *  picker, so a phone isn't handed a fourth row of chrome before a part. */
+  headEnd?: ReactNode;
   page: ListingPage;
   basePath: string;
   /** Current query params, preserved across sort and page links. */
@@ -57,7 +61,10 @@ export function MarketplaceResults({
   const summary = (
     <div className="marketplace-results-head" role="status" aria-live="polite" aria-atomic="true">
       <h2>{store ? store.heading(total) : `${total.toLocaleString("en-US")} ${total === 1 ? "part" : "parts"}${hasFilters ? " found" : " available"}`}</h2>
-      {total > 0 && results.length > 0 && <span className="microlabel">Showing {(current - 1) * page.pageSize + 1}–{(current - 1) * page.pageSize + results.length}</span>}
+      {/* The range only says something when there is more than one page;
+          on one page it repeats the count. */}
+      {results.length > 0 && (current > 1 || hasMore) && <span className="microlabel">Showing {(current - 1) * page.pageSize + 1}–{(current - 1) * page.pageSize + results.length}</span>}
+      {headEnd}
     </div>
   );
 
@@ -92,19 +99,28 @@ export function MarketplaceResults({
       <div className={isMarketplace ? "marketplace-grid" : undefined}>
       <Mosaic commerce label="Parts for sale">
         {results.map((listing, index) => {
+          // Your own part in the results is marked as yours (the image flag)
+          // and offers Edit instead of Save / cart — you can't buy it, and
+          // "From the same vehicle model" means nothing about your own car.
+          const own = Boolean(listing.seller_id && listing.seller_id === viewerId);
           return (
             <ListingCard
               key={listing.id}
-              listing={listing}
+              listing={own && !store ? { ...listing, status_flag: listing.status_flag ?? "Yours", match_evidence: null } : listing}
               eager={index === 0}
               variant={isMarketplace ? "shopping" : "feed"}
-              save={{ isLoggedIn, path: returnPath }}
+              save={own ? undefined : { isLoggedIn, path: returnPath }}
               /* M-5: add to cart on the card, never Buy now. Deciding to buy
                  happens on the item page; this is for the part you already
                  recognised. Hidden on your own listing — you can't buy it. */
               actions={
-                listing.seller_id && listing.seller_id === viewerId ? (
-                  ownerActions?.(listing)
+                own ? (
+                  ownerActions?.(listing) ??
+                  (store ? undefined : (
+                    <ButtonLink href={`/listings/${listing.id}/edit`} variant="quiet">
+                      Edit
+                    </ButtonLink>
+                  ))
                 ) : listing.status_flag ? (
                   // Sold, reserved: there is nothing to add to a cart. The
                   // card says which; a button that can only fail says nothing.

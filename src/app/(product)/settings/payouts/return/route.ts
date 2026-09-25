@@ -8,7 +8,7 @@ import { reportError } from "@/lib/monitoring";
  * Where Stripe sends the seller back after (or mid-way through) Connect
  * onboarding — both `return_url` and `refresh_url` land here. Returning is
  * not proof of completion, so the live account state is fetched and
- * `payouts_enabled` stored before Settings renders it.
+ * `payouts_enabled` stored before /payouts renders it.
  */
 export async function GET() {
   const supabase = await createClient();
@@ -27,6 +27,6 @@ export async function GET() {
     }
   }
 
-  // Sections are hash-driven in the settings panel.
-  redirect("/settings#payments");
+  // The payout account's status lives on /payouts, the family's money page.
+  redirect("/payouts");
 }

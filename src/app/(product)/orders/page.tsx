@@ -1,8 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Fragment } from "react";
 
 import { Rv } from "@/components/livesheet";
-import { Alert, Foot, SellingNav, Pagination, TileHead } from "@/components/ui";
+import {
+  Alert,
+  ButtonLink,
+  EmptyState,
+  Foot,
+  ObjectRow,
+  SellingNav,
+  Pagination,
+  TileHead,
+} from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
@@ -90,7 +100,6 @@ export default async function OrdersPage({
   // The anchor-emitting link builders had to be fixed at the source instead.
   if (legacyOfferId) redirect(`/offers/${legacyOfferId}`);
 
-  const view = viewParam === "sales" ? "sales" : "purchases";
   const state = isStateGroup(stateParam) ? stateParam : undefined;
   // A raw status is the operational escape hatch and wins over the group.
   const rawStatus = isRawStatus(statusParam) ? statusParam : undefined;
@@ -102,6 +111,22 @@ export default async function OrdersPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Orders sits in the Selling family, so with no explicit view a seller
+  // lands on their sales — reached from the Selling nav or the rail, the
+  // buyer's view was the wrong half of the page. Members who have never
+  // listed a part keep purchases as the default. An explicit ?view= always
+  // wins, and both chips carry one.
+  let view: "sales" | "purchases";
+  if (viewParam === "sales" || viewParam === "purchases") view = viewParam;
+  else {
+    const { count: listingCount } = await supabase
+      .from("listings")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", user.id)
+      .limit(1);
+    view = (listingCount ?? 0) > 0 ? "sales" : "purchases";
+  }
 
   const roleColumn = view === "purchases" ? "buyer_id" : "seller_id";
 
@@ -124,6 +149,7 @@ export default async function OrdersPage({
     { data: orders, count, error: ordersError },
     offersCount,
     { count: needsDispatchCount },
+    { count: viewTotal },
   ] = await Promise.all([
     ordersQuery
       .order("created_at", { ascending: false })
@@ -134,6 +160,12 @@ export default async function OrdersPage({
       .select("id", { count: "exact", head: true })
       .eq("seller_id", user.id)
       .eq("status", "paid"),
+    // Everything in this view, unfiltered: with none at all, the state
+    // filters have nothing to refine and stay off the page.
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq(roleColumn, user.id),
   ]);
 
   if (ordersError) reportError("[orders] failed to load orders", ordersError);
@@ -152,7 +184,8 @@ export default async function OrdersPage({
     ...new Set(rows.flatMap((o) => [o.buyer_id, o.seller_id])),
   ].filter((x): x is string => Boolean(x) && x !== user.id);
 
-  const [{ data: people }, { data: listingTitles }] = await Promise.all([
+  const itemIds = items.map((i) => i.id);
+  const [{ data: people }, { data: listingTitles }, { data: frozenImages }] = await Promise.all([
     counterpartyIds.length
       ? supabase
           .from("profiles")
@@ -162,7 +195,20 @@ export default async function OrdersPage({
     listingIds.length
       ? supabase.from("listings").select("id, title").in("id", listingIds)
       : Promise.resolve({ data: [] }),
+    // The part's photo as it was bought (0049's frozen gallery) — a seller
+    // picking the right part off the shelf goes by the picture.
+    itemIds.length
+      ? supabase
+          .from("order_item_snapshot_images")
+          .select("order_item_id, url, position")
+          .in("order_item_id", itemIds)
+          .order("position")
+      : Promise.resolve({ data: [] }),
   ]);
+  const coverByItem = new Map<string, string>();
+  for (const img of frozenImages ?? []) {
+    if (!coverByItem.has(img.order_item_id)) coverByItem.set(img.order_item_id, img.url);
+  }
 
   const name = (pid: string | null, fallback?: string | null) => {
     if (!pid) return fallback ?? "DRVN member";
@@ -181,7 +227,7 @@ export default async function OrdersPage({
   const firstOnPage = total === 0 ? 0 : from + 1;
   const lastOnPage = from + rows.length;
   const params = {
-    view: viewParam,
+    view,
     page: pageParam,
     state: stateParam,
     status: statusParam,
@@ -195,51 +241,52 @@ export default async function OrdersPage({
     const stamps = milestones(order);
     const latest = stamps[stamps.length - 1];
 
+    const lines = (items ?? []).filter((i) => i.order_id === order.id);
+    const lead = lines[0];
+    const leadTitle = lead ? (lead.title ?? listingTitle(lead.listing_id)) : "Order";
+    const cover = lines.map((i) => coverByItem.get(i.id)).find(Boolean);
+
+    // The shared dense row: the part's photo leads, then what the order
+    // wants next, the part, who and when, and the pipeline as a strip.
     return (
-      <Link
+      <ObjectRow
         href={`/orders/${order.id}`}
-        className="jobrow block transition-colors hover:bg-[color:var(--paper-deep)]"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <OrderPipeline
-            status={order.status}
-            progressStatus={order.pre_dispute_status}
-          />
+        media={{ src: cover, alt: leadTitle }}
+        className="order--under"
+        actions={
           <span className="kv font-medium">
             {isSale
               ? `${formatPrice(order.total_cents - order.platform_fee_cents)} payout`
               : formatPrice(order.total_cents)}
           </span>
-        </div>
-        {/* What this order wants next LEADS the row (SYS — orders triage by
-            next action, not by record): state, then the ask, then the item. */}
-        {action && (
-          <p className="ordernext !mt-2">
-            <span className="ordernext__mark" aria-hidden="true" />
-            {action}
-          </p>
-        )}
-        <ul className="mt-2">
-          {(items ?? [])
-            .filter((i) => i.order_id === order.id)
-            .map((i) => (
-              <li key={i.id} className="flex justify-between gap-3 py-0.5">
-                <span className="order__name min-w-0 truncate !text-body">
-                  {i.title ?? listingTitle(i.listing_id)}
-                </span>
-                <span className="kv shrink-0 text-dim">
-                  {formatPrice(i.price_cents)}
-                </span>
-              </li>
-            ))}
-        </ul>
-        <p className="order__meta mt-1">
-          {isSale
-            ? `Buyer — ${name(order.buyer_id, order.buyer_label)}`
-            : `Seller — ${name(order.seller_id, order.seller_label)}`}
-          {latest && ` · ${latest.label} ${latest.date}`}
-        </p>
-      </Link>
+        }
+      >
+        <span className="min-w-0">
+          {/* What this order wants next LEADS the row (SYS — orders triage by
+              next action, not by record): the ask, then the item. */}
+          {action && (
+            <span className="ordernext !mt-0">
+              <span className="ordernext__mark" aria-hidden="true" />
+              {action}
+            </span>
+          )}
+          <span className="order__name mt-1 block truncate">
+            {leadTitle}
+            {lines.length > 1 && (
+              <span className="text-dim"> + {lines.length - 1} more</span>
+            )}
+          </span>
+          <span className="order__meta block">
+            {isSale
+              ? `Buyer — ${name(order.buyer_id, order.buyer_label)}`
+              : `Seller — ${name(order.seller_id, order.seller_label)}`}
+            {latest && ` · ${latest.label} ${latest.date}`}
+          </span>
+          <span className="mt-2 block">
+            <OrderPipeline status={order.status} progressStatus={order.pre_dispute_status} />
+          </span>
+        </span>
+      </ObjectRow>
     );
   };
 
@@ -292,28 +339,19 @@ export default async function OrdersPage({
         aria-label="Order view"
       >
         <span className="microlabel filters__label">Show</span>
-        <Link
-          href={withParams("/orders", params, {
-            view: undefined,
-            page: undefined,
-          })}
-          className={`fbtn ${view === "purchases" ? "is-on" : ""}`}
-          aria-current={view === "purchases" ? "true" : undefined}
-        >
-          Purchases
-        </Link>
-        <Link
-          href={withParams("/orders", params, {
-            view: "sales",
-            page: undefined,
-          })}
-          className={`fbtn ${view === "sales" ? "is-on" : ""}`}
-          aria-current={view === "sales" ? "true" : undefined}
-        >
-          Sales
-        </Link>
+        {(["sales", "purchases"] as const).map((v) => (
+          <Link
+            key={v}
+            href={withParams("/orders", params, { view: v, page: undefined })}
+            className={`fbtn ${view === v ? "is-on" : ""}`}
+            aria-current={view === v ? "true" : undefined}
+          >
+            {v === "sales" ? "Sales" : "Purchases"}
+          </Link>
+        ))}
       </div>
 
+      {((viewTotal ?? 0) > 0 || state || rawStatus) && (
       <div
         className="filters filters--sub filters--scroll"
         role="group"
@@ -368,6 +406,7 @@ export default async function OrdersPage({
           </span>
         )}
       </div>
+      )}
 
       {rows.length > 0 ? (
         <Rv className="tile tile--deep" stagger={1}>
@@ -386,7 +425,7 @@ export default async function OrdersPage({
           />
           <div className="rowlist">
             {rows.map((o) => (
-              <div key={o.id}>
+              <Fragment key={o.id}>
                 <OrderRow order={o} />
                 {view === "purchases" && o.status === "shipped" && (
                   <div className="flex items-center justify-between gap-3 border-t border-[color:var(--rule-soft)] px-1 py-2">
@@ -394,49 +433,49 @@ export default async function OrdersPage({
                     <ReceivedButton orderId={o.id} />
                   </div>
                 )}
-              </div>
+              </Fragment>
             ))}
           </div>
         </Rv>
       ) : (
-        <Rv className="undrawn" stagger={1}>
-          <span className="undrawn__mark" aria-hidden="true">
-            ⏱
-          </span>
-          <h3>
-            {state || rawStatus
+        <EmptyState
+          mark="⇄"
+          title={
+            state || rawStatus
               ? "Nothing in this state"
               : view === "purchases"
                 ? "No purchases yet"
-                : "No sales yet"}
-          </h3>
-          <p>
-            {state || rawStatus
-              ? "No orders match this filter right now."
-              : view === "purchases"
-                ? "Buy now or have an offer accepted and it'll show up here."
-                : "Buyers can't offer until you list a part."}
-          </p>
-          {state || rawStatus ? (
-            <Link
-              href={withParams("/orders", params, {
-                state: undefined,
-                status: undefined,
-                page: undefined,
-              })}
-              className="btn btn--ghost"
-            >
-              Show all orders
-            </Link>
-          ) : (
-            <Link
-              href={view === "purchases" ? "/marketplace" : "/sell"}
-              className="btn btn--ghost"
-            >
-              {view === "purchases" ? "Browse the marketplace" : "List a part"}
-            </Link>
-          )}
-        </Rv>
+                : "No sales yet"
+          }
+          action={
+            state || rawStatus ? (
+              <ButtonLink
+                variant="ghost"
+                href={withParams("/orders", params, {
+                  state: undefined,
+                  status: undefined,
+                  page: undefined,
+                })}
+              >
+                Show all orders
+              </ButtonLink>
+            ) : view === "purchases" ? (
+              <ButtonLink variant="ghost" href="/marketplace">
+                Browse the marketplace
+              </ButtonLink>
+            ) : (
+              <ButtonLink variant="ghost" href="/listings">
+                My listings
+              </ButtonLink>
+            )
+          }
+        >
+          {state || rawStatus
+            ? "No orders match this filter right now."
+            : view === "purchases"
+              ? "Buy a part or have an offer accepted and it'll show up here."
+              : "When a buyer checks out one of your parts, the order lands here with what to do next."}
+        </EmptyState>
       )}
 
       <Pagination

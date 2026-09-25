@@ -88,9 +88,7 @@ function OfferSummary({ row }: { row: LedgerRow }) {
 
   if (!row.offers.length) {
     return (
-      <p className="py-1 font-mono text-micro uppercase tracking-[0.1em] text-dim">
-        No offers on this listing yet
-      </p>
+      <p className="py-1 text-dim">No offers yet — they&apos;ll show here with their clock.</p>
     );
   }
 
@@ -144,6 +142,36 @@ function OfferSummary({ row }: { row: LedgerRow }) {
             : "View offers →"}
         </Link>
       </p>
+    </div>
+  );
+}
+
+/**
+ * The listing's lifecycle controls — pause/relist, archive, delete — inside
+ * the opened row. Delete is the only one in the live ink: it's the one that
+ * can't be undone. Reserved/sold/removed rows get none (the actions return
+ * null for them and the DB delete guard refuses them anyway).
+ */
+function ManageRow({ row }: { row: LedgerRow }) {
+  const deletable = row.status !== "reserved" && row.status !== "sold" && row.status !== "removed";
+  return (
+    <div className="ledger__manage">
+      <span className="microlabel">Manage</span>
+      <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {row.status !== "draft" && (
+          <Link href={`/listings/${row.id}`} className="relbtn !static">
+            View listing
+          </Link>
+        )}
+        <ListingStatusActions id={row.id} status={row.status} />
+        {deletable && (
+          <DeleteListing
+            listingId={row.id}
+            triggerLabel="Delete"
+            triggerClassName="relbtn relbtn--danger !static"
+          />
+        )}
+      </span>
     </div>
   );
 }
@@ -286,7 +314,7 @@ export function ListingsLedger({
 
                   <td className="ledger__part">
                     <span className="flex items-center gap-3">
-                      <span className="order__img hidden sm:block">
+                      <span className="order__img">
                         <Media
                           src={row.cover ?? undefined}
                           alt={row.title}
@@ -307,23 +335,15 @@ export function ListingsLedger({
                         {row.partNumber && (
                           <span className="order__meta block">Part no. {row.partNumber}</span>
                         )}
-                        {/* Working controls appear when the row is engaged —
-                            hover, keyboard focus, or open — and stay put on
-                            touch layouts, where there is no hover to reveal
-                            them. */}
+                        {/* One routine action on the row. Pause, archive and
+                            delete used to sit beside it as four identical
+                            buttons, so the destructive one looked like the
+                            rest; they now live in the opened row, where the
+                            seller has already said "this one". */}
                         <span className="ledger__acts mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                           <Link href={`/listings/${row.id}/edit`} className="relbtn !static">
                             Edit
                           </Link>
-                          <ListingStatusActions id={row.id} status={row.status} />
-                          {/* Full deletion, not just archiving — for any row
-                              the DB delete guard allows. Reserved/sold rows
-                              keep their history and can only be archived. */}
-                          {row.status !== "reserved" &&
-                            row.status !== "sold" &&
-                            row.status !== "removed" && (
-                              <DeleteListing listingId={row.id} triggerLabel="Delete" />
-                            )}
                           {row.unansweredQuestions > 0 && (
                             <Link href={`/listings/${row.id}#qa`} className="chip chip--live">
                               {row.unansweredQuestions} question
@@ -398,6 +418,7 @@ export function ListingsLedger({
                       <div className="pb-2 pl-[18px]">
                         <span className="microlabel">Offers on this listing</span>
                         <OfferSummary row={row} />
+                        <ManageRow row={row} />
                       </div>
                     </motion.div>
                   </td>

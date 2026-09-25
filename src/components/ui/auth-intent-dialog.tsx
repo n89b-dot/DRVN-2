@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
-
 import {
-  AUTH_INTENT_COPY,
   authHref,
+  authIntentCopy,
   authReturnTo,
   type AuthIntent,
+  type AuthIntentSubject,
 } from "@/lib/auth-intent";
 
+import { ButtonLink } from "./button";
 import { Dialog } from "./dialog";
 
 /**
@@ -29,6 +29,7 @@ export function AuthIntentDialog({
   /** Internal path to come back to — the action is appended as `?action=`. */
   returnPath,
   resume = true,
+  subject,
 }: {
   open: boolean;
   onClose: () => void;
@@ -40,8 +41,11 @@ export function AuthIntentDialog({
    * it would leave a parameter on the URL that means nothing.
    */
   resume?: boolean;
+  /** What the action is about — a save or like on a build reads differently
+   *  from one on a part. */
+  subject?: AuthIntentSubject;
 }) {
-  const copy = AUTH_INTENT_COPY[intent];
+  const copy = authIntentCopy(intent, subject);
   const returnTo = resume ? authReturnTo(returnPath, intent) : returnPath;
 
   return (
@@ -60,12 +64,12 @@ export function AuthIntentDialog({
         </ul>
 
         <div className="sheet__actions">
-          <Link href={authHref("/login", returnTo)} className="btn btn--live flex-1">
+          <ButtonLink href={authHref("/login", returnTo)} variant="live" className="flex-1">
             {copy.signIn}
-          </Link>
-          <Link href={authHref("/signup", returnTo)} className="btn btn--ghost flex-1">
+          </ButtonLink>
+          <ButtonLink href={authHref("/signup", returnTo)} variant="ghost" className="flex-1">
             Create account
-          </Link>
+          </ButtonLink>
         </div>
         <p className="spec-note">{copy.returnNote}</p>
       </div>

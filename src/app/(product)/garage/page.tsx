@@ -35,7 +35,10 @@ export default async function GaragePage({
   // G-1: `?car=` focuses one car; without it the garage is the list it has
   // always been. An unknown id falls back to the list rather than a 404 —
   // a stale link from a deleted car should land somewhere useful.
-  const focused = carParam ? sheets.find((s) => s.id === carParam) : undefined;
+  // The garage opens on the main car (sheets arrive main-first). "All cars"
+  // is `?car=all` — a destination you choose, not the default.
+  const focused =
+    carParam === "all" ? undefined : (sheets.find((s) => s.id === carParam) ?? sheets[0]);
 
   // G-3: the focused car's mods and photos are edited here, in place — the
   // same editors the full car page mounts, given the same rows. Loaded only
@@ -68,8 +71,7 @@ export default async function GaragePage({
       ? [
           `${sheets.length} car${sheets.length === 1 ? "" : "s"}`,
           `${totals.updates} update${totals.updates === 1 ? "" : "s"}`,
-          `${totals.live} part${totals.live === 1 ? "" : "s"} live`,
-          totals.earned > 0 ? `${formatPrice(totals.earned)} earned off them` : null,
+          `${totals.live} live`,
         ]
           .filter(Boolean)
           .join(" · ")
@@ -77,30 +79,44 @@ export default async function GaragePage({
 
   return (
     <div className="wrap">
-      <Rv as="header" className="pagehead pagehead--task">
-        <span className="microlabel">Garage{tally ? ` — ${tally}` : ""}</span>
-        {/* Provenance stays a supporting fact (brand doc): the headline is
-            the cars; the tally and the sheets carry what's happening. */}
-        <h1>
-          The cars you&apos;re <span className="live-word">building.</span>
-        </h1>
+      <Rv as="header" className="pagehead pagehead--task garagehead">
+        <div className="pagehead__row">
+          <div>
+            <span className="microlabel">
+              {/* On a phone the tally alone fits one line; "Garage" is the
+                  page's name in the nav already. */}
+              <span className="max-sm:hidden">Garage{tally ? " — " : ""}</span>
+              {tally}
+              {totals.earned > 0 && (
+                <span className="max-sm:hidden"> · {formatPrice(totals.earned)} earned off them</span>
+              )}
+            </span>
+            {/* Provenance stays a supporting fact (brand doc): the headline is
+                the cars; the tally and the sheets carry what's happening. */}
+            <h1>
+              The cars you&apos;re <span className="live-word">building.</span>
+            </h1>
+          </div>
+          {/* G-1: Add vehicle exists once — here, where it is visible on a
+              phone, rather than as the last chip of a strip that scrolls it
+              off-screen. */}
+          {sheets.length > 0 && (
+            <span id="add-car" className="scroll-mt-24">
+              <AddCarForm quiet />
+            </span>
+          )}
+        </div>
         {sheets.length > 0 ? (
-          <p className="sub">
-            {totals.offers > 0
-              ? `${totals.offers} offer${totals.offers === 1 ? "" : "s"} waiting on parts off your cars.`
-              : "Each sheet shows what's happened to the car and what's next for it."}
-          </p>
+          totals.offers > 0 && (
+            <p className="sub">
+              {`${totals.offers} offer${totals.offers === 1 ? "" : "s"} waiting on parts off your cars.`}
+            </p>
+          )
         ) : (
           <p className="sub">
             Add the car you&apos;re building. Photos, the mod list and every part you sell off it
             live on one build page.
           </p>
-        )}
-        {sheets.length > 0 && (
-          /* The switcher's "+ Add vehicle" chip lands here. */
-          <div className="mt-4 scroll-mt-24" id="add-car">
-            <AddCarForm quiet />
-          </div>
         )}
       </Rv>
 
@@ -111,7 +127,7 @@ export default async function GaragePage({
           sheet={focused}
           initialTab={view}
           panels={{
-            overview: <GarageCarOverview sheet={focused} />,
+            overview: <GarageCarOverview sheet={focused} mods={focusedMods ?? []} />,
             mods: (
               <div className="mt-6">
                 <ModsEditor carId={focused.id} initialMods={focusedMods ?? []} />

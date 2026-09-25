@@ -22,11 +22,15 @@ type FieldMessages = {
   error?: ReactNode;
   /** Success line, e.g. "Looks good" — only where confirmation means something. */
   ok?: ReactNode;
+  /** A live check running against the value ("Checking…", "✓ Available").
+   *  Passing the prop (even empty) mounts a stable polite live region, so
+   *  screen readers hear each change without the region being re-created. */
+  status?: ReactNode;
 };
 
-function describedBy(id: string, { hint, error, ok }: FieldMessages) {
+function describedBy(id: string, { hint, error, ok, status }: FieldMessages) {
   return (
-    [error && `${id}-err`, ok && `${id}-ok`, hint && `${id}-hint`]
+    [error && `${id}-err`, ok && `${id}-ok`, hint && `${id}-hint`, status !== undefined && `${id}-status`]
       .filter(Boolean)
       .join(" ") || undefined
   );
@@ -46,6 +50,7 @@ export function FormField({
   hint,
   error,
   ok,
+  status,
   row = false,
   className,
   children,
@@ -99,6 +104,11 @@ export function FormField({
           {hint}
         </span>
       )}
+      {status !== undefined && (
+        <span id={`${id}-status`} role="status" aria-live="polite" className="field__hint">
+          {status}
+        </span>
+      )}
     </div>
   );
 }
@@ -127,6 +137,7 @@ export function TextField({
   hint,
   error,
   ok,
+  status,
   row,
   prefix,
   className,
@@ -142,7 +153,7 @@ export function TextField({
       id={id}
       className={cx("ctl", className)}
       aria-invalid={error ? true : undefined}
-      aria-describedby={describedBy(id, { hint, error, ok })}
+      aria-describedby={describedBy(id, { hint, error, ok, status })}
       required={required}
       {...rest}
     />
@@ -157,6 +168,7 @@ export function TextField({
       hint={hint}
       error={error}
       ok={ok}
+      status={status}
       row={row}
       className={fieldClassName}
     >

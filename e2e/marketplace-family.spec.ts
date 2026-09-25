@@ -214,7 +214,7 @@ test.describe.serial("Marketplace family", () => {
 
     await page.goto(listingPath);
     await page.getByRole("button", { name: "Make an offer" }).first().click();
-    await page.getByRole("link", { name: /sign in and make the offer/i }).click();
+    await page.getByRole("dialog", { name: "Sign in to make an offer" }).getByRole("link", { name: "Sign in", exact: true }).click();
 
     await expect(page).toHaveURL(/\/login\?next=/);
     await page.getByLabel(/email/i).fill(buyer.email);

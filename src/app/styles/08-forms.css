@@ -1,0 +1,1602 @@
+/* forms — part of the Livesheet stylesheet, imported in order by
+   src/app/globals.css. Everything here sits in @layer components. */
+@layer components {
+  /* ---------- in-system form controls ---------- */
+  .ctl {
+    /* What people type is read back as text, so it's set in Sans. Mono at
+       16px made every form read like a terminal. */
+    font-family: var(--sans);
+    font-size: 16px;
+    color: var(--ink);
+    background: var(--paper-deep);
+    border: 1px solid transparent; /* rest border so invalid/ok states paint */
+    border-radius: var(--r-ctl);
+    padding: 10px 12px;
+    min-width: 0;
+    width: 100%;
+    max-width: 320px;
+    transition:
+      border-color var(--t-fast) ease,
+      background var(--t-fast) ease;
+  }
+  .ctl:hover:not(:disabled) {
+    border-color: var(--rule-mid);
+  }
+  .ctl:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  /* A control on a raised surface (a tile, a sheet, the filter panel) is
+     outlined instead of filled: beige-on-beige plates lost their edges and
+     every panel read as a stack of blocks. Zero-specificity :where keeps
+     the state rules (invalid/ok/hover) above in charge. */
+  :where(.tile, .sheet, .bsheet__panel, .finder__refine) .ctl {
+    background: var(--tile-2);
+    border-color: var(--rule-mid);
+  }
+  .ctl::placeholder {
+    color: var(--dim);
+  }
+  /* Selects drop the browser chrome and draw their own caret: the native
+     glyph sat flush against the label with no air, and its position drifted
+     per platform. A drafting tick in the dim ink, held 14px off the right
+     edge, with enough right padding that label and caret never touch. */
+  select.ctl {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 38px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23565963' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px 6px;
+  }
+  [data-theme="dark"] select.ctl {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a909b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  }
+  /* Build Story Composer (features/composer) — the writing surface is bare
+     paper: no chrome until you want it. Rich blocks ride in .cblock shells
+     whose tools appear on hover/focus (always on coarse pointers). Motion:
+     new blocks rise in over --t-fast; nothing animates under
+     prefers-reduced-motion. */
+  /* The composer is a writing surface: a tile, so typed text doesn't run
+     across the page's grid lines. */
+  .bsc {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: clamp(16px, 3vw, 28px);
+  }
+  /* Fields inside blocks are live inputs, drawn like every control on a
+     raised surface — not the recessed paper-deep that read as disabled. */
+  .bsc .ctl {
+    background: var(--tile-2);
+    border-color: var(--rule-mid);
+    color: var(--ink);
+  }
+  .bsc > .microlabel {
+    display: block;
+    margin-bottom: -6px;
+  }
+  .bsc__surface:focus,
+  .bsc__surface:focus-visible {
+    outline: none;
+  }
+  .bsc__title {
+    font-family: var(--sans);
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    background: none;
+    border: none;
+    outline: none;
+    padding: 0;
+    color: var(--ink);
+    width: 100%;
+  }
+  .bsc__title::placeholder {
+    color: var(--dim);
+    opacity: 0.6;
+  }
+  .bsc__starters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .bsc__starter {
+    cursor: pointer;
+    transition: background var(--t-fast) ease, color var(--t-fast) ease;
+  }
+  .bsc__starter:hover,
+  .bsc__starter:focus-visible {
+    background: var(--ink);
+    color: var(--on-ink);
+    outline: none;
+  }
+  /* Short when empty: the add controls sit right under the last block
+     instead of after a 250px void that pushed Publish off a phone screen. */
+  .bsc__surface {
+    min-height: 96px;
+    outline: none;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .bsc__surface p {
+    margin: 0 0 0.9em;
+    max-width: 62ch;
+  }
+  .bsc__surface h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 1.2em 0 0.5em;
+  }
+  .bsc__surface hr {
+    border: none;
+    border-top: 1px solid var(--dimline);
+    margin: 18px 0;
+  }
+  .bsc__surface p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--dim);
+    opacity: 0.6;
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+  .bsc__surface .ProseMirror-selectednode > .cblock,
+  .cblock.ProseMirror-selectednode {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+    border-radius: var(--r-ctl);
+  }
+  .bsc__surface .ProseMirror-dropcursor {
+    border-top: 2px solid var(--live);
+  }
+  /* The block is one plate: its tools sit in a header row inside the
+     border rather than floating over the edge above it. */
+  .cblock {
+    position: relative;
+    margin: 14px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--r-ctl);
+    animation: cblock-rise var(--t-move) var(--spring);
+  }
+  @keyframes cblock-rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cblock {
+      animation: none;
+    }
+  }
+  .cblock__rail {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 8px 8px 0;
+    opacity: 0;
+    transition: opacity var(--t-fast) ease;
+  }
+  .cblock:hover .cblock__rail,
+  .cblock:focus-within .cblock__rail {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .cblock__rail {
+      opacity: 1;
+    }
+  }
+  .cblock__grip {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: -0.08em;
+    color: var(--dim);
+    background: var(--tile);
+    border-radius: var(--r-chip);
+    padding: 4px 6px;
+    cursor: grab;
+    box-shadow: 0 1px 4px var(--scrim);
+  }
+  .cblock__tool {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    background: var(--tile);
+    border-radius: var(--r-chip);
+    min-width: 26px;
+    min-height: 26px;
+    padding: 2px 6px;
+    cursor: pointer;
+    box-shadow: 0 1px 4px var(--scrim);
+    transition: background var(--t-fast) ease, color var(--t-fast) ease;
+  }
+  .cblock__tool:hover,
+  .cblock__tool:focus-visible {
+    background: var(--ink);
+    color: var(--on-ink);
+    outline: none;
+  }
+  .cblock__tool--x:hover,
+  .cblock__tool--x:focus-visible {
+    background: var(--live);
+  }
+  .cblock__body {
+    padding: 4px 14px 14px;
+  }
+  .sortable--lifted {
+    opacity: 0.85;
+    z-index: 20;
+    box-shadow: 0 10px 24px var(--scrim);
+    border-radius: var(--r-ctl);
+    cursor: grabbing;
+  }
+
+  .cgal__item {
+    position: relative;
+    margin: 0;
+  }
+  .cgal__tools {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--t-fast) ease;
+  }
+  .cgal__item:hover .cgal__tools,
+  .cgal__item:focus-within .cgal__tools {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .cgal__tools {
+      opacity: 1;
+    }
+  }
+  .cgal__item--pending {
+    opacity: 0.75;
+  }
+  .cgal__state {
+    position: absolute;
+    inset-inline: 6px;
+    bottom: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--on-ink);
+    background: var(--scrim);
+    border-radius: var(--r-chip);
+    padding: 4px 8px;
+  }
+  .cgal__state--failed {
+    background: var(--live);
+  }
+  .bsc__addwrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  /* Doubled class: .combo__pop sits later in this file at the same
+     specificity and pins `top` + `overflow: hidden`; with both top and bottom
+     set the menu collapsed to a 2px sliver and "+ Add something" did nothing. */
+  .combo__pop.bsc__plus {
+    position: absolute;
+    top: auto;
+    right: auto;
+    bottom: calc(100% + 6px);
+    left: 0;
+    width: min(280px, calc(100vw - 2 * var(--gutter, 16px)));
+    max-height: min(420px, 60vh);
+    overflow-y: auto;
+    z-index: 40;
+  }
+  .bsc__slash {
+    z-index: 40;
+  }
+  .bsc__foot {
+    border-top: 1px solid var(--rule-soft);
+    padding-top: 14px;
+  }
+  /* Phones: Publish stays on screen — a bar pinned to the foot of the
+     viewport, clear of the home indicator — however long the story gets. */
+  @media (max-width: 640px) {
+    .bsc__foot {
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+      padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+      background: var(--tile);
+    }
+  }
+
+  /* Activity story blocks (features/activity/blocks-view.tsx) — the V2
+     automotive set. Each is a quiet plate in the sheet's own materials; the
+     "Owner-reported" microlabel on results is load-bearing honesty, not
+     decoration. */
+  .modline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 10px;
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 12px 14px;
+  }
+  .modline__label {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .modline__detail {
+    color: var(--dim);
+    font-size: 13px;
+  }
+  .modline__link {
+    margin-left: auto;
+  }
+  .perfcard {
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    padding: 14px 16px;
+  }
+  .perfcard__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .perfcard__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 12px 18px;
+    margin: 0;
+  }
+  .perfcard__cell dt {
+    color: var(--dim);
+  }
+  .perfcard__value {
+    font-family: var(--mono);
+    font-size: clamp(18px, 2.4vw, 24px);
+    font-weight: 600;
+    margin: 2px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .perfcard__note {
+    margin: 10px 0 0;
+    color: var(--dim);
+    font-size: 13px;
+  }
+  .milestone {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0;
+  }
+  .milestone__value {
+    font-family: var(--mono);
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Build Evolution (features/garage/build-evolution.tsx) — the car's story
+     as a horizontal scroll-snap strip: year ticks in the margin, one
+     representative photo per milestone. Derived data only (§V). */
+  .evo__track {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding: 6px 2px 10px;
+    scrollbar-width: thin;
+  }
+  .evo__track:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+    border-radius: var(--r-ctl);
+  }
+  .evo__stop {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    scroll-snap-align: start;
+  }
+  .evo__year {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--live);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    border-left: 1px solid var(--dimline);
+    padding-left: 6px;
+    align-self: stretch;
+    display: flex;
+    align-items: flex-start;
+  }
+  .evo__card {
+    display: block;
+    width: clamp(180px, 26vw, 240px);
+    flex-shrink: 0;
+  }
+  .evo__img {
+    aspect-ratio: 3 / 2;
+    border-radius: var(--r-ctl);
+    transition: transform var(--t-fast) ease;
+  }
+  .evo__card:hover .evo__img,
+  .evo__card:focus-visible .evo__img {
+    transform: translateY(-2px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .evo__card:hover .evo__img,
+    .evo__card:focus-visible .evo__img {
+      transform: none;
+    }
+  }
+  .evo__meta {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 6px;
+    min-width: 0;
+  }
+  .evo__date {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    flex-shrink: 0;
+  }
+  .evo__title {
+    font-size: 13.5px;
+    font-weight: 550;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ShowcaseExplorer (features/garage/showcase.tsx) — the annotated build
+     photo (§U). At rest: a clean photograph. Explored: pins fade in staggered
+     and one card at a time explains a part. Pins are drawn in the sheet's own
+     materials — on-ink dot on scrim ring — so they read on any photograph. */
+  .showcase__frame {
+    position: relative;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .showcase__img {
+    display: block;
+    width: 100%;
+  }
+  .showcase__pin {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--scrim);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    opacity: 0;
+    animation: showcase-pin-in var(--t-move) var(--spring) forwards;
+  }
+  .showcase__pin span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--on-ink);
+    transition: transform var(--t-fast) ease, background var(--t-fast) ease;
+  }
+  .showcase__pin:hover span,
+  .showcase__pin.is-active span {
+    background: var(--live);
+    transform: scale(1.25);
+  }
+  .showcase__pin:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
+  @keyframes showcase-pin-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -30%);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .showcase__pin {
+      animation: none;
+      opacity: 1;
+    }
+  }
+  .showcase__card {
+    position: absolute;
+    transform: translateX(-50%);
+    background: var(--tile);
+    border-radius: var(--r-ctl);
+    box-shadow: 0 12px 28px var(--scrim);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 240px;
+    z-index: 5;
+  }
+  .showcase__cardlabel {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .showcase__foot {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* BeforeAfter — the two-image comparison plate (before-after.tsx). One
+     frame, the before layer clipped from the right, a drafting-line divider
+     with a mono grip. Corner tags are microcap chips on scrim so they read on
+     any photograph. */
+  .ba {
+    position: relative;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    aspect-ratio: 3 / 2;
+    background: var(--img-fallback);
+    touch-action: none;
+    user-select: none;
+  }
+  .ba__img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .ba__before {
+    position: absolute;
+    inset: 0;
+  }
+  .ba__divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--on-ink);
+    box-shadow: 0 0 0 1px var(--scrim);
+    transform: translateX(-1px);
+    cursor: ew-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ba__divider:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
+  .ba__grip {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    background: var(--on-ink);
+    border-radius: var(--r-chip);
+    padding: 3px 5px;
+    box-shadow: 0 1px 6px var(--scrim);
+  }
+  .ba__tag {
+    position: absolute;
+    bottom: 10px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--on-ink);
+    background: var(--scrim);
+    border-radius: var(--r-chip);
+    padding: 3px 8px;
+    transition: opacity var(--t-fast) ease;
+    pointer-events: none;
+  }
+  .ba__tag--before {
+    left: 10px;
+  }
+  .ba__tag--after {
+    right: 10px;
+  }
+
+  /* ComboField — the searchable single-select (combo-field.tsx). The input
+     is a plain `.ctl`; the popover is a tile floated off its bottom edge,
+     drawn with the sheet's own materials (tile ground, soft rules, mono
+     options) rather than browser chrome. */
+  .combo {
+    position: relative;
+    max-width: 320px;
+  }
+  .combo .ctl {
+    max-width: none;
+  }
+  .combo__pop {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--tile);
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r-ctl);
+    box-shadow: 0 12px 28px var(--scrim);
+    overflow: hidden;
+  }
+  .combo__list {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    max-height: 264px;
+    overflow-y: auto;
+  }
+  .combo__opt {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: calc(var(--r-ctl) - 4px);
+    cursor: pointer;
+  }
+  .combo__opt.is-active {
+    background: var(--ghost-strong);
+  }
+  .combo__opt.is-selected {
+    color: var(--live);
+  }
+  .combo__optnote {
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .combo__note {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    padding: 10px 12px;
+  }
+  .combo__foot {
+    border-top: 1px solid var(--rule-soft);
+    padding: 8px 12px;
+  }
+  /* Search suggestions — the `.search` plate's popover. Sans like the field
+     and the group heads (mono options read as a different system), labels
+     truncate before the dim sub column, and the list ends on "Search for …". */
+  .combo--suggest .combo__pop {
+    min-width: min(420px, calc(100vw - 32px));
+  }
+  .combo--suggest .combo__list {
+    max-height: min(420px, 60vh);
+  }
+  .combo--suggest .combo__opt {
+    font-family: var(--sans);
+    font-size: 15px;
+  }
+  .combo--suggest .combo__note {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .combo--suggest .combo__optnote {
+    flex: none;
+    max-width: 45%;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .combo__optlabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Pinned to the popover's floor so the way to the full results is
+     always in view, however long the groups run. */
+  .combo__all {
+    position: sticky;
+    bottom: -4px;
+    background: var(--tile);
+    margin-top: 4px;
+    border-top: 1px solid var(--rule-soft);
+    border-radius: 0 0 calc(var(--r-ctl) - 4px) calc(var(--r-ctl) - 4px);
+    font-weight: 500;
+  }
+  /* Phones: the sub line drops under the label instead of taking its width. */
+  @media (max-width: 479px) {
+    .combo--suggest .combo__opt {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+    }
+    .combo--suggest .combo__optnote {
+      max-width: none;
+    }
+    .combo--suggest .combo__all {
+      flex-direction: row;
+      justify-content: space-between;
+    }
+  }
+
+  textarea.ctl {
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    min-height: 88px;
+    resize: vertical;
+    max-width: none;
+  }
+  .bline--ctl textarea.ctl {
+    grid-column: 2 / -1;
+  }
+  input.sq {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--live);
+    border-radius: 0;
+    margin: 0;
+  }
+  /* The one radio treatment — same accent, natively round. */
+  input.sq[type="radio"] {
+    border-radius: 50%;
+  }
+
+  .bline--ctl {
+    align-items: center;
+  }
+  .bline--ctl .ctl {
+    justify-self: start;
+  }
+  .bline__checks {
+    grid-row: 1;
+    grid-column: 3;
+    display: flex;
+    gap: 28px;
+    align-items: center;
+  }
+  .bline__checks label {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  /* owner build sheet — quiet [ RELEASE ] action per ruled line */
+  .bline--own {
+    grid-template-columns: 190px 1fr auto auto;
+  }
+  /* A part that came off this car (A-2). Still a record, so it keeps the same
+     ruled line and the same columns — dimmed, not struck through: the part
+     isn't wrong, it's just no longer fitted. */
+  .bline--off {
+    grid-template-columns: 190px 1fr auto auto;
+    color: var(--dim);
+  }
+  .bline--off .bline__val {
+    color: var(--dim);
+  }
+  .relbtn {
+    grid-row: 1;
+    grid-column: 4;
+    align-self: center;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--dim);
+    border-bottom: 1px solid var(--dimline);
+    padding-bottom: 1px;
+    transition:
+      color var(--t-fast) ease,
+      border-color var(--t-fast) ease;
+  }
+  .relbtn:hover {
+    color: var(--live);
+    border-color: var(--live);
+  }
+  /* The one relation action that can't be undone reads as such at rest. */
+  .relbtn--danger {
+    color: var(--live);
+    border-color: color-mix(in srgb, var(--live) 45%, transparent);
+  }
+
+
+  /* ---------- mods editor line ----------
+     Desktop is a ledger row, and that is the right instrument for it: group,
+     brand, product, part number, category and the release/remove actions read
+     across one line, where a control's COLUMN POSITION is its label. That is
+     why the field labels are screen-reader-only — sighted users read the
+     column, not a caption.
+
+     A phone has no columns. The row wrapped rather than overflowed, so nothing
+     was clipped, but the spatial contract that carried the meaning was gone:
+     three selects and two text fields stacked with nothing saying which was
+     which. Under `sm` the line becomes a RECORD instead — sheet index and
+     group in a ruled header, every field's label unhidden (the same element,
+     not a second copy, so there is one set of controls and one set of state),
+     and the release/remove actions moved onto their own footer rule so
+     "edit this line" and "dispose of this line" stop reading as one sequence.
+
+     `display: contents` is what makes that possible without duplicating any
+     markup: the header and footer wrappers vanish on desktop and their
+     children become flex items of the row directly. */
+  .modrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .modrow__head,
+  .modrow__foot {
+    display: contents;
+  }
+  /* The record index and the "Remove" word are phone-only furniture. */
+  .modrow__n,
+  .modrow__rmtext {
+    display: none;
+  }
+  /* Field captions: hidden on desktop exactly as `sr-only` was, because the
+     column says it instead. Same rule, kept local so the phone override below
+     has something to switch off. */
+  .modrow__lab {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .modrow__rm {
+    color: var(--dim);
+    transition: color var(--t-fast) ease;
+  }
+  .modrow__rm:hover {
+    color: var(--live);
+  }
+  /* Desktop column captions over the ledger lines — Group and Category are
+     both selects, and without a caption nobody could tell them apart. The
+     widths are the row controls' own (`sm:w-[…]` in the markup). */
+  .modrow--cols {
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .modrow__col {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .modrow__col--group { width: 160px; }
+  .modrow__col--short { width: 110px; }
+  .modrow__col--cat { width: 130px; }
+  .modrow__col--grow { flex: 1 1 0; min-width: 150px; }
+  /* The phone-only folded summary of a saved line. */
+  .modrow__sum {
+    display: none;
+  }
+
+  /* "What happens to the old part?" (A-1). A full-width band under the row it
+     belongs to, so the question is visibly about that line and not a dialog
+     wearing a row's clothes. It reads as a continuation of the record, hence
+     the shared left edge and the recessed plate rather than a bordered card. */
+  .modrow__ask {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 2px;
+    padding: 10px 12px;
+    background: var(--tile-2);
+    border-radius: var(--r-ctl);
+  }
+
+  /* Profile head (P-1). A banner band across the full width of the page — a
+     car's cover, borrowed, never a separate upload — with the identity row
+     BELOW it: the avatar plate overlaps the band's bottom edge, the name and
+     the counts sit on paper. Nothing is ever typeset onto somebody's photo,
+     so no photo can make a name unreadable; the scrim only settles the
+     band's foot into the page. With no eligible cover the band is a plain
+     tile — a clean header, not a missing image. */
+  .profhead {
+    display: grid;
+  }
+  .profhead__banner {
+    position: relative;
+    display: block;
+    height: clamp(132px, 21vw, 260px);
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--tile);
+  }
+  .profhead__banner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent 45%,
+      color-mix(in srgb, var(--paper) 55%, transparent) 100%
+    );
+    pointer-events: none;
+  }
+  .profhead__body {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 16px clamp(16px, 2.4vw, 28px);
+    align-items: start;
+    padding: 0 clamp(8px, 2vw, 24px);
+  }
+  .profhead__avatar {
+    width: clamp(88px, 11vw, 136px);
+    height: clamp(88px, 11vw, 136px);
+    margin-top: calc(clamp(88px, 11vw, 136px) * -0.42);
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--tile);
+    box-shadow: 0 0 0 4px var(--paper);
+  }
+  .profhead__avatar > * {
+    width: 100%;
+    height: 100%;
+  }
+  .profhead__id {
+    min-width: 0;
+    padding-top: 14px;
+  }
+  .profhead__side {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+  .profhead__stats {
+    display: flex;
+    gap: clamp(20px, 3vw, 40px);
+    margin: 0;
+  }
+  .profhead__stats > div {
+    display: grid;
+    gap: 2px;
+  }
+  .profhead__stats dd {
+    margin: 0;
+    font: 600 20px/1.1 var(--sans);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .profhead__stats .is-zero dd {
+    color: var(--dim);
+    font-weight: 400;
+  }
+  .profhead__stats dt {
+    order: 2;
+    font: 400 12px/1.3 var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  @media (min-width: 860px) {
+    .profhead__body {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+    .profhead__side {
+      grid-column: auto;
+      padding-top: 18px;
+      justify-items: end;
+    }
+  }
+  /* Phones: one column. The avatar overlaps the band on its own, and the
+     name, handle and bio run the full width under it — beside a 88px
+     avatar they were squeezed into a 250px column with a blank square
+     below the photo, and the tabs started at the foot of the first screen. */
+  @media (max-width: 639.98px) {
+    .profhead__body {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .profhead__avatar {
+      width: 80px;
+      height: 80px;
+      margin-top: -40px;
+    }
+    .profhead__id {
+      padding-top: 0;
+    }
+    .profhead__id > .text-body {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .profhead__stats dd {
+      font-size: 17px;
+    }
+  }
+
+  /* Main column + rail for a profile (P-4): tabs and their panels on the
+     left, the garage and featured parts on the right. Below 1024px the rail
+     simply follows the panel — a profile has no feed to fold it into. */
+  .deck--aside {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(24px, 3vw, 36px);
+    align-items: start;
+  }
+  .deck--aside > * {
+    min-width: 0;
+  }
+  .deck--aside__rail {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(16px, 2vw, 20px);
+    align-content: start;
+  }
+  @media (min-width: 1024px) {
+    .deck--aside {
+      grid-template-columns: minmax(0, 1fr) 320px;
+    }
+    /* No rail on this tab (the panel is the rail's content in full). */
+    .deck--aside--solo {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    /* The rail's rows keep thumbnail, text and status on one line — at
+       320px the status chip used to wrap under the title. */
+    .deck--aside__rail .order {
+      flex-wrap: nowrap;
+    }
+    /* Desktop has the rail; the inline copy is for phones. */
+    .deck--aside__inline {
+      display: none;
+    }
+  }
+  /* Below 1024px there is no rail: the Overview carries the parts inline,
+     right after the featured build, instead of after every update. */
+  @media (max-width: 1023.98px) {
+    .deck--aside__rail {
+      display: none;
+    }
+  }
+  /* The Overview's latest updates: on a two-up phone grid a third card sat
+     alone in its own row, so phones show two. */
+  @container wall (max-width: 600px) {
+    .profupdates .mcell:nth-child(n + 3) {
+      display: none;
+    }
+  }
+
+  /* The featured build on a profile's Overview: one big cover with the car's
+     name on a scrim at its foot — the same treatment G-2 gives the garage's
+     focused car. */
+  .featbuild {
+    position: relative;
+    display: block;
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--tile);
+    aspect-ratio: 16 / 9;
+    color: var(--ink);
+  }
+  .featbuild__img {
+    position: absolute;
+    inset: 0;
+  }
+  /* With a photo, a dark fade under the caption only — the cream paper
+     fade it replaced bleached the car in the light theme. */
+  .featbuild--photo .featbuild__img::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, var(--photo-scrim) 0%, transparent 55%);
+  }
+  .featbuild--photo .featbuild__cap {
+    color: var(--on-photo);
+  }
+  .featbuild--photo .featbuild__cap .text-dim,
+  .featbuild--photo .featbuild__cap .kv,
+  .featbuild--photo .featbuild__cap .jumplink {
+    color: var(--on-photo-dim);
+  }
+  .featbuild__cap {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+    padding: clamp(14px, 2.4vw, 24px);
+  }
+  .featbuild__name {
+    font: 600 clamp(20px, 2.4vw, 28px) / 1.1 var(--sans);
+    letter-spacing: -0.015em;
+  }
+
+  /* What a pasted product link gave us, under the row it filled in. Quiet by
+     design: it is provenance for the line, not part of the line. */
+  .modrow__via {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: var(--dim);
+  }
+  .modrow__thumb {
+    width: 28px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: var(--r-ctl);
+    background: var(--img-fallback);
+  }
+
+  /* A part that came off. The record stays on the sheet — dimmed, not hidden,
+     because it is still the provenance behind a listing and behind every past
+     update that named it. */
+  .modrow--off {
+    padding: 10px 0;
+    border-top: 1px solid var(--rule-soft);
+    color: var(--dim);
+  }
+  .modrow--off .modrow__n {
+    display: inline;
+    color: var(--dim);
+  }
+
+  /* Matches Tailwind's `sm` boundary exactly (`sm:` is min-width 640px), so
+     the markup's `w-full sm:w-[130px]` widths and these rules change over on
+     the same pixel rather than fighting for one width in between. */
+  @media (max-width: 639.98px) {
+    .modrow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 4px;
+      padding: 16px 0;
+      border-top: 1px solid var(--rule-mid);
+    }
+    .modrow:first-child {
+      border-top: 0;
+      padding-top: 4px;
+    }
+    /* "01  [ Suspension ▾ ]" — the sheet index beside the group the line files
+       under, which is the record's own heading. The group stays a live select:
+       it is a heading that can be corrected. */
+    .modrow__head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .modrow__n {
+      display: block;
+      flex: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      color: var(--dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .modrow__head .ctl {
+      flex: 1 1 auto;
+    }
+    /* The group's own caption stays hidden — the heading already reads as the
+       group, and a "GROUP" label above it would caption the obvious. */
+    .modrow__head .modrow__lab {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    .modrow__lab {
+      position: static;
+      width: auto;
+      height: auto;
+      margin: 8px 0 0;
+      overflow: visible;
+      clip-path: none;
+      /* The `.microlabel` voice one step down: it captions a field, not a
+         section, so it must not compete with the record heading above it. */
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    /* `.ctl` caps itself at 320px for the desktop sheet. In a stacked record
+       that cap lands mid-column on a large phone — four fields stopping at
+       320px beside a `max-w-none` Product running to 356px, which reads as a
+       ragged edge rather than a form. The record owns its own width. */
+    .modrow .ctl {
+      max-width: none;
+    }
+    .modrow__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--rule-soft);
+    }
+    /* The disposal actions get real targets once they are the only things on
+       their line — on the desktop row they are inline text among controls. */
+    .modrow__foot > *,
+    .modrow__foot .relbtn,
+    .modrow__rm {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .modrow__rm {
+      gap: 8px;
+    }
+    .modrow__rmtext {
+      display: inline;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .modrow--cols {
+      display: none;
+    }
+    /* A saved line folds to one tappable row — index, the part, its group —
+       and opens into the labelled record on tap. */
+    .modrow--folded {
+      padding: 6px 0;
+    }
+    .modrow--folded > :not(.modrow__sum) {
+      display: none;
+    }
+    .modrow--folded .modrow__sum {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      min-height: 56px;
+      text-align: left;
+    }
+    .modrow__sumtext {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+    .modrow__sumname {
+      font-weight: 600;
+      font-size: 15px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--ink);
+    }
+    .modrow__sumgroup {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .modrow__sumgo {
+      flex: none;
+      font-size: 20px;
+      color: var(--dim);
+    }
+  }
+
+  /* ---------- compact order summary ----------
+     The phone stand-in for checkout's desktop aside. A native `<details>`, so
+     it works with no JS, is a real disclosure to assistive tech, and costs
+     nothing when closed. Closed it states the one fact that must never leave
+     the screen — the total — plus how many parts it covers; open it gives the
+     full contents without the customer leaving the checkout column. */
+  .ordersum__line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    cursor: pointer;
+    /* Both spellings: the marker is furniture from another design system. */
+    list-style: none;
+  }
+  .ordersum__line::-webkit-details-marker {
+    display: none;
+  }
+  .ordersum__total {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+    display: block;
+    margin-top: 2px;
+  }
+  .ordersum__meta {
+    flex: none;
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  /* The disclosure's own affordance, in the jumplink voice the sheet already
+     uses for "there is more this way". */
+  .ordersum__toggle {
+    display: block;
+    margin-top: 4px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--dimline);
+    padding-bottom: 1px;
+  }
+  .ordersum__toggle::after {
+    content: " ▾";
+    opacity: 0.5;
+  }
+  .ordersum[open] .ordersum__toggle::after {
+    content: " ▴";
+  }
+  /* The label has to be true in both states, so the disclosure carries both
+     and shows the one that applies — "View order details" still reading as
+     the invitation while the list is already open would be a lie. */
+  .ordersum__less,
+  .ordersum[open] .ordersum__more {
+    display: none;
+  }
+  .ordersum[open] .ordersum__less {
+    display: inline;
+  }
+  .ordersum__body {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  /* ---------- commit row ----------
+     The bottom of an editing surface: an optional auxiliary action on the
+     left, then status, then the one button that files the work. On a phone
+     "PREFERENCES SAVED" beside "[ SAVE PREFERENCES ]" is two pieces of 12px
+     tracked-out mono fighting over ~340px, so both get hard to read and the
+     button gets hard to hit. Under 520px they stack and the commit action
+     takes the full width — the same width at which `.sheet__actions` already
+     gives up its horizontal arrangement, so the two agree. */
+  .saverow {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  /* Anchors the left while status + commit stay together on the right. */
+  .saverow__aux {
+    margin-right: auto;
+  }
+  @media (max-width: 520px) {
+    .saverow {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .saverow__aux {
+      margin-right: 0;
+      align-self: flex-start;
+    }
+    /* Status reads as a line of its own rather than a chip wedged beside the
+       button; the button becomes the full-width commit it deserves to be. */
+    .saverow__status {
+      align-self: flex-start;
+    }
+    .saverow .btn {
+      width: 100%;
+      min-height: 44px;
+    }
+  }
+
+  /* sticky save bar */
+  .savebar {
+    position: sticky;
+    bottom: 14px;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--tile);
+    border-radius: var(--r);
+    padding: 12px 18px;
+    box-shadow: 0 1px 0 var(--dimline);
+    margin-bottom: clamp(48px, 7vw, 80px);
+  }
+
+  /* ink-inverted stat band */
+  .band {
+    background: var(--ink);
+    color: var(--on-ink);
+    border-radius: var(--r);
+    padding: clamp(24px, 4vw, 40px);
+  }
+  .band .microlabel {
+    color: var(--on-ink);
+    opacity: 0.65;
+  }
+  .band__stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-top: 18px;
+  }
+  .band__stats .num-giant {
+    color: var(--on-ink);
+  }
+  .band .bandrule {
+    height: 1px;
+    background: color-mix(in srgb, var(--on-ink) 30%, transparent);
+    margin: 10px 0;
+  }
+
+  /* Landing — the hero photo stops short of the fold so "what DRVN is"
+     starts on the first screen, and the page closes on its two front doors. */
+  .landing-hero {
+    max-height: 56vh;
+    width: 100%;
+  }
+  .landing-close {
+    display: grid;
+    gap: 14px;
+    justify-items: start;
+    padding: clamp(24px, 4vw, 40px);
+  }
+  .landing-close__title {
+    font-size: var(--text-section);
+    line-height: var(--text-section--line-height);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .landing-close__sub {
+    color: var(--dim);
+    font-size: var(--text-body);
+    max-width: 52ch;
+  }
+  /* Signed-out marketplace: one dim line saying shopping needs no account. */
+  .marketplace-head__visitor {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--dim);
+  }
+  .marketplace-head__visitor .jumplink {
+    font-size: 11px;
+  }
+
+  /* public monogram plate */
+  .monogram {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--r-ctl);
+    flex: none;
+    display: grid;
+    place-items: center;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .monogram--sm {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-ctl);
+    font-size: 16px;
+  }
+  /* Named avatar scale: sm 44 · md 48 · lg 64 (base) · xl 88. The md and xl
+     sizes previously lived as ad-hoc Tailwind utilities on call sites. */
+  .monogram--md {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--r-ctl);
+    font-size: 16px;
+  }
+  .monogram--xl {
+    width: 88px;
+    height: 88px;
+    border-radius: var(--r-ctl);
+    font-size: 24px;
+  }
+  /* Glyph-scale plate for card footers — below the avatar scale proper, so
+     the radius steps down to the chip radius with the size. */
+  .monogram--xs {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-chip);
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+
+  /* review entries — ruled, not boxed */
+  .review {
+    padding: 16px 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .review:first-of-type {
+    border-top: 0;
+  }
+  .review__head {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .review__stars {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--live);
+    margin-left: auto;
+  }
+
+  /* interactive star rating — a radiogroup of buttons, not a select */
+  .star-pick {
+    font-size: 24px;
+    line-height: 1;
+    color: var(--dimline);
+    background: none;
+    border: 0;
+    padding: 2px;
+    cursor: pointer;
+    transition: color var(--t-fast) ease, transform var(--t-fast) ease;
+  }
+  .star-pick:hover {
+    color: var(--live);
+    transform: scale(1.08);
+  }
+  .star-pick[data-on="true"] {
+    color: var(--live);
+  }
+  .star-pick:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: 2px;
+  }
+  .review p {
+    font-size: 16px;
+    line-height: 1.6;
+    margin-top: 7px;
+    max-width: 72ch;
+  }
+}

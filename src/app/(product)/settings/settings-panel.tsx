@@ -1,14 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useCallback, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
-import { ActionFooter, Button, DataRow, ScrollActiveIntoView } from "@/components/ui";
+import {
+  ActionFooter,
+  Button,
+  DataRow,
+  PageHead,
+  ScrollActiveIntoView,
+  Select,
+  TextArea,
+  TextField,
+} from "@/components/ui";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 import type { SavedCard } from "@/lib/payments/customers";
 
 import { updateNotificationPrefs, updateProfile, type ActionState } from "../garage/actions";
-import { startConnectOnboarding } from "./payouts-actions";
+import type { ConnectSummary } from "./payout-setup";
 import { DeleteAccount } from "./delete-account";
 import { ExportAccount } from "./export-account";
 import { PaymentMethods } from "./payment-methods";
@@ -92,69 +102,57 @@ function NotificationPrefsForm({ prefs }: { prefs: unknown }) {
  * (Livesheet's tab replacement). Nothing files until you save.
  */
 
+// Payouts is not a section: the payout account and the money ledger live on
+// /payouts (the Selling family's money page) and Payments links there — the
+// same ledger used to render in both places.
 const SETTINGS_SECTIONS = [
   { id: "account", label: "Account" },
-  { id: "keeper", label: "Profile" },
-  { id: "signals", label: "Notifications" },
+  { id: "profile", label: "Profile" },
+  { id: "notifications", label: "Notifications" },
+  { id: "privacy", label: "Privacy" },
   { id: "payments", label: "Payments" },
-  { id: "payouts", label: "Payouts" },
   { id: "shipping", label: "Shipping" },
   { id: "shop", label: "Shop" },
   { id: "danger", label: "Danger zone" },
 ] as const;
 type SectionId = (typeof SETTINGS_SECTIONS)[number]["id"];
 
+/** Hashes that shipped under older section ids — old links still land. */
+const LEGACY_SECTIONS: Record<string, SectionId> = {
+  keeper: "profile",
+  signals: "notifications",
+};
+
 function subscribeHash(cb: () => void) {
   window.addEventListener("hashchange", cb);
   return () => window.removeEventListener("hashchange", cb);
 }
 
-export type ConnectSummary = {
-  stripeConfigured: boolean;
-  hasAccount: boolean;
-  payoutsEnabled: boolean;
-};
+export type { ConnectSummary };
 
-/** Settings → Payments — Stripe Connect onboarding state and entry point. */
-function PayoutSetup({ connect }: { connect: ConnectSummary }) {
-  const [state, action, pending] = useActionState<{ error?: string }, FormData>(
-    async () => (await startConnectOnboarding()) ?? {},
-    {}
-  );
-
-  if (!connect.stripeConfigured) return null;
-
+/** Settings → Payments' pointer to the payout account, which lives on /payouts. */
+function PayoutPointer({ connect }: { connect: ConnectSummary }) {
   return (
     <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
       <div className="flex items-center justify-between gap-4">
-        <span className="microlabel microlabel--ink">Payouts</span>
-        {connect.payoutsEnabled ? (
+        <span className="microlabel microlabel--ink">Payout account</span>
+        {!connect.stripeConfigured ? (
+          <span className="chip">Test mode</span>
+        ) : connect.payoutsEnabled ? (
           <span className="chip chip--ok">Payouts enabled</span>
         ) : connect.hasAccount ? (
-          <span className="chip">Setup incomplete</span>
+          <span className="chip chip--live">Setup incomplete</span>
         ) : (
-          <span className="chip">Not set up</span>
+          <span className="chip chip--live">Not set up</span>
         )}
       </div>
-      <p className="field__hint mt-2 max-w-[62ch]">
-        {connect.payoutsEnabled
-          ? "Your Stripe account can receive payouts. Sale proceeds transfer automatically when a buyer's payment settles."
-          : "Selling needs somewhere for the money to go. Stripe verifies your details and holds your bank account — DRVN never sees either. Until this is done, listings can't be published."}
+      <p className="mt-2">
+        <Link href="/payouts" className="jumplink">
+          {connect.stripeConfigured && !connect.payoutsEnabled
+            ? "Set up payouts →"
+            : "Payouts and earnings →"}
+        </Link>
       </p>
-      <form action={action} className="mt-3">
-        <Button type="submit" variant="live" loading={pending} pendingLabel="Opening Stripe…">
-          {connect.payoutsEnabled
-            ? "Update payout details"
-            : connect.hasAccount
-              ? "Finish payout setup"
-              : "Set up payouts"}
-        </Button>
-      </form>
-      {state.error && (
-        <p role="alert" aria-live="polite" className="field__err mt-3">
-          {state.error}
-        </p>
-      )}
     </div>
   );
 }
@@ -165,7 +163,7 @@ export function SettingsPanel({
   savedCards,
   connect,
   paymentsLive,
-  payoutsSection,
+  privacySection,
   shippingSection,
   shopSection,
 }: {
@@ -174,8 +172,8 @@ export function SettingsPanel({
   savedCards: SavedCard[];
   connect: ConnectSummary;
   paymentsLive: boolean;
-  /** Settings → Payouts, server-rendered (the ledger needs server data). */
-  payoutsSection?: React.ReactNode;
+  /** Settings → Privacy, server-rendered (reads the consent cookie + row). */
+  privacySection?: React.ReactNode;
   /** Settings → Shipping, server-rendered (0051 fulfillment profile). */
   shippingSection?: React.ReactNode;
   /** Settings → Shop, server-rendered (0056 shop profile). */
@@ -189,9 +187,14 @@ export function SettingsPanel({
     () => window.location.hash.slice(1),
     () => ""
   );
+  const router = useRouter();
+  // The ledger moved to /payouts; an old /settings#payouts link follows it.
+  useEffect(() => {
+    if (activeHash === "payouts") router.replace("/payouts");
+  }, [activeHash, router]);
   const active: SectionId = SETTINGS_SECTIONS.some((x) => x.id === activeHash)
     ? (activeHash as SectionId)
-    : "account";
+    : (LEGACY_SECTIONS[activeHash] ?? "account");
   const show = useCallback((id: SectionId) => {
     window.location.hash = id;
   }, []);
@@ -223,16 +226,31 @@ export function SettingsPanel({
   };
   return (
     <div>
-      <header className="pagehead pagehead--task">
-        <span className="microlabel">Settings</span>
-        <h1>Settings.</h1>
-        <p className="sub">
-          Profile, notifications, payouts — change what you need and hit save. Nothing sticks
-          until you do.
-        </p>
-      </header>
+      <PageHead
+        className="pagehead--task"
+        eyebrow="Settings"
+        title="Settings."
+        sub="Change what you need and hit save — nothing sticks until you do."
+      />
 
       <div className="grid items-start gap-6 md:grid-cols-[200px_1fr]">
+        {/* Compact widths pick a section from a native select: eight
+            sideways-scrolling tabs showed two and a half of them, and the
+            rest were undiscoverable. The rail returns at md. */}
+        <Select
+          id="settings-section"
+          label="Section"
+          value={active}
+          onChange={(event) => show(event.target.value as SectionId)}
+          fieldClassName="sectionjump !mb-0"
+          className="max-w-none"
+        >
+          {SETTINGS_SECTIONS.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.label}
+            </option>
+          ))}
+        </Select>
         <nav
           aria-label="Settings sections"
           className="sectionnav"
@@ -275,16 +293,11 @@ export function SettingsPanel({
           <div className="mt-4 border-t border-[color:var(--rule-soft)] pt-4">
             <PasswordSection currentEmail={profile.email} />
           </div>
-          <form action={logout} className="mt-6">
-            <Button type="submit" variant="ghost">
-              Log out
-            </Button>
-          </form>
         </section>
         )}
 
-        {active === "keeper" && (
-        <section id="keeper" className="tile">
+        {active === "profile" && (
+        <section id="profile" className="tile">
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Profile — shown publicly on your listings and builds</span>
             <Link href={`/u/${profile.username}`} className="microlabel mono hover:text-live">
@@ -297,19 +310,38 @@ export function SettingsPanel({
               action(fd);
             }}
             onChange={() => setSaved(false)}
+            className="mt-2"
           >
-            <DataRow label="Display name">
-              <input name="display_name" value={profileDraft.display_name} onChange={event => setProfileField("display_name", event.target.value)} required className="ctl" />
-            </DataRow>
-            <DataRow label="Headline">
-              <input name="headline" value={profileDraft.headline} onChange={event => setProfileField("headline", event.target.value)} placeholder="e.g. B9 S4 owner, slowly going single-turbo" className="ctl" />
-            </DataRow>
-            <DataRow label="Location">
-              <input name="location" value={profileDraft.location} onChange={event => setProfileField("location", event.target.value)} className="ctl" />
-            </DataRow>
-            <DataRow label="Country">
-              <select
+            <TextField
+              id="profile-display_name"
+              name="display_name"
+              label="Display name"
+              required
+              value={profileDraft.display_name}
+              onChange={(event) => setProfileField("display_name", event.target.value)}
+            />
+            <TextField
+              id="profile-headline"
+              name="headline"
+              label="Headline"
+              optional
+              value={profileDraft.headline}
+              onChange={(event) => setProfileField("headline", event.target.value)}
+              placeholder="e.g. B9 S4 owner, slowly going single-turbo"
+            />
+            <TextField
+              id="profile-location"
+              name="location"
+              label="Location"
+              optional
+              value={profileDraft.location}
+              onChange={(event) => setProfileField("location", event.target.value)}
+            />
+            <div className="field--row mb-[18px]">
+              <Select
+                id="profile-country"
                 name="country"
+                label="Country"
                 value={profileDraft.country}
                 onChange={(event) => {
                   setProfileField("country", event.target.value);
@@ -317,7 +349,7 @@ export function SettingsPanel({
                   // other rather than leaving an impossible pair behind.
                   setProfileField("region", "");
                 }}
-                className="ctl"
+                fieldClassName="!mb-0"
               >
                 <option value="">Not saying</option>
                 {COUNTRIES.map((c) => (
@@ -325,15 +357,16 @@ export function SettingsPanel({
                     {c.name}
                   </option>
                 ))}
-              </select>
-            </DataRow>
-            {(countryByCode(profileDraft.country)?.regions.length ?? 0) > 0 && (
-              <DataRow label="Region" note="Shows the Local tab on Home.">
-                <select
+              </Select>
+              {(countryByCode(profileDraft.country)?.regions.length ?? 0) > 0 && (
+                <Select
+                  id="profile-region"
                   name="region"
+                  label="Region"
                   value={profileDraft.region}
                   onChange={(event) => setProfileField("region", event.target.value)}
-                  className="ctl"
+                  hint="Shows the Local tab on Home."
+                  fieldClassName="!mb-0"
                 >
                   <option value="">Anywhere in the country</option>
                   {countryByCode(profileDraft.country)!.regions.map((r) => (
@@ -341,50 +374,74 @@ export function SettingsPanel({
                       {r}
                     </option>
                   ))}
-                </select>
-              </DataRow>
-            )}
-            <DataRow
+                </Select>
+              )}
+            </div>
+            <TextField
+              id="profile-offer_floor"
+              name="default_offer_floor_pct"
               label="Lowest offer, by default"
-              note="Prefills the sell form. Never changes a listing that's already live."
-            >
-              <input
-                name="default_offer_floor_pct"
-                type="number"
-                min={10}
-                max={100}
-                inputMode="numeric"
-                value={profileDraft.default_offer_floor_pct}
-                onChange={(event) => setProfileField("default_offer_floor_pct", event.target.value)}
-                placeholder="e.g. 80 (% of the asking price)"
-                className="ctl"
-              />
-            </DataRow>
-            <DataRow
+              optional
+              type="number"
+              min={10}
+              max={100}
+              inputMode="numeric"
+              value={profileDraft.default_offer_floor_pct}
+              onChange={(event) => setProfileField("default_offer_floor_pct", event.target.value)}
+              placeholder="e.g. 80 (% of the asking price)"
+              hint="Prefills the sell form. Never changes a listing that's already live."
+            />
+            <TextField
+              id="profile-store_note"
+              name="store_note"
               label="Store note"
-              note="One line above your parts — how you pack, when you post. Up to 180 characters."
-            >
-              <input
-                name="store_note"
-                maxLength={180}
-                value={profileDraft.store_note}
-                onChange={(event) => setProfileField("store_note", event.target.value)}
-                placeholder="e.g. Posted within two days, boxed properly."
-                className="ctl"
+              optional
+              maxLength={180}
+              value={profileDraft.store_note}
+              onChange={(event) => setProfileField("store_note", event.target.value)}
+              placeholder="e.g. Posted within two days, boxed properly."
+              hint="One line above your parts — how you pack, when you post. Up to 180 characters."
+            />
+            <TextArea
+              id="profile-bio"
+              name="bio"
+              label="Bio"
+              optional
+              rows={3}
+              value={profileDraft.bio}
+              onChange={(event) => setProfileField("bio", event.target.value)}
+            />
+            <TextField
+              id="profile-link_website"
+              name="link_website"
+              label="Website"
+              optional
+              value={profileDraft.link_website}
+              onChange={(event) => setProfileField("link_website", event.target.value)}
+              placeholder="https://…"
+            />
+            <div className="field--row">
+              <TextField
+                id="profile-link_instagram"
+                name="link_instagram"
+                label="Instagram"
+                optional
+                value={profileDraft.link_instagram}
+                onChange={(event) => setProfileField("link_instagram", event.target.value)}
+                placeholder="https://instagram.com/…"
+                fieldClassName="!mb-0"
               />
-            </DataRow>
-            <DataRow label="Bio">
-              <textarea name="bio" value={profileDraft.bio} onChange={event => setProfileField("bio", event.target.value)} rows={3} className="ctl" />
-            </DataRow>
-            <DataRow label="Website">
-              <input name="link_website" value={profileDraft.link_website} onChange={event => setProfileField("link_website", event.target.value)} placeholder="https://…" className="ctl" />
-            </DataRow>
-            <DataRow label="Instagram">
-              <input name="link_instagram" value={profileDraft.link_instagram} onChange={event => setProfileField("link_instagram", event.target.value)} placeholder="https://instagram.com/…" className="ctl" />
-            </DataRow>
-            <DataRow label="YouTube">
-              <input name="link_youtube" value={profileDraft.link_youtube} onChange={event => setProfileField("link_youtube", event.target.value)} placeholder="https://youtube.com/…" className="ctl" />
-            </DataRow>
+              <TextField
+                id="profile-link_youtube"
+                name="link_youtube"
+                label="YouTube"
+                optional
+                value={profileDraft.link_youtube}
+                onChange={(event) => setProfileField("link_youtube", event.target.value)}
+                placeholder="https://youtube.com/…"
+                fieldClassName="!mb-0"
+              />
+            </div>
             {state.error && (
               <p role="alert" aria-live="polite" className="field__err mt-3">
                 {state.error}
@@ -401,14 +458,16 @@ export function SettingsPanel({
         </section>
         )}
 
-        {active === "signals" && (
-        <section id="signals" className="tile">
+        {active === "notifications" && (
+        <section id="notifications" className="tile">
           <div className="tile__head">
             <span className="microlabel microlabel--ink">Notifications — what reaches you</span>
           </div>
           <NotificationPrefsForm prefs={profile.notification_prefs} />
         </section>
         )}
+
+        {active === "privacy" && privacySection}
 
         {active === "payments" && (
         <section id="payments" className="tile tile--deep">
@@ -447,12 +506,10 @@ export function SettingsPanel({
               Full fee schedule →
             </Link>
           </div>
-          <PayoutSetup connect={connect} />
+          <PayoutPointer connect={connect} />
           <PaymentMethods cards={savedCards} />
         </section>
         )}
-
-        {active === "payouts" && payoutsSection}
 
         {active === "shipping" && shippingSection}
 
@@ -486,6 +543,18 @@ export function SettingsPanel({
         )}
         </div>
       </div>
+
+      {/* Signing out isn't an account edit — it sat inside the Account form
+          as a third identical grey button. It closes the page instead. */}
+      <form
+        action={logout}
+        className="mt-10 flex items-center justify-between gap-4 border-t border-[color:var(--rule-soft)] pt-6"
+      >
+        <span className="microlabel min-w-0 break-all">Signed in as {profile.email}</span>
+        <Button type="submit" variant="ghost" className="shrink-0">
+          Log out
+        </Button>
+      </form>
     </div>
   );
 }

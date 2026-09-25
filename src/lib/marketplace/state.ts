@@ -9,7 +9,16 @@ export type RawMarketplaceParams = Record<string, string | string[] | undefined>
 
 export const CATEGORY_REDIRECTS: Readonly<Record<string, string>> = {
   interior: "interior-lighting",
+  lighting: "interior-lighting",
   brakes: "brakes-suspension",
+  suspension: "brakes-suspension",
+  exterior: "exterior-body",
+  body: "exterior-body",
+  // The UK spelling, and the halves of the pair, are normal things to type.
+  "wheels-tyres": "wheels-tires",
+  wheels: "wheels-tires",
+  tires: "wheels-tires",
+  tyres: "wheels-tires",
 };
 export const REFINEMENT_KEYS = ["condition", "brand", "min", "max", "location", "fit", "ymin", "ymax"] as const;
 
