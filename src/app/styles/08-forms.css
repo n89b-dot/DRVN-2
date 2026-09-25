@@ -1341,7 +1341,9 @@
     display: none;
   }
   .ordersum__total {
-    font-family: var(--mono);
+    /* Reading size, so Plex Sans (mono is for ≤12px labels and data). */
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
     font-size: 20px;
     font-weight: 600;
     line-height: 1.2;

@@ -1,6 +1,6 @@
 # Remediation rollout and recovery
 
-This change is implemented in the working tree. It has not been deployed to the shared Supabase project, published, or verified against live money. Use the implementation status report alongside this runbook; passing local tests is not a production sign-off.
+This change is implemented in the working tree. Its migrations reached the shared dev Supabase project (`grunnjojhdevhuckujmc`) on 2026-09-24 — backed up and reconciled, recorded in `supabase/MIGRATIONS.md` — and admin MFA is in force there. On that project the Site URL/redirects, SMTP, the `job_config` worker URL and CRON_SECRET, and the worker-health monitor below are still to do. Nothing has been deployed to production, published, or verified against live money. Use the implementation status report alongside this runbook; passing local tests is not a production sign-off.
 
 ## Isolated verification environment
 

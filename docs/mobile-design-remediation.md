@@ -87,3 +87,32 @@ code review.
 3. **`.finder` submit at 320px** — the Search button wraps to its own row below ~360px (text button + 16px mono can't fit beside a usable query field); accepted, documented in CSS.
 4. **Scroll-driven rail fades** — inert in Firefox (no scroll-timeline support); gutter-bleed cut-off remains the baseline affordance there.
 5. **`spec-note`/`field__hint` at 12px mono** — sentence-case, wraps, no clipping at 200% zoom, but below the audit's 13–14px preference for operational metadata; changing it is a system-wide type decision deliberately not taken unilaterally.
+
+## 2026-09-24 — design review follow-up
+
+A later whole-product review covered 39 pages at 1440 and 390, signed in and
+out, in both themes. It is in the private artifact "DRVN Design Review"
+(https://claude.ai/artifact/UeET3tVmtEZ1mfTkyZYukp). It found 261 issues, 20
+of them P0. It records 240 fixed, 18 partly fixed and 3 deferred, each
+checked in the running app at both widths. They landed in commit `3daf293`,
+and `CHANGELOG.md` has the summary. The phone fixes that bear on this
+tracker:
+
+| Area | Fix |
+|---|---|
+| Home | The page was 445px wide at 390 because `.deck--main` had no `minmax(0,1fr)` track. It now fits, and the feed is photo-first (`FeedList variant="cards"`) |
+| Sticky bar | The bar was see-through on phones: the build keeps only the last of a prefixed/unprefixed pair, so the unprefixed `backdrop-filter` now comes last |
+| Index menu | Single-line 48px rows (no descriptions), with search, which now suggests, at the top |
+| Tabs | Underline `SheetTabs` (`.tabstrip`), sized so all five profile tabs, the Parts store included, fit a 358px column. The sideways scroll is only an overflow fallback |
+| Chips and touch targets | Hairline-outlined `.fbtn` at a 44px floor, and the same floor on card Save/cart squares and the dialog Close; Explore's segments share one row (`FilterGroup fit`) |
+| Dialogs and sheets | Dialog Close sits inside the panel; `BottomSheet closeLabel={null}` when the content already ends in its own Done/Cancel |
+| Marketplace | Slimmer cards with cover photos; fitment only with evidence; the delivery line and seller blurb drop at phone-width cells |
+| Search suggest | Two per group below 640px, parts ahead of updates, and a pinned "Search for …" row |
+| Sell | Photos are step 01 and required to publish; price and Publish pinned on phones |
+| My listings | Below 860px, one compact card per listing (about 700px per row before) |
+| Explore price row | Part prices no longer truncate to "$5,…" |
+
+Against the follow-ups below: #5 is half closed. `.spec-note` is Plex Sans at
+13px, but `.field__hint` stays 12px mono, which fits the new rule of mono for
+labels and data at 12px and under (`docs/site/typography.md`). #1 (WebKit and
+real-device coverage) is still open. The review ran in Chromium only.

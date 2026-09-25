@@ -33,9 +33,9 @@
   }
   .dialogbox__close {
     position: absolute;
-    top: 10px;
-    right: 12px;
-    min-height: 36px;
+    top: 8px;
+    right: 10px;
+    min-height: 44px;
     padding: 0 6px;
     font-size: 13px;
     font-weight: 500;
@@ -338,7 +338,9 @@
     visibility: hidden;
   }
   .buybar__price {
-    font-family: var(--mono);
+    /* Reading size, so Plex Sans (mono is for ≤12px labels and data). */
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
     font-weight: 600;
     font-size: 20px;
     line-height: 24px;

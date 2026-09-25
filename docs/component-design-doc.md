@@ -12,7 +12,7 @@
 > - `/docs` (the docs microsite) and its markdown twins under `docs/site/`
 > - `src/components/registry.ts` — the machine-readable component registry
 > - `src/components/ui` + `src/components/commerce` — the production components
-> - `src/app/globals.css` — the Livesheet stylesheet
+> - `src/app/styles/` — the Livesheet stylesheet, by recipe family (imported in order by `src/app/globals.css`)
 >
 > Kept only for its historical iteration reports (appendices). Everything above
 > those appendices is obsolete.

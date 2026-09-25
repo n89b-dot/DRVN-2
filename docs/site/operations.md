@@ -65,12 +65,15 @@ trace.
 ## Selling IA (§J — decision of record)
 
 Marketplace is discovery; **Selling** is operations. The rail's collapsible
-group and the `familynav` strip cover Selling → My Listings → Offers →
+group (unfolded on selling pages, folded elsewhere) and the `familynav` strip cover Selling → My Listings → Offers →
 Orders → Payouts; marketplace surfaces carry no operational strip. Orders
 stays one shared surface (purchases + sales) homed with Selling; buyers keep
-reaching orders from Home/notifications. `/payouts` renders the same ledger
-section Settings embeds — one money view, two doors; configuration stays in
-Settings → Payments. Mobile keeps the Index sheet (no bottom nav): the family
+reaching orders from Home/notifications, and anyone who has listed a part
+opens it on Sales.
+`/payouts` is the one money view: the Connect account's state and the action
+that sets it up, then the ledger. Settings → Payments keeps fees and saved
+cards and links to `/payouts` (an old `/settings#payouts` link redirects
+there). Mobile keeps the Index sheet (no bottom nav): the family
 is a labeled group, every register one tap deep.
 
 ## Analytics (§AE)

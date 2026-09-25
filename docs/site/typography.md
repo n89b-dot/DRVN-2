@@ -7,28 +7,34 @@ Two families, loaded via `next/font` in `src/app/layout.tsx`:
 | Sans | IBM Plex Sans | 400, 500, 600, 700 | `--sans` / `--font-sans` |
 | Mono | IBM Plex Mono | 400, 500 | `--mono` / `--font-mono` |
 
-The split is semantic, not decorative: **sans carries prose and values; mono
-carries labels, navigation, data and money.** Every number that ticks is mono
-with `tabular-nums`.
+The split is semantic, not decorative: **sans carries everything read or typed
+at reading size — prose, values, names, prices, inputs; mono carries labels
+and data at 12px and under** (microlabels, chips, counts, timestamps, spec
+tags). Every number that ticks or aligns is `tabular-nums`, in either face.
 
 ## Scale
 
 | Tier | Face | Spec | Where |
 | --- | --- | --- | --- |
-| Display | Sans 600 | `clamp(28px, 4vw, 44px)` / 1.05 / -0.02em | `.pagehead h1` — the only display type |
-| Display (console) | Sans 620 | `clamp(24px, 2.6vw, 34px)` / 1.25 / -0.008em | `.console-main .pagehead h1` — the admin console's calmer display tier. 620 is not a loaded cut (the browser synthesizes it between 600 and 700) — a known wrinkle |
+| Display | Sans 600 | `clamp(32px, 4vw, 48px)` / 1.14 / -0.02em | `.pagehead h1` — the only display type |
+| Display (console) | Sans 600 | `clamp(24px, 2.6vw, 32px)` / 1.25 / -0.008em | `.console-main .pagehead h1` — the admin console's calmer display tier |
 | Num-giant | Sans 600 | `clamp(40px, 5.4vw, 64px)` / 0.95 / -0.03em, tabular | `.num-giant` KPI numerals |
-| Section head | Sans 600 | 18px / 1.3 / -0.01em, sentence case | `.tile__head > .microlabel--ink`, `.bsec > .microlabel--ink` — promoted from label to heading; always larger than the section's buttons |
-| H2 | Sans 600 | 18–21px / 1.4 / -0.01em | tile heads (18px), prose h2 (21px) |
+| Section head | Sans 600 | 20px / 1.3 / -0.01em, sentence case | `.tile__head > .microlabel--ink`, `.bsec > .microlabel--ink` — promoted from label to heading; always larger than the section's buttons |
+| H2 | Sans 600 | 20px / 1.4 / -0.01em | tile heads, prose h2 |
 | H3 | Sans 600 | 15–17px / 1.4 | drop/alert/mail headings, prose h3 |
-| Value | Sans 600 | 17.5px / 1.35 / -0.01em | `.bline__val` — ruled-row values |
-| Body | Sans 400 | 17px / 1.55 | `<body>` default |
+| Value | Sans 600 | 16px / 1.35 / -0.01em | `.bline__val` — ruled-row values |
+| Body | Sans 400 | 16px / 1.5 (24px) | `<body>` default |
 | Body-sm | Sans 400 | 15–16px / 1.55 | feed items, reviews, spec cells, row notes |
-| Body-prose | Sans 400 | 17px / 1.7 | `.prose` legal/long-form |
+| Body-prose | Sans 400 | 16px / 1.7 | `.prose` legal/long-form |
 | Label (microlabel) | Mono 500 | 12px / 0.14em tracking / uppercase / dim | `.microlabel` — the connective tissue |
 | Label-row | Mono 400 | 12px / 0.12–0.13em / uppercase / dim | `.bline__label`, `.msg__who` |
 | Label-nav | Mono 400 | 11.5–12.5px / 0.10–0.12em / uppercase | `.bar__link`, `.jumplink`, `.fbtn` |
-| Label-btn | Mono 400 | 12px / 0.10em / uppercase | `.btn` |
+| Label-btn | Mono 500 | 12px / 0.10em / uppercase | `.btn` (ink) and `.btn--live` — only `--live` wears the `[ ]` brackets |
+| Label-btn-secondary | Sans 500 | 14px, sentence case as written | `.btn--ghost`, `.btn--destructive`; `.relbtn` at 13px |
+| Tab | Sans 500 | 15px (14px ≤640px), accent underline when current | `.tabstrip [role=tab]` |
+| Input | Sans 400 | 16px (15px in `.search` on desktop) | `.ctl`, `.search input` |
+| Price | Sans 600 | 18–20px on cards, tabular, ink | `.mcell__price`, `.marketplace-card__price` |
+| Figure | Sans 400 | 16px, tabular | `.kv`, `.vref--lg` / `--xl` |
 | Mono-data | Mono 500 | 12.5–14px, tabular | `.livedim .val`, `.spec` values, `.capsule` |
 | Mono-meta | Mono 400 | 11–12.5px / dim | order meta, feed times, mail footers |
 

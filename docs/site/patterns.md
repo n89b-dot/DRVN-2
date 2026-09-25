@@ -6,27 +6,27 @@ Page-level patterns: how components compose into the product's surfaces.
 
 | Surface | Route | Composition |
 | --- | --- | --- |
-| Public landing | `/` | car-led pagehead + two equal actions (Add your car · Shop parts), hero media, steps 01–03 (garage → community → market), builds strip before parts strip, band stats, buyer protection |
-| Home | `/home` | two columns: the quick post box on top of the feed (Following · For you · Local), and a rail of the few things needing an answer. Seller KPIs live on `/selling`; empty tiles don't render |
-| Explore | `/explore` | one uniform-footprint wall of car/part/update cells, segments (All · Builds · Updates · Parts — all public), breakers (trending models, builders) woven in at ≥3 results, search + filters |
-| Marketplace | `/marketplace` (+ `[category]`/`[subcategory]`) | search + fitment switch + filter row + `.mkt` grid (3→2→1 cols) |
-| Listing | `/listings/[id]` | measured spec table, buy box (capsule + buy/offer), off-this-car, keeper livedims, Q&A |
+| Public landing | `/` | car-led pagehead + two equal actions (Add your car → `/signup?next=/garage` · Shop parts), hero media capped at 56vh, steps 01–03 (garage → community → market) with working links, builds strip before a four-across parts strip with photos, band stats only once there are 100+ cars and parts, buyer protection, a closing "two ways in" block |
+| Home | `/home` | one-line head with Following · For you (· Local) beside it; the quick post box on top of a photo-first feed (`FeedList variant="cards"`, the viewer's own posts left out of For you), and a rail — Your garage, Parts people are watching, Builders to follow — that folds into the feed on a phone, only its last tile sticky. Seller KPIs live on `/selling`; empty tiles don't render |
+| Explore | `/explore` | one uniform wall (every photo one frame — 4:3, 3:2 on a phone-width wall — `KindBadge` on each card) of car/part/update cells; segments All · Builds · Updates · Parts · Builders that all fit a phone (`FilterGroup fit`); breakers (trending models, builders with Follow) woven in at ≥3 results; a visitor gets a "Put your car on DRVN" row; search + filters (the page's own scoped search, below the same top bar as everywhere else) |
+| Marketplace | `/marketplace` (+ `[category]`/`[subcategory]`, slug aliases; an unknown slug shows the marketplace with a notice) | ≥1024px: a left panel (categories with counts, labelled filters) beside four-across `ListingCard variant="shopping"` cells, vehicle picker on the results row. Phone: search, then one row of Filters · Category · Sort; the first part on the first screen |
+| Listing | `/listings/[id]` | item-sized title (`.pagehead--item`) over the gallery (full-screen lightbox); price panel with one primary action, "Came off this car", the seller as a person with a track record; measured spec table, Q&A. The owner sees an owner panel (Edit listing, Offers, views, watching) instead of buyer CTAs |
 | Car sheet | `/cars/[slug]` (+ `/activity/[postId]`) | hero callouts, jumprow, KPI tiles, for-sale rowlist, build blines (fitted, then "Came off this car"), activity feed |
 | Post without a car | `/posts/[postId]` | W-5. Its own route, not a second rendering of the car-sheet post page: no build to sit inside, no breadcrumb, and the tagged parts ARE the subject. A post that HAS a car redirects to its car URL — one canonical address per post |
 | Garage | `/garage?car=` (+ add car, `[id]/edit`; updates at `[id]/update/new` and `[id]/update/[postId]/edit`) | car switcher → focused view: stat strip and tabs (Overview · Mods · Parts · Media) mounting the existing editors. Main car leads |
-| Sell | `/sell` | draft autosave; photos → part → provenance → condition → price → review; live preview card + completeness rail |
-| Seller listings | `/listings` (seller register) + `/listings/[id]/edit` | ledger of the seller's listings; edit reuses the sell form |
+| Sell | `/sell` | draft autosave; Photos is step 01 (large cover slot, drop area) → part → provenance → condition → price → review; publishing needs a photo (drafts don't); on phones the price and Publish stay pinned. Invite-only accounts get the shared `SellerAccessNotice` (Request seller access · Manage your listings) on `/sell` and `/sell/import` |
+| Seller listings | `/listings` (seller register) + `/listings/[id]/edit` | ledger of the seller's listings — below 860px one compact card per listing (photo, title, car, status, then Views · Watch · Asking · Top offer); Pause/Archive/Delete live in the opened row. Edit names the listing (title, photo, price) and reuses the sell form |
 | Messages | `/messages` + `/messages/[orderId]` | per-order threads on the `.msg`/`.thread` idiom |
 | Offers | `/offers` + `/offers/[id]` | open work orders, accept/counter/pass |
-| Payouts | `/payouts` | payout history + Stripe Connect status |
-| Orders (seller) | `/orders` job detail | pipe + dispatch form + payout math + past jobs |
+| Payouts | `/payouts` | whether a payout account is connected (and the button to set it up), payout history, clearing → available |
+| Orders (seller) | `/orders` job detail | opens on Sales for anyone who has listed a part; rows lead with the part's photo; pipe + dispatch form + payout math + past jobs |
 | Orders (buyer) | `/orders` | KPI, transit pipe + countdown, tracking spec, inspection alert, past purchases |
 | Cart | `/cart` | review surface only — see P20 |
 | Checkout | `/checkout` (+ `/orders/[id]/checkout`) | 2-step stepper — see P21 |
 | Watchlist | `/saved` | watched part tiles + saved searches + followed sheets |
 | Notifications | `/notifications` | actionable rows, policy blines, mail previews |
 | Profile | `/u/[username]` + `/profile` | full-width page: banner band with the avatar overlapping its foot, identity and followers · following · cars below it, actions on the right (Follow · Store · share; the owner gets Edit · Saved · share), trust strip (rating · sold · member since); tabs beside a rail of the garage and parts for sale (`.deck--aside`), rail following the panel below 1024px. Overview = featured build + latest updates as cards; Garage and Updates are card grids. **Parts is the member's store**, rendered exactly like the marketplace, with the statuses decided server-side by who is looking |
-| Settings | `/settings` | rail + one section at a time (01–05 indices), signals matrix, savebar |
+| Settings | `/settings` | rail + one section at a time (a section picker on phones), Account · Profile · Notifications · Privacy (analytics consent) · Payments · Shipping · Shop · Danger zone, signals matrix, per-section Save; payouts live on `/payouts` |
 | Auth | `/login`, `/signup`, `/login/forgot`, `/login/reset`, `/onboarding` | 420px authwrap, field states (there is no verify route) |
 | Legal | `/terms`, `/privacy`, `/fees`, `/protection` | `.prose` + `.toc` |
 | Admin console | `/admin/*` — 11 routes: admin, audit, disputes, listings, orders, orders/[id], payments, reports, settings, users, users/[id] | gated (404 to non-admins); own nav; same tokens |
@@ -40,7 +40,7 @@ mobile index and the Selling family subnav. Signed in, the top level is fixed:
 Settings. Garage sits above the Selling family because the car is the middle of
 the product, while Selling is a workspace entered on purpose; the family's five
 children stay expanded beneath their group heading so none costs a second
-click. Signed out, the register advertises only Explore and Marketplace —
+click on selling pages — elsewhere the group stays folded to one row with a count. Signed out, the register advertises only Explore and Marketplace —
 management surfaces have no signed-out reading.
 
 ## Commerce patterns (Mobbin-derived, exact values)
@@ -82,7 +82,7 @@ Cart is a **review surface only** — no address form, no payment fields.
   once payments are live it renders nothing. One shared component, so the
   copy can never claim test mode after money is real.
 
-## Empty states (the 14-rule digest)
+## Empty states (the 15-rule digest)
 
 1. Dashed `.undrawn` plates, same geometry as the content they stand for.
 2. `—` for empty values; **`$0.00` for empty money** (factual, never cute).
@@ -98,7 +98,11 @@ Cart is a **review surface only** — no address form, no payment fields.
 11. Zero-count KPIs still render their livedim, blank variant.
 12. Truncation is explicit: `.clamp2` / `.trunc`.
 13. Free/zero money renders as money (`$0.00`), not as "free".
-14. Every empty state names the action that fills it.
+14. Every empty state names the action that fills it — ONE message and ONE
+    next step. No filter bars, sort controls or search boxes over nothing;
+    they appear once there is something to filter.
+15. A seller's empty page points at selling, not shopping ("List a part",
+    not "Browse the marketplace").
 
 ## Form states
 
@@ -107,4 +111,4 @@ hint/counter → inline error **after blur** → summary → async check →
 cross-field → server reject → pending → fail → two-step confirm → undo →
 unsaved-changes → draft restore → optimistic rollback. Controls keep a
 transparent 1px border at rest so validation borders never shift layout.
-Settings uses a dirty-flag + sticky `.savebar` + save toast.
+Settings sections each commit with their own form's Save (an `ActionFooter` row) and a result note; the sticky `.savebar` recipe is currently unused in the product.

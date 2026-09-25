@@ -4,9 +4,11 @@
 > and precise, whose annotations are alive: dimension lines measure real-time
 > values, offers arrive as work orders, countdowns tick on the sheet.
 
-Source of truth: `design-mockups/livesheet/livesheet.css`, contracted in
-`design-mockups/livesheet/design.md` (served at `/docs/md/livesheet-design-md`).
-Production port lives in `src/app/styles/00-tokens-base.css` (Tailwind v4 `@theme` +
+Origin: `design-mockups/livesheet/livesheet.css`. The current contract is
+`design-mockups/livesheet/design.md` (updated 2026-09-24, served at
+`/docs/md/livesheet-design-md`); these `docs/site` pages go into more depth, and
+the production CSS in `src/app/styles/` is the final word on values.
+Production tokens live in `src/app/styles/00-tokens-base.css` (Tailwind v4 `@theme` +
 `:root` custom properties).
 
 ## 1. The concept
@@ -32,8 +34,14 @@ Two layers:
 2. **Alpha + state tokens** — plain custom properties on `:root` (dimline,
    grid-line, live-tint, ok-tint, warn/warn-tint, info/info-tint,
    destructive, scrim, ink-hover,
-   live-hover, ghost-hover, rule-soft, rule-mid, ghost, ghost-strong,
-   photo-filter). Used directly via `var(...)` in component CSS.
+   live-hover, ghost-fill, ghost-hover, rule-soft, rule-mid, ghost,
+   ghost-strong, photo-filter). Used directly via `var(...)` in component
+   CSS.
+3. **Photo overlay tokens** — `--photo-scrim`, `--on-photo`,
+   `--on-photo-dim`: text laid over a photograph (the garage hero, a
+   profile's featured build). One value in both themes, because the photo
+   underneath doesn't change with the theme; the scrim is a dark fade under
+   the caption only, never a paper wash over the car.
 
 Legacy aliases (`--color-background`, `--bg-surface`, `--text-primary`…) map
 old utility names onto Livesheet tones so pre-Livesheet code shifts palette in
@@ -43,7 +51,11 @@ one move.
 
 - NIGHT is a **token remap only**, declared once under
   `[data-theme="dark"]` on `<html>`. No component rule is duplicated for
-  dark. The only dark-specific rules are the photo filter
+  dark. `--ghost-fill` is the one token whose ROLE flips: recessed
+  (paper-deep) by day, raised (#242830) at night, so a secondary button sits
+  above the graphite instead of reading as a black slab cut into it. Selected
+  chips and category rows at night are a tile plate with an accent edge, not
+  a white inversion. The only dark-specific rules are the photo filter
   (`brightness(0.86) contrast(1.05)` on img/video), the theme-pip fill and
   the `select` chevron, which is an inline SVG and so carries `dim` as a
   literal in both themes.
@@ -70,12 +82,17 @@ Radius descends with the size of the thing. **Nothing is a pill.**
 | `--r-meter` | 3px | bars and tracks |
 | circle | 50% | ONLY live dots, pipeline pips, thumb-remove badges |
 
-Layout: max width 1200px (`--maxw`, `.wrap`); the one grid gap is 14px
-(`.deck`); tile padding 18px; section bottom padding `clamp(48px, 7vw, 80px)`.
+Layout: max width 1200px (`--maxw`, `.wrap`); the one grid gap is 16px
+(`.deck`); tile padding 20px; section bottom padding `clamp(48px, 7vw, 80px)`.
 
-Separation is **tonal** — no borders, no shadows, no glass, no gradients.
-Hairlines (`rule-soft` / `rule-mid`) rule rows inside plates; `dimline` alpha
-is reserved for dimension and leader lines.
+Separation is **tonal** — plates are lighter than the paper, not boxed.
+Hairlines (`rule-soft` / `rule-mid`) rule rows inside plates and outline
+controls that sit on a raised surface; `dimline` alpha is reserved for
+dimension and leader lines. The deliberate exceptions: a 1px `rule-mid` edge
+on the marketplace card, the frosted top bar, soft `--scrim` shadows on things
+that float (popovers, dragged items), and photo overlays (the dark caption
+fade and the small chips drawn on photos). Nothing else takes a border,
+shadow, gradient or blur.
 
 ## 5. Motion
 
@@ -123,11 +140,15 @@ never start — **countdowns keep running** (information, not decoration).
 
 - things happening right now (pulsing dots, arriving events, LIVE chips,
   countdowns, "you" markers);
-- at most **one** primary CTA per surface (`.btn--live`);
+- at most **one** primary CTA per surface (`.btn--live`) — the one red
+  fill, and the only button that wears the `[ ]` brackets. The shell's red is
+  the top bar's Post; the rail's List a part, card cart buttons and every
+  secondary action are outlined or ghost;
 - one `.live-word` per page, in the h1 only, with a draw-in underline.
 
 Everything else is ink, dim, ok or warn. A second accent is banned; status
-colors are never navigation.
+colors are never navigation, and `--ok` is a status (settled / done /
+verified) — prices are ink, never green.
 
 ## 7. Empty, loading and edge states
 
@@ -135,7 +156,11 @@ colors are never navigation.
   dashed plate with a cross-hair mark and factual copy.
 - Loading is **ghost rows** (`.ghostrow`, `.gbar`, `.gbox`) with a drawing
   sweep — never spinners.
-- Empty values print `—`; empty **money** prints `$0.00`.
+- Empty values print `—`; empty **money** prints `$0.00`. A KPI with nothing
+  counted yet shows the real zero, dimmed (`MetricCard blank`), because a
+  dash in a giant numeral reads as loading.
+- An empty page says one thing and offers one next step: no filter bars,
+  sort controls or search boxes over nothing.
 - Spent/expired content desaturates (`.chip--spent`, stamp) — it does not
   disappear.
 - Media without an image renders the img-fallback tone; listing covers
@@ -145,7 +170,8 @@ colors are never navigation.
 
 | Concern | File |
 | --- | --- |
-| Production tokens + all component CSS | `src/app/styles/*.css`, imported in order by `src/app/globals.css` |
+| Production tokens | `src/app/styles/00-tokens-base.css` (`@theme`, `:root`, night block, element defaults) |
+| Component CSS, by recipe family | `src/app/styles/01-foundation.css` … `09-states-content.css` (all `@layer components`), then `10-unlayered-motion.css`, `11-responsive.css`, `12-overrides.css` (unlayered on purpose) — imported in filename order by `src/app/globals.css`; import order is the cascade, guarded by `styles-ratchet.test.ts` |
 | Source mockups + contract | `design-mockups/livesheet/` (`design.md`, `design.html`, `livesheet.css`) |
 | React chrome + primitives | `src/components/ui/` |
 | Behavior components (Rv, LiveDim, Countdown) | `src/components/livesheet.tsx` |

@@ -68,6 +68,13 @@ post page and any preview feed it `normalizeBlocks` output. Mod blocks
 resolve their destination at render time (live listing → `For sale →`,
 otherwise the build tab).
 
+Above the blocks, a post page shows a lead: the intro line and the photo
+gallery. The editor writes the same first paragraph and photos into the
+blocks too, so the pages pass the lead through `postLead()`
+(`src/lib/activity-blocks.ts`). It drops an intro that matches a text block
+and any photo already in an `images` or `before_after` block, so a post
+never reads twice. A post with no blocks keeps its whole lead.
+
 ## The post row (2026-09 direction)
 
 The block document is only half the model. Three things about the row it

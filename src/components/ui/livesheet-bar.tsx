@@ -180,12 +180,6 @@ export function LivesheetBar({
       ];
   const familyHere = isSellingFamily(pathname);
   const indexRouteCount = indexEntries.filter((e) => e.kind === "route").length;
-  // Explore and the Marketplace own a search field of their own, right under
-  // the bar; a second one in the bar (different placeholder, same target)
-  // left a visitor guessing which to use.
-  const pageOwnsSearch = ["/explore", "/marketplace"].some(
-    (href) => pathname === href || pathname.startsWith(`${href}/`)
-  );
 
   return (
     <>
@@ -195,18 +189,18 @@ export function LivesheetBar({
             DRVN<em>.</em> <span className="microlabel">Builds and parts</span>
           </Link>
 
-          {/* N-2: one search field on every page, not just Explore. It
-              submits to /explore, which is the federated view — searching
-              from the top bar shouldn't make you choose a scope first. */}
-          {!pageOwnsSearch && (
-            <form action="/explore" role="search" className="bar__search">
-              <SuggestingSearchField
-                label="Search DRVN"
-                placeholder="Search DRVN"
-                endpoint="/api/explore/suggest"
-              />
-            </form>
-          )}
+          {/* N-2: one search field on every page, not just Explore — the bar
+              is the same everywhere, including Explore and the Marketplace,
+              which also carry their own scoped search below it. It submits
+              to /explore, the federated view, so searching from the bar
+              never makes you choose a scope first. */}
+          <form action="/explore" role="search" className="bar__search">
+            <SuggestingSearchField
+              label="Search DRVN"
+              placeholder="Search DRVN"
+              endpoint="/api/explore/suggest"
+            />
+          </form>
 
           <nav className="bar__nav" aria-label="Primary">
             {/* Signed-out visitors keep text links; signed-in navigation is the rail. */}

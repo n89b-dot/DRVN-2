@@ -48,7 +48,7 @@ different values — never a second stylesheet.
 | Token | Hex | Role |
 | --- | --- | --- |
 | `paper` | `#EFEDE6` | canvas / page background |
-| `paper-deep` | `#E5E2D8` | recessed — ghost buttons, chips, controls |
+| `paper-deep` | `#E5E2D8` | recessed — form controls on paper; the day `ghost-fill` |
 | `tile` | `#F8F6F0` | raised widget plate |
 | `tile-2` | `#F1EFE8` | secondary / deeper plate |
 | `ink` | `#20232A` | text; ink-inverted surfaces |
@@ -60,13 +60,16 @@ different values — never a second stylesheet.
 | `destructive` | aliases `live` | destructive actions; same hue, distinct semantic name |
 | `on-ink` | `#F8F6F0` | text on ink surfaces |
 | `img-fallback` | `#E2DFD5` | media box before an image |
+| `ghost-fill` | `var(--paper-deep)` | secondary (ghost) button fill — recessed by day |
+| `photo-scrim` / `on-photo` / `on-photo-dim` | `rgba(10, 11, 14, 0.74)` / `#FFFFFF` / `rgba(255, 255, 255, 0.78)` | text over a photograph (garage hero, featured build) — same in both lightings |
 
-> **Trap avoidance — `:root` vs `@theme` diverge on DAY.** The R3 contrast
-> pass (see `src/app/styles/00-tokens-base.css`) darkened `--dim`, `--live` and
-> `--ok` on `:root` so text usage clears WCAG 4.5:1 on paper, while the
-> `@theme` scale tokens (`text-dim`, `text-live`, `text-ok` utilities) kept
-> the original hues. This is deliberate: check *which* layer you are reading
-> before copying a hex. Dark theme values were already passing and match.
+> **One source per hue.** The R3 contrast pass darkened `--dim`, `--live` and
+> `--ok` on `:root` so text clears WCAG 4.5:1 on paper. The `@theme` scale
+> tokens (`--color-dim`, `--color-live`, `--color-ok` → `text-dim`,
+> `text-live`, `text-ok` utilities) are now `var()` references to those same
+> `:root` values (`src/app/styles/00-tokens-base.css`), so utilities and
+> component CSS can no longer diverge. The older `@theme` hexes shown in some
+> tables above are history.
 
 The "one accent" rule applies to the *signal* accent (`live`); `info` is a
 status tone alongside `ok`/`warn`, never a call to action.
@@ -97,7 +100,8 @@ the whole day palette are unchanged.
 | `on-ink` | `#14161A` |
 | `img-fallback` | `#22262D` |
 | `ink-hover` | `#D7D8DC` |
-| `ghost-hover` | `#262A31` |
+| `ghost-fill` | `#242830` — raised above the graphite, so a ghost button never reads as a black slab |
+| `ghost-hover` | `#2E333B` |
 | `scrim` | `rgba(5, 6, 7, 0.62)` |
 
 Alpha-ink tokens (`dimline`, `grid-line`, `rule-soft`, `rule-mid`, `ghost`,
@@ -116,8 +120,12 @@ gained a little room.
 - **One accent.** Live red is reserved for things happening *right now*
   (live dots, countdowns, LIVE chips, arriving events) plus at most one
   primary CTA per surface. A second accent color is banned.
-- `ok` green marks terminal good states; `warn` amber marks held money and due
-  work — attention without alarm.
+- `ok` green marks terminal good states only — never a price, never a kind
+  label; `warn` amber marks held money and due work — attention without
+  alarm.
+- One red fill per surface: the primary action (the only bracketed button).
+  Card cart buttons are outlined and the rail's List a part is a ghost
+  button; the top bar's Post is the shell's red.
 - Hairlines come from alpha ink (`rule-soft`, `rule-mid`); `dimline` is for
   dimension/leader lines only, never card borders.
 - All text/ground pairs must clear WCAG AA 4.5:1 in both lightings (dim, live

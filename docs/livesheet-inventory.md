@@ -5,7 +5,17 @@
 > predates the component library (Button, the form family, Pagination, the
 > messaging/row/card contracts…). For what exists **now**, use `/docs/components`
 > and `src/components/registry.ts`; some details below (e.g. ".btn has no
-> spinner variant", `.savebar`) no longer match production.
+> spinner variant", `.savebar`) no longer match production. Since the
+> 2026-09-24 design review:
+> - Only `.btn--live` wears the `[ ]` brackets, and ghost and destructive
+>   buttons are Plex Sans.
+> - Mono is kept for labels and data at 12px and under.
+> - Prices are ink, not green.
+> - Panels switch with underline tabs (`SheetTabs` / `.tabstrip`) as well as
+>   the jumprow.
+> - `.fbtn` chips are hairline-outlined at 44px.
+> - The phone index menu uses single-line 48px rows.
+> - The stylesheet lives in `src/app/styles/`.
 
 Derived 2026-07-26 from `design-mockups/livesheet/` — shipped CSS (`livesheet.css`)
 treated as source of truth, cross-checked against `design.md` (frontmatter matches CSS)

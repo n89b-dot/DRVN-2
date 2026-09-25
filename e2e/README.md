@@ -82,9 +82,13 @@ faked with mocks, which would test nothing about RLS or the RPCs.
 - Golden-path locators track the current UI: structured country select,
   consequence-confirmation dialogs on dispatch / mark-received, and the
   explicit star rating on reviews.
-- Local runs against an already-running dev server: set
-  `E2E_BASE_URL=http://localhost:3005` (the launchd dev server) — Playwright
-  reuses it instead of starting a second one.
+- The suite no longer runs against an already-running dev server:
+  `playwright.config.ts` sets `reuseExistingServer: false` (it builds and
+  starts its own), and `tests/support/test-target.ts` refuses any Supabase
+  target but the isolated loopback stack on port 54321 or a reviewed
+  disposable project. The launchd dev server on :3005 uses the shared dev
+  project, so point e2e at the isolated stack instead (see
+  `docs/remediation-rollout.md`, "Isolated verification environment").
 
 ## Money-completing specs and payments mode (Aug 2026)
 
@@ -165,3 +169,19 @@ E2E_BASE_URL=http://localhost:3006 npx playwright test e2e/transaction-completio
 Flow A drives the order to `delivered` by POSTing a tracker event to
 `/api/shipping/easypost` signed with `EASYPOST_WEBHOOK_SECRET` — the same
 HMAC door EasyPost uses, so the webhook path is exercised too.
+
+## Admin console and `/docs`: MFA (Sept 2026)
+
+`/admin` and `/docs` need an `admin_users` member at AAL2 with a TOTP check in
+the last 15 minutes (`src/lib/admin/guard.ts`); anything less is sent to
+`/admin-verify`. The specs that go in (`remediation-security`,
+`admin-mutation-recovery`, `beta-invitations`) make a throwaway admin, press
+**Set up authenticator** on `/admin-verify`, and work out the code from the
+secret shown on the page with their own `totp()` helper. A new admin or docs
+spec must do the same step, or it will stop at `/admin-verify`.
+
+This has applied on the shared dev project since the remediation chain went
+in on 2026-09-24. Its standing console-admin account has an enrolled factor
+whose secret is kept outside the repo (`~/drvn-db-backups/`). Keep it out of
+`.env*` files and specs: the specs must keep making their own disposable
+admins.

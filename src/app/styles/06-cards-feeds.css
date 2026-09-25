@@ -481,12 +481,12 @@ a.cartbtn:hover {
   background: var(--ink-hover);
 }
 /* The bookmark twin of the cart square (SaveButton variant="icon"): the
-   same outlined 40px plate, the glyph filled once saved. */
+   same outlined 44px plate (the touch floor), the glyph filled once saved. */
 .savebtn {
   display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border-radius: var(--r-ctl);
   background: transparent;
@@ -508,8 +508,16 @@ a.cartbtn:hover {
   height: 16px;
 }
 .marketplace-card__foot .cartbtn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+}
+/* Touch screens get the 44px floor (docs/site/rules.md); a pointer keeps the
+   compact 32px square that fits the wall's engagement strip. */
+@media (pointer: coarse) {
+  .cartbtn {
+    width: 44px;
+    height: 44px;
+  }
 }
 .cartbtn:active {
   transform: scale(0.96);
@@ -1829,9 +1837,10 @@ a.cartbtn:hover {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 6px 12px;
-    /* 40px keeps a comfortable target while a chip row stops reading as a
-       wall of filled 44px buttons: a hairline outline at rest, ink when on. */
-    min-height: 40px;
+    /* The 44px touch floor stays (docs/site/rules.md); what stopped a chip
+       row reading as a wall of buttons is the hairline outline at rest
+       instead of a filled plate — ink only when on. */
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     gap: 6px;

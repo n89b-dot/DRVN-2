@@ -152,7 +152,15 @@ under its own headline with "Update" where the build name would go. The client i
 (`src/components/ui/search-suggest.tsx`): ARIA combobox over the `.combo`
 popover, ≥2-character threshold enforced on both sides, 150 ms debounce,
 stale requests aborted, Enter without a selection submits the GET form.
-Suggestions orient; the results page answers.
+The client reorders the groups to builds, parts, accounts, updates (parts
+used to fall below the popover's cut on a phone), shows two per group below
+640px, and always ends on a pinned "Search for …" option that submits the
+form. Suggestions orient; the results page answers.
+
+The field appears in the top bar on every page — the bar is identical
+everywhere, so Explore and the Marketplace show it too, above their own
+scoped search. It also appears in the phone's index menu, with the same
+suggestions. Both submit to `/explore`.
 
 ## Providers
 

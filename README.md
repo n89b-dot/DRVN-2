@@ -24,9 +24,11 @@ inferences* (potential fitment matches — never presented as verified).
 - **Stripe** — PaymentIntents (one per basket), Connect transfers to sellers
   on delivery + 7-day hold, refunds via a durable state machine. Separate
   charges and transfers; the platform account is merchant of record.
-- **Design system** — "Livesheet" (`docs/livesheet-inventory.md`, tokens in
-  `src/app/globals.css`, primitives in `src/components/ui/`). Internal design
-  microsite at `/docs` (admin-gated).
+- **Design system** — "Livesheet" (`docs/livesheet-inventory.md`; the
+  stylesheet is split by recipe family in `src/app/styles/`, tokens in
+  `00-tokens-base.css`, imported in order by `src/app/globals.css`;
+  primitives in `src/components/ui/`). Internal design microsite at `/docs`
+  (admin-gated, same MFA as `/admin`).
 
 ### Money model (the part worth understanding first)
 
@@ -103,8 +105,9 @@ idempotent with self-checks that raise on failure.
    subscribing to `payment_intent.succeeded`, `payment_intent.payment_failed`,
    `payment_intent.requires_action`, `charge.refunded`,
    `charge.dispute.created`, `charge.dispute.closed`, `account.updated`.
-2. Connect (Express) for sellers — onboarding from Settings → Payments;
-   `payouts_enabled` syncs via `account.updated`.
+2. Connect (Express) for sellers — onboarding from Selling → Payouts
+   (`/payouts`; Settings → Payments links there); `payouts_enabled` syncs via
+   `account.updated`.
 3. Schedule the worker: POST `/api/jobs/transfers` with `Authorization:
    Bearer $CRON_SECRET` every ~10 min (pg_cron + pg_net wiring in
    `supabase/MIGRATIONS.md`), or run it from Admin → Payments.
@@ -131,8 +134,10 @@ full E2E) do not run in CI — treat a green build accordingly.
 ## Admin access
 
 Insert into `admin_users` via SQL/service role only (`role`: `admin` or
-read-only `viewer`) — never a flag on `profiles`. `/admin` 404s for everyone
-else. Every admin action lands in the append-only `admin_audit_log`.
+read-only `viewer`) — never a flag on `profiles`. `/admin` and `/docs` 404 for
+everyone else. Members also need MFA: AAL2 with a TOTP check in the last 15
+minutes, enrolled and challenged at `/admin-verify` (`src/lib/admin/guard.ts`).
+Every admin action lands in the append-only `admin_audit_log`.
 
 ## Deployment & operations
 

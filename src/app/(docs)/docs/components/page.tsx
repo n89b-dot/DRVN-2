@@ -37,6 +37,7 @@ import {
   ValidationSummary,
   Badge,
   KindBadge,
+  SheetTabs,
 } from "@/components/ui";
 
 import { DocsJumprow, DocsPagehead, Specimen, SpecimenGroup } from "../../_components/docs-page";
@@ -81,7 +82,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Top bar"
           klass=".bar"
-          note="Sticky, 86% paper + blur(14px). Logo carries the live full stop; links are mono 12.5 uppercase; .is-active gets the ink ground. The bar above this page is the docs variant of the same idiom. ≤640px the nav becomes one scrollable row."
+          note="Sticky, 86% paper + blur(14px) — the -webkit- declaration goes BEFORE the unprefixed one (the build keeps only the last of the pair). Logo carries the live full stop; the inner edge lines up with the content column; a 560px global search on every page (the bar is identical everywhere; Explore and Marketplace add their own scoped search below it); compact count badges on the icons. The shell's one red fill is Post."
         >
           <div className="flex items-center justify-between rounded-ctl bg-paper px-4 py-3">
             <span className="bar__logo !text-body">
@@ -96,7 +97,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Index rows"
           klass=".indexrow"
-          note="The menu is a second sheet unrolled over the page — margin-marked rows with a note; the current row chips 'Here'. The product rail and index carry stroke icons in the margin; the numbered form survives in the admin console."
+          note="The phone menu is a second sheet unrolled over the page: search and Post lead, then one 48px single-line row per destination (stroke icon + label; notes are hidden so the whole menu fits in about 1.5 screens); the current row chips 'Here'. The numbered form survives in the admin console."
         >
           <div>
             <div className="indexrow !animate-none !opacity-100">
@@ -115,7 +116,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Jumprow"
           klass=".jumprow / .jumplink"
-          note="THE tab replacement. A drawing shows everything at once and tells you where to look — no pill tabs, no segmented controls. Every section keeps a real anchor."
+          note="In-page references on a long sheet — every section keeps a real anchor. Panels that switch use SheetTabs (.tabstrip: Sans labels, accent underline); feed segments are .fbtn chips in a FilterGroup."
         >
           <nav className="jumprow">
             <span className="microlabel">On this sheet</span>
@@ -129,6 +130,21 @@ export default function ComponentsPage() {
               Activity
             </a>
           </nav>
+        </Specimen>
+        <Specimen
+          name="Sheet tabs"
+          klass="SheetTabs / .tabstrip"
+          note="Panels that switch: Plex Sans labels on a ruled baseline, the current tab inked with an accent underline, counts as quiet tabular numbers. Five tabs with counts fit a 358px phone column; sideways scroll is only the fallback when a strip overflows. URL-backed (replaceState), arrow keys and Home/End; onChange tells a page which tab is showing."
+        >
+          <SheetTabs
+            label="Specimen tabs"
+            tabs={[
+              { key: "overview", label: "Overview", panel: <p className="text-body text-dim">The featured build and the latest updates.</p> },
+              { key: "garage", label: "Garage", count: 2, panel: <p className="text-body text-dim">Every car, as photo cards.</p> },
+              { key: "parts", label: "Parts", count: 1, live: true, panel: <p className="text-body text-dim">The store, four across.</p> },
+              { key: "reviews", label: "Reviews", panel: <p className="text-body text-dim">What buyers said.</p> },
+            ]}
+          />
         </Specimen>
         <Specimen
           name="Foot"
@@ -287,7 +303,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Button"
           klass="Button / variant · loading"
-          note="The production component (src/components/ui/button.tsx), rendered here directly. Semantic variants map to the .btn recipes — default, live (one per surface), ghost, destructive, quiet (.relbtn). loading disables, sets aria-busy and swaps to pendingLabel, so async work always narrates itself. ButtonLink is the same contract as a navigation."
+          note="The production component (src/components/ui/button.tsx), rendered here directly. Semantic variants map to the .btn recipes — default (ink, mono caps), live (THE action: one red fill per surface and the only variant with [ ] brackets), ghost and destructive (Plex Sans, sentence case as written), quiet (.relbtn, a Sans row action). loading disables, sets aria-busy and swaps to pendingLabel, so async work always narrates itself. ButtonLink is the same contract as a navigation."
         >
           <div className="flex flex-wrap items-center gap-3">
             <Button>Counter</Button>
@@ -357,7 +373,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Filters & search"
           klass="FilterGroup / FilterLink / FilterButton / SearchField"
-          note="Production components. A filter axis is one labelled group: link mode carries aria-current for URL-backed selection (.is-on ink ground), button mode carries aria-pressed (live fill). Axis grammar — stack for the primary axis, sub for the quieter one beneath, scroll to ride the gutter sideways ≤760px. Every target keeps the 44px floor."
+          note="Production components. A filter axis is one labelled group: link mode carries aria-current for URL-backed selection (.is-on ink ground), button mode carries aria-pressed (live fill). Chips are mono micro-labels in a hairline outline, ink when on. Axis grammar — stack for the primary axis, sub for the quieter one beneath, scroll to ride the gutter sideways ≤760px, fit for a short fixed set that must share one phone row (never scrolls). Every target keeps the 44px floor."
         >
           <FilterGroup label="Category" className="mb-3">
             <FilterLink href="#suspension" selected>
@@ -1039,7 +1055,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Bottom sheet"
           klass="BottomSheet / .bsheet"
-          note="The compact-screen sheet: the dialog plate risen from the bottom edge — full width, top corners at r16, safe-area padding, scrim behind, Esc/trap/restore like Dialog. Children stay mounted while closed so form fields keep submitting; with inlineFrom the chrome dissolves ≥640px and the children flow back inline. First consumer: the marketplace finder's refinements behind one Refine control. Drawn static here."
+          note="The compact-screen sheet: the dialog plate risen from the bottom edge — full width, top corners at r16, safe-area padding, scrim behind, Esc/trap/restore like Dialog. Children stay mounted while closed so form fields keep submitting; with inlineFrom the chrome dissolves ≥640px and the children flow back inline. First consumer: the marketplace finder's refinements behind one Refine control. On phones it adds a quiet dismiss word; pass closeLabel={null} when the content already ends in its own Done/Cancel. Drawn static here."
         >
           <div className="bsheet is-open !static rounded-ctl p-4">
             <div className="bsheet__panel !max-h-none">

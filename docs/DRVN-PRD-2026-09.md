@@ -59,7 +59,7 @@ Home, Explore, Marketplace, Garage, Profile, Store, Selling. Not "Build / Scene 
 
 - **Typeface unchanged:** IBM Plex Sans and IBM Plex Mono, as in `docs/site/typography.md`.
 - **Accent unchanged** (`--live`). **Light theme unchanged.**
-- **Dark theme moves to a cooler paper** (one block, `src/app/globals.css` `[data-theme="dark"]`): `--paper #121418`, `--paper-deep #0c0e11`, `--tile #1c1f25`, `--tile-2 #171a1f`, `--ink #eceef2`, `--dim #8a909b`, `--img-fallback #22262d`, `--on-ink #14161a`, `--ghost-hover #262a31`; ink-tint tokens swap `240,238,229` → `236,238,242`.
+- **Dark theme moves to a cooler paper** (one block, `[data-theme="dark"]` in `src/app/styles/00-tokens-base.css`): `--paper #121418`, `--paper-deep #0c0e11`, `--tile #1c1f25`, `--tile-2 #171a1f`, `--ink #eceef2`, `--dim #8a909b`, `--img-fallback #22262d`, `--on-ink #14161a`, `--ghost-hover #262a31`; ink-tint tokens swap `240,238,229` → `236,238,242`.
 - **Reuse before create.** Screens are composed from the registry. A new component is made only when it is clearly better than extending or composing an existing one, and it is then registered, documented and given a specimen. CSS-only needs become named recipes, not wrapper components.
 - If imagery is ever generated, use the Higgsfield MCP. Nothing here requires it.
 
@@ -78,7 +78,7 @@ Priority: **P0** the direction doesn't hold without it · **P1** needed for the 
 | N-5 | Messages shows an unread count | P1 | New |
 | F-1 | Landing leads with the car; two equal actions — Add your car · Shop parts; builds before parts | P0 | Change |
 | F-2 | Lockup and root metadata stop saying "Parts marketplace"; marketplace routes keep marketplace wording | P0 | Change |
-| F-3 | Sign-up, onboarding and return-to-where-you-were unchanged | P0 | Exists |
+| F-3 | Sign-up, onboarding and return-to-where-you-were unchanged — except (2026-09-24) that "Add your car" now carries `next=/garage` through sign-up, and an account with nowhere to return to finishes onboarding on add-car, with "Skip — just browsing" going to Home | P0 | Change |
 
 ### 4.2 Home
 

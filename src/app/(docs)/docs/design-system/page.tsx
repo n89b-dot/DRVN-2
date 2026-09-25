@@ -100,7 +100,8 @@ export default function DesignSystemPage() {
           >
             <div className="kv">
               dimline · grid-line · live-tint · ok-tint · warn · scrim · ink-hover · live-hover ·
-              ghost-hover · rule-soft · rule-mid · ghost · ghost-strong · photo-filter
+              ghost-fill · ghost-hover · rule-soft · rule-mid · ghost · ghost-strong · photo-filter ·
+              photo-scrim · on-photo · on-photo-dim
             </div>
           </Specimen>
         </div>

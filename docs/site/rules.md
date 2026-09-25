@@ -18,15 +18,23 @@ The contract. When a change violates one of these, the change is wrong.
 - Empty states keep the geometry of the content they replace (`.undrawn`).
 - `—` for empty values; `$0.00` for empty money.
 - Spent/expired desaturates, it never disappears.
-- Jumprow ("ON THIS SHEET") instead of tabs.
+- Panels switch with underline tabs (`SheetTabs`); in-page references use the
+  jumprow ("ON THIS SHEET"). Every tab in a strip fits a phone column; the
+  strip's sideways scroll (≤760px) is only a fallback for overflow.
 
 **Don't**
 
-- No pills. No shadows. No gradients. No glass.
-- No borders as edges (the `.mail` frame is the sole exception — it depicts
-  an external artifact; `dimline` is for dimension/leader lines only).
-- One *signal* accent only (`live`). `ok`/`warn`/`info` are status tones,
-  never navigation or CTAs.
+- No pills. No shadows. No gradients. No glass — except where a thing
+  genuinely floats or sits on a photo: soft `--scrim` shadows on popovers
+  and dragged items, the frosted top bar, the dark caption fade and small
+  chips on photos, and the round count badge (`.barbadge`).
+- No borders as edges. Exceptions: the `.mail` frame (it depicts an external
+  artifact), the marketplace card's 1px `rule-mid` edge, and hairline
+  outlines on controls and chips that sit on a raised surface. `dimline` is
+  for dimension/leader lines only.
+- One *signal* accent only (`live`), and one red fill per surface: the
+  primary action, the only button with `[ ]` brackets. `ok`/`warn`/`info` are
+  status tones, never navigation, CTAs or prices.
 - No spinners — ghost rows with the drawing sweep.
 - No fake data, fake liveness or decorative pulsing.
 - No tile-in-tile; never nest decks.
@@ -36,10 +44,11 @@ The contract. When a change violates one of these, the change is wrong.
 
 - Every text/ground pair clears WCAG AA 4.5:1 in **both** lightings; re-check
   contrast whenever a token moves.
-- Touch targets ≥ 44px for primary controls (filter chips and bar icons were
-  specifically fixed to meet this).
+- Touch targets ≥ 44px for primary controls — filter chips, card Save/cart
+  squares, dialog Close and bar icons included.
 - `:focus-visible`: 2px live outline, offset 3px, border-radius 4px — never
-  removed.
+  removed. The one exception is the search pill (`.search`), which draws a
+  2px ink ring on the whole pill (`:focus-within`) instead of a box inside it.
 - `prefers-reduced-motion`: draws render settled, pulses stop, count-ups
   print final values; countdowns keep running (information, not decoration).
 - Dialogs and sheets trap focus, close on Escape, and lock body scroll.
@@ -50,10 +59,14 @@ The contract. When a change violates one of these, the change is wrong.
 
 ## Content rules
 
-- Microlabels: 2–6 words, uppercase mono, regions not sentences.
+- Microlabels: 2–6 words, uppercase mono, regions not sentences. Mono is for
+  labels and data at 12px and under; anything read or typed at reading size
+  (inputs, names, figures, notes, sentences) is Plex Sans — see
+  [typography](typography.md).
 - Copy is factual and quiet — annotations on a drawing. State what happened
   and what fills the space next; no exclamation marks, no apology.
-- Money is exact and mono. Fees and payouts show their math (`.spec`).
+- Money is exact and tabular. Prices read in Plex Sans 600, ink; fee and
+  payout math shows its working in `.spec` tables.
 - Dates and countdowns are server-authoritative; never fake a tick.
 
 ## Engineering conventions
@@ -72,12 +85,20 @@ The contract. When a change violates one of these, the change is wrong.
 - Server actions re-verify auth/membership themselves; layouts are
   convenience gates only. Admin (and this microsite) 404 — never 403 — to
   non-members.
+- CSS lives in `src/app/styles/` by recipe family; `globals.css` only
+  imports the files, and import order is the cascade. Add a rule to its
+  family's file and extend a selector's first definition rather than
+  redefining it (`styles-ratchet.test.ts` blocks new duplicates).
 - Rules added inside `@layer components` get tree-shaken by the Tailwind
-  build if unreferenced; declare app-global component classes unlayered in
-  `globals.css` (see `.plate-undrawn`).
-- If Turbopack dev serves stale CSS after a `globals.css` edit: `rm -rf
-  .next` and restart.
+  build if unreferenced; declare app-global component classes in the
+  unlayered files (`10-`–`12-`, see `.plate-undrawn`).
+- Declare `-webkit-` prefixed properties BEFORE the unprefixed one: the build
+  keeps only the last of a pair (the top bar's blur was silently lost this
+  way).
+- If Turbopack dev serves stale CSS after a stylesheet edit: `rm -rf
+  .next/dev/cache` and restart.
 - Keep the 540px/1200px layout primitives (`NarrowColumn`, `.wrap`) — no
   magic numbers per page.
-- New components: add the class to `globals.css`, document it in
-  `docs/site/components.md`, and render a specimen on `/docs/components`.
+- New components: add the recipe to its family file in `src/app/styles/`,
+  document it in `docs/site/components.md`, and render a specimen on
+  `/docs/components`.

@@ -1,6 +1,6 @@
 # Next-session brief — admin console + remaining Rev E work
 
-> **SUPERSEDED — historical brief (early Aug 2026).** Everything in Tasks 1–2 has shipped; the admin console exists; there are 28 migrations. Kept as archive.
+> **SUPERSEDED — historical brief (early Aug 2026).** Everything in Tasks 1–2 has shipped; the admin console exists; there are 28 migrations. Kept as archive. Paths below are as they were then: the stylesheet has since moved from `globals.css` to `src/app/styles/`, and payout onboarding has moved to `/payouts`.
 
 Paste everything below the line into a new chat. It is written to be
 self-contained: a fresh session has none of the prior conversation.

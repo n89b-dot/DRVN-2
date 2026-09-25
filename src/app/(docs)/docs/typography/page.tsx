@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui";
 import { DocsPagehead, Rule, Specimen } from "../../_components/docs-page";
 
 export const metadata = { title: "Typography" };
@@ -31,14 +32,14 @@ export default function TypographyPage() {
         liveWord="Type"
         titleRest="— two faces, one split"
         mdSlug="typography"
-        sub="IBM Plex Sans carries prose and values; IBM Plex Mono carries labels, navigation, data and money. Every ticking number is tabular."
+        sub="IBM Plex Sans carries everything read or typed at reading size — prose, values, names, prices, inputs. IBM Plex Mono carries labels and data at 12px and under. Every number that ticks or aligns is tabular."
       />
 
       <div className="deck deck--two">
         <Specimen
           name="IBM Plex Sans"
           klass="--sans · 400 500 600 700"
-          note="Loaded via next/font in src/app/layout.tsx. Prose, headings, values."
+          note="Loaded via next/font in src/app/layout.tsx. Prose, headings, values, prices, inputs, tabs and secondary buttons."
         >
           <p className="text-head font-semibold leading-tight tracking-tight">
             Parts off real builds
@@ -50,7 +51,7 @@ export default function TypographyPage() {
         <Specimen
           name="IBM Plex Mono"
           klass="--mono · 400 500"
-          note="Labels, nav, buttons, chips, spec values, money. Tabular numerals on anything that counts."
+          note="Labels and data at 12px and under: microlabels, chips, counts, timestamps, spec values, and the contained (ink / live) buttons."
         >
           <p className="font-mono text-micro tabular-nums">
             $1,240.00 · 0:41:09 · REF 88-D
@@ -110,8 +111,20 @@ export default function TypographyPage() {
               Marketplace
             </span>
           </TypeRow>
-          <TypeRow tier="Label-btn" spec="mono 400 · 12px · uppercase · .btn">
-            <span className="btn">Make an offer</span>
+          <TypeRow tier="Label-btn" spec="mono 500 · 12px · uppercase · .btn--live (the only bracketed button) / .btn">
+            <span className="flex flex-wrap gap-2">
+              <Button variant="live">Buy now</Button>
+              <Button>Shop parts</Button>
+            </span>
+          </TypeRow>
+          <TypeRow tier="Label-btn-secondary" spec="sans 500 · 14px · sentence case · .btn--ghost / .btn--destructive">
+            <Button variant="ghost">Make an offer</Button>
+          </TypeRow>
+          <TypeRow tier="Tab" spec="sans 500 · 15px (14 ≤640) · accent underline · .tabstrip">
+            <span className="text-[15px] font-medium">Overview · Garage 2 · Parts 1</span>
+          </TypeRow>
+          <TypeRow tier="Price" spec="sans 600 · 18–20px · tabular · ink — never green">
+            <span className="text-[20px] font-semibold tabular-nums">$5,200</span>
           </TypeRow>
           <TypeRow tier="Mono-data" spec="mono 500 · 12px · tabular · .livedim .val / .spec">
             <span className="font-mono text-micro font-medium tabular-nums">
@@ -143,7 +156,8 @@ export default function TypographyPage() {
             <ul className="list-disc space-y-1.5 pl-5 text-body leading-relaxed text-dim">
               <li>Additional families or faux weights.</li>
               <li>Italics as a system voice.</li>
-              <li>Mono for prose, or sans for money.</li>
+              <li>Mono above 12px, for prose, or for anything typed — inputs, names, figures.</li>
+              <li>Green prices, or brackets on any button but the primary.</li>
               <li>Display type below the pagehead.</li>
             </ul>
           </Specimen>

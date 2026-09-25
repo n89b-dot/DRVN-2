@@ -18,25 +18,25 @@ const COMPARISONS: {
   {
     concept: "Filled button",
     material: "Primary contained action",
-    livesheet: "[ BUY NOW ] — Button variant=\"live\": mono brackets, live fill, one per surface",
+    livesheet: "[ BUY NOW ] — Button variant=\"live\": mono brackets (the only variant that wears them), live fill, one per surface; ghost/quiet actions are Plex Sans",
     borrowed: "Action hierarchy, disabled/loading states, 44px floor, aria-busy narration",
   },
   {
     concept: "Text field",
     material: "Label, supporting text, error state, prefix",
-    livesheet: "TextField — microlabel + 16px mono .ctl on paper-deep, ▸ error line",
+    livesheet: "TextField — microlabel + 16px Plex Sans .ctl on paper-deep (outlined on tile-2 on a raised surface), ▸ error line, live status line",
     borrowed: "Anatomy and aria-describedby/aria-invalid wiring; error paints the control",
   },
   {
     concept: "Filter chip / segmented button",
     material: "Selectable chips in a labelled set",
-    livesheet: "FilterGroup + FilterLink/FilterButton — .fbtn, ink-ground selection",
+    livesheet: "FilterGroup + FilterLink/FilterButton — .fbtn mono micro-labels in a hairline outline, ink-ground selection; fit sets a short fixed set in one phone row",
     borrowed: "Single vs multi-select semantics (aria-current vs aria-pressed), axis grouping",
   },
   {
     concept: "Tabs",
     material: "Tablist, roving tabindex, arrow keys",
-    livesheet: "SheetTabs — the .tabstrip in the fbtn vocabulary, URL-backed",
+    livesheet: "SheetTabs — .tabstrip: Sans labels on a ruled baseline, accent underline on the current tab, URL-backed; all tabs visible on a phone",
     borrowed: "Full keyboard contract (arrows, Home/End), scroll-selected-into-view",
   },
   {

@@ -34,15 +34,17 @@ export default function RulesPage() {
               <li>Rule every list inside a tile (1px rule-soft tops).</li>
               <li>
                 Reserve live red for what is happening <i>right now</i>, plus one primary CTA per
-                surface and one live-word per page.
+                surface — the one red fill, and the only bracketed button — and one live-word per
+                page.
               </li>
-              <li>ok for terminal good states; warn for held money and due work.</li>
+              <li>ok for terminal good states only — never a price; warn for held money and due work.</li>
+              <li>Mono for labels and data at 12px and under; anything read or typed at reading size is Plex Sans.</li>
               <li>Radius descends with size: 16 / 10 / 6 / 3. Circles only for live dots, pips, thumb-x.</li>
               <li>tabular-nums on every number that ticks or aligns.</li>
               <li>Empty states keep the geometry of the content they replace.</li>
               <li>— for empty values; $0.00 for empty money.</li>
               <li>Spent desaturates; it never disappears.</li>
-              <li>Jumprow (&ldquo;On this sheet&rdquo;) instead of tabs.</li>
+              <li>Panels switch with underline tabs (SheetTabs), all visible on a phone; in-page references use the jumprow (&ldquo;On this sheet&rdquo;).</li>
             </ul>
           </Specimen>
           <Specimen name="Don't">
@@ -74,7 +76,7 @@ export default function RulesPage() {
                 Every text/ground pair clears WCAG AA 4.5:1 in <b>both</b> lightings — re-measure
                 whenever a token moves.
               </li>
-              <li>Touch targets ≥ 44px for primary controls.</li>
+              <li>Touch targets ≥ 44px for primary controls — chips, card Save/cart squares and dialog Close included.</li>
               <li>:focus-visible — 2px live outline, offset 3px. Never removed.</li>
               <li>Dialogs and sheets trap focus, close on Escape, lock body scroll.</li>
             </ul>

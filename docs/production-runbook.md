@@ -1,6 +1,6 @@
 # Production runbook
 
-For the September 2026 change, follow [the remediation rollout](remediation-rollout.md) before using the historical setup instructions below. The new migration has only been applied to disposable local databases.
+For the September 2026 change, follow [the remediation rollout](remediation-rollout.md) before using the historical setup instructions below. Its migrations have been applied to disposable local databases and, on 2026-09-24, to the shared dev project (see `supabase/MIGRATIONS.md`) — never to production.
 
 How to stand up (and stand back up) a production DRVN, separate from the dev
 project `grunnjojhdevhuckujmc`. Written to be followed top to bottom the first

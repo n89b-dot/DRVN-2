@@ -76,10 +76,10 @@ or the thread composer — never two).
 
 | Material concept | Behavioral contract | Livesheet implementation | Borrowed |
 | --- | --- | --- | --- |
-| Filled button | Primary contained action | `[ BUY NOW ]` — Button variant="live": mono brackets, live fill, one per surface | Action hierarchy; disabled/loading states; 44px floor; aria-busy narration |
-| Text field | Label, supporting text, error, prefix | TextField — microlabel + 16px mono .ctl on paper-deep, ▸ error line | Anatomy; aria-describedby/aria-invalid wiring; error paints the control |
-| Filter chip / segmented | Selectable chips in a labelled set | FilterGroup + FilterLink/FilterButton — .fbtn, ink-ground selection | Single vs multi-select semantics (aria-current vs aria-pressed); axis grouping |
-| Tabs | Tablist, roving tabindex, arrows | SheetTabs — .tabstrip in the fbtn vocabulary, URL-backed | Keyboard contract (arrows, Home/End); scroll selected into view |
+| Filled button | Primary contained action | `[ BUY NOW ]` — Button variant="live": mono brackets (the only variant that wears them), live fill, one per surface. Secondary actions are `ghost` (a recessed fill) or `quiet` (text), in Plex Sans | Action hierarchy; disabled/loading states; 44px floor; aria-busy narration |
+| Text field | Label, supporting text, error, prefix | TextField — microlabel + 16px Plex Sans .ctl on paper-deep (outlined on tile-2 when it sits on a raised surface), ▸ error line, live `status` line | Anatomy; aria-describedby/aria-invalid wiring; error paints the control |
+| Filter chip / segmented | Selectable chips in a labelled set | FilterGroup + FilterLink/FilterButton — .fbtn mono micro-labels in a hairline outline, ink-ground selection; `fit` sets a short fixed set in one phone row | Single vs multi-select semantics (aria-current vs aria-pressed); axis grouping |
+| Tabs | Tablist, roving tabindex, arrows | SheetTabs — .tabstrip: Sans labels on a ruled baseline, accent underline on the current tab, URL-backed; all tabs visible on a phone | Keyboard contract (arrows, Home/End); scroll selected into view |
 | Dialog | Modal: scrim, trap, restore | Dialog — the .sheet plate over the scrim | Trap/Esc/restore/body-lock; @starting-style mount |
 | Bottom sheet | Compact surface for dense controls | BottomSheet — the sheet plate flush to the bottom edge, safe-area padded | When to sheet; kept-mounted children; inline dissolution ≥640px |
 | Bottom bar / FAB region | Persistent primary action on compact | MobileActionBar — the .buybar: total block + one live action, no FAB | Persistence; safe-area; body clearance; retirement at real breakpoints |

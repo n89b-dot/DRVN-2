@@ -13,6 +13,7 @@ const DAY_SWATCHES = [
   { name: "ok", hex: "#256B42", role: "settled / verified" },
   { name: "warn", hex: "#8A5A00", role: "held / due" },
   { name: "img-fallback", hex: "#E2DFD5", role: "media fallback" },
+  { name: "ghost-fill", hex: "#E5E2D8", role: "secondary button (recessed)" },
 ];
 
 // Cooler paper since September 2026 (PRD 2026-09 §3); the accent and the
@@ -28,6 +29,7 @@ const NIGHT_SWATCHES = [
   { name: "ok", hex: "#57B983", role: "settled / verified" },
   { name: "warn", hex: "#D9A13C", role: "held / due" },
   { name: "img-fallback", hex: "#22262D", role: "media fallback" },
+  { name: "ghost-fill", hex: "#242830", role: "secondary button (raised)" },
 ];
 
 function SwatchGrid({ swatches, onDark }: { swatches: typeof DAY_SWATCHES; onDark?: boolean }) {

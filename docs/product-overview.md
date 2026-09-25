@@ -150,8 +150,10 @@ cleaner and faster to scan. A **garage-fitment toggle** ("show parts that fit my
 "fits your [car]" indicator — driven by *platform* fitment, never seller claims.
 
 ### Sell — "list a part in under 3 minutes"
-A **single, well-sectioned form** (not a wizard) covering basics → photos → came-from car
-(optional) → compatibility notes → price/location → review, with an optional sticky preview.
+A **single, well-sectioned form** (not a wizard) covering photos → the part → came-from car
+(optional) → fitment → price, shipping and location. Photos come first because a listing goes
+public with its picture: publishing needs at least one (drafts don't), and on a phone the price
+and Publish stay pinned.
 Linking to a garage car is **fully optional** (people sell parts for cars they've since
 sold). Compatibility began as **freeform seller notes** only; since migration `0025` the
 sell form also has a **structured fitment picker** backed by platform (vPIC-sourced)
@@ -198,9 +200,10 @@ second (sold, new offer, offer accepted, questions, price drops) — so the prod
 like it's only about offloading parts.
 
 ### Settings — config + the content-management layer
-Account/profile config, notification prefs, and real billing/payouts — Stripe Connect
-onboarding lives in Settings → Payments, with the payout ledger at `/payouts` — plus
-purchase/sales history now that checkout is live. It's also the practical home for some of
+Account/profile config, notification prefs, privacy (analytics consent), fees and saved
+cards, plus purchase/sales history now that checkout is live. Payouts moved out in
+September 2026: Stripe Connect onboarding and the payout ledger both live on `/payouts` in
+the Selling family, and Settings → Payments links there. It's also the practical home for some of
 the **read.cv-style editor modals** — the content-management layer the prototype was missing,
 which is a first-class part of the build, not an afterthought. The design reference now
 lives in the in-app docs microsite (`/docs/design-system`).

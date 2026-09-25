@@ -51,11 +51,16 @@ view or trigger names overlap.
 ready. No duplicate payment rows existed before the one-payment-per-order
 index. Every signed-in and signed-out route loads.
 
+**Admin MFA is live here.** `/admin` and `/docs` now require AAL2 with a TOTP
+check in the last 15 minutes (`src/lib/admin/guard.ts` → `/admin-verify`).
+The console-admin fixture has an enrolled TOTP factor; its secret is kept
+outside the repo, in `~/drvn-db-backups/`.
+
 **Operator settings still to do on this project** (from
-`docs/remediation-rollout.md`; schema alone doesn't do them): Auth TOTP for
-admin MFA, the canonical Site URL/redirects, SMTP + magic-link template, the
-`job_config` worker URL and CRON_SECRET for the money/search/deletion
-workers, and the `/api/health/workers` monitor.
+`docs/remediation-rollout.md`; schema alone doesn't do them): the canonical
+Site URL/redirects, SMTP + magic-link template, the `job_config` worker URL
+and CRON_SECRET for the money/search/deletion workers, and the
+`/api/health/workers` monitor.
 
 ## September 19 — security repairs from the direction-build review
 
@@ -65,7 +70,7 @@ workers, and the `/api/health/workers` monitor.
 | `20260919202000_post_edit_repairs.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919203000_mod_sheet_stale_delete.sql` | shared dev project and local test database, 2026-09-19 |
 | `20260919204000_brand_backfill_correction.sql` | shared dev project and local test database, 2026-09-19 |
-| `20260919205000_account_export_contract_v4.sql` | local test database only, 2026-09-19 — the shared dev project has no `account_export_requests` table: the 2026-09-05 privacy migrations were never applied there |
+| `20260919205000_account_export_contract_v4.sql` | local test database, 2026-09-19; shared dev project, 2026-09-24 — it needs the 2026-09-05 privacy tables, so it waited for the September 5–6 chain (see the top of this file) |
 | `20260920090000_profile_follow_counts.sql` | shared dev project and local test database, 2026-09-20 — read-only definer function for profile header counts |
 
 Adds no feature; closes holes a review found in `…170000`–`…200000`.
@@ -593,8 +598,8 @@ Offer expiry is currently advisory: `offers.expires_at` is set and shown, and
 offers into `'expired'` on a timer. Add that alongside the above if you want the
 status to be authoritative rather than presentational.
 
-## Phase-two provider-aware expiry — local verification only
+## Phase-two provider-aware expiry
 
-`20260905101425_provider_aware_expiry.sql` was applied to isolated local Supabase and rebuilt from all migration files on CI's PostgreSQL image on September 5, 2026. It adds expiry queue support, a fenced service-only finalization RPC, creation/expiry serialization and expiry worker health. It has not been applied to a hosted DRVN project. The older scheduling notes above are historical: expiry cron now queues work and requires the compatible money worker to complete release; lapsed offers are swept by the function.
+`20260905101425_provider_aware_expiry.sql` was applied to isolated local Supabase and rebuilt from all migration files on CI's PostgreSQL image on September 5, 2026. It adds expiry queue support, a fenced service-only finalization RPC, creation/expiry serialization and expiry worker health. It reached the shared dev project on 2026-09-24 with the rest of the September 5–6 chain (see the top of this file); it has not been applied to any production project. The older scheduling notes above are historical: expiry cron now queues work and requires the compatible money worker to complete release; lapsed offers are swept by the function.
 
 The September 5 phase-two sequence adds capture recovery/claims, lease renewal, consent outbox, serialized search/rebuilds, historical-media guards, deletion manifests/financial rechecks, admin operation/recovery fencing, uncapped search relations and explicit function search paths. Apply these additive files in filename order. Fresh migration, SQL-guard and generated-type verification is recorded in `docs/remediation-evidence/phase-two-completion/`. Never replay `0001_v3_schema.sql` on an existing deployment.

@@ -129,7 +129,9 @@
     line-height: 1.35;
   }
   .order__meta {
-    font-family: var(--mono);
+    /* Reading size, so Plex Sans (mono is for ≤12px labels and data). */
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
     font-size: 16px;
     color: var(--dim);
     margin-top: 4px;
@@ -197,7 +199,9 @@
     line-height: 28px;
   }
   .vehicle__meta {
-    font-family: var(--mono);
+    /* Reading size, so Plex Sans (mono is for ≤12px labels and data). */
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
     font-size: 16px;
     color: var(--dim);
     margin-top: 4px;
@@ -410,7 +414,9 @@
   }
   .feed .amt {
     margin-left: auto;
-    font-family: var(--mono);
+    /* Reading size, so Plex Sans (mono is for ≤12px labels and data). */
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
     font-size: 16px;
     color: var(--ink);
     font-weight: 500;
@@ -913,7 +919,9 @@
   }
   .spec td:last-child {
     text-align: right;
-    font-family: var(--mono);
+    /* Reading size, so Plex Sans (mono is for ≤12px labels and data). */
+    font-family: var(--sans);
+    font-variant-numeric: tabular-nums;
     font-size: 16px;
   }
   .spec tr + tr td {

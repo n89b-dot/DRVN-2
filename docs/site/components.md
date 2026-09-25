@@ -13,10 +13,10 @@ Format: **class — shape — key rules.**
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.bar` | Sticky top bar; `.bar__inner` (maxw 1200) > `.bar__logo` (`DRVN.` + microlabel) + `nav.bar__nav` of `.bar__link` | 86% paper + blur(14px); mono 12.5 uppercase links; `.is-active` ink bg; ≤640px nav becomes one scrollable row |
-| `.indexbtn` + `.indexwrap`/`.indexsheet`/`.indexrow` | "Index" trigger opening a full-page sheet of numbered rows (01, 02…) | The menu is a second sheet unrolled over the page; rows carry number, label, note; current row chips "Here" |
+| `.bar` | Sticky top bar; `.bar__inner` aligned to the content column > `.bar__logo` + `nav.bar__nav` of `.bar__link` + `.bar__search` (560px) + icon links with `.barbadge` counts | 86% paper + blur(14px) — declare `-webkit-backdrop-filter` BEFORE `backdrop-filter` (the build keeps only the last of the pair, and Chrome ignores the prefixed one); the bar is identical on every page, search included — Explore and Marketplace add their own scoped search below it |
+| `.indexbtn` + `.indexwrap`/`.indexsheet`/`.indexrow` | "Index" trigger opening a full-page sheet: search, Post, then one row per destination | A menu, not a document: 48px single-line rows (icon + 17px label; `--child` 15px/44px), descriptions hidden; the current row chips "Here"; the whole menu fits in about 1.5 phone screens |
 | `.rail` / `.railrow` | Signed-in desktop side rail with numbered rows | Same numbering language as the index |
-| `.jumprow` / `.jumplink` | "ON THIS SHEET" microlabel + underlined mono ref-links | THE tab replacement — no pill tabs or segmented controls, ever |
+| `.jumprow` / `.jumplink` | "ON THIS SHEET" microlabel + underlined mono ref-links | In-page references, not navigation between panels — panels switch with `SheetTabs` (`.tabstrip`); feed segments are `.fbtn` chips in a `FilterGroup` |
 | `.foot` | 1px rule-mid top; mono microlabels both ends | Every page ends with it |
 | `.skip-link` | Focus-visible skip to content | Accessibility furniture |
 
@@ -39,19 +39,19 @@ Format: **class — shape — key rules.**
 | `.microlabel` | Mono 12 uppercase 0.14em dim | 2–6 words; variants `--ink`, `--live` |
 | `.livedim` | pl18 + 1px spine + 7px ticks; microlabel + `.val` (mono 13 tabular) | `--live`: red value + pulsing dot; `--blank`: dashed spine — THE signature component |
 | `.dimline-h` | 1px horizontal rule with end ticks | Draws in (scaleX) over 650ms when `.is-in` |
-| `.num-giant` | Sans 650 clamp(40–64) tabular | KPI numeral above a livedim; `--blank` for `—` |
-| `.kv` | Mono key-value inline | Small data callouts |
+| `.num-giant` | Sans 600 clamp(40–64) tabular | KPI numeral above a livedim; `--blank` for `—` |
+| `.kv` | Sans 16 tabular key-value inline | Figures and names at reading size (mono 16px read like code); `b` inks the value |
 
 ## 04 Actions
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.btn` | Mono 12 uppercase, 13×20 pad, r10, ink bg, `[` `]` bracket pseudos | Press scale(.97); `--live` (one per surface), `--ghost` (paper-deep), `--destructive` (reads serious without competing with the one filled-red `--live`); no spinner — async buttons use `Button loading` + `pendingLabel` ("Saving…", aria-busy) |
-| `.chip` | Mono 11 uppercase, 4×10, r6 | `--live`, `--ok`, `--warn`, `--ink`, `--spent`, `--danger`, `--info`, `--x` (removable filter chip); status, never navigation |
+| `.btn` | Mono 12 uppercase, 13×20 pad, r10, ink bg | Press scale(.97). `--live` is THE action — one red fill per surface — and the only variant with the `[` `]` bracket pseudos. `--ghost` (`--ghost-fill`: recessed paper-deep by day, raised at night) and `--destructive` are Plex Sans 14/500 in sentence case, as written. No spinner — async buttons use `Button loading` + `pendingLabel` ("Saving…", aria-busy) |
+| `.chip` | Mono 12 uppercase, 4×10, r6 | `--live`, `--ok`, `--warn`, `--ink`, `--spent`, `--danger`, `--info`, `--x` (removable filter chip); status, never navigation |
 | `.capsule` | Ink band r10, 10×16, mono; `.dot` pulse + `.cd` countdown | `--paper` (+1px baseline shadow-rule), `--quiet` |
-| `.relbtn` | Small release button in `.bline--own` rows | Owner "release this part" affordance |
-| `.fbtn` / `.filters` | Mono 11 filter buttons, r10, paper-deep | `.is-on` ink; `[aria-pressed=true]` live (fitment switch); 44px touch target at every width. Consumed via `FilterGroup` (axis grammar: `stack` primary / `sub` quieter / `scroll` gutter-rides ≤760px) with `FilterLink` (aria-current) and `FilterButton` (aria-pressed) |
-| `.search` | Tile-framed label + borderless input | Consumed via `SearchField` (accessible name required) and `Finder` (query row + refinement row, GET form — every search is an address) |
+| `.relbtn` | Quiet row action — Sans 13/500, dim, dotted underline, no brackets | Row-level release/remove actions (`Button variant="quiet"`), sheet dismiss words |
+| `.fbtn` / `.filters` | Mono 12 uppercase chips in a hairline outline (transparent ground), r10, 44px min height | `.is-on` ink (night: a tile plate with an accent edge); `.n` is a quiet tabular count after the label; `[aria-pressed=true]` live (fitment switch). Consumed via `FilterGroup` (axis grammar: `stack` primary / `sub` quieter / `scroll` gutter-rides ≤760px / `fit` — a short fixed set that shares one phone row, never scrolls) with `FilterLink` (aria-current) and `FilterButton` (aria-pressed) |
+| `.search` | Tile-framed label + borderless input, Plex Sans 15 (16 on phones) | One focus ring, on the pill (`:focus-within`); no WebKit clear glyph. Consumed via `SearchField` (accessible name required), `SuggestingSearchField` and `Finder` (query row + refinement row, GET form — every search is an address) |
 | `.saverow` | Commit row: aux left, status + commit right | Consumed via `ActionFooter`; ≤520px stacks aux / status / full-width 44px commit |
 | `.buybar` | Fixed bottom action bar, safe-area padded | Consumed via `MobileActionBar`; body clearance reserved by the stylesheet; retires at 981px (plain) / 1024px (`--wide`, cart + checkout) |
 
@@ -62,8 +62,8 @@ Format: **class — shape — key rules.**
 | `.bline` | Baseline grid 190px/1fr/auto: label / value / note / chip | `--ctl` puts a control in the value col; `--own` adds `.relbtn`; stacks ≤720px |
 | `.spec` | 2-col ruled table, mono label left, mono value right | Spec tables (tracking, payout math) |
 | `.rowlist` | Strips row bg/radius; rows get 1px rule-soft top | The ruled-row principle for every list in a tile |
-| `.order` | Row: `.order__img` 56×44 + name/meta + `.order__actions` (Accept/Counter/Pass) | `.is-done` ok-tint; `.is-gone` slides out 420ms |
-| `.ledger` | Ruled data table for the seller's listings register | The one genuinely tabular surface |
+| `.order` | Row: `.order__img` 56×44 + one text column (name over meta) + `.order__actions` | Text flex-basis 10rem so a 320px rail keeps the photo beside the title; phones use a 56px thumb column; `.is-done` ok-tint; `.is-gone` slides out 420ms |
+| `.ledger` | Ruled data table for the seller's listings register | The one genuinely tabular surface. Below 860px each `tr.ledger__row` becomes a compact card (4-column grid: title + actions, car + status, then Views · Watch · Asking · Top offer side by side) |
 | `.feed` | `li`: mono time (74px col) + text + `.amt` right | `--live` amounts for money in motion |
 | `.week` | 7-col strip; `.week__day` paper-deep r10 | `--hot` live bg + tag |
 | `.pipe` / `.pip` | 9px pips + 14px dimline connectors + mono labels | `.is-on` live; empty pipeline renders at reduced opacity; `.pip` only exists as a `.pipe .pip` descendant — there is no standalone `.pip` class |
@@ -76,7 +76,7 @@ Format: **class — shape — key rules.**
 
 | Component | Shape | Key rules |
 | --- | --- | --- |
-| `.field` / `.ctl` | Grid gap 7: microlabel + control (mono, paper-deep, r10) + hint/err/ok | `.ctl` keeps `border: 1px solid transparent` so invalid/ok borders paint without layout shift; `.field--row` 2-col. Consumed via `FormField` / `TextField` / `TextArea` / `Select` — label, hint, error, success and `aria-describedby`/`aria-invalid` wired automatically |
+| `.field` / `.ctl` | Grid gap 8: microlabel + control (Plex Sans 16, paper-deep, r10) + hint/err/ok/status | `.ctl` keeps `border: 1px solid transparent` so invalid/ok borders paint without layout shift; on a raised surface (tile, sheet, filter panel) it is outlined on `--tile-2` instead. `.field--row` is a 2-col grid (18px row / 16px column gap; 1 col ≤640px), its fields aligned to the top. Consumed via `FormField` / `TextField` / `TextArea` / `Select` — label, hint, error, success, live `status` and `aria-describedby`/`aria-invalid` wired automatically |
 | `.ctl__prefix` | Framed prefix ("$") input | |
 | `input.sq` | 16px square checkbox, accent live | |
 | `.drop` / `.thumbs` / `.thumb` | Dashed r16 dropzone (live tint on hover/dragover); 84px thumb grid with `__x`, `__tag`, `--ghost` | |
@@ -100,7 +100,7 @@ Format: **class — shape — key rules.**
 | `.alert` | r10 tinted ground + icon color, grid auto/1fr | `--live`, `--ok`; never a side-bar stroke |
 | `.msg` / `.thread` / `.composer` | 2px left spine; `--me` live spine, `--sys` dashed; mono who/meta | Annotations, not chat bubbles |
 | `.mail` | 1px rule-mid frame: bar/body/foot | The ONLY framed component — it depicts an external artifact |
-| `.toast` | Fixed bottom ink pill r10 mono uppercase | Renders `<output aria-live="polite">` (implicit status role), 3200ms default dwell |
+| `.toast` | Fixed bottom ink plate, r10, mono uppercase | Renders `<output aria-live="polite">` (implicit status role), 3200ms default dwell |
 
 ## 09 States
 
@@ -137,8 +137,8 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Avatar` | Primitive | `@/components/ui` | Monogram identity plate (soft square, never a circle). — `.monogram` | People without photos; photo avatars go through Media. |
 | `Badge` | Primitive | `@/components/ui` | The one badge system for cards: `variant="kind"` is a neutral outline (+ icon); `variant="state"` is a tint whose tone is colour only for real state (neutral for plain facts like Used / Grade B). — `.chip.chip--kind / .chip--state / .chip--ok / .chip--live / .chip--spent` | A card's condition or grade, a listing's sold/live state, anything that labels what a thing is or what state it is in. *Not for:* Order/offer lifecycle — StatusChip. Filters — FilterLink/ActiveFilterChip. |
 | `BeforeAfter` | Primitive | `@/components/ui` | Two-image comparison plate: clip-path reveal on pointer drag/touch, keyboard slider divider, corner label tags. — `.ba` | Before/after photography — suspension drops, wheels, wraps, detailing. *Not for:* Plain image pairs with no comparison story (use Media in a grid). |
-| `BottomSheet` | Primitive | `@/components/ui` | Compact bottom sheet; keeps children mounted; dissolves inline ≥ its breakpoint. — `.bsheet` | Compact-width pickers and refinements. |
-| `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. — `.btn / .relbtn` | Every button. One `live` action per surface. |
+| `BottomSheet` | Primitive | `@/components/ui` | Compact bottom sheet; keeps children mounted; dissolves inline ≥ its breakpoint. On phones it adds a quiet dismiss word (`closeLabel`, default Done) under the content; pass `closeLabel={null}` when the content already ends in its own Done/Cancel so the two never stack. — `.bsheet` | Compact-width pickers and refinements. |
+| `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. `live` is THE action on a surface and the only variant that carries the brackets; `default` (ink) keeps the mono caps voice without them; `ghost` and `destructive` read as words (Plex Sans, sentence case as written). — `.btn / .relbtn` | Every button. One `live` action — one red fill — per surface; secondary actions are `ghost`. |
 | `ButtonLink` | Primitive | `@/components/ui` | The action contract as a real link. — `.btn` | CTAs that navigate — keeps middle-click/new-tab semantics. |
 | `Checkbox` | Primitive | `@/components/ui` | Live-accent square checkbox with its label as one touch target. — `.sq` | Boolean options. |
 | `ComboField` | Primitive | `@/components/ui` | Searchable single-select (ARIA combobox) in the field contract: ranked options, keyword matching (aliases), optional footer escape hatch. — `.field / .ctl / .combo` | Choosing one option from a ranked list too long for Select — vehicle makes/models. *Not for:* Short fixed lists (Select) and free-text with suggestions (TextField + datalist). |
@@ -146,18 +146,18 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
 | `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |
 | `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row, with an optional trailing action (`end`). — `.bline` | Settings-style label/value and label/control lines, and build-sheet lines whose trailing slot carries a state chip or a 'Sell it' action. *Not for:* Full form fields with hints/errors — that's the `.field` family. |
-| `Dialog` | Primitive | `@/components/ui` | The sheet dialog — focus management, escape/backdrop dismissal. | Modal editing/confirmation surfaces. |
+| `Dialog` | Primitive | `@/components/ui` | The sheet dialog — focus management, escape/backdrop dismissal, and a quiet Close in the panel's top-right corner (`.dialogbox__close`), never on the scrim below it. | Modal editing/confirmation surfaces. |
 | `DropZone` | Primitive | `@/components/ui` | Click/drag file target with busy state and keyboard support. — `.drop` | Every upload entry point (pair with lib/media-upload's uploadImages). |
 | `EmbeddedVideo` | Primitive | `@/components/ui` | External video as an ink plate with a play mark. | Video links in updates. |
 | `EmptyState` | Primitive | `@/components/ui` | The undrawn plate — dashed mark badge, title, body, optional action. — `.undrawn` | Every empty collection or missing object. |
 | `FilterButton` | Primitive | `@/components/ui` | Filter as a button. — `.fbtn` | Client-side filters. |
-| `FilterGroup` | Primitive | `@/components/ui` | Labelled filter cluster. — `.filters` | Filter bars. |
+| `FilterGroup` | Primitive | `@/components/ui` | Labelled filter cluster. `scroll` rows scroll sideways on phones and drop the leading label below 640px; `fit` is for a short, fixed set of segments (Explore's five) that must all be visible on a phone — equal columns, icon over word, never a sideways scroll. — `.filters` | Filter bars. |
 | `FilterLink` | Primitive | `@/components/ui` | GET filter as a link. — `.fbtn` | Stateless filters. |
 | `Finder` | Primitive | `@/components/ui` | The search instrument: the SearchField owning its row, optional Clear, refinements beneath. — `.finder` | Any GET search with refinements (Saved, Messages). No Search button — Enter submits. |
 | `FinderClear` | Primitive | `@/components/ui` | Finder's clear control. | Inside Finder. |
 | `FinderLabel` | Primitive | `@/components/ui` | Finder's mono label. | Inside Finder. |
 | `Foot` | Primitive | `@/components/ui` | The ruled page foot. — `.foot` | Bottom of full pages. |
-| `FormField` | Primitive | `@/components/ui` | Labelled field wrapper — label, hint, error (role=alert), ok, aria wiring. — `.field` | Custom controls the family doesn't cover (wire aria via fieldDescribedBy). |
+| `FormField` | Primitive | `@/components/ui` | Labelled field wrapper — label, hint, error (role=alert), ok, and `status`: a stable polite live region for checks that run against the value ("Checking…", "✓ Available"); aria wiring for all of them. — `.field` | Custom controls the family doesn't cover (wire aria via fieldDescribedBy). |
 | `FormSection` | Primitive | `@/components/ui` | Numbered form section tile — mono step numeral, heading, hint. | Long editing workflows (Sell, editors). |
 | `Gallery` | Primitive | `@/components/ui` | PDP media gallery. — `.gallery` | Listing detail media. |
 | `GalleryLightbox` | Primitive | `@/components/ui` | Full-screen lightbox with keyboard navigation. | Expanding gallery/vehicle media. |
@@ -167,17 +167,17 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `KindBadge` | Primitive | `@/components/ui` | Badge variant="kind" for the feed's three kinds — Build, Update, For sale — with Explore's segment icons. — `.chip.chip--kind + .chip__ico` | Every card that says what it is: Explore/mosaic cells, Home feed cards and rows. *Not for:* Colouring a kind — kind is never a state. |
 | `LinkedTitle` | Primitive | `@/components/ui` | Linked title with the drafting-office arrow. | Row/section titles that navigate. |
 | `LiveDim` | Primitive | `@/components/livesheet` | The drafting leader line with a measured value; live and blank variants. — `.livedim` | Measured facts on tiles and sheets. |
-| `LivesheetBar` | Primitive | `@/components/ui` | The top bar — wordmark, primary nav, counts, account. — `.bar` | Via AppShell / group layouts only. |
+| `LivesheetBar` | Primitive | `@/components/ui` | The top bar — wordmark, primary nav, global search (on every page — the bar is identical everywhere; Explore and Marketplace add their own scoped search below it), compact count badges, account. Opaque-frosted (`.bar`, unprefixed backdrop-filter declared last). On phones the index menu is 48px single-line rows with search leading. — `.bar` | Via AppShell / group layouts only. |
 | `Media` | Primitive | `@/components/ui` | Optimized image plate with role-based `sizes` presets and the undrawn no-photo fallback. | Every product image. Pick a `role` (hero/card/row/thumb/avatar…). *Not for:* Raw <img> tags anywhere. |
 | `Message` | Primitive | `@/components/ui` | One message — sender line, body, meta; `me` right-tones the row. — `.msg` | Order messages, offer threads, Q&A, comments. Features decide what `me` means. |
 | `MessageComposer` | Primitive | `@/components/ui` | The send row — hidden fields, `.ctl` input, submit; block variant for the Q&A ask box. — `.composer__row / .composer` | Thread reply rows. The owning feature supplies action + pending. |
 | `MessageThread` | Primitive | `@/components/ui` | Conversation container (`.thread`). — `.thread` | Wrapping Message runs on any discussion surface. |
 | `MetadataTags` | Primitive | `@/components/ui` | Wrapping row of plain chips. — `.chip` | Tag lists. |
-| `MetricCard` | Primitive | `@/components/ui` | KPI tile — microlabel, giant numeral, measured LiveDim line, floor-pinned footer link. — `.tile + .num-giant` | KPI decks (`.deck--kpi`); calculations stay with the feature. |
+| `MetricCard` | Primitive | `@/components/ui` | KPI tile — microlabel, giant numeral, measured LiveDim line, floor-pinned footer link. With nothing to count pass the real zero ("0", "$0") and `blank`: a dim figure reads as a settled answer, where a dash read as loading. — `.tile + .num-giant` | KPI decks (`.deck--kpi`); calculations stay with the feature. |
 | `MobileActionBar` | Primitive | `@/components/ui` | Pinned bottom action bar (buybar) for compact widths. — `.buybar` | Primary commerce actions on PDP-like pages. One bottom surface per route. |
 | `MotionPolicy` | Primitive | `@/components/ui` | App-level Motion for React policy provider (`MotionConfig reducedMotion="user"`). Semantic tokens/springs/recipes live in `src/lib/motion`. | Mounted once in the root layout. Never nest a second one. *Not for:* Per-feature MotionConfig overrides — the global policy is the contract. |
 | `NarrowColumn` | Primitive | `@/components/ui` | Constrained page column (narrow 720 / medium / wide). — `.wrap--*` | Reading and list surfaces that shouldn't span the full 1200px wrap. |
-| `ObjectRow` | Primitive | `@/components/ui` | The `.order` dense row — leading media plate, name, dim meta, trailing actions — inside `.rowlist`. — `.order / .rowlist` | Any object in a dense collection (saved items, cart lines, inbox rows, task rows). *Not for:* Marketplace browsing — that's the mosaic card family. Sortable tables — that's `.ledger`. |
+| `ObjectRow` | Primitive | `@/components/ui` | The `.order` dense row — leading media plate, then one text column (name over dim meta), trailing actions — inside `.rowlist`. With `meta` set, title and meta stack as a single column at every width; never nest meta spans inside `title` (they inherit its weight). — `.order / .rowlist` | Any object in a dense collection (saved items, cart lines, inbox rows, task rows). *Not for:* Marketplace browsing — that's the mosaic card family. Sortable tables — that's `.ledger`. |
 | `PageHead` | Primitive | `@/components/ui` | Page header: mono eyebrow, display h1, dim sub line, revealed on entry. — `.pagehead` | The head of every page instead of hand-assembling `.pagehead` markup. |
 | `Pagination` | Primitive | `@/components/ui` | Ghost prev/next with mono page marker; renders nothing on a lone first page. | Every paginated list. (Admin's jumplink Pager is a deliberate console variant.) |
 | `PasswordField` | Primitive | `@/components/ui` | TextField's password sibling with a labelled reveal/conceal eye toggle; type flips client-side only. — `.field / .ctl` | Every password input — never a bare TextField type=password. |
@@ -191,7 +191,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `SectionLabel` | Primitive | `@/components/ui` | Ink microlabel paragraph. — `.microlabel--ink` | Ink-toned section labels. |
 | `Select` | Primitive | `@/components/ui` | Native select in the field contract (platform picker on compact). — `.ctl` | Enumerated choices. |
 | `ShareButton` | Primitive | `@/components/ui` | Labelled share control: the system share sheet where one exists, the clipboard elsewhere, with a "Link copied" confirmation. | Sharing a whole page where there is room for a word — a profile header (P-2), a build page. *Not for:* The icon in a feed card's engagement strip — CardEngagement owns that. |
-| `SheetTabs` | Primitive | `@/components/ui` | URL-backed sheet tabs. | Profile/car sheet sections. |
+| `SheetTabs` | Primitive | `@/components/ui` | URL-backed sheet tabs over the `.tabstrip` recipe: Sans labels on a ruled baseline, the current tab underlined in the accent; five tabs with counts fit a 358px phone column. Optional `onChange(key)` for callers that react to the switch (e.g. hiding a rail). | Profile/car sheet sections. |
 | `SkeletonCardGrid` | Primitive | `@/components/ui` | Card-grid placeholder matching the marketplace 3→2→1 grid. | loading.tsx for card-grid routes. |
 | `SkeletonLedger` | Primitive | `@/components/ui` | Console placeholder — pagehead + ledger ghost rows, no wrap. | Admin console loading. |
 | `SkeletonMasonry` | Primitive | `@/components/ui` | Masonry placeholder with varied plate heights. | loading.tsx for feed walls (Explore). |
@@ -201,7 +201,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `SortableGrid` | Primitive | `@/components/ui` | Drag-and-drop ordering for photo strips/tile grids (dnd-kit: pointer, touch, keyboard sensors). — `.sortable--lifted` | Wrap reorderable thumbs; pair with SortableItem per cell. Keep explicit ↑/↓ controls alongside. *Not for:* Single-item or fixed-order sets. |
 | `SortableItem` | Primitive | `@/components/ui` | One draggable cell inside a SortableGrid. | Only inside SortableGrid. |
 | `Stepper` | Primitive | `@/components/ui` | Auto-numbered workflow progress rail; live numeral on the current step. — `.steps` | Multi-step workflows (checkout). Workflow state stays with the feature. |
-| `SuggestingSearchField` | Primitive | `@/components/ui` | The `.search` plate with grouped autocomplete (ARIA combobox over a `.combo` popover). Progressive enhancement on a GET search form: debounced fetch from a suggest endpoint, stale requests aborted, Enter without a selection submits the form. — `.search / .combo` | A search field whose short queries should surface direct destinations — Explore's cross-family search. *Not for:* Plain filter search where results are the page anyway (SearchField), and picking one option from a bounded list (ComboField). |
+| `SuggestingSearchField` | Primitive | `@/components/ui` | The `.search` plate with grouped autocomplete (ARIA combobox over a `.combo` popover): builds, then parts, then people, then updates — two per group on phones — and a pinned “Search for …” row. Progressive enhancement on a GET search form: debounced fetch from a suggest endpoint, stale requests aborted, Enter without a selection submits. One focus ring, on the pill. — `.search / .combo` | A search field whose short queries should surface direct destinations — Explore's cross-family search. *Not for:* Plain filter search where results are the page anyway (SearchField), and picking one option from a bounded list (ComboField). |
 | `TabNav` | Primitive | `@/components/ui` | The system's tab replacement — a quiet jumprow of mono links. — `.jumprow` | On-page section switching. |
 | `TextArea` | Primitive | `@/components/ui` | Textarea in the field contract. — `.ctl` | Multi-line input. |
 | `TextField` | Primitive | `@/components/ui` | Text input in the field contract; mono prefix support ($, PN). — `.field / .ctl` | Every text input. |
@@ -217,22 +217,22 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
 | `AccountRowList` | Product pattern | `@/components/commerce` | People as compact identity rows — avatar, name, one line of who they are, optional trailing action. — `.rowlist / .order` | Anywhere a list of members is shown: Explore's account results, Explore's 'Builders to follow' breaker, Home's rail suggestions. *Not for:* A single member's header — that's ProfileHeader. |
-| `AuthIntentDialog` | Product pattern | `@/components/ui` | Signed-out interception — explains the action and routes to login with intent. | Any engagement control a guest can press. |
+| `AuthIntentDialog` | Product pattern | `@/components/ui` | Signed-out interception — explains the action in its own words (`subject`: save, like, reply, react, offer…) and routes to sign in or join with the intent carried through. | Any engagement control a guest can press. |
 | `CategoryIcon` | Product pattern | `@/components/ui` | Marketplace taxonomy category mark. | Category navigation and headers. |
 | `ConditionSummary` | Product pattern | `@/components/commerce` | Structured part-condition grid (grade + checklist). | PDP and sell preview condition blocks. |
 | `FeedList` | Product pattern | `@/components/ui/feed-list` | Home's feed over one description per item: `cards` (photo-first, Home's column) or `rows` (dense `.order`-based rows). — `.feedcards / .feedcard; .feedrow on .order` | Home feeds — `cards` for the main column, `rows` where a photo column would be too loud. *Not for:* Browse surfaces — that's the mosaic family. |
 | `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card, the Figma card set — one tile for all three. Update: title → excerpt (two lines on wider cells, one on phone cells), then owner byline → full vehicle label in the foot. Part (always 1×1): FOR SALE pill + time, title → price row (price alone, no ship line on the discovery wall; condition chip + grade beside it), then seller byline → source car in the foot, with ListingCartButton at the end of the strip. Build: name → vehicle, then owner byline → activity line in the foot. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline). | Explore and mixed feeds, via MasonryFeed. |
-| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder filters in a sheet at every width; optional onDismiss discards drafts and labels the close action Cancel. | Finder filtering — a sliders-icon trigger ("Filters" label ≥640px, icon-only on compact) with a live count, opening the refinement sheet (bottom sheet on compact, centered dialog wider). |
-| `ListingCard` | Product pattern | `@/components/ui` | Canonical listing card with two explicit contexts: feed (default, delegates to ListingMosaicCell) and shopping (contained photo, full title, separate item/delivery price, condition, identifier, evidence, seller/source and independent Save). | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
+| `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder filters in a sheet at every width; optional onDismiss discards drafts and labels the close action Cancel. `actions` renders one footer row inside the sheet (quiet Reset left, Apply right) — pass it instead of stacking full-width buttons, and the sheet adds no extra Cancel. | Finder filtering — a sliders-icon trigger ("Filters" label ≥640px, icon-only on compact) with a live count, opening the refinement sheet (bottom sheet on compact, centered dialog wider). |
+| `ListingCard` | Product pattern | `@/components/ui` | Canonical listing card with two explicit contexts: feed (default, delegates to ListingMosaicCell) and shopping (cover-cropped 4:3 photo, two-line title, ink price, condition · place, seller, 'Off my {car}', icon Save + outlined cart). Fitment shows only when there is evidence; at phone-width cells the delivery line and the seller's blurb drop out. | Anywhere a listing is browsed: marketplace, home recs, PDP rails, saved grid. *Not for:* Seller-scoped dense lists — that's ListingRow. |
 | `ListingMosaicCell` | Product pattern | `@/components/ui` | A listing as a mosaic card: title → price + ship line → condition chip · fit · location → provenance → seller byline (name · rating). | Via ListingCard. |
 | `ListingRow` | Product pattern | `@/components/commerce` | A seller's listing as a dense ledger row — cover, title, price, and a state chip only when not live (Sold, Reserved, Paused). — `.order` | Seller-scoped lists (profile shopfront, car sheet parts). *Not for:* Marketplace browsing — that's ListingCard. |
 | `MasonryFeed` | Product pattern | `@/components/ui` | The Explore wall — FeedMosaicCells in a dense Mosaic, with its empty state. | Mixed-kind feed walls. |
 | `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. 1×1 cards, plus 2×1 wides on the two-column phone wall for builds and updates only — a listing is always square (part photos are often portrait; the wide shape letterboxes them); there is no 2×2 shape (it filled a phone viewport with one card). — `.mosaic` | Container for MosaicCell families on browse surfaces. |
-| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — eyebrow/kind + time, a fixed 5:3 plate on wider cells, then a caption head (title, lede, value, price row) and a foot anchored to the caption's floor (byline, then the car or the activity line); engagement strip on the card's floor. — `.mcell` | Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Head order: title → `lede` (an update's two-line excerpt) → `value` (a build's vehicle under its name, mono ink) → `price` (OK colour) with `detail` (condition chip + grade) beside it when `detailBesidePrice` is set, else under it. Foot: `byline` (monogram + name, ink) → `sub` (the car: a part's source car, an update's vehicle) → `meta` (a build's activity line). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/16px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale). |
+| `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — kind badge (`KindBadge`) + time, a photo plate, then a caption head (title, lede, value, price row) and a foot anchored to the caption's floor (byline with a real avatar when `byline.avatarUrl` is set, then the car or the activity line); engagement strip pinned below. On uniform walls every plate is one 4:3 frame and cells size to content (rows stretch to align); `chip` renders a state `Badge`. The price never truncates — the detail wraps under it. — `.mcell` | Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Head order: title → `lede` (an update's two-line excerpt) → `value` (a build's vehicle under its name, mono ink) → `price` (ink, Sans 600, tabular — never green) with `detail` (condition chip + grade) beside it when `detailBesidePrice` is set, else under it. Foot: `byline` (monogram + name, ink) → `sub` (the car: a part's source car, an update's vehicle) → `meta` (a build's activity line). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/16px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale). |
 | `OrderPipeline` | Product pattern | `@/components/commerce` | The order lifecycle as a `.pipe` stage rail, terminal states included. — `.pipe` | Order rows and order detail. |
 | `PaymentModeNotice` | Product pattern | `@/components/ui` | Test-mode payments banner. | Payment surfaces while Stripe runs in test mode. |
-| `ProfileHeader` | Product pattern | `@/components/ui` | Profile head — a full-width banner band (a car's cover, borrowed; a plain tile when there is none), the avatar plate overlapping its foot, then name, handle, tagline, location and website on paper, with a stats list and an action slot on the right. — `.profhead / .profhead__banner / .profhead__body / .profhead__avatar / .profhead__stats` | The top of a member's profile — public (`/u/[username]`) and the owner's own (`/profile`). Pass `stats` as already-formatted label/value pairs and every action (Follow, Store, share, Edit) through `action`. *Not for:* Typesetting anything on the banner photo — the identity row sits below it so no photo can make a name unreadable. Not for car pages: the garage's focused car has its own cover recipe. |
-| `SellingNav` | Product pattern | `@/components/ui` | The marketplace-family console nav. | Marketplace-family pages. |
+| `ProfileHeader` | Product pattern | `@/components/ui` | Profile head — a full-width banner band (a car's cover, borrowed; a plain tile when there is none), the avatar plate overlapping its foot, then name, handle, tagline, location and website on paper, with a stats list (a zero steps back to dim) and an action cluster: Follow (compact) · Store · Share, per PRD P-2. — `.profhead / .profhead__banner / .profhead__body / .profhead__avatar / .profhead__stats` | The top of a member's profile — public (`/u/[username]`) and the owner's own (`/profile`). Pass `stats` as already-formatted label/value pairs and every action (Follow, Store, share, Edit) through `action`. *Not for:* Typesetting anything on the banner photo — the identity row sits below it so no photo can make a name unreadable. Not for car pages: the garage's focused car has its own cover recipe. |
+| `SellingNav` | Product pattern | `@/components/ui` | The Selling family's own navigation where the rail isn't: on phones it scrolls with the page (never pinned under the bar); at desktop widths the rail lists the same five members and the plate stands down. | Marketplace-family pages. |
 | `StatusChip` | Product pattern | `@/components/commerce` | Order/offer lifecycle state as a toned chip (ok / live / spent). — `.chip--ok/--live/--spent` | Orders, offers, and anywhere an order-family status appears. *Not for:* Non-lifecycle chips — use `.chip` variants directly. |
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity (name; vehicle line only when it adds to the name), pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
@@ -251,13 +251,13 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ListingCartButton` | Feature | `@/features/commerce/quick-commerce` | One 32px live cart square at the end of a listing card's engagement strip — adds to cart in place, links to the cart once it's in. — `.cartbtn` | The discovery wall's listing card, via CardEngagement's `trailing` slot. |
 | `ListingQuickCommerce` | Feature | `@/features/commerce/quick-commerce` | Card-level quick buy/offer actions. | Commerce mosaic walls. |
 | `ProfileBody` | Feature | `@/components/profile/profile-body` | The public profile's tabbed body (vehicles, activity, listings, reviews). | Profile routes. |
-| `SaveButton` | Feature | `@/features/social/buttons` | Full-size save toggle for detail pages. | PDP / car sheet headers. |
+| `SaveButton` | Feature | `@/features/social/buttons` | Save toggle. Full-size (label) on detail pages; `variant="icon"` is the bookmark-only form for card floors. | PDP / car sheet headers (full); marketplace and store cards (icon). |
 | `SellForm` | Feature | `@/app/(product)/sell/sell-form` | The listing create/edit workflow (also used by Edit Listing). | Feature-owned; compose FormSection/ValidationSummary/fields from it, don't fork it. |
 | `ThreadView` | Feature | `@/app/(product)/messages/[orderId]/thread-view` | The order-messages surface: day buckets, windowed history, pinned composer. | Feature-owned; its grammar is Message/MessageThread/MessageComposer. |
 
 <!-- END GENERATED: component-registry -->
 
-## 11 Further CSS families (globals.css)
+## 11 Further CSS families (src/app/styles)
 
 Previously undocumented class families, one line each:
 
@@ -271,13 +271,13 @@ Previously undocumented class families, one line each:
 | `.pdp` | Listing detail two-column layout: 1.35fr/1fr grid ≥981px, `.pdp__media` / `.pdp__more` column flow |
 | `.finder` | The one search/filter recipe (tile plate) serving the marketplace, category sheets and console queues |
 | `.gallery` / `.lightbox` | Interactive gallery hero + thumb strip (`.gallery__hero/__thumbs/__thumb`) and full-screen lightbox — backs `Gallery`/`GalleryLightbox` |
-| `.tabstrip` | Real panel-switching tabs (car sheet, profile) reusing the `.fbtn` vocabulary; selection is ink, never signal red |
+| `.tabstrip` | Real panel-switching tabs (car sheet, profile, garage): Plex Sans 15 (14 on phones) on a ruled baseline, the current tab inked with a 2px accent underline; counts are quiet tabular `.n`. Five tabs with counts fit a phone; the strip goes one line with a sideways scroll at ≤760px only as the overflow fallback |
 | `.star-pick` | Interactive star rating — a radiogroup of buttons, not a select |
 | `.jobrow` | Seller job row inside `.rowlist` (orders register) |
 | `.filterchips` | Active-filter readout between the finder and results (removable `.chip--x` chips) |
 | `.barbadge` | Count badge on cart/notifications — a legitimately live number in the signal colour |
 | `.authswap` | Mono link row swapping between login and signup on auth pages |
-| `.spec-note` | Catalog-page furniture: dim mono footnote under spec tables |
+| `.spec-note` | Catalog-page furniture: dim Sans 13 footnote under spec tables (sentences are never mono) |
 | `.toc` | Table-of-contents link column for legal/long-form pages |
 | `.prose` | Legal / long-form prose styling |
 | `.shell` | The register rail layout: signed-in desktop rail + content ("the drawing's left margin") |
@@ -285,10 +285,21 @@ Previously undocumented class families, one line each:
 | `.indexlight` | The lighting (theme) switch spelled out inside the index sheet — the bar's version is icon-only |
 | `.railtoggle` | Collapse/expand control for the register rail |
 | `.console-nav` / `.console-main` | Admin console layer: console nav (a `.filters` compound, hidden ≤640px for the index button) and the console content column with its calmer display/stat scale |
+| `.dialogbox` / `.dialogbox__close` | `Dialog`'s panel wrapper and its quiet Close in the top-right corner (the first child of the sheet keeps 56px clear for it) |
+| `.carfocus--photo` / `.featbuild--photo` | The garage hero and a profile's featured build when they have a photo: a dark fade under the caption only (`--photo-scrim`, `--on-photo`, `--on-photo-dim`) — never a cream paper wash over the car |
+| `.pagehead--item` | An object page's title (the listing PDP): 24–32px, 40ch measure, so the gallery starts right under it |
+| `.feedcards` / `.feedcard` | Home's photo-first feed column (`FeedList variant="cards"`): photo, kind, title, body, byline |
+| `.marketplace-card__fit` / `__meta--ship` | Card lines that appear only with fitment evidence / drop out at phone-width cells |
+| `.finder__actions` | `FinderRefineSheet`'s one footer row — quiet Reset left, Apply right |
+| `.filters--fit` | `FilterGroup fit`: a short fixed segment set sharing one phone row, icon over word |
+| `.profhead__stats .is-zero` | A zero profile stat steps back to dim at regular weight |
+| `.notfound__actions` / `.notfound__search` | The 404's recovery row — search, then the two doors |
+| `.landing-hero` / `.landing-close` | The landing hero capped at 56vh, and the closing "two ways in" block |
+| `.storenote` | A seller's pinned store note above the store grid |
 
 ## 12 Taxonomy — which component do I use?
 
-Layers: **CSS recipes** (globals.css) define the visual foundations ·
+Layers: **CSS recipes** (`src/app/styles/`, imported in order by `globals.css`) define the visual foundations ·
 **primitives** (`@/components/ui`) are the generic React contracts ·
 **product patterns** (`@/components/ui` cards + `@/components/commerce`) represent
 DRVN objects · **features** (routes, `src/features`) own business logic and
@@ -298,7 +309,7 @@ compose the rest. Registry: `src/components/registry.ts`.
 
 One family, built on `MosaicCell` (`.mcell`):
 
-- **`ListingCard`** — a listing anywhere it is browsed (Marketplace, Home recs, PDP rails, Saved grid). Delegates to `ListingMosaicCell`.
+- **`ListingCard`** — a listing anywhere it is browsed. `variant="shopping"` (Marketplace, the store): photo, title, price, condition · place, seller, 'Off my {car}', icon Save + cart. The default feed variant delegates to `ListingMosaicCell` (Home recs, PDP rails, Saved grid).
 - **`MasonryFeed` → `FeedMosaicCell`** — mixed feed items (part / build / update) on Explore-style walls.
 - **`VehicleCard`** — a vehicle as a dashboard row (Home). The Garage management card is the feature-level `GarageSheetCard` (`.gsheet`) — deliberately not shared.
 - The old `FeedCard` tile deck is **gone** (no call sites); the landing page's `.mkt` tiles are an intentional marketing-surface exception.
@@ -307,7 +318,7 @@ One family, built on `MosaicCell` (`.mcell`):
 
 - **`ObjectRow`** (primitive, `.order`/`.rowlist`) — any object in a dense list: saved items, cart/checkout lines, inbox rows, task rows, payment methods.
 - **`ListingRow`** (`@/components/commerce`) — a seller's listing in a seller-scoped list (profile shopfront, car sheet parts).
-- **`FeedList`** — feed items as rows on Home.
+- **`FeedList`** — Home's feed: `variant="cards"` (photo-first, the main column) or `rows`.
 - **`.ledger`** — the seller register's sortable table; genuinely tabular, stays feature-local. `TimelineRow` for dated activity.
 
 ### Messages
@@ -317,7 +328,8 @@ One family, built on `MosaicCell` (`.mcell`):
 
 ### Status & chips
 
-- **`.chip` variants** (raw or `MetadataTags`) — generic labels; `ActiveFilterChip` for removable filters.
+- **`Badge` / `KindBadge`** — the one card badge system: *kind* (Build · Update · For sale) is a neutral outline with an icon; *state* (Used · Grade B · Sold · Reserved) is a tint, with colour only for a real state. Never paint a kind green.
+- **`.chip` variants** (raw or `MetadataTags`) — generic labels; `ActiveFilterChip` for removable filters. `ListingRow` shows a chip only for a non-live state.
 - **`StatusChip`** (`@/components/commerce`) — order/offer lifecycle states; `OrderPipeline` for the stage rail. Payout/admin state maps are deliberate feature-local variants (different state vocabularies).
 
 ### Forms
@@ -334,7 +346,7 @@ the new piece from existing primitives and recipes, export it from the barrel,
 add a `registry.ts` entry, run `npm run docs:components`, and add a specimen to
 `/docs/components` if it is visual.
 
-Four vitest gates enforce this (`npm test`):
+Five vitest gates enforce this (`npm test`):
 
 1. **Registry sync** — every public export has a registry entry and every entry
    resolves (`src/components/registry.test.ts`).
@@ -348,3 +360,9 @@ Four vitest gates enforce this (`npm test`):
    decrease (`src/components/recipe-ratchet.test.ts`). After migrating old
    markup, lock in the lower counts with
    `UPDATE_RECIPE_BASELINE=1 npx vitest run src/components/recipe-ratchet.test.ts`.
+5. **Stylesheet ratchet** — `globals.css` must import every file in
+   `src/app/styles/` in filename order (import order IS the cascade), and a
+   selector defined twice in the same context (same `@layer`/`@media`/
+   `@container` chain) may not appear or grow: extend the first definition
+   instead (`src/app/styles/styles-ratchet.test.ts`, baseline
+   `styles-baseline.json`; lower it with `UPDATE_STYLES_BASELINE=1`).

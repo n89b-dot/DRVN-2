@@ -12,6 +12,21 @@ A full design, UI and UX review of every page at 1440 and 390 (signed in and out
 
 **Stylesheet.** `globals.css` is now an ordered list of 13 family files in `src/app/styles/`, and the compiled CSS is identical before and after. `styles-ratchet.test.ts` pins the import order and blocks new duplicated selectors (16 left to merge).
 
+**Documentation.**
+- The design system is written down to match what ships:
+  - `design-system.md`: tokens (`--ghost-fill`, the photo overlay tokens) and the per-file map.
+  - `typography.md`: the mono and Sans split, with new tiers for secondary buttons, tabs, inputs, prices and figures.
+  - `components.md`: recipe rows, the new recipe families, the badge taxonomy, and a fifth gate (the stylesheet ratchet).
+  - `rules.md`: one red fill, 44px targets, prices, and the CSS file conventions.
+  - `brand.md` night and day tables, the `material.md` mapping, and the `patterns.md` route map and empty-state rules.
+  - `CLAUDE.md` points new CSS at `src/app/styles/`.
+- 17 registry entries describe the new props and behaviour: `SheetTabs.onChange`, `FilterGroup fit`, `FinderRefineSheet.actions`, `FormField.status`, `BottomSheet closeLabel={null}`, `SaveButton variant="icon"`, and the new behaviour of Button, ObjectRow, Dialog and MosaicCell.
+- On the `/docs` microsite:
+  - The typography, rules, material, patterns, brand, design-system and components pages match.
+  - The components page has a new SheetTabs specimen.
+- The Livesheet `design.md` contract is brought current.
+- The 44px touch floor is restored on chips, card Save/cart squares and the dialog Close.
+
 **Database (shared dev).** The September 5–6 remediation chain and the export contract `v4` are applied, with a backup and a reconciliation log (`supabase/MIGRATIONS.md`), so dispatch, receipt, seller cancellation and cart checkout work on dev. Test data now includes orders, offers and threads for review.
 
 ## 2026-09-20 — Profile and Garage laid out like the mocks

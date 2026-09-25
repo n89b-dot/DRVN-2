@@ -6,7 +6,7 @@
 
 **Before starting:** the working tree had 114+ uncommitted files on 2026-09-19, many in routes this plan touches. Commit or shelve first. Read the relevant guide in `node_modules/next/dist/docs/` before writing route code (`AGENTS.md`).
 
-**Components — reuse before create.** Look in `src/components/registry.ts` first. Extend an existing component (a prop, a variant) before making a new one. A new component is justified only when it is clearly better than composing what exists, and is reusable (2+ contexts or real interaction / a11y behaviour). CSS-only needs become a named recipe in `globals.css` (tokens only), not a wrapper component. One-off layout stays plain JSX in the route. Typeface stays IBM Plex Sans / Mono.
+**Components — reuse before create.** Look in `src/components/registry.ts` first. Extend an existing component (a prop, a variant) before making a new one. A new component is justified only when it is clearly better than composing what exists, and is reusable (2+ contexts or real interaction / a11y behaviour). CSS-only needs become a named recipe in the family file under `src/app/styles/` (tokens only), not a wrapper component. One-off layout stays plain JSX in the route. Typeface stays IBM Plex Sans / Mono.
 
 Decisions already made on that basis:
 
@@ -75,6 +75,17 @@ Known gaps, stated rather than hidden:
   order fixtures** — the unique `source_order_item_id` and the action's
   "already on this car" answer are both exercised by journey 6, which builds
   its order with the service role.
+
+**Status, 2026-09-24.** A design review of every page at 1440 and 390 (the
+"DRVN Design Review" artifact; summary in `CHANGELOG.md`) landed its P0–P2
+fixes in `3daf293`. Two of the gaps above are closed. The mods editor was
+reviewed and fixed at phone width. M-3's left column shipped in the
+2026-09-19 repair pass: the filter form goes `display: contents` from 1024px,
+so the panel is a cell of the page grid. C-1 still has no SQL guard. The
+review changed F-3 (onboarding now ends on add-car when there is nowhere to
+return to). N-2 holds as written: the bar — search included — is identical
+on every page; Explore and the Marketplace also carry their own scoped
+search below it.
 
 ## Workstreams
 
