@@ -1,5 +1,21 @@
 # Applying migrations
 
+## September 28 — duplicate `write_activity_post` removed from the shared dev project
+
+| File | Applied to |
+|---|---|
+| `20260928120000_drop_legacy_write_activity_post.sql` | shared dev project, 2026-09-28 |
+
+The September 24 catch-up (below) re-ran `20260905230238`, which re-created the
+8-argument `write_activity_post` beside the 9-argument form from
+`20260919194000`. The catch-up's snapshot comparison matched functions by
+signature, so this overload was missed. With both present, PostgREST returned
+PGRST203 for every call that omits `p_listing_ids`: full updates, drafts,
+autosave, edits and untagged quick posts. Both definitions were saved to
+`~/drvn-db-backups/write_activity_post-overloads-20260928.json` before the
+drop. Verified with a draft save through the API. A fresh install never had
+the duplicate, so the file is a no-op there.
+
 ## September 24 — invited-beta boundaries reach the shared dev project
 
 | File | Applied to |
