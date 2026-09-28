@@ -45,6 +45,14 @@ function withParams(
   return query ? `${base}?${query}` : base;
 }
 
+/** Drops checkouts that were never paid for: still at the payment step,
+ *  failed, or cancelled because checkout ran out of time (0012's sweep). */
+function hideUnpaidCheckouts<Q extends { not(column: "status", operator: "in", value: string): Q; or(filters: string): Q }>(query: Q): Q {
+  return query
+    .not("status", "in", "(pending,requires_action,payment_failed)")
+    .or('status.neq.cancelled,cancel_reason.is.null,cancel_reason.neq."checkout not completed in time"');
+}
+
 /** Milestone dates shown per row — every one that's actually set. There is
  *  no separate "paid at" column on orders (only the status transition), so
  *  "Placed" doubles as the paid milestone once the order is past pending. */
@@ -142,6 +150,11 @@ export default async function OrdersPage({
   if (rawStatus) ordersQuery = ordersQuery.eq("status", rawStatus);
   else if (state)
     ordersQuery = ordersQuery.in("status", [...STATE_GROUPS[state]]);
+  // A checkout that was never paid for isn't a sale: anyone who reaches the
+  // payment step reserves the part, and walking away used to leave the
+  // seller a "Waiting on the buyer to pay" order. Sellers see paid orders;
+  // an explicit ?status= still shows everything (the operational escape hatch).
+  if (view === "sales" && !rawStatus) ordersQuery = hideUnpaidCheckouts(ordersQuery);
 
   // The offers counts that fed the promo card are gone — the family nav puts
   // Offers one click away on every surface, so a card duplicating navigation
@@ -164,10 +177,13 @@ export default async function OrdersPage({
       .eq("status", "paid"),
     // Everything in this view, unfiltered: with none at all, the state
     // filters have nothing to refine and stay off the page.
-    supabase
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .eq(roleColumn, user.id),
+    (() => {
+      const all = supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq(roleColumn, user.id);
+      return view === "sales" ? hideUnpaidCheckouts(all) : all;
+    })(),
   ]);
 
   if (ordersError) reportError("[orders] failed to load orders", ordersError);

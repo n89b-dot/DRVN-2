@@ -78,6 +78,9 @@ export default async function OrderDetailPage({
 
   // RLS restricts orders to their participants, so a miss here is either a bad
   // id or someone else's order — both are a 404 from this user's point of view.
+  // So is an id that isn't one at all (a mistyped or shortened link): the
+  // query would error on it, and that isn't "something went wrong".
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
   const { data: order, error } = await supabase
     .from("orders")
     .select("*")
@@ -93,6 +96,9 @@ export default async function OrderDetailPage({
   const isBuyer = order.buyer_id === user.id;
   const isSeller = order.seller_id === user.id;
   if (!isBuyer && !isSeller) notFound();
+  const reportClosesAt = order.delivered_at
+    ? new Date(new Date(order.delivered_at).getTime() + DISPUTE_WINDOW_DAYS * 86_400_000)
+    : null;
 
   // Opening the order deals with what its notifications were about.
   await markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]);
@@ -258,20 +264,6 @@ export default async function OrderDetailPage({
     id: c.id,
     name: c.name,
   }));
-  // An item already added to one of the buyer's cars names that car instead
-  // of offering "Add to a car" again.
-  const { data: addedRows } =
-    canAddToCar && itemIds.length && garageCars.length
-      ? await supabase
-          .from("mod_items")
-          .select("source_order_item_id, car:cars!mod_items_car_id_fkey(name, slug)")
-          .in("source_order_item_id", itemIds)
-          .in("car_id", garageCars.map((c) => c.id))
-      : { data: [] };
-  const addedTo = new Map<string, { name: string; slug: string }>();
-  for (const row of addedRows ?? []) {
-    if (row.source_order_item_id && row.car) addedTo.set(row.source_order_item_id, row.car);
-  }
 
   // Falls back to the snapshot label, so a deleted account still reads sensibly.
   const counterpartyName =
@@ -451,7 +443,6 @@ export default async function OrderDetailPage({
                         orderItemId={item.id}
                         title={item.title ?? "this part"}
                         cars={garageCars}
-                        addedTo={addedTo.get(item.id) ?? null}
                       />
                     ) : undefined
                   }
@@ -880,19 +871,29 @@ export default async function OrderDetailPage({
                     How protection works
                   </Link>
                 </p>
-                {order.delivered_at && (
+                {/* The claim window (dispute-command.ts): 30 days from
+                    delivery. Once it has closed, the form would only be
+                    refused on submit — say so instead of offering it. */}
+                {reportClosesAt && reportClosesAt.getTime() < Date.now() ? (
                   <p className="spec-note">
-                    You can report a problem until{" "}
-                    {new Date(
-                      new Date(order.delivered_at).getTime() +
-                        DISPUTE_WINDOW_DAYS * 86_400_000,
-                    ).toLocaleDateString()}{" "}
-                    — {DISPUTE_WINDOW_DAYS} days after delivery.
+                    The {DISPUTE_WINDOW_DAYS}-day window to report a problem
+                    closed on {reportClosesAt.toLocaleDateString()}. Message
+                    the seller below if something isn&apos;t right.
                   </p>
+                ) : (
+                  <>
+                    {reportClosesAt && (
+                      <p className="spec-note">
+                        You can report a problem until{" "}
+                        {reportClosesAt.toLocaleDateString()} —{" "}
+                        {DISPUTE_WINDOW_DAYS} days after delivery.
+                      </p>
+                    )}
+                    <div className="mt-3">
+                      <ReportProblemForm orderId={id} />
+                    </div>
+                  </>
                 )}
-                <div className="mt-3">
-                  <ReportProblemForm orderId={id} />
-                </div>
               </Rv>
             )}
 

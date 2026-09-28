@@ -1,9 +1,9 @@
 /**
  * ISO 3166-1 alpha-2 country list for the checkout country <select>.
  *
- * GB is first-class (and the default) since DRVN launched UK-first — every
- * other country follows in alphabetical order by name so the dropdown reads
- * naturally once GB is picked off the top.
+ * The United States is the default and sits first: prices are in dollars and
+ * most sellers ship from the US. The United Kingdom follows (DRVN launched
+ * UK-first), then every other country alphabetically by name.
  *
  * Orders written before this migration stored a free-text country name in
  * `ship_country` (e.g. "United Kingdom"), not a code — `countryLabel` below
@@ -11,7 +11,7 @@
  */
 export type Country = { code: string; name: string };
 
-export const DEFAULT_COUNTRY_CODE = "GB";
+export const DEFAULT_COUNTRY_CODE = "US";
 
 const REST_OF_WORLD: Country[] = [
   { code: "AF", name: "Afghanistan" },
@@ -248,7 +248,6 @@ const REST_OF_WORLD: Country[] = [
   { code: "UG", name: "Uganda" },
   { code: "UA", name: "Ukraine" },
   { code: "AE", name: "United Arab Emirates" },
-  { code: "US", name: "United States" },
   { code: "UM", name: "United States Minor Outlying Islands" },
   { code: "UY", name: "Uruguay" },
   { code: "UZ", name: "Uzbekistan" },
@@ -264,8 +263,9 @@ const REST_OF_WORLD: Country[] = [
   { code: "ZW", name: "Zimbabwe" },
 ];
 
-/** GB pinned first — everything else follows alphabetically by name. */
+/** US then GB pinned first — everything else follows alphabetically by name. */
 export const COUNTRIES: Country[] = [
+  { code: "US", name: "United States" },
   { code: "GB", name: "United Kingdom" },
   ...REST_OF_WORLD,
 ];

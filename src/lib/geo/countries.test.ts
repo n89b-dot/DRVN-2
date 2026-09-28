@@ -16,9 +16,10 @@ describe("COUNTRIES", () => {
     expect(codes.has("JP")).toBe(true);
   });
 
-  it("puts GB first, matching the default", () => {
-    expect(COUNTRIES[0].code).toBe("GB");
-    expect(DEFAULT_COUNTRY_CODE).toBe("GB");
+  it("puts the US first, matching the default, then GB", () => {
+    expect(COUNTRIES[0].code).toBe("US");
+    expect(COUNTRIES[1].code).toBe("GB");
+    expect(DEFAULT_COUNTRY_CODE).toBe("US");
   });
 });
 
