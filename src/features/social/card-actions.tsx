@@ -111,7 +111,7 @@ export function CardEngagement({
       try {
         const result =
           target.kind === "post"
-            ? await toggleReaction(target.id, ACTIVITY_EMOJIS[0], path)
+            ? await toggleReaction(target.id, ACTIVITY_EMOJIS[0], path, next)
             : await toggleLike(target.kind, target.id, path, next);
         if (!("error" in result)) return;
         setLiked(!next);

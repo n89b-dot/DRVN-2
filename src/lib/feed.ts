@@ -258,7 +258,8 @@ export async function hydrateFeedItems(
           .order("position")
       : Promise.resolve({ data: [] }),
     postIds.length
-      ? supabase.from("activity_reactions").select("post_id").in("post_id", postIds)
+      ? // The card's heart is the 🔥 reaction, so it counts 🔥 only.
+        supabase.from("activity_reactions").select("post_id").eq("emoji", "🔥").in("post_id", postIds)
       : Promise.resolve({ data: [] }),
     // Activity rollup for build cards: count + latest published_at per car.
     carIds.length
@@ -296,6 +297,7 @@ export async function hydrateFeedItems(
           .from("activity_reactions")
           .select("post_id")
           .eq("user_id", viewerId)
+          .eq("emoji", "🔥")
           .in("post_id", postIds)
       : Promise.resolve({ data: [] }),
     // Public like counts over the page's listings+cars (0037).

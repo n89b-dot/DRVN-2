@@ -1,5 +1,17 @@
 # Applying migrations
 
+## September 28 — card hearts count 🔥 only (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928170000_card_likes_fire_only.sql` | shared dev project, 2026-09-28 |
+
+Redefines `feed_hydration` (from `20260928120500`, the performance session's
+migration) with two changes: a post's card count and the viewer's "liked"
+mark read 🔥 reactions only, matching the heart that toggles 🔥. The live
+definition before the change is in
+`~/drvn-db-backups/pre-20260928170000-feed_hydration.sql`.
+
 ## September 28 — offer notifications open the offer (shared dev project)
 
 | File | Applied to |

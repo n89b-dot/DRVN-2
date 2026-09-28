@@ -6,10 +6,16 @@ import { createClient } from "@/lib/supabase/server";
 
 import { ACTIVITY_EMOJIS } from "./constants";
 
+/**
+ * Flips one reaction, or — given `want` — sets it. The card's heart passes
+ * the state the member tapped for, so a stale or doubled tap can't turn an
+ * "unlike" into a new 🔥; the post page's emoji bar still toggles.
+ */
 export async function toggleReaction(
   postId: string,
   emoji: string,
-  path: string
+  path: string,
+  want?: boolean
 ): Promise<{ reacted: boolean } | { error: string }> {
   if (!ACTIVITY_EMOJIS.includes(emoji as (typeof ACTIVITY_EMOJIS)[number])) {
     return { error: "Unsupported reaction." };
@@ -28,6 +34,9 @@ export async function toggleReaction(
     .eq("user_id", user.id)
     .eq("emoji", emoji)
     .maybeSingle();
+
+  if (want === true && existing) return { reacted: true };
+  if (want === false && !existing) return { reacted: false };
 
   if (existing) {
     await supabase
