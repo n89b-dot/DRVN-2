@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Keeps `stripe listen` forwarding TEST events to the dev server (see
+     scripts/dev-stripe-listen.sh). Runs the copy in ~/bin. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>cc.drvn2.stripe</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/neilbarrow/bin/drvn2-stripe-listen.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PROJECT_DIR</key>
+    <string>/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/neilbarrow/Library/Logs/drvn2-stripe.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/neilbarrow/Library/Logs/drvn2-stripe.log</string>
+</dict>
+</plist>
