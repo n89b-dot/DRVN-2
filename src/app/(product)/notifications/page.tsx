@@ -12,7 +12,8 @@ import {
   NarrowColumn,
   Pagination,
 } from "@/components/ui";
-import { prefEnabled, prefKeyForKind } from "@/lib/notification-prefs";
+import { kindIsShown } from "@/lib/notification-prefs";
+import { loadUnreadNotificationCount } from "@/lib/shell-counts";
 import { withParams as buildParams } from "@/lib/url-params";
 import { createClient } from "@/lib/supabase/server";
 
@@ -154,17 +155,13 @@ export default async function NotificationsPage({
   const [
     { data: rows, count, error },
     { data: me },
-    { count: totalUnreadCount },
+    totalUnreadCount,
     { count: everCount },
   ] =
     await Promise.all([
       query,
       supabase.from("profiles").select("notification_prefs").eq("id", user.id).maybeSingle(),
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .is("read_at", null),
+      loadUnreadNotificationCount(supabase, user.id),
       // Whether there is anything at all — with filters on, the page count
       // above can't say. Unfiltered it is the same number, so no second trip.
       filtered
@@ -181,14 +178,11 @@ export default async function NotificationsPage({
   }
 
   const prefs = me?.notification_prefs;
-  const visible = (rows ?? []).filter((row) => {
-    const key = prefKeyForKind(row.kind);
-    return key ? prefEnabled(prefs, key) : true;
-  });
+  const visible = (rows ?? []).filter((row) => kindIsShown(prefs, row.kind));
 
   const engagement = visible.filter((r) => r.section === "engagement");
   const marketplace = visible.filter((r) => r.section === "marketplace");
-  const unreadTotal = totalUnreadCount ?? 0;
+  const unreadTotal = totalUnreadCount;
   const total = count ?? 0;
   const nothingEver = (filtered ? (everCount ?? 0) : total) === 0;
   const hasMore = from + PAGE_SIZE < total;

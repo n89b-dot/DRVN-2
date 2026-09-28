@@ -1,5 +1,19 @@
 # Applying migrations
 
+## September 28 — offer notifications open the offer (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928160000_offer_notification_links.sql` | shared dev project, 2026-09-28 |
+
+Replaces `notify_on_offer`, `notify_on_offer_response` and `notify_on_follow`
+(previous definitions in `~/drvn-db-backups/pre-20260928160000-fn-*.sql`):
+offer notifications link to `/offers/<id>` instead of `/orders`; a seller's
+acceptance is announced once, by the app; a buyer accepting the seller's
+counter now tells the seller; car follows get their own `car_follow` kind
+(existing rows backfilled). Sorts after the Messages session's
+`20260928140000`, which touches no offer or follow trigger.
+
 ## September 28 — reserved parts readable on the shared dev project
 
 | File | Applied to |

@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
+import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
 import { ReviewForm } from "../review-form";
 import { nextAction } from "../next-action";
@@ -92,6 +93,9 @@ export default async function OrderDetailPage({
   const isBuyer = order.buyer_id === user.id;
   const isSeller = order.seller_id === user.id;
   if (!isBuyer && !isSeller) notFound();
+
+  // Opening the order deals with what its notifications were about.
+  await markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]);
 
   const counterpartyId = isBuyer ? order.seller_id : order.buyer_id;
 

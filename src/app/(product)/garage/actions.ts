@@ -1028,7 +1028,9 @@ export async function updateNotificationPrefs(
 
   const { error } = await supabase
     .from("profiles")
-    .update({ notification_prefs: prefs, updated_at: new Date().toISOString() })
+    // Members can update only some profile columns; updated_at isn't one of
+    // them, and sending it made Postgres refuse the whole save.
+    .update({ notification_prefs: prefs })
     .eq("id", user.id);
   if (error) return { error: error.message };
 

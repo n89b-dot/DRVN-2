@@ -92,6 +92,8 @@ export function prefEnabled(prefs: unknown, key: NotificationPrefKey): boolean {
 export function prefKeyForKind(kind: string): NotificationPrefKey | null {
   const key = (() => {
     if (kind === "follow") return "profile_follows";
+    // Someone following a car is build engagement, not a follow of you.
+    if (kind === "car_follow") return "car_engagement";
     // A saved part is governed by the marketplace preference; a saved car or
     // profile by the engagement one.
     if (kind === "listing_save") return "listing_saves";
@@ -109,4 +111,11 @@ export function prefKeyForKind(kind: string): NotificationPrefKey | null {
   })();
 
   return key && KEYS.has(key) ? (key as NotificationPrefKey) : null;
+}
+
+/** Whether a notification of this kind is shown under these preferences —
+ *  the one rule for the list, the bell badge and the "N unread" line. */
+export function kindIsShown(prefs: unknown, kind: string): boolean {
+  const key = prefKeyForKind(kind);
+  return key ? prefEnabled(prefs, key) : true;
 }

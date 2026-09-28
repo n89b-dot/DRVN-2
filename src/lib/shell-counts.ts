@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cartCount } from "@/lib/cart";
 import type { Database } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
+import { kindIsShown } from "@/lib/notification-prefs";
 
 /**
  * The badges the app shell shows.
@@ -28,23 +29,40 @@ export async function loadShellCounts(
   const cart = await cartCount();
   if (!userId) return { cartCount: cart, unreadCount: 0, offersCount: 0, messagesCount: 0 };
 
-  const [{ count, error }, offersCount, messagesCount] = await Promise.all([
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .is("read_at", null),
+  const [unreadCount, offersCount, messagesCount] = await Promise.all([
+    loadUnreadNotificationCount(supabase, userId),
     loadOffersNeedingAttention(supabase, userId),
     loadUnreadMessages(supabase, userId),
   ]);
 
+  return { cartCount: cart, unreadCount, offersCount, messagesCount };
+}
+
+/**
+ * Unread notifications the member will actually see: kinds they muted in
+ * Settings are left out, so the bell never counts rows the list hides.
+ * Reads kinds rather than a head count because the kind → preference rule
+ * lives in notification-prefs.ts.
+ */
+export async function loadUnreadNotificationCount(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<number> {
+  const [{ data: unread, error }, { data: me }] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("kind")
+      .eq("user_id", userId)
+      .is("read_at", null)
+      .limit(1000),
+    supabase.from("profiles").select("notification_prefs").eq("id", userId).maybeSingle(),
+  ]);
   if (error) {
     // A badge is not worth failing a page render over.
     reportError("[shell] unread count failed", error);
-    return { cartCount: cart, unreadCount: 0, offersCount, messagesCount };
+    return 0;
   }
-
-  return { cartCount: cart, unreadCount: count ?? 0, offersCount, messagesCount };
+  return (unread ?? []).filter((row) => kindIsShown(me?.notification_prefs, row.kind)).length;
 }
 
 /**
