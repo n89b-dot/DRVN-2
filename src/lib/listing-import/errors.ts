@@ -36,6 +36,8 @@ export const PASTE_FALLBACK_CODES: ReadonlySet<ImportErrorCode> = new Set([
   "source_login_required",
   "source_challenge",
   "source_too_large",
+  // Its message promises a paste box ("paste just the sale text below").
+  "source_not_sale_post",
   "source_parse_failed",
   "source_unsupported",
 ]);

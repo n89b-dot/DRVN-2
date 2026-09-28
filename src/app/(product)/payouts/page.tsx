@@ -57,6 +57,7 @@ export default async function PayoutsPage() {
             hasAccount: Boolean(connectAccountId),
             payoutsEnabled: profile?.payouts_enabled ?? false,
           }}
+          waitingCents={ledger.heldCents + ledger.clearingCents + ledger.availableCents}
         />
         <PayoutsSection ledger={ledger} paymentsLive={paymentsAreLive()} />
       </section>

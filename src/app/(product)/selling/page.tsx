@@ -13,7 +13,6 @@ import {
 import { ListingRow } from "@/components/commerce";
 import { formatPrice } from "@/lib/payments/fee";
 import { getSellerLedger } from "@/lib/payments/ledger";
-import { paymentsAreLive } from "@/lib/payments/provider";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { createClient } from "@/lib/supabase/server";
@@ -94,6 +93,8 @@ export default async function SellingPage() {
       [...(l.listing_images ?? [])].sort((a, b) => a.position - b.position)[0]?.url ?? null,
   }));
 
+  const waitingCents = ledger.heldCents + ledger.clearingCents + ledger.availableCents;
+
   const attention: { label: string; href: string; count: number }[] = [
     { label: "Offers waiting on you", href: "/offers", count: offersCount },
     { label: "Questions to answer", href: "/listings", count: openQuestions },
@@ -115,11 +116,15 @@ export default async function SellingPage() {
         sub="Everything selling-related in one place: what needs you first, how the stock stands, and where the money is."
       />
 
-      {!canPublish && paymentsAreLive() && (
+      {/* Shown whenever publishing is blocked — test mode included, where
+          the gate is just as real — and it names money already waiting. */}
+      {!canPublish && (
         <Alert tone="live" title="Payouts aren't set up yet">
-          Publishing needs somewhere to send your money —{" "}
+          {waitingCents > 0
+            ? `You have ${money(waitingCents)} from sales waiting, and new listings can't go live until `
+            : "Publishing needs somewhere to send your money — "}
           <Link href="/payouts" className="underline">
-            set up payouts
+            {waitingCents > 0 ? "payouts are set up" : "set up payouts"}
           </Link>
           . Drafts still save.
         </Alert>

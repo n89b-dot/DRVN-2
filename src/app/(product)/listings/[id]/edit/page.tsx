@@ -16,6 +16,7 @@ import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
 import { DeleteListing } from "../../delete-listing";
+import { ListingStatusActions } from "../../status-actions";
 import { reportError } from "@/lib/monitoring";
 
 export const metadata = { title: "Edit listing - DRVN" };
@@ -115,6 +116,11 @@ export default async function EditListingPage({
           <Link href="/listings" className="jumplink">
             All listings
           </Link>
+          {/* "Publish it from here" has to be true: the ledger's own
+              Publish / Relist control, for a listing that isn't live. */}
+          {(listing.status === "draft" || listing.status === "paused" || listing.status === "archived") && (
+            <ListingStatusActions id={listing.id} status={listing.status} />
+          )}
         </div>
       </PageHead>
 

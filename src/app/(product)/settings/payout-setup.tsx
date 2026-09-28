@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Button, TileHead } from "@/components/ui";
 
 import { startConnectOnboarding } from "./payouts-actions";
+import { formatPrice } from "@/lib/payments/fee";
 
 export type ConnectSummary = {
   stripeConfigured: boolean;
@@ -20,7 +21,14 @@ export type ConnectSummary = {
  * In test mode there is no account to connect, and the row says so rather
  * than disappearing: an absent status read as "unknown", not "not needed".
  */
-export function PayoutSetup({ connect }: { connect: ConnectSummary }) {
+export function PayoutSetup({
+  connect,
+  waitingCents = 0,
+}: {
+  connect: ConnectSummary;
+  /** Sale money that can't be paid out until payouts are set up. */
+  waitingCents?: number;
+}) {
   const [state, action, pending] = useActionState<{ error?: string }, FormData>(
     async () => (await startConnectOnboarding()) ?? {},
     {}
@@ -60,6 +68,11 @@ export function PayoutSetup({ connect }: { connect: ConnectSummary }) {
           ? "Your Stripe account can receive payouts. Sale proceeds transfer automatically when a buyer's payment settles."
           : "Selling needs somewhere for the money to go. Stripe verifies your details and holds your bank account — DRVN never sees either. Until this is done, listings can't be published."}
       </p>
+      {!connect.payoutsEnabled && waitingCents > 0 && (
+        <p className="mt-2 max-w-[62ch] font-medium">
+          {`You have ${formatPrice(waitingCents)} from sales waiting. It's paid out once this is set up.`}
+        </p>
+      )}
       <form action={action} className="mt-4">
         <Button
           type="submit"
