@@ -262,7 +262,7 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
       .from("listings")
       .select("id, title, price_cents, status")
       .eq("source_car_id", sheet.id)
-      .in("status", ["active", "reserved", "sold"])
+      .in("status", ["draft", "active", "reserved", "sold"])
       .order("created_at", { ascending: false }),
     supabase
       .from("mod_items")
@@ -272,7 +272,11 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
       .order("removed_at", { ascending: false }),
   ]);
 
-  const forSale = (listings ?? []).filter((l) => l.status !== "sold");
+  // For sale = active + reserved: the same two states the garage counts as
+  // live. A draft is not for sale, but it is not gone either — it gets its
+  // own group, so a part saved as a draft from List it stays findable.
+  const forSale = (listings ?? []).filter((l) => l.status === "active" || l.status === "reserved");
+  const drafts = (listings ?? []).filter((l) => l.status === "draft");
   const sold = (listings ?? []).filter((l) => l.status === "sold");
   const unlisted = (removedMods ?? []).filter((m) => !m.linked_listing_id);
 
@@ -287,7 +291,11 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
                 key={l.id}
                 href={`/listings/${l.id}`}
                 title={l.title}
-                meta={formatPrice(l.price_cents)}
+                meta={
+                  l.status === "reserved"
+                    ? `${formatPrice(l.price_cents)} · Reserved`
+                    : formatPrice(l.price_cents)
+                }
               />
             ))
           ) : (
@@ -295,6 +303,26 @@ export async function GarageCarParts({ sheet }: { sheet: GarageSheet }) {
           )}
         </div>
       </section>
+
+      {drafts.length > 0 && (
+        <section>
+          <span className="microlabel microlabel--ink">Drafts</span>
+          <div className="rowlist mt-2">
+            {drafts.map((l) => (
+              <ObjectRow
+                key={l.id}
+                title={l.title}
+                meta={l.price_cents ? `Draft · ${formatPrice(l.price_cents)}` : "Draft · not listed yet"}
+                actions={
+                  <Link href={`/listings/${l.id}/edit`} className="relbtn !static shrink-0">
+                    Finish listing
+                  </Link>
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {sold.length > 0 && (
         <section>

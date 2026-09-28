@@ -50,6 +50,9 @@ type Row = {
   raw_text: string;
   /** Set once this line has been released for sale — drives the Unlink control. */
   linked_listing_id: string | null;
+  /** That listing's own status (draft, active, reserved, sold…) — the chip
+   *  says what the listing really is, not "For sale" for any link. */
+  linked_status: string | null;
   /**
    * Whether the part is still on the car (A-2). A removed row stays in the
    * sheet and stays in the payload — that is what keeps its id, and what lets
@@ -86,6 +89,7 @@ function blankRow(group_label = "Other"): Row {
     confidence: null,
     raw_text: "",
     linked_listing_id: null,
+    linked_status: null,
     status: "installed",
     removed_at: null,
     product_url: null,
@@ -95,6 +99,40 @@ function blankRow(group_label = "Other"): Row {
     ref_price_currency: null,
     bought: false,
     loadedLabel: "",
+  };
+}
+
+/** A line with nothing typed and nothing attached — never worth saving. */
+function isEmptyRow(row: Row): boolean {
+  return (
+    !row.id &&
+    !row.brand.trim() &&
+    !row.product.trim() &&
+    !row.part_number.trim() &&
+    !row.raw_text.trim() &&
+    !row.product_url &&
+    !row.linked_listing_id &&
+    !row.bought
+  );
+}
+
+/** A linked line's chip and where it leads: the listing's real state. A
+ *  draft opens its editor — it has no public page to show yet. */
+function linkedListingChip(row: Pick<Row, "linked_listing_id" | "linked_status">) {
+  const status = row.linked_status;
+  const label =
+    status === "active"
+      ? "For sale"
+      : status
+        ? status.charAt(0).toUpperCase() + status.slice(1)
+        : "Listed";
+  return {
+    label,
+    className: `chip ${status === "active" ? "chip--ok" : status === "reserved" ? "chip--live" : "chip--spent"} !static`,
+    href:
+      status === "draft"
+        ? `/listings/${row.linked_listing_id}/edit`
+        : `/listings/${row.linked_listing_id}`,
   };
 }
 
@@ -133,7 +171,14 @@ function snapshot(rows: Row[]): string {
   );
 }
 
-export function ModsEditor({ carId, initialMods }: { carId: string; initialMods: ModItem[] }) {
+export function ModsEditor({
+  carId,
+  initialMods,
+}: {
+  carId: string;
+  /** `linked_listing` is the linked listing's status, embedded by the caller. */
+  initialMods: (ModItem & { linked_listing?: { status: string } | null })[];
+}) {
   const [rows, setRows] = useState<Row[]>(
     initialMods.map((m) => ({
       key: m.id,
@@ -146,6 +191,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
       confidence: m.confidence,
       raw_text: m.raw_text ?? "",
       linked_listing_id: m.linked_listing_id,
+      linked_status: m.linked_listing?.status ?? null,
       status: m.status,
       removed_at: m.removed_at,
       bought: Boolean(m.source_order_item_id),
@@ -264,7 +310,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
    */
   async function listIt(row: Row) {
     if (row.linked_listing_id) {
-      router.push(`/listings/${row.linked_listing_id}`);
+      router.push(linkedListingChip(row).href);
       return;
     }
     const nextRows = rows.map((r) =>
@@ -290,7 +336,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         // clearing the link locally while the server kept it.
         setStatus({ kind: "error", message: result.error });
       } else {
-        updateRow(row.key, { linked_listing_id: null });
+        updateRow(row.key, { linked_listing_id: null, linked_status: null });
       }
       setUnlinkingKey(null);
     });
@@ -347,7 +393,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
     savingRef.current = true;
     setSaving(true);
     setStatus(null);
-    const items: ModItemInput[] = rowsToSave.map((r, i) => ({
+    // A line with nothing in it (a Replace or "+ Add a line" left blank) is
+    // dropped rather than saved as a nameless part.
+    const dropped = new Set(rowsToSave.filter(isEmptyRow).map((r) => r.key));
+    const kept = rowsToSave.filter((r) => !dropped.has(r.key));
+    const items: ModItemInput[] = kept.map((r, i) => ({
       id: r.id ?? r.key,
       group_label: r.group_label,
       brand: r.brand.trim() || null,
@@ -388,10 +438,19 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
         // New rows use their client UUID as the durable database id. Promote
         // that id locally so an ordinary second save and a response-loss retry
         // update the same row instead of inserting a duplicate.
+        // A part that just came off gets its date now, so the row reads
+        // "Off since …" instead of still promising to come off.
+        const today = new Date().toISOString();
         setRows((current) =>
-          current.map((row) => (row.id ? row : { ...row, id: row.key }))
+          current
+            .filter((row) => !dropped.has(row.key))
+            .map((row) => ({
+              ...row,
+              id: row.id ?? row.key,
+              removed_at: row.status === "removed" ? (row.removed_at ?? today) : row.removed_at,
+            }))
         );
-        setSavedSnap(snapshot(rowsToSave));
+        setSavedSnap(snapshot(kept));
         setReplaced(null);
         const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
           [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
@@ -402,7 +461,7 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
           initialMods.filter((m) => m.status === "installed").map((m) => label(m)).filter(Boolean)
         );
         const after = new Set(
-          rowsToSave.filter((r) => r.status === "installed").map((r) => label(r)).filter(Boolean)
+          kept.filter((r) => r.status === "installed").map((r) => label(r)).filter(Boolean)
         );
         const added = [...after].filter((l) => !before.has(l)).slice(0, 3);
         const removed = [...before].filter((l) => !after.has(l)).slice(0, 3);
@@ -643,11 +702,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 {row.linked_listing_id && (
                   <span className="flex shrink-0 items-center gap-1.5">
                     <Link
-                      href={`/listings/${row.linked_listing_id}`}
-                      className="chip chip--ok !static"
+                      href={linkedListingChip(row).href}
+                      className={linkedListingChip(row).className}
                       title="See the listing this line released"
                     >
-                      For sale
+                      {linkedListingChip(row).label}
                     </Link>
                     <button
                       type="button"
@@ -809,11 +868,11 @@ export function ModsEditor({ carId, initialMods }: { carId: string; initialMods:
                 <span className="modrow__foot">
                   {row.linked_listing_id ? (
                     <Link
-                      href={`/listings/${row.linked_listing_id}`}
-                      className="chip chip--ok !static"
+                      href={linkedListingChip(row).href}
+                      className={linkedListingChip(row).className}
                       title="See the listing this part was released to"
                     >
-                      For sale
+                      {linkedListingChip(row).label}
                     </Link>
                   ) : (
                     <button

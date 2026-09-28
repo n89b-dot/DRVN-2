@@ -52,7 +52,11 @@ export default async function GaragePage({
           .eq("owner_id", user!.id)
           .maybeSingle(),
         supabase.from("car_images").select("*").eq("car_id", focused.id).order("position"),
-        supabase.from("mod_items").select("*").eq("car_id", focused.id).order("position"),
+        supabase
+          .from("mod_items")
+          .select("*, linked_listing:listings!mod_items_linked_listing_id_fkey(status)")
+          .eq("car_id", focused.id)
+          .order("position"),
       ])
     : [{ data: null }, { data: null }, { data: null }];
 

@@ -120,24 +120,51 @@ function ModRow({
       media={plate ? { src: mod.imageUrl ?? undefined, alt: "" } : undefined}
       title={name}
       meta={meta ?? undefined}
-      actions={<ModState mod={mod} carId={carId} isOwner={isOwner} />}
+      actions={<ModState mod={mod} carId={carId} isOwner={isOwner} off={off} />}
     />
   );
 }
 
-/** A build line's trailing state: its listing, or the owner's way to make one. */
-function ModState({ mod, carId, isOwner }: { mod: ModLine; carId: string; isOwner: boolean }) {
-  if (mod.listing) {
+/**
+ * A build line's trailing state: its listing's real state, or the owner's way
+ * to make one. Only an active listing says "For sale" — a draft, a reserved
+ * part or a paused one used to claim it too. Drafts, paused and archived
+ * listings are the owner's business, so visitors see nothing for them.
+ */
+function ModState({
+  mod,
+  carId,
+  isOwner,
+  off,
+}: {
+  mod: ModLine;
+  carId: string;
+  isOwner: boolean;
+  off: boolean;
+}) {
+  const listing = mod.listing;
+  if (listing) {
+    if (listing.status === "active") {
+      return (
+        <Link href={`/listings/${listing.id}`} className="chip chip--live">
+          For sale {money(listing.price)}
+        </Link>
+      );
+    }
+    if (listing.status !== "sold" && listing.status !== "reserved" && !isOwner) return null;
     return (
       <Link
-        href={`/listings/${mod.listing.id}`}
-        className={`chip ${mod.listing.status === "sold" ? "chip--spent" : "chip--live"}`}
+        href={listing.status === "draft" ? `/listings/${listing.id}/edit` : `/listings/${listing.id}`}
+        className="chip chip--spent"
       >
-        {mod.listing.status === "sold" ? "Sold" : `For sale ${money(mod.listing.price)}`}
+        {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
       </Link>
     );
   }
-  if (!isOwner) return null;
+  // Selling starts from a part that came off. A fitted part is taken off in
+  // the garage (its List it marks it removed first); a Sell it here left it
+  // fitted and for sale at once.
+  if (!isOwner || !off) return null;
   return (
     <Link href={`/sell?car=${carId}&mod=${mod.id}`} className="relbtn !static">
       Sell it

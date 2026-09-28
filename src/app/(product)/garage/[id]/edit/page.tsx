@@ -34,7 +34,11 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
   const [{ data: images }, { data: mods }, postsResult, { data: hotspots }, { data: profile }] =
     await Promise.all([
       supabase.from("car_images").select("*").eq("car_id", id).order("position"),
-      supabase.from("mod_items").select("*").eq("car_id", id).order("position"),
+      supabase
+        .from("mod_items")
+        .select("*, linked_listing:listings!mod_items_linked_listing_id_fkey(status)")
+        .eq("car_id", id)
+        .order("position"),
       supabase
         .from("activity_posts")
         .select("id, title, intro, body, published_at")

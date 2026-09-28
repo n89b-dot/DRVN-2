@@ -123,6 +123,9 @@ export default async function CarPage({
         .from("activity_posts")
         .select("id, title, body, intro, published_at")
         .eq("car_id", car.id)
+        // Published only — RLS lets the author read their own drafts, which
+        // then counted and listed here with no date (the garage filters too).
+        .not("published_at", "is", null)
         .order("published_at", { ascending: false })
         .limit(50),
       // The marketplace payload of this page. The build page never queried
@@ -132,7 +135,9 @@ export default async function CarPage({
         .from("listings")
         .select("id, title, price_cents, status, created_at")
         .eq("source_car_id", car.id)
-        .in("status", ["active", "sold"])
+        // Reserved is still for sale here, as it is in the garage's count —
+        // a part with a buyer part-way through didn't vanish from both lists.
+        .in("status", ["active", "reserved", "sold"])
         .order("created_at", { ascending: false })
         .limit(50),
     ]);

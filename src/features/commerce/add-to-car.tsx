@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { Button, Dialog } from "@/components/ui";
@@ -21,16 +22,27 @@ export function AddToCar({
   orderItemId,
   title,
   cars,
+  addedTo = null,
 }: {
   orderItemId: string;
   title: string;
   cars: AddToCarTarget[];
+  /** The car this item is already on, when it was added before — the row
+   *  then names it instead of offering the button again. */
+  addedTo?: { name: string; slug: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  if (addedTo) {
+    return (
+      <Link href={`/cars/${addedTo.slug}`} className="jumplink">
+        On {addedTo.name} →
+      </Link>
+    );
+  }
   if (!cars.length) return null;
   if (done) {
     return (
