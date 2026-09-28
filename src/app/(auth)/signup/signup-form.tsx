@@ -12,10 +12,13 @@ export function SignupForm({
   next,
   invite,
   betaEnforced,
+  google = false,
 }: {
   next?: string;
   invite?: string;
   betaEnforced: boolean;
+  /** Google sign-in is switched on in Supabase (lib/auth-providers). */
+  google?: boolean;
 }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(signup, {});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -132,7 +135,7 @@ export function SignupForm({
         </Link>
       </div>
 
-      {!betaEnforced && (
+      {!betaEnforced && google && (
         <div className="mt-6">
           <span className="microlabel">Or use an account you already have</span>
           <div className="mt-3">

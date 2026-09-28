@@ -10,7 +10,16 @@ import { OAuthButton } from "../oauth-button";
 
 const subscribeNever = () => () => {};
 
-export function LoginForm({ next, message }: { next?: string; message?: string }) {
+export function LoginForm({
+  next,
+  message,
+  google = false,
+}: {
+  next?: string;
+  message?: string;
+  /** Google sign-in is switched on in Supabase (lib/auth-providers). */
+  google?: boolean;
+}) {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, {});
   // Controlled values must not replace input entered before hydration.
   const ready = useSyncExternalStore(subscribeNever, () => true, () => false);
@@ -88,12 +97,14 @@ export function LoginForm({ next, message }: { next?: string; message?: string }
         </Link>
       </div>
 
-      <div className="mt-6">
-        <span className="microlabel">Or use an account you already have</span>
-        <div className="mt-3">
-          <OAuthButton next={next} />
+      {google && (
+        <div className="mt-6">
+          <span className="microlabel">Or use an account you already have</span>
+          <div className="mt-3">
+            <OAuthButton next={next} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
