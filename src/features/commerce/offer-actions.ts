@@ -8,6 +8,7 @@ import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import type { CommerceState } from "./action-types";
+import { formatPrice } from "@/lib/payments/fee";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 async function requireUser() {
@@ -74,9 +75,24 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     }
     if (listing.offer_floor_cents && amount < listing.offer_floor_cents) {
       return {
-        error: `The seller doesn't consider offers below ${(listing.offer_floor_cents / 100).toFixed(2)}.`,
+        error: `The seller doesn't consider offers below ${formatPrice(listing.offer_floor_cents)}.`,
       };
     }
+  }
+
+  // One live offer per buyer per part. Say so plainly instead of letting the
+  // database refuse it into a generic "couldn't confirm" error.
+  const { data: live } = await supabase
+    .from("offers")
+    .select("id")
+    .eq("listing_id", listingId)
+    .eq("buyer_id", user.id)
+    .in("status", ["open", "countered"])
+    .neq("id", offerId)
+    .limit(1)
+    .maybeSingle();
+  if (live) {
+    return { error: "You already have an open offer on this part — find it in Offers." };
   }
 
   const created = await supabase.rpc("create_offer_with_message", {
@@ -89,7 +105,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     reportError("[commerce] atomic offer submission failed", { offerId, error: created.error });
     return {
       error: created.error?.code === "23505"
-        ? "You already have an offer on this part, or this offer changed. Check Orders before trying again."
+        ? "You already have an open offer on this part — find it in Offers."
         : "Couldn't confirm your offer was sent. Try again with the same offer.",
     };
   }
@@ -98,7 +114,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   revalidatePath(`/listings/${listingId}`);
   revalidatePath("/orders");
   revalidatePath("/offers");
-  return { ok: "Offer sent. You'll find it under Orders." };
+  return { ok: "Offer sent — track it in Offers." };
 }
 
 export async function respondToOffer(

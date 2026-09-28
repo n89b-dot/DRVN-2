@@ -206,6 +206,19 @@ export default async function ListingPage({
   // above (user, or ids derived from listing/questions/moreFromSeller), not
   // on each other, so they can also run concurrently.
   const isOwn = user?.id === listing.seller_id;
+  // The viewer's own live offer, so the page points at it instead of
+  // inviting a second one the server would refuse.
+  const { data: myOfferRow } =
+    user && !isOwn
+      ? await supabase
+          .from("offers")
+          .select("id, amount_cents, counter_amount_cents")
+          .eq("listing_id", listing.id)
+          .eq("buyer_id", user.id)
+          .in("status", ["open", "countered"])
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
   const [
     { data: save },
     garageFitment,
@@ -472,6 +485,11 @@ export default async function ListingPage({
                 priceCents={listing.price_cents}
                 shippingCents={listing.shipping_cents}
                 offerFloorCents={listing.offer_floor_cents}
+                myOffer={
+                  myOfferRow
+                    ? { id: myOfferRow.id, amountCents: myOfferRow.amount_cents, counterCents: myOfferRow.counter_amount_cents }
+                    : null
+                }
                 resumeAction={resumeAction}
                 returnPath={detailPath}
               />

@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   existing: vi.fn(),
+  live: vi.fn(),
   listing: vi.fn(),
   rpc: vi.fn(),
   allow: vi.fn(),
@@ -26,7 +27,19 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: mocks.auth },
     from: (table: string) => ({
-      select: () => ({ eq: () => ({ maybeSingle: table === "offers" ? mocks.existing : mocks.listing }) }),
+      // One chain for every read: a single .eq() on offers is the idempotency
+      // lookup by id; more filters on offers is the buyer's live-offer check.
+      select: () => {
+        let filters = 0;
+        const chain = {
+          eq: () => { filters++; return chain; },
+          in: () => { filters++; return chain; },
+          neq: () => chain,
+          limit: () => chain,
+          maybeSingle: () => (table !== "offers" ? mocks.listing() : filters > 1 ? mocks.live() : mocks.existing()),
+        };
+        return chain;
+      },
     }),
     rpc: mocks.rpc,
   }),
@@ -49,6 +62,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue({ data: { user: { id: "buyer-1" } } });
   mocks.existing.mockResolvedValue({ data: null, error: null });
+  mocks.live.mockResolvedValue({ data: null, error: null });
   mocks.listing.mockResolvedValue({ data: {
     seller_id: "seller-1",
     status: "active",
@@ -92,5 +106,12 @@ it("never calls the database mutation without a valid stable identity", async ()
   const data = form();
   data.set("offer_id", "not-a-uuid");
   await expect(makeOffer({}, data)).resolves.toHaveProperty("error");
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it("says so plainly when the buyer already has a live offer on the part", async () => {
+  mocks.live.mockResolvedValue({ data: { id: "other-offer" }, error: null });
+  const result = await makeOffer({}, form());
+  expect(result.error).toBe("You already have an open offer on this part — find it in Offers.");
   expect(mocks.rpc).not.toHaveBeenCalled();
 });

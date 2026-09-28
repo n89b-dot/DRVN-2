@@ -85,7 +85,7 @@ export default async function OffersPage({
   // those had to be fixed at the source (the link builders that emit them).
   if (legacyOfferId) redirect(`/offers/${legacyOfferId}`);
 
-  const role = roleParam === "made" ? "made" : "received";
+  let role: "made" | "received" = roleParam === "made" ? "made" : "received";
   const status = isStatus(statusParam) ? statusParam : undefined;
   // `?listing=<id>` is how the seller's ledger hands a listing over to its
   // canonical offers surface. Ignored unless it's a well-formed id.
@@ -99,6 +99,16 @@ export default async function OffersPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // No explicit tab: someone who has never listed a part only makes offers,
+  // so they open on Made rather than an empty Received.
+  if (roleParam !== "made" && roleParam !== "received") {
+    const { count: listingCount } = await supabase
+      .from("listings")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", user.id);
+    if (!listingCount) role = "made";
+  }
 
   // The listing rides along on the offer row via a join — for "received"
   // that join is also the scope (offers on listings this user sells), which

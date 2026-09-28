@@ -12,6 +12,7 @@ import {
 import {
   AuthIntentDialog,
   Button,
+  ButtonLink,
   Dialog,
   PaymentModeNotice,
   TextField,
@@ -30,11 +31,14 @@ export function PurchaseActions({
   priceCents,
   shippingCents,
   offerFloorCents = null,
+  myOffer = null,
   resumeAction = null,
   returnPath,
 }: {
   /** The seller's lowest acceptable offer, when they set one. */
   offerFloorCents?: number | null;
+  /** The viewer's own live offer on this part, if any. */
+  myOffer?: { id: string; amountCents: number; counterCents: number | null } | null;
   listingId: string;
   isLoggedIn: boolean;
   betaEnforced: boolean;
@@ -203,13 +207,22 @@ export function PurchaseActions({
           {cartPending ? "Adding…" : "Add to cart"}
         </Button>
       )}
-      <Button
-        variant="quiet"
-        onClick={() => guard("offer", () => setOfferOpen(true))}
-        className="self-center"
-      >
-        Make an offer
-      </Button>
+      {myOffer ? (
+        // One live offer per part: point at it rather than offering a second.
+        <ButtonLink variant="quiet" href={`/offers/${myOffer.id}`} className="self-center">
+          {myOffer.counterCents
+            ? `Seller countered ${formatPrice(myOffer.counterCents)} — view offer`
+            : `You offered ${formatPrice(myOffer.amountCents)} — view offer`}
+        </ButtonLink>
+      ) : (
+        <Button
+          variant="quiet"
+          onClick={() => guard("offer", () => setOfferOpen(true))}
+          className="self-center"
+        >
+          Make an offer
+        </Button>
+      )}
       {cartState?.error && (
         <p role="alert" aria-live="polite" className="field__err">
           {cartState.error}
