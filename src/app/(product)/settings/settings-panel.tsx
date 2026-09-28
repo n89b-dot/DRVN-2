@@ -477,8 +477,8 @@ export function SettingsPanel({
           </div>
           <p className="field__hint max-w-[62ch]">
             {paymentsLive
-              ? "Payments run live through Stripe. Stripe Connect payouts plug into the same seam."
-              : "Payments run through a test provider — no money moves yet. Stripe Connect payouts plug into the same seam."}
+              ? "Payments run live through Stripe."
+              : "Test mode — no real money moves yet."}
           </p>
           <div className="mt-3">
             <div className="sheet__row">
@@ -532,9 +532,9 @@ export function SettingsPanel({
             <span className="microlabel microlabel--ink">Delete your account</span>
           </div>
           <p className="field__hint max-w-[62ch]">
-            Deletion removes eligible profile, content, uploads and provider data. Active money
-            obligations place the request on hold. Financial or audit records may require a
-            scrubbed identity and operator review; retention periods still await policy approval.
+            Deleting removes your profile, posts, photos and listings. If you have an order still
+            in progress, deletion waits until it&apos;s settled. Records of past sales are kept
+            without your name where the law requires it.
           </p>
           <div className="mt-4">
             <DeleteAccount />

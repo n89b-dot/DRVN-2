@@ -124,8 +124,10 @@ export default async function LandingPage() {
           }
         >
           <div className="mt-5 flex flex-wrap gap-3">
-            <ButtonLink href={ADD_CAR_HREF} variant="live">
-              Add your car
+            {/* Invite-only: "Add your car" would end at "joining is by
+                invitation", so the first action is one anyone can take. */}
+            <ButtonLink href={betaEnforced ? "/explore" : ADD_CAR_HREF} variant="live">
+              {betaEnforced ? "Explore builds" : "Add your car"}
             </ButtonLink>
             <ButtonLink href="/marketplace">Shop parts</ButtonLink>
           </div>
@@ -335,8 +337,8 @@ export default async function LandingPage() {
               other one later.
             </p>
             <div className="flex flex-wrap gap-3">
-              <ButtonLink href={ADD_CAR_HREF} variant="live">
-                Add your car
+              <ButtonLink href={betaEnforced ? "/explore" : ADD_CAR_HREF} variant="live">
+                {betaEnforced ? "Explore builds" : "Add your car"}
               </ButtonLink>
               <ButtonLink href="/marketplace">Shop parts</ButtonLink>
             </div>
@@ -357,6 +359,22 @@ export default async function LandingPage() {
               {" · "}
               <Link href="/login" className="hover:text-live">
                 Sign in
+              </Link>
+              {" · "}
+              <Link href="/terms" className="hover:text-live">
+                Terms
+              </Link>
+              {" · "}
+              <Link href="/privacy" className="hover:text-live">
+                Privacy
+              </Link>
+              {" · "}
+              <Link href="/fees" className="hover:text-live">
+                Fees
+              </Link>
+              {" · "}
+              <Link href="/protection" className="hover:text-live">
+                Protection
               </Link>
             </>
           }

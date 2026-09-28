@@ -410,6 +410,14 @@ export function LivesheetBar({
                 <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
                 Theme <b>{night ? "Dark" : "Light"}</b>
               </button>
+              {/* Signing out used to live only at the bottom of Settings. */}
+              {signedIn && (
+                <form action="/logout" method="post">
+                  <button type="submit" className="indexlight" tabIndex={open ? undefined : -1}>
+                    Log out
+                  </button>
+                </form>
+              )}
               <Link href={signedIn ? "/sell" : "/signup"} className="btn btn--live" tabIndex={open ? undefined : -1}>
                 {signedIn ? "List a part" : "Join DRVN"}
               </Link>
