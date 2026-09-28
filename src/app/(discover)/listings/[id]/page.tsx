@@ -394,11 +394,20 @@ export default async function ListingPage({
             long description; on desktop it is the right column. */}
         <div className="pdp__rail flex min-w-0 flex-col gap-4 self-start">
           <Rv className="tile" stagger={1}>
-            {listing.status !== "active" && (
+            {listing.status === "reserved" ? (
+              <div className="mb-3">
+                <Badge tone="spent">Reserved</Badge>
+                <p className="mt-1 text-micro text-dim">
+                  {isOwn
+                    ? "A buyer is paying for this. It goes back on sale if the payment doesn't complete."
+                    : "Someone is buying this right now. If the sale doesn't go through, it goes back on sale."}
+                </p>
+              </div>
+            ) : listing.status !== "active" ? (
               <p className="mb-3">
                 <Badge tone="spent">This listing is {listing.status}</Badge>
               </p>
-            )}
+            ) : null}
             {isOwn && listing.status === "active" && (
               <p className="mb-3">
                 <Badge tone="live">Your listing · Live</Badge>

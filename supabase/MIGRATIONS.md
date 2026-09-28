@@ -1,5 +1,18 @@
 # Applying migrations
 
+## September 28 — reserved parts readable on the shared dev project
+
+| File | Applied to |
+|---|---|
+| `20260928150000_reserved_listings_readable.sql` | shared dev project, 2026-09-28 |
+
+'reserved' joins 'active' and 'sold' in the listing read policy and the
+photo, fitment, part-number and Q&A policies that follow it, so a part held
+by a checkout or an accepted offer shows as Reserved instead of a 404. Every
+browse, feed, store and search query already filters to active itself. The
+previous policy definitions are in
+`~/drvn-db-backups/listing-policies-pre-20260928150000.json`.
+
 ## September 28 — duplicate `write_activity_post` removed from the shared dev project
 
 | File | Applied to |
