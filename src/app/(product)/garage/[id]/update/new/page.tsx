@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { normalizeBlocks } from "@/lib/activity-blocks";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { BuildStoryComposer } from "@/features/composer/composer";
 
 import { createRichActivityPost, saveActivityDraft } from "../../../actions";
@@ -19,10 +19,8 @@ export default async function NewUpdatePage({
 }) {
   const { id } = await params;
   const seeds = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const { data: car } = await supabase

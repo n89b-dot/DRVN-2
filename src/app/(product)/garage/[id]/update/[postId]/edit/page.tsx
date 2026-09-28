@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { normalizeBlocks } from "@/lib/activity-blocks";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { PostEditor } from "./post-editor";
 import { updateActivityPost } from "../../../../actions";
@@ -31,10 +31,8 @@ export default async function EditActivityPostPage({
   // post can be corrected without a second copy of this page.
   const carless = carId === NO_CAR;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const { data: post, error } = await supabase

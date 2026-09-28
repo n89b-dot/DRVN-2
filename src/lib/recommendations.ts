@@ -2,6 +2,7 @@ import "server-only";
 
 import type { ListingCardData } from "@/components/ui";
 import { hydrateListingCards } from "@/lib/marketplace/query";
+import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { platformLabel } from "@/lib/vehicles/label";
 
@@ -26,6 +27,27 @@ export async function recommendListings(
   limit = 8
 ): Promise<ListingCardData[]> {
   const admin = createAdminClient();
+  // One statement: `recommend_listings` (migration 20260928121000) runs the
+  // three rules below in the database — the chain here was up to eight
+  // dependent reads. Service-role only, like the reads it replaces.
+  const { data: ranked, error } = await admin.rpc("recommend_listings", { p_user: userId, p_limit: limit });
+  if (!error && ranked) {
+    if (!ranked.length) return [];
+    const cards = await hydrateListingCards(admin, ranked);
+    const reasons = new Map(ranked.map((r) => [r.id, r.reason]));
+    return cards.map((card): ListingCardData => ({ ...card, reason: reasons.get(card.id) ?? null }));
+  }
+  reportError("[recommendations] recommend_listings unavailable, falling back to per-rule reads", error);
+  return recommendListingsByRule(admin, userId, limit);
+}
+
+/** The per-rule reads `recommend_listings` replaced — kept as the fallback
+ *  for a database without that function. */
+async function recommendListingsByRule(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  limit: number
+): Promise<ListingCardData[]> {
   const picks = new Map<string, number>(); // listing_id → score
   const reasons = new Map<string, string>(); // listing_id → why it was picked
 

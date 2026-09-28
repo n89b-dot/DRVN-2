@@ -40,10 +40,28 @@ export type GarageSheet = {
   likes: number;
 };
 
-export async function loadGarageSheets(
+export type GarageCar = {
+  id: string;
+  slug: string;
+  name: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  cover_image_url: string | null;
+  is_public: boolean;
+  created_at: string;
+  trim: string | null;
+  engine: string | null;
+  drivetrain: string | null;
+};
+
+/** The owner's cars, main car first — step one of the garage. Split from
+ *  the measuring so the page can start the focused car's editors as soon as
+ *  it knows which car that is, beside the measuring rather than after it. */
+export async function loadGarageCars(
   supabase: SupabaseClient<Database>,
   ownerId: string
-): Promise<GarageSheet[]> {
+): Promise<GarageCar[]> {
   // P-5: the member's own answer to "which car comes first?", not the
   // accident of which they added first.
   const [{ data: carRows }, { data: profile }] = await Promise.all([
@@ -53,7 +71,22 @@ export async function loadGarageSheets(
       .eq("owner_id", ownerId),
     supabase.from("profiles").select("main_car_id").eq("id", ownerId).maybeSingle(),
   ]);
-  const cars = orderCars(carRows ?? [], profile?.main_car_id);
+  return orderCars(carRows ?? [], profile?.main_car_id);
+}
+
+export async function loadGarageSheets(
+  supabase: SupabaseClient<Database>,
+  ownerId: string
+): Promise<GarageSheet[]> {
+  return measureGarageSheets(supabase, await loadGarageCars(supabase, ownerId));
+}
+
+/** One round over the cars' ids. Open offers and each latest update's cover
+ *  ride along as embeds — they used to be a third, dependent round. */
+export async function measureGarageSheets(
+  supabase: SupabaseClient<Database>,
+  cars: GarageCar[]
+): Promise<GarageSheet[]> {
   if (!cars.length) return [];
   const ids = cars.map((c) => c.id);
 
@@ -71,39 +104,29 @@ export async function loadGarageSheets(
     supabase.from("mod_items").select("car_id").in("car_id", ids).eq("status", "installed"),
     supabase
       .from("activity_posts")
-      .select("id, car_id, title, intro, body, published_at")
+      .select("id, car_id, title, intro, body, published_at, activity_images(url, position)")
       .in("car_id", ids)
       .not("published_at", "is", null)
-      .order("published_at", { ascending: false }),
+      .order("published_at", { ascending: false })
+      .order("position", { referencedTable: "activity_images" })
+      .limit(1, { referencedTable: "activity_images" }),
     supabase
       .from("listings")
-      .select("id, source_car_id, status, price_cents")
+      .select("id, source_car_id, status, price_cents, offers(listing_id)")
       .in("source_car_id", ids)
-      .in("status", ["active", "reserved", "sold"]),
+      .in("status", ["active", "reserved", "sold"])
+      .eq("offers.status", "open"),
     supabase.from("follows").select("target_id").eq("target_type", "car").in("target_id", ids),
     supabase.from("likes").select("target_id").eq("target_type", "car").in("target_id", ids),
   ]);
 
-  // Open offers on the live parts off these cars, and the cover of each
-  // car's latest update — both keyed off the first round.
-  const liveListingIds = (listings ?? []).filter((l) => l.status !== "sold").map((l) => l.id);
-  const latestPostIds = new Map<string, string>();
+  // Open offers count on the live parts off these cars only.
+  const offers = (listings ?? []).filter((l) => l.status !== "sold").flatMap((l) => l.offers ?? []);
   // W-5: a carless post belongs to no car, so it has no place in a garage
   // sheet's "latest update".
-  for (const p of posts ?? [])
-    if (p.car_id && !latestPostIds.has(p.car_id)) latestPostIds.set(p.car_id, p.id);
-  const [{ data: offers }, { data: postImages }] = await Promise.all([
-    liveListingIds.length
-      ? supabase.from("offers").select("listing_id").eq("status", "open").in("listing_id", liveListingIds)
-      : Promise.resolve({ data: [] as { listing_id: string }[] }),
-    latestPostIds.size
-      ? supabase
-          .from("activity_images")
-          .select("post_id, url, position")
-          .in("post_id", [...latestPostIds.values()])
-          .order("position")
-      : Promise.resolve({ data: [] as { post_id: string; url: string; position: number }[] }),
-  ]);
+  const postImages = (posts ?? []).flatMap((p) =>
+    (p.activity_images ?? []).map((img) => ({ post_id: p.id, url: img.url, position: img.position }))
+  );
 
   const count = (rows: { [k: string]: unknown }[] | null, key: string) => {
     const m = new Map<string, number>();

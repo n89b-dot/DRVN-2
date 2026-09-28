@@ -41,7 +41,9 @@ export async function POST(request: Request) {
     // Ledger first: a crash after storage succeeds still leaves a GC candidate.
     const staged = await admin.from("staged_uploads").insert({ owner_id: user.id, bucket, path, url });
     if (staged.error) throw new Error("Staging unavailable");
-    const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false });
+    // Paths are a fresh UUID per upload and never overwritten (upsert: false),
+    // so browsers and the CDN may keep the object for a year.
+    const result = await admin.storage.from(bucket).upload(path, normalized, { contentType: "image/webp", upsert: false, cacheControl: "31536000" });
     if (result.error) throw new Error("Storage unavailable");
     return Response.json({ url, path });
   } catch {

@@ -4509,6 +4509,15 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      feed_hydration: {
+        Args: {
+          p_car_ids: string[]
+          p_listing_ids: string[]
+          p_post_ids: string[]
+          p_viewer?: string
+        }
+        Returns: Json
+      }
       finish_capture_check: {
         Args: { p_reference: string }
         Returns: undefined
@@ -4897,6 +4906,23 @@ export type Database = {
           p_success: boolean
         }
         Returns: Json
+      }
+      recommend_listings: {
+        Args: { p_limit?: number; p_user: string }
+        Returns: {
+          condition: string
+          id: string
+          location: string
+          part_number: string
+          price_cents: number
+          reason: string
+          score: number
+          seller_id: string
+          shipping_cents: number
+          source_car_id: string
+          status: string
+          title: string
+        }[]
       }
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }

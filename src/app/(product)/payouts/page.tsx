@@ -6,7 +6,7 @@ import { getConnectAccountId } from "@/lib/payments/connect";
 import { getSellerLedger } from "@/lib/payments/ledger";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { PayoutSetup } from "../settings/payout-setup";
 import { PayoutsSection } from "../settings/payouts-section";
@@ -20,10 +20,8 @@ export const metadata = { title: "Payouts - DRVN" };
  * embedding a second copy.
  */
 export default async function PayoutsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const [ledger, offersCount, connectAccountId, { data: profile }] = await Promise.all([

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { CarDetailsForm } from "./car-details-form";
 import { GalleryManager } from "./gallery-manager";
@@ -16,10 +16,8 @@ export const metadata = { title: "Manage car - DRVN" };
 
 export default async function CarEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const { data: car } = await supabase

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense, cache } from "react";
 
 import {
   ButtonLink,
   ProfileHeader,
   ShareButton,
+  SkeletonCardGrid,
   ratingLine,
 } from "@/components/ui";
 import { ProfileBody } from "@/components/profile/profile-body";
@@ -17,19 +19,24 @@ import { reportError } from "@/lib/monitoring";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
 import { profileBannerUrl } from "@/lib/cars/banner";
 
+/** One profile read per request, shared by the metadata and the page (they
+ *  each used to fetch it). React's cache is per render, never cross-user. */
+const loadProfileByUsername = cache(async (username: string) => {
+  const supabase = await createClient();
+  return supabase
+    .from("profiles")
+    .select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, main_car_id, store_note, created_at, updated_at")
+    .eq("username", username)
+    .maybeSingle();
+});
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ username: string }>;
 }): Promise<Metadata> {
   const { username } = await params;
-  const supabase = await createClient();
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, username, headline, bio, avatar_url")
-    .eq("username", username)
-    .maybeSingle();
+  const { data: profile } = await loadProfileByUsername(username);
 
   if (!profile) return { title: "Profile not found - DRVN" };
 
@@ -94,11 +101,7 @@ export default async function PublicProfilePage({
   const updatesPage = Math.max(1, Number(updatesPageParam) || 1);
   const supabase = await createClient();
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, username, display_name, headline, bio, location, links, avatar_url, profile_type, notification_prefs, payouts_enabled, main_car_id, store_note, created_at, updated_at")
-    .eq("username", username)
-    .maybeSingle();
+  const [{ data: profile, error }, user] = await Promise.all([loadProfileByUsername(username), getViewer()]);
 
   if (error) {
     reportError("[profile] failed to load", { username, error });
@@ -106,57 +109,55 @@ export default async function PublicProfilePage({
   }
   if (!profile) notFound();
 
-  const user = await getViewer();
-
-  let isFollowing = false;
-  if (user) {
-    const { data: follow } = await supabase
-      .from("follows")
-      .select("target_id")
-      .eq("follower_id", user.id)
-      .eq("target_type", "profile")
-      .eq("target_id", profile.id)
-      .maybeSingle();
-    isFollowing = Boolean(follow);
-  }
-
-  const view = await loadProfileView(supabase, profile.id, {
-    publicOnly: true,
-    listingsPage,
-    reviewsPage,
+  // Everything else needs only the profile id, so it goes out together —
+  // these were five more steps in a row after the profile view.
+  const isShop = profile.profile_type === "shop";
+  const [followRes, view, partsForSale, { data: bannerCars }, { data: shopProfile }] = await Promise.all([
+    user
+      ? supabase
+          .from("follows")
+          .select("target_id")
+          .eq("follower_id", user.id)
+          .eq("target_type", "profile")
+          .eq("target_id", profile.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    loadProfileView(supabase, profile.id, {
+      publicOnly: true,
+      listingsPage,
+      reviewsPage,
       updatesPage,
-  });
+    }),
+    // The number on the Parts tab is what is FOR SALE — not the page's
+    // total, which on "All" counts sold parts and, for the owner, drafts.
+    forSaleCount(supabase, profile.id),
+    // P-1: the banner is a car's cover, borrowed — never a separate upload.
+    supabase
+      .from("cars")
+      .select("id, created_at, is_public, cover_image_url")
+      .eq("owner_id", profile.id)
+      .eq("is_public", true),
+    // Shop context (0056): same account, storefront emphasis — a shop opens
+    // on For Sale, and the verified badge is admin-granted state, never
+    // self-declaration.
+    isShop
+      ? supabase
+          .from("shop_profiles")
+          .select("verification_status, returns_accepted, return_window_days")
+          .eq("profile_id", profile.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const isFollowing = Boolean(followRes.data);
   // P-6. The store runs its own query: it shows SOLD parts, which the
   // marketplace never does, and the allowed statuses come from who is
   // looking rather than from the URL.
   const isOwner = user?.id === profile.id;
-  // The number on the Parts tab is what is FOR SALE — not the page's total,
-  // which on "All" counts sold parts and, for the owner, drafts.
-  const partsForSale = await forSaleCount(supabase, profile.id);
-
-  // P-1: the banner is a car's cover, borrowed — never a separate upload.
-  const { data: bannerCars } = await supabase
-    .from("cars")
-    .select("id, created_at, is_public, cover_image_url")
-    .eq("owner_id", profile.id)
-    .eq("is_public", true);
   const bannerUrl = profileBannerUrl(bannerCars ?? [], profile.main_car_id);
 
   const { website, rest } = splitLinks(profile.links);
   const name = profile.display_name ?? `@${profile.username}`;
   const trustLine = ratingLine(view.rating, view.reviewCount);
-
-  // Shop context (0056): same account, storefront emphasis — a shop opens on
-  // For Sale, and the verified badge is admin-granted state, never
-  // self-declaration.
-  const isShop = profile.profile_type === "shop";
-  const { data: shopProfile } = isShop
-    ? await supabase
-        .from("shop_profiles")
-        .select("verification_status, returns_accepted, return_window_days")
-        .eq("profile_id", profile.id)
-        .maybeSingle()
-    : { data: null };
   const verifiedShop = shopProfile?.verification_status === "verified";
 
   return (
@@ -244,15 +245,18 @@ export default async function PublicProfilePage({
         storeNote={profile.store_note}
         partsCount={partsForSale}
         partsPanel={
-          <StorePanel
-            supabase={supabase}
-            sellerId={profile.id}
-            isOwner={isOwner}
-            viewerId={user?.id ?? null}
-            basePath={`/u/${profile.username}`}
-            tab={storeTab}
-            page={listingsPage}
-          />
+          // Streams in after the page: the store runs its own two queries.
+          <Suspense fallback={<SkeletonCardGrid label="Loading parts" cards={4} />}>
+            <StorePanel
+              supabase={supabase}
+              sellerId={profile.id}
+              isOwner={isOwner}
+              viewerId={user?.id ?? null}
+              basePath={`/u/${profile.username}`}
+              tab={storeTab}
+              page={listingsPage}
+            />
+          </Suspense>
         }
       />
       {user?.id !== profile.id && (

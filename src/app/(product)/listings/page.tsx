@@ -8,7 +8,7 @@ import type {
   SellerRegisterTally,
 } from "@/lib/database.types";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import {
   ListingsLedger,
@@ -123,10 +123,8 @@ export default async function SellerListingsPage({
     SORTS.find((s) => s.key === sortParam)?.key ?? "top_offer";
   const page = Math.max(1, Number(pageParam) || 1);
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const fetchStats = (forPage: number) =>

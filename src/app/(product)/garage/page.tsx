@@ -6,7 +6,7 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { AddCarForm } from "./add-car-form";
-import { loadGarageSheets } from "./garage-data";
+import { loadGarageCars, measureGarageSheets } from "./garage-data";
 import { GarageSheetCard } from "./garage-sheet";
 import { GarageSwitcher } from "./garage-switcher";
 import { FocusedCar } from "./focused-car";
@@ -31,34 +31,38 @@ export default async function GaragePage({
   const supabase = await createClient();
   const user = await getViewer();
 
-  const sheets = await loadGarageSheets(supabase, user!.id);
+  const cars = await loadGarageCars(supabase, user!.id);
   // G-1: `?car=` focuses one car; without it the garage is the list it has
   // always been. An unknown id falls back to the list rather than a 404 —
   // a stale link from a deleted car should land somewhere useful.
-  // The garage opens on the main car (sheets arrive main-first). "All cars"
+  // The garage opens on the main car (cars arrive main-first). "All cars"
   // is `?car=all` — a destination you choose, not the default.
-  const focused =
-    carParam === "all" ? undefined : (sheets.find((s) => s.id === carParam) ?? sheets[0]);
+  const focusedId = carParam === "all" ? undefined : (cars.find((c) => c.id === carParam) ?? cars[0])?.id;
 
   // G-3: the focused car's mods and photos are edited here, in place — the
   // same editors the full car page mounts, given the same rows. Loaded only
-  // when a car is focused; the list view needs none of it.
-  const [{ data: focusedCar }, { data: focusedImages }, { data: focusedMods }] = focused
-    ? await Promise.all([
-        supabase
-          .from("cars")
-          .select("id, cover_image_url, cover_focal_x, cover_focal_y")
-          .eq("id", focused.id)
-          .eq("owner_id", user!.id)
-          .maybeSingle(),
-        supabase.from("car_images").select("*").eq("car_id", focused.id).order("position"),
-        supabase
-          .from("mod_items")
-          .select("*, linked_listing:listings!mod_items_linked_listing_id_fkey(status)")
-          .eq("car_id", focused.id)
-          .order("position"),
-      ])
-    : [{ data: null }, { data: null }, { data: null }];
+  // when a car is focused (the list view needs none of it), and beside the
+  // sheets' measuring rather than after it.
+  const [sheets, [{ data: focusedCar }, { data: focusedImages }, { data: focusedMods }]] = await Promise.all([
+    measureGarageSheets(supabase, cars),
+    focusedId
+      ? Promise.all([
+          supabase
+            .from("cars")
+            .select("id, cover_image_url, cover_focal_x, cover_focal_y")
+            .eq("id", focusedId)
+            .eq("owner_id", user!.id)
+            .maybeSingle(),
+          supabase.from("car_images").select("*").eq("car_id", focusedId).order("position"),
+          supabase
+            .from("mod_items")
+            .select("*, linked_listing:listings!mod_items_linked_listing_id_fkey(status)")
+            .eq("car_id", focusedId)
+            .order("position"),
+        ])
+      : Promise.resolve([{ data: null }, { data: null }, { data: null }] as const),
+  ]);
+  const focused = focusedId ? sheets.find((s) => s.id === focusedId) : undefined;
 
   // The garage's own tally — what the whole drawer has done.
   const totals = sheets.reduce(

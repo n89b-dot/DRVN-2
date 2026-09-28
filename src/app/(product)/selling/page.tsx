@@ -15,7 +15,7 @@ import { formatPrice } from "@/lib/payments/fee";
 import { getSellerLedger } from "@/lib/payments/ledger";
 import { sellerCanPublish } from "@/lib/payments/connect";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 import { Countdown, LiveDim } from "@/components/livesheet";
 
@@ -31,10 +31,8 @@ const money = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { m
  * where sellers operate.
  */
 export default async function SellingPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const [offersCount, tallyRes, questionsRes, toShipRes, ledger, canPublish, soonestRes, viewRes, recentRes] = await Promise.all([

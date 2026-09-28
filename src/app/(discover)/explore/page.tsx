@@ -20,6 +20,7 @@ import {
 } from "@/lib/explore/search/query";
 import { FEED_TABS, fetchFeed, resolveFeedTab, type FeedTab } from "@/lib/feed";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { createPublicClient } from "@/lib/supabase/public";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
 import { ActiveSearchFilters } from "./active-search-filters";
@@ -74,10 +75,25 @@ export default async function ExplorePage({
   // E-4's two breakers, each with its own query. They render only when they
   // have enough to show, which the components decide — so a quiet week
   // simply has no breakers rather than two empty shells.
+  // Browse mode: page one of the feed renders here; the wall pulls the rest.
+  // Started now so it runs beside the breakers — it used to wait for them.
+  const feedPromise = searching || showBuilders
+    ? Promise.resolve(null)
+    : fetchFeed(supabase, tab, {
+        page: 1,
+        viewerId,
+        // The mixed wall leaves your own things out (see loadFeedPage).
+        excludeOwnerId: tab === "all" ? viewerId : null,
+      });
   const [{ data: trendingRows }, { data: builderRows }] = searching
     ? [{ data: [] }, { data: [] }]
     : await Promise.all([
-        supabase.rpc("trending_models", { p_days: 45, p_limit: 10 }),
+        // The same for every visitor, so it is cached for five minutes
+        // rather than aggregated on each view.
+        createPublicClient({ revalidate: 300, tags: ["explore-trending"] }).rpc("trending_models", {
+          p_days: 45,
+          p_limit: 10,
+        }),
         supabase.rpc("suggested_builders", {
           p_viewer: viewerId ?? undefined,
           p_limit: showBuilders ? 24 : 8,
@@ -108,15 +124,7 @@ export default async function ExplorePage({
       .join(" · "),
   }));
 
-  // Browse mode: page one of the feed renders here; the wall pulls the rest.
-  const feed = searching || showBuilders
-    ? null
-    : await fetchFeed(supabase, tab, {
-        page: 1,
-        viewerId,
-        // The mixed wall leaves your own things out (see loadFeedPage).
-        excludeOwnerId: tab === "all" ? viewerId : null,
-      });
+  const feed = await feedPromise;
 
   // Search mode: one scope's worth of work, nothing speculative.
   const partsPageNum = Math.max(1, Number(raw.page) || 1);

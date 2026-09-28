@@ -54,7 +54,10 @@ export function Gallery({
           alt={hero.alt ?? label}
           fill
           sizes={sizes}
-          priority={clampedActive === 0}
+          // `priority` is deprecated in Next 16; the first hero is the
+          // listing page's largest paint, so it loads eagerly at high priority.
+          loading={clampedActive === 0 ? "eager" : "lazy"}
+          fetchPriority={clampedActive === 0 ? "high" : undefined}
           className="object-cover"
         />
       </button>

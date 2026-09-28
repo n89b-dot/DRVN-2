@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { OrderPipeline } from "@/components/commerce";
 import {
@@ -116,10 +116,8 @@ export default async function OrdersPage({
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   // Orders sits in the Selling family, so with no explicit view a seller
@@ -145,7 +143,12 @@ export default async function OrdersPage({
   // parallel round instead of orders → items → counts in series.
   let ordersQuery = supabase
     .from("orders")
-    .select("*, order_items(*)", { count: "exact" })
+    // Counterparty names, listing titles and each item's frozen photo ride
+    // along as embeds — they were a second, dependent round.
+    .select(
+      "*, buyer:profiles!orders_buyer_id_fkey(id, display_name, username), seller:profiles!orders_seller_id_fkey(id, display_name, username), order_items(*, listings(id, title), order_item_snapshot_images(url, position))",
+      { count: "exact" }
+    )
     .eq(roleColumn, user.id);
   if (rawStatus) ordersQuery = ordersQuery.eq("status", rawStatus);
   else if (state)
@@ -168,6 +171,7 @@ export default async function OrdersPage({
   ] = await Promise.all([
     ordersQuery
       .order("created_at", { ascending: false })
+      .order("position", { referencedTable: "order_items.order_item_snapshot_images" })
       .range(from, from + PAGE_SIZE - 1),
     loadOffersNeedingAttention(supabase, user.id),
     supabase
@@ -191,41 +195,15 @@ export default async function OrdersPage({
   const rows = orders ?? [];
   const items = rows.flatMap((o) => o.order_items ?? []);
 
-  const listingIds = [
-    ...new Set(
-      (items ?? [])
-        .map((i) => i.listing_id)
-        .filter((x): x is string => Boolean(x)),
-    ),
-  ];
-  const counterpartyIds = [
-    ...new Set(rows.flatMap((o) => [o.buyer_id, o.seller_id])),
-  ].filter((x): x is string => Boolean(x) && x !== user.id);
-
-  const itemIds = items.map((i) => i.id);
-  const [{ data: people }, { data: listingTitles }, { data: frozenImages }] = await Promise.all([
-    counterpartyIds.length
-      ? supabase
-          .from("profiles")
-          .select("id, display_name, username")
-          .in("id", counterpartyIds)
-      : Promise.resolve({ data: [] }),
-    listingIds.length
-      ? supabase.from("listings").select("id, title").in("id", listingIds)
-      : Promise.resolve({ data: [] }),
-    // The part's photo as it was bought (0049's frozen gallery) — a seller
-    // picking the right part off the shelf goes by the picture.
-    itemIds.length
-      ? supabase
-          .from("order_item_snapshot_images")
-          .select("order_item_id, url, position")
-          .in("order_item_id", itemIds)
-          .order("position")
-      : Promise.resolve({ data: [] }),
-  ]);
+  // The embedded rows, keyed the way the row renderer looks them up.
+  const people = rows.flatMap((o) => [o.buyer, o.seller]).filter((p): p is NonNullable<typeof p> => Boolean(p));
+  const listingTitles = items.flatMap((i) => (i.listings ? [i.listings] : []));
+  // The part's photo as it was bought (0049's frozen gallery) — a seller
+  // picking the right part off the shelf goes by the picture.
   const coverByItem = new Map<string, string>();
-  for (const img of frozenImages ?? []) {
-    if (!coverByItem.has(img.order_item_id)) coverByItem.set(img.order_item_id, img.url);
+  for (const item of items) {
+    const first = item.order_item_snapshot_images?.[0];
+    if (first) coverByItem.set(item.id, first.url);
   }
 
   const name = (pid: string | null, fallback?: string | null) => {

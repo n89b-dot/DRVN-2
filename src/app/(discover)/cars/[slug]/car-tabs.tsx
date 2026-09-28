@@ -10,6 +10,7 @@ import {
   EmptyState,
   ObjectRow,
   GalleryLightbox,
+  Media,
   SheetTabs,
   VehicleGallery,
   type GalleryImage,
@@ -376,8 +377,11 @@ export function CarTabs({
                   <span className="thumbs !mt-2">
                     {post.gallery.slice(0, 4).map((g, i) => (
                       <span key={i} className="thumb">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={g.url} alt={g.alt ?? post.title} />
+                        {/* Through the resizer: a raw <img> here shipped the
+                            full-size original (≈470 KB each) for a ~120px
+                            thumbnail, and React hoisted it into a head
+                            preload even while this tab was hidden. */}
+                        <Media src={g.url} alt={g.alt ?? post.title} className="h-full w-full" role="thumb" />
                       </span>
                     ))}
                   </span>

@@ -376,6 +376,10 @@ export function LivesheetBar({
                     style={{ ["--i" as string]: i }}
                     aria-current={here ? "page" : undefined}
                     tabIndex={open ? undefined : -1}
+                    // The closed index still sits in the DOM, so every row was
+                    // viewport-prefetched on every page view, doubling what the
+                    // rail already prefetches. Rows prefetch once it is open.
+                    prefetch={open ? null : false}
                   >
                     <span className="indexrow__ico" aria-hidden="true">
                       <Icon name={entry.icon} className="h-[18px] w-[18px]" />

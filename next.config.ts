@@ -40,6 +40,21 @@ const nextConfig: NextConfig = {
       ? [{ protocol: isolatedLocal ? "http" : "https", hostname: host, port: isolatedLocal ? "54321" : "", pathname: "/storage/v1/object/public/**" }]
       : [],
     formats: ["image/avif", "image/webp"],
+    // Storage paths are content-unique (UUID per upload) and never rewritten,
+    // so a resized variant can live a month. The 4-hour default forced the
+    // slow AVIF re-encode (0.6–1 s per image) again every four hours.
+    minimumCacheTTL: 2678400,
+    // Uploads are capped at 2560px (src/lib/media-upload.ts), so a 3840px
+    // variant is an upscale nobody needs — and the slowest encode there is.
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 2560],
+  },
+
+  experimental: {
+    // Revisiting a page by link within 30 s reuses the client's copy instead
+    // of re-rendering it on the server. Server actions that revalidate still
+    // clear it, so edits show straight away; passive data (badge counts, feed
+    // order) can be up to 30 s old on a quick return.
+    staleTimes: { dynamic: 30 },
   },
 
   async headers() {

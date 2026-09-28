@@ -1,7 +1,6 @@
 "use client";
 
 import { recordStagedUpload } from "@/lib/media-staging";
-import { createClient } from "@/lib/supabase/client";
 
 /**
  * The one image-upload loop. Four surfaces (Sell photos, Garage gallery,
@@ -80,7 +79,6 @@ export async function uploadImages({
   /** Run normalizePublicPhoto first (public photography only — never evidence). */
   normalize?: boolean;
 }): Promise<UploadImagesResult> {
-  const supabase = createClient();
   const uploaded: UploadedImage[] = [];
   const failed: UploadFailure[] = [];
   const maxMb = Math.round(maxBytes / (1024 * 1024));
@@ -111,6 +109,11 @@ export async function uploadImages({
       }
       continue;
     }
+    // Only private buckets upload straight from the browser. The client is
+    // loaded here, on demand, so every page that merely offers a public photo
+    // upload (Home's quick post, garage, profile) doesn't ship supabase-js.
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
     const ext = file.name.split(".").pop() ?? "jpg";
     const path = `${pathPrefix}/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage

@@ -146,13 +146,20 @@ export default async function CarPage({
   const postIds = (posts ?? []).map(p => p.id);
   const linkedListingIds = (mods ?? []).map(m => m.linked_listing_id).filter((id): id is string => Boolean(id));
   const releasedIds = (released ?? []).map(l => l.id);
-  const [{ data: save }, { data: follow }, { data: postImages }, { data: linkedListings }, { data: listingImages }, { data: hotspots }] = await Promise.all([
+  const [{ data: save }, { data: follow }, { data: postImages }, { data: linkedListings }, { data: listingImages }, { data: hotspots }, provenance] = await Promise.all([
     user ? supabase.from("saves").select("target_id").eq("user_id", user.id).eq("target_type", "car").eq("target_id", car.id).maybeSingle() : Promise.resolve({ data: null }),
     user ? supabase.from("follows").select("target_id").eq("follower_id", user.id).eq("target_type", "car").eq("target_id", car.id).maybeSingle() : Promise.resolve({ data: null }),
     postIds.length ? supabase.from("activity_images").select("post_id, url, alt, position").in("post_id", postIds).order("position") : Promise.resolve({ data: [] }),
     linkedListingIds.length ? supabase.from("listings").select("id, price_cents, status").in("id", linkedListingIds) : Promise.resolve({ data: [] }),
     releasedIds.length ? supabase.from("listing_images").select("listing_id, url, position").in("listing_id", releasedIds).order("position") : Promise.resolve({ data: [] }),
     supabase.from("car_hotspots").select("id, image_url, x, y, mod_item_id, label").eq("car_id", car.id).order("created_at"),
+    // C-1: "Bought on DRVN · off {car}", read back from the frozen purchase
+    // record so a source build that has since gone private stops being
+    // named. Needs only the mod rows, so it rides this round.
+    fetchModProvenance(
+      supabase,
+      (mods ?? []).flatMap((m) => (m.source_order_item_id ? [m.source_order_item_id] : []))
+    ),
   ]);
   const isSaved = Boolean(save);
   const isFollowing = Boolean(follow);
@@ -188,12 +195,6 @@ export default async function CarPage({
     return { id: found.id, price: formatPrice(found.price_cents), status: found.status };
   };
 
-  // C-1: "Bought on DRVN · off {car}", read back from the frozen purchase
-  // record so a source build that has since gone private stops being named.
-  const provenance = await fetchModProvenance(
-    supabase,
-    (mods ?? []).flatMap((m) => (m.source_order_item_id ? [m.source_order_item_id] : []))
-  );
   const boughtLine = (m: { source_order_item_id: string | null }) => {
     const found = m.source_order_item_id ? provenance.get(m.source_order_item_id) : undefined;
     return found ?? null;
@@ -376,7 +377,7 @@ export default async function CarPage({
       </Rv>
 
       {car.cover_image_url && (
-        <Rv className="hero-media carhero mb-6">
+        <Rv className="hero-media carhero mb-6" immediate>
           <Media
             src={car.cover_image_url}
             alt={car.name}

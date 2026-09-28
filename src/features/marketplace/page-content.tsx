@@ -15,6 +15,7 @@ import { VehicleControl } from "./vehicle-control";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 import { SaveSearchButton } from "./save-search-button";
 import { orderCars } from "@/lib/cars/order";
+import { createPublicClient } from "@/lib/supabase/public";
 
 /** Every marketplace route composes the same controls and result states. */
 export async function MarketplacePageContent({ raw, categorySlug, subcategorySlug }: {
@@ -59,9 +60,12 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   const pagePromise = fetchListings(supabase, filters, user?.id, { garage: garagePromise, selection: vehiclePromise });
   // M-6's facet: the brands that actually have parts live, so the field
   // suggests what exists rather than a hardcoded list that goes stale.
-  const brandPromise = Promise.resolve(supabase.rpc("marketplace_brand_counts"))
+  // Both counts are the same for every shopper, so they come through a
+  // one-minute cache instead of being grouped on every view.
+  const countsClient = createPublicClient({ revalidate: 60, tags: ["marketplace-counts"] });
+  const brandPromise = Promise.resolve(countsClient.rpc("marketplace_brand_counts"))
     .then(({ data, error }) => (error ? [] : ((data ?? []) as { brand: string; total: number }[])));
-  const categoryPromise = Promise.resolve(supabase.rpc("marketplace_category_counts")).then(categoryResult => categoryResult.error ? undefined : (categoryResult.data ?? []).reduce<Record<string, number>>((counts, row) => {
+  const categoryPromise = Promise.resolve(countsClient.rpc("marketplace_category_counts")).then(categoryResult => categoryResult.error ? undefined : (categoryResult.data ?? []).reduce<Record<string, number>>((counts, row) => {
     counts[row.category] = (counts[row.category] ?? 0) + Number(row.total);
     if (row.subcategory) counts[`${row.category}/${row.subcategory}`] = Number(row.total);
     counts.all = (counts.all ?? 0) + Number(row.total);

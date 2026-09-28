@@ -5,7 +5,7 @@ import { Rv } from "@/components/livesheet";
 import { Alert, ButtonLink, Foot, Media, PageHead } from "@/components/ui";
 import { formatPrice } from "@/lib/payments/fee";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 import {
   fulfillmentProfileReady,
@@ -31,10 +31,8 @@ export default async function EditListingPage({
   const { id } = await params;
   const { saved } = await searchParams;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const { data: listing, error } = await supabase

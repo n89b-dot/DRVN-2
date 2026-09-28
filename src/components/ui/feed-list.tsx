@@ -96,7 +96,17 @@ function describe(item: FeedItem): Row {
  * - `rows` — the ruled list: a 112×84 plate beside the text, the kind chip at
  *   the end. For narrow contexts where a photo column would be too loud.
  */
-export function FeedList({ items, variant = "rows" }: { items: FeedItem[]; variant?: "rows" | "cards" }) {
+export function FeedList({
+  items,
+  variant = "rows",
+  eagerFirst = false,
+}: {
+  items: FeedItem[];
+  variant?: "rows" | "cards";
+  /** The list leads the page (Home's first cards): load the first card's
+   *  photo eagerly at high priority, since it is the page's largest paint. */
+  eagerFirst?: boolean;
+}) {
   if (!items.length) {
     return (
       <div className="undrawn">
@@ -114,10 +124,16 @@ export function FeedList({ items, variant = "rows" }: { items: FeedItem[]; varia
   if (variant === "cards") {
     return (
       <div className="feedcards">
-        {rows.map((row) => (
+        {rows.map((row, i) => (
           <Link key={row.key} href={row.href} className="feedcard">
             <span className="feedcard__img" aria-hidden="true">
-              <Media src={row.cover ?? undefined} alt="" className="h-full w-full" role="feature" />
+              <Media
+                src={row.cover ?? undefined}
+                alt=""
+                className="h-full w-full"
+                role="feature"
+                eager={eagerFirst && i === 0}
+              />
             </span>
             <span className="feedcard__body">
               <KindBadge kind={row.kind} className="feedcard__kind" />

@@ -11,9 +11,11 @@ export async function loadFeedPage(
   page: number
 ): Promise<{ items: FeedItem[]; hasMore: boolean }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verified locally against the project's signing keys (getClaims), not a
+  // round trip to the auth server on every scroll. Row-level security still
+  // checks each query below.
+  const { data: verified } = await supabase.auth.getClaims();
+  const user = typeof verified?.claims.sub === "string" && verified.claims.sub ? { id: verified.claims.sub } : null;
   const feed = await fetchFeed(supabase, tab, {
     page: Math.max(1, page),
     viewerId: user?.id ?? null,
@@ -36,9 +38,11 @@ export async function loadSearchPage(
   page: number
 ): Promise<{ items: FeedItem[]; hasMore: boolean }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verified locally against the project's signing keys (getClaims), not a
+  // round trip to the auth server on every scroll. Row-level security still
+  // checks each query below.
+  const { data: verified } = await supabase.auth.getClaims();
+  const user = typeof verified?.claims.sub === "string" && verified.claims.sub ? { id: verified.claims.sub } : null;
   const params = parseExploreSearch(raw, tab);
   const search = tab === "cars" ? searchBuilds : searchUpdates;
   const result = await search(supabase, params, {

@@ -180,7 +180,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     status: "active",
     description:
       "Livesheet spring reveal, staggered per index, reduced-motion safe. Motion for React drives the animation (shared `reveal` recipe from `src/lib/motion`).",
-    use: "Entry reveal on page heads, tiles, cards.",
+    use: "Entry reveal on page heads, tiles, cards. Pass `immediate` around a page's leading media (hero, first feed card) so it renders settled — a hidden hero delays the largest paint.",
     a11y: "Skips animation under prefers-reduced-motion; failsafe guarantees content never stays hidden.",
   },
   {
@@ -1372,7 +1372,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     category: "row",
     status: "active",
     description: "Home's feed over one description per item: `cards` (photo-first, Home's column) or `rows` (dense `.order`-based rows).",
-    use: "Home feeds — `cards` for the main column, `rows` where a photo column would be too loud.",
+    use: "Home feeds — `cards` for the main column, `rows` where a photo column would be too loud. Pass `eagerFirst` when the list leads the page so its first photo loads at high priority.",
     avoid: "Browse surfaces — that's the mosaic family.",
     variants: ["cards", "rows"],
     cssRecipe: ".feedcards / .feedcard; .feedrow on .order",

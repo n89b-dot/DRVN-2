@@ -12,7 +12,7 @@ import {
   Pagination,
   TileHead,
 } from "@/components/ui";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 
 import { OfferListRow, type OfferListItem } from "./offer-list-row";
@@ -94,10 +94,8 @@ export default async function OffersPage({
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   // No explicit tab: someone who has never listed a part only makes offers,

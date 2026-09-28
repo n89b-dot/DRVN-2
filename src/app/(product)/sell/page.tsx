@@ -18,7 +18,7 @@ import {
 } from "@/features/commerce/fulfillment";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 
 import { SellForm, type SellFormInitialValues } from "./sell-form";
@@ -112,16 +112,24 @@ export default async function SellPage({
 }) {
   const { car: carParam, mod: modParam, import: importParam } = await searchParams;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
-  const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return <SellerAccessNotice />;
-
-  const [{ data: cars, error }, makes, canPublish, fulfillment] = await Promise.all([
+  // One parallel round. The access check, the form's data, the import under
+  // review and the pre-fill mod line used to load in up to six steps.
+  const [
+    betaAccess,
+    { data: cars, error },
+    makes,
+    canPublish,
+    fulfillment,
+    { data: sellerProfile },
+    { data: offerFloorPct },
+    { data: importRow },
+    { data: prefillMod },
+  ] = await Promise.all([
+    getBetaAccess(user.id, "seller"),
     supabase
       .from("cars")
       .select("id, name, make, model, year, created_at")
@@ -132,7 +140,43 @@ export default async function SellPage({
     // re-checks on publish either way.
     sellerCanPublish(user.id).catch(() => true),
     loadFulfillmentProfile(user.id).catch(() => null),
+    // P-5: main car first, so the picker's default is the car the seller
+    // actually means rather than whichever they added first.
+    supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle(),
+    // P-9: no client select grant on the floor; see `my_default_offer_floor`.
+    supabase.rpc("my_default_offer_floor"),
+    importParam
+      ? createAdminClient()
+          .from("listing_imports")
+          .select("*")
+          .eq("id", importParam)
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Fetched against the requested car now; only used below once that car
+    // is confirmed to be this seller's own.
+    //
+    // Unfiltered by status: selling a part is what usually FOLLOWS taking
+    // it off, so a removed line is the normal case here, not the exception.
+    //
+    // L-4: `image_url` is deliberately NOT selected. A link-added mod
+    // carries the shop's own product photo, and that photo must never
+    // become a listing photo — it shows a new part in a studio, not the
+    // used one in this seller's garage, and it isn't theirs to republish.
+    // The seller photographs what they are actually selling. Not selecting
+    // the column is the guard: there is nothing here to pass along by
+    // accident, and `sell-form-prefill.test.ts` holds that line.
+    carParam && modParam
+      ? supabase
+          .from("mod_items")
+          .select("id, brand, product, raw_text, category, confidence, part_number, car_id, linked_listing_id")
+          .eq("id", modParam)
+          .eq("car_id", carParam)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  if (!betaAccess.eligible) return <SellerAccessNotice />;
+
   const drvnShipping = {
     enabled: integratedShippingEnabled(),
     profileReady: fulfillmentProfileReady(fulfillment),
@@ -143,13 +187,6 @@ export default async function SellPage({
   let initialValues: SellFormInitialValues | undefined;
 
   if (importParam) {
-    const admin = createAdminClient();
-    const { data: importRow } = await admin
-      .from("listing_imports")
-      .select("*")
-      .eq("id", importParam)
-      .eq("user_id", user.id)
-      .maybeSingle();
     if (!importRow) redirect("/sell/import");
     if (importRow.status === "consumed" && importRow.listing_id) {
       redirect(`/listings/${importRow.listing_id}/edit`);
@@ -164,15 +201,6 @@ export default async function SellPage({
   }
 
   // Only honour the pre-fill if this really is the seller's own car.
-  // P-5: main car first, so the picker's default is the car the seller
-  // actually means rather than whichever they added first.
-  const { data: sellerProfile } = await supabase
-    .from("profiles")
-    .select("main_car_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  // P-9: no client select grant on the floor; see `my_default_offer_floor`.
-  const { data: offerFloorPct } = await supabase.rpc("my_default_offer_floor");
   const orderedCars = orderCars(cars ?? [], sellerProfile?.main_car_id);
   const sourceCar = carParam ? orderedCars.find((c) => c.id === carParam) : undefined;
 
@@ -180,22 +208,7 @@ export default async function SellPage({
     initialValues = { origin: "garage", carId: sourceCar.id };
 
     if (modParam) {
-      // Unfiltered by status: selling a part is what usually FOLLOWS taking
-      // it off, so a removed line is the normal case here, not the exception.
-      //
-      // L-4: `image_url` is deliberately NOT selected. A link-added mod
-      // carries the shop's own product photo, and that photo must never
-      // become a listing photo — it shows a new part in a studio, not the
-      // used one in this seller's garage, and it isn't theirs to republish.
-      // The seller photographs what they are actually selling. Not selecting
-      // the column is the guard: there is nothing here to pass along by
-      // accident, and `sell-form-prefill.test.ts` holds that line.
-      const { data: mod } = await supabase
-        .from("mod_items")
-        .select("id, brand, product, raw_text, category, confidence, part_number, car_id, linked_listing_id")
-        .eq("id", modParam)
-        .eq("car_id", sourceCar.id)
-        .maybeSingle();
+      const mod = prefillMod;
 
       // A-1: a line that already has a listing — a draft counts — opens that
       // listing. Starting a second one here would re-point the line at the

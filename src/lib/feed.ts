@@ -151,13 +151,104 @@ type FeedKind = FeedItem["kind"];
 
 export type FeedEventRow = { kind: FeedKind; id: string; happened_at: string };
 
+type HydrationPost = {
+  id: string;
+  title: string | null;
+  intro: string | null;
+  car_id: string | null;
+  author_id: string;
+  published_at: string | null;
+  body: Database["public"]["Tables"]["activity_posts"]["Row"]["body"];
+};
+type HydrationCar = {
+  id: string;
+  slug: string;
+  name: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  cover_image_url: string | null;
+  owner_id: string;
+  created_at: string;
+};
+type HydrationListing = {
+  id: string;
+  title: string;
+  price_cents: number;
+  shipping_cents: number | null;
+  condition: string | null;
+  grade: string | null;
+  location: string | null;
+  part_number: string | null;
+  seller_id: string;
+  source_car_id: string | null;
+  created_at: string;
+};
+type HydrationPostCar = {
+  id: string;
+  slug: string;
+  name: string;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  is_public: boolean;
+  cover_image_url: string | null;
+};
+type HydrationSourceCar = {
+  id: string;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  slug: string;
+  is_public: boolean;
+};
+type HydrationOwner = {
+  id: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+};
+
+/** Everything a page of cards needs, already counted — the one shape both
+ *  loaders below produce, so card building can't tell them apart. */
+type HydrationData = {
+  posts: HydrationPost[];
+  cars: HydrationCar[];
+  listings: HydrationListing[];
+  garage: { name: string; make: string | null; model: string | null }[];
+  postCars: HydrationPostCar[];
+  sourceCars: HydrationSourceCar[];
+  owners: HydrationOwner[];
+  postCover: Map<string, string>;
+  postImageCount: Map<string, number>;
+  reactionCount: Map<string, number>;
+  commentCountByPost: Map<string, number>;
+  carUpdateCount: Map<string, number>;
+  carLastActivity: Map<string, string>;
+  carForSaleCount: Map<string, number>;
+  listingCover: Map<string, string>;
+  watchCounts: Map<string, number>;
+  questionCountByListing: Map<string, number>;
+  likeCountByKey: Map<string, number>;
+  viewerSavedKeys: Set<string>;
+  viewerLikedPosts: Set<string>;
+  viewerLikedKeys: Set<string>;
+};
+
+type HydrationIds = { postIds: string[]; carIds: string[]; listingIds: string[] };
+
 /**
  * Hydrates a page-sized window of (kind, id, happened_at) rows into full
- * FeedItems. All enrichment queries here are bounded by the window size
- * (`.in()` over at most pageSize ids), never by table size — this is the only
- * place feed cards' extra signals (watch counts, fitment, activity rollups,
- * image counts) are fetched, so both the view path and the legacy fallback
- * pay the same flat per-page cost.
+ * FeedItems. All enrichment is bounded by the window size (at most pageSize
+ * ids), never by table size — this is the only place feed cards' extra
+ * signals (watch counts, fitment, activity rollups, image counts) are
+ * fetched, so both the view path and the legacy fallback pay the same flat
+ * per-page cost.
+ *
+ * One round trip: `feed_hydration` (migration 20260928120500) returns every
+ * signal, counts already made, under the caller's own RLS. If the function
+ * is missing (migration unapplied), this falls back to the per-table reads
+ * it replaced — two dependent rounds, ~19 requests.
  *
  * Exported for Explore search (src/lib/explore/search/query.ts): search
  * result windows are the same (kind, id) shape, so feed and search hydrate
@@ -170,10 +261,88 @@ export async function hydrateFeedItems(
   rows: FeedEventRow[],
   viewerId?: string | null
 ): Promise<FeedItem[]> {
-  const postIds = rows.filter((r) => r.kind === "update").map((r) => r.id);
-  const carIds = rows.filter((r) => r.kind === "car").map((r) => r.id);
-  const listingIds = rows.filter((r) => r.kind === "part").map((r) => r.id);
+  if (!rows.length) return [];
+  const ids: HydrationIds = {
+    postIds: rows.filter((r) => r.kind === "update").map((r) => r.id),
+    carIds: rows.filter((r) => r.kind === "car").map((r) => r.id),
+    listingIds: rows.filter((r) => r.kind === "part").map((r) => r.id),
+  };
+  const data =
+    (await loadHydrationInOneCall(supabase, ids, viewerId)) ??
+    (await loadHydrationByTable(supabase, ids, viewerId));
+  return buildFeedItems(rows, data);
+}
 
+type FeedHydrationJson = {
+  posts: (HydrationPost & { cover_url: string | null; image_count: number; reactions: number; comments: number })[];
+  cars: (HydrationCar & { update_count: number; last_activity_at: string | null; for_sale_count: number })[];
+  listings: (HydrationListing & { cover_url: string | null; watch_count: number; question_count: number })[];
+  garage: { name: string; make: string | null; model: string | null }[];
+  post_cars: HydrationPostCar[];
+  source_cars: HydrationSourceCar[];
+  owners: HydrationOwner[];
+  likes: { target_type: string; target_id: string; count: number }[];
+  viewer_saves: { target_type: string; target_id: string }[];
+  viewer_reactions: string[];
+  viewer_likes: { target_type: string; target_id: string }[];
+};
+
+async function loadHydrationInOneCall(
+  supabase: SupabaseClient<Database>,
+  { postIds, carIds, listingIds }: HydrationIds,
+  viewerId?: string | null
+): Promise<HydrationData | null> {
+  const { data, error } = await supabase.rpc("feed_hydration", {
+    p_post_ids: postIds,
+    p_car_ids: carIds,
+    p_listing_ids: listingIds,
+    p_viewer: viewerId ?? undefined,
+  });
+  if (error || !data) {
+    reportError("[feed] feed_hydration unavailable, falling back to per-table reads", error);
+    return null;
+  }
+  const json = data as unknown as FeedHydrationJson;
+  const byId = <T extends { id: string }, V>(list: T[], pick: (row: T) => V | null | undefined) => {
+    const map = new Map<string, V>();
+    for (const row of list) {
+      const value = pick(row);
+      if (value !== null && value !== undefined) map.set(row.id, value);
+    }
+    return map;
+  };
+  return {
+    posts: json.posts,
+    cars: json.cars,
+    listings: json.listings,
+    garage: json.garage,
+    postCars: json.post_cars,
+    sourceCars: json.source_cars,
+    owners: json.owners,
+    postCover: byId(json.posts, (p) => p.cover_url),
+    postImageCount: byId(json.posts, (p) => p.image_count),
+    reactionCount: byId(json.posts, (p) => p.reactions),
+    commentCountByPost: byId(json.posts, (p) => p.comments),
+    carUpdateCount: byId(json.cars, (c) => c.update_count),
+    carLastActivity: byId(json.cars, (c) => c.last_activity_at),
+    carForSaleCount: byId(json.cars, (c) => c.for_sale_count),
+    listingCover: byId(json.listings, (l) => l.cover_url),
+    watchCounts: byId(json.listings, (l) => l.watch_count),
+    questionCountByListing: byId(json.listings, (l) => l.question_count),
+    likeCountByKey: new Map(json.likes.map((l) => [`${l.target_type}:${l.target_id}`, l.count])),
+    viewerSavedKeys: new Set(json.viewer_saves.map((s) => `${s.target_type}:${s.target_id}`)),
+    viewerLikedPosts: new Set(json.viewer_reactions),
+    viewerLikedKeys: new Set(json.viewer_likes.map((l) => `${l.target_type}:${l.target_id}`)),
+  };
+}
+
+/** The per-table reads `feed_hydration` replaced, counted here — kept as the
+ *  fallback for a database without that function. */
+async function loadHydrationByTable(
+  supabase: SupabaseClient<Database>,
+  { postIds, carIds, listingIds }: HydrationIds,
+  viewerId?: string | null
+): Promise<HydrationData> {
   const [postsRes, carsRes, listingsRes, garageRes] = await Promise.all([
     postIds.length
       ? supabase
@@ -204,7 +373,6 @@ export async function hydrateFeedItems(
   const posts = postsRes.data ?? [];
   const cars = carsRes.data ?? [];
   const listings = listingsRes.data ?? [];
-  const garageIndex = buildGarageFitmentIndex(garageRes.data ?? []);
 
   // W-5: a post may have no car. The feed still carries it; it just has
   // no build to name and no cover to borrow.
@@ -285,7 +453,7 @@ export async function hydrateFeedItems(
     listingIds.length ? fetchWatchCounts(supabase, listingIds) : Promise.resolve(new Map<string, number>()),
     // The viewer's own marks, so every card renders its toggles pre-fired:
     // saves over this page's listings+cars+posts, 🔥 reactions over posts.
-    viewerId && rows.length
+    viewerId && (listingIds.length || carIds.length || postIds.length)
       ? supabase
           .from("saves")
           .select("target_type, target_id")
@@ -347,16 +515,6 @@ export async function hydrateFeedItems(
     );
   }
 
-  const postById = new Map(posts.map((p) => [p.id, p]));
-  const carItemById = new Map(cars.map((c) => [c.id, c]));
-  const listingById = new Map(listings.map((l) => [l.id, l]));
-  const postCarById = new Map((postCars ?? []).map((c) => [c.id, c]));
-  const ownerById = new Map(
-    (owners ?? []).map((o) => [o.id, o.display_name ?? (o.username ? `@${o.username}` : null)])
-  );
-  const avatarById = new Map((owners ?? []).map((o) => [o.id, o.avatar_url ?? null]));
-  const sourceCarById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
-
   const listingCover = new Map<string, string>();
   for (const img of listingImages ?? []) {
     if (!listingCover.has(img.listing_id)) listingCover.set(img.listing_id, img.url);
@@ -366,14 +524,6 @@ export async function hydrateFeedItems(
   for (const img of postImages ?? []) {
     if (!postCover.has(img.post_id)) postCover.set(img.post_id, img.url);
     postImageCount.set(img.post_id, (postImageCount.get(img.post_id) ?? 0) + 1);
-  }
-  // A post that leads with a before/after plate has no gallery mirror to
-  // cover it (activity_images takes gallery urls only) — the pair itself is
-  // the cover, drawn as a static split on the card.
-  const postCompare = new Map<string, { beforeUrl: string; afterUrl: string }>();
-  for (const p of postsRes.data ?? []) {
-    const pair = leadingBeforeAfter(normalizeBlocks(p.body));
-    if (pair) postCompare.set(p.id, pair);
   }
   const reactionCount = new Map<string, number>();
   for (const row of reactionRows ?? []) {
@@ -396,6 +546,75 @@ export async function hydrateFeedItems(
     }
   }
 
+
+  return {
+    posts,
+    cars,
+    listings,
+    garage: garageRes.data ?? [],
+    postCars: postCars ?? [],
+    sourceCars: sourceCars ?? [],
+    owners: owners ?? [],
+    postCover,
+    postImageCount,
+    reactionCount,
+    commentCountByPost,
+    carUpdateCount,
+    carLastActivity,
+    carForSaleCount,
+    listingCover,
+    watchCounts,
+    questionCountByListing,
+    likeCountByKey,
+    viewerSavedKeys,
+    viewerLikedPosts,
+    viewerLikedKeys,
+  };
+}
+
+/** Maps a hydrated page back onto its rows, in row order. */
+function buildFeedItems(rows: FeedEventRow[], data: HydrationData): FeedItem[] {
+  const {
+    posts,
+    cars,
+    listings,
+    postCars,
+    sourceCars,
+    owners,
+    postCover,
+    postImageCount,
+    reactionCount,
+    commentCountByPost,
+    carUpdateCount,
+    carLastActivity,
+    carForSaleCount,
+    listingCover,
+    watchCounts,
+    questionCountByListing,
+    likeCountByKey,
+    viewerSavedKeys,
+    viewerLikedPosts,
+    viewerLikedKeys,
+  } = data;
+  const garageIndex = buildGarageFitmentIndex(data.garage);
+  const postById = new Map(posts.map((p) => [p.id, p]));
+  const carItemById = new Map(cars.map((c) => [c.id, c]));
+  const listingById = new Map(listings.map((l) => [l.id, l]));
+  const postCarById = new Map((postCars ?? []).map((c) => [c.id, c]));
+  const ownerById = new Map(
+    (owners ?? []).map((o) => [o.id, o.display_name ?? (o.username ? `@${o.username}` : null)])
+  );
+  const avatarById = new Map((owners ?? []).map((o) => [o.id, o.avatar_url ?? null]));
+  const sourceCarById = new Map((sourceCars ?? []).map((c) => [c.id, c]));
+
+  // A post that leads with a before/after plate has no gallery mirror to
+  // cover it (activity_images takes gallery urls only) — the pair itself is
+  // the cover, drawn as a static split on the card.
+  const postCompare = new Map<string, { beforeUrl: string; afterUrl: string }>();
+  for (const p of posts) {
+    const pair = leadingBeforeAfter(normalizeBlocks(p.body));
+    if (pair) postCompare.set(p.id, pair);
+  }
   // Map back in row order — the window is already time-ordered.
   const items: FeedItem[] = [];
   for (const row of rows) {

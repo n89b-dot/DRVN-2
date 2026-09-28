@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { EmptyState, Foot, PageHead } from "@/components/ui";
 import { resolveImportConfig } from "@/lib/listing-import/config";
 import { getBetaAccess } from "@/lib/beta-access";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { SellerAccessNotice } from "../seller-access-notice";
 import { ImportFlow } from "./import-flow";
@@ -18,10 +18,8 @@ export default async function ImportPage({
 }) {
   const { resume } = await searchParams;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const betaAccess = await getBetaAccess(user.id, "seller");

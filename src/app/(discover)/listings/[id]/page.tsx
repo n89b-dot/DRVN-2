@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense, cache } from "react";
 
 import { LiveDim, Rv } from "@/components/livesheet";
 import {
@@ -38,6 +39,18 @@ import { QASection, type QAItem } from "./qa-section";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
 
+/** The listing row and its photos, read once per request and shared by the
+ *  metadata and the page (each used to fetch its own). React's cache is per
+ *  render, never shared between users. */
+const loadListing = cache(async (id: string) => {
+  const supabase = await createClient();
+  return supabase.from("listings").select("*").eq("id", id).maybeSingle();
+});
+const loadListingImages = cache(async (id: string) => {
+  const supabase = await createClient();
+  return supabase.from("listing_images").select("*").eq("listing_id", id).order("position");
+});
+
 /**
  * Per-listing metadata with the cover as the OG image. A part listing is the
  * unit people paste into group chats, and every one of them previously unfurled
@@ -49,23 +62,11 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data: listing } = await supabase
-    .from("listings")
-    .select("title, description, price_cents, condition, status, category")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: listing }, { data: images }] = await Promise.all([loadListing(id), loadListingImages(id)]);
 
   if (!listing) return { title: "Listing not found - DRVN" };
 
-  const { data: image } = await supabase
-    .from("listing_images")
-    .select("url")
-    .eq("listing_id", id)
-    .order("position")
-    .limit(1)
-    .maybeSingle();
+  const image = images?.[0] ?? null;
 
   const price = formatPrice(listing.price_cents);
   const sold = listing.status === "sold";
@@ -108,35 +109,75 @@ export default async function ListingPage({
   const { action, from } = await searchParams;
   const returnTo = shoppingReturn(from);
   const shoppingState = returnTo ? normalizeMarketplaceState(Object.fromEntries(new URL(returnTo, "https://drvn.invalid").searchParams)) : {};
-  const selectedVehicle = shoppingState.vehicle ? await resolveVehicleFilter(shoppingState.vehicle) : null;
   const detailPath = listingHref(id, returnTo ?? undefined);
   const resumeAction = parseAuthIntent(action);
   const supabase = await createClient();
+  // The viewer is a local token check (no network), so it can be known
+  // before the first round and let viewer-only reads join it.
+  const user = await getViewer();
 
-  const { data: listing } = await supabase.from("listings").select("*").eq("id", id).single();
+  // Round 1: everything that needs only the listing id or the viewer.
+  const [{ data: listing }, { data: images }, selectedVehicle, betaBuyerAccess, { data: taggedPostRows }] =
+    await Promise.all([
+      loadListing(id),
+      loadListingImages(id),
+      shoppingState.vehicle ? resolveVehicleFilter(shoppingState.vehicle) : Promise.resolve(null),
+      getBetaAccess(user?.id, "buyer"),
+      // W-4: updates that tagged this part, with their photos, in one read.
+      // Only ever posts on public builds — see the filter below. A LEFT join
+      // to cars: a post about this part may have no car at all (W-5), and an
+      // inner join dropped exactly those — the posts for which the part is
+      // the whole subject. Which posts may be seen is the post policy's
+      // business (a private build's posts never arrive here).
+      supabase
+        .from("activity_posts")
+        .select(
+          "id, title, intro, body, car_id, published_at, cars(slug, name, is_public), activity_post_listings!inner(listing_id), activity_images(url, position)"
+        )
+        .eq("activity_post_listings.listing_id", id)
+        .not("published_at", "is", null)
+        .order("published_at", { ascending: false })
+        .order("position", { referencedTable: "activity_images" })
+        .limit(6),
+    ]);
   if (!listing) notFound();
+  const isOwn = user?.id === listing.seller_id;
+  // The viewer's own live offer, so the page points at it instead of
+  // inviting a second one the server would refuse.
+  const { data: myOfferRow } =
+    user && !isOwn
+      ? await supabase
+          .from("offers")
+          .select("id, amount_cents, counter_amount_cents")
+          .eq("listing_id", listing.id)
+          .eq("buyer_id", user.id)
+          .in("status", ["open", "countered"])
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
 
-  // Everything in this group only needs listing.id / listing.seller_id /
-  // listing.source_car_id — all known the moment the listing row lands — so
-  // they have no data dependency on each other and can fire together.
+  // Round 2: everything that needs listing.seller_id / listing.source_car_id
+  // (known the moment the listing row lands) or the viewer. No dependency on
+  // each other, so they fire together.
   const [
     { data: seller },
-    { data: images },
     { data: sourceCar },
     { data: moreFromSeller },
-    user,
     { data: sourceModLine },
     watchCounts,
     { data: reviews },
     { data: fitments },
     { data: questions },
+    { data: save },
+    garageFitment,
+    { count: soldCount },
+    { count: openOfferCount },
   ] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, display_name, location, avatar_url")
       .eq("id", listing.seller_id)
       .single(),
-    supabase.from("listing_images").select("*").eq("listing_id", id).order("position"),
     listing.source_car_id
       ? supabase
           .from("cars")
@@ -151,7 +192,6 @@ export default async function ListingPage({
       .eq("status", "active")
       .neq("id", id)
       .limit(4),
-    getViewer(),
     // Provenance: the build line this listing was released off, if any —
     // names the line rather than just linking to the whole car sheet.
     // Deliberately unfiltered by status: the part being sold here is usually
@@ -175,9 +215,37 @@ export default async function ListingPage({
       .order("created_at"),
     supabase
       .from("listing_questions")
-      .select("id, parent_id, body, created_at, author_id")
+      .select("id, parent_id, body, created_at, author_id, author:profiles!listing_questions_author_id_fkey(display_name, username)")
       .eq("listing_id", id)
       .order("created_at"),
+    user
+      ? supabase
+          .from("saves")
+          .select("target_id")
+          .eq("user_id", user.id)
+          .eq("target_type", "listing")
+          .eq("target_id", id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Fitment against the viewer's garage. Asked whenever someone is signed
+    // in (rather than after the fitment rows arrive) so it rides this round.
+    user
+      ? fetchGarageFitment(supabase, user.id)
+      : Promise.resolve({ cars: [], index: new Map<string, string>() }),
+    // Track record for the seller line: parts they've actually sold here.
+    supabase
+      .from("listings")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", listing.seller_id)
+      .eq("status", "sold"),
+    // The owner panel's one open question: offers waiting on them.
+    isOwn
+      ? supabase
+          .from("offers")
+          .select("id", { count: "exact", head: true })
+          .eq("listing_id", id)
+          .in("status", ["open", "countered"])
+      : Promise.resolve({ count: 0 }),
   ]);
 
   const modLineName = sourceModLine
@@ -185,8 +253,6 @@ export default async function ListingPage({
       sourceModLine.raw_text ||
       null
     : null;
-  const betaBuyerAccess = await getBetaAccess(user?.id, "buyer");
-
   const watchCount = watchCounts.get(id) ?? 0;
 
   const avgRating = (reviews ?? []).length
@@ -200,67 +266,10 @@ export default async function ListingPage({
     void supabase.rpc("bump_listing_view", { p_listing: id });
   }
 
-  const qaAuthorIds = [...new Set((questions ?? []).map((q) => q.author_id))];
-
-  // Second group: each of these depends only on results already in hand
-  // above (user, or ids derived from listing/questions/moreFromSeller), not
-  // on each other, so they can also run concurrently.
-  const isOwn = user?.id === listing.seller_id;
-  // The viewer's own live offer, so the page points at it instead of
-  // inviting a second one the server would refuse.
-  const { data: myOfferRow } =
-    user && !isOwn
-      ? await supabase
-          .from("offers")
-          .select("id, amount_cents, counter_amount_cents")
-          .eq("listing_id", listing.id)
-          .eq("buyer_id", user.id)
-          .in("status", ["open", "countered"])
-          .limit(1)
-          .maybeSingle()
-      : { data: null };
-  const [
-    { data: save },
-    garageFitment,
-    { data: qaAuthors },
-    moreFromSellerCards,
-    { count: soldCount },
-    { count: openOfferCount },
-  ] =
-    await Promise.all([
-      user
-        ? supabase
-            .from("saves")
-            .select("target_id")
-            .eq("user_id", user.id)
-            .eq("target_type", "listing")
-            .eq("target_id", id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-      user && (listing.source_car_id || (fitments ?? []).length)
-        ? fetchGarageFitment(supabase, user.id)
-        : Promise.resolve({ cars: [], index: new Map<string, string>() }),
-      qaAuthorIds.length
-        ? supabase.from("profiles").select("id, display_name, username").in("id", qaAuthorIds)
-        : Promise.resolve({ data: [] }),
-      // Same card shape as the search grid — the rails previously selected a
-      // thinner row and rendered a visibly different card on the same page.
-      hydrateListingCards(supabase, moreFromSeller ?? []),
-      // Track record for the seller line: parts they've actually sold here.
-      supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("seller_id", listing.seller_id)
-        .eq("status", "sold"),
-      // The owner panel's one open question: offers waiting on them.
-      isOwn
-        ? supabase
-            .from("offers")
-            .select("id", { count: "exact", head: true })
-            .eq("listing_id", id)
-            .in("status", ["open", "countered"])
-        : Promise.resolve({ count: 0 }),
-    ]);
+  // Round 3: the seller rail's cards need the rows from round 2. Same card
+  // shape as the search grid — the rails previously selected a thinner row
+  // and rendered a visibly different card on the same page.
+  const moreFromSellerCards = await hydrateListingCards(supabase, moreFromSeller ?? []);
   const isSaved = Boolean(save);
 
   const fitmentClaims = fitments ?? [];
@@ -275,16 +284,14 @@ export default async function ListingPage({
       ? ` ${f.year_start ?? "…"}–${f.year_end ?? "…"}`
       : "";
 
-  const qaName = (aid: string) => {
-    const a = (qaAuthors ?? []).find((x) => x.id === aid);
-    return a?.display_name ?? (a?.username ? `@${a.username}` : "User");
-  };
+  const qaName = (a: { display_name: string | null; username: string | null } | null) =>
+    a?.display_name ?? (a?.username ? `@${a.username}` : "User");
   const qaItems: QAItem[] = (questions ?? []).map((q) => ({
     id: q.id,
     parent_id: q.parent_id,
     body: q.body,
     created_at: q.created_at,
-    authorName: qaName(q.author_id),
+    authorName: qaName(q.author),
     isSeller: q.author_id === listing.seller_id,
   }));
 
@@ -306,39 +313,13 @@ export default async function ListingPage({
 
   const gallery = images ?? [];
 
-  // W-4: updates that tagged this part. Read from the mirror table, and
-  // only ever posts on public builds — the join is what enforces that.
-  const { data: taggedPostRows } = await supabase
-    .from("activity_post_listings")
-    .select("post_id")
-    .eq("listing_id", id)
-    .limit(12);
-  const taggedPostIds = (taggedPostRows ?? []).map((r) => r.post_id);
-  const { data: taggedPosts } = taggedPostIds.length
-    ? await supabase
-        .from("activity_posts")
-        // A LEFT join: a post about this part may have no car at all (W-5),
-        // and an inner join dropped exactly those — the posts for which the
-        // part is the whole subject. Which posts may be seen is the post
-        // policy's business (a private build's posts never arrive here).
-        .select("id, title, intro, body, car_id, published_at, cars(slug, name, is_public)")
-        .in("id", taggedPostIds)
-        .not("published_at", "is", null)
-        .order("published_at", { ascending: false })
-        .limit(6)
-    : { data: [] };
-  const { data: taggedPostImages } = taggedPosts?.length
-    ? await supabase
-        .from("activity_images")
-        .select("post_id, url, position")
-        .in("post_id", taggedPosts.map((p) => p.id))
-        .order("position")
-    : { data: [] };
+  const taggedPosts = taggedPostRows ?? [];
   const postCover = new Map<string, string>();
-  for (const img of taggedPostImages ?? []) {
-    if (!postCover.has(img.post_id)) postCover.set(img.post_id, img.url);
+  for (const post of taggedPosts) {
+    const first = post.activity_images?.[0];
+    if (first) postCover.set(post.id, first.url);
   }
-  const postsAboutPart = (taggedPosts ?? [])
+  const postsAboutPart = taggedPosts
     // Belt and braces beside the policy: a car that is there but not public
     // is never named or linked from a public part page.
     .filter((post) => {
@@ -740,7 +721,10 @@ export default async function ListingPage({
         </section>
       )}
 
-      <SimilarInCategory category={listing.category} excludeId={listing.id} excludeSeller={listing.seller_id} supabase={supabase} />
+      {/* Streams in after the page — two more reads that nothing above waits on. */}
+      <Suspense fallback={null}>
+        <SimilarInCategory category={listing.category} excludeId={listing.id} excludeSeller={listing.seller_id} supabase={supabase} />
+      </Suspense>
 
       {moreFromSellerCards.length > 0 && (
         <section className="deck">

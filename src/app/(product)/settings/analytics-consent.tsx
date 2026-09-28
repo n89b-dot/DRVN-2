@@ -1,16 +1,20 @@
 import { cookies } from "next/headers";
 
-import { createClient } from "@/lib/supabase/server";
+import type { createClient } from "@/lib/supabase/server";
 
-import { AnalyticsConsentForm } from "./analytics-consent-form";
-
-async function loadConsent() {
-  const client = await createClient();
-  const { data: { user } } = await client.auth.getUser();
-  const preference = user ? await client.from("analytics_consents").select("allowed,expires_at").eq("user_id", user.id).maybeSingle() : null;
-  return (await cookies()).get("drvn_analytics_consent")?.value === "v1:yes" && Boolean(preference?.data?.allowed && Date.parse(preference.data.expires_at) > Date.now());
-}
-export async function AnalyticsConsent() {
-  const enabled = await loadConsent();
-  return <AnalyticsConsentForm initialEnabled={enabled} />;
+/** Whether analytics is on for this member: the consent cookie and a live,
+ *  unexpired server-side preference must agree. Loaded by the settings page
+ *  in its one parallel round rather than as a second render pass. */
+export async function loadAnalyticsConsent(
+  client: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<boolean> {
+  const [preference, jar] = await Promise.all([
+    client.from("analytics_consents").select("allowed,expires_at").eq("user_id", userId).maybeSingle(),
+    cookies(),
+  ]);
+  return (
+    jar.get("drvn_analytics_consent")?.value === "v1:yes" &&
+    Boolean(preference.data?.allowed && Date.parse(preference.data.expires_at) > Date.now())
+  );
 }

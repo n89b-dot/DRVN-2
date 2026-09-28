@@ -46,11 +46,17 @@ export function Rv({
   stagger = 0,
   className = "",
   style,
+  immediate: immediateProp = false,
 }: {
   children: ReactNode;
   as?: RvTag;
   /** Stagger index — delays entry by index × 70ms (mockup convention). */
   stagger?: number;
+  /** Render settled, with no hidden first frame. For a page's leading media
+   *  (its hero): browsers don't count an opacity-0 element as the largest
+   *  paint, so a revealed hero held that paint back until hydration and the
+   *  observer had both run. */
+  immediate?: boolean;
   className?: string;
   style?: CSSProperties;
 }) {
@@ -71,7 +77,7 @@ export function Rv({
   }, [stagger]);
 
   // Page headers must be readable before hydration/IntersectionObserver.
-  const immediate = as === "header";
+  const immediate = immediateProp || as === "header";
   const shown = immediate || reduce || inView || forced;
 
   return (

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { hydrateListingCards } from "@/lib/marketplace/query";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { vehicleSubline } from "@/lib/vehicles/label";
 
 /** The front door's two actions. The add-car intent survives signup and
@@ -65,7 +65,11 @@ export const metadata = {
  * own no-fake-data rule.
  */
 export default async function LandingPage() {
-  const supabase = await createClient();
+  // Only signed-out visitors reach this page (the proxy sends members to
+  // /home), and what it shows is the same for all of them — newest public
+  // cars and live parts, and two totals. A one-minute cache serves it
+  // without asking the database on every visit.
+  const supabase = createPublicClient({ revalidate: 60, tags: ["landing"] });
   const jar = await cookies();
   const night = jar.get("ls-theme")?.value === "night";
 
@@ -134,7 +138,7 @@ export default async function LandingPage() {
         </PageHead>
 
         {heroImage && (
-          <Rv className="hero-media landing-hero mb-10">
+          <Rv className="hero-media landing-hero mb-10" immediate>
             <Media src={heroImage} alt="A modified car on DRVN" className="h-full w-full" role="hero" />
           </Rv>
         )}

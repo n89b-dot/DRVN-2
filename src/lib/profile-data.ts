@@ -115,12 +115,21 @@ export async function loadProfileView(
 ): Promise<ProfileView> {
   const listingsFrom = (Math.max(1, listingsPage) - 1) * PROFILE_LISTINGS_PAGE_SIZE;
   const reviewsFrom = (Math.max(1, reviewsPage) - 1) * PROFILE_REVIEWS_PAGE_SIZE;
+
+  // Everything below depends only on the profile id, so it goes out as one
+  // parallel round, with photos and reviewer names embedded in the rows that
+  // own them. This used to be seven dependent round trips (cars → images and
+  // posts → post images → listings and reviews → all ratings → listing
+  // covers → reviewer names), the deepest chain on the site.
   // P-5: main car first, then newest. Sorting by model year had the
   // profile lead with whichever car happened to be oldest on paper.
   let carsQuery = supabase
     .from("cars")
-    .select("id, slug, name, year, make, model, color, tags, created_at, cover_image_url, is_public")
-    .eq("owner_id", profileId);
+    .select(
+      "id, slug, name, year, make, model, color, tags, created_at, cover_image_url, is_public, car_images(url, alt, position)"
+    )
+    .eq("owner_id", profileId)
+    .order("position", { referencedTable: "car_images" });
   if (publicOnly) carsQuery = carsQuery.eq("is_public", true);
 
   // Posts this keeper wrote — by author, not by car, so a post about a part
@@ -141,45 +150,58 @@ export async function loadProfileView(
     .limit(updatesLimit);
   if (publicOnly) postsQuery = postsQuery.eq("cars.is_public", true).or("car_id.is.null,cars.not.is.null");
 
-  const [{ data: cars }, { data: mainCar }] = await Promise.all([
+  // ---- Shopfront and credibility ----
+  let listingsQuery = supabase
+    .from("listings")
+    .select("id, title, price_cents, status, created_at, listing_images(url, position)", { count: "exact" })
+    .eq("seller_id", profileId)
+    .order("created_at", { ascending: false })
+    .order("position", { referencedTable: "listing_images" })
+    .range(listingsFrom, listingsFrom + PROFILE_LISTINGS_PAGE_SIZE - 1);
+  listingsQuery = publicOnly
+    ? listingsQuery.in("status", ["active", "sold"])
+    : listingsQuery.not("status", "eq", "archived");
+
+  const [
+    { data: cars },
+    { data: mainCar },
+    { data: posts, count: postsTotal },
+    { data: listingRows, count: listingsTotal },
+    { data: reviewRows, count: reviewsTotal },
+    { data: salesCount },
+    { data: followCounts },
+    { data: allRatingRows },
+  ] = await Promise.all([
     carsQuery,
     supabase.from("profiles").select("main_car_id").eq("id", profileId).maybeSingle(),
-  ]);
-  const carList = orderCars(cars ?? [], mainCar?.main_car_id);
-  const carIds = carList.map((c) => c.id);
-
-  const [{ data: carImages }, { data: posts, count: postsTotal }] = await Promise.all([
-    carIds.length
-      ? supabase
-          .from("car_images")
-          .select("car_id, url, alt, position")
-          .in("car_id", carIds)
-          .order("position")
-      : Promise.resolve({ data: [] }),
     postsQuery,
+    listingsQuery,
+    supabase
+      .from("reviews")
+      .select(
+        "id, rating, body, created_at, reviewer_id, reviewer:profiles!reviews_reviewer_id_fkey(display_name, username)",
+        { count: "exact" }
+      )
+      .eq("reviewee_id", profileId)
+      .order("created_at", { ascending: false })
+      .range(reviewsFrom, reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE - 1),
+    // Orders are private to their buyer and seller, so a visitor counting
+    // them through RLS saw 0 sold. The function returns the total only.
+    supabase.rpc("profile_sales_count", { p_profile: profileId }),
+    // `follows` rows are private to the two people in them, so a visitor
+    // counting through RLS saw 0. The function returns the totals only.
+    supabase.rpc("profile_follow_counts", { p_profile: profileId }).maybeSingle(),
+    // Average rating has to look at every review, not just the current page —
+    // otherwise it would drift as the reviewer paged through history. Just
+    // the rating column, so it stays cheap even with many reviews.
+    supabase.from("reviews").select("rating").eq("reviewee_id", profileId),
   ]);
 
-  const galleryByCar = new Map<string, GalleryImage[]>();
-  for (const img of carImages ?? []) {
-    const list = galleryByCar.get(img.car_id) ?? [];
-    list.push({ url: img.url, alt: img.alt });
-    galleryByCar.set(img.car_id, list);
-  }
+  const carList = orderCars(cars ?? [], mainCar?.main_car_id);
 
-  const postIds = (posts ?? []).map((p) => p.id);
-  const { data: postImages } = postIds.length
-    ? await supabase
-        .from("activity_images")
-        .select("post_id, url, alt, position")
-        .in("post_id", postIds)
-        .order("position")
-    : { data: [] };
-  const galleryByPost = new Map<string, GalleryImage[]>();
-  for (const img of postImages ?? []) {
-    const list = galleryByPost.get(img.post_id) ?? [];
-    list.push({ url: img.url, alt: img.alt });
-    galleryByPost.set(img.post_id, list);
-  }
+  const galleryByCar = new Map<string, GalleryImage[]>(
+    carList.map((c) => [c.id, (c.car_images ?? []).map((img) => ({ url: img.url, alt: img.alt }))])
+  );
 
   const slugByCar = new Map(carList.map((c) => [c.id, c.slug]));
   const nameByCar = new Map(carList.map((c) => [c.id, c.name]));
@@ -207,66 +229,14 @@ export async function loadProfileView(
     date: formatDate(p.published_at),
     title: postHeadline(p),
     intro: p.intro,
-    gallery: galleryByPost.get(p.id) ?? [],
+    gallery: (p.activity_images ?? []).map((img) => ({ url: img.url, alt: img.alt })),
   }));
 
-  // ---- Shopfront and credibility ----
-  let listingsQuery = supabase
-    .from("listings")
-    .select("id, title, price_cents, status, created_at", { count: "exact" })
-    .eq("seller_id", profileId)
-    .order("created_at", { ascending: false })
-    .range(listingsFrom, listingsFrom + PROFILE_LISTINGS_PAGE_SIZE - 1);
-  listingsQuery = publicOnly
-    ? listingsQuery.in("status", ["active", "sold"])
-    : listingsQuery.not("status", "eq", "archived");
-
-  const [
-    { data: listingRows, count: listingsTotal },
-    { data: reviewRows, count: reviewsTotal },
-    { data: salesCount },
-    { data: followCounts },
-  ] = await Promise.all([
-    listingsQuery,
-    supabase
-      .from("reviews")
-      .select("id, rating, body, created_at, reviewer_id", { count: "exact" })
-      .eq("reviewee_id", profileId)
-      .order("created_at", { ascending: false })
-      .range(reviewsFrom, reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE - 1),
-    // Orders are private to their buyer and seller, so a visitor counting
-    // them through RLS saw 0 sold. The function returns the total only.
-    supabase.rpc("profile_sales_count", { p_profile: profileId }),
-    // `follows` rows are private to the two people in them, so a visitor
-    // counting through RLS saw 0. The function returns the totals only.
-    supabase.rpc("profile_follow_counts", { p_profile: profileId }).maybeSingle(),
-  ]);
-
-  // Average rating has to look at every review, not just the current page —
-  // otherwise it would drift as the reviewer paged through history. Just the
-  // rating column, so the extra round trip stays cheap even with many reviews.
-  const { data: allRatingRows } = await supabase
-    .from("reviews")
-    .select("rating")
-    .eq("reviewee_id", profileId);
-
-  const listingIds = (listingRows ?? []).map((l) => l.id);
-  const { data: listingImages } = listingIds.length
-    ? await supabase
-        .from("listing_images")
-        .select("listing_id, url, position")
-        .in("listing_id", listingIds)
-        .order("position")
-    : { data: [] };
   const coverByListing = new Map<string, string>();
-  for (const img of listingImages ?? []) {
-    if (!coverByListing.has(img.listing_id)) coverByListing.set(img.listing_id, img.url);
+  for (const l of listingRows ?? []) {
+    const first = l.listing_images?.[0];
+    if (first) coverByListing.set(l.id, first.url);
   }
-
-  const reviewerIds = [...new Set((reviewRows ?? []).map((r) => r.reviewer_id))];
-  const { data: reviewers } = reviewerIds.length
-    ? await supabase.from("profiles").select("id, display_name, username").in("id", reviewerIds)
-    : { data: [] };
 
   const listings: ProfileListing[] = (listingRows ?? []).map((l) => ({
     id: l.id,
@@ -277,7 +247,7 @@ export async function loadProfileView(
   }));
 
   const reviews: ProfileReview[] = (reviewRows ?? []).map((r) => {
-    const reviewer = (reviewers ?? []).find((p) => p.id === r.reviewer_id);
+    const reviewer = r.reviewer;
     return {
       id: r.id,
       rating: r.rating,

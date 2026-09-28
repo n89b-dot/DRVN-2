@@ -1,5 +1,30 @@
 # Applying migrations
 
+## September 28 — Home feed and recommendations in one round trip each
+
+| File | Applied to |
+|---|---|
+| `20260928120500_feed_hydration.sql` | shared dev project, 2026-09-28 |
+| `20260928121000_recommend_listings.sql` | shared dev project, 2026-09-28 |
+
+Owner-approved performance work (speed audit, 28 Sep). Both only add
+functions; no table, policy or existing function changes, so no backup was
+needed. Applied with `scripts/apply-migration.mjs`.
+
+- `feed_hydration(post_ids, car_ids, listing_ids, viewer)` returns every
+  signal a page of feed cards needs, counts already made, as one jsonb.
+  SECURITY INVOKER, so each read runs under the caller's RLS exactly as the
+  per-table reads did; viewer marks are read only when `p_viewer` is
+  `auth.uid()`. `hydrateFeedItems` falls back to the per-table reads if the
+  function is missing. Verified identical output against the old path for
+  signed-out and three signed-in viewers, every feed kind, two pages.
+- `recommend_listings(user, limit)` runs the three recommendation rules in
+  one statement. Execute is granted to `service_role` only (revoked from
+  anon/authenticated by name). Identical to the old path for 26 of 27
+  profiles; the one difference is a fix — the old platform match missed
+  garages whose make differs only in case ("volkswagen" vs "Volkswagen").
+  `recommendListings` falls back to the per-rule reads if it is missing.
+
 ## September 28 — "N sold" for visitors (shared dev project)
 
 | File | Applied to |

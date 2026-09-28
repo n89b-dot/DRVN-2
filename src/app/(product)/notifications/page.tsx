@@ -15,7 +15,7 @@ import {
 import { kindIsShown } from "@/lib/notification-prefs";
 import { loadUnreadNotificationCount } from "@/lib/shell-counts";
 import { withParams as buildParams } from "@/lib/url-params";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { MarkAllRead } from "./mark-all-read";
 import { reportError } from "@/lib/monitoring";
@@ -131,10 +131,8 @@ export default async function NotificationsPage({
   searchParams: Promise<{ filter?: string; section?: string; page?: string; notice?: string }>;
 }) {
   const { filter, section: sectionParam, page: pageParam, notice } = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   const unreadOnly = filter === "unread";

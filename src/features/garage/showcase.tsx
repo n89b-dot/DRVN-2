@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button } from "@/components/ui";
+import { Button, MEDIA_SIZES } from "@/components/ui";
 import { cx } from "@/lib/format";
 
 /**
@@ -40,8 +41,19 @@ export function ShowcaseExplorer({
   return (
     <figure className="showcase">
       <div className="showcase__frame">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={imageUrl} alt={alt} className="showcase__img" draggable={false} />
+        {/* Resized, not the original. The width/height pair is only an
+            aspect hint for layout: `height: auto` lets the photo keep its own
+            proportions once it loads, which the pins are positioned against. */}
+        <Image
+          src={imageUrl}
+          alt={alt}
+          width={1600}
+          height={1200}
+          sizes={MEDIA_SIZES.feature}
+          className="showcase__img"
+          style={{ height: "auto" }}
+          draggable={false}
+        />
         {exploring &&
           pins.map((pin, index) => (
             <button

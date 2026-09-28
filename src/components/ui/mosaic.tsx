@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { CardEngagement } from "@/features/social/card-actions";
@@ -10,6 +9,7 @@ import { ListingCartButton } from "@/features/commerce/quick-commerce";
 
 import type { ListingCardData } from "./listing-card";
 import { Badge, KindBadge } from "./badge";
+import { IntentLink } from "./intent-link";
 import { Media } from "./primitives";
 import { ratingLine } from "./rating";
 import { postHref } from "@/lib/activity/href";
@@ -219,7 +219,10 @@ export function MosaicCell({
 
   return (
     <article className={cls} role="listitem">
-      <Link href={href} prefetch={prefetch} className="mcell__link">
+      {/* Hover/focus prefetch, not viewport: every cell on the Explore wall
+          used to prefetch its dynamic route as it scrolled into view,
+          competing with the wall's own photos for bandwidth. */}
+      <IntentLink href={href} prefetch={prefetch} className="mcell__link">
         {(eyebrow || flag || corner) && (
           <span className="mcell__head">
             {(eyebrow || flag || corner) && (
@@ -289,7 +292,7 @@ export function MosaicCell({
         {/* The headline is the link's name; only say the alt when it adds
             something (an update card whose headline is its intro, etc.). */}
         {alt !== headline && <span className="sr-only">{alt}</span>}
-      </Link>
+      </IntentLink>
       {trust && <span className="mcell__trust">{trust}</span>}
       {actions && <div className="mcell__actions">{actions}</div>}
       {engagement}

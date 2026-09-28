@@ -18,9 +18,11 @@ export async function loadHomeFeedPage(
   page: number
 ): Promise<{ items: FeedItem[]; hasMore: boolean }> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verified locally against the project's signing keys (getClaims), not a
+  // round trip to the auth server on every scroll. Row-level security still
+  // checks each query below.
+  const { data: verified } = await supabase.auth.getClaims();
+  const user = typeof verified?.claims.sub === "string" && verified.claims.sub ? { id: verified.claims.sub } : null;
   if (!user) return { items: [], hasMore: false };
 
   const opts = { page: Math.max(1, Math.floor(page) || 1), pageSize: HOME_FEED_PAGE_SIZE };

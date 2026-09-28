@@ -1,96 +1,28 @@
 "use client";
 
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
+import type { ComponentProps } from "react";
 
-import { cx } from "@/lib/format";
+import type * as Impl from "./sortable-grid-impl";
 
 /**
- * SortableGrid — drag-and-drop ordering for photo strips and tile grids
- * (dnd-kit: pointer + touch + keyboard sensors, screen-reader
- * announcements built in). An 8px activation distance keeps buttons inside
- * items clickable. This upgrades pointer ergonomics; keep the existing ↑/↓
- * controls alongside it as the explicit accessible path (brief §S2).
+ * SortableGrid / SortableItem — drag-and-drop ordering for photo strips and
+ * tile grids. The dnd-kit implementation lives in ./sortable-grid-impl and is
+ * loaded on demand: exported through the `@/components/ui` barrel, a static
+ * import put dnd-kit (~19 KB gzipped) in the shared bundle of nearly every
+ * route, though only the Sell form and the garage gallery editor use it.
+ * Server rendering is unchanged — the chunk is preloaded on the pages that
+ * render a grid.
  */
 
-export function SortableGrid({
-  ids,
-  onReorder,
-  className,
-  children,
-}: {
-  /** Item ids in display order. */
-  ids: string[];
-  /** Called with the full new order after a drop. */
-  onReorder: (ids: string[]) => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+const LazySortableGrid = dynamic(() => import("./sortable-grid-impl").then((m) => m.SortableGrid));
+const LazySortableItem = dynamic(() => import("./sortable-grid-impl").then((m) => m.SortableItem));
 
-  const onDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const from = ids.indexOf(String(active.id));
-    const to = ids.indexOf(String(over.id));
-    if (from === -1 || to === -1) return;
-    onReorder(arrayMove(ids, from, to));
-  };
-
-  return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={ids} strategy={rectSortingStrategy}>
-        <div className={className}>{children}</div>
-      </SortableContext>
-    </DndContext>
-  );
+export function SortableGrid(props: ComponentProps<typeof Impl.SortableGrid>) {
+  return <LazySortableGrid {...props} />;
 }
 
 /** One draggable cell inside a SortableGrid. */
-export function SortableItem({
-  id,
-  className,
-  label,
-  children,
-}: {
-  id: string;
-  className?: string;
-  /** Announced name for the draggable ("Photo 3"). */
-  label?: string;
-  children: ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-  });
-  return (
-    <div
-      ref={setNodeRef}
-      className={cx(className, isDragging && "sortable--lifted")}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      aria-label={label}
-      {...attributes}
-      {...listeners}
-    >
-      {children}
-    </div>
-  );
+export function SortableItem(props: ComponentProps<typeof Impl.SortableItem>) {
+  return <LazySortableItem {...props} />;
 }

@@ -44,8 +44,11 @@ export function Avatar({ size = "md", initials = "NB" }: { size?: AvatarSize; in
  *  can still pass any raw `sizes` string; these just name the common cases so
  *  a caller isn't guessing at a viewport-width formula. */
 export const MEDIA_SIZES = {
-  /** Full-bleed page hero. */
-  hero: "100vw",
+  /** Page hero. Heroes sit inside `.wrap` (max 1200px less the 40px
+   *  gutters), so past that width they never render wider than 1120px —
+   *  a bare `100vw` made 2× desktops fetch the 3840px variant, the slowest
+   *  encode the optimizer does. */
+  hero: "(min-width: 1200px) 1120px, 100vw",
   /** Large in-column feature image (e.g. a PDP gallery hero at desktop). */
   feature: "(min-width: 981px) 60vw, 100vw",
   /** Garage/Home vehicle presentation — a leading section image, larger than
@@ -88,13 +91,16 @@ export function Media({
   /** Raw `sizes` escape hatch for a layout the role presets don't cover.
    *  Wins over `role` when both are passed. */
   sizes?: string;
-  /** Only the leading visible image should compete for early bandwidth. */
+  /** Only the leading visible image should compete for early bandwidth.
+   *  `role="hero"` implies it: a hero is the page's leading image by
+   *  definition, and loading it lazily held back the largest paint. */
   eager?: boolean;
   /** Non-destructive framing (0043): 0..1 focal point kept in frame at every
    *  crop via object-position. Null/undefined = centered as before. */
   focal?: { x: number | null; y: number | null } | null;
 }) {
   const resolvedSizes = sizes ?? MEDIA_SIZES[role ?? "card"];
+  const leading = eager || role === "hero";
   if (!src) {
     // The plate variants carry a drawn mark; the plain fallback stays empty so
     // thumbnails and inline media don't sprout a badge at 44px.
@@ -127,8 +133,8 @@ export function Media({
         alt={alt}
         fill
         sizes={resolvedSizes}
-        loading={eager ? "eager" : "lazy"}
-        fetchPriority={eager ? "high" : undefined}
+        loading={leading ? "eager" : "lazy"}
+        fetchPriority={leading ? "high" : undefined}
         className="object-cover"
         style={
           focal && focal.x !== null && focal.y !== null

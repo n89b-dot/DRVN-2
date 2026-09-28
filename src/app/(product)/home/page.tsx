@@ -74,6 +74,51 @@ export default async function HomePage({
   if (!user) redirect("/login");
   const recommendations = recommendListings(user.id, 3);
 
+  // Started here, before anything is awaited: these need only the member's
+  // id, and they used to wait for the feed before they began.
+  // H-4's rail: people worth following, ranked by what they've actually
+  // built and posted rather than by follower count, so the same five
+  // accounts don't win forever. Deterministic, so it doesn't reshuffle.
+  // W-1's handoff needs to know which cars already have a draft, and W-3's
+  // picker needs the author's own active listings.
+  const quickContextPromise = Promise.all([
+    supabase
+      .from("activity_posts")
+      .select("car_id")
+      .eq("author_id", user.id)
+      .is("published_at", null)
+      .is("draft_archived_at", null),
+    // The picker shows each part by its photo — without the covers every
+    // row was an empty grey square. The covers ride along as an embed.
+    supabase
+      .from("listings")
+      .select("id, title, price_cents, source_car_id, listing_images(url, position)")
+      .eq("seller_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .order("position", { referencedTable: "listing_images" })
+      .limit(1, { referencedTable: "listing_images" })
+      .limit(40),
+  ]).then(([drafts, listings]) => ({
+    hasDraftFor: (drafts.data ?? []).flatMap((d) => (d.car_id ? [d.car_id] : [])),
+    parts: (listings.data ?? []).map((l) => ({
+      id: l.id,
+      title: l.title,
+      price: formatPrice(l.price_cents),
+      cover: l.listing_images?.[0]?.url ?? null,
+      sourceCarId: l.source_car_id,
+    })),
+  }));
+
+  // A suggestion with no photo and no name reads as a broken row (placeholder
+  // and test accounts), so only people who have put a face and a name on
+  // their profile are offered. Asked for a few more to cover the ones dropped.
+  const buildersPromise = Promise.resolve(
+    supabase.rpc("suggested_builders", { p_viewer: user.id, p_limit: 8 })
+  ).then(({ data, error }) =>
+    (error ? [] : (data ?? [])).filter((b) => b.avatar_url && b.display_name?.trim()).slice(0, 4)
+  );
+
   const [{ data: profile }, { data: cars, count: carCountRaw }, { count: followCount }] =
     await Promise.all([
       supabase
@@ -118,23 +163,52 @@ export default async function HomePage({
           ? "foryou"
           : "following";
 
-  const feed: { items: FeedItem[]; hasMore: boolean } =
+  const feedPromise: Promise<{ items: FeedItem[]; hasMore: boolean }> =
     tab === "following"
-      ? await fetchFollowedFeed(supabase, user.id, { page, pageSize: HOME_FEED_PAGE_SIZE })
+      ? fetchFollowedFeed(supabase, user.id, { page, pageSize: HOME_FEED_PAGE_SIZE })
       : tab === "local" && place
-        ? await fetchLocalFeed(
+        ? fetchLocalFeed(
             supabase,
             { country: place.country, region: place.region },
             { page, pageSize: HOME_FEED_PAGE_SIZE, viewerId: user.id }
           )
         : // For you is other people's things: your own car is already in the
           // garage tile beside it.
-          await fetchFeed(supabase, "all", {
+          fetchFeed(supabase, "all", {
             page,
             pageSize: HOME_FEED_PAGE_SIZE,
             viewerId: user.id,
             excludeOwnerId: user.id,
           });
+
+  const garage = orderCars(cars ?? [], profile?.main_car_id);
+  const carCount = carCountRaw ?? garage.length;
+  const shownCars = garage.slice(0, HOME_GARAGE_MAX);
+
+  // Depth for the garage card: how alive each build is (updates posted) and
+  // who's watching it (followers). One bounded round over the shown cars'
+  // ids, counted in memory — same pattern as the garage's own sheet loader.
+  // It needs only the garage, so it runs beside the feed rather than after.
+  const garageStatsPromise = shownCars.length
+    ? Promise.all([
+        supabase
+          .from("activity_posts")
+          .select("car_id")
+          .in("car_id", shownCars.map((c) => c.id))
+          .not("published_at", "is", null),
+        supabase
+          .from("follows")
+          .select("target_id")
+          .eq("target_type", "car")
+          .in("target_id", shownCars.map((c) => c.id)),
+      ])
+    : Promise.resolve([{ data: [] as { car_id: string | null }[] }, { data: [] as { target_id: string }[] }] as const);
+
+  const [feed, [{ data: carPosts }, { data: carFollows }]] = await Promise.all([feedPromise, garageStatsPromise]);
+  const updatesBy = new Map<string, number>();
+  const followersBy = new Map<string, number>();
+  for (const p of carPosts ?? []) if (p.car_id) updatesBy.set(p.car_id, (updatesBy.get(p.car_id) ?? 0) + 1);
+  for (const f of carFollows ?? []) followersBy.set(f.target_id, (followersBy.get(f.target_id) ?? 0) + 1);
 
   const tabs: { key: HomeTab; label: string }[] = [
     { key: "following", label: "Following" },
@@ -156,85 +230,8 @@ export default async function HomePage({
     .slice(0, 2)
     .toUpperCase();
   const firstName = profile?.display_name?.split(" ")[0];
-  // H-4's rail: people worth following, ranked by what they've actually
-  // built and posted rather than by follower count, so the same five
-  // accounts don't win forever. Deterministic, so it doesn't reshuffle.
-  // W-1's handoff needs to know which cars already have a draft, and W-3's
-  // picker needs the author's own active listings.
-  const quickContextPromise = Promise.all([
-    supabase
-      .from("activity_posts")
-      .select("car_id")
-      .eq("author_id", user.id)
-      .is("published_at", null)
-      .is("draft_archived_at", null),
-    supabase
-      .from("listings")
-      .select("id, title, price_cents, source_car_id")
-      .eq("seller_id", user.id)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(40),
-  ]).then(async ([drafts, listings]) => {
-    // The picker shows each part by its photo — without the covers every
-    // row was an empty grey square.
-    const ids = (listings.data ?? []).map((l) => l.id);
-    const { data: images } = ids.length
-      ? await supabase
-          .from("listing_images")
-          .select("listing_id, url, position")
-          .in("listing_id", ids)
-          .order("position")
-      : { data: [] };
-    const coverOf = new Map<string, string>();
-    for (const img of images ?? []) if (!coverOf.has(img.listing_id)) coverOf.set(img.listing_id, img.url);
-    return {
-      hasDraftFor: (drafts.data ?? []).flatMap((d) => (d.car_id ? [d.car_id] : [])),
-      parts: (listings.data ?? []).map((l) => ({
-        id: l.id,
-        title: l.title,
-        price: formatPrice(l.price_cents),
-        cover: coverOf.get(l.id) ?? null,
-        sourceCarId: l.source_car_id,
-      })),
-    };
-  });
-
-  // A suggestion with no photo and no name reads as a broken row (placeholder
-  // and test accounts), so only people who have put a face and a name on
-  // their profile are offered. Asked for a few more to cover the ones dropped.
-  const buildersPromise = Promise.resolve(
-    supabase.rpc("suggested_builders", { p_viewer: user.id, p_limit: 8 })
-  ).then(({ data, error }) =>
-    (error ? [] : (data ?? [])).filter((b) => b.avatar_url && b.display_name?.trim()).slice(0, 4)
-  );
-
-  const garage = orderCars(cars ?? [], profile?.main_car_id);
   const leadItems = feed.items.slice(0, LEAD_POSTS);
   const restItems = feed.items.slice(LEAD_POSTS);
-  const carCount = carCountRaw ?? garage.length;
-  const shownCars = garage.slice(0, HOME_GARAGE_MAX);
-
-  // Depth for the garage card: how alive each build is (updates posted) and
-  // who's watching it (followers). One bounded round over the shown cars'
-  // ids, counted in memory — same pattern as the garage's own sheet loader.
-  const updatesBy = new Map<string, number>();
-  const followersBy = new Map<string, number>();
-  if (shownCars.length > 0) {
-    const carIds = shownCars.map((c) => c.id);
-    const [{ data: carPosts }, { data: carFollows }] = await Promise.all([
-      supabase
-        .from("activity_posts")
-        .select("car_id")
-        .in("car_id", carIds)
-        .not("published_at", "is", null),
-      supabase.from("follows").select("target_id").eq("target_type", "car").in("target_id", carIds),
-    ]);
-    for (const p of carPosts ?? [])
-      if (p.car_id) updatesBy.set(p.car_id, (updatesBy.get(p.car_id) ?? 0) + 1);
-    for (const f of carFollows ?? [])
-      followersBy.set(f.target_id, (followersBy.get(f.target_id) ?? 0) + 1);
-  }
 
   return (
     <div className="wrap">
@@ -292,8 +289,8 @@ export default async function HomePage({
 
           <div className="deck--main__feed deck--main__feed--lead">
             {leadItems.length > 0 ? (
-              <Rv>
-                <FeedList items={leadItems} variant="cards" />
+              <Rv immediate>
+                <FeedList items={leadItems} variant="cards" eagerFirst />
               </Rv>
             ) : (
               <EmptyState
