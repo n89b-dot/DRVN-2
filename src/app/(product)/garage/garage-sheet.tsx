@@ -87,7 +87,7 @@ export function GarageSheetCard({
     { label: "Updates", value: s.updates },
     { label: "Parts live", value: s.partsLive, live: s.openOffers > 0 },
     { label: "Sold", value: s.partsSold },
-    { label: "Following", value: s.followers },
+    { label: "Followers", value: s.followers },
   ].filter((d) => d.value > 0);
   const sheetNo = String(s.index).padStart(2, "0");
 

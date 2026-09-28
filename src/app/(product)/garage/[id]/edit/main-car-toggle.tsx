@@ -40,7 +40,12 @@ export function MainCarToggle({ carId, isMain }: { carId: string; isMain: boolea
           type="checkbox"
           checked={main}
           disabled={pending}
-          onChange={(e) => toggle(e.target.checked)}
+          onChange={(e) => {
+            // It saves by itself — kept from bubbling to the details form it
+            // sits in, which would otherwise mark "Unsaved changes".
+            e.stopPropagation();
+            toggle(e.target.checked);
+          }}
           className="sq"
         />
         My main car — leads your profile, garage and car lists

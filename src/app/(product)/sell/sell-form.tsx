@@ -1112,7 +1112,7 @@ export function SellForm({
               </ul>
               <p className="field__hint mt-1">
                 {!canPublish || needsPhoto
-                  ? "Drafts save any time — publishing unlocks once the bold items are done."
+                  ? "A draft needs a title, category and price — publishing unlocks once the bold items are done."
                   : "These are nudges, not blockers — you can still publish or save a draft as-is."}
               </p>
             </div>

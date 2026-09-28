@@ -16,7 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 
-import { decodeVin } from "@/lib/vehicles/vpic";
+import { decodeVin, decodeVinResult } from "@/lib/vehicles/vpic";
 import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/catalog";
 import type { Car, CarImage, Json, ModStatus } from "@/lib/database.types";
 import { isKnownPlace } from "@/lib/geo/regions";
@@ -111,13 +111,20 @@ export async function createCar(_prev: ActionState, formData: FormData): Promise
     if (!vin || vin.length < 11 || vin.length > 17) {
       return { error: "That VIN doesn't look right — 17 characters on modern cars." };
     }
-    decoded = await decodeVin(vin);
-    if (!decoded) {
+    const result = await decodeVinResult(vin);
+    if (result.status === "unavailable") {
+      return {
+        error:
+          "VIN lookup is unavailable right now — choose the vehicle from the list or try later.",
+      };
+    }
+    if (result.status === "undecoded") {
       return {
         error:
           "That VIN didn't decode. Check it, or choose the vehicle from the list instead.",
       };
     }
+    decoded = result.decoded;
     make = decoded.make;
     model = decoded.model;
     year = year ?? decoded.year;
@@ -125,6 +132,10 @@ export async function createCar(_prev: ActionState, formData: FormData): Promise
   } else {
     make = String(formData.get("make") ?? "").trim() || null;
     model = String(formData.get("model") ?? "").trim() || null;
+    // An empty manual form used to create a nameless "My car".
+    if (!make && !nameInput) {
+      return { error: "Enter at least the make — or give the car a name." };
+    }
   }
 
   // Manual words that happen to name a catalog vehicle quietly gain the

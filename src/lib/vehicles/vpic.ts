@@ -52,14 +52,26 @@ const titleCase = (s: string) =>
 
 /** Decodes a VIN. Null = vPIC unreachable or nothing usable came back. */
 export async function decodeVin(vin: string): Promise<DecodedVin | null> {
+  const result = await decodeVinResult(vin);
+  return result.status === "ok" ? result.decoded : null;
+}
+
+/**
+ * The same decode, telling an outage apart from a VIN vPIC answered for but
+ * couldn't place — so a correct VIN isn't called wrong while vPIC is down.
+ */
+export async function decodeVinResult(
+  vin: string
+): Promise<{ status: "ok"; decoded: DecodedVin } | { status: "unavailable" } | { status: "undecoded" }> {
   const rows = await vpic<Record<string, string>>(`DecodeVinValues/${encodeURIComponent(vin)}`);
-  const d = rows?.[0];
-  if (!d) return null;
+  if (rows === null) return { status: "unavailable" };
+  const d = rows[0];
+  if (!d) return { status: "undecoded" };
 
   const year = Number(d.ModelYear);
   // vPIC returns a row even for garbage; a decode without make AND year is
   // no decode at all.
-  if (!d.Make || !Number.isInteger(year)) return null;
+  if (!d.Make || !Number.isInteger(year)) return { status: "undecoded" };
 
   const displacement = d.DisplacementL ? `${Number(d.DisplacementL).toFixed(1)}L` : null;
   const cylinders = d.EngineCylinders ? `${d.EngineCylinders}cyl` : null;
@@ -67,13 +79,16 @@ export async function decodeVin(vin: string): Promise<DecodedVin | null> {
     [displacement, cylinders, d.FuelTypePrimary || null].filter(Boolean).join(" ") || null;
 
   return {
-    make: titleCase(d.Make),
-    model: d.Model || null,
-    year,
-    trim: d.Trim || d.Series || null,
-    engine,
-    drivetrain: d.DriveType || null,
-    bodyClass: d.BodyClass || null,
+    status: "ok",
+    decoded: {
+      make: titleCase(d.Make),
+      model: d.Model || null,
+      year,
+      trim: d.Trim || d.Series || null,
+      engine,
+      drivetrain: d.DriveType || null,
+      bodyClass: d.BodyClass || null,
+    },
   };
 }
 
