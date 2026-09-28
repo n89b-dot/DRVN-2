@@ -903,8 +903,13 @@ export async function updateActivityPost(
     const priorBlockUrls = new Set(
       normalizePrior(post.body ?? []).flatMap((b) => (b.type === "images" ? b.urls : []))
     );
-    const loose = previousImages.map((i) => i.url).filter((url) => !priorBlockUrls.has(url));
-    imageUrls = [...new Set([...loose, ...imageUrls])];
+    // The edit page now hands those photos to the editor as a photos block,
+    // so a body that arrives WITH photos is the member's full choice
+    // (including removals). Only a body without any is topped up.
+    if (!imageUrls.length) {
+      const loose = previousImages.map((i) => i.url).filter((url) => !priorBlockUrls.has(url));
+      imageUrls = [...new Set(loose)];
+    }
   }
 
   const { error } = await supabase.rpc("write_activity_post", {

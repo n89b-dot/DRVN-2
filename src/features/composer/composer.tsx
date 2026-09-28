@@ -410,7 +410,9 @@ export function BuildStoryComposer({
       return false;
     }
   }, [blocksJson]);
-  const missing = [!title.trim() && "a title", !isEdit && !hasPhoto && "a photo"].filter(Boolean);
+  // A quick post has no title, so an edit only needs one if the post had one.
+  const titleRequired = !isEdit || Boolean(initialTitle.trim());
+  const missing = [titleRequired && !title.trim() && "a title", !isEdit && !hasPhoto && "a photo"].filter(Boolean);
   const publishReason = missing.length ? `Add ${missing.join(" and ")} to publish` : null;
   const titleInput = useRef<HTMLInputElement>(null);
   const addPhotos = useCallback(() => {

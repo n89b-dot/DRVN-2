@@ -55,7 +55,20 @@ export default async function EditActivityPostPage({
     : await supabase.from("cars").select("name, slug").eq("id", carId).maybeSingle();
 
   // A post from the rich composer holds image and/or multiple blocks. Those
-  const blocks = normalizeBlocks(post.body);
+  const bodyBlocks = normalizeBlocks(post.body);
+  // A quick post's photos live only in the gallery, never in a block, so the
+  // editor couldn't show them — or remove a wrong one. They open as a photos
+  // block at the top; saving writes back whatever the member leaves there.
+  const { data: gallery } = await supabase
+    .from("activity_images")
+    .select("url")
+    .eq("post_id", post.id)
+    .order("position");
+  const inBlocks = new Set(bodyBlocks.flatMap((b) => (b.type === "images" ? b.urls : [])));
+  const loosePhotos = (gallery ?? []).map((image) => image.url).filter((url) => !inBlocks.has(url));
+  const blocks = loosePhotos.length
+    ? [{ type: "images" as const, urls: loosePhotos }, ...bodyBlocks]
+    : bodyBlocks;
 
   const { data: modRows } = carless
     ? { data: [] }
