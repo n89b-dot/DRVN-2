@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { capture } from "@/lib/analytics";
 import { SAVED_SEARCH_KEYS, savedSearchKey, writeSavedSearch } from "@/lib/marketplace/saved-search";
 import { normalizeMarketplaceState } from "@/lib/marketplace/state";
-import { CATEGORIES } from "@/lib/marketplace/taxonomy";
+import { savedSearchName } from "./saved-search-name";
 
 /**
  * Saved searches (brief §C). Saving is silent; alerts are a separate,
@@ -25,18 +25,6 @@ function readParams(formData: FormData): Record<string, string> {
     if (value) params[key] = value;
   }
   return Object.fromEntries(Object.entries(normalizeMarketplaceState(params)).filter((entry): entry is [string, string] => Boolean(entry[1])));
-}
-
-/** A human name for the saved state: the query, else the category, else "Everything". */
-function nameFor(params: Record<string, string>): string {
-  if (params.q) return `“${params.q}”`;
-  if (params.category) {
-    const category = CATEGORIES.find((c) => c.slug === params.category);
-    const sub = category?.subcategories.find((s) => s.slug === params.subcategory);
-    return sub?.label ?? category?.label ?? params.category;
-  }
-  if (params.fit === "1") return "Potential matches for my garage";
-  return "Everything on the marketplace";
 }
 
 export async function createSavedSearch(
@@ -71,7 +59,7 @@ export async function createSavedSearch(
   }
 
   const { error } = await supabase.rpc("save_marketplace_search", {
-    p_name: nameFor(params).slice(0, 120), p_params: writeSavedSearch(params),
+    p_name: ((await savedSearchName(params)) ?? "Saved search").slice(0, 120), p_params: writeSavedSearch(params),
   });
   if (error) {
     return {

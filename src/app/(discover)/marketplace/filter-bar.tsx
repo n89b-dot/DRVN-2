@@ -35,6 +35,7 @@ export function FilterBar({
   browse,
   sidebar,
   brands = [],
+  conditions,
 }: {
   action: string;
   filters: Record<string, string | undefined>;
@@ -49,6 +50,9 @@ export function FilterBar({
   sidebar?: ReactNode;
   /** Brands that actually have parts live, with their counts (M-6). */
   brands?: { brand: string; total: number }[];
+  /** Conditions that have parts listed; the others aren't offered (the
+   *  selected one always is). Undefined when unknown: offer them all. */
+  conditions?: readonly string[];
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const activeCount = refinementCount(filters);
@@ -113,7 +117,7 @@ export function FilterBar({
               the moment you type, and "Seller location (te…" truncated. */}
           <Select id="mkt-condition" label="Condition" name="condition" defaultValue={filters.condition ?? ""} className="w-full max-w-none" fieldClassName="!mb-0">
             <option value="">Any condition</option>
-            {CONDITIONS.map((c) => (
+            {CONDITIONS.filter((c) => !conditions || conditions.includes(c.value) || c.value === filters.condition).map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
               </option>

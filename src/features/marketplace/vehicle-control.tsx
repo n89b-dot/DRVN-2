@@ -27,8 +27,8 @@ export function VehicleControl({ filters, selection, garage }: { filters: Listin
   function close() { setOpen(false); setDraftKey(key => key + 1); }
   // First in the list, and the one the shortcut offers. `garage` already
   // arrives main-car-first (lib/cars/order.ts), so this is the same answer
-  // every other surface gives.
-  const mainCar = garage.find(car => car.isMain) ?? null;
+  // every other surface gives — the newest car when no main car is set.
+  const mainCar = garage.find(car => car.isMain) ?? garage[0] ?? null;
   function choose(vehicle?: string, vyear?: string) {
     startTransition(() => router.push(marketplaceHref(filters, { vehicle, vyear, fit: undefined, page: undefined })));
     close();

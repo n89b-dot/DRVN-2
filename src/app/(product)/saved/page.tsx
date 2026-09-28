@@ -25,6 +25,7 @@ import { hydrateListingCards } from "@/lib/marketplace/query";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 import { SavedSearchList } from "@/features/marketplace/saved-search-list";
+import { savedSearchName } from "@/features/marketplace/saved-search-name";
 import { vehicleSubline } from "@/lib/vehicles/label";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
@@ -181,7 +182,9 @@ export default async function SavedPage({
     tab === "saved" && savedPostIds.length
       ? await supabase
           .from("activity_posts")
-          .select("id, title, intro, car_id, published_at")
+          // `body` too: a quick post has no title, and its caption is the
+          // only thing that tells one saved post from another.
+          .select("id, title, intro, body, car_id, published_at")
           .in("id", savedPostIds)
           .not("published_at", "is", null)
       : { data: [] };
@@ -235,7 +238,7 @@ export default async function SavedPage({
 
   const buildCount = totalCarSaves + totalFollowedCars;
   const sellerCount = totalFollowedProfiles;
-  const isEmpty = !savesError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !(savedSearches ?? []).length;
+  const isEmpty = !savesError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !totalPostSaves && !(savedSearches ?? []).length;
   const hasMoreListings = tab === "saved" && (listingsTotal ?? 0) > from + PAGE_SIZE;
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
@@ -273,7 +276,8 @@ export default async function SavedPage({
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Saved · {totalListingSaves} part{totalListingSaves === 1 ? "" : "s"} · {buildCount}{" "}
-          build{buildCount === 1 ? "" : "s"} · {sellerCount} seller{sellerCount === 1 ? "" : "s"}
+          build{buildCount === 1 ? "" : "s"} · {totalPostSaves} post{totalPostSaves === 1 ? "" : "s"} ·{" "}
+          {sellerCount} seller{sellerCount === 1 ? "" : "s"}
         </span>
         <h1>
           Everything you&apos;re
@@ -460,7 +464,9 @@ export default async function SavedPage({
         <section className="deck">
           <Rv className="tile">
             <TileHead label="Saved searches" end={<span className="chip">{(savedSearches ?? []).length}</span>} />
-            <SavedSearchList searches={savedSearches ?? []} />
+            {/* Named from what's set, so searches saved before names said
+                "2003 BMW M3 · KW" read the same as new ones. */}
+            <SavedSearchList searches={await Promise.all((savedSearches ?? []).map(async (search) => ({ ...search, name: (await savedSearchName(search.params)) ?? search.name })))} />
             <p className="field__hint mt-2">
               Alerts are off unless you turn them on — matching inventory then lands in
               Notifications, never your inbox.

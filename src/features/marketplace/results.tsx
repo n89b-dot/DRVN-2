@@ -85,7 +85,7 @@ export function MarketplaceResults({
           : undefined
         }
       >
-        {total > 0 ? "Return to the first page to see the available parts." : hasFilters ? "Try another search or remove a filter. Your category stays selected." : emptyBody}
+        {total > 0 ? "Return to the first page to see the available parts." : hasFilters ? `Try another search or remove a filter.${params.category ? " Your category stays selected." : ""}` : emptyBody}
       </EmptyState>
       </>
     );

@@ -15,14 +15,14 @@ import { deleteSavedSearch, setSavedSearchAlert } from "./saved-search-actions";
  * the ONLY place alerting turns on; nothing opts a user in for them.
  */
 
+/** The refinements under the name. Vehicle, text, category and brand are
+ *  already in the name (saved-search-name.ts), so they aren't repeated. */
 function describe(params: Record<string, string>): string {
   const bits: string[] = [];
   if (params.condition) bits.push(params.condition.replace("_", " "));
   if (params.min || params.max) bits.push(`$${params.min ?? "0"}–${params.max ? `$${params.max}` : "any"}`);
-  if (params.brand) bits.push(params.brand);
   if (params.location) bits.push(params.location);
   if (params.fit === "1") bits.push("Potential matches for my current garage");
-  if (params.vehicle) bits.push(`Vehicle selected${params.vyear ? ` · ${params.vyear}` : ""}`);
   if (params.sort) bits.push(params.sort === "price_asc" ? "Item price: low to high" : params.sort === "price_desc" ? "Item price: high to low" : "Newest");
   return bits.join(" · ");
 }

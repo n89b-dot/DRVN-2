@@ -1,5 +1,19 @@
 # Applying migrations
 
+## September 28 — garage cars get catalogue ids (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928181000_backfill_car_catalog_ids.sql` | shared dev project, 2026-09-28 |
+
+Data only. Cars with no `catalog_make_id` get one by case-insensitive make
+name, and a `catalog_model_id` by exact model name or else the longest
+catalogue model the car's model starts with ("M4 Competition" → M4). The
+marketplace only offers garage cars that carry a catalogue id, so before this
+no existing member saw "Parts for my …". On dev 18 of 19 cars matched a make
+and 16 a model. Previous values (all null) are in
+`~/drvn-db-backups/pre-20260928181000-cars-catalog-ids.sql`. Safe to re-run.
+
 ## September 28 — card hearts count 🔥 only (shared dev project)
 
 | File | Applied to |

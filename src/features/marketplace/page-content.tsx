@@ -67,16 +67,25 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
     counts.all = (counts.all ?? 0) + Number(row.total);
     return counts;
   }, {}));
+  // The condition choices offered are the ones with parts in them: a filter
+  // whose options always return nothing is worse than no option.
+  const conditionPromise = Promise.resolve(supabase.rpc("marketplace_browse_rows", {}).select("condition").limit(1000))
+    .then(({ data, error }) => (error ? undefined : [...new Set((data ?? []).flatMap(row => row.condition ? [row.condition] : []))]));
   // The sidebar's category list is handed to a client component as a prop,
   // where a Suspense boundary left BOTH its placeholder and its resolved
   // list in the document. The counts are one small grouped query already in
   // flight, so the list simply waits for them with everything else here.
-  const [vehicle, garage, brands, categoryCounts] = await Promise.all([
+  const [vehicle, garage, brands, allCategoryCounts, conditions] = await Promise.all([
     vehiclePromise,
     garagePromise,
     brandPromise,
     categoryPromise,
+    conditionPromise,
   ]);
+  // The counts are for everything listed, not for this search — shown beside
+  // a search they promise parts that aren't there, so they only show without one.
+  const searching = hasMarketplaceSearch(filters);
+  const categoryCounts = searching ? undefined : allCategoryCounts;
   const garageChoices = (garage ?? []).flatMap(car => car.catalog_make_id ? [{ label: car.name, vehicle: `${car.catalog_make_id}${car.catalog_model_id ? `-${car.catalog_model_id}` : ""}`, year: car.year ? String(car.year) : "", isMain: car.isMain }] : []);
   const leaf = category?.subcategories.find(s => s.slug === filters.subcategory);
   const title = leaf?.label ?? category?.label ?? "Marketplace";
@@ -117,7 +126,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
             All
           </FilterLink>
           {/* Only the types with parts in them (and the one you're on). */}
-          {category.subcategories.filter(sub => !categoryCounts || sub.slug === leaf?.slug || (categoryCounts[`${category.slug}/${sub.slug}`] ?? 0) > 0).map(sub => (
+          {category.subcategories.filter(sub => !allCategoryCounts || sub.slug === leaf?.slug || (allCategoryCounts[`${category.slug}/${sub.slug}`] ?? 0) > 0).map(sub => (
             <FilterLink key={sub.slug} href={categoryHref(filters, category.slug, sub.slug)} selected={sub.slug === leaf?.slug}>
               {sub.label}
             </FilterLink>
@@ -137,12 +146,13 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         filters={filters}
         showFitToggle={Boolean(user)}
         brands={brands}
+        conditions={conditions}
         browse={<CategorySheet currentCategory={category?.slug} currentSubcategory={leaf?.slug} filters={filters} />}
         sidebar={<CategorySidebarList counts={categoryCounts} category={category} subcategory={leaf?.slug} filters={filters} />}
       />
       <ActiveFilters basePath={basePath} filters={filters} vehicleLabel={vehicle ? [filters.vyear, vehicle.label].filter(Boolean).join(" ") : undefined} />
       <Suspense fallback={<CategoryNav category={category} subcategory={leaf?.slug} filters={filters} compact={hasMarketplaceSearch(filters) || Boolean(leaf)} />}>
-        {categoryPromise.then(counts => <CategoryNav counts={counts} category={category} subcategory={leaf?.slug} filters={filters} compact={hasMarketplaceSearch(filters) || Boolean(leaf)} />)}
+        {categoryPromise.then(counts => <CategoryNav counts={searching ? undefined : counts} category={category} subcategory={leaf?.slug} filters={filters} compact={hasMarketplaceSearch(filters) || Boolean(leaf)} />)}
       </Suspense>
       <section className="deck" aria-label="Marketplace results">
         <Suspense key={marketplaceHref(filters)} fallback={<div role="status" className="marketplace-grid is-loading" aria-label="Loading parts">{Array.from({ length: 8 }, (_, i) => <div key={i} className="marketplace-card" aria-hidden="true"><span className="gbox block !h-auto !w-full aspect-[4/3]" /><span className="gbar my-4 !w-3/4" /></div>)}</div>}>
