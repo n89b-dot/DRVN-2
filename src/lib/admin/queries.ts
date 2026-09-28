@@ -18,6 +18,7 @@ import type {
 import { buildOrderTimeline, type TimelineEvent } from "./diagnostics";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reportError } from "@/lib/monitoring";
 
 /**
  * Admin console read layer. Server-only, service-role.
@@ -37,6 +38,32 @@ type Admin = ReturnType<typeof createAdminClient>;
 const admin = (): Admin => createAdminClient();
 
 /** Days of silence after which a dispute is flagged as over SLA. */
+/**
+ * An order-id search as a uuid range. Uuids order like their hex text, so a
+ * prefix ("5ef01246", or a whole id) is every id between the prefix padded
+ * with 0s and with fs — a plain range filter, where `id::text ilike` isn't
+ * possible through PostgREST at all (it errored and read as "no results").
+ */
+export function uuidPrefixRange(text: string): [string, string] | null {
+  const hex = text.trim().toLowerCase().replace(/-/g, "");
+  if (!/^[0-9a-f]{1,32}$/.test(hex)) return null;
+  const shape = (h: string) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  return [shape(hex.padEnd(32, "0")), shape(hex.padEnd(32, "f"))];
+}
+
+/** Free text made safe inside a PostgREST `.or()` filter, where commas and
+ *  brackets are syntax (a search for "Vega, Marisol" broke the query). */
+function orText(text: string): string {
+  return text.replace(/[,()*%\\]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** A failed console read must not look like an empty result. */
+function unlessFailed(label: string, error: { message: string } | null) {
+  if (!error) return;
+  reportError(`[admin] ${label} failed`, error);
+  throw new Error(`Couldn't load ${label}. Try again.`);
+}
+
 export const DISPUTE_SLA_DAYS = 4;
 
 // ---------- Overview ----------
@@ -247,7 +274,7 @@ export async function getDisputeQueue(
       a
         .from("profiles")
         .select("id")
-        .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+        .or(`username.ilike.%${orText(q)}%,display_name.ilike.%${orText(q)}%`)
         .limit(20),
       a.from("order_items").select("order_id").ilike("title", `%${q}%`).limit(200),
     ]);
@@ -276,7 +303,8 @@ export async function getDisputeQueue(
     );
   }
   if (idPrefix) {
-    builder = builder.ilike("id::text" as never, `${idPrefix}%`);
+    const range = uuidPrefixRange(idPrefix);
+    if (range) builder = builder.gte("id", range[0]).lte("id", range[1]);
   } else if (q) {
     const clauses = [
       ...(partyIds.length
@@ -291,7 +319,8 @@ export async function getDisputeQueue(
     builder = builder.or(clauses.join(","));
   }
 
-  const { data: orders } = await builder.range(page * size, page * size + size);
+  const { data: orders, error: disputesError } = await builder.range(page * size, page * size + size);
+  unlessFailed("disputes", disputesError);
 
   const fetched = orders ?? [];
   const hasMore = fetched.length > size;
@@ -642,7 +671,12 @@ export async function searchOrders(opts: OrdersSearchOpts): Promise<AdminOrdersR
         .select("order_id")
         .ilike("provider_reference", `${query}%`);
       const orderIds = (byPayment ?? []).map((p) => p.order_id);
-      builder = orderIds.length ? builder.in("id", orderIds) : builder.ilike("id::text" as never, `${query}%`);
+      const range = uuidPrefixRange(query);
+      builder = orderIds.length
+        ? builder.in("id", orderIds)
+        : range
+          ? builder.gte("id", range[0]).lte("id", range[1])
+          : builder.in("id", []);
     } else if (query.startsWith("pi_")) {
       const { data: byPayment } = await a
         .from("payments")
@@ -653,7 +687,7 @@ export async function searchOrders(opts: OrdersSearchOpts): Promise<AdminOrdersR
       const { data: users } = await a
         .from("profiles")
         .select("id")
-        .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+        .or(`username.ilike.%${orText(query)}%,display_name.ilike.%${orText(query)}%`)
         .limit(20);
       const ids = (users ?? []).map((u) => u.id);
       if (!ids.length) return { rows: [], page, hasMore: false };
@@ -663,7 +697,8 @@ export async function searchOrders(opts: OrdersSearchOpts): Promise<AdminOrdersR
     }
   }
 
-  const { data: orders } = await builder;
+  const { data: orders, error: ordersError } = await builder;
+  unlessFailed("orders", ordersError);
   const fetched = orders ?? [];
   const hasMore = fetched.length > size;
   const rows = fetched.slice(0, size);
@@ -758,7 +793,8 @@ export async function searchListings(opts: {
   if (opts.category) builder = builder.eq("category", opts.category);
   if (opts.query?.trim()) builder = builder.ilike("title", `%${opts.query.trim()}%`);
 
-  const { data: listings, count } = await builder;
+  const { data: listings, count, error: listingsError } = await builder;
+  unlessFailed("listings", listingsError);
   const rows = listings ?? [];
   const total = count ?? rows.length;
   const [parties, images] = await Promise.all([
@@ -864,14 +900,25 @@ export async function searchUsers(
     )
     .order("created_at", { ascending: false })
     .range(page * USERS_PAGE_SIZE, page * USERS_PAGE_SIZE + USERS_PAGE_SIZE - 1);
-  if (query?.trim()) {
-    builder = builder.or(`username.ilike.%${query.trim()}%,display_name.ilike.%${query.trim()}%`);
+  const text = query?.trim() ?? "";
+  if (text.includes("@")) {
+    // Support mail arrives by email address: match the account's email.
+    const { data: byEmail, error: emailError } = await a
+      .from("account_emails")
+      .select("user_id")
+      .ilike("email", `%${text.replace(/[%_\\]/g, "")}%`)
+      .limit(50);
+    unlessFailed("users", emailError);
+    builder = builder.in("id", (byEmail ?? []).map((row) => row.user_id));
+  } else if (text) {
+    builder = builder.or(`username.ilike.%${orText(text)}%,display_name.ilike.%${orText(text)}%`);
   }
   if (state === "suspended") builder = builder.not("suspended_at", "is", null);
   if (state === "no_payouts") builder = builder.eq("payouts_enabled", false);
   if (constrainIds) builder = builder.in("id", constrainIds);
 
-  const { data: profiles, count: total } = await builder;
+  const { data: profiles, count: total, error: usersError } = await builder;
+  unlessFailed("users", usersError);
   const rows = profiles ?? [];
   if (!rows.length) return { rows: [], total: total ?? 0, page, hasMore: false };
 
