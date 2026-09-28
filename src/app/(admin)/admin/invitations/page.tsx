@@ -45,7 +45,15 @@ export default async function InvitationsPage() {
         </span>
       </PageHead>
 
-      {context?.role === "admin" && <InvitationForm siteOrigin={siteOrigin} />}
+      {context?.role === "admin" &&
+        (config?.enforced ? (
+          <InvitationForm siteOrigin={siteOrigin} />
+        ) : (
+          <p className="order__meta">
+            Invitations only matter while the beta gate is on — right now anyone can join, buy and
+            sell.
+          </p>
+        ))}
 
       <section className="mt-8">
         <h2 className="font-display text-section">Recent invitations</h2>

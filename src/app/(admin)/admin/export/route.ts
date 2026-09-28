@@ -24,7 +24,10 @@ function csv(rows: (string | number | null | undefined)[][]): string {
     .map((row) =>
       row
         .map((cell) => {
-          const s = cell == null ? "" : String(cell);
+          const raw = cell == null ? "" : String(cell);
+          // A cell starting with = + - @ (or tab/CR) runs as a formula in
+          // Excel/Sheets; seller-written titles must stay plain text.
+          const s = typeof cell === "string" && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
           return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
         })
         .join(",")

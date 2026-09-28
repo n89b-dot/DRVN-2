@@ -62,7 +62,13 @@ function denyProductRoutes(request: NextRequest, response: NextResponse, reason:
 }
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  // Admin pages learn which page they are, so the 15-minute MFA check can
+  // send an admin back where they were after the code (guard.ts).
+  const forwarded = new Headers(request.headers);
+  if (request.nextUrl.pathname.startsWith("/admin") || request.nextUrl.pathname.startsWith("/docs")) {
+    forwarded.set("x-drvn-path", request.nextUrl.pathname + request.nextUrl.search);
+  }
+  let supabaseResponse = NextResponse.next({ request: { headers: forwarded } });
 
   if (!hasSupabaseConfig()) {
     // Local dev without env vars should stay browsable; a deployed environment
@@ -84,7 +90,9 @@ export async function updateSession(request: NextRequest) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        supabaseResponse = NextResponse.next({ request });
+        // The refreshed session must reach the page too, not just the browser.
+        forwarded.set("cookie", request.cookies.toString());
+        supabaseResponse = NextResponse.next({ request: { headers: forwarded } });
         cookiesToSet.forEach(({ name, value, options }) =>
           supabaseResponse.cookies.set(name, value, options)
         );

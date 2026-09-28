@@ -926,7 +926,8 @@ export async function searchUsers(
   const partyClause = `seller_id.in.(${ids.join(",")}),buyer_id.in.(${ids.join(",")})`;
   const [listings, sales, disputes, admins] = await Promise.all([
     a.from("listings").select("seller_id").in("seller_id", ids),
-    a.from("orders").select("seller_id").in("seller_id", ids),
+    // A sale is an order that was paid — cancelled and abandoned ones aren't.
+    a.from("orders").select("seller_id").in("seller_id", ids).in("status", ["paid", "shipped", "delivered", "completed", "disputed"]),
     // Only this page's parties — never the whole orders table.
     a.from("orders").select("seller_id, buyer_id").not("disputed_at", "is", null).or(partyClause),
     a.from("admin_users").select("user_id").in("user_id", ids),

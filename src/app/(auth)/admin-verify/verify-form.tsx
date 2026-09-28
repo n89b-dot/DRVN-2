@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-export function AdminVerifyForm({ factorId }: { factorId?: string }) {
+export function AdminVerifyForm({ factorId, next = "/admin" }: { factorId?: string; next?: string }) {
   const [factor, setFactor] = useState(factorId);
   const [enrollment, setEnrollment] = useState<{ qr_code: string; secret: string }>();
   const [error, setError] = useState("");
@@ -27,7 +27,7 @@ export function AdminVerifyForm({ factorId }: { factorId?: string }) {
     try {
       const { error } = await createClient().auth.mfa.challengeAndVerify({ factorId: factor, code: String(form.get("code") || "").trim() });
       if (error) throw error;
-      window.location.assign("/admin");
+      window.location.assign(next);
     } catch { setError("The code was not accepted. Try the current code from your authenticator."); }
     finally { setBusy(false); }
   }

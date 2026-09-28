@@ -739,7 +739,13 @@ export async function adminMessageParties(
           .eq("id", orderId)
           .maybeSingle();
         if (!order) throw new Error("Order not found.");
-        await notifyBothParties(ctx.admin, order, "A message from DRVN support", message);
+        // Notifications can't be replied to, so say where a reply goes.
+        await notifyBothParties(
+          ctx.admin,
+          order,
+          "A message from DRVN support",
+          `${message}\n\nTo reply, open the order: message the other party there, or report a problem with photos.`
+        );
         return { recipients: [order.buyer_id, order.seller_id].filter(Boolean).length };
       }
     );

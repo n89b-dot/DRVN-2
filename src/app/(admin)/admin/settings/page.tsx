@@ -132,6 +132,8 @@ export default async function AdminSettingsPage() {
     paymentsModeError = error instanceof Error ? error.message : "Could not resolve payments mode.";
   }
   const monitoringConfigured = Boolean(process.env.SENTRY_DSN);
+  // The key's prefix says test or live; the value itself is never shown.
+  const stripeTestKey = (process.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_test_");
   const cronSecretConfigured = Boolean(process.env.CRON_SECRET);
   const overdueJobs = jobs?.filter((job) => job.stale).length ?? 0;
 
@@ -160,7 +162,7 @@ export default async function AdminSettingsPage() {
             desc={
               webhookHost
                 ? `Delivering to ${webhookHost} — Slack-compatible JSON.`
-                : "Not configured. Set ADMIN_ALERT_WEBHOOK_URL in the deploy environment; unset means alerts are silently skipped."
+                : "Not configured. Set ADMIN_ALERT_WEBHOOK_URL in the deploy environment; until then alerts are recorded in the outbox but sent nowhere."
             }
           >
             <span className={cx(webhookHost ? "chip chip--ok" : "chip chip--warn")}>
@@ -197,15 +199,17 @@ export default async function AdminSettingsPage() {
               paymentsModeError
                 ? "Could not resolve — misconfigured. Fix in the deploy environment; see the exact rule in src/lib/env.ts (resolvePaymentsMode)."
                 : paymentsMode === "stripe"
-                  ? "Live Stripe integration — real charges, real transfers."
+                  ? stripeTestKey
+                    ? "Stripe in TEST mode — test cards only, no real money moves."
+                    : "Live Stripe integration — real charges, real transfers."
                   : "Stub provider — no real money moves. Fine for dev, refused in production without an explicit override."
             }
           >
             {paymentsModeError ? (
               <span className="chip chip--live">error</span>
             ) : (
-              <span className={cx("chip", paymentsMode === "stripe" ? "chip--ok" : "chip--warn")}>
-                {paymentsMode}
+              <span className={cx("chip", paymentsMode === "stripe" && !stripeTestKey ? "chip--ok" : "chip--warn")}>
+                {paymentsMode === "stripe" && stripeTestKey ? "stripe test" : paymentsMode}
               </span>
             )}
           </Setting>
@@ -214,7 +218,7 @@ export default async function AdminSettingsPage() {
             desc={
               webhookHost
                 ? "ADMIN_ALERT_WEBHOOK_URL is set — see Alerts above for delivery detail."
-                : "Not configured — alerts accumulate as undelivered outbox rows instead of reaching anyone."
+                : "Not configured — alerts are recorded in the outbox but sent nowhere."
             }
           >
             <span className={cx("chip", webhookHost ? "chip--ok" : "chip--warn")}>

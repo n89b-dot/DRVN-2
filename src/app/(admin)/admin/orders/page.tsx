@@ -223,7 +223,14 @@ export default async function AdminOrdersPage({
                   {r.refundedCents > 0 ? (
                     <span className="chip chip--spent">Refunded {formatPrice(r.refundedCents)}</span>
                   ) : (
-                    <span className="status-plain">{r.transferred ? "paid out" : "held"}</span>
+                    <span className="status-plain">
+                      {r.transferred
+                        ? "paid out"
+                        : // Only a paid order has money in DRVN's hands.
+                          ["paid", "shipped", "delivered", "disputed"].includes(r.status)
+                          ? "held"
+                          : "not paid"}
+                    </span>
                   )}
                 </td>
                 <td data-label="Status">

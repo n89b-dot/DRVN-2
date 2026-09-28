@@ -1,8 +1,12 @@
 import { notFound, redirect } from "next/navigation";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/server";
 import { AdminVerifyForm } from "./verify-form";
 export const metadata = { title: "Verify admin access — DRVN", robots: { index: false, follow: false } };
-export default async function AdminVerifyPage() {
+export default async function AdminVerifyPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  // Only console pages are worth returning to from here.
+  const requested = safeRedirectPath((await searchParams).next, "/admin");
+  const next = /^\/(admin|docs)(\/|\?|$)/.test(requested) ? requested : "/admin";
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
   if (!user) redirect("/login?next=%2Fadmin-verify");
@@ -12,6 +16,6 @@ export default async function AdminVerifyPage() {
   if (error) throw new Error("Could not load authentication factors");
   return <main className="mx-auto max-w-md p-6"><h1 className="mb-4 text-xl">Verify admin access</h1>
     <p className="mb-4">Use your authenticator app to unlock the admin console. Verification lasts 15 minutes.</p>
-    <AdminVerifyForm factorId={data.totp.find((factor) => factor.status === "verified")?.id} />
+    <AdminVerifyForm factorId={data.totp.find((factor) => factor.status === "verified")?.id} next={next} />
   </main>;
 }
