@@ -5,9 +5,16 @@ import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type BetaRole = "buyer" | "seller";
-export type BetaAccess = { enforced: boolean; eligible: boolean };
+export type BetaAccess = {
+  enforced: boolean;
+  eligible: boolean;
+  /** The check itself failed (not a "no"): callers should say "try again",
+   *  not "you're not invited". Access is still denied. */
+  unavailable?: boolean;
+};
 
 const CLOSED: BetaAccess = { enforced: true, eligible: false };
+const UNAVAILABLE: BetaAccess = { enforced: true, eligible: false, unavailable: true };
 
 export function normalizeBetaEmail(value: string): string {
   return value.trim().toLowerCase();
@@ -38,10 +45,10 @@ export async function getBetaAccess(
       p_user_id: userId ?? null,
       p_role: role,
     });
-    if (error) return CLOSED;
+    if (error) return UNAVAILABLE;
     return readStatus(data);
   } catch {
-    return CLOSED;
+    return UNAVAILABLE;
   }
 }
 
@@ -60,6 +67,10 @@ export async function prepareBetaSignup(email: string, token: string): Promise<{
 }> {
   const status = await getBetaAccess(null, "buyer");
   if (!status.enforced) return { enforced: false };
+  // A failed check is not a bad invitation — most people signing up have none.
+  if (status.unavailable) {
+    return { enforced: true, error: "Something went wrong on our side. Try again in a moment." };
+  }
 
   const normalizedEmail = normalizeBetaEmail(email);
   if (!normalizedEmail || token.length < 32 || token.length > 256) {

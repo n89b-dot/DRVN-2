@@ -8,7 +8,14 @@ import { DISPLAY_NAME_MAX } from "@/lib/limits";
 import { betaCommerceError, getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
 import { createClient } from "@/lib/supabase/server";
 
-export type AuthState = { error?: string; ok?: string };
+export type AuthState = {
+  error?: string;
+  ok?: string;
+  /** Which field the error belongs under; none means the whole form. */
+  field?: "email" | "password";
+  /** The email the person typed, handed back so a failed sign-up keeps it. */
+  email?: string;
+};
 
 /**
  * Where a signed-in user belongs. Onboarding writes `username`, so a null
@@ -87,16 +94,18 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   // destination now survives both branches below, including the email
   // round-trip, and is validated as an internal path before it's used.
   const next = safeRedirectPath(formData.get("next"), "");
+  // Every failure keeps what was typed and says which field it's about.
+  const fail = (error: string, field?: "email" | "password"): AuthState => ({ error, field, email });
 
   if (!email || !password) {
-    return { error: "Email and password are required." };
+    return fail("Email and password are required.", email ? "password" : "email");
   }
   if (password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
+    return fail("Password must be at least 8 characters.", "password");
   }
 
   const prepared = await prepareBetaSignup(email, String(formData.get("invite") ?? ""));
-  if (prepared.error) return { error: prepared.error };
+  if (prepared.error) return fail(prepared.error);
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
@@ -106,7 +115,13 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   });
 
   if (error) {
-    return { error: authErrorCopy(error) };
+    const field =
+      error.code === "weak_password"
+        ? "password"
+        : error.code === "user_already_exists" || error.code === "email_exists" || error.code === "email_address_invalid"
+          ? "email"
+          : undefined;
+    return fail(authErrorCopy(error), field);
   }
 
   // In enforced mode, the Auth trigger is the authority: a direct Auth user
@@ -116,7 +131,7 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
     const sellerAccess = await getBetaAccess(data.user?.id, "seller");
     if (!access.eligible && !sellerAccess.eligible) {
       await supabase.auth.signOut();
-      return { error: "This invitation could not be accepted. It may already have been used." };
+      return fail("This invitation could not be accepted. It may already have been used.");
     }
   }
 
@@ -188,7 +203,7 @@ export async function completeOnboarding(
     if (error.code === "23505") {
       return { error: "That username is taken." };
     }
-    return { error: error.message };
+    return { error: "We couldn't save your username. Try again." };
   }
 
   // Username + display name are the account-search projection (brief §28) —

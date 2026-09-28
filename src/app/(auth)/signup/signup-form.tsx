@@ -80,7 +80,16 @@ export function SignupForm({
           )}
           {next && <input type="hidden" name="next" value={next} />}
           {invite && <input type="hidden" name="invite" value={invite} />}
+          {state.error && !state.field && (
+            <Alert tone="live" role="alert" className="mb-5" title="Couldn't create your account">
+              {state.error}
+            </Alert>
+          )}
           <TextField
+            // Remount with what was typed after a failed submit — React resets
+            // the form when the action returns, which used to empty this box.
+            key={state.email ?? ""}
+            defaultValue={state.email}
             id="signup-email"
             label="Email"
             name="email"
@@ -90,7 +99,7 @@ export function SignupForm({
             autoComplete="email"
             className="max-w-none"
             hint="Used for offers, orders and payouts. Never shown publicly."
-            error={errors.email}
+            error={errors.email ?? (state.field === "email" ? state.error : undefined)}
             onInput={() => clear("email")}
           />
           <PasswordField
@@ -103,7 +112,7 @@ export function SignupForm({
             autoComplete="new-password"
             className="max-w-none"
             hint="8+ characters. Length is what really counts."
-            error={errors.password ?? state.error}
+            error={errors.password ?? (state.field === "password" ? state.error : undefined)}
             onInput={() => clear("password")}
           />
           <Button

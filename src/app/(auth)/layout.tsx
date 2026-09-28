@@ -6,6 +6,7 @@ import { ListingCard, Mosaic, MosaicCell } from "@/components/ui";
 import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vehicleSubline } from "@/lib/vehicles/label";
+import { AuthClose } from "./auth-close";
 
 /**
  * The backdrop's data is public and identical for every visitor, and layouts
@@ -117,9 +118,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <Link href="/" className="authtop__plate bar__logo" aria-label="DRVN home">
             DRVN<em>.</em>
           </Link>
-          <Link href="/" className="authtop__plate authtop__close">
-            <span aria-hidden="true">×</span> Close
-          </Link>
+          <AuthClose />
         </div>
         <div className="authcard">{children}</div>
       </div>

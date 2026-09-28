@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { hasSupabaseConfig, isProduction, publicKey } from "@/lib/env";
 import { reportError } from "@/lib/monitoring";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 /**
  * Routes that mean nothing without an account.
@@ -22,13 +23,22 @@ const PRODUCT_PREFIXES = [
   "/settings",
   "/sell",
   "/orders",
+  "/offers",
+  "/messages",
+  "/selling",
+  "/payouts",
 ];
+
+/** Members-only pages under a public prefix: /listings/<id> is a public
+ *  listing, but /listings (your ledger) and /listings/<id>/edit are yours. */
+const PRODUCT_PATTERNS = [/^\/listings\/?$/, /^\/listings\/[^/]+\/edit\/?$/];
 
 const AUTH_PAGES = ["/login", "/signup"];
 
 function isProductPath(pathname: string) {
-  return PRODUCT_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  return (
+    PRODUCT_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
+    PRODUCT_PATTERNS.some((pattern) => pattern.test(pathname))
   );
 }
 
@@ -110,15 +120,19 @@ export async function updateSession(request: NextRequest) {
   if (!user && isProductRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    url.search = "";
+    // The whole destination, query included — /orders?view=sales comes back
+    // to Sales, not to whichever tab Orders defaults to.
+    url.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 
   if (user && (isAuthPage || pathname === "/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/home";
-    url.search = "";
-    return NextResponse.redirect(url);
+    // Already signed in: honour a safe ?next= (a sign-in link to
+    // /notifications should open Notifications), never another auth page.
+    const next = isAuthPage ? safeRedirectPath(request.nextUrl.searchParams.get("next"), "/home") : "/home";
+    const dest = /^\/(login|signup)(\/|\?|$)/.test(next) ? "/home" : next;
+    return NextResponse.redirect(new URL(dest, request.url));
   }
 
   return supabaseResponse;

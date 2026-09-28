@@ -25,6 +25,15 @@ export default async function OnboardingPage({
     redirect(carry ? `/login?next=${encodeURIComponent(carry)}` : "/login");
   }
 
+  // A handle is set once. Someone who already has one has nothing to do here:
+  // the form would only show their own name as "Already taken".
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.username) redirect(safeRedirectPath(next, "/home"));
+
   // Validated here as well as in the action — the hidden field is user input
   // by the time it comes back.
   return (

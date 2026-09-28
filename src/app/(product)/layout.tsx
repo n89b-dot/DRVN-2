@@ -15,6 +15,11 @@ export default async function ProductLayout({ children }: { children: ReactNode 
     redirect("/login");
   }
 
+  // Every member has a handle. An account that skipped onboarding had a
+  // /u/null profile yet could post, buy and sell; send it back to finish.
+  const { data: me } = await supabase.from("profiles").select("username").eq("id", user.id).maybeSingle();
+  if (me && !me.username) redirect("/onboarding");
+
   // Both preferences are cookies so the shell renders correctly server-side —
   // no flash of the wrong palette or a rail snapping open on hydration.
   const jar = await cookies();
