@@ -31,6 +31,8 @@ const UTILITY_ROUTES: IconRoute[] = [
   { href: "/saved", label: "Saved", note: "Parts, builds and sellers you follow", icon: "bookmark" },
 ];
 
+const GUEST_UTILITY_ROUTES = UTILITY_ROUTES.filter((route) => route.href === "/cart");
+
 /** Theme — an icon switch, not a labelled control. */
 function ThemeToggle({ night, toggle }: { night: boolean; toggle: () => void }) {
   return (
@@ -170,6 +172,7 @@ export function LivesheetBar({
     ? [...PRIMARY_NAV, ...UTILITY_ROUTES.map((route) => ({ kind: "route" as const, ...route }))]
     : [
         ...PUBLIC_ROUTES.map((route) => ({ kind: "route" as const, ...route })),
+        ...GUEST_UTILITY_ROUTES.map((route) => ({ kind: "route" as const, ...route })),
         {
           kind: "route" as const,
           href: "/login",
@@ -226,8 +229,9 @@ export function LivesheetBar({
               </ButtonLink>
             )}
 
-            {signedIn &&
-              UTILITY_ROUTES.map((route) => {
+            {/* Guests can fill a cart and check out, so the cart is theirs
+                too; notifications and saved need an account. */}
+            {(signedIn ? UTILITY_ROUTES : GUEST_UTILITY_ROUTES).map((route) => {
                 const badge =
                   route.href === "/cart"
                     ? cartCount

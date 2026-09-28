@@ -294,7 +294,9 @@ export function CheckoutSteps({
                   clientSecret={state.payment.clientSecret}
                   orderIds={state.payment.orderIds}
                   total={liveTotal}
-                  canSaveCard
+                  // Saving a card needs an account to keep it on; a guest who
+                  // ticked it was sent to /login before being charged.
+                  canSaveCard={!needsEmail}
                 />
               )
             )}
