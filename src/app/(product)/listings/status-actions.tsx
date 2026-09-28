@@ -48,6 +48,10 @@ export function ListingStatusActions({
   if (status === "active") {
     actions.push({ label: "Pause", next: "paused", hint: "Hide from the market, keep the sheet" });
   }
+  // Sold somewhere else: it shows as sold on the store instead of vanishing.
+  if (status === "active" || status === "paused") {
+    actions.push({ label: "Mark sold", next: "sold", hint: "Sold off DRVN — shows as sold on your store" });
+  }
   if (status !== "archived") {
     actions.push({ label: "Archive", next: "archived", hint: "File it away" });
   }

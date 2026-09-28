@@ -60,6 +60,15 @@ export function ShopSection({ shop }: { shop: ShopSettings }) {
         }
       />
 
+      {/* Sellers look here for store settings; two of them live with the
+          profile fields because they show on the profile's Parts tab. */}
+      <p className="field__hint mt-2 max-w-[62ch]">
+        Your store note and default offer floor are under{" "}
+        <a href="#profile" className="jumplink">
+          Profile
+        </a>
+        .
+      </p>
       {!shop.isShop ? (
         <form action={convertAction} className="mt-3 grid gap-3">
           <p className="field__hint max-w-[62ch]">

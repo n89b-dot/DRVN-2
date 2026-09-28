@@ -815,6 +815,15 @@
     .ledger__num {
       text-align: left;
     }
+    /* Stacked, a row has the width: the title gets two lines instead of an
+       ellipsis after two words, so similar parts can be told apart. */
+    .ledger__title {
+      max-width: none;
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
     .ledger__num::before {
       content: attr(data-label) " ";
       font-family: var(--mono);

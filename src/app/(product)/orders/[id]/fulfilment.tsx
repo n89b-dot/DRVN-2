@@ -63,7 +63,7 @@ export function DispatchForm({ orderId, isCollection }: { orderId: string; isCol
             <div className="field--row mt-3">
               <label className="field">
                 <span className="field__label">Carrier</span>
-                <input name="carrier" value={carrier} onChange={(event) => setCarrier(event.target.value)} disabled={pending} required className="ctl !max-w-none" placeholder="Royal Mail" />
+                <input name="carrier" value={carrier} onChange={(event) => setCarrier(event.target.value)} disabled={pending} required className="ctl !max-w-none" placeholder="USPS, UPS, FedEx…" />
               </label>
               <label className="field">
                 <span className="field__label">Tracking number</span>

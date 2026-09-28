@@ -187,6 +187,9 @@ export default async function EditListingPage({
         />
       )}
 
+      {/* A sold or reserved part is part of an order record: deleting it is
+          refused, so it isn't offered (the ledger's rule). */}
+      {!locked && (
       <section className="deck mt-10">
         <Rv className="tile">
           <span className="microlabel microlabel--ink">Remove it entirely</span>
@@ -199,6 +202,7 @@ export default async function EditListingPage({
           </div>
         </Rv>
       </section>
+      )}
 
       <Foot
         left="DRVN — edits publish immediately"

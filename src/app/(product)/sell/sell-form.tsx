@@ -324,7 +324,9 @@ export function SellForm({
     { label: "Photos", done: images.length > 0 },
     { label: "Condition", done: !usedNeedsGrade || Boolean(grade) },
     { label: "Fitment", done: fitmentCount > 0 },
-    { label: "Shipping", done: shippingMode !== "flat" || shipping.trim() !== "" },
+    // "0.00" is the blank default, not a decision — only a real price (or a
+    // non-flat mode) counts, matching the "$0 shipping" check below.
+    { label: "Shipping", done: shippingMode !== "flat" || Number(shipping) > 0 },
   ];
   const readyCount = readiness.filter((r) => r.done).length;
 
