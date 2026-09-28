@@ -1407,6 +1407,41 @@ export async function getAdminRoster(): Promise<AdminRosterRow[]> {
   }));
 }
 
+// ---------- Background jobs ----------
+
+export type WorkerJobRow = {
+  family: string;
+  lastSuccess: string | null;
+  lastFailure: string | null;
+  stale: boolean;
+  /** Switched off in this environment (search without Typesense, analytics without PostHog). */
+  disabled: boolean;
+};
+
+/**
+ * When each background job last ran, from worker_health_snapshot() — the
+ * same data /api/health/workers serves an external monitor. Null when the
+ * snapshot can't be read, so the console says so instead of looking healthy.
+ */
+export async function getWorkerJobs(): Promise<WorkerJobRow[] | null> {
+  const { data, error } = await admin().rpc("worker_health_snapshot", {});
+  if (error || !data) return null;
+  const snapshot = data as {
+    families?: { family: string; stale: boolean; last_success: string | null; last_failure: string | null }[];
+  };
+  if (!Array.isArray(snapshot.families)) return null;
+  const off = new Set<string>();
+  if (!(process.env.TYPESENSE_URL && process.env.TYPESENSE_API_KEY)) off.add("search");
+  if (!process.env.POSTHOG_KEY) off.add("analytics");
+  return snapshot.families.map((f) => ({
+    family: f.family,
+    lastSuccess: f.last_success,
+    lastFailure: f.last_failure,
+    stale: off.has(f.family) ? false : f.stale,
+    disabled: off.has(f.family),
+  }));
+}
+
 // ---------- Operations cases (0046) ----------
 
 export type OpsCaseRow = {

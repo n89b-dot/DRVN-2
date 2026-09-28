@@ -8,10 +8,10 @@ import { revalidatePath } from "next/cache";
 
 import { auditedAction } from "./audit";
 import { sendAdminAlert } from "./alerts";
-import { processDisputeSla } from "@/lib/payments/dispute-sla";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
 import { dispatchRecordedWebhookEvent } from "./replay-webhook";
-import { processDueTransfers } from "@/lib/payments/transfer-worker";
+import { runMoneyWorkerPass } from "@/lib/money-worker";
+import { ACCOUNT_DELETION_REASON } from "./presentation";
 import { getAdminContext } from "./guard";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -436,9 +436,11 @@ export async function adminUnsuspendUser(
           .update({ suspended_at: null, suspended_reason: null })
           .eq("id", userId)
           .not("suspended_at", "is", null)
+          // A pending account deletion is not a suspension to lift.
+          .or(`suspended_reason.is.null,suspended_reason.neq."${ACCOUNT_DELETION_REASON}"`)
           .select("id");
         if (error) throw new Error(error.message);
-        if (!cleared?.length) throw new Error("This user isn't suspended.");
+        if (!cleared?.length) throw new Error("This user isn't suspended, or their account is being deleted.");
 
         // Reactivate exactly the set the suspension paused.
         const { data: lastSuspend } = await ctx.admin
@@ -523,9 +525,10 @@ export async function adminResolveReport(
 // ---------- Transfer worker ----------
 
 /**
- * Manual run of the transfer worker — the dev path (pg_net can't reach
- * localhost) and the human retry for stuck funds. Same code the scheduled
- * job invokes via /api/jobs/transfers.
+ * Manual run of the money worker — the human retry for stuck work. Runs
+ * exactly the scheduled pass (`runMoneyWorkerPass`, also behind
+ * /api/jobs/transfers): expiries, captures, transfers, refunds, returns,
+ * disputes, alerts, receipts and the rest, each recorded in worker_runs.
  */
 export async function adminRunTransferWorker(
   _prev: AdminActionState,
@@ -539,7 +542,7 @@ export async function adminRunTransferWorker(
   if (!reason) return { error: "A reason is required — it goes in the audit log." };
 
   try {
-    const summary = await auditedAction(
+    const pass = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -548,16 +551,20 @@ export async function adminRunTransferWorker(
         subjectId: randomUUID(),
         reason,
       },
-      async () => {
-        const transfers = await processDueTransfers(ctx.admin);
-        const disputes = await processDisputeSla(ctx.admin);
-        return { ...transfers, ...disputes };
-      }
+      () => runMoneyWorkerPass(ctx.admin)
     );
     revalidatePath("/admin", "layout");
-    return {
-      ok: `Worker ran: ${summary.transferred} transferred, ${summary.blocked} blocked, ${summary.failed} failed, ${summary.cancelled} cancelled, ${summary.requeued} requeued; ${summary.autoRefunded} dispute${summary.autoRefunded === 1 ? "" : "s"} auto-refunded.`,
+    const count = (family: string, key: string) => {
+      const value = (pass.results[family] as Record<string, unknown> | undefined)?.[key];
+      return typeof value === "number" ? value : 0;
     };
+    const failedFamilies = Object.entries(pass.results)
+      .filter(([, result]) => (result as { failed?: unknown } | undefined)?.failed === true)
+      .map(([family]) => family);
+    const summary = `${count("transfers", "transferred")} paid out, ${count("expiries", "completed")} holds released, ${count("disputes", "autoRefunded")} disputes auto-refunded.`;
+    return failedFamilies.length
+      ? { error: `Worker ran. ${summary} These jobs failed and will retry: ${failedFamilies.join(", ")}.` }
+      : { ok: `Worker ran. ${summary}` };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Worker run failed." };
   }

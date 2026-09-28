@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
-import { SUSPENDED_CHIP } from "@/lib/admin/presentation";
+import { isDeletionPending, SUSPENDED_CHIP } from "@/lib/admin/presentation";
 import { searchUsers, USER_STATE_FILTERS, USERS_PAGE_SIZE, type UserStateFilter } from "@/lib/admin/queries";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
@@ -134,14 +134,16 @@ export default async function AdminUsersPage({
                   </span>
                 </td>
                 <td data-label="State">
-                  {u.suspendedAt ? (
+                  {u.suspendedAt && isDeletionPending(u.suspendedReason) ? (
+                    <span className="chip chip--warn">Deleting</span>
+                  ) : u.suspendedAt ? (
                     <span className={cx("chip", SUSPENDED_CHIP)}>Suspended</span>
                   ) : (
                     <span className="status-plain">active</span>
                   )}
                 </td>
                 <td>
-                  {u.isAdmin ? (
+                  {u.isAdmin || (u.suspendedAt && isDeletionPending(u.suspendedReason)) ? (
                     <span className="order__meta">—</span>
                   ) : u.suspendedAt ? (
                     <ActionDialog

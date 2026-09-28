@@ -164,11 +164,11 @@ export default async function AdminPaymentsPage({
           <span className="microlabel !mb-0">Transfer pipeline ({ops.stuckIntents.length})</span>
           <ActionDialog
             action={adminRunTransferWorker}
-            title="Run transfer worker"
+            title="Run background money jobs"
             trigger="Run worker now"
             triggerClassName="relbtn !static"
             hidden={{}}
-            confirmNote="Processes every due, blocked or failed transfer immediately — the same pass the scheduler runs. Safe to repeat: one transfer per order, ever."
+            confirmNote="Runs the scheduled money pass now: payouts, expired holds, refunds, returns, disputes, alerts and receipts. Safe to repeat: one transfer per order, ever."
             fields={[{ kind: "reason", placeholder: "e.g. seller finished onboarding, paying out stuck funds" }]}
             submitLabel="Run worker"
           />

@@ -39,3 +39,14 @@ export function payoutAlertChip(status: string): string | null {
 
 /** Suspension is an enforced terminal state, not a live event. */
 export const SUSPENDED_CHIP = "chip--danger";
+
+/**
+ * The reason the privacy RPCs write when a member asks to delete their
+ * account (20260905185725). The profile is suspended while the deletion
+ * worker runs; the console shows it as a deletion, never offers Unsuspend.
+ */
+export const ACCOUNT_DELETION_REASON = "Account deletion requested";
+
+export function isDeletionPending(suspendedReason: string | null | undefined): boolean {
+  return suspendedReason === ACCOUNT_DELETION_REASON;
+}

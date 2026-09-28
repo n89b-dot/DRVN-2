@@ -5,7 +5,7 @@ import { Rv } from "@/components/livesheet";
 import { KeyValueTable } from "@/components/ui";
 import { adminAddNote, adminSuspendUser, adminUnsuspendUser } from "@/lib/admin/actions";
 import { getUserDetail, type AdminUserOrderRow } from "@/lib/admin/queries";
-import { ORDER_STATUS_CHIP } from "@/lib/admin/presentation";
+import { isDeletionPending, ORDER_STATUS_CHIP } from "@/lib/admin/presentation";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel, plural } from "@/lib/format";
 
@@ -78,7 +78,9 @@ export default async function AdminUserPage({
       <Rv as="header" className="pagehead">
         <div className="flex flex-wrap items-baseline gap-3">
           <h1 className={cx(isPersonStub(user) && "person--stub")}>{personLabel(user)}</h1>
-          {user.suspendedAt ? (
+          {user.suspendedAt && isDeletionPending(user.suspendedReason) ? (
+            <span className="chip chip--warn">deletion in progress</span>
+          ) : user.suspendedAt ? (
             <span className="chip chip--live">suspended</span>
           ) : (
             <span className="chip chip--ok">active</span>
@@ -131,6 +133,11 @@ export default async function AdminUserPage({
             )}
             {user.isAdmin ? (
               <span className="chip chip--spent">Admins are managed in SQL</span>
+            ) : user.suspendedAt && isDeletionPending(user.suspendedReason) ? (
+              <span className="order__meta">
+                The member asked to delete their account. Their profile stays hidden while the
+                deletion job runs.
+              </span>
             ) : user.suspendedAt ? (
               <ActionDialog
                 action={adminUnsuspendUser}

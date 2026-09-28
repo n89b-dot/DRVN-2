@@ -39,6 +39,7 @@ export function ExportAccount() {
     <Button type="button" variant="ghost" loading={pending} pendingLabel="Requesting…" onClick={start} disabled={request?.status === "pending" || request?.status === "processing"}>
       {request?.status === "pending" || request?.status === "processing" ? "Preparing export…" : "Request my data"}
     </Button>
+    {(request?.status === "pending" || request?.status === "processing") && <p className="field__hint mt-2">This usually takes a few minutes. You can leave this page — the download appears here when it&apos;s ready.</p>}
     {request?.status === "failed" && <p role="alert" className="field__err mt-2">The export stopped before completion. Request a new package or contact support.</p>}
     {request?.status === "expired" && <p className="field__hint mt-2">That private package expired. You can request a fresh one.</p>}
     {error && <p role="alert" className="field__err mt-2">{error}</p>}

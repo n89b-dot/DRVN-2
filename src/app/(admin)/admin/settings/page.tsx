@@ -6,6 +6,8 @@ import {
   DISPUTE_SLA_DAYS,
   ORDERS_PAGE_SIZE,
   getAdminRoster,
+  getWorkerJobs,
+  type WorkerJobRow,
 } from "@/lib/admin/queries";
 import { resolvePaymentsMode, type PaymentsMode } from "@/lib/env";
 import { cx } from "@/lib/format";
@@ -22,6 +24,59 @@ const ALERT_TRIGGERS = [
   "recovery case opened",
   "transfer stuck",
 ];
+
+/** Each background job in the words an operator would use for it. */
+const JOB_LABEL: Record<string, string> = {
+  expiries: "Release expired holds",
+  captures: "Confirm captured payments",
+  transfers: "Pay out sellers",
+  transferReconciliation: "Reconcile payouts",
+  refunds: "Finish interrupted refunds",
+  labelVoids: "Void unused shipping labels",
+  returns: "Advance return timers",
+  disputes: "Dispute deadlines and auto-refunds",
+  alerts: "Deliver admin alerts",
+  receipts: "Send guest receipts",
+  analytics: "Purchase analytics",
+  search: "Search index",
+  deletions: "Account deletions and exports",
+  savedSearches: "Saved-search alerts",
+  media: "Clean up unused uploads",
+};
+
+function ago(iso: string): string {
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+function JobRow({ job }: { job: WorkerJobRow }) {
+  const failedLast = Boolean(
+    job.lastFailure && (!job.lastSuccess || job.lastFailure > job.lastSuccess)
+  );
+  const desc = job.disabled
+    ? "Switched off in this environment."
+    : job.lastSuccess
+      ? `Last ran ${ago(job.lastSuccess)}${failedLast && job.lastFailure ? ` · last attempt failed ${ago(job.lastFailure)}` : ""}.`
+      : job.lastFailure
+        ? `Never succeeded · last attempt failed ${ago(job.lastFailure)}.`
+        : "Has never run.";
+  const [chip, label] = job.disabled
+    ? ["chip", "off"]
+    : job.stale
+      ? ["chip chip--live", job.lastSuccess ? "overdue" : "never ran"]
+      : failedLast
+        ? ["chip chip--warn", "retrying"]
+        : ["chip chip--ok", "running"];
+  return (
+    <Setting name={JOB_LABEL[job.family] ?? job.family} desc={desc}>
+      <span className={chip}>{label}</span>
+    </Setting>
+  );
+}
 
 function Setting({
   name,
@@ -52,7 +107,7 @@ function Setting({
  * audited way to run the marketplace.
  */
 export default async function AdminSettingsPage() {
-  const [roster, jar] = await Promise.all([getAdminRoster(), cookies()]);
+  const [roster, jar, jobs] = await Promise.all([getAdminRoster(), cookies(), getWorkerJobs()]);
   const night = jar.get("ls-theme")?.value === "night";
 
   const webhookUrl = process.env.ADMIN_ALERT_WEBHOOK_URL;
@@ -78,6 +133,7 @@ export default async function AdminSettingsPage() {
   }
   const monitoringConfigured = Boolean(process.env.SENTRY_DSN);
   const cronSecretConfigured = Boolean(process.env.CRON_SECRET);
+  const overdueJobs = jobs?.filter((job) => job.stale).length ?? 0;
 
   return (
     <>
@@ -117,6 +173,20 @@ export default async function AdminSettingsPage() {
           </Setting>
         </section>
       </div>
+
+      <section className="tile mb-8" aria-label="Background jobs">
+        <span className="microlabel">Background jobs</span>
+        <p className="order__meta mb-2">
+          {!cronSecretConfigured
+            ? "CRON_SECRET is unset, so the scheduler can't run any job. Set it in the deploy environment."
+            : jobs === null
+              ? "Couldn't read job history. Reload to try again."
+              : overdueJobs
+                ? `${overdueJobs} ${overdueJobs === 1 ? "job is" : "jobs are"} overdue — holds, payouts or alerts may be stuck. On a local dev server, run scripts/dev-jobs.sh (see its header).`
+                : "Every job has run on schedule."}
+        </p>
+        {jobs?.map((job) => <JobRow key={job.family} job={job} />)}
+      </section>
 
       <div className="deck deck--two mb-8">
         <section className="tile" aria-label="Operations">
@@ -161,18 +231,6 @@ export default async function AdminSettingsPage() {
           >
             <span className={cx("chip", monitoringConfigured ? "chip--ok" : "chip--warn")}>
               {monitoringConfigured ? "configured" : "not configured"}
-            </span>
-          </Setting>
-          <Setting
-            name="Cron secret"
-            desc={
-              cronSecretConfigured
-                ? "CRON_SECRET is set — scheduled job endpoints (transfer worker) authenticate."
-                : "CRON_SECRET is unset — the transfer worker endpoint refuses every run; use \"Run worker now\" in Payments in the meantime."
-            }
-          >
-            <span className={cx("chip", cronSecretConfigured ? "chip--ok" : "chip--warn")}>
-              {cronSecretConfigured ? "configured" : "not configured"}
             </span>
           </Setting>
           <p className="order__meta mt-3">

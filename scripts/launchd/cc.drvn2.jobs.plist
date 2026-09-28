@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Runs a copy of scripts/dev-jobs.sh every two minutes. launchd can't open
+     a script inside ~/Desktop (macOS privacy), so install the copy in ~/bin
+     like the dev server's own wrapper; PROJECT_DIR points it at this checkout. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>cc.drvn2.jobs</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/neilbarrow/bin/drvn2-jobs.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PROJECT_DIR</key>
+    <string>/Users/neilbarrow/Desktop/Cursor Projects/DRVN 2</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>120</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/neilbarrow/Library/Logs/drvn2-jobs.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/neilbarrow/Library/Logs/drvn2-jobs.log</string>
+</dict>
+</plist>
