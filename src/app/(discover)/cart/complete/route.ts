@@ -65,8 +65,10 @@ export async function GET(request: NextRequest) {
   const locallySettled = orders?.filter((order) => ownOrderIds.includes(order.id)).every((order) => ["paid", "shipped", "delivered", "completed", "disputed", "refunded"].includes(order.status));
   const status = providerStatus === "succeeded" && !locallySettled ? "requires_action" : providerStatus;
 
-  if (status === "succeeded") {
-    // Clear exactly what was bought from the cookie cart.
+  // Stripe has the money: clear exactly what was bought from the cookie cart,
+  // even when the webhook hasn't settled the order locally yet — the buyer
+  // has paid, so those parts must not sit in their cart.
+  if (providerStatus === "succeeded") {
     const { data: items } = await admin
       .from("order_items")
       .select("listing_id")
@@ -75,10 +77,12 @@ export async function GET(request: NextRequest) {
       .map((i) => i.listing_id)
       .filter((id): id is string => Boolean(id));
     if (listingIds.length) await removeCartIds(listingIds);
+  }
 
+  if (status === "succeeded") {
     if (!user) return NextResponse.redirect(new URL("/order-placed?placed=1", request.url));
     const dest =
-      ownOrderIds.length === 1 ? `/orders/${ownOrderIds[0]}?placed=1` : "/orders?placed=1";
+      ownOrderIds.length === 1 ? `/orders/${ownOrderIds[0]}?placed=1` : "/orders?view=purchases&placed=1";
     return NextResponse.redirect(new URL(dest, request.url));
   }
 
@@ -87,7 +91,7 @@ export async function GET(request: NextRequest) {
     // the webhook or the reservation sweeper will resolve it either way.
     if (!user) return NextResponse.redirect(new URL("/order-placed?processing=1", request.url));
     const dest =
-      ownOrderIds.length === 1 ? `/orders/${ownOrderIds[0]}?processing=1` : "/orders?processing=1";
+      ownOrderIds.length === 1 ? `/orders/${ownOrderIds[0]}?processing=1` : "/orders?view=purchases&processing=1";
     return NextResponse.redirect(new URL(dest, request.url));
   }
 

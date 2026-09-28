@@ -79,6 +79,7 @@ export default async function OrdersPage({
     view?: string;
     page?: string;
     placed?: string;
+    processing?: string;
     skipped?: string;
     offer?: string;
     state?: string;
@@ -89,6 +90,7 @@ export default async function OrdersPage({
     view: viewParam,
     page: pageParam,
     placed,
+    processing,
     skipped,
     offer: legacyOfferId,
     state: stateParam,
@@ -250,13 +252,17 @@ export default async function OrdersPage({
     // wants next, the part, who and when, and the pipeline as a strip.
     return (
       <ObjectRow
-        href={`/orders/${order.id}`}
+        // An unpaid purchase has one thing to do — pay — so its row goes
+        // straight to checkout (which sends a paid order back here).
+        href={!isSale && order.status === "pending" ? `/orders/${order.id}/checkout` : `/orders/${order.id}`}
         media={{ src: cover, alt: leadTitle }}
         className="order--under"
         actions={
           <span className="kv font-medium">
             {isSale
-              ? `${formatPrice(order.total_cents - order.platform_fee_cents)} payout`
+              ? ["cancelled", "payment_failed", "refunded"].includes(order.status)
+                ? "No payout"
+                : `${formatPrice(order.total_cents - order.platform_fee_cents)} payout`
               : formatPrice(order.total_cents)}
           </span>
         }
@@ -320,6 +326,12 @@ export default async function OrdersPage({
           Purchases and sales, with dispatch and delivery dates as they land.
         </p>
       </Rv>
+      {processing && !placed && (
+        <Alert tone="ok" ico="✓" title="Payment received" className="mb-6">
+          The bank is confirming it. There&apos;s nothing else to do — your orders update once it
+          clears.
+        </Alert>
+      )}
       {placed && (
         <Alert tone="ok" ico="✓" title="Order placed" className="mb-6">
           {skipped

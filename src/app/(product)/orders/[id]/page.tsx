@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { LiveDim, Rv } from "@/components/livesheet";
-import { Alert, Foot, SellingNav, Media, ObjectRow, RatingStars, TileHead } from "@/components/ui";
+import { Alert, ButtonLink, Foot, SellingNav, Media, ObjectRow, RatingStars, TileHead } from "@/components/ui";
 import {
   ConditionSummary,
   type ConditionSnapshot,
@@ -64,10 +64,10 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ placed?: string; skipped?: string }>;
+  searchParams: Promise<{ placed?: string; skipped?: string; processing?: string }>;
 }) {
   const { id } = await params;
-  const { placed, skipped } = await searchParams;
+  const { placed, skipped, processing } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -301,7 +301,16 @@ export default async function OrderDetailPage({
       : Promise.resolve({ data: null }),
   ]);
 
-  const action = nextAction(order, isSeller);
+  // Stripe sent the buyer back before its webhook settled the order: the
+  // money is on its way, so don't ask them to pay again.
+  const confirmingPayment = Boolean(processing) && isBuyer && order.status === "pending";
+  const action = confirmingPayment ? "Confirming your payment" : nextAction(order, isSeller);
+  const canFinishCheckout = isBuyer && order.status === "pending" && !confirmingPayment;
+  // Money only moved once the order was paid. An unpaid or failed checkout,
+  // or one cancelled before payment, charged nobody and pays nobody out.
+  const moneyMoved =
+    !["pending", "requires_action", "payment_failed"].includes(order.status) &&
+    !(order.status === "cancelled" && !["succeeded", "refunded", "partially_refunded"].includes(payment?.status ?? ""));
 
   const myReview = (reviews ?? []).find((r) => r.reviewer_id === user.id);
   const reviewedByMe = Boolean(myReview);
@@ -354,6 +363,17 @@ export default async function OrderDetailPage({
         <div className="nextaction">
           <span className="microlabel">Next</span>
           <p className="nextaction__what">{action}</p>
+          {confirmingPayment && (
+            <p className="spec-note">
+              Payment received — the bank is confirming it. There&apos;s nothing else to do; this
+              page updates once it clears.
+            </p>
+          )}
+          {canFinishCheckout && (
+            <ButtonLink href={`/orders/${id}/checkout`} variant="live" className="mt-2">
+              Finish checkout
+            </ButtonLink>
+          )}
           {originOffer && (
             <p className="spec-note">
               From an accepted offer of{" "}
@@ -594,11 +614,21 @@ export default async function OrderDetailPage({
                 </div>
               )}
               <div className="sheet__row sheet__total">
-                <span>{isSeller ? "Payout to you" : "You paid"}</span>
+                <span>
+                  {order.status === "cancelled" && !moneyMoved
+                    ? "Cancelled — nothing charged"
+                    : isSeller
+                      ? moneyMoved
+                        ? "Payout to you"
+                        : "Payout once paid"
+                      : moneyMoved
+                        ? "You paid"
+                        : "To pay"}
+                </span>
                 <b>{formatPrice(isSeller ? payout : order.total_cents)}</b>
               </div>
             </div>
-            {isSeller && (
+            {isSeller && moneyMoved && !["cancelled", "refunded"].includes(order.status) && (
               <LiveDim
                 label="Payout releases"
                 value={
