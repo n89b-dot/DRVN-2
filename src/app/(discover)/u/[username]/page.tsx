@@ -79,17 +79,19 @@ export default async function PublicProfilePage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ view?: string; listingsPage?: string; reviewsPage?: string; status?: string }>;
+  searchParams: Promise<{ view?: string; listingsPage?: string; reviewsPage?: string; updatesPage?: string; status?: string }>;
 }) {
   const { username } = await params;
   const {
     view: viewParam,
     listingsPage: listingsPageParam,
     reviewsPage: reviewsPageParam,
+    updatesPage: updatesPageParam,
     status: storeTab,
   } = await searchParams;
   const listingsPage = Math.max(1, Number(listingsPageParam) || 1);
   const reviewsPage = Math.max(1, Number(reviewsPageParam) || 1);
+  const updatesPage = Math.max(1, Number(updatesPageParam) || 1);
   const supabase = await createClient();
 
   const { data: profile, error } = await supabase
@@ -122,6 +124,7 @@ export default async function PublicProfilePage({
     publicOnly: true,
     listingsPage,
     reviewsPage,
+      updatesPage,
   });
   // P-6. The store runs its own query: it shows SOLD parts, which the
   // marketplace never does, and the allowed statuses come from who is

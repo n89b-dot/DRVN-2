@@ -321,10 +321,21 @@ export function ProfileBody({
     {
       key: "updates",
       label: "Updates",
-      count: view.activity.length || null,
+      count: view.activityTotal || null,
       panel: (
         <div className="mt-8">
           <ActivityCards view={view} />
+          {view.activityHasMore && (
+            <div className="pt-4">
+              <Link
+                href={`${basePath}?view=updates&updatesPage=${view.activityPage + 1}`}
+                className="jumplink"
+                scroll={false}
+              >
+                Show more updates →
+              </Link>
+            </div>
+          )}
         </div>
       ),
     },

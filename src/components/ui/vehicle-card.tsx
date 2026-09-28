@@ -56,7 +56,9 @@ export function VehicleCard({
             <span className="vehicle__statdot" aria-hidden="true">
               ·
             </span>
-            <span className="vehicle__stat">{stats.followers} following</span>
+            <span className="vehicle__stat">
+              {stats.followers} follower{stats.followers === 1 ? "" : "s"}
+            </span>
           </span>
         )}
       </span>

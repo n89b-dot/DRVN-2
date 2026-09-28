@@ -17,11 +17,12 @@ type ProfileLink = { label: string; url: string };
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ listingsPage?: string; reviewsPage?: string; status?: string; view?: string }>;
+  searchParams: Promise<{ listingsPage?: string; reviewsPage?: string; updatesPage?: string; status?: string; view?: string }>;
 }) {
   const {
     listingsPage: listingsPageParam,
     reviewsPage: reviewsPageParam,
+    updatesPage: updatesPageParam,
     status: storeTab,
     view: viewParam,
   } = await searchParams;
@@ -36,6 +37,7 @@ export default async function ProfilePage({
     publicOnly: false,
     listingsPage: Math.max(1, Number(listingsPageParam) || 1),
     reviewsPage: Math.max(1, Number(reviewsPageParam) || 1),
+      updatesPage: Math.max(1, Number(updatesPageParam) || 1),
   });
   // Same banner the public page shows (P-1) — public cars only, so what you
   // see here is what a visitor sees.

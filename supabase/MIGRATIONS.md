@@ -1,5 +1,16 @@
 # Applying migrations
 
+## September 28 — "N sold" for visitors (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928182000_profile_sales_count.sql` | shared dev project, 2026-09-28 |
+
+Adds `profile_sales_count(p_profile)`, a definer function returning only the
+number of paid/shipped/delivered/completed orders a visible profile has sold —
+the profile trust line read `orders` through RLS and showed 0 sold to anyone
+but the seller and their buyers. New function; nothing replaced.
+
 ## September 28 — garage cars get catalogue ids (shared dev project)
 
 | File | Applied to |

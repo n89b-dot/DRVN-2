@@ -238,7 +238,11 @@ export default async function SavedPage({
 
   const buildCount = totalCarSaves + totalFollowedCars;
   const sellerCount = totalFollowedProfiles;
-  const isEmpty = !savesError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !totalPostSaves && !(savedSearches ?? []).length;
+  // A saved post that has since been deleted leaves its save row behind; on
+  // this tab, count the posts that are still there so the header never
+  // promises a post the page doesn't show.
+  const postCount = tab === "saved" && totalPostSaves <= SECONDARY_CAP ? savedUpdates.length : totalPostSaves;
+  const isEmpty = !savesError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !postCount && !(savedSearches ?? []).length;
   const hasMoreListings = tab === "saved" && (listingsTotal ?? 0) > from + PAGE_SIZE;
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
@@ -276,7 +280,7 @@ export default async function SavedPage({
       <Rv as="header" className="pagehead pagehead--task">
         <span className="microlabel">
           Saved · {totalListingSaves} part{totalListingSaves === 1 ? "" : "s"} · {buildCount}{" "}
-          build{buildCount === 1 ? "" : "s"} · {totalPostSaves} post{totalPostSaves === 1 ? "" : "s"} ·{" "}
+          build{buildCount === 1 ? "" : "s"} · {postCount} post{postCount === 1 ? "" : "s"} ·{" "}
           {sellerCount} seller{sellerCount === 1 ? "" : "s"}
         </span>
         <h1>

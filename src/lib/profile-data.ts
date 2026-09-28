@@ -63,6 +63,11 @@ export type ProfileView = {
   salesCount: number;
   followerCount: number;
   followingCount: number;
+  /** Every published post (the Updates tab's number), and whether the
+   *  loaded list stops short of it — "Show more updates". */
+  activityTotal: number;
+  activityPage: number;
+  activityHasMore: boolean;
   /** Pagination — "Show more" on the For sale / Reviews tabs. */
   listingsPage: number;
   listingsPageSize: number;
@@ -74,6 +79,7 @@ export type ProfileView = {
 
 export const PROFILE_LISTINGS_PAGE_SIZE = 24;
 export const PROFILE_REVIEWS_PAGE_SIZE = 20;
+export const PROFILE_UPDATES_PAGE_SIZE = 12;
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -104,7 +110,8 @@ export async function loadProfileView(
     publicOnly,
     listingsPage = 1,
     reviewsPage = 1,
-  }: { publicOnly: boolean; listingsPage?: number; reviewsPage?: number }
+    updatesPage = 1,
+  }: { publicOnly: boolean; listingsPage?: number; reviewsPage?: number; updatesPage?: number }
 ): Promise<ProfileView> {
   const listingsFrom = (Math.max(1, listingsPage) - 1) * PROFILE_LISTINGS_PAGE_SIZE;
   const reviewsFrom = (Math.max(1, reviewsPage) - 1) * PROFILE_REVIEWS_PAGE_SIZE;
@@ -116,6 +123,24 @@ export async function loadProfileView(
     .eq("owner_id", profileId);
   if (publicOnly) carsQuery = carsQuery.eq("is_public", true);
 
+  // Posts this keeper wrote — by author, not by car, so a post about a part
+  // (no car) is on their profile too. On /u/… a post about a private car
+  // stays off: the car is embedded only when it is public, and a post keeps
+  // its place only if it has no car or its car came through. The Updates tab
+  // shows them a page at a time; the count is every published post.
+  const updatesLimit = Math.max(1, updatesPage) * PROFILE_UPDATES_PAGE_SIZE;
+  let postsQuery = supabase
+    .from("activity_posts")
+    .select("id, car_id, title, body, intro, published_at, cars(is_public), activity_images(url, alt, position)", {
+      count: "exact",
+    })
+    .eq("author_id", profileId)
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .order("position", { referencedTable: "activity_images" })
+    .limit(updatesLimit);
+  if (publicOnly) postsQuery = postsQuery.eq("cars.is_public", true).or("car_id.is.null,cars.not.is.null");
+
   const [{ data: cars }, { data: mainCar }] = await Promise.all([
     carsQuery,
     supabase.from("profiles").select("main_car_id").eq("id", profileId).maybeSingle(),
@@ -123,7 +148,7 @@ export async function loadProfileView(
   const carList = orderCars(cars ?? [], mainCar?.main_car_id);
   const carIds = carList.map((c) => c.id);
 
-  const [{ data: carImages }, { data: posts }] = await Promise.all([
+  const [{ data: carImages }, { data: posts, count: postsTotal }] = await Promise.all([
     carIds.length
       ? supabase
           .from("car_images")
@@ -131,15 +156,7 @@ export async function loadProfileView(
           .in("car_id", carIds)
           .order("position")
       : Promise.resolve({ data: [] }),
-    carIds.length
-      ? supabase
-          .from("activity_posts")
-          .select("id, car_id, title, body, intro, published_at")
-          .in("car_id", carIds)
-          .not("published_at", "is", null)
-          .order("published_at", { ascending: false })
-          .limit(6)
-      : Promise.resolve({ data: [] }),
+    postsQuery,
   ]);
 
   const galleryByCar = new Map<string, GalleryImage[]>();
@@ -207,7 +224,7 @@ export async function loadProfileView(
   const [
     { data: listingRows, count: listingsTotal },
     { data: reviewRows, count: reviewsTotal },
-    { count: salesCount },
+    { data: salesCount },
     { data: followCounts },
   ] = await Promise.all([
     listingsQuery,
@@ -217,11 +234,9 @@ export async function loadProfileView(
       .eq("reviewee_id", profileId)
       .order("created_at", { ascending: false })
       .range(reviewsFrom, reviewsFrom + PROFILE_REVIEWS_PAGE_SIZE - 1),
-    supabase
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .eq("seller_id", profileId)
-      .in("status", ["paid", "shipped", "delivered", "completed"]),
+    // Orders are private to their buyer and seller, so a visitor counting
+    // them through RLS saw 0 sold. The function returns the total only.
+    supabase.rpc("profile_sales_count", { p_profile: profileId }),
     // `follows` rows are private to the two people in them, so a visitor
     // counting through RLS saw 0. The function returns the totals only.
     supabase.rpc("profile_follow_counts", { p_profile: profileId }).maybeSingle(),
@@ -285,9 +300,12 @@ export async function loadProfileView(
     reviews,
     rating,
     reviewCount: reviewsTotal ?? ratings.length,
-    salesCount: salesCount ?? 0,
+    salesCount: Number(salesCount ?? 0),
     followerCount: Number(followCounts?.followers ?? 0),
     followingCount: Number(followCounts?.following ?? 0),
+    activityTotal: postsTotal ?? activity.length,
+    activityPage: Math.max(1, updatesPage),
+    activityHasMore: (postsTotal ?? 0) > activity.length,
     listingsPage: Math.max(1, listingsPage),
     listingsPageSize: PROFILE_LISTINGS_PAGE_SIZE,
     listingsHasMore: (listingsTotal ?? 0) > listingsFrom + PROFILE_LISTINGS_PAGE_SIZE,
