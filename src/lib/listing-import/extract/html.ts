@@ -65,7 +65,18 @@ function isType(node: Record<string, JsonValue>, type: string): boolean {
   );
 }
 
-/** Walks every JSON-LD block for the first schema.org Product (+ Offer). */
+function asRecord(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, JsonValue>)
+    : undefined;
+}
+
+/**
+ * Walks every JSON-LD block for the first schema.org Product (+ Offer). A
+ * ProductGroup (how Shopify describes a product with variants) counts too:
+ * its name and brand are the product's, and its price, part number and
+ * images come from the first variant when the group doesn't state them.
+ */
 export function extractJsonLdProduct($: CheerioDoc, baseUrl: string): JsonLdProduct | null {
   const nodes: Record<string, JsonValue>[] = [];
   $('script[type="application/ld+json"]').each((_i, el) => {
@@ -89,14 +100,17 @@ export function extractJsonLdProduct($: CheerioDoc, baseUrl: string): JsonLdProd
     }
   });
 
-  const product = nodes.find((n) => isType(n, "Product"));
+  const product = nodes.find((n) => isType(n, "Product") || isType(n, "ProductGroup"));
   if (!product) return null;
+  const variant = asRecord(asArray(product.hasVariant)[0]);
 
-  const offers = asArray(product.offers).find(
-    (o): o is Record<string, JsonValue> => Boolean(o) && typeof o === "object" && !Array.isArray(o)
-  );
+  const firstOffer = (node: Record<string, JsonValue> | undefined) =>
+    asArray(node?.offers).find(
+      (o): o is Record<string, JsonValue> => Boolean(o) && typeof o === "object" && !Array.isArray(o)
+    );
+  const offers = firstOffer(product) ?? firstOffer(variant);
 
-  const images = asArray(product.image)
+  const images = asArray(product.image ?? variant?.image)
     .map((img) => firstString(img))
     .filter((u): u is string => Boolean(u))
     .map((u) => absoluteUrl(baseUrl, u))
@@ -123,7 +137,11 @@ export function extractJsonLdProduct($: CheerioDoc, baseUrl: string): JsonLdProd
     availability: offers
       ? firstString(offers.availability)?.replace(/^https?:\/\/schema\.org\//i, "")
       : undefined,
-    partNumber: firstString(product.mpn) ?? firstString(product.sku),
+    partNumber:
+      firstString(product.mpn) ??
+      firstString(product.sku) ??
+      firstString(variant?.mpn) ??
+      firstString(variant?.sku),
     brand,
     images,
   };
@@ -134,6 +152,10 @@ export type OpenGraphData = {
   description?: string;
   siteName?: string;
   url?: string;
+  /** `og:price:amount` / `product:price:amount` — shops that state a price
+   *  in meta tags but not in JSON-LD. */
+  priceAmount?: string;
+  priceCurrency?: string;
   images: string[];
 };
 
@@ -158,6 +180,8 @@ export function extractOpenGraph($: CheerioDoc, baseUrl: string): OpenGraphData 
     description: meta("og:description") ?? meta("twitter:description") ?? meta("description"),
     siteName: meta("og:site_name"),
     url: absoluteUrl(baseUrl, meta("og:url")),
+    priceAmount: meta("og:price:amount") ?? meta("product:price:amount"),
+    priceCurrency: meta("og:price:currency") ?? meta("product:price:currency"),
     images: images.slice(0, 24),
   };
 }

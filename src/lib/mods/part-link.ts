@@ -98,7 +98,19 @@ export async function fetchPartLink(rawUrl: string, userId: string): Promise<Par
     allowPrivate: config.allowPrivateHosts,
   });
   if (!page.ok) {
-    return { ok: false, error: "Couldn't reach that page. You can type the part in instead." };
+    // Many big parts shops refuse automated reads outright (403, a bot
+    // challenge, a login wall). That isn't the member's link being broken,
+    // so it shouldn't sound like it.
+    const blocked =
+      page.code === "source_access_denied" ||
+      page.code === "source_challenge" ||
+      page.code === "source_login_required";
+    return {
+      ok: false,
+      error: blocked
+        ? "This shop blocks automatic reading — add the part by hand or paste its details."
+        : "Couldn't reach that page. You can type the part in instead.",
+    };
   }
   if (!/text\/html|application\/xhtml/i.test(page.contentType)) {
     return { ok: false, error: "That link isn't a product page. Type the part in instead." };
@@ -109,7 +121,7 @@ export async function fetchPartLink(rawUrl: string, userId: string): Promise<Par
   const og = extractOpenGraph($, page.finalUrl);
   const canonical = extractCanonicalUrl($, page.finalUrl) ?? page.finalUrl;
 
-  const title = (product?.name ?? og.title ?? "").trim().slice(0, 200);
+  const title = (product?.name ?? trimSiteName(og.title, og.siteName) ?? "").trim().slice(0, 200);
   if (!title) {
     return { ok: false, error: "Couldn't read a part from that page. Type it in instead." };
   }
@@ -126,8 +138,10 @@ export async function fetchPartLink(rawUrl: string, userId: string): Promise<Par
       title
     : parsed.product || title;
 
-  const currency = normalizeCurrency(product?.currency);
-  const cents = parsePriceCents(product?.priceText);
+  // JSON-LD first; a shop that only states its price in meta tags still
+  // gets one.
+  const currency = normalizeCurrency(product?.currency) ?? normalizeCurrency(og.priceCurrency);
+  const cents = parsePriceCents(product?.priceText) ?? parsePriceCents(og.priceAmount);
   // No currency means no price — the database refuses the half-state, and so
   // does this, rather than storing a number nobody can read.
   const refPrice = currency && cents ? { cents, currency } : null;
@@ -161,6 +175,28 @@ export async function fetchPartLink(rawUrl: string, userId: string): Promise<Par
     ref_price_cents: refPrice?.cents ?? null,
     ref_price_currency: refPrice?.currency ?? null,
   };
+}
+
+/**
+ * Page titles carry the shop's name: "MX | Asphalt Black | fifteen52". Left
+ * in, it became the product name and the parser read the shop's name as a
+ * part number. Drops a trailing " | Site" (or " – Site") segment — the
+ * stated site name when there is one, otherwise the last pipe segment.
+ */
+export function trimSiteName(title: string | undefined, siteName?: string): string | undefined {
+  if (!title) return title;
+  let out = title.trim();
+  const site = siteName?.trim();
+  const withoutSite = site
+    ? out.replace(new RegExp(`\\s*[|\\-–—:]\\s*${escapeRegExp(site)}\\s*$`, "i"), "")
+    : out;
+  if (withoutSite !== out) {
+    out = withoutSite;
+  } else {
+    const parts = out.split(/\s+\|\s+/);
+    if (parts.length > 1) out = parts.slice(0, -1).join(" | ");
+  }
+  return out.replace(/[\s|\-–—:]+$/, "").trim() || title.trim();
 }
 
 function escapeRegExp(value: string): string {
