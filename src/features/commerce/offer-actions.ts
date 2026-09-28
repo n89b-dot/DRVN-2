@@ -177,6 +177,13 @@ export async function respondToOffer(
   if (!["open", "countered"].includes(offer.status)) {
     return { error: "That offer has already been settled." };
   }
+  // Once the seller has countered it's the buyer's turn. offer_accept_begin
+  // prices a countered offer at the counter, so a seller "accepting" here
+  // reserved the part at a price the buyer never agreed to. Passing (decline)
+  // stays open so the seller can withdraw their counter.
+  if (decision !== "declined" && offer.status === "countered") {
+    return { error: "You've already countered — it's the buyer's turn now. Pass to withdraw your counter." };
+  }
 
   if (decision === "declined") {
     const { data: declined, error } = await admin
@@ -212,7 +219,7 @@ export async function respondToOffer(
         countered_at: new Date().toISOString(),
       })
       .eq("id", offerId)
-      .in("status", ["open", "countered"])
+      .eq("status", "open")
       .select("id");
     if (error) return { error: error.message };
     if (!countered?.length) return { error: "That offer has already been settled." };

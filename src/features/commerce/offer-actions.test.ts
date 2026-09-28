@@ -28,6 +28,10 @@ vi.mock("@/lib/supabase/admin", () => ({
             mocks.inStatuses(statuses);
             return { select: mocks.updateResult };
           },
+          eq: (_column: string, status: string) => {
+            mocks.inStatuses([status]);
+            return { select: mocks.updateResult };
+          },
         }),
       }),
     }),
@@ -62,7 +66,34 @@ it("does not overwrite an offer accepted while a decline was waiting", async () 
 it("does not overwrite an offer accepted while a counter was waiting", async () => {
   const result = await respondToOffer({}, decisionForm("countered"));
   expect(result.error).toContain("already been settled");
-  expect(mocks.inStatuses).toHaveBeenCalledWith(["open", "countered"]);
+  expect(mocks.inStatuses).toHaveBeenCalledWith(["open"]);
+});
+
+const countered = { id: "offer-1", listing_id: "listing-1", buyer_id: "buyer-1", amount_cents: 1000, counter_amount_cents: 1500, status: "countered", expires_at: null };
+
+it("refuses a seller accepting their own counter — it's the buyer's turn", async () => {
+  mocks.offer.mockResolvedValue({ data: countered });
+  const data = new FormData();
+  data.set("offer_id", "offer-1");
+  data.set("decision", "accepted");
+  const result = await respondToOffer({}, data);
+  expect(result.error).toContain("buyer's turn");
+  expect(mocks.inStatuses).not.toHaveBeenCalled();
+});
+
+it("refuses a second counter while the first is waiting on the buyer", async () => {
+  mocks.offer.mockResolvedValue({ data: countered });
+  const data = decisionForm("countered");
+  data.set("counter_amount", "18");
+  const result = await respondToOffer({}, data);
+  expect(result.error).toContain("buyer's turn");
+  expect(mocks.inStatuses).not.toHaveBeenCalled();
+});
+
+it("lets a seller pass on an offer they countered", async () => {
+  mocks.offer.mockResolvedValue({ data: countered });
+  mocks.updateResult.mockResolvedValue({ data: [{ id: "offer-1" }], error: null });
+  await expect(respondToOffer({}, decisionForm("declined"))).resolves.toEqual({ ok: "Offer declined." });
 });
 
 it("confirms an exact decline replay after its response was lost", async () => {
