@@ -11,7 +11,7 @@ import { sendAdminAlert } from "@/lib/admin/alerts";
 import { SELLER_RESPONSE_DAYS } from "./disputes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { postOrderSystemMessage } from "./order-system-message";
+import { postOrderEvent } from "./order-thread";
 import { openDisputeCommand } from "./dispute-command";
 import type { CommerceState } from "./action-types";
 
@@ -90,11 +90,10 @@ export async function offerRefund(
   // report that instead of a phantom success.
   if (!offered?.length) return { error: "This dispute has already been settled." };
 
-  await postOrderSystemMessage(
+  await postOrderEvent(
     admin,
     orderId,
     user.id,
-    order.buyer_id,
     `Offered a refund of ${formatPrice(amount)}.`
   );
   await admin.from("notifications").insert({
@@ -181,11 +180,10 @@ export async function acceptRefund(
   }
 
   if (order.seller_id) {
-    await postOrderSystemMessage(
+    await postOrderEvent(
       admin,
       orderId,
       user.id,
-      order.seller_id,
       `Accepted the ${formatPrice(amount)} refund. Dispute closed.`
     );
   }
@@ -229,11 +227,10 @@ export async function closeDispute(
   if (!closed?.length) return { error: "This dispute has already been settled." };
 
   if (order.seller_id) {
-    await postOrderSystemMessage(
+    await postOrderEvent(
       admin,
       orderId,
       user.id,
-      order.seller_id,
       "Closed the dispute — resolved, no action needed."
     );
   }
@@ -288,11 +285,10 @@ export async function escalateDispute(
   if (!escalated?.length) return { error: "This dispute has already moved on — reload." };
 
   if (order.seller_id) {
-    await postOrderSystemMessage(
+    await postOrderEvent(
       admin,
       orderId,
       user.id,
-      order.seller_id,
       "Asked DRVN to step in — the case is now with support."
     );
     await admin.from("notifications").insert({

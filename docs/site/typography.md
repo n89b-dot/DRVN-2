@@ -27,7 +27,7 @@ tags). Every number that ticks or aligns is `tabular-nums`, in either face.
 | Body-sm | Sans 400 | 15–16px / 1.55 | feed items, reviews, spec cells, row notes |
 | Body-prose | Sans 400 | 16px / 1.7 | `.prose` legal/long-form |
 | Label (microlabel) | Mono 500 | 12px / 0.14em tracking / uppercase / dim | `.microlabel` — the connective tissue |
-| Label-row | Mono 400 | 12px / 0.12–0.13em / uppercase / dim | `.bline__label`, `.msg__who` |
+| Label-row | Mono 400 | 12px / 0.12–0.13em / uppercase / dim | `.bline__label`, `.msg__who`, `.dealcard__eyebrow` (11px) |
 | Label-nav | Mono 400 | 11.5–12.5px / 0.10–0.12em / uppercase | `.bar__link`, `.jumplink`, `.fbtn` |
 | Label-btn | Mono 500 | 12px / 0.10em / uppercase | `.btn` (ink) and `.btn--live` — only `--live` wears the `[ ]` brackets |
 | Label-btn-secondary | Sans 500 | 14px, sentence case as written | `.btn--ghost`, `.btn--destructive`; `.relbtn` at 13px |

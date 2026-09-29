@@ -68,15 +68,15 @@ export async function loadUnreadNotificationCount(
 /**
  * Unread messages (N-5).
  *
- * Counts THREADS with something unread, not individual messages: "3" beside
- * Messages should mean three conversations are waiting, which is what a
- * reader assumes and what they can act on. Forty unread messages in one
- * thread is one thing to deal with, not forty.
+ * Counts PEOPLE with something unread, not individual messages: "3" beside
+ * Messages means three people are waiting on you. Since 20260928140000 a
+ * conversation is one pair of people, so a counter row is one person. Forty
+ * unread messages from one buyer is one thing to deal with, not forty.
  *
  * Reads the denormalised per-user counter from 0031 rather than walking
  * messages, so this stays one indexed count however long a thread runs.
  */
-async function loadUnreadMessages(
+export async function loadUnreadMessages(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<number> {

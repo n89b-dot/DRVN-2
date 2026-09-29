@@ -6,7 +6,7 @@ import { capture } from "@/lib/analytics";
 import { DISPUTE_CATEGORIES, DISPUTE_WINDOW_DAYS } from "./disputes";
 import type { DisputeCategory } from "@/lib/database.types";
 import type { CommerceState } from "./action-types";
-import { postOrderSystemMessage } from "./order-system-message";
+import { postOrderEvent } from "./order-thread";
 const DISPUTE_CATEGORY_LABEL = new Map(DISPUTE_CATEGORIES.map(c => [c.value, c.label]));
 export async function openDisputeCommand(
   formData: FormData
@@ -69,11 +69,10 @@ export async function openDisputeCommand(
   // Zero rows: the order moved on between our read and this write.
   if (!opened?.length) return { error: "This order changed state — reload and try again." };
 
-  await postOrderSystemMessage(
+  await postOrderEvent(
     admin,
     orderId,
     user.id,
-    order.seller_id,
     `Opened a dispute — ${DISPUTE_CATEGORY_LABEL.get(category)}.${reason ? ` "${reason}"` : ""}`
   );
 

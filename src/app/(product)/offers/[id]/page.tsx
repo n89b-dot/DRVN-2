@@ -2,15 +2,19 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { Foot, SellingNav, Media } from "@/components/ui";
+import { ButtonLink, Foot, Media, MessageBubble, MessageRun, MessageThread, SellingNav, TileHead } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 import { markThreadMessagesRead } from "@/features/commerce/actions";
+import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
 import { StatusChip } from "@/components/commerce";
-import { CheckoutLink, OfferThread, type ThreadMessage } from "./offer-thread";
+import { OfferDecision } from "@/features/commerce/offer-decision";
+
+/** How much of the conversation the offer page previews. */
+const PREVIEW_COUNT = 3;
 
 export async function generateMetadata({
   params,
@@ -35,10 +39,8 @@ export default async function OfferThreadPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/offers/${id}`)}`);
 
   const { data: offer, error: offerError } = await supabase
@@ -86,12 +88,18 @@ export default async function OfferThreadPage({
         .from("messages")
         .select("id, sender_id, body, created_at")
         .eq("offer_id", id)
-        .order("created_at", { ascending: true }),
+        .eq("kind", "message")
+        .order("created_at", { ascending: false })
+        .limit(PREVIEW_COUNT),
     ]);
 
   // This viewer's read receipt for the thread — scoped to messages
   // addressed to them, safe to call unconditionally on every render.
-  await markThreadMessagesRead(supabase, user.id, { offerId: id });
+  await Promise.all([
+    markThreadMessagesRead(supabase, user.id, { offerId: id }),
+    // Opening the offer deals with what its notification was about.
+    markNotificationsReadForPage(supabase, user.id, [`/offers/${id}`]),
+  ]);
 
   // The order an acceptance produced, by the canonical relation (migration
   // 0034). This used to be a guess — every order_item for the listing, then
@@ -121,13 +129,9 @@ export default async function OfferThreadPage({
     counterparty?.display_name ??
     (counterparty?.username ? `@${counterparty.username}` : "DRVN member");
 
-  const messages: ThreadMessage[] = (rawMessages ?? []).map((m) => ({
-    id: m.id,
-    sender_id: m.sender_id,
-    sender_name: m.sender_id === user.id ? "You" : counterpartyName,
-    body: m.body,
-    created_at: m.created_at,
-  }));
+  // The latest few lines about this offer; the whole relationship lives in
+  // the person's conversation (/messages), which this links into.
+  const preview = [...(rawMessages ?? [])].reverse();
 
   // Derived history, oldest first — every column already on the offer row
   // is a timestamped state change, just never assembled into a timeline.
@@ -172,16 +176,26 @@ export default async function OfferThreadPage({
   }
 
   const live = offer.status === "open" || offer.status === "countered";
-  const expiresLabel = offer.expires_at
-    ? `${live ? "Expires" : "Expired"} ${new Date(
-        offer.expires_at,
-      ).toLocaleString(undefined, {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`
-    : null;
+  // What the dateline says depends on how the offer stands: a live offer
+  // expires; a settled one says what happened and when — never "Expired"
+  // with a future date on an offer that was withdrawn or accepted.
+  const stamp = (iso: string | null | undefined) =>
+    iso
+      ? new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+      : null;
+  const settledAt: Record<string, [string, string | null | undefined]> = {
+    accepted: ["Accepted", offer.responded_at],
+    declined: ["Declined", offer.responded_at],
+    withdrawn: ["Withdrawn", offer.updated_at],
+    expired: ["Expired", offer.responded_at ?? offer.expires_at],
+  };
+  const expiresLabel = live
+    ? offer.expires_at
+      ? `Expires ${stamp(offer.expires_at)}`
+      : null
+    : settledAt[offer.status]
+      ? [settledAt[offer.status][0], stamp(settledAt[offer.status][1])].filter(Boolean).join(" ")
+      : null;
 
   return (
     <div className="wrap">
@@ -236,7 +250,9 @@ export default async function OfferThreadPage({
         {acceptedOrderId && (
           <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-[color:var(--rule-soft)] pt-3">
             {acceptedOrderStatus === "pending" && isBuyer ? (
-              <CheckoutLink orderId={acceptedOrderId} />
+              <ButtonLink href={`/orders/${acceptedOrderId}/checkout`} variant="live">
+                Complete checkout →
+              </ButtonLink>
             ) : null}
             <Link href={`/orders/${acceptedOrderId}`} className="jumplink">
               Order {acceptedOrderId.slice(0, 8).toUpperCase()} →
@@ -280,19 +296,47 @@ export default async function OfferThreadPage({
         </ol>
       </Rv>
 
-      <Rv className="tile" stagger={2}>
-        <div className="tile__head">
-          <span className="microlabel microlabel--ink">Conversation</span>
-        </div>
-        <OfferThread
-          offerId={offer.id}
-          amountCents={offer.amount_cents}
-          counterAmountCents={offer.counter_amount_cents}
-          status={offer.status}
-          incoming={incoming}
-          currentUserId={user.id}
-          messages={messages}
+      {live && (
+        <Rv className="mb-4" stagger={2}>
+          <OfferDecision
+            offerId={offer.id}
+            status={offer.status}
+            amountCents={offer.amount_cents}
+            counterAmountCents={offer.counter_amount_cents}
+            incoming={incoming}
+            counterpartyName={counterpartyName}
+            expiresAt={offer.expires_at}
+            block
+          />
+        </Rv>
+      )}
+
+      <Rv className="tile" stagger={3}>
+        <TileHead
+          label={`Conversation with ${counterpartyName}`}
+          end={
+            <Link href={`/messages/${offer.id}`} className="jumplink">
+              {preview.length ? "Open the conversation →" : `Message ${counterpartyName} →`}
+            </Link>
+          }
         />
+        {preview.length > 0 ? (
+          <MessageThread className="mt-2">
+            {preview.map((m) => (
+              <MessageRun
+                key={m.id}
+                me={m.sender_id === user.id}
+                who={m.sender_id === user.id ? "You" : counterpartyName}
+                when={m.created_at}
+                whenLabel={new Date(m.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              >
+                <MessageBubble>{m.body}</MessageBubble>
+              </MessageRun>
+            ))}
+          </MessageThread>
+        ) : (
+          <p className="field__hint mt-2">Nothing said about this offer yet.</p>
+        )}
       </Rv>
 
       <Foot

@@ -992,12 +992,8 @@ export type Database = {
           last_message_at: string | null
           last_message_id: string | null
           last_message_preview: string | null
-          listing_id: string | null
-          offer_id: string | null
-          order_id: string | null
           participant_a: string
           participant_b: string
-          type: string
         }
         Insert: {
           created_at?: string
@@ -1005,12 +1001,8 @@ export type Database = {
           last_message_at?: string | null
           last_message_id?: string | null
           last_message_preview?: string | null
-          listing_id?: string | null
-          offer_id?: string | null
-          order_id?: string | null
           participant_a: string
           participant_b: string
-          type: string
         }
         Update: {
           created_at?: string
@@ -1018,35 +1010,10 @@ export type Database = {
           last_message_at?: string | null
           last_message_id?: string | null
           last_message_preview?: string | null
-          listing_id?: string | null
-          offer_id?: string | null
-          order_id?: string | null
           participant_a?: string
           participant_b?: string
-          type?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "conversations_listing_id_fkey"
-            columns: ["listing_id"]
-            isOneToOne: false
-            referencedRelation: "listings"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversations_offer_id_fkey"
-            columns: ["offer_id"]
-            isOneToOne: true
-            referencedRelation: "offers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversations_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: true
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "conversations_participant_a_fkey"
             columns: ["participant_a"]
@@ -1586,10 +1553,12 @@ export type Database = {
       }
       messages: {
         Row: {
+          attachments: string[]
           body: string
           conversation_id: string | null
           created_at: string
           id: string
+          kind: string
           listing_id: string | null
           offer_id: string | null
           order_id: string | null
@@ -1598,10 +1567,12 @@ export type Database = {
           sender_id: string
         }
         Insert: {
+          attachments?: string[]
           body: string
           conversation_id?: string | null
           created_at?: string
           id?: string
+          kind?: string
           listing_id?: string | null
           offer_id?: string | null
           order_id?: string | null
@@ -1610,10 +1581,12 @@ export type Database = {
           sender_id: string
         }
         Update: {
+          attachments?: string[]
           body?: string
           conversation_id?: string | null
           created_at?: string
           id?: string
+          kind?: string
           listing_id?: string | null
           offer_id?: string | null
           order_id?: string | null
@@ -4568,6 +4541,23 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_suspended: { Args: { uid: string }; Returns: boolean }
       is_trusted_writer: { Args: never; Returns: boolean }
+      list_conversations: {
+        Args: {
+          p_filter?: string
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+        }
+        Returns: {
+          counterparty_id: string
+          id: string
+          last_message_at: string
+          last_message_id: string
+          last_message_preview: string
+          total_count: number
+          unread_count: number
+        }[]
+      }
       listing_commercial_snapshot: {
         Args: {
           p_listing_id: string
@@ -5103,6 +5093,16 @@ export type Database = {
           unanswered_questions: number
           view_count: number
           watch_count: number
+        }[]
+      }
+      seller_open_question_list: {
+        Args: { p_limit?: number }
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          listing_id: string
+          listing_title: string
         }[]
       }
       seller_open_questions: { Args: { p_seller: string }; Returns: number }

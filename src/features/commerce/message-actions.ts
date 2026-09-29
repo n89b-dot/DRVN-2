@@ -26,9 +26,14 @@ export async function sendThreadMessage(
   const offerId = String(formData.get("offer_id") ?? "") || null;
   const orderId = String(formData.get("order_id") ?? "") || null;
   const body = String(formData.get("body") ?? "").trim();
+  // Private photo paths from the composer's upload (`message-photos` bucket,
+  // `<sender>/<recipient>/<file>`); checked against the real recipient below
+  // and again by the messages insert guard.
+  const attachments = formData.getAll("attachment").map(String).filter(Boolean);
 
-  if (!body) return { error: "Write something first." };
+  if (!body && !attachments.length) return { error: "Write something first." };
   if (body.length > 4000) return { error: "Keep it under 4000 characters." };
+  if (attachments.length > 4) return { error: "Up to four photos per message." };
   if (Boolean(offerId) === Boolean(orderId)) return { error: "Choose one conversation to reply to." };
   const messageId = String(formData.get("message_id") ?? "");
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(messageId)) {
@@ -39,12 +44,13 @@ export async function sendThreadMessage(
   // else's message, or silently treat changed content as a successful retry.
   async function existingMessage() {
     return supabase.from("messages")
-      .select("sender_id, body, order_id, offer_id")
+      .select("sender_id, body, order_id, offer_id, attachments")
       .eq("id", messageId).maybeSingle();
   }
-  function matches(message: { sender_id: string; body: string; order_id: string | null; offer_id: string | null }) {
+  function matches(message: { sender_id: string; body: string; order_id: string | null; offer_id: string | null; attachments: string[] }) {
     return message.sender_id === user.id && message.body === body &&
-      message.order_id === orderId && message.offer_id === offerId;
+      message.order_id === orderId && message.offer_id === offerId &&
+      (message.attachments ?? []).join("|") === attachments.join("|");
   }
   const previous = await existingMessage();
   if (previous.error) return { error: "Couldn't check whether this message was sent. Try again." };
@@ -96,6 +102,10 @@ export async function sendThreadMessage(
   if (!participants.includes(user.id)) return { error: "That isn't your conversation." };
   const recipient = participants.find((p) => p && p !== user.id);
   if (!recipient) return { error: "The other party's account is no longer active." };
+  const photoFolder = `${user.id}/${recipient}/`;
+  if (attachments.some((path) => !path.startsWith(photoFolder) || path.slice(photoFolder.length).includes("/") || path.includes(".."))) {
+    return { error: "Those photos didn't upload for this conversation. Remove them and add them again." };
+  }
 
   const { error } = await supabase.from("messages").insert({
     // Nullable since 0031: an order whose listing was deleted (order_items
@@ -107,6 +117,7 @@ export async function sendThreadMessage(
     sender_id: user.id,
     recipient_id: recipient,
     body,
+    attachments,
   });
   if (error) {
     const committed = await existingMessage();
@@ -115,23 +126,20 @@ export async function sendThreadMessage(
     }
   }
 
-  revalidatePath("/messages");
-  if (orderId) revalidatePath(`/messages/${orderId}`);
-
-  revalidatePath("/orders");
-  if (orderId) revalidatePath(`/orders/${orderId}`);
-  if (offerId) {
-    revalidatePath("/offers");
-    revalidatePath(`/offers/${offerId}`);
+  // The photos are referenced now — take them off the 48h staging sweep.
+  if (attachments.length) {
+    const { error: stagedError } = await supabase
+      .from("staged_uploads")
+      .update({ consumed_at: new Date().toISOString() })
+      .in("path", attachments)
+      .is("consumed_at", null);
+    if (stagedError) reportError("[messages] staged photo finalize failed", stagedError);
   }
-  return { ok: "Sent." };
-}
 
-export async function sendOfferMessage(
-  prev: CommerceState,
-  formData: FormData
-): Promise<CommerceState> {
-  return sendThreadMessage(prev, formData);
+  revalidatePath("/messages", "layout");
+  if (orderId) revalidatePath(`/orders/${orderId}`);
+  if (offerId) revalidatePath(`/offers/${offerId}`);
+  return { ok: "Sent." };
 }
 
 export async function markThreadMessagesRead(
@@ -151,23 +159,5 @@ export async function markThreadMessagesRead(
   if (error) {
     // A missed read-receipt is not worth failing a page render over.
     reportError("[commerce] markThreadMessagesRead failed", { scope, error });
-  }
-}
-
-export async function markMessagesRead(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const orderId = String(formData.get("order_id") ?? "");
-  const offerId = String(formData.get("offer_id") ?? "");
-
-  if (orderId) await markThreadMessagesRead(supabase, user.id, { orderId });
-  else if (offerId) await markThreadMessagesRead(supabase, user.id, { offerId });
-  else return;
-
-  revalidatePath("/orders");
-  revalidatePath("/messages");
-  if (orderId) revalidatePath(`/messages/${orderId}`);
-  if (offerId) {
-    revalidatePath("/offers");
-    revalidatePath(`/offers/${offerId}`);
   }
 }

@@ -3,8 +3,7 @@
 import { useRef, useState } from "react";
 import { unstable_rethrow } from "next/navigation";
 
-import { MessageComposer } from "@/features/commerce/message-composer";
-import { ConfirmDialog, Message, MessageThread } from "@/components/ui";
+import { ConfirmDialog } from "@/components/ui";
 import {
   markReceived,
   markShipped,
@@ -133,42 +132,6 @@ export function CancelOrder({ orderId }: { orderId: string }) {
       >
         Cancel this order
       </ConfirmDialog>
-    </div>
-  );
-}
-
-/** Post-sale thread, keyed to the order so buy-now purchases have a channel. */
-export function OrderThread({
-  orderId,
-  currentUserId,
-  messages,
-}: {
-  orderId: string;
-  currentUserId: string;
-  messages: { id: string; sender_id: string; sender_name: string; body: string; created_at: string }[];
-}) {
-
-  return (
-    <div className="grid gap-3">
-      {messages.length > 0 ? (
-        <MessageThread>
-          {messages.map((m) => (
-            <Message
-              key={m.id}
-              me={m.sender_id === currentUserId}
-              who={m.sender_id === currentUserId ? "You" : m.sender_name}
-              body={m.body}
-            />
-          ))}
-        </MessageThread>
-      ) : (
-        <p className="spec-note">
-          No messages yet. Anything about delivery, fitment or condition belongs here — it stays
-          attached to the order.
-        </p>
-      )}
-
-      <MessageComposer orderId={orderId} />
     </div>
   );
 }

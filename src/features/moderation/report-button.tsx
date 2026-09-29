@@ -27,11 +27,18 @@ export function ReportButton({
   subjectId,
   subjectLabel,
   isLoggedIn,
+  triggerLabel,
+  context,
 }: {
   subjectType: "listing" | "user";
   subjectId: string;
   subjectLabel: string;
   isLoggedIn: boolean;
+  /** Overrides "Report this listing/seller" — e.g. "Report" in a conversation header. */
+  triggerLabel?: string;
+  /** Where the report was filed from, prefixed to the detail for the review
+   *  queue — e.g. "From conversation <id>", so a reviewer can open the thread. */
+  context?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -66,7 +73,7 @@ export function ReportButton({
           setOpen(true);
         }}
       >
-        Report {subjectType === "listing" ? "this listing" : "this seller"}
+        {triggerLabel ?? `Report ${subjectType === "listing" ? "this listing" : "this seller"}`}
       </button>
 
       <Dialog
@@ -84,6 +91,7 @@ export function ReportButton({
           <form onSubmit={(event) => { event.preventDefault(); void submit(new FormData(event.currentTarget)); }} className="mt-4 flex flex-col gap-3">
             <input type="hidden" name="subject_type" value={subjectType} />
             <input type="hidden" name="subject_id" value={subjectId} />
+            {context && <input type="hidden" name="context" value={context} />}
             <div className="field">
               <label htmlFor={`${idBase}-reason`} className="microlabel">
                 What&apos;s wrong

@@ -12,7 +12,7 @@ import { siteUrl } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-import { postOrderThreadMessage } from "./order-thread";
+import { postOrderEvent } from "./order-thread";
 
 /**
  * Local pickup confirmation (brief §20-21, migration 0054).
@@ -69,7 +69,7 @@ export async function markReadyForPickup(
   }
   if (!updated?.length) return { error: "This order can't be marked ready for pickup." };
 
-  await postOrderThreadMessage(
+  await postOrderEvent(
     admin,
     orderId,
     user.id,
@@ -192,7 +192,7 @@ export async function redeemPickup(
     return { error: messages[result.reason ?? ""] ?? "Couldn't confirm the pickup." };
   }
 
-  await postOrderThreadMessage(admin, orderId, user.id, "Pickup confirmed — handoff complete.");
+  await postOrderEvent(admin, orderId, user.id, "Pickup confirmed — handoff complete.");
   capture(user.id, { event: "pickup_confirmed" });
   revalidatePath(`/orders/${orderId}`);
   revalidatePath("/orders");

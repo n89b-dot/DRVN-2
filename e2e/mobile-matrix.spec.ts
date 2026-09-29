@@ -384,10 +384,10 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
       await page.waitForURL(/\/orders\/[\w-]+/);
       const orderId = new URL(page.url()).pathname.split("/")[2];
       await page.goto(`/messages/${orderId}`);
-      const composer = page.locator(".composer--pin");
+      const composer = page.locator(".chatbox");
       await expect(composer).toBeVisible();
       expect(await composer.evaluate((el) => getComputedStyle(el).position)).toBe("sticky");
-      const input = composer.getByPlaceholder(/message the other party/i);
+      const input = composer.getByPlaceholder(/^Message /);
       expect(
         await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))
       ).toBeGreaterThanOrEqual(16);
@@ -401,8 +401,8 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
 
       // History mode retires the composer and offers the way back.
       await page.goto(`/messages/${orderId}?before=${encodeURIComponent(new Date().toISOString())}`);
-      await expect(page.locator(".composer--pin")).toHaveCount(0);
-      await expect(page.getByRole("link", { name: /back to latest to reply/i })).toBeVisible();
+      await expect(page.locator(".chatbox")).toHaveCount(0);
+      await expect(page.getByRole("link", { name: /back to the latest to reply/i })).toBeVisible();
     } else {
       throw new Error("checkout reached neither the payment review nor an order");
     }

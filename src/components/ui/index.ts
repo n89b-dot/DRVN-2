@@ -94,7 +94,11 @@ export {
   ThreadDivider,
   Message,
   MessageComposer,
+  MessageRun,
+  MessageBubble,
+  ThreadEvent,
 } from "./messaging";
+export { ChatComposer } from "./chat-composer";
 export { ResultNote } from "./result-note";
 export { FormSection, ValidationSummary, type ValidationEntry } from "./form-section";
 export {

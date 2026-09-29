@@ -73,7 +73,8 @@ Body: 16px Plex Sans on `--paper` with 40px graticule (two repeating-linear-grad
 | `.drop`/`.thumbs`/`.thumb` | dashed r16 dropzone (live tint on hover/over); thumb grid 84px, `__x`, `__tag`, `--ghost` | |
 | `.steps`/`.step` | counter 01/02… grid 34/1fr/auto ruled | `.is-now` live number, `.is-done` dim |
 | `.alert` | r10 tinted ground + icon color; grid auto/1fr | `--live`, `--ok`; never a side bar stroke |
-| `.msg`/`.thread`/`.composer` | 2px left spine; `--me` live spine, `--sys` dashed; mono who/meta; `.msg__attach` | annotations, not chat bubbles |
+| `.msg`/`.thread`/`.composer` | 2px left spine; `--me` live spine, `--sys` dashed; mono who/meta; `.msg__attach` | public discussion (Q&A, comments) only — annotations |
+| `.msgrun`/`.bubble`/`.tevent`/`.chatbox`/`.convrow`/`.dealchip`/`.dealcard`/`.offercard`/`.msgsplit` | person-first conversation grammar (20260928): soft r16 blocks, yours ink / theirs tile, dashed centred events, sticky composer, one inbox row per person | no tails, no pills |
 | `.mail` | 1px rule-mid frame (only framed component), bar/body/foot | depicts external artifact |
 | `.toast` | fixed bottom ink pill r10 mono up; `window.lsToast()` / `[data-toast]`; role=status 2600ms | |
 | `.undrawn` | dashed r16 ghost plate + `__mark` + h3 + p; `--hero` | empty = same geometry as real content |

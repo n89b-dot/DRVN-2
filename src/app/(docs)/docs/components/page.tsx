@@ -1,7 +1,8 @@
-import { OrderPipeline, StatusChip } from "@/components/commerce";
+import { ConversationRow, DealCard, DealChip, OfferCard, OrderPipeline, StatusChip } from "@/components/commerce";
 import { LiveDim } from "@/components/livesheet";
 import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
 import { DialogDemo } from "./dialog-demo";
+import { ChatComposerDemo } from "./chat-composer-demo";
 import { FinderDemo } from "./finder-demo";
 import { ComboDemo } from "./combo-demo";
 import {
@@ -16,6 +17,8 @@ import {
   FilterLink,
   FormSection,
   Message,
+  MessageBubble,
+  MessageRun,
   MessageThread,
   MetricCard,
   MosaicCell,
@@ -34,6 +37,7 @@ import {
   TextField,
   TileHead,
   ThreadDivider,
+  ThreadEvent,
   ValidationSummary,
   Badge,
   KindBadge,
@@ -1088,9 +1092,9 @@ export default function ComponentsPage() {
           </div>
         </Specimen>
         <Specimen
-          name="Messages"
+          name="Discussion (Q&A, comments)"
           klass=".msg / --me / --sys / .composer"
-          note="No chat bubbles. A message is an annotation in the margin: 2px left spine, mono author, sans body. --me turns the spine live; --sys dashes it."
+          note="Public discussion only — listing Q&A and comments. A message here is an annotation in the margin: 2px left spine, mono author, sans body. --me turns the spine live; --sys dashes it. Private conversations use the Conversation grammar below."
         >
           <div className="thread">
             <div className="msg">
@@ -1105,6 +1109,96 @@ export default function ComponentsPage() {
               <span className="msg__who">System</span>
               <p className="msg__body">Offer of $620 recorded against this thread.</p>
             </div>
+          </div>
+        </Specimen>
+        <Specimen
+          name="Conversation"
+          klass=".convthread / .msgrun / .bubble / .tevent"
+          note="One conversation is one person. MessageRun groups one side's consecutive messages under a single meta line (who · time · about tag); MessageBubble is an r16 plate — theirs tile, yours ink — with the joined corner tightened to r6. ThreadEvent is a fact, not speech: centred, dashed, r10. No tails, no pills."
+        >
+          <div className="convthread">
+            <div className="convthread__day">
+              <ThreadDivider>Tue 22 Sep</ThreadDivider>
+            </div>
+            <ThreadEvent>
+              <span>
+                <b>Kaito</b> shipped the Rays bronze 17x9 set
+              </span>
+            </ThreadEvent>
+            <MessageRun who="Kaito" when="2026-09-22T16:53:00Z" whenLabel="4:53 pm" about="Rays wheels">
+              <MessageBubble>These are on their way. Tires have maybe 60% left — fine for a few more track days.</MessageBubble>
+            </MessageRun>
+            <MessageRun me who="You" when="2026-09-22T17:02:00Z" whenLabel="5:02 pm" about="Seats" foot="Seen">
+              <MessageBubble>Will do — double-wrapped with foam on the bolsters.</MessageBubble>
+              <MessageBubble>Shipping Monday, I&apos;ll mark it here.</MessageBubble>
+            </MessageRun>
+            <ThreadEvent live>
+              <span>
+                <b>Imani</b> countered $6,200
+              </span>
+            </ThreadEvent>
+          </div>
+        </Specimen>
+        <Specimen
+          name="Chat composer"
+          klass=".chatbox"
+          note="Auto-growing field, 44px photo button, one Send that turns live when there is something to send. Enter sends on a mouse/keyboard device, Shift+Enter adds a line; on touch Return adds a line. Sticky to the viewport bottom in the product (static here)."
+        >
+          <div className="[&_.chatbox]:!static">
+            <ChatComposerDemo />
+          </div>
+        </Specimen>
+        <Specimen
+          name="Inbox row · deal chips"
+          klass=".convrow / .dealchip--move / --ok"
+          note="One row per person — never per order or offer. The deals between you ride underneath as chips: side, part, where it stands. Red (move) means it's your turn; green (ok) means it's going well."
+        >
+          <div className="grid gap-1" style={{ maxWidth: 360 }}>
+            <ConversationRow
+              href="#annotation"
+              active
+              name="Kaito Nakamura"
+              when="2026-09-24T05:53:00Z"
+              whenLabel="4d"
+              preview="Excited for these. Could you wrap the bolster edges when you pack them?"
+              unread={1}
+              deals={
+                <>
+                  <DealChip side="selling" title="E46 M3 front sport seats" label="Ship it" tone="move" />
+                  <DealChip side="buying" title="Rays bronze 17x9 set" label="On its way" tone="ok" />
+                </>
+              }
+            />
+            <ConversationRow
+              href="#annotation"
+              name="Lena Park"
+              when="2026-09-24T18:53:00Z"
+              whenLabel="4d"
+              preview="You: Shipping to the UK is closer to $180 for this…"
+              deals={<DealChip side="selling" title="Big brake kit" label="Offer expired" />}
+            />
+          </div>
+        </Specimen>
+        <Specimen
+          name="Deal card · offer card"
+          klass=".dealcard / .offercard"
+          note="DealCard heads a conversation: part photo, 'Selling · Paid', title link, price, one action. OfferCard puts a live offer's decision where it's being discussed (wired as OfferDecision); --move borders it live when the decision is yours."
+        >
+          <div className="grid gap-3" style={{ maxWidth: 460 }}>
+            <DealCard
+              href="#annotation"
+              title="E46 M3 front sport seats, black leather, pair"
+              eyebrow="Selling · Ship it"
+              amount="$1,130"
+              tone="move"
+              action={<span className="btn">Mark shipped</span>}
+            />
+            <OfferCard eyebrow="Imani countered · Akrapovič exhaust" amount="$6,200" note="You offered $5,900. Decide in 2 days." move>
+              <div className="flex flex-wrap gap-2">
+                <span className="btn btn--live">Accept $6,200</span>
+                <span className="relbtn !static">Withdraw offer</span>
+              </div>
+            </OfferCard>
           </div>
         </Specimen>
         <Specimen

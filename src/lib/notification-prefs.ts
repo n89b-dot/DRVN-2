@@ -5,7 +5,7 @@
  *
  * Widened alongside migration 0009: the old list covered four events, so the
  * majority of what the product now raises — questions, comments, reviews,
- * dispatch updates, messages — had no toggle, and `offers_sales` rendered a
+ * dispatch updates — had no toggle, and `offers_sales` rendered a
  * checkbox that governed nothing.
  */
 export const NOTIFICATION_PREFS = [
@@ -58,12 +58,6 @@ export const NOTIFICATION_PREFS = [
     hint: "Payment, dispatch, delivery and cancellations on your orders",
   },
   {
-    key: "messages",
-    group: "Marketplace",
-    label: "Messages",
-    hint: "Someone messages you about an offer or an order",
-  },
-  {
     key: "saved_searches",
     group: "Marketplace",
     label: "Saved-search matches",
@@ -101,7 +95,6 @@ export function prefKeyForKind(kind: string): NotificationPrefKey | null {
     if (kind === "comment" || kind === "reaction") return "comments";
     if (kind === "review") return "reviews";
     if (kind === "question") return "questions";
-    if (kind === "message") return "messages";
     if (kind.startsWith("offer")) return "offers_sales";
     if (kind === "order_sold" || kind === "order_paid") return "offers_sales";
     if (kind.startsWith("order")) return "order_updates";

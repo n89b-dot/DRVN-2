@@ -843,21 +843,22 @@ export type Message = {
   sender_id: string;
   recipient_id: string;
   body: string;
+  /** 'event' = a lifecycle note (dispute, pickup, return) written by the
+   *  server; clients can only insert 'message' (20260928140000). */
+  kind: "message" | "event";
+  /** Private `message-photos` paths, `<sender>/<recipient>/<file>`, max 4. */
+  attachments: string[];
   read_at: string | null;
   created_at: string;
 };
 
 /**
- * One row per message channel (migration 0031) — the durable form of what the
- * inbox used to derive by scanning `messages`. Written exclusively by the
- * message triggers; clients only ever select.
+ * One row per PAIR of people (20260928140000; per order/offer before that).
+ * participant_a < participant_b. The order/offer a message is about lives on
+ * the message. Written exclusively by the message triggers; clients select.
  */
 export type Conversation = {
   id: string;
-  type: "order" | "offer";
-  order_id: string | null;
-  offer_id: string | null;
-  listing_id: string | null;
   participant_a: string;
   participant_b: string;
   created_at: string;

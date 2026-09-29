@@ -7,7 +7,7 @@ import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-import { postOrderThreadMessage } from "./order-thread";
+import { postOrderEvent } from "./order-thread";
 import { readCommercialSnapshot } from "./snapshot";
 import { RETURN_SHIP_DAYS } from "./returns";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
@@ -159,7 +159,7 @@ export async function requestShopReturn(
   }
 
   if (!result.replayed) {
-    await postOrderThreadMessage(
+    await postOrderEvent(
       admin,
       orderId,
       user.id,
@@ -214,7 +214,7 @@ async function respondToShopReturn(
   }
   if (!result.ok || !result.order_id) return { error: result.reason ?? "This return has already been handled." };
   if (!result.replayed) {
-    await postOrderThreadMessage(
+    await postOrderEvent(
       admin,
       result.order_id,
       user.id,

@@ -1,5 +1,26 @@
 # Applying migrations
 
+## September 28 — one conversation per pair of people on the shared dev project
+
+| File | Applied to |
+|---|---|
+| `20260928140000_person_conversations.sql` | shared dev project, 2026-09-28 (owner-approved as part of the Messages rebuild) |
+
+`conversations` changes grain from one row per order/offer to one row per pair
+of people (`participant_a < participant_b`, unique); the per-deal columns are
+dropped and every message stays tagged with its order/offer. The 11 per-deal
+rows on dev merged into 9 pairs; unread counters were rebuilt from `read_at`.
+Also adds `messages.kind`/`attachments`, the private `message-photos` bucket,
+`list_conversations` and `seller_open_question_list`, a delete trigger that
+keeps previews honest, adds `messages` + `conversation_unreads` to the realtime
+publication, and drops the `messages_notify` bell trigger. Backup first:
+`~/drvn-db-backups/messaging-before-person-conversations-20260928-1743.sql`
+(data) and `messaging-schema-before-…sql` (schema). The file was re-run once
+to prove it is idempotent (the merge only runs while the old columns exist).
+The local disposable database used by `npm run db:types` does not have it yet,
+so `db:types:check` reports drift until it is applied there; the generated
+types were edited to match by hand.
+
 ## September 29 — sellers can mark a part sold (shared dev project)
 
 | File | Applied to |

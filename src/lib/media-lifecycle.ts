@@ -28,7 +28,7 @@ async function isMediaReferenced(
   url: string,
   strict = false
 ): Promise<boolean> {
-  const checks = [
+  const checks: PromiseLike<{ count: number | null; error: unknown }>[] = [
     admin.from("car_images").select("id", { count: "exact", head: true }).eq("url", url),
     admin.from("listing_images").select("id", { count: "exact", head: true }).eq("url", url),
     admin.from("activity_images").select("id", { count: "exact", head: true }).eq("url", url),
@@ -46,6 +46,14 @@ async function isMediaReferenced(
     // build sheet that is still showing it.
     admin.from("mod_items").select("id", { count: "exact", head: true }).eq("image_url", url),
   ];
+  // Message photos are private and stored on the message by storage PATH
+  // (20260928140000), not by URL — match on the object path instead.
+  const object = parseStorageObject(url);
+  if (object?.bucket === "message-photos") {
+    checks.push(
+      admin.from("messages").select("id", { count: "exact", head: true }).contains("attachments", [object.path]),
+    );
+  }
   const results = await Promise.all(checks);
   for (const { count, error } of results) {
     // An unanswerable check must read as "referenced" — deleting storage on

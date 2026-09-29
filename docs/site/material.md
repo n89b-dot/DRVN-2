@@ -90,8 +90,9 @@ or the thread composer — never two).
 
 Pill geometry and expressive shape morphing · dynamic color · Roboto /
 Google Sans · Material surface tints and elevation overlays · FABs ·
-navigation rail/drawer/bottom-navigation replacing DRVN chrome · chat
-bubbles · generic Card in place of ListingCard / VehicleCard / Ledger rows /
+navigation rail/drawer/bottom-navigation replacing DRVN chrome · Material
+chat bubbles (tails, pill shapes, tinted surfaces — DRVN's conversation
+blocks are r16 plates in ink and tile) · generic Card in place of ListingCard / VehicleCard / Ledger rows /
 build lines · bouncy expressive motion.
 
 The test for any future borrow: if a normal DRVN user could tell Material

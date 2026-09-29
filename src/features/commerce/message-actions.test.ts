@@ -7,7 +7,11 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: { getUser: async () => ({ data: { user: { id: "buyer" } } }) },
-  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.read }) }), insert: mocks.insert }),
+  from: () => ({
+    select: () => ({ eq: () => ({ maybeSingle: mocks.read }) }),
+    insert: mocks.insert,
+    update: () => ({ in: () => ({ is: async () => ({ error: null }) }) }),
+  }),
 }) }));
 import { sendThreadMessage } from "./message-actions";
 const saved = { sender_id: "buyer", body: "Hello", order_id: "order", offer_id: null };
@@ -48,5 +52,20 @@ describe("message submission recovery", () => {
   it("refuses to insert when prior delivery cannot be checked", async () => {
     mocks.read.mockResolvedValue({ error: { message: "offline" } });
     expect((await sendThreadMessage({}, form())).error).toBeTruthy(); expect(mocks.insert).not.toHaveBeenCalled();
+  });
+  it("sends photos that live in the sender's folder for this recipient", async () => {
+    const data = form(); data.set("body", ""); data.append("attachment", "buyer/seller/a.jpg");
+    expect(await sendThreadMessage({}, data)).toEqual({ ok: "Sent." });
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ body: "", attachments: ["buyer/seller/a.jpg"] }));
+  });
+  it.each(["seller/buyer/a.jpg", "buyer/other/a.jpg", "buyer/seller/x/a.jpg", "buyer/seller/../a.jpg"])("refuses a photo path outside the sender's folder (%s)", async (path) => {
+    const data = form(); data.append("attachment", path);
+    expect((await sendThreadMessage({}, data)).error).toBeTruthy(); expect(mocks.insert).not.toHaveBeenCalled();
+  });
+  it("refuses more than four photos and an empty message", async () => {
+    const many = form(); for (let i = 0; i < 5; i++) many.append("attachment", `buyer/seller/${i}.jpg`);
+    expect((await sendThreadMessage({}, many)).error).toContain("four");
+    const empty = form(); empty.set("body", "  ");
+    expect((await sendThreadMessage({}, empty)).error).toBeTruthy();
   });
 });

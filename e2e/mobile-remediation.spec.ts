@@ -341,7 +341,7 @@ test.describe.serial("mobile remediation", () => {
       const content = await finderContentWidth(page);
       if (width === 375) expect((await search.boundingBox())!.width / content).toBeGreaterThanOrEqual(0.9);
     }
-    const field = page.getByLabel("Search your conversations");
+    const field = page.getByLabel("Search people, parts and messages");
     await field.fill("brakes");
     await field.press("Enter");
     await expect(page).toHaveURL(/q=brakes/);

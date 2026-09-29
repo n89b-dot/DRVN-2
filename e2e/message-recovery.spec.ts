@@ -25,12 +25,14 @@ test("message draft survives a lost committed response and retry inserts only on
     await page.getByLabel(/^password$/i).fill(password);
     await page.getByRole("button", { name: /log in|sign in/i }).click();
     await page.waitForURL(/\/home/);
-    await page.goto(`/offers/${offer.data.id}`);
-    const input = page.getByRole("textbox", { name: "Message the other party" });
+    // The offer page links into the person's conversation; an offer id opens
+    // it (and redirects to the conversation once the first message exists).
+    await page.goto(`/messages/${offer.data.id}`);
+    const input = page.getByRole("textbox", { name: /^Message / });
     const body = `Lost response ${randomUUID()}`;
     await input.fill(body);
     let interrupted = false;
-    await page.route(`**/offers/${offer.data.id}`, async (route) => {
+    await page.route(`**/messages/${offer.data.id}`, async (route) => {
       if (!interrupted && route.request().method() === "POST" && route.request().headers()["next-action"]) {
         interrupted = true;
         const response = await route.fetch();
@@ -42,8 +44,8 @@ test("message draft survives a lost committed response and retry inserts only on
     await expect(page.getByRole("main").getByRole("alert")).toContainText("Your draft is still here");
     await expect(input).toHaveValue(body);
     await page.getByRole("button", { name: /send/i }).dblclick();
-    await expect(input).toHaveValue("");
-    await expect(page.getByRole("main").getByRole("alert").filter({ hasText: /^Sent\.$/ })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /^Message / })).toHaveValue("");
+    await expect(page.getByText(body, { exact: true })).toBeVisible();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Your draft is still here" })).toHaveCount(0);
     const rows = await admin.from("messages").select("id").eq("offer_id", offer.data.id).eq("body", body);
     if (rows.error) throw rows.error;
@@ -83,7 +85,7 @@ test("order-thread composer preserves a draft and retries a committed response l
     await page.getByRole("button", { name: /log in|sign in/i }).click();
     await page.waitForURL(/\/home/);
     await page.goto(`/messages/${order.data.id}`);
-    const input = page.getByRole("textbox", { name: "Message the other party" });
+    const input = page.getByRole("textbox", { name: /^Message / });
     const body = `Order response lost ${randomUUID()}`;
     await input.fill(body);
     let interrupted = false;
@@ -98,7 +100,7 @@ test("order-thread composer preserves a draft and retries a committed response l
     await expect(page.getByRole("main").getByRole("alert")).toContainText("Your draft is still here");
     await expect(input).toHaveValue(body);
     await page.getByRole("button", { name: /send/i }).click();
-    await expect(input).toHaveValue("");
+    await expect(page.getByRole("textbox", { name: /^Message / })).toHaveValue("");
     const rows = await admin.from("messages").select("id").eq("order_id", order.data.id).eq("body", body);
     if (rows.error) throw rows.error;
     expect(rows.data).toHaveLength(1);

@@ -98,7 +98,10 @@ Format: **class — shape — key rules.**
 | Component | Shape | Key rules |
 | --- | --- | --- |
 | `.alert` | r10 tinted ground + icon color, grid auto/1fr | `--live`, `--ok`; never a side-bar stroke |
-| `.msg` / `.thread` / `.composer` | 2px left spine; `--me` live spine, `--sys` dashed; mono who/meta | Annotations, not chat bubbles |
+| `.msg` / `.thread` / `.composer` | 2px left spine; `--me` live spine, `--sys` dashed; mono who/meta | Public discussion only (listing Q&A, comments): annotations in the margin |
+| `.convthread` / `.msgrun` / `.bubble` / `.tevent` | Runs of one side's messages under one meta line; `.bubble` r16 soft block — theirs tile + rule-soft, yours ink; consecutive blocks tighten the joined corner to r6; `.tevent` dashed r10 centred event | Person-to-person conversations (/messages). No tails, no pills, no gradients; events never look typed |
+| `.chatbox` | Sticky bottom plate: auto-growing `.chatbox__input` (r10), 44px photo button, one Send (live when there is something to send) | Enter sends on fine pointers, Return adds a line on touch |
+| `.convrow` / `.dealchip` / `.dealcard` / `.offercard` / `.msgsplit` | Person row (44px avatar, name, when, last line, deal chips); deal chip r6 (`--move` live tint = your turn, `--ok`); deal card with 48px photo; offer card (`--move` live border; `--block` full-width plate on the offer page); list beside conversation ≥981px | One row per person, never per deal |
 | `.mail` | 1px rule-mid frame: bar/body/foot | The ONLY framed component — it depicts an external artifact |
 | `.toast` | Fixed bottom ink plate, r10, mono uppercase | Renders `<output aria-live="polite">` (implicit status role), 3200ms default dwell |
 
@@ -126,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (81)
+### Primitives (85)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -140,6 +143,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `BottomSheet` | Primitive | `@/components/ui` | Compact bottom sheet; keeps children mounted; dissolves inline ≥ its breakpoint. On phones it adds a quiet dismiss word (`closeLabel`, default Done) under the content; pass `closeLabel={null}` when the content already ends in its own Done/Cancel so the two never stack. — `.bsheet` | Compact-width pickers and refinements. |
 | `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. `live` is THE action on a surface and the only variant that carries the brackets; `default` (ink) keeps the mono caps voice without them; `ghost` and `destructive` read as words (Plex Sans, sentence case as written). — `.btn / .relbtn` | Every button. One `live` action — one red fill — per surface; secondary actions are `ghost`. |
 | `ButtonLink` | Primitive | `@/components/ui` | The action contract as a real link. — `.btn` | CTAs that navigate — keeps middle-click/new-tab semantics. |
+| `ChatComposer` | Primitive | `@/components/ui` | Conversation reply box — auto-growing field, optional photo button, one Send, pinned to the viewport bottom. — `.chatbox` | Replying in a person-to-person conversation. The feature holds the draft, uploads and send action; slots above/below carry topic, pending photos and the result. *Not for:* Q&A and comment boxes — MessageComposer. |
 | `Checkbox` | Primitive | `@/components/ui` | Live-accent square checkbox with its label as one touch target. — `.sq` | Boolean options. |
 | `ComboField` | Primitive | `@/components/ui` | Searchable single-select (ARIA combobox) in the field contract: ranked options, keyword matching (aliases), optional footer escape hatch. — `.field / .ctl / .combo` | Choosing one option from a ranked list too long for Select — vehicle makes/models. *Not for:* Short fixed lists (Select) and free-text with suggestions (TextField + datalist). |
 | `ConfirmDialog` | Primitive | `@/components/ui` | Destructive confirmation with optional type-to-confirm gate. | Deletes and irreversible actions. |
@@ -169,9 +173,11 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `LiveDim` | Primitive | `@/components/livesheet` | The drafting leader line with a measured value; live and blank variants. — `.livedim` | Measured facts on tiles and sheets. |
 | `LivesheetBar` | Primitive | `@/components/ui` | The top bar — wordmark, primary nav, global search (on every page — the bar is identical everywhere; Explore and Marketplace add their own scoped search below it), compact count badges, account. The cart icon and its count show to everyone (guests can fill a cart and buy); notifications and saved are members-only. Opaque-frosted (`.bar`, unprefixed backdrop-filter declared last). On phones the index menu is 48px single-line rows with search leading; visitors get Cart in it too. The index foot carries the theme switch and, for members, Log out (a form POST to /logout). — `.bar` | Via AppShell / group layouts only. |
 | `Media` | Primitive | `@/components/ui` | Optimized image plate with role-based `sizes` presets and the undrawn no-photo fallback. | Every product image. Pick a `role` (hero/card/row/thumb/avatar…). *Not for:* Raw <img> tags anywhere. |
-| `Message` | Primitive | `@/components/ui` | One message — sender line, body, meta; `me` right-tones the row. — `.msg` | Order messages, offer threads, Q&A, comments. Features decide what `me` means. |
-| `MessageComposer` | Primitive | `@/components/ui` | The send row — hidden fields, `.ctl` input, submit; block variant for the Q&A ask box. — `.composer__row / .composer` | Thread reply rows. The owning feature supplies action + pending. |
-| `MessageThread` | Primitive | `@/components/ui` | Conversation container (`.thread`). — `.thread` | Wrapping Message runs on any discussion surface. |
+| `Message` | Primitive | `@/components/ui` | One annotation-style message — sender line, body, meta; `me` right-tones the rule. — `.msg` | Listing Q&A and comments, where a message is a public note with a sender line. Features decide what `me` means. *Not for:* Private conversations between two people — use MessageRun + MessageBubble. |
+| `MessageBubble` | Primitive | `@/components/ui` | One message block inside a MessageRun — text, up to four photos, or both. — `.bubble / .bubble--photos` | Every message in a MessageRun. Photos are resolved URLs (signed, for private buckets); each opens full size. |
+| `MessageComposer` | Primitive | `@/components/ui` | The one-line send row — hidden fields, `.ctl` input, submit; block variant for the Q&A ask box. — `.composer__row / .composer` | Q&A ask/reply rows and comment boxes. The owning feature supplies action + pending. *Not for:* Replying in a conversation — use ChatComposer (multi-line, photos, pinned). |
+| `MessageRun` | Primitive | `@/components/ui` | Consecutive messages from one side of a conversation under a single meta line (who · time · about tag); `me` aligns right. — `.msgrun` | Person-to-person conversations (/messages, the offer page preview). The feature groups messages into runs. *Not for:* Public Q&A or comments — use Message. |
+| `MessageThread` | Primitive | `@/components/ui` | Discussion container (`.thread`) — annotation-style rows. — `.thread` | Public discussion: listing Q&A, comments, a short message preview on an order/offer page. *Not for:* A person-to-person conversation — that is MessageRun/MessageBubble/ThreadEvent inside `.convthread` (/messages). |
 | `MetadataTags` | Primitive | `@/components/ui` | Wrapping row of plain chips. — `.chip` | Tag lists. |
 | `MetricCard` | Primitive | `@/components/ui` | KPI tile — microlabel, giant numeral, measured LiveDim line, floor-pinned footer link. With nothing to count pass the real zero ("0", "$0") and `blank`: a dim figure reads as a settled answer, where a dash read as loading. — `.tile + .num-giant` | KPI decks (`.deck--kpi`); calculations stay with the feature. |
 | `MobileActionBar` | Primitive | `@/components/ui` | Pinned bottom action bar (buybar) for compact widths. — `.buybar` | Primary commerce actions on PDP-like pages. One bottom surface per route. |
@@ -206,13 +212,14 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `TextArea` | Primitive | `@/components/ui` | Textarea in the field contract. — `.ctl` | Multi-line input. |
 | `TextField` | Primitive | `@/components/ui` | Text input in the field contract; mono prefix support ($, PN). — `.field / .ctl` | Every text input. |
 | `ThreadDivider` | Primitive | `@/components/ui` | Centered mono divider (day buckets). | Grouped threads. |
+| `ThreadEvent` | Primitive | `@/components/ui` | A lifecycle fact inside a conversation — centred, dashed, never styled like something a person typed. — `.tevent` | Offers made/countered/accepted, shipping, dispute and return notes (`messages.kind = 'event'`). *Not for:* Anything a person wrote — that's a MessageBubble. |
 | `TileHead` | Primitive | `@/components/ui` | Tile rule line — ink microlabel left, optional chip/jumplink right. — `.tile__head` | The head of any `.tile` section. *Not for:* Heads with bespoke inner structure — keep those raw. |
 | `TimelineRow` | Primitive | `@/components/ui` | Date-rail timeline row — mono date column beside content. | Activity/history feeds on profiles and sheets. |
 | `Toast` | Primitive | `@/components/ui` | Bottom-center transient confirmation, portalled to <body>. — `.toast` | Post-action confirmations that need no reply. |
 | `ValidationSummary` | Primitive | `@/components/ui` | Assertive submit-blocking error list with per-field jump links. | Above long forms on failed submit; fields keep their inline errors. |
 | `WebsitePill` | Primitive | `@/components/ui` | Quiet mono external-link pill. | Profile websites. |
 
-### Product patterns (20)
+### Product patterns (24)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -220,6 +227,9 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `AuthIntentDialog` | Product pattern | `@/components/ui` | Signed-out interception — explains the action in its own words (`subject`: save, like, reply, react, offer…) and routes to sign in or join with the intent carried through. | Any engagement control a guest can press. |
 | `CategoryIcon` | Product pattern | `@/components/ui` | Marketplace taxonomy category mark. | Category navigation and headers. |
 | `ConditionSummary` | Product pattern | `@/components/commerce` | Structured part-condition grid (grade + checklist). | PDP and sell preview condition blocks. |
+| `ConversationRow` | Product pattern | `@/components/commerce` | One person in the inbox — avatar, name, when, last line, unread dot, and the deals between you as DealChips. — `.convrow` | The /messages people list (one row per person, never per deal). *Not for:* Order or offer ledgers — ObjectRow / ListingRow. |
+| `DealCard` | Product pattern | `@/components/commerce` | A deal in a conversation header — part photo, "Selling · Paid", title link, price, one action. — `.dealcard / .dealstrip` | The deal strip above a conversation (active deals first, up to three). |
+| `DealChip` | Product pattern | `@/components/commerce` | A deal between two people in one line — side (Buying/Selling), part, where it stands. — `.dealchip` | Inbox rows. Tone `move` = it's your turn (red), `ok` = going well, `quiet` = nothing for you to do. *Not for:* A bare order/offer status — StatusChip. |
 | `FeedList` | Product pattern | `@/components/ui/feed-list` | Home's feed over one description per item: `cards` (photo-first, Home's column) or `rows` (dense `.order`-based rows). — `.feedcards / .feedcard; .feedrow on .order` | Home feeds — `cards` for the main column, `rows` where a photo column would be too loud. Pass `eagerFirst` when the list leads the page so its first photo loads at high priority. *Not for:* Browse surfaces — that's the mosaic family. |
 | `FeedMosaicCell` | Product pattern | `@/components/ui` | A feed item (part / build / update) as a mosaic card, the Figma card set — one tile for all three. Update: title → excerpt (two lines on wider cells, one on phone cells), then owner byline → full vehicle label in the foot. Part (always 1×1): FOR SALE pill + time, title → price row (price alone, no ship line on the discovery wall; condition chip + grade beside it), then seller byline → source car in the foot, with ListingCartButton at the end of the strip. Build: name → vehicle, then owner byline → activity line in the foot. An update that leads with a before/after plate shows the pair as a static split; a nameless build leads with its vehicle label and drops the duplicate subline (vehicleSubline). | Explore and mixed feeds, via MasonryFeed. |
 | `FinderRefineSheet` | Product pattern | `@/components/ui` | Finder filters in a sheet at every width; optional onDismiss discards drafts and labels the close action Cancel. `actions` renders one footer row inside the sheet (quiet Reset left, Apply right) — pass it instead of stacking full-width buttons, and the sheet adds no extra Cancel. | Finder filtering — a sliders-icon trigger ("Filters" label ≥640px, icon-only on compact) with a live count, opening the refinement sheet (bottom sheet on compact, centered dialog wider). |
@@ -229,6 +239,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `MasonryFeed` | Product pattern | `@/components/ui` | The Explore wall — FeedMosaicCells in a dense Mosaic, with its empty state. | Mixed-kind feed walls. |
 | `Mosaic` | Product pattern | `@/components/ui` | The card wall grid (`.mosaic`), commerce variant included. 1×1 cards, plus 2×1 wides on the two-column phone wall for builds and updates only — a listing is always square (part photos are often portrait; the wide shape letterboxes them); there is no 2×2 shape (it filled a phone viewport with one card). — `.mosaic` | Container for MosaicCell families on browse surfaces. |
 | `MosaicCell` | Product pattern | `@/components/ui` | The single card primitive — kind badge (`KindBadge`) + time, a photo plate, then a caption head (title, lede, value, price row) and a foot anchored to the caption's floor (byline with a real avatar when `byline.avatarUrl` is set, then the car or the activity line); engagement strip pinned below. On uniform walls every plate is one 4:3 frame and cells size to content (rows stretch to align); `chip` renders a state `Badge`. The price never truncates — the detail wraps under it. — `.mcell` | Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Head order: title → `lede` (an update's two-line excerpt) → `value` (a build's vehicle under its name, mono ink) → `price` (ink, Sans 600, tabular — never green) with `detail` (condition chip + grade) beside it when `detailBesidePrice` is set, else under it. Foot: `byline` (monogram + name, ink) → `sub` (the car: a part's source car, an update's vehicle) → `meta` (a build's activity line). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/16px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale). |
+| `OfferCard` | Product pattern | `@/components/commerce` | A live offer as a card — eyebrow, amount, note, and a slot for the decision buttons. — `.offercard` | Visual shell for OfferDecision, in a conversation and on the offer page. |
 | `OrderPipeline` | Product pattern | `@/components/commerce` | The order lifecycle as a `.pipe` stage rail, terminal states included. — `.pipe` | Order rows and order detail. |
 | `PaymentModeNotice` | Product pattern | `@/components/ui` | Test-mode payments banner. | Payment surfaces while Stripe runs in test mode. |
 | `ProfileHeader` | Product pattern | `@/components/ui` | Profile head — a full-width banner band (a car's cover, borrowed; a plain tile when there is none), the avatar plate overlapping its foot, then name, handle, tagline, location and website on paper, with a stats list (a zero steps back to dim) and an action cluster: Follow (compact) · Store · Share, per PRD P-2. — `.profhead / .profhead__banner / .profhead__body / .profhead__avatar / .profhead__stats` | The top of a member's profile — public (`/u/[username]`) and the owner's own (`/profile`). Pass `stats` as already-formatted label/value pairs and every action (Follow, Store, share, Edit) through `action`. *Not for:* Typesetting anything on the banner photo — the identity row sits below it so no photo can make a name unreadable. Not for car pages: the garage's focused car has its own cover recipe. |
@@ -237,7 +248,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity (name; vehicle line only when it adds to the name), pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
 
-### Features (13)
+### Features (15)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -245,15 +256,17 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `BuildStoryComposer` | Feature | `@/features/composer/composer` | The one build-update editor (Tiptap runtime, DRVN-owned document): immediate writing surface, optional starter chips, / and + insert menus, draggable automotive blocks, quiet autosave, explicit publish. — `.bsc / .cblock / .cgal` | Creating and editing build updates — pass the route's server actions as props. *Not for:* Anything that isn't an activity post. Message threads use MessageComposer. |
 | `CardEngagement` | Feature | `@/features/social/card-actions` | Like · comment · share · save strip on cards; optimistic with rollback; guest → AuthIntentDialog. On a post the like IS its 🔥 reaction: the count and lit state read 🔥 only, and the tap sets the state asked for (on/off), never a toggle. — `.cardeng` | Via the mosaic card family's engagement slot. |
 | `CheckoutSteps` | Feature | `@/app/(discover)/checkout/checkout-steps` | The checkout workflow (shipping → payment), shared by cart and order checkout. | Feature-owned; the Stepper and field primitives inside it are the reusable parts. |
+| `ConversationComposer` | Feature | `@/features/commerce/conversation-composer` | ChatComposer wired to sendThreadMessage — About (deal) picker, private photo upload, idempotent retries. | Feature-owned; replying in /messages. |
 | `FollowButton` | Feature | `@/features/social/buttons` | Follow toggle with configurable labels. | Profiles and car sheets. |
 | `GarageSheetCard` | Feature | `@/app/(product)/garage/garage-sheet` | The Garage management sheet card (`.gsheet`) — dims, notes, latest update, orders. | Garage only. The public vehicle row is VehicleCard. |
 | `ImportFlow` | Feature | `@/app/(product)/sell/import/import-flow` | The Existing Listing Importer flow (0047): URL/paste source input, honest state-driven progress, paste fallback on the same import, multi-item picker — hands off to SellForm for review. | Feature-owned at /sell/import; it composes Alert/Stepper/TextField/TextArea/Button — extend those, don't fork this. *Not for:* Any other prefill path — Garage → Sell goes through SellFormInitialValues directly. |
 | `ListingCartButton` | Feature | `@/features/commerce/quick-commerce` | One 32px live cart square at the end of a listing card's engagement strip — adds to cart in place, links to the cart once it's in. — `.cartbtn` | The discovery wall's listing card, via CardEngagement's `trailing` slot. |
 | `ListingQuickCommerce` | Feature | `@/features/commerce/quick-commerce` | Card-level quick buy/offer actions. | Commerce mosaic walls. |
+| `OfferDecision` | Feature | `@/features/commerce/offer-decision` | Accept · Counter · Pass / Accept counter · Withdraw for a live offer, by side and status. A seller never sees Accept on their own counter. | The offer page and the conversation — the same decision wherever the offer is discussed. |
 | `ProfileBody` | Feature | `@/components/profile/profile-body` | The public profile's tabbed body (vehicles, activity, listings, reviews). The Updates tab counts every published post (including posts about a part with no car) and pages with "Show more updates" (`?view=updates&updatesPage=`). | Profile routes. |
 | `SaveButton` | Feature | `@/features/social/buttons` | Save toggle. Full-size (label) on detail pages; `variant="icon"` is the bookmark-only form for card floors. | PDP / car sheet headers (full); marketplace and store cards (icon). |
 | `SellForm` | Feature | `@/app/(product)/sell/sell-form` | The listing create/edit workflow (also used by Edit Listing). | Feature-owned; compose FormSection/ValidationSummary/fields from it, don't fork it. |
-| `ThreadView` | Feature | `@/app/(product)/messages/[orderId]/thread-view` | The order-messages surface: day buckets, windowed history, pinned composer. | Feature-owned; its grammar is Message/MessageThread/MessageComposer. |
+| `ThreadView` | Feature | `@/app/(product)/messages/[id]/thread-view` | One person's conversation: runs, events and day breaks in the reader's timezone, live offer decisions, the composer, live updates. | Feature-owned; its grammar is MessageRun/MessageBubble/ThreadEvent/ChatComposer. |
 
 <!-- END GENERATED: component-registry -->
 
@@ -316,14 +329,17 @@ One family, built on `MosaicCell` (`.mcell`):
 
 ### Rows (dense collections)
 
-- **`ObjectRow`** (primitive, `.order`/`.rowlist`) — any object in a dense list: saved items, cart/checkout lines, inbox rows, task rows, payment methods.
+- **`ObjectRow`** (primitive, `.order`/`.rowlist`) — any object in a dense list: saved items, cart/checkout lines, task rows, payment methods. (The Messages inbox is `ConversationRow` — one row per person.)
 - **`ListingRow`** (`@/components/commerce`) — a seller's listing in a seller-scoped list (profile shopfront, car sheet parts).
 - **`FeedList`** — Home's feed: `variant="cards"` (photo-first, the main column) or `rows`.
 - **`.ledger`** — the seller register's sortable table; genuinely tabular, stays feature-local. `TimelineRow` for dated activity.
 
 ### Messages
 
-- **`MessageThread` / `Message` / `ThreadDivider` / `MessageComposer`** carry the whole `.thread`/`.msg`/`.composer` grammar. Features decide semantics: `me` = current user in order/offer threads, = seller in listing Q&A. Day grouping, pagination, send actions, optimistic state stay feature-local (`ThreadView`, `OfferThread`, `QASection`, activity comments).
+Two grammars, by audience:
+
+- **A conversation between two people** (/messages — one conversation per person since 20260928): **`MessageRun`** (consecutive messages from one side, one meta line, optional *about* tag naming the part) → **`MessageBubble`** (text and/or up to four photos) · **`ThreadEvent`** (a lifecycle fact: offer made/countered, shipped, dispute note — `messages.kind = 'event'`) · **`ThreadDivider`** (day) · **`ChatComposer`** (reply). In the inbox, **`ConversationRow`** is one person, with the deals between you as **`DealChip`**s (`move` = your turn); the conversation header shows **`DealCard`**s; a live offer is an **`OfferCard`** (wired as the feature `OfferDecision`, shared with the offer page). Run grouping, timezones, uploads, send and live refresh stay feature-local (`ThreadView`, `ConversationComposer`, `src/features/commerce/conversation-timeline.ts`).
+- **Public discussion** (listing Q&A, activity comments): **`MessageThread` / `Message` / `MessageComposer`** — the annotation idiom, a sender line over a ruled body. `me` = the seller in Q&A. Never use it for a private conversation, and never use bubbles for public Q&A.
 - **`ResultNote`** — the ok-chip/error outcome line beside any action form.
 
 ### Status & chips

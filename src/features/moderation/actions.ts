@@ -37,7 +37,11 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   const subjectType = String(formData.get("subject_type") ?? "");
   const subjectId = String(formData.get("subject_id") ?? "");
   const reason = String(formData.get("reason") ?? "") as ReportReason;
-  const detail = String(formData.get("detail") ?? "").trim().slice(0, 1000);
+  // Where it was filed from ("From conversation <id>") leads the detail so a
+  // reviewer can open the thread; the reporter's own words follow.
+  const context = String(formData.get("context") ?? "").trim().slice(0, 120);
+  const typed = String(formData.get("detail") ?? "").trim();
+  const detail = (context ? `${context}${typed ? `\n${typed}` : ""}` : typed).slice(0, 1000);
 
   if (!["listing", "user"].includes(subjectType) || !subjectId) {
     return { error: "Missing what you're reporting." };

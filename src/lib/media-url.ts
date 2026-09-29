@@ -49,6 +49,9 @@ const OWNED_STORAGE_BUCKETS = [
   "activity-images",
   "listing-images",
   "dispute-evidence",
+  // Private conversation photos, `<sender>/<recipient>/<file>` (20260928140000)
+  // — ledgered like any upload so an unsent photo is reclaimed after 48h.
+  "message-photos",
 ];
 
 /**

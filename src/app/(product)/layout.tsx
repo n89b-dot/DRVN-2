@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
+import { LiveInbox } from "@/features/commerce/live-messages";
 import { cartCount as getCartCount } from "@/lib/cart";
 import { loadShellCounts } from "@/lib/shell-counts";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
@@ -40,6 +41,8 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       counts={counts}
     >
       {children}
+      {/* Keeps the Messages badge live when someone writes (realtime). */}
+      <LiveInbox userId={user.id} />
     </AppShell>
   );
 }

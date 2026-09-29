@@ -90,7 +90,6 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `order_disputed` | marketplace | `order_updates` | DB trigger | A dispute opened on an order. |
 | `dispute_resolved` | marketplace | `order_updates` | DB trigger | A dispute was resolved. |
 | `dispute_escalated` | marketplace | `order_updates` | DB trigger | A dispute was escalated to support. |
-| `message` | marketplace | `messages` | DB trigger | A message on an offer or order thread. |
 | `saved_search` | marketplace | `saved_searches` | app (deliver.ts) | New inventory matching a saved search with alerts on. |
 
 <!-- END GENERATED: notification-kinds -->
@@ -115,3 +114,8 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 The generated table above comes from `NOTIFICATION_KINDS` and does not yet
 list `car_follow` or the per-outcome offer kinds; `prefKeyForKind` already
 maps them.
+
+**Messages are not notifications** (since 20260928140000). The `message` kind
+and its "Messages" preference are retired: chat no longer reaches the bell,
+and the rail's Messages badge — the number of people waiting on you, kept live
+over realtime — is the one signal. Old `message` rows were marked read.

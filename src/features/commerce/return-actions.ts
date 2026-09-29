@@ -11,7 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 import { loadFulfillmentProfile, returnAddress } from "./fulfillment";
-import { postOrderThreadMessage } from "./order-thread";
+import { postOrderEvent } from "./order-thread";
 import { completeReturn, RETURN_SHIP_DAYS } from "./returns";
 
 /**
@@ -111,7 +111,7 @@ export async function proposeReturn(
   }
 
   if (!result.replayed) {
-    await postOrderThreadMessage(
+    await postOrderEvent(
       admin,
       orderId,
       user.id,
@@ -247,7 +247,7 @@ export async function markReturnShipped(
     } catch (error) { reportError("[returns] tracker registration failed", { returnId, error }); }
   }
 
-  if (result.applied) await postOrderThreadMessage(admin, order.id, user.id, "Return shipped — tracking attached.");
+  if (result.applied) await postOrderEvent(admin, order.id, user.id, "Return shipped — tracking attached.");
   revalidatePath(`/orders/${order.id}`);
   return { ok: "Return on its way — the refund follows once it's received." };
 }
@@ -293,7 +293,7 @@ export async function confirmReturnReceived(
     }
   }
 
-  await postOrderThreadMessage(admin, order.id, user.id, "Return received — refund issued.");
+  await postOrderEvent(admin, order.id, user.id, "Return received — refund issued.");
   revalidatePath(`/orders/${order.id}`);
   revalidatePath("/orders");
   return { ok: "Return received — the buyer's refund is on its way." };
@@ -356,7 +356,7 @@ export async function reportReturnProblem(
   );
   if (caseError) reportError("[returns] ops case upsert failed", { returnId, caseError });
 
-  await postOrderThreadMessage(
+  await postOrderEvent(
     admin,
     order.id,
     user.id,
@@ -392,7 +392,7 @@ export async function cancelReturn(
     .select("id");
   if (!cancelled?.length) return { error: "Couldn't cancel — refresh and try again." };
 
-  await postOrderThreadMessage(admin, order.id, user.id, "Return withdrawn by the buyer.");
+  await postOrderEvent(admin, order.id, user.id, "Return withdrawn by the buyer.");
   revalidatePath(`/orders/${order.id}`);
   return { ok: "Return cancelled." };
 }

@@ -212,7 +212,7 @@ export default function MaterialPage() {
           <p className="text-body">
             Pill geometry and expressive shape morphing · dynamic color · Roboto / Google Sans ·
             Material surface tints and elevation overlays · FABs · navigation rail/drawer/bottom
-            navigation as replacements for DRVN&apos;s own chrome · chat bubbles in messages ·
+            navigation as replacements for DRVN&apos;s own chrome · Material chat bubbles (tails, pill shapes, tinted surfaces) ·
             generic Card in place of ListingCard, VehicleCard, Ledger rows and build lines ·
             bouncy expressive motion.
           </p>

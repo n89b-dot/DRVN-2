@@ -42,7 +42,6 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "order_disputed", section: "marketplace", pref: "order_updates", source: "trigger", description: "A dispute opened on an order." },
   { kind: "dispute_resolved", section: "marketplace", pref: "order_updates", source: "trigger", description: "A dispute was resolved." },
   { kind: "dispute_escalated", section: "marketplace", pref: "order_updates", source: "trigger", description: "A dispute was escalated to support." },
-  { kind: "message", section: "marketplace", pref: "messages", source: "trigger", description: "A message on an offer or order thread." },
   { kind: "saved_search", section: "marketplace", pref: "saved_searches", source: "app", description: "New inventory matching a saved search with alerts on." },
 ];
 

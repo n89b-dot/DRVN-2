@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-28 — Messages: one conversation per person
+
+The inbox listed deals, not people: every order and every offer was its own conversation, so a member who bought from and sold to the same person had a thread per deal, each on a different page (order threads under Messages, offer chats under Selling, a third tile on the order page). The review is the "DRVN Messages Review" artifact.
+
+- **One conversation per person.** `conversations` is keyed by the pair of people (`20260928140000_person_conversations.sql`); each message keeps the order or offer it's about. Who can message whom is unchanged — you still need an order or offer together; no open DMs (PRD §7).
+- **Inbox.** One row per person with the deals between you as chips (Selling · Seats · Ship it — red when it's your move), filters All · Unread · Buying · Selling, search across people, parts and messages, and unanswered listing questions on top for sellers. The marketing hero is gone. On desktop the people list sits beside the open conversation.
+- **Conversation.** Deal cards at the top (Mark shipped, Pay now, Track), then what was said and what happened in one timeline: offers, counters, purchases, shipping and dispute/return notes as centred event rows (`messages.kind = 'event'` — they no longer look like the person typed them). A live offer is decided in the thread; a seller who countered now waits instead of seeing Accept. Your messages sit right in ink, theirs left, grouped into runs; "Seen" under your last message.
+- **Composer.** Multi-line (Enter sends on desktop, Return adds a line on phones), up to four photos (private `message-photos` bucket, signed URLs), and an About picker for which deal the message concerns.
+- **Live.** Realtime on `messages` and `conversation_unreads`: a reply appears without a reload and the rail badge updates everywhere (20s refresh fallback).
+- **Notifications.** Messages no longer go to the bell (the `message` kind and its preference are retired); the Messages badge counts people waiting on you. Old links (`/messages/<orderId>`, `/offers/<id>` "Message …") resolve to the person's conversation.
+- **Report.** "Report" in the conversation header files a user report with the conversation attached.
+- **System.** New `MessageRun`, `MessageBubble`, `ThreadEvent`, `ChatComposer` (ui) and `ConversationRow`, `DealChip`, `DealCard`, `OfferCard` (commerce), registered, documented (components §08/§12, patterns, notifications, typography, Material) with specimens and stories. `Message`/`MessageThread`/`MessageComposer` stay for public Q&A and comments. Removed: the legacy inbox scan, `OrderThread`, `offer-thread.tsx`, the old composer and the duplicate system-message helper.
+
 ## 2026-09-29 — Review fixes: what the 28 September feature review found
 
 The 28 September functional review ("DRVN Feature Review" artifact) walked every flow as buyer, seller, guest and admin and found things that looked fine and didn't work. This entry is the fix pass. Six migrations went to the shared dev project, each logged in `supabase/MIGRATIONS.md`.

@@ -82,10 +82,11 @@ test.describe.serial("feature regressions", () => {
     await expect(freeCard.getByText(/Shipping included/)).toHaveText(/Shipping included/i);
   });
 
-  test("messages footer links to offers", async ({ page }) => {
+  test("messages inbox filters by side of the deal", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/messages");
-    await expect(page.locator('footer.foot a[href="/offers"]')).toBeVisible();
+    await expect(page.getByRole("link", { name: /^selling/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^buying/i })).toBeVisible();
   });
 
   test("home greets by time of day", async ({ page }) => {

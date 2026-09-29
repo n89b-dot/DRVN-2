@@ -163,3 +163,107 @@ export function MessageComposer({
     </form>
   );
 }
+
+/* ------------------------------------------------------------------------
+ * Person-first conversation grammar (20260928). A conversation is one
+ * person; these render a run of that person's (or your) consecutive
+ * messages, one message block, and a lifecycle event. Visual only — the
+ * feature groups messages into runs and decides what an event says.
+ * --------------------------------------------------------------------- */
+
+/**
+ * Consecutive messages from one side under a single meta line. `me` aligns
+ * the run right and inks its bubbles.
+ */
+export function MessageRun({
+  me = false,
+  who,
+  when,
+  whenLabel,
+  about,
+  foot,
+  children,
+}: {
+  me?: boolean;
+  /** Sender name ("You", "Kaito"). */
+  who: ReactNode;
+  /** ISO timestamp of the run's first message. */
+  when?: string;
+  whenLabel?: ReactNode;
+  /** What the run is about — a short part name, rendered as a tag. */
+  about?: ReactNode;
+  /** Under the run — "Seen", "Sending…". */
+  foot?: ReactNode;
+  /** MessageBubble children. */
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx("msgrun", me && "msgrun--me")}>
+      <span className="msgrun__meta">
+        <span className="msgrun__who">{who}</span>
+        {when && (
+          <time dateTime={when} suppressHydrationWarning>
+            {whenLabel}
+          </time>
+        )}
+        {about && <span className="msgrun__about">{about}</span>}
+      </span>
+      {children}
+      {foot !== undefined && foot !== null && <span className="msgrun__foot">{foot}</span>}
+    </div>
+  );
+}
+
+/** One message block inside a MessageRun — text, photos, or both. */
+export function MessageBubble({
+  children,
+  photos,
+  photoAlt = "Photo",
+}: {
+  children?: ReactNode;
+  /** Already-resolved (signed) image URLs; each opens full size. */
+  photos?: string[];
+  photoAlt?: string;
+}) {
+  const hasPhotos = Boolean(photos && photos.length);
+  return (
+    <div className={cx("bubble", hasPhotos && "bubble--photos")}>
+      {hasPhotos && (
+        <div className="bubble__photos">
+          {photos!.map((src, i) => (
+            <a key={src} href={src} target="_blank" rel="noreferrer" className="bubble__photo">
+              {/* Signed private-bucket URLs expire; next/image would cache
+                  them past their lifetime, so these stay plain <img>. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`${photoAlt} ${i + 1}`} loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
+      {children !== undefined && children !== null && children !== "" &&
+        (hasPhotos ? <span className="bubble__text">{children}</span> : children)}
+    </div>
+  );
+}
+
+/**
+ * A lifecycle fact inside a conversation — "Kaito shipped the wheels",
+ * "You offered $5,900". Centred and dashed so it can never be mistaken for
+ * something a person typed. `live` marks one that asks for your move.
+ */
+export function ThreadEvent({
+  live = false,
+  when,
+  children,
+}: {
+  live?: boolean;
+  when?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx("tevent", live && "tevent--live")} role="note">
+      {children}
+      {when && <time dateTime={when} className="sr-only">{when}</time>}
+    </div>
+  );
+}
