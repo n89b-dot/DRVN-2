@@ -6,6 +6,7 @@ import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 import type { CommerceState } from "./action-types";
 
 async function requireUser() {
@@ -122,6 +123,9 @@ export async function sendThreadMessage(
   if (error) {
     const committed = await existingMessage();
     if (committed.error || !committed.data || !matches(committed.data)) {
+      // A suspended member's insert is refused by 20260929110000's policy —
+      // say so rather than inviting a retry that can't succeed.
+      if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
       return { error: "Couldn't confirm your message was sent. Try again with the same message." };
     }
   }

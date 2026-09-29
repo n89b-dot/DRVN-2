@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ read: vi.fn(), insert: vi.fn(), allow: vi.fn(), admin: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), insert: vi.fn(), allow: vi.fn(), admin: vi.fn(), refresh: vi.fn(), suspended: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({ RATE_LIMITS: { sendMessage: {} }, allowAction: mocks.allow, rateLimitMessage: () => "Too many messages." }));
@@ -7,6 +7,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: { getUser: async () => ({ data: { user: { id: "buyer" } } }) },
+  rpc: async () => ({ data: mocks.suspended() }),
   from: () => ({
     select: () => ({ eq: () => ({ maybeSingle: mocks.read }) }),
     insert: mocks.insert,
@@ -17,7 +18,7 @@ import { sendThreadMessage } from "./message-actions";
 const saved = { sender_id: "buyer", body: "Hello", order_id: "order", offer_id: null };
 function form() { const data = new FormData(); data.set("message_id", "12345678-1234-4234-8234-123456789012"); data.set("order_id", "order"); data.set("body", "Hello"); return data; }
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.allow.mockResolvedValue(true); mocks.read.mockResolvedValue({ data: null, error: null }); mocks.insert.mockResolvedValue({ error: null });
+  vi.clearAllMocks(); mocks.suspended.mockReturnValue(false); mocks.allow.mockResolvedValue(true); mocks.read.mockResolvedValue({ data: null, error: null }); mocks.insert.mockResolvedValue({ error: null });
   mocks.admin.mockReturnValue({ from: (table: string) => {
     const query = { select: () => query, eq: () => query, limit: () => query,
       maybeSingle: async () => ({ data: table === "orders" ? { id: "order", buyer_id: "buyer", seller_id: "seller" } : { listing_id: "listing" } }) };
@@ -67,5 +68,10 @@ describe("message submission recovery", () => {
     expect((await sendThreadMessage({}, many)).error).toContain("four");
     const empty = form(); empty.set("body", "  ");
     expect((await sendThreadMessage({}, empty)).error).toBeTruthy();
+  });
+  it("tells a suspended member why the send was refused", async () => {
+    mocks.suspended.mockReturnValue(true);
+    mocks.insert.mockResolvedValue({ error: { code: "42501", message: "row-level security" } });
+    expect((await sendThreadMessage({}, form())).error).toMatch(/suspended/i);
   });
 });

@@ -1,5 +1,17 @@
 # Applying migrations
 
+## September 29 — suspended members can't message (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260929110000_suspended_members_dont_message.sql` | shared dev project, 2026-09-29 |
+
+One restrictive insert policy on `messages` (`not is_suspended(auth.uid())`),
+the same shape 20260928182300 gave posts, replies and offers. Checked in a
+rolled-back transaction: a suspended sender is refused, a normal one isn't.
+Service-role lifecycle notes are unaffected. `sendThreadMessage` shows
+`SUSPENDED_MESSAGE` when a send is refused this way.
+
 ## September 28 — posts and replies can be reported; suspension stops posting (shared dev project)
 
 | File | Applied to |
