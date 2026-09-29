@@ -59,6 +59,12 @@ on-demand:
 - **Autosave** (create mode): debounced 1.6s to the one-per-car draft, quiet
   `Saved — only you can see it` status, plus a localStorage recovery buffer
   cleared on publish. Publishing stays explicit.
+- **Tag a part** (create and edit): the same picker and limit of three as
+  the quick post box, over your own live listings. On edit, tags you don't
+  touch are left as they are; a post with no car must keep at least one.
+  Drafts don't store tags — they're chosen when you publish.
+- **Discard draft**: deletes the unpublished draft after a confirm step and
+  goes back to Home.
 - Server actions ride in as props — `src/features` never imports route code.
 
 ## Renderer
@@ -90,7 +96,8 @@ the database rather than in the composer.
 ### Tagged parts
 
 `activity_post_listings` (W-3) records up to three of the author's **own
-active** listings per post, ordered. A post is a place to say "this is for
+active** listings per post, ordered, set from the quick post box or the full
+editor (`c31251d`). A post is a place to say "this is for
 sale", not a place to advertise somebody else's stock, so
 `sync_activity_post_listings` is SECURITY DEFINER and checks the author
 itself — a direct call cannot tag parts onto another member's post.
@@ -112,6 +119,13 @@ itself — a direct call cannot tag parts onto another member's post.
 
 All four are retry-safe through the same `publish_operation_id`: a lost
 response replays rather than double-posting.
+
+### Replies
+
+A reply can be deleted by the person who wrote it or by the post's author
+(migration `20260928182200`); Delete takes two taps. The reply box keeps
+what you typed until the reply has actually saved, so a failed send loses
+nothing.
 
 ### Where a post lives
 
