@@ -36,7 +36,9 @@ export async function signUp(page: Page, user: TestUser) {
   await page.waitForURL(/\/onboarding/);
   await page.getByLabel(/handle|username/i).fill(user.username);
   await page.getByLabel(/display name|keeper name/i).fill(user.displayName);
-  await page.getByRole("button", { name: /continue|finish|save|let.s go/i }).click();
+  // Onboarding's primary is now "Next: add your car"; "Skip — just browsing"
+  // saves the same profile and lands on /home.
+  await page.getByRole("button", { name: /continue|finish|save|let.s go|just browsing/i }).click();
   await page.waitForURL(/\/home/);
 }
 
