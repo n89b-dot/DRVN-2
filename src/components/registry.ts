@@ -1345,6 +1345,16 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     cssRecipe: ".cardeng",
   },
   {
+    name: "ReportButton",
+    importPath: "@/features/moderation/report-button",
+    file: "src/features/moderation/report-button.tsx",
+    layer: "feature",
+    category: "social",
+    status: "active",
+    description: "A quiet \"Report …\" link that opens the report dialog (reason + detail) and files to the admin review queue. Subjects: listing, user, post, comment — the wording follows the subject (\"Report this post\", \"Report\" on a reply). Guests get the sign-in explanation instead.",
+    use: "Listing pages, profiles, post pages, each reply (engagement.tsx) and a conversation header. Never on the viewer's own content.",
+  },
+  {
     name: "SaveButton",
     importPath: "@/features/social/buttons",
     file: "src/features/social/buttons.tsx",

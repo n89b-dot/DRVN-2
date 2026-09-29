@@ -90,6 +90,19 @@ trace.
   on a test key; a member who asked to delete their account shows as
   "Deleting", not suspended, and can't be unsuspended. CSV export writes
   cells starting `=`, `+`, `-` or `@` as plain text.
+- **Reports and moderation** (`f57b5c7`, migration `20260928182300`).
+  Members can report a listing, a user, a post or a reply (`ReportButton`;
+  never on their own content). The report queue lists Post and Reply rows
+  with "Remove post" / "Remove reply": it deletes the content, keeps its text
+  in the audit log, tells the author (`post_removed` / `comment_removed`),
+  marks the report actioned and tells the reporter (`report_reviewed`).
+  Resolving starts on "Choose…" — there is no default outcome — and the
+  reporter hears the outcome either way.
+- **Suspension stops activity.** Restrictive RLS blocks a suspended member
+  from posting, replying and making offers; they see a plain notice
+  (`src/lib/suspension.ts`) and are told when they're suspended, with the
+  reason, and when it's lifted (`account_suspended` / `account_restored`).
+  Messaging needs the same guard on `messages` inserts (Messages area).
 
 ## Selling IA (§J — decision of record)
 

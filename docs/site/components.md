@@ -248,7 +248,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `VehicleCard` | Product pattern | `@/components/ui` | A vehicle as a dashboard row — 3:2 media, identity (name; vehicle line only when it adds to the name), pulse stats, whole-row link. — `.vehicle--row` | Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.) |
 | `VehicleGallery` | Product pattern | `@/components/ui` | Asymmetric hero + supporting plates for a build's photos. | Car sheets. |
 
-### Features (15)
+### Features (16)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -264,6 +264,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ListingQuickCommerce` | Feature | `@/features/commerce/quick-commerce` | Card-level quick buy/offer actions. | Commerce mosaic walls. |
 | `OfferDecision` | Feature | `@/features/commerce/offer-decision` | Accept · Counter · Pass / Accept counter · Withdraw for a live offer, by side and status. A seller never sees Accept on their own counter. | The offer page and the conversation — the same decision wherever the offer is discussed. |
 | `ProfileBody` | Feature | `@/components/profile/profile-body` | The public profile's tabbed body (vehicles, activity, listings, reviews). The Updates tab counts every published post (including posts about a part with no car) and pages with "Show more updates" (`?view=updates&updatesPage=`). | Profile routes. |
+| `ReportButton` | Feature | `@/features/moderation/report-button` | A quiet "Report …" link that opens the report dialog (reason + detail) and files to the admin review queue. Subjects: listing, user, post, comment — the wording follows the subject ("Report this post", "Report" on a reply). Guests get the sign-in explanation instead. | Listing pages, profiles, post pages, each reply (engagement.tsx) and a conversation header. Never on the viewer's own content. |
 | `SaveButton` | Feature | `@/features/social/buttons` | Save toggle. Full-size (label) on detail pages; `variant="icon"` is the bookmark-only form for card floors. | PDP / car sheet headers (full); marketplace and store cards (icon). |
 | `SellForm` | Feature | `@/app/(product)/sell/sell-form` | The listing create/edit workflow (also used by Edit Listing). | Feature-owned; compose FormSection/ValidationSummary/fields from it, don't fork it. |
 | `ThreadView` | Feature | `@/app/(product)/messages/[id]/thread-view` | One person's conversation: runs, events and day breaks in the reader's timezone, live offer decisions, the composer, live updates. | Feature-owned; its grammar is MessageRun/MessageBubble/ThreadEvent/ChatComposer. |
