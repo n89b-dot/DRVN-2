@@ -99,6 +99,8 @@ export default async function OrderDetailPage({
   const reportClosesAt = order.delivered_at
     ? new Date(new Date(order.delivered_at).getTime() + DISPUTE_WINDOW_DAYS * 86_400_000)
     : null;
+  // Computed here, not in JSX — `new Date()`, the purity lint's house pattern.
+  const reportWindowClosed = Boolean(reportClosesAt && reportClosesAt.getTime() < new Date().getTime());
 
   // Opening the order deals with what its notifications were about.
   await markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]);
@@ -874,7 +876,7 @@ export default async function OrderDetailPage({
                 {/* The claim window (dispute-command.ts): 30 days from
                     delivery. Once it has closed, the form would only be
                     refused on submit — say so instead of offering it. */}
-                {reportClosesAt && reportClosesAt.getTime() < Date.now() ? (
+                {reportWindowClosed && reportClosesAt ? (
                   <p className="spec-note">
                     The {DISPUTE_WINDOW_DAYS}-day window to report a problem
                     closed on {reportClosesAt.toLocaleDateString()}. Message
