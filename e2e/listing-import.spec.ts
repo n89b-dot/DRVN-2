@@ -197,7 +197,23 @@ test.describe("listing importer", () => {
     await page.reload();
     await expect(page.getByLabel(/asking price/i)).toHaveValue("250.00");
     await page.getByLabel(/^category/i).selectOption("performance");
-    await page.getByRole("button", { name: /publish to market/i }).click();
+
+    // Publishing needs a photo (2026-09-24). A text-only paste brings none, so
+    // attach one through the form's own uploader and wait for it to land.
+    await page.locator('#sell-photos input[type="file"]').setInputFiles({
+      name: "intake.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64"
+      ),
+    });
+    await expect(page.getByRole("button", { name: /add more photos/i })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // The live button's CSS brackets are part of its accessible name.
+    await page.getByRole("button", { name: /^\[?\s*publish\s*\]?$/i }).click();
     await page.waitForURL(/\/listings\/[\w-]+$/, { timeout: 30_000 });
   });
 
