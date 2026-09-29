@@ -12,15 +12,26 @@ DRVN's async architecture is **Postgres-owned**, deliberately:
   (daily), transfer-worker invocation via pg_net (10 min), dispute-SLA sweep
   (daily).
 - **Worker routes** (bearer `CRON_SECRET`, 404 otherwise):
-  - `/api/jobs/transfers` — one pass runs due transfers, reconciliation,
-    refund resume, dispute SLA, alert outbox. The retry heartbeat for every
-    durable money queue.
+  - `/api/jobs/transfers` — one money pass (`runMoneyWorkerPass`,
+    `src/lib/money-worker.ts`): expired holds, capture reconciliation, due
+    transfers, transfer reconciliation, refund resume, label voids, return
+    timers, dispute SLA, alert outbox, purchase analytics and receipts, each
+    recorded in `worker_runs`. The retry heartbeat for every durable money
+    queue. The console's "Run worker now" runs exactly this pass.
+  - `/api/jobs/search` and `/api/jobs/account-deletions` — search index
+    delivery; account deletions and data exports.
   - `/api/jobs/media-gc` — staged-upload sweep (48h, heals before deleting).
   - `/api/jobs/saved-searches` — saved-search matching → one summary
     notification per search per pass.
   - `/api/jobs/listing-imports` — importer retention sweep (0047): expires
     overdue imports (48h) and scrubs source payloads from week-old terminal
-    rows. Run daily beside media-gc. See [listing-import](listing-import.md).
+    rows. Run daily beside media-gc — it has no database schedule, so it
+    needs its own. See [listing-import](listing-import.md).
+- **Local dev:** the shared dev database's pg_net can't reach a dev server on
+  localhost, so there `scripts/dev-jobs.sh` (launchd agent `cc.drvn2.jobs`,
+  every 2 minutes) calls the same routes on the database's schedule, and
+  `scripts/dev-stripe-listen.sh` (`cc.drvn2.stripe`) forwards Stripe test
+  events. Setup: `docs/production-runbook.md` §12.
 - **Durable queues as tables:** `transfer_intents` (leased,
   FOR UPDATE SKIP LOCKED), `refund_operations` (8-state machine),
   `admin_alert_outbox`, `payment_recoveries`, `webhook_events` (dedup).
@@ -60,7 +71,25 @@ trace.
   the audit log's trigger refuses non-admin actors for every role. The
   future-roles seam is `src/lib/admin/capabilities.ts` (action families →
   required role); shops/staff/moderators extend there without changing call
-  sites.
+  sites. A lapsed 15-minute MFA check sends the admin through
+  `/admin-verify?next=` and back to the console page they were on.
+- **Background jobs** (Admin → Settings): when each job family last
+  succeeded or failed, from `worker_health_snapshot()` — the data
+  `/api/health/workers` serves a monitor — marked running, retrying,
+  overdue or never ran (search and analytics read "off" without Typesense or
+  PostHog). "Run worker now" (Admin → Payments) runs the full money pass,
+  not just transfers.
+- **Reads fail loudly.** Orders, disputes, listings and users throw on a
+  failed read, so the console shows its error page with a retry rather than
+  an empty "Nothing matches". An order or dispute id (or its first
+  characters) is searched as a uuid range; a users search containing `@`
+  matches account emails.
+- **Telling the truth.** The orders Money column says "not paid" for unpaid,
+  failed and cancelled orders and "held" only when DRVN holds payment; a
+  user's Sales counts paid orders only; Settings shows "Stripe in TEST mode"
+  on a test key; a member who asked to delete their account shows as
+  "Deleting", not suspended, and can't be unsuspended. CSV export writes
+  cells starting `=`, `+`, `-` or `@` as plain text.
 
 ## Selling IA (§J — decision of record)
 

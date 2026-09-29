@@ -142,3 +142,18 @@ Enforced by: CHECK + guard_listing_import_status trigger (0047)
 | `expired` | **terminal** |
 
 <!-- END GENERATED: domain-states -->
+
+## What the maps don't show
+
+- **Who may take a transition.** Offers: `open → countered` is the seller's
+  move and `countered → accepted` is the **buyer's**. Once the seller has
+  countered it is the buyer's turn — the seller can only pass (decline, which
+  withdraws the counter), not accept their own counter or counter again
+  (`respondToOffer`; a counter is written only onto an `open` offer). A buyer
+  has at most one live (`open` or `countered`) offer per part; `makeOffer`
+  checks before the RPC and points at the existing offer.
+- **Reserved is visible.** A `reserved` listing — held by a checkout
+  (15 min) or an accepted offer (24 h) — is publicly readable with its
+  photos, fitment, part numbers and Q&A (`20260928150000`), and the listing
+  page shows it as **Reserved** with a line explaining the hold. Browse,
+  feed, store and search queries still show `active` parts only.

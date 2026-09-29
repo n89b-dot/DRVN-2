@@ -8,7 +8,12 @@
 
 One table (`notifications`: kind, section, title, body, href, actor, read_at)
 renders generically on `/notifications` (two sections, unread filter,
-per-item read-on-open). Reactive kinds are written by SECURITY DEFINER
+per-item read-on-open). Opening an order also marks the notifications that
+point at it read (`markNotificationsReadForPage` in
+`src/lib/notifications-read.ts`), so the bell stops counting what the member
+has already dealt with. The bell badge, the "N unread" line and the list all
+use one rule, `kindIsShown()`: a kind the member switched off in Settings is
+neither shown nor counted. Reactive kinds are written by SECURITY DEFINER
 database triggers; app-raised kinds (worker alerts) go through
 `deliverNotification()` — the delivery boundary — which checks the governing
 preference **at write time** and is the documented seam where future channels
@@ -85,3 +90,24 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `saved_search` | marketplace | `saved_searches` | app (deliver.ts) | New inventory matching a saved search with alerts on. |
 
 <!-- END GENERATED: notification-kinds -->
+
+**Offers and follows** (`20260928160000`):
+
+- Every offer notification opens the offer, `/offers/<id>` — they used to
+  point at `/orders`. The trigger writes `offer_new` (to the seller),
+  `offer_countered` and `offer_declined` (to the buyer) and `offer_withdrawn`
+  (to the seller).
+- A seller's acceptance is announced once, by the app (`offer_accepted`,
+  linking to the checkout the buyer now needs); the trigger no longer adds a
+  second "Your offer was accepted".
+- A buyer taking the seller's counter tells the **seller**
+  (`offer_counter_accepted`, "Your counter was accepted", linking to the order
+  it created). Before, it told the buyer and not the seller.
+- Following a car is `car_follow`, governed by "Car follows & saves"
+  (`car_engagement`); `follow` is profile follows only. Existing car-follow
+  rows were moved over. Before, "New followers" muted both and the car
+  switch muted neither.
+
+The generated table above comes from `NOTIFICATION_KINDS` and does not yet
+list `car_follow` or the per-outcome offer kinds; `prefKeyForKind` already
+maps them.

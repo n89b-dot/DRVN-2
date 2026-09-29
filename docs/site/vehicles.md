@@ -17,6 +17,14 @@ Cars carry both:
 - **Display snapshots** — `cars.make/model/year` stay frozen strings, so an
   upstream catalog rename can never rewrite what a build page has always said.
 
+Cars that predate the catalog, or were typed by hand, were given references
+by `20260928181000`: make by case-insensitive exact name; model by exact
+name, else the longest catalog model the car's model starts with ("M4
+Competition" → M4). No model match leaves the car make-only. Only cars with
+no make reference were touched, so an id a member picked is never
+overridden. Marketplace's "Parts for my …" and the vehicle picker need these
+references; with no main car set, the shortcut offers the newest car.
+
 ## Data sources
 
 | Source | Role | License |
@@ -39,10 +47,15 @@ ranked, and cached for an hour.
    vehicle.
 2. **VIN (secondary)** — `Enter VIN instead`. One vPIC decode prefills
    identity plus trim/engine/drivetrain. The VIN stays private; wording is
-   always **"VIN decoded"**, never "verified".
+   always **"VIN decoded"**, never "verified". When vPIC itself is down
+   (`decodeVinResult` → `unavailable`), the dialog says lookup is unavailable
+   and points at the list — a correct VIN is never called wrong because the
+   service didn't answer.
 3. **Manual (always)** — `Can't find your vehicle? Enter it manually.` Kit
    cars, imports, gray-market and one-offs are first-class. Manual words that
-   happen to name a catalog vehicle quietly gain the reference.
+   happen to name a catalog vehicle quietly gain the reference. A blank
+   manual form asks for at least a make or a name rather than creating
+   "My car".
 
 A personal name is optional everywhere — unnamed, the car is called what it
 is ("2024 Volkswagen Golf").

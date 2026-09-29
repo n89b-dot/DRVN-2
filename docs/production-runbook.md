@@ -87,7 +87,7 @@ Environment (deployment platform):
 | `STRIPE_SECRET_KEY` | `sk_live_…` flips `paymentsAreLive()`; the terms' test-mode clause must be removed at the same moment |
 | `STRIPE_WEBHOOK_SECRET` | from the production webhook endpoint below |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | live publishable key |
-| `CRON_SECRET` | random 32+ chars; gates `/api/jobs/transfers` |
+| `CRON_SECRET` | random 32+ chars; gates every `/api/jobs/*` route (transfers, search, account-deletions, saved-searches, media-gc, listing-imports) |
 | `SENTRY_DSN` | **required in live-money production** — boot fails without it (`validatePaymentsEnv`) |
 | `ADMIN_ALERT_WEBHOOK_URL` | operator alerts (Slack-compatible). Unset = alerts accumulate as `disabled` outbox rows, visible in Admin → Payments |
 | `PAYMENTS_MODE` | optional; set `stripe` explicitly in production. Production **refuses** stub mode without `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true` |
@@ -148,6 +148,16 @@ Every money queue is durable and visible in **Admin → Payments**:
 - **Failed transfer recovery**: fix the cause (usually seller onboarding —
   `account.updated` auto-unblocks), then "Run worker now". For an intent at
   8 attempts, clear `attempts`/`next_attempt_at` via SQL after diagnosing.
+- **"Run worker now"** (Admin → Payments) runs the whole scheduled money
+  pass — the same `runMoneyWorkerPass` behind `/api/jobs/transfers`:
+  expired holds, capture checks, payouts, refunds, label voids, returns,
+  disputes, alerts, analytics and receipts. It reports what it paid out and
+  released, and names any family that failed (those retry next pass).
+- **Is anything running?** Admin → Settings → Background jobs lists each job
+  family's last success and failure (`worker_health_snapshot()`, the data
+  `/api/health/workers` serves) and flags overdue ones. An overdue list
+  usually means the scheduler can't reach the app — check `job_config` and
+  `CRON_SECRET`.
 - **Alert backlog** (`admin_alert_outbox`): `pending` retries with backoff on
   every worker pass; `failed` = 10 attempts exhausted; `disabled` = no
   destination configured when raised.
@@ -330,3 +340,30 @@ update public.shop_profiles
 Revoke by setting it back to `'unverified'`. Whatever return policy a shop
 had at each sale is frozen in that order's commercial snapshot; changing the
 policy never affects existing orders.
+
+## 12. Local dev server — background jobs and Stripe events
+
+Not for production. On the shared dev project the scheduler can't reach a
+dev server on `localhost` (pg_net runs in the database's network), so without
+these nothing scheduled ever runs there: holds never expire, payouts never
+run, saved-search alerts, deletions and exports never finish — and Stripe
+can't deliver webhooks, so a test purchase stays "pending" until the
+10-minute capture check.
+
+- **`scripts/dev-jobs.sh`** — calls `/api/jobs/*` with the `CRON_SECRET`
+  from `.env.local` on the database's own intervals (search 2 min, account
+  deletions 5 min, transfers 10 min, saved searches 30 min, media GC and
+  listing imports daily). Each job runs once its interval has passed, so a
+  missed tick catches up once rather than piling up; a dead server retries
+  next tick. Run it by hand for one pass.
+- **`scripts/dev-stripe-listen.sh`** — `stripe listen` forwarding to
+  `/api/stripe/webhook`, using the test key in `.env.local`; its signing
+  secret is the `STRIPE_WEBHOOK_SECRET` already configured. It refuses any
+  key that isn't `sk_test_`.
+
+Both are launchd agents beside the dev server's own (`cc.drvn2.jobs` every
+two minutes; `cc.drvn2.stripe` kept alive). launchd can't open scripts inside
+`~/Desktop`, so install a copy in `~/bin` — the header of each script has
+the three commands. Logs: `~/Library/Logs/drvn2-jobs.log` and
+`~/Library/Logs/drvn2-stripe.log`. Admin → Settings → Background jobs shows
+whether the jobs are keeping up.

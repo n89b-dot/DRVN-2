@@ -395,7 +395,7 @@ components:
     states:
       open: { class: ".is-open on the tr", background: "{colors.tile-2}", note: "the open row lifts by tone, never by shadow" }
     responsive:
-      "860px and below": "each tr.ledger__row becomes a compact card: title + actions, car + status, then Views, Watch, Asking, Top offer side by side"
+      "860px and below": "each tr.ledger__row becomes a compact card: title + actions, car + status, then Views, Watch, Asking, Top offer side by side; the title wraps to two lines instead of an ellipsis"
   chip:
     class: ".chip"
     base:

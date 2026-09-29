@@ -57,7 +57,7 @@ Use explicit `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SECRET_KEY` and matching `DRV
 
 ## Independent monitoring
 
-`node scripts/check-worker-health.mjs` requires `DRVN_MONITOR_ORIGIN` and `DRVN_MONITOR_SECRET`. It uses HTTPS remotely, rejects redirects and fails on HTTP errors, incomplete/stale families or failed queues without printing response payloads or secrets.
+`node scripts/check-worker-health.mjs` requires `DRVN_MONITOR_ORIGIN` and `DRVN_MONITOR_SECRET`. It uses HTTPS remotely, rejects redirects and fails on HTTP errors, incomplete/stale families or failed queues without printing response payloads or secrets. Inside the product, Admin → Settings → Background jobs reads the same `worker_health_snapshot()` and marks each family running, retrying, overdue or never ran; it is a view for operators, not an alert.
 
 The independent GitHub workflow is deliberately inactive until repository variable `DRVN_MONITOR_ENABLED=true`, the canonical monitor origin and its separate secret are configured. Before enabling it, identify the operator and notification destination, verify an actual failed notification and recovery, and account for GitHub schedule delays. A configured workflow file is not evidence that an alert was delivered.
 

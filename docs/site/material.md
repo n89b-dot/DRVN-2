@@ -63,7 +63,8 @@ fresh number:
   981–1023px where the one-column layout persists.
 - **Ledgers** — tables linearize into labelled records at **860px**
   (`.ledger`) because that is where the column set stops fitting, not at a
-  shell threshold.
+  shell threshold. Stacked, the title wraps to two lines instead of an
+  ellipsis, so similar parts can be told apart.
 - **Register rail** — exists only ≥**1081px**; measured ("the last width
   that fits the full register"), not themed.
 

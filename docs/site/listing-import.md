@@ -44,7 +44,8 @@ dedupes on source URL, so retries never duplicate photos.
 `import_expired` · `import_not_found`
 
 `PASTE_FALLBACK_CODES` drive the "paste the post instead" UX on the same
-import; `RETRYABLE_CODES` drive the retry button. Sellers only ever see the
+import (`source_not_sale_post` is one: its message says "paste just the sale
+text below", so the paste box opens); `RETRYABLE_CODES` drive the retry button. Sellers only ever see the
 sentence from `messageForImportError` — never `error_detail`.
 
 ## Environment
@@ -101,7 +102,18 @@ pasting a link" feel rationed for no reason.
 The build sheet's link flow reuses the importer's machinery rather than
 growing its own: `fetch/safe-fetch.ts` and `fetch/guard.ts` (SSRF posture
 unchanged), `extract/html.ts` (whose JSON-LD reader gained `brand`) and
-`adapters/images.ts`. `media/import-images.ts` takes the bucket and path as
+`adapters/images.ts`.
+
+Shop pages it reads: a schema.org `Product`, or a `ProductGroup` — how
+Shopify describes a product with variants — whose name and brand are the
+group's and whose price, part number and photo come from its first variant
+when the group doesn't state them. A price only in meta tags is read from
+`og:price:amount` / `product:price:amount`. An OpenGraph title loses its
+" | Shop name" tail (`trimSiteName`) before it becomes the part's title. A
+shop that refuses automated reads (access denied, a bot challenge, a login
+wall) gets "This shop blocks automatic reading — add the part by hand or
+paste its details" rather than "Couldn't reach that page", which is kept for
+links that really didn't answer. `media/import-images.ts` takes the bucket and path as
 parameters so the same code re-hosts a mod thumbnail and a listing photo.
 
 What it writes is on `mod_items`, not `listings`: `product_url`,
