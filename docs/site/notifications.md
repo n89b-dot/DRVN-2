@@ -70,6 +70,7 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | Kind | Section | Preference | Written by | What it means |
 | --- | --- | --- | --- | --- |
 | `follow` | engagement | `profile_follows` | DB trigger | Someone followed your profile. |
+| `car_follow` | engagement | `car_engagement` | DB trigger | Someone followed one of your cars (20260928160000). |
 | `save` | engagement | `car_engagement` | DB trigger | Someone saved your car, profile or post. |
 | `comment` | engagement | `comments` | DB trigger | A comment on your build update. |
 | `reaction` | engagement | `comments` | DB trigger | A reaction on your build update. |
@@ -77,7 +78,10 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `listing_save` | marketplace | `listing_saves` | DB trigger | Someone saved your listing. |
 | `question` | marketplace | `questions` | DB trigger | A question on one of your parts. |
 | `offer_new` | marketplace | `offers_sales` | DB trigger | A new offer on your listing. |
-| `offer_response` | marketplace | `offers_sales` | DB trigger | Your offer was answered. |
+| `offer_countered` | marketplace | `offers_sales` | DB trigger | The seller countered your offer — opens the offer. |
+| `offer_declined` | marketplace | `offers_sales` | DB trigger | The seller declined your offer — opens the offer. |
+| `offer_accepted` | marketplace | `offers_sales` | app (deliver.ts) | The seller accepted your offer — opens checkout (offer-actions.ts; the trigger no longer writes a second one). |
+| `offer_counter_accepted` | marketplace | `offers_sales` | DB trigger | The buyer accepted your counter — opens the order. |
 | `offer_withdrawn` | marketplace | `offers_sales` | DB trigger | An offer was withdrawn. |
 | `order_sold` | marketplace | `offers_sales` | DB trigger | Your part sold. |
 | `order_paid` | marketplace | `offers_sales` | DB trigger | Payment confirmed on an order. |

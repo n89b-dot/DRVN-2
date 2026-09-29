@@ -44,9 +44,9 @@ Enforced by: CHECK (0001/0007) + guard_listing_status trigger (0012) + moderatio
 | From | May move to |
 | --- | --- |
 | `draft` | `active` · `archived` |
-| `active` | `reserved` · `paused` · `archived` · `removed` |
+| `active` | `reserved` · `paused` · `sold` · `archived` · `removed` |
 | `reserved` | `active` · `sold` |
-| `paused` | `active` · `archived` · `removed` |
+| `paused` | `active` · `sold` · `archived` · `removed` |
 | `sold` | **terminal** |
 | `archived` | `active` |
 | `removed` | `paused` |

@@ -1,5 +1,16 @@
 # Applying migrations
 
+## September 29 — sellers can mark a part sold (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260929100000_seller_marks_sold.sql` | shared dev project, 2026-09-29 |
+
+`guard_listing_status` now lets a seller move their own active or paused
+listing to `sold` ("Mark sold" — sold somewhere else). Every other change to
+`sold` or `reserved` is still checkout's. The live definition before the
+change is in `~/drvn-db-backups/pre-mark-sold-guard_listing_status.sql`.
+
 ## September 28 — Home feed and recommendations in one round trip each
 
 | File | Applied to |

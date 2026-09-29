@@ -44,9 +44,11 @@ export const ORDER_TRANSITIONS: TransitionMap<OrderStatus> = {
 /** Listings (0001/0012/0018). `removed` is moderation-only in both directions. */
 export const LISTING_TRANSITIONS: TransitionMap<ListingStatus> = {
   draft: ["active", "archived"],
-  active: ["reserved", "paused", "archived", "removed"],
+  // → sold from active/paused is the seller's "Mark sold" (sold elsewhere,
+  // 20260929100000); every other → sold is checkout's.
+  active: ["reserved", "paused", "sold", "archived", "removed"],
   reserved: ["active", "sold"],
-  paused: ["active", "archived", "removed"],
+  paused: ["active", "sold", "archived", "removed"],
   sold: [],
   archived: ["active"],
   removed: ["paused"],

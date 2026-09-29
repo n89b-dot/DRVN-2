@@ -22,6 +22,7 @@ export type NotificationKind = {
 
 export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "follow", section: "engagement", pref: "profile_follows", source: "trigger", description: "Someone followed your profile." },
+  { kind: "car_follow", section: "engagement", pref: "car_engagement", source: "trigger", description: "Someone followed one of your cars (20260928160000)." },
   { kind: "save", section: "engagement", pref: "car_engagement", source: "trigger", description: "Someone saved your car, profile or post." },
   { kind: "comment", section: "engagement", pref: "comments", source: "trigger", description: "A comment on your build update." },
   { kind: "reaction", section: "engagement", pref: "comments", source: "trigger", description: "A reaction on your build update." },
@@ -29,7 +30,10 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "listing_save", section: "marketplace", pref: "listing_saves", source: "trigger", description: "Someone saved your listing." },
   { kind: "question", section: "marketplace", pref: "questions", source: "trigger", description: "A question on one of your parts." },
   { kind: "offer_new", section: "marketplace", pref: "offers_sales", source: "trigger", description: "A new offer on your listing." },
-  { kind: "offer_response", section: "marketplace", pref: "offers_sales", source: "trigger", description: "Your offer was answered." },
+  { kind: "offer_countered", section: "marketplace", pref: "offers_sales", source: "trigger", description: "The seller countered your offer — opens the offer." },
+  { kind: "offer_declined", section: "marketplace", pref: "offers_sales", source: "trigger", description: "The seller declined your offer — opens the offer." },
+  { kind: "offer_accepted", section: "marketplace", pref: "offers_sales", source: "app", description: "The seller accepted your offer — opens checkout (offer-actions.ts; the trigger no longer writes a second one)." },
+  { kind: "offer_counter_accepted", section: "marketplace", pref: "offers_sales", source: "trigger", description: "The buyer accepted your counter — opens the order." },
   { kind: "offer_withdrawn", section: "marketplace", pref: "offers_sales", source: "trigger", description: "An offer was withdrawn." },
   { kind: "order_sold", section: "marketplace", pref: "offers_sales", source: "trigger", description: "Your part sold." },
   { kind: "order_paid", section: "marketplace", pref: "offers_sales", source: "trigger", description: "Payment confirmed on an order." },
