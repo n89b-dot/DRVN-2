@@ -103,6 +103,9 @@ export default async function ExplorePage({
     make: t.make,
     model: t.model,
     builds: Number(t.builds),
+    // The chip opens the vehicle filter for exactly this make + model when
+    // the cars are matched to the catalog; a text search otherwise.
+    vehicle: t.catalog_make_id && t.catalog_model_id ? `${t.catalog_make_id}-${t.catalog_model_id}` : null,
   }));
   // Only people with a face and a name are suggested: a blank plate with a
   // handle (placeholder and test accounts) read as a broken first row.

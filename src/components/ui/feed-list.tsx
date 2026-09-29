@@ -7,6 +7,8 @@ import { vehicleSubline } from "@/lib/vehicles/label";
 import { KindBadge, type FeedKind } from "./badge";
 import { Media } from "./primitives";
 import { postHref } from "@/lib/activity/href";
+import { relativeTime } from "@/lib/format";
+import { CardEngagement, type EngagementTarget } from "@/features/social/card-actions";
 
 type Row = {
   key: string;
@@ -17,6 +19,18 @@ type Row = {
   /** One quiet line of context under the title. */
   meta: React.ReactNode;
   intro?: string | null;
+  /** "4w ago" — the card's time stamp. */
+  when: string;
+  /** What the card's like · comment · share · save strip acts on. */
+  engage: {
+    target: EngagementTarget;
+    liked: boolean;
+    likes: number;
+    saved: boolean;
+    commentCount?: number;
+    /** Posts and parts have a conversation to open; a build doesn't. */
+    commentHref?: string;
+  };
 };
 
 function shipText(cents: number | null): string {
@@ -36,6 +50,15 @@ function describe(item: FeedItem): Row {
       title: item.title,
       meta: [item.carName, item.ownerName].filter(Boolean).join(" · "),
       intro: item.intro,
+      when: relativeTime(item.created_at),
+      engage: {
+        target: { kind: "post", id: item.id },
+        liked: Boolean(item.viewerLiked),
+        likes: item.reactions,
+        saved: Boolean(item.viewerSaved),
+        commentCount: item.commentCount ?? 0,
+        commentHref: postHref({ id: item.id, carSlug: item.carSlug }),
+      },
     };
   }
   if (item.kind === "car") {
@@ -57,6 +80,13 @@ function describe(item: FeedItem): Row {
       cover: item.cover_url,
       kind: "car",
       title,
+      when: relativeTime(item.lastActivityAt ?? item.created_at),
+      engage: {
+        target: { kind: "car", id: item.id },
+        liked: Boolean(item.viewerLiked),
+        likes: item.likeCount ?? 0,
+        saved: Boolean(item.viewerSaved),
+      },
       meta: (
         <>
           {vehicle && <span className="vref vref--value">{vehicle}</span>}
@@ -72,6 +102,15 @@ function describe(item: FeedItem): Row {
     cover: item.cover_url,
     kind: "part",
     title: item.title,
+    when: relativeTime(item.created_at),
+    engage: {
+      target: { kind: "listing", id: item.id },
+      liked: Boolean(item.viewerLiked),
+      likes: item.likeCount ?? 0,
+      saved: Boolean(item.viewerSaved),
+      commentCount: item.questionCount ?? 0,
+      commentHref: `/listings/${item.id}`,
+    },
     meta: (
       <>
         <span className="feedrow__price">{formatPrice(item.price_cents)}</span>
@@ -100,9 +139,14 @@ export function FeedList({
   items,
   variant = "rows",
   eagerFirst = false,
+  engagement,
 }: {
   items: FeedItem[];
   variant?: "rows" | "cards";
+  /** Cards only: the like · comment · share · save strip under each card —
+   *  the same CardEngagement the Explore wall's cells carry. `path` is the
+   *  page the toggles revalidate. */
+  engagement?: { path: string; isLoggedIn: boolean };
   /** The list leads the page (Home's first cards): load the first card's
    *  photo eagerly at high priority, since it is the page's largest paint. */
   eagerFirst?: boolean;
@@ -119,29 +163,55 @@ export function FeedList({
     );
   }
 
-  const rows = items.map(describe);
+  // W-2: posts from before the photo rule keep their pages, but the cards
+  // column is a photo wall and a photo-less update on it is a blank plate —
+  // they are left off here, as on Explore's wall (MasonryFeed).
+  const shown = variant === "cards" ? items.filter((item) => item.kind !== "update" || item.cover_url) : items;
+  if (!shown.length) return null;
+  const rows = shown.map(describe);
 
   if (variant === "cards") {
     return (
       <div className="feedcards">
         {rows.map((row, i) => (
-          <Link key={row.key} href={row.href} className="feedcard">
-            <span className="feedcard__img" aria-hidden="true">
-              <Media
-                src={row.cover ?? undefined}
-                alt=""
-                className="h-full w-full"
-                role="feature"
-                eager={eagerFirst && i === 0}
-              />
-            </span>
-            <span className="feedcard__body">
-              <KindBadge kind={row.kind} className="feedcard__kind" />
-              <span className="feedcard__title">{row.title}</span>
-              {row.meta && <span className="feedrow__meta">{row.meta}</span>}
-              {row.intro && <span className="feedrow__intro">{row.intro}</span>}
-            </span>
-          </Link>
+          <article key={row.key} className="feedcard">
+            <Link href={row.href} className="feedcard__link">
+              <span className="feedcard__img" aria-hidden="true">
+                <Media
+                  src={row.cover ?? undefined}
+                  alt=""
+                  className="h-full w-full"
+                  role="feature"
+                  eager={eagerFirst && i === 0}
+                />
+              </span>
+              <span className="feedcard__body">
+                <span className="feedcard__top">
+                  <KindBadge kind={row.kind} className="feedcard__kind" />
+                  <span className="microlabel">{row.when}</span>
+                </span>
+                <span className="feedcard__title">{row.title}</span>
+                {row.meta && <span className="feedrow__meta">{row.meta}</span>}
+                {row.intro && <span className="feedrow__intro">{row.intro}</span>}
+              </span>
+            </Link>
+            {engagement && (
+              <div className="feedcard__eng">
+                <CardEngagement
+                  target={row.engage.target}
+                  path={engagement.path}
+                  isLoggedIn={engagement.isLoggedIn}
+                  initialLiked={row.engage.liked}
+                  likeCount={row.engage.likes}
+                  commentHref={row.engage.commentHref}
+                  commentCount={row.engage.commentCount}
+                  shareUrl={row.href}
+                  initialSaved={row.engage.saved}
+                  compact
+                />
+              </div>
+            )}
+          </article>
         ))}
       </div>
     );

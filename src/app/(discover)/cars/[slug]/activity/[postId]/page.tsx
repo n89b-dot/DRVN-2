@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Avatar, EmbeddedVideo, Icon, Media, NarrowColumn, ObjectRow } from "@/components/ui";
+import { Avatar, EmbeddedVideo, Icon, Media, NarrowColumn, ObjectRow, ShareButton } from "@/components/ui";
+import { SaveButton } from "@/features/social/buttons";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement } from "@/features/activity/engagement";
 import { loadPostEngagement } from "@/features/activity/load-engagement";
@@ -40,11 +41,21 @@ export default async function ActivityDetailPage({
 
   const user = await getViewer();
 
-  const [{ data: owner }, { data: images }, { reactions, comments }] = await Promise.all([
+  const [{ data: owner }, { data: images }, { reactions, comments }, { data: saveRow }] = await Promise.all([
     supabase.from("profiles").select("display_name, username, avatar_url").eq("id", car.owner_id).single(),
     supabase.from("activity_images").select("url, alt, position").eq("post_id", postId).order("position"),
     loadPostEngagement(supabase, postId, user?.id ?? null),
+    user
+      ? supabase
+          .from("saves")
+          .select("target_id")
+          .eq("user_id", user.id)
+          .eq("target_type", "post")
+          .eq("target_id", postId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const path = `/cars/${slug}/activity/${post.id}`;
 
   // W-1: a quick post has no title; the heading falls back to the
   // author's own first line — and then that line isn't said again below it.
@@ -189,6 +200,19 @@ export default async function ActivityDetailPage({
               .filter(Boolean)
               .join(" · ")}
           </Link>
+        </div>
+        {/* Save and Share live on the feed card too; someone who opened the
+            post from a link can keep it or pass it on from here. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <SaveButton
+            targetType="post"
+            targetId={post.id}
+            path={path}
+            initialSaved={Boolean(saveRow)}
+            isLoggedIn={Boolean(user)}
+            itemLabel="this update"
+          />
+          <ShareButton url={path} title={headline} />
         </div>
       </header>
       {lead.intro && <p className="max-w-[62ch] text-body leading-7">{lead.intro}</p>}

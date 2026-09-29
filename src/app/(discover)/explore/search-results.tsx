@@ -8,7 +8,7 @@ import {
   MasonryFeed,
 } from "@/components/ui";
 import { Rv } from "@/components/livesheet";
-import { ListingQuickCommerce } from "@/features/commerce/quick-commerce";
+import { ListingCartButton } from "@/features/commerce/quick-commerce";
 import type { FeedTab } from "@/lib/feed";
 import type { ExploreAllResults } from "@/lib/explore/search/query";
 import { exploreSearchHref, type ExploreSearchParams } from "@/lib/explore/search/params";
@@ -48,8 +48,9 @@ function GroupHead({
   );
 }
 
-/** The parts group's card wall — canonical ListingCards, quick commerce on
- *  purchasable rows, same rules as the marketplace grid. */
+/** The parts group's card wall — canonical ListingCards with the Explore
+ *  wall's one commerce control, the cart square. No Buy now: Explore is where
+ *  you find things; checkout starts from the part's page or the cart. */
 function PartsGroup({
   parts,
   isLoggedIn,
@@ -73,7 +74,7 @@ function PartsGroup({
             save={{ isLoggedIn, path }}
             actions={
               purchasable ? (
-                <ListingQuickCommerce listingId={listing.id} title={listing.title} />
+                <ListingCartButton listingId={listing.id} title={listing.title} />
               ) : isOwn ? (
                 <span className="microlabel block">Your listing</span>
               ) : undefined

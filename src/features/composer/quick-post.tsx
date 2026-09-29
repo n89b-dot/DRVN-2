@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 
-import { Button } from "@/components/ui";
+import { Button, ButtonLink } from "@/components/ui";
 import { createQuickPost } from "@/app/(product)/garage/actions";
 import { uploadImages } from "@/lib/media-upload";
 
@@ -58,8 +58,25 @@ export function QuickPost({
 
   // W-5: with no cars at all the box still works, provided a part is tagged
   // — someone between cars is exactly who the carless post is for. With no
-  // cars AND nothing to sell there is nothing to post about, so it hides.
-  if (!cars.length && !parts.length) return null;
+  // cars AND nothing to sell there is nothing to post about yet — so the box
+  // says what comes first (the bar's Post button lands here) rather than
+  // showing an empty tile.
+  if (!cars.length && !parts.length) {
+    return (
+      <div className="composerlite">
+        <p className="text-body">Add your car — or list a part — to start posting.</p>
+        <p className="spec-note">Every post is about a car or a part, with a photo.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ButtonLink href="/garage" variant="live">
+            Add your car
+          </ButtonLink>
+          <ButtonLink href="/sell" variant="ghost">
+            List a part
+          </ButtonLink>
+        </div>
+      </div>
+    );
+  }
   const draftHere = Boolean(carId) && hasDraftFor.includes(carId);
   const carless = !carId;
 

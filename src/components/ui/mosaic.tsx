@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { CardEngagement } from "@/features/social/card-actions";
 import type { FeedItem } from "@/lib/feed";
-import { cx } from "@/lib/format";
+import { cx, relativeTime } from "@/lib/format";
 import { conditionLabel, formatPrice } from "@/lib/marketplace/taxonomy";
 import { provenanceLine, vehicleLabel, vehicleSubline } from "@/lib/vehicles/label";
 import { ListingCartButton } from "@/features/commerce/quick-commerce";
@@ -301,23 +301,6 @@ export function MosaicCell({
 }
 
 type Viewer = { isLoggedIn?: boolean; path?: string };
-
-/** Relative time, coarse — a feed date is a feel, not a stamp. */
-function relativeTime(iso: string): string {
-  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 5) return `${weeks}w ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-}
 
 function shipLine(cents: number | null | undefined): string | null {
   if (typeof cents !== "number") return null;

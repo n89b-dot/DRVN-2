@@ -5173,6 +5173,8 @@ export type Database = {
         Args: { p_days?: number; p_limit?: number }
         Returns: {
           builds: number
+          catalog_make_id: number | null
+          catalog_model_id: number | null
           make: string
           model: string
           updates: number

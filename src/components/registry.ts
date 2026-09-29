@@ -1341,7 +1341,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     category: "social",
     status: "active",
     description: "Like · comment · share · save strip on cards; optimistic with rollback; guest → AuthIntentDialog. On a post the like IS its 🔥 reaction: the count and lit state read 🔥 only, and the tap sets the state asked for (on/off), never a toggle.",
-    use: "Via the mosaic card family's engagement slot.",
+    use: "Via the mosaic card family's engagement slot, and under each Home feed card (FeedList `engagement`).",
     cssRecipe: ".cardeng",
   },
   {
@@ -1502,7 +1502,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     category: "row",
     status: "active",
     description: "Home's feed over one description per item: `cards` (photo-first, Home's column) or `rows` (dense `.order`-based rows).",
-    use: "Home feeds — `cards` for the main column, `rows` where a photo column would be too loud. Pass `eagerFirst` when the list leads the page so its first photo loads at high priority.",
+    use: "Home feeds — `cards` for the main column, `rows` where a photo column would be too loud. Pass `eagerFirst` when the list leads the page so its first photo loads at high priority. Pass `engagement` ({ path, isLoggedIn }) to give each card the CardEngagement strip (like · comment · share · save). Photo-less legacy updates are left off `cards`.",
     avoid: "Browse surfaces — that's the mosaic family.",
     variants: ["cards", "rows"],
     cssRecipe: ".feedcards / .feedcard; .feedrow on .order",

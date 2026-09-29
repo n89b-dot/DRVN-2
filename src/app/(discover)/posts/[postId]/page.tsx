@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { NarrowColumn, ObjectRow, PageHead } from "@/components/ui";
+import { NarrowColumn, ObjectRow, PageHead, ShareButton } from "@/components/ui";
+import { SaveButton } from "@/features/social/buttons";
 import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { DeletePostButton } from "@/features/activity/delete-post-button";
@@ -67,13 +68,22 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
   const car = post.cars as unknown as { slug: string } | null;
   if (car?.slug) redirect(`/cars/${car.slug}/activity/${post.id}`);
 
-  const [{ data: author }, { data: images }, { data: taggedRows }, { reactions, comments }] = await Promise.all([
+  const [{ data: author }, { data: images }, { data: taggedRows }, { reactions, comments }, { data: saveRow }] = await Promise.all([
     supabase.from("profiles").select("display_name, username, avatar_url").eq("id", post.author_id).maybeSingle(),
     supabase.from("activity_images").select("url, alt, position").eq("post_id", post.id).order("position"),
     supabase.from("activity_post_listings").select("listing_id, position").eq("post_id", post.id).order("position"),
     // A post without a car is still a post: people react to it and talk
     // under it. 200000 made that possible; this page had never asked.
     loadPostEngagement(supabase, post.id, user?.id ?? null),
+    user
+      ? supabase
+          .from("saves")
+          .select("target_id")
+          .eq("user_id", user.id)
+          .eq("target_type", "post")
+          .eq("target_id", post.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const taggedIds = (taggedRows ?? []).map((r) => r.listing_id);
@@ -110,6 +120,19 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
         sub={author?.username ? `@${author.username}` : undefined}
         reveal={false}
       />
+      {/* Save and Share live on the feed card too; someone who opened the
+          post from a link can keep it or pass it on from here. */}
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <SaveButton
+          targetType="post"
+          targetId={post.id}
+          path={`/posts/${post.id}`}
+          initialSaved={Boolean(saveRow)}
+          isLoggedIn={Boolean(user)}
+          itemLabel="this update"
+        />
+        <ShareButton url={`/posts/${post.id}`} title={headline} />
+      </div>
 
       {gallery.length > 0 && (
         <ActivityGallery

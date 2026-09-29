@@ -72,7 +72,7 @@ export function HomeFeedMore({
 
   return (
     <div className="deck--main__feed deck--main__feed--rest">
-      {items.length > 0 && <FeedList items={items} variant="cards" />}
+      {items.length > 0 && <FeedList items={items} variant="cards" engagement={{ path: "/home", isLoggedIn: true }} />}
       <div ref={sentinel} aria-hidden="true" />
       {hasMore ? (
         <p className="mt-4 flex justify-center">

@@ -1,5 +1,17 @@
 # Applying migrations
 
+## September 28 — Trending chips carry catalog ids (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928182100_trending_models_catalog.sql` | shared dev project, 2026-09-28 |
+
+`trending_models` also returns `catalog_make_id` / `catalog_model_id` for each
+make + model group, so Explore's Trending chip opens the vehicle filter (the
+builds it counted) instead of a loose text search. The return type changes, so
+the function is dropped and recreated; the previous definition is in
+`~/drvn-db-backups/pre-20260928182100-trending_models.sql`.
+
 ## September 28 — one conversation per pair of people on the shared dev project
 
 | File | Applied to |

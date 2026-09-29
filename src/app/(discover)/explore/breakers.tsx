@@ -17,7 +17,8 @@ const MIN_ITEMS = 3;
 export function TrendingBreaker({
   models,
 }: {
-  models: { make: string; model: string; builds: number }[];
+  /** `vehicle` is the catalog filter value ("<makeId>-<modelId>"), when known. */
+  models: { make: string; model: string; builds: number; vehicle?: string | null }[];
 }) {
   if (models.length < MIN_ITEMS) return null;
   return (
@@ -29,7 +30,13 @@ export function TrendingBreaker({
         {models.slice(0, 6).map((m) => (
           <FilterLink
             key={`${m.make}-${m.model}`}
-            href={`/explore?q=${encodeURIComponent(`${m.make} ${m.model}`)}`}
+            // The vehicle filter the Filters sheet sets, so the chip opens the
+            // builds it counted — not a text search that matches any word.
+            href={
+              m.vehicle
+                ? `/explore?tab=cars&vehicle=${m.vehicle}`
+                : `/explore?q=${encodeURIComponent(`${m.make} ${m.model}`)}`
+            }
             selected={false}
             count={m.builds}
           >

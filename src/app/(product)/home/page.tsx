@@ -290,7 +290,7 @@ export default async function HomePage({
           <div className="deck--main__feed deck--main__feed--lead">
             {leadItems.length > 0 ? (
               <Rv immediate>
-                <FeedList items={leadItems} variant="cards" eagerFirst />
+                <FeedList items={leadItems} variant="cards" engagement={{ path: "/home", isLoggedIn: true }} eagerFirst />
               </Rv>
             ) : (
               <EmptyState
