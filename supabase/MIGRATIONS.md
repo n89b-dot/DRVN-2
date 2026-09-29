@@ -1,5 +1,15 @@
 # Applying migrations
 
+## September 29 — suspended members can't post in listing Q&A (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260929120000_suspended_members_dont_ask.sql` | shared dev project, 2026-09-29 |
+
+A restrictive insert policy on `listing_questions` (not `is_suspended`),
+matching the posts, replies and offers guards (`20260928182300`) and the
+Messages session's `20260929110000`. Adds a policy only.
+
 ## September 29 — suspended members can't message (shared dev project)
 
 | File | Applied to |

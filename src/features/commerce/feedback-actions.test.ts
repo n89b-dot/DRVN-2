@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   reportError: vi.fn(),
   reviewInsert: vi.fn(),
   reviewRead: vi.fn(),
+  suspended: false,
 }));
 
 function readable(result: ReturnType<typeof vi.fn>) {
@@ -31,6 +32,7 @@ vi.mock("@/lib/rate-limit", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: "author" } } }) },
+    rpc: async () => ({ data: mocks.suspended ?? false, error: null }),
     from: (table: string) => {
       if (table === "listing_questions") {
         return { ...readable(mocks.questionRead), insert: mocks.questionInsert };
@@ -132,6 +134,18 @@ describe("question submission recovery", () => {
       parent_id: null,
       body: question.body,
     });
+  });
+
+  it("tells a suspended member why their question was refused", async () => {
+    mocks.questionRead.mockResolvedValue({ data: null, error: null });
+    mocks.questionInsert.mockResolvedValue({ error: { message: "new row violates row-level security policy" } });
+    mocks.suspended = true;
+    try {
+      const result = await askQuestion({}, questionForm());
+      expect(result.error).toContain("Your account is suspended");
+    } finally {
+      mocks.suspended = false;
+    }
   });
 
   it("fails closed when the prior-operation lookup cannot be completed", async () => {

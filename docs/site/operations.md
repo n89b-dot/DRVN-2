@@ -102,7 +102,8 @@ trace.
   from posting, replying and making offers; they see a plain notice
   (`src/lib/suspension.ts`) and are told when they're suspended, with the
   reason, and when it's lifted (`account_suspended` / `account_restored`).
-  Messaging needs the same guard on `messages` inserts (Messages area).
+  Messages (`20260929110000`) and listing Q&A (`20260929120000`) carry the
+  same guard, so a suspended member can't message or ask either.
 
 ## Selling IA (§J — decision of record)
 

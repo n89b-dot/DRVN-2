@@ -7,6 +7,7 @@ import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { CommerceState } from "./action-types";
+import { isSuspended, SUSPENDED_MESSAGE } from "@/lib/suspension";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -189,6 +190,8 @@ export async function askQuestion(_prev: CommerceState, formData: FormData): Pro
   if (error) {
     const committed = await existingQuestion();
     if (committed.error || !committed.data || !matches(committed.data)) {
+      // A suspended member's insert is refused by policy (20260929120000).
+      if (await isSuspended(supabase, user.id)) return withOperation({ error: SUSPENDED_MESSAGE });
       reportError("[commerce] question insert could not be confirmed", {
         operationId,
         error,
