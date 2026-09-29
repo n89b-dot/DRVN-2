@@ -15,6 +15,7 @@ import {
 import { messageForImportError } from "@/lib/listing-import/errors";
 import {
   canonicalizeImportUrl,
+  normalizeImportUrl,
   parseImportUrl,
   policyFor,
 } from "@/lib/listing-import/policy";
@@ -91,8 +92,11 @@ export async function startUrlImport(
   const attestError = await ensureAttested(supabase, user.id, formData);
   if (attestError) return { error: attestError };
 
-  const url = parseImportUrl(String(formData.get("source_url") ?? ""));
-  if (!url) return { error: "That doesn't look like a listing link. Check the URL and try again." };
+  const parsed = parseImportUrl(String(formData.get("source_url") ?? ""));
+  if (!parsed) return { error: "That doesn't look like a listing link. Check the URL and try again." };
+  // App-copied Facebook links (m./web. hosts, the link shim, sheet params)
+  // become the one page Facebook serves logged-out — and dedupe as one.
+  const url = normalizeImportUrl(parsed);
 
   const policy = policyFor(url);
   if (policy.mode === "paste_only") {

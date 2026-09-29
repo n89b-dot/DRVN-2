@@ -9,7 +9,7 @@ import { fetchNormalizedSource } from "./adapters";
 import { resolveImportConfig } from "./config";
 import { messageForImportError, PASTE_FALLBACK_CODES, RETRYABLE_CODES, type ImportErrorCode } from "./errors";
 import { extractListing } from "./extract/ai";
-import { finalizeExtraction } from "./extract/validate";
+import { finalizeExtraction, foreignPrice } from "./extract/validate";
 import { appendUnresolvedToNotes, resolveImportFitments } from "./fitment";
 import { importListingImages } from "./media/import-images";
 import { parseImportUrl, policyFor } from "./policy";
@@ -174,7 +174,10 @@ async function stepFetch(admin: Admin, row: ListingImport, userId: string): Prom
       event: "listing_import_fetch_failed",
       props: { adapter: outcome.adapter, code: outcome.code },
     });
-    if (outcome.adapter === "facebook" && PASTE_FALLBACK_CODES.has(outcome.code)) {
+    if (outcome.adapter === "facebook" && outcome.code === "source_listing_gone") {
+      // Not a verdict on anonymous retrieval — the listing itself is gone.
+      capture(userId, { event: "listing_import_facebook_outcome", props: { outcome: "listing_gone" } });
+    } else if (outcome.adapter === "facebook" && PASTE_FALLBACK_CODES.has(outcome.code)) {
       capture(userId, { event: "listing_import_facebook_outcome", props: { outcome: "fallback_to_paste" } });
     }
     await fail(admin, row, "fetching", outcome.code, outcome.detail);
@@ -247,7 +250,7 @@ async function stepExtract(admin: Admin, row: ListingImport, userId: string): Pr
   if (row.selected_item !== null) {
     const chosen = previous?.items?.[row.selected_item];
     extraction = { ...extraction, multipleItems: false, items: previous?.items };
-    if (extraction.priceCents === undefined && chosen?.priceText) {
+    if (extraction.priceCents === undefined && chosen?.priceText && !foreignPrice(focusedSource)) {
       const match = /\$?\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?/.exec(chosen.priceText);
       if (match) {
         extraction.priceCents =

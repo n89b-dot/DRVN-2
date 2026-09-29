@@ -138,7 +138,8 @@ function buildSystemPrompt(): string {
     "Taxonomy (category: subcategories):",
     taxonomy,
     "",
-    "Money is integer cents. '$450 shipped OBO' → priceCents 45000, shippingCents 0, shippingIncluded true, acceptsOffers true.",
+    "Money is integer US-dollar cents. '$450 shipped OBO' → priceCents 45000, shippingCents 0, shippingIncluded true, acceptsOffers true.",
+    "If the price is in any other currency (£, €, A$, C$, NZ$, or a STRUCTURED FACTS currency other than USD), OMIT priceCents and shippingCents — never convert and never treat it as dollars.",
     "A multi-item part-out gets multipleItems true and one items[] entry per priced part; the single-item fields then describe nothing.",
   ].join("\n");
 }

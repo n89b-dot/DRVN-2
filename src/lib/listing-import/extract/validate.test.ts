@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { NormalizedImportSource } from "../schema";
-import { finalizeExtraction } from "./validate";
+import { finalizeExtraction, foreignPrice } from "./validate";
 
 const source = (text: string, extra?: Partial<NormalizedImportSource>): NormalizedImportSource => ({
   sourceType: "paste",
@@ -135,5 +135,44 @@ describe("finalizeExtraction — non-invention", () => {
     expect(
       result.ok && result.extraction.needsReview.some((issue) => issue.field === "condition")
     ).toBe(true);
+  });
+});
+
+describe("foreignPrice", () => {
+  it("treats a bare $ as US dollars", () => {
+    expect(foreignPrice(source("APR downpipe $450 shipped OBO"))).toBeNull();
+    expect(foreignPrice(source("Price: 450 USD"))).toBeNull();
+    expect(foreignPrice(source("no price here"))).toBeNull();
+  });
+
+  it("spots foreign prices in pasted text", () => {
+    expect(foreignPrice(source("Coilovers, £650 collected"))).toBe("£650");
+    expect(foreignPrice(source("Wheels A$1,850 pickup Cleveland"))).toBe("A$1,850");
+    expect(foreignPrice(source("Intake 300 EUR"))).toBe("300 EUR");
+    expect(foreignPrice(source("Seats €400"))).toBe("€400");
+  });
+
+  it("lets a declared currency decide", () => {
+    expect(foreignPrice(source("x", { structuredFacts: { priceText: "$200", currency: "USD" } }))).toBeNull();
+    expect(foreignPrice(source("x", { structuredFacts: { priceText: "A$1,850", currency: "AUD" } }))).toBe("A$1,850 (AUD)");
+    expect(foreignPrice(source("x", { structuredFacts: { priceText: "1850.00", currency: "aud" } }))).toBe("1850.00 (AUD)");
+  });
+});
+
+describe("finalizeExtraction — currency", () => {
+  it("never stores a foreign price as dollars, and says why", () => {
+    const result = finalizeExtraction(
+      { ...base, priceCents: 65000, shippingCents: 2000 },
+      source("Coilovers £650, £20 postage")
+    );
+    expect(result.ok && result.extraction.priceCents).toBeUndefined();
+    expect(result.ok && result.extraction.shippingCents).toBeUndefined();
+    const issue = result.ok ? result.extraction.needsReview.find((i) => i.field === "price") : undefined;
+    expect(issue?.message).toBe("The post's price is £650. DRVN prices are in US dollars — set your asking price.");
+  });
+
+  it("keeps a dollar price", () => {
+    const result = finalizeExtraction({ ...base, priceCents: 45000 }, source("Downpipe $450 shipped"));
+    expect(result.ok && result.extraction.priceCents).toBe(45000);
   });
 });

@@ -38,6 +38,11 @@ export type SafeFetchOptions = {
   accept?: string;
   /** Test-only escape hatch for local fixture servers. */
   allowPrivate?: boolean;
+  /**
+   * Maps each redirect destination before it is followed (e.g. Facebook's
+   * m. host → www). The rewritten URL still runs the full guard gauntlet.
+   */
+  rewriteRedirect?: (url: URL) => URL;
 };
 
 export type SafeFetchResult =
@@ -153,7 +158,8 @@ export async function safeFetch(rawUrl: string, opts: SafeFetchOptions): Promise
         const location = response.headers.get("location");
         await response.body?.cancel().catch(() => {});
         if (!location) return { ok: false, code: "source_fetch_failed", detail: "redirect without location" };
-        currentUrl = new URL(location, checked.url).href;
+        const next = new URL(location, checked.url);
+        currentUrl = (opts.rewriteRedirect ? opts.rewriteRedirect(next) : next).href;
         continue;
       }
 

@@ -57,7 +57,7 @@ export type AnalyticsEvent =
    *  extraction-quality signal (never field contents, only which/how many). */
   | { event: "listing_import_consumed"; props: { adapter: string; published: boolean; fields_edited: number; edited_fields: string } }
   /** Aggregate viability signal for anonymous Facebook retrieval (§32). */
-  | { event: "listing_import_facebook_outcome"; props: { outcome: "fetch_attempted" | "fetch_succeeded" | "render_attempted" | "render_succeeded" | "fallback_to_paste" } }
+  | { event: "listing_import_facebook_outcome"; props: { outcome: "fetch_attempted" | "fetch_succeeded" | "render_attempted" | "render_succeeded" | "fallback_to_paste" | "listing_gone" } }
   | { event: "offer_submitted"; props?: undefined }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }

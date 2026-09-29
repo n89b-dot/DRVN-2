@@ -16,6 +16,7 @@ export const IMPORT_ERROR_CODES = [
   "source_challenge",
   "source_too_large",
   "source_not_sale_post",
+  "source_listing_gone",
   "source_parse_failed",
   "ai_unavailable",
   "ai_failed",
@@ -40,6 +41,7 @@ export const PASTE_FALLBACK_CODES: ReadonlySet<ImportErrorCode> = new Set([
   "source_not_sale_post",
   "source_parse_failed",
   "source_unsupported",
+  "source_listing_gone",
 ]);
 
 /** Codes where retrying the same step is worth offering. */
@@ -67,6 +69,8 @@ const MESSAGES: Record<ImportErrorCode, string> = {
   source_too_large: "That page is too large to read. Paste the listing text instead.",
   source_not_sale_post:
     "This doesn't look like a for-sale post. If it is one, paste just the sale text below.",
+  source_listing_gone:
+    "That listing isn't available any more — it may have sold or been taken down. If you still have the post, paste it below and we'll finish the import.",
   source_parse_failed:
     "We couldn't make sense of that page. Paste the post text below and we'll take it from there.",
   ai_unavailable: "Listing organization is temporarily unavailable. Try again in a minute.",

@@ -39,7 +39,7 @@ dedupes on source URL, so retries never duplicate photos.
 `source_invalid` · `source_unsupported` · `source_private_address` ·
 `source_fetch_timeout` · `source_fetch_failed` · `source_access_denied` ·
 `source_login_required` · `source_challenge` · `source_too_large` ·
-`source_not_sale_post` · `source_parse_failed` · `ai_unavailable` ·
+`source_not_sale_post` · `source_listing_gone` · `source_parse_failed` · `ai_unavailable` ·
 `ai_failed` · `ai_invalid_output` · `media_fetch_failed` · `media_invalid` ·
 `import_expired` · `import_not_found`
 
@@ -47,6 +47,38 @@ dedupes on source URL, so retries never duplicate photos.
 import (`source_not_sale_post` is one: its message says "paste just the sale
 text below", so the paste box opens); `RETRYABLE_CODES` drive the retry button. Sellers only ever see the
 sentence from `messageForImportError` — never `error_detail`.
+
+## Facebook Marketplace
+
+`adapters/facebook.ts`, one logged-out fetch of the item page.
+
+- **Links are normalized first** (`normalizeImportUrl` in `policy.ts`, applied
+  in `startUrlImport` and to every redirect hop the adapter follows). `m.`,
+  `mbasic.`, `web.` and bare `facebook.com` hosts, the `l.facebook.com` link
+  shim, city-scoped and `/commerce/listing/` paths and share/tracking params
+  all become `https://www.facebook.com/marketplace/item/<id>/`, so mobile and
+  desktop links dedupe as one import. `m.facebook.com` answers anonymous
+  readers with HTTP 500, so an un-normalized mobile link used to fail.
+- **Fields come only from the listing's own data.** The page embeds ~20
+  recommended listings with the same keys, ahead of the linked one. The
+  adapter parses the `<script type="application/json">` blobs and reads only
+  objects whose `id` is the item id: `marketplace_listing_title`,
+  `redacted_description`, `listing_price` (`formatted_amount_zeros_stripped` +
+  `currency`), `location_text`, `attribute_data` (Condition), `is_sold` /
+  `is_pending`, and `listing_photos` (the full gallery, up to 12). When that
+  data is missing it falls back to OpenGraph alone (title, description, one
+  photo, no price) — never to the first match on the page.
+- **Currency.** DRVN prices are USD. A non-USD `listing_price.currency` (or a
+  £ / € / A$ / C$ … price in pasted text) leaves the price unset with a
+  review note naming the original ("The post's price is A$1,850 (AUD)…") —
+  see `foreignPrice` in `extract/validate.ts`. Nothing is converted.
+- **Removed listings** (HTTP 200, no OpenGraph, Facebook's `CometErrorRoot`)
+  fail as `source_listing_gone`, not `source_login_required`, and record the
+  `listing_gone` Facebook outcome so they don't count against anonymous
+  retrieval.
+- **Fixtures** (`adapters/fixtures.ts`) mirror the September 2026 page shape,
+  neighbours first. If Facebook changes the shape, capture a live page and
+  update `facebookMarketplacePage` before touching the adapter.
 
 ## Environment
 
@@ -80,7 +112,7 @@ Typed events (`src/lib/analytics.ts`): `listing_import_started`,
 `listing_import_review_opened`, `listing_import_consumed` (published?,
 `fields_edited` count + field names — the extraction-quality signal), and
 `listing_import_facebook_outcome`
-(`fetch_attempted/fetch_succeeded/render_attempted/render_succeeded/fallback_to_paste`)
+(`fetch_attempted/fetch_succeeded/render_attempted/render_succeeded/fallback_to_paste/listing_gone`)
 — the aggregate answering "does anonymous Facebook retrieval actually work at
 scale?". No event ever carries listing text, URLs beyond the domain, or
 personal data.
@@ -139,8 +171,11 @@ listing backfilled from its title all agree on what the brand is called.
   closed tab leaves the row until it expires; harmless.
 - **Facebook URLs always falling to paste** — check the
   `listing_import_facebook_outcome` aggregate; if `fetch_succeeded` ≈ 0 in a
-  region, enable `LISTING_IMPORT_PUBLIC_BROWSER_ENABLED` where the deployment
-  can run Chromium, or accept paste-first for that geography.
+  region, the logged-out page is being withheld from the deployment's IPs.
+  The render fallback (`LISTING_IMPORT_PUBLIC_BROWSER_ENABLED`) is refused in
+  production (`fetch/render.ts` — Chromium's DNS is not pinned), so the
+  answer there is paste-first for that geography until rendering has isolated
+  public-only egress. `listing_gone` outcomes are removed listings, not walls.
 - **`ai_invalid_output` spikes** — the model/schema drifted; the extraction is
   re-validated server-side, so bad outputs fail safe. Check
   `LISTING_IMPORT_MODEL`.

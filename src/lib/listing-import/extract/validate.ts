@@ -51,6 +51,39 @@ function amountAppears(cents: number, haystack: string): boolean {
   return false;
 }
 
+/**
+ * Price marks that are NOT US dollars. A bare "$" is USD — DRVN's only
+ * currency — but "A$", "C$", "NZ$" etc. are not, so the "$" must not follow
+ * a letter to count as USD.
+ */
+const FOREIGN_PRICE =
+  /(?:£|€|¥|₹|\b(?:A|AU|C|CA|NZ|HK|S|SG|MX|R)\$|\b(?:GBP|EUR|AUD|CAD|NZD|JPY|CHF|SEK|NOK|DKK|INR|ZAR)\b)\s?\d(?:[\d,.]*\d)?|\d(?:[\d,.]*\d)?\s?(?:GBP|EUR|AUD|CAD|NZD|JPY|CHF|SEK|NOK|DKK|INR|ZAR)\b/i;
+const USD_PRICE = /(?<![A-Za-z])\$\s?\d|\bUSD\b|\bUS\$/i;
+
+/**
+ * The foreign price a source states, when it is not in US dollars — e.g.
+ * "A$1,850" from a Brisbane Marketplace listing. Declared currency (JSON-LD,
+ * Facebook's listing_price) decides; otherwise the price text and post are
+ * read for a foreign mark with no dollar price beside it. Null = USD or
+ * unknown (an unmarked number is treated as the seller's USD price).
+ */
+export function foreignPrice(source: NormalizedImportSource): string | null {
+  const facts = source.structuredFacts;
+  const declared = facts?.currency?.toUpperCase();
+  if (declared) {
+    if (declared === "USD") return null;
+    const shown = facts?.priceText;
+    if (!shown) return `in ${declared}`;
+    return shown.toUpperCase().includes(declared) ? shown : `${shown} (${declared})`;
+  }
+  for (const text of [facts?.priceText, source.title, source.text]) {
+    if (!text) continue;
+    const foreign = FOREIGN_PRICE.exec(text);
+    if (foreign && !USD_PRICE.test(text)) return foreign[0].trim();
+  }
+  return null;
+}
+
 export function finalizeExtraction(
   raw: unknown,
   source: NormalizedImportSource
@@ -90,7 +123,20 @@ export function finalizeExtraction(
       sources.price ??= source.structuredFacts?.priceText ? "structured_data" : "explicit_text";
     }
   }
-  if (extraction.priceCents === undefined && !extraction.multipleItems) {
+  // Currency — money is USD cents. A foreign price is never carried over as
+  // if it were dollars (A$1,850 is not $1,850); the seller sets it.
+  const foreign = foreignPrice(source);
+  if (foreign) {
+    extraction.priceCents = undefined;
+    if (extraction.shippingCents) extraction.shippingCents = undefined;
+    delete sources.price;
+    if (!extraction.multipleItems) {
+      issues.push({
+        field: "price",
+        message: `The post's price is ${foreign}. DRVN prices are in US dollars — set your asking price.`,
+      });
+    }
+  } else if (extraction.priceCents === undefined && !extraction.multipleItems) {
     issues.push({ field: "price", message: "We couldn't find a price. Set your asking price." });
   }
 

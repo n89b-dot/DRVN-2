@@ -9,11 +9,17 @@ import { fetchNormalizedSource } from "./index";
 import { fetchFacebookListing } from "./facebook";
 import { extractForumFirstPost } from "./forums";
 import { filterImageCandidates } from "./images";
+import { extractListing } from "../extract/ai";
+import { finalizeExtraction } from "../extract/validate";
 import {
   DISCOURSE_SHELL,
   DISCOURSE_TOPIC_JSON,
+  FACEBOOK_EVO_EXHAUST,
+  FACEBOOK_LISTING_GONE,
   FACEBOOK_LOGIN_WALL,
-  FACEBOOK_MARKETPLACE_PUBLIC,
+  FACEBOOK_OPENGRAPH_ONLY,
+  FACEBOOK_XR50_WHEELS,
+  facebookMarketplacePage,
   GENERIC_JSONLD_LISTING,
   PHPBB_TOPIC,
   VBULLETIN_THREAD,
@@ -42,8 +48,14 @@ beforeAll(async () => {
       res.end(DISCOURSE_TOPIC_JSON);
     } else if (url.startsWith("/t/fs-034-dogbone/55")) {
       html(DISCOURSE_SHELL);
-    } else if (url.startsWith("/marketplace/item/123")) {
-      html(FACEBOOK_MARKETPLACE_PUBLIC);
+    } else if (url.startsWith(`/marketplace/item/${FACEBOOK_EVO_EXHAUST.id}`)) {
+      html(facebookMarketplacePage(FACEBOOK_EVO_EXHAUST));
+    } else if (url.startsWith(`/marketplace/item/${FACEBOOK_XR50_WHEELS.id}`)) {
+      html(facebookMarketplacePage(FACEBOOK_XR50_WHEELS));
+    } else if (url.startsWith("/marketplace/item/1234567890")) {
+      html(FACEBOOK_OPENGRAPH_ONLY);
+    } else if (url.startsWith("/marketplace/item/456282203388872")) {
+      html(FACEBOOK_LISTING_GONE);
     } else if (url.startsWith("/marketplace/item/999")) {
       html(FACEBOOK_LOGIN_WALL);
     } else if (url.startsWith("/products/apr-turbo-inlet")) {
@@ -135,27 +147,70 @@ describe("fetchNormalizedSource", () => {
 });
 
 describe("Facebook adapter", () => {
-  it("extracts a publicly-served Marketplace page (OG + embedded fields)", async () => {
-    const outcome = await fetchFacebookListing(new URL(`${base}/marketplace/item/123/`), {
-      allowPrivate: true,
-      browserEnabled: false,
-    });
+  const fb = (path: string) =>
+    fetchFacebookListing(new URL(`${base}${path}`), { allowPrivate: true, browserEnabled: false });
+
+  it("reads the linked listing's own data, never a recommended listing's", async () => {
+    const outcome = await fb(`/marketplace/item/${FACEBOOK_EVO_EXHAUST.id}/`);
     expect(outcome.ok).toBe(true);
-    if (outcome.ok) {
-      expect(outcome.source.title).toContain("APR Intercooler");
-      expect(outcome.source.structuredFacts?.priceText).toBe("$450");
-      expect(outcome.source.structuredFacts?.location).toBe("Fort Lauderdale, FL");
-      expect(outcome.source.text).toContain("bent fins");
-      expect(outcome.source.images[0]?.url).toContain("ic1.jpg");
-      expect(outcome.rendered).toBe(false);
+    if (!outcome.ok) return;
+    const { source } = outcome;
+    expect(source.title).toBe("Evo X Turbo XS exhaust");
+    expect(source.structuredFacts?.priceText).toBe("$200");
+    expect(source.structuredFacts?.currency).toBe("USD");
+    expect(source.structuredFacts?.location).toBe("San Bruno, CA");
+    expect(source.structuredFacts?.conditionText).toBe("Used - Good");
+    expect(source.text).toContain("no leaks");
+    expect(source.canonicalUrl).toBe(`https://www.facebook.com/marketplace/item/${FACEBOOK_EVO_EXHAUST.id}/`);
+    // The neighbours on the page ($100 kayak, $25 pillow) leave no trace.
+    const serialized = JSON.stringify(source);
+    expect(serialized).not.toMatch(/Kayak|Pillow|Commodore|neighbour/);
+    expect(outcome.rendered).toBe(false);
+  });
+
+  it("imports the whole gallery in order, not OpenGraph's single crop", async () => {
+    const outcome = await fb(`/marketplace/item/${FACEBOOK_EVO_EXHAUST.id}/`);
+    expect(outcome.ok && outcome.source.images.map((i) => i.url)).toEqual(FACEBOOK_EVO_EXHAUST.photos);
+  });
+
+  it("carries a foreign currency through, and the draft gets no dollar price", async () => {
+    const outcome = await fb(`/marketplace/item/${FACEBOOK_XR50_WHEELS.id}/`);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.source.structuredFacts?.priceText).toBe("A$1,850");
+    expect(outcome.source.structuredFacts?.currency).toBe("AUD");
+
+    const ai = await extractListing(outcome.source, { aiMode: "stub", model: "x", browserEnabled: false, allowPrivateHosts: true });
+    const finalized = ai.ok ? finalizeExtraction(ai.raw, outcome.source) : null;
+    expect(finalized?.ok).toBe(true);
+    if (!finalized?.ok) return;
+    expect(finalized.extraction.priceCents).toBeUndefined();
+    const price = finalized.extraction.needsReview.find((issue) => issue.field === "price");
+    expect(price?.message).toContain("A$1,850");
+    expect(price?.message).toContain("US dollars");
+  });
+
+  it("falls back to OpenGraph alone when the embedded data is missing — no page-wide guessing", async () => {
+    const outcome = await fb("/marketplace/item/1234567890/");
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.source.title).toBe("APR Intercooler MK7 GTI/R");
+    expect(outcome.source.text).toContain("bent fins");
+    expect(outcome.source.structuredFacts?.priceText).toBeUndefined();
+    expect(outcome.source.images.map((i) => i.url)).toEqual(["https://scontent.example/v/ic1.jpg"]);
+  });
+
+  it("reports a removed listing as gone, not as a login wall", async () => {
+    const outcome = await fb("/marketplace/item/456282203388872/");
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.code).toBe("source_listing_gone");
+      expect(outcome.attemptedRender).toBe(false);
     }
   });
 
   it("stops at a login wall and reports the paste fallback", async () => {
-    const outcome = await fetchFacebookListing(new URL(`${base}/marketplace/item/999/`), {
-      allowPrivate: true,
-      browserEnabled: false,
-    });
+    const outcome = await fb("/marketplace/item/999/");
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
       expect(outcome.code).toBe("source_login_required");

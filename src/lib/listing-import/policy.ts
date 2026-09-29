@@ -94,6 +94,51 @@ export function parseImportUrl(raw: string): URL | null {
   return url;
 }
 
+const FACEBOOK_HOSTS = ["facebook.com", "fb.com"];
+/** Link-shim hosts: `l.facebook.com/l.php?u=<real url>`. */
+const FACEBOOK_SHIM_HOSTS = new Set(["l.facebook.com", "lm.facebook.com"]);
+/** Marketplace item paths, including the city-scoped and commerce forms. */
+const FACEBOOK_ITEM_PATH = /^\/(?:marketplace\/(?:[^/]+\/)?item|commerce\/listing)\/(\d{5,25})(?:\/|$)/;
+
+function isFacebookHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return FACEBOOK_HOSTS.some((h) => hostMatches(host, h));
+}
+
+/** The Marketplace item id a Facebook URL names, or null. */
+export function facebookItemId(url: URL): string | null {
+  if (!isFacebookHost(url.hostname)) return null;
+  return FACEBOOK_ITEM_PATH.exec(url.pathname)?.[1] ?? null;
+}
+
+/**
+ * Rewrites the link a seller copied into the one Facebook serves logged-out
+ * readers. Links copied from the app arrive as `m.` / `mbasic.` / `web.`
+ * hosts (m.facebook.com answers anonymous requests with a 500), wrapped in
+ * the `l.facebook.com` link shim, or carrying tracking and sheet params. A
+ * Marketplace item becomes `https://www.facebook.com/marketplace/item/<id>/`;
+ * any other Facebook link (a /share/ link) keeps its path on www. Non-Facebook
+ * URLs pass through untouched. Also applied to every redirect hop the
+ * Facebook adapter follows.
+ */
+export function normalizeImportUrl(url: URL, depth = 0): URL {
+  const host = url.hostname.toLowerCase();
+  if (FACEBOOK_SHIM_HOSTS.has(host) && depth === 0) {
+    const inner = parseImportUrl(url.searchParams.get("u") ?? "");
+    if (inner) return normalizeImportUrl(inner, depth + 1);
+  }
+  if (!isFacebookHost(host) || FACEBOOK_SHIM_HOSTS.has(host)) return url;
+
+  const itemId = facebookItemId(url);
+  if (itemId) return new URL(`https://www.facebook.com/marketplace/item/${itemId}/`);
+
+  const clean = new URL(url.href);
+  clean.protocol = "https:";
+  clean.hostname = "www.facebook.com";
+  clean.port = "";
+  return clean;
+}
+
 /** The policy decision for a URL the seller pasted. */
 export function policyFor(url: URL): SourcePolicy {
   const hostname = url.hostname.toLowerCase().replace(/^www\./, "");

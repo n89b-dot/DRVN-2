@@ -45,11 +45,16 @@ Three modes:
 Current policy:
 
 - **Facebook Marketplace — first-class `public_url`.** The attempt is
-  user-directed, single-page, logged-out. Retrieval ladder: plain HTTP →
-  OpenGraph + embedded-JSON extraction → (when the deployment enables it)
+  user-directed, single-page, logged-out. App-copied links (`m.`/`web.`
+  hosts, the link shim, share params) are normalized to the one
+  `www.facebook.com/marketplace/item/<id>/` page first. Retrieval ladder:
+  plain HTTP → the listing's own embedded data, read only from objects
+  carrying the item's id (the page also embeds ~20 recommended listings) →
+  OpenGraph when that data is missing → (when the deployment enables it)
   ordinary Chromium rendering of the same public page → same extraction. A
   login wall, challenge or empty shell **stops the attempt** and the *same
-  import* falls forward to paste — the seller loses nothing.
+  import* falls forward to paste — the seller loses nothing. A removed
+  listing says so (`source_listing_gone`) and also offers paste.
   Hard boundaries, enforced in the adapter: no accounts, no cookies or
   sessions, no credential collection, no CAPTCHA solving, no proxy/fingerprint
   rotation or stealth, no search/enumeration, no profile/comment/related
@@ -113,7 +118,9 @@ claim. That is enforced twice:
 1. prompt rules, and
 2. **server evidence checks** (`extract/validate.ts`): a price, shipping
    amount, part number or location that leaves no trace in the source material
-   is dropped, not stored. Category/subcategory are validated against the real
+   is dropped, not stored. A price in any currency other than US dollars is
+   dropped too, with a review issue naming the original — DRVN never stores
+   A$1,850 as $1,850 and never converts. Category/subcategory are validated against the real
    taxonomy. Money is normalized server-side.
 
 Missing/ambiguous fields become **specific review issues** ("The post says
@@ -170,7 +177,8 @@ re-encoded, uploaded into `listing-images/{userId}/imported/{importId}/…`
 (so `isOwnedStorageUrl` holds), and recorded in the **existing** staged-media
 ledger (0029) — an abandoned import's photos are swept by the same 48h GC as
 any hand-upload. No listing ever references a Facebook CDN or forum URL.
-Max 12 photos, source order preserved, cover = first, all normal gallery
+Max 12 photos (Facebook: the listing's full gallery, not the OpenGraph
+crop), source order preserved, cover = first, all normal gallery
 controls on review.
 
 ## 9. Review = the sell form

@@ -24,6 +24,12 @@ beforeAll(async () => {
     } else if (url === "/redirect") {
       res.writeHead(302, { location: "/ok" });
       res.end();
+    } else if (url === "/redirect-mobile") {
+      res.writeHead(302, { location: "/mobile-only" });
+      res.end();
+    } else if (url === "/mobile-only") {
+      res.writeHead(500);
+      res.end("mobile host refuses anonymous readers");
     } else if (url === "/redirect-loop") {
       res.writeHead(302, { location: "/redirect-loop" });
       res.end();
@@ -96,6 +102,27 @@ describe("safeFetch", () => {
     const result = await safeFetch(`${base}/redirect`, opts);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.finalUrl).toBe(`${base}/ok`);
+  });
+
+  it("rewrites each redirect destination before following it", async () => {
+    const plain = await safeFetch(`${base}/redirect-mobile`, opts);
+    expect(plain.ok).toBe(false);
+
+    const rewritten = await safeFetch(`${base}/redirect-mobile`, {
+      ...opts,
+      rewriteRedirect: (next) => new URL(next.pathname === "/mobile-only" ? "/ok" : next.pathname, next),
+    });
+    expect(rewritten.ok).toBe(true);
+    if (rewritten.ok) expect(rewritten.finalUrl).toBe(`${base}/ok`);
+  });
+
+  it("re-validates a rewritten redirect destination", async () => {
+    const result = await safeFetch(`${base}/redirect-mobile`, {
+      ...opts,
+      rewriteRedirect: () => new URL("ftp://example.com/x"),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("source_invalid");
   });
 
   it("caps redirect chains", async () => {
