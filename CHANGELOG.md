@@ -1,18 +1,5 @@
 # Changelog
 
-## 2026-09-28 — Messages: one conversation per person
-
-The inbox listed deals, not people: every order and every offer was its own conversation, so a member who bought from and sold to the same person had a thread per deal, each on a different page (order threads under Messages, offer chats under Selling, a third tile on the order page). The review is the "DRVN Messages Review" artifact.
-
-- **One conversation per person.** `conversations` is keyed by the pair of people (`20260928140000_person_conversations.sql`); each message keeps the order or offer it's about. Who can message whom is unchanged — you still need an order or offer together; no open DMs (PRD §7).
-- **Inbox.** One row per person with the deals between you as chips (Selling · Seats · Ship it — red when it's your move), filters All · Unread · Buying · Selling, search across people, parts and messages, and unanswered listing questions on top for sellers. The marketing hero is gone. On desktop the people list sits beside the open conversation.
-- **Conversation.** Deal cards at the top (Mark shipped, Pay now, Track), then what was said and what happened in one timeline: offers, counters, purchases, shipping and dispute/return notes as centred event rows (`messages.kind = 'event'` — they no longer look like the person typed them). A live offer is decided in the thread; a seller who countered now waits instead of seeing Accept. Your messages sit right in ink, theirs left, grouped into runs; "Seen" under your last message.
-- **Composer.** Multi-line (Enter sends on desktop, Return adds a line on phones), up to four photos (private `message-photos` bucket, signed URLs), and an About picker for which deal the message concerns.
-- **Live.** Realtime on `messages` and `conversation_unreads`: a reply appears without a reload and the rail badge updates everywhere (20s refresh fallback).
-- **Notifications.** Messages no longer go to the bell (the `message` kind and its preference are retired); the Messages badge counts people waiting on you. Old links (`/messages/<orderId>`, `/offers/<id>` "Message …") resolve to the person's conversation.
-- **Report.** "Report" in the conversation header files a user report with the conversation attached.
-- **System.** New `MessageRun`, `MessageBubble`, `ThreadEvent`, `ChatComposer` (ui) and `ConversationRow`, `DealChip`, `DealCard`, `OfferCard` (commerce), registered, documented (components §08/§12, patterns, notifications, typography, Material) with specimens and stories. `Message`/`MessageThread`/`MessageComposer` stay for public Q&A and comments. Removed: the legacy inbox scan, `OrderThread`, `offer-thread.tsx`, the old composer and the duplicate system-message helper.
-
 ## 2026-09-29 — Review fixes: what the 28 September feature review found
 
 The 28 September functional review ("DRVN Feature Review" artifact) walked every flow as buyer, seller, guest and admin and found things that looked fine and didn't work. This entry is the fix pass. Six migrations went to the shared dev project, each logged in `supabase/MIGRATIONS.md`.
@@ -29,6 +16,29 @@ The 28 September functional review ("DRVN Feature Review" artifact) walked every
 - **Garage and marketplace.** A part line shows its listing's real state (Draft, For sale, Reserved, Sold), with drafts grouped under Finish listing. Existing cars got catalogue ids (`20260928181000`), so "Parts for my …" works. Saved searches are named from what's set. Category counts hide during a search, and the condition filter only offers conditions that are listed. A down VIN service says lookup is unavailable instead of calling the VIN wrong.
 - **Admin console.** Orders are found by id prefix and members by email. A failed read shows an error page, not "Nothing matches". Money, Stripe mode and alert wording tell the truth. Pending account deletions aren't shown as suspensions, and a lapsed MFA check returns to the page you were on.
 - **Documentation.** `operations.md`, `domain-states.md`, `notifications.md`, `patterns.md`, `listing-import.md`, `vehicles.md`, `material.md`, the Livesheet ledger contract, the production runbook (new §12, local dev jobs and Stripe) and the remediation rollout/operations notes match the above.
+
+## 2026-09-28 — Messages: one conversation per person
+
+The inbox listed deals, not people: every order and every offer was its own conversation, so a member who bought from and sold to the same person had a thread per deal, each on a different page (order threads under Messages, offer chats under Selling, a third tile on the order page). The review is the "DRVN Messages Review" artifact.
+
+- **One conversation per person.** `conversations` is keyed by the pair of people (`20260928140000_person_conversations.sql`); each message keeps the order or offer it's about. Who can message whom is unchanged — you still need an order or offer together; no open DMs (PRD §7).
+- **Inbox.** One row per person with the deals between you as chips (Selling · Seats · Ship it — red when it's your move), filters All · Unread · Buying · Selling, search across people, parts and messages, and unanswered listing questions on top for sellers. The marketing hero is gone. On desktop the people list sits beside the open conversation.
+- **Conversation.** Deal cards at the top (Mark shipped, Pay now, Track), then what was said and what happened in one timeline: offers, counters, purchases, shipping and dispute/return notes as centred event rows (`messages.kind = 'event'` — they no longer look like the person typed them). A live offer is decided in the thread; a seller who countered now waits instead of seeing Accept. Your messages sit right in ink, theirs left, grouped into runs; "Seen" under your last message.
+- **Composer.** Multi-line (Enter sends on desktop, Return adds a line on phones), up to four photos (private `message-photos` bucket, signed URLs), and an About picker for which deal the message concerns.
+- **Live.** Realtime on `messages` and `conversation_unreads`: a reply appears without a reload and the rail badge updates everywhere (20s refresh fallback).
+- **Notifications.** Messages no longer go to the bell (the `message` kind and its preference are retired); the Messages badge counts people waiting on you. Old links (`/messages/<orderId>`, `/offers/<id>` "Message …") resolve to the person's conversation.
+- **Report.** "Report" in the conversation header files a user report with the conversation attached.
+- **System.** New `MessageRun`, `MessageBubble`, `ThreadEvent`, `ChatComposer` (ui) and `ConversationRow`, `DealChip`, `DealCard`, `OfferCard` (commerce), registered, documented (components §08/§12, patterns, notifications, typography, Material) with specimens and stories. `Message`/`MessageThread`/`MessageComposer` stay for public Q&A and comments. Removed: the legacy inbox scan, `OrderThread`, `offer-thread.tsx`, the old composer and the duplicate system-message helper.
+
+## 2026-09-25 — Facebook importer: the linked listing's own price, photos and link
+
+A live test against real Marketplace listings found the Facebook adapter drafting a different price on every run ($25, $30, $25 for a $200 exhaust) and sometimes a stranger's title ("Royal Court Estelle Blush Boudoir Pillow"). A logged-out item page embeds ~20 recommended listings with the same keys, ahead of the linked one, and the adapter took the first match. Its test page was invented, so the tests passed.
+
+- **Own data only.** `adapters/facebook.ts` parses the page's JSON blobs and reads only objects whose `id` is the item id: title, description, `listing_price` + currency, location, condition, sold/pending and the full photo gallery (was one 600px OpenGraph crop). No embedded data → OpenGraph alone, never a page-wide guess.
+- **Currency.** A non-USD price (Facebook's declared currency, or £/€/A$/C$… in pasted text) is left unset with a review note naming it; `foreignPrice` in `extract/validate.ts`, and the AI prompt says the same.
+- **Links.** `normalizeImportUrl` turns `m.`/`mbasic.`/`web.` hosts, the `l.facebook.com` shim, city and `/commerce/listing/` paths and share params into the one `www` item page (m.facebook.com returns 500 to logged-out readers), and runs on every redirect hop via a new `safeFetch` `rewriteRedirect` option. Mobile and desktop links dedupe as one import.
+- **Removed listings** fail as `source_listing_gone` ("That listing isn't available any more…"), with paste offered, instead of "needs a login"; the Facebook outcome aggregate records them as `listing_gone`.
+- **Fixtures** now mirror the September 2026 page shape, neighbours first; the old adapter fails 5 of the new Facebook tests.
 
 ## 2026-09-24 — Design review: P0, P1 and P2 fixes
 

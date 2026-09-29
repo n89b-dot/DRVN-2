@@ -58,27 +58,6 @@ builds it counted) instead of a loose text search. The return type changes, so
 the function is dropped and recreated; the previous definition is in
 `~/drvn-db-backups/pre-20260928182100-trending_models.sql`.
 
-## September 28 — one conversation per pair of people on the shared dev project
-
-| File | Applied to |
-|---|---|
-| `20260928140000_person_conversations.sql` | shared dev project, 2026-09-28 (owner-approved as part of the Messages rebuild) |
-
-`conversations` changes grain from one row per order/offer to one row per pair
-of people (`participant_a < participant_b`, unique); the per-deal columns are
-dropped and every message stays tagged with its order/offer. The 11 per-deal
-rows on dev merged into 9 pairs; unread counters were rebuilt from `read_at`.
-Also adds `messages.kind`/`attachments`, the private `message-photos` bucket,
-`list_conversations` and `seller_open_question_list`, a delete trigger that
-keeps previews honest, adds `messages` + `conversation_unreads` to the realtime
-publication, and drops the `messages_notify` bell trigger. Backup first:
-`~/drvn-db-backups/messaging-before-person-conversations-20260928-1743.sql`
-(data) and `messaging-schema-before-…sql` (schema). The file was re-run once
-to prove it is idempotent (the merge only runs while the old columns exist).
-The local disposable database used by `npm run db:types` does not have it yet,
-so `db:types:check` reports drift until it is applied there; the generated
-types were edited to match by hand.
-
 ## September 29 — sellers can mark a part sold (shared dev project)
 
 | File | Applied to |
@@ -89,31 +68,6 @@ types were edited to match by hand.
 listing to `sold` ("Mark sold" — sold somewhere else). Every other change to
 `sold` or `reserved` is still checkout's. The live definition before the
 change is in `~/drvn-db-backups/pre-mark-sold-guard_listing_status.sql`.
-
-## September 28 — Home feed and recommendations in one round trip each
-
-| File | Applied to |
-|---|---|
-| `20260928120500_feed_hydration.sql` | shared dev project, 2026-09-28 |
-| `20260928121000_recommend_listings.sql` | shared dev project, 2026-09-28 |
-
-Owner-approved performance work (speed audit, 28 Sep). Both only add
-functions; no table, policy or existing function changes, so no backup was
-needed. Applied with `scripts/apply-migration.mjs`.
-
-- `feed_hydration(post_ids, car_ids, listing_ids, viewer)` returns every
-  signal a page of feed cards needs, counts already made, as one jsonb.
-  SECURITY INVOKER, so each read runs under the caller's RLS exactly as the
-  per-table reads did; viewer marks are read only when `p_viewer` is
-  `auth.uid()`. `hydrateFeedItems` falls back to the per-table reads if the
-  function is missing. Verified identical output against the old path for
-  signed-out and three signed-in viewers, every feed kind, two pages.
-- `recommend_listings(user, limit)` runs the three recommendation rules in
-  one statement. Execute is granted to `service_role` only (revoked from
-  anon/authenticated by name). Identical to the old path for 26 of 27
-  profiles; the one difference is a fix — the old platform match missed
-  garages whose make differs only in case ("volkswagen" vs "Volkswagen").
-  `recommendListings` falls back to the per-rule reads if it is missing.
 
 ## September 28 — "N sold" for visitors (shared dev project)
 
@@ -166,6 +120,27 @@ counter now tells the seller; car follows get their own `car_follow` kind
 (existing rows backfilled). Sorts after the Messages session's
 `20260928140000`, which touches no offer or follow trigger.
 
+## September 28 — one conversation per pair of people on the shared dev project
+
+| File | Applied to |
+|---|---|
+| `20260928140000_person_conversations.sql` | shared dev project, 2026-09-28 (owner-approved as part of the Messages rebuild) |
+
+`conversations` changes grain from one row per order/offer to one row per pair
+of people (`participant_a < participant_b`, unique); the per-deal columns are
+dropped and every message stays tagged with its order/offer. The 11 per-deal
+rows on dev merged into 9 pairs; unread counters were rebuilt from `read_at`.
+Also adds `messages.kind`/`attachments`, the private `message-photos` bucket,
+`list_conversations` and `seller_open_question_list`, a delete trigger that
+keeps previews honest, adds `messages` + `conversation_unreads` to the realtime
+publication, and drops the `messages_notify` bell trigger. Backup first:
+`~/drvn-db-backups/messaging-before-person-conversations-20260928-1743.sql`
+(data) and `messaging-schema-before-…sql` (schema). The file was re-run once
+to prove it is idempotent (the merge only runs while the old columns exist).
+The local disposable database used by `npm run db:types` does not have it yet,
+so `db:types:check` reports drift until it is applied there; the generated
+types were edited to match by hand.
+
 ## September 28 — reserved parts readable on the shared dev project
 
 | File | Applied to |
@@ -178,6 +153,31 @@ by a checkout or an accepted offer shows as Reserved instead of a 404. Every
 browse, feed, store and search query already filters to active itself. The
 previous policy definitions are in
 `~/drvn-db-backups/listing-policies-pre-20260928150000.json`.
+
+## September 28 — Home feed and recommendations in one round trip each
+
+| File | Applied to |
+|---|---|
+| `20260928120500_feed_hydration.sql` | shared dev project, 2026-09-28 |
+| `20260928121000_recommend_listings.sql` | shared dev project, 2026-09-28 |
+
+Owner-approved performance work (speed audit, 28 Sep). Both only add
+functions; no table, policy or existing function changes, so no backup was
+needed. Applied with `scripts/apply-migration.mjs`.
+
+- `feed_hydration(post_ids, car_ids, listing_ids, viewer)` returns every
+  signal a page of feed cards needs, counts already made, as one jsonb.
+  SECURITY INVOKER, so each read runs under the caller's RLS exactly as the
+  per-table reads did; viewer marks are read only when `p_viewer` is
+  `auth.uid()`. `hydrateFeedItems` falls back to the per-table reads if the
+  function is missing. Verified identical output against the old path for
+  signed-out and three signed-in viewers, every feed kind, two pages.
+- `recommend_listings(user, limit)` runs the three recommendation rules in
+  one statement. Execute is granted to `service_role` only (revoked from
+  anon/authenticated by name). Identical to the old path for 26 of 27
+  profiles; the one difference is a fix — the old platform match missed
+  garages whose make differs only in case ("volkswagen" vs "Volkswagen").
+  `recommendListings` falls back to the per-rule reads if it is missing.
 
 ## September 28 — duplicate `write_activity_post` removed from the shared dev project
 
