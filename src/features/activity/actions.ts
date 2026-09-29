@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
 import { ACTIVITY_EMOJIS } from "./constants";
 
@@ -74,7 +75,10 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
   const { error } = await supabase
     .from("activity_comments")
     .insert({ post_id: postId, author_id: user.id, body });
-  if (error) return { error: error.message };
+  if (error) {
+    if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
+    return { error: "Your reply didn't send. It's still here — try again." };
+  }
 
   if (path) revalidatePath(path);
   return {};

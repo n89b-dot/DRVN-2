@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { Avatar, EmbeddedVideo, Icon, Media, NarrowColumn, ObjectRow, ShareButton } from "@/components/ui";
 import { SaveButton } from "@/features/social/buttons";
+import { ReportButton } from "@/features/moderation/report-button";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement } from "@/features/activity/engagement";
 import { loadPostEngagement } from "@/features/activity/load-engagement";
@@ -277,6 +278,14 @@ export default async function ActivityDetailPage({
         reactions={reactions}
         comments={comments}
       />
+
+      {/* Anyone but the author can flag a post for review — the same quiet
+          report link a listing and a profile carry. */}
+      {user?.id !== post.author_id && (
+        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+          <ReportButton subjectType="post" subjectId={post.id} subjectLabel="this post" isLoggedIn={Boolean(user)} />
+        </div>
+      )}
     </NarrowColumn>
   );
 }

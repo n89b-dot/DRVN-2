@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { NarrowColumn, ObjectRow, PageHead, ShareButton } from "@/components/ui";
 import { SaveButton } from "@/features/social/buttons";
+import { ReportButton } from "@/features/moderation/report-button";
 import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { DeletePostButton } from "@/features/activity/delete-post-button";
@@ -182,6 +183,14 @@ export default async function PostPage({ params }: { params: Promise<{ postId: s
             Edit this post →
           </Link>
           <DeletePostButton postId={post.id} />
+        </div>
+      )}
+
+      {/* Anyone but the author can flag a post for review — the same quiet
+          report link a listing and a profile carry. */}
+      {user?.id !== post.author_id && (
+        <div className="mt-8 border-t border-[color:var(--rule-soft)] pt-4">
+          <ReportButton subjectType="post" subjectId={post.id} subjectLabel="this post" isLoggedIn={Boolean(user)} />
         </div>
       )}
     </NarrowColumn>

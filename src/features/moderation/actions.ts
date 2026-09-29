@@ -43,7 +43,8 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   const typed = String(formData.get("detail") ?? "").trim();
   const detail = (context ? `${context}${typed ? `\n${typed}` : ""}` : typed).slice(0, 1000);
 
-  if (!["listing", "user"].includes(subjectType) || !subjectId) {
+  // A post or a reply on one (20260928182300) as well as a listing or a member.
+  if (!["listing", "user", "post", "comment"].includes(subjectType) || !subjectId) {
     return { error: "Missing what you're reporting." };
   }
   if (!REASONS.includes(reason)) return { error: "Pick what's wrong." };
@@ -69,7 +70,7 @@ export async function fileReport(_prev: ReportState, formData: FormData): Promis
   const { error } = await supabase.from("reports").insert({
     id: reportId,
     reporter_id: user.id,
-    subject_type: subjectType as "listing" | "user",
+    subject_type: subjectType as "listing" | "user" | "post" | "comment",
     subject_id: subjectId,
     reason,
     detail: detail || null,

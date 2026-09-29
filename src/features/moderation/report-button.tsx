@@ -7,6 +7,15 @@ import { Dialog } from "@/components/ui";
 
 import { fileReport, type ReportState } from "./actions";
 
+export type ReportSubject = "listing" | "user" | "post" | "comment";
+
+const SUBJECT_WORDS: Record<ReportSubject, { trigger: string; owner: string }> = {
+  listing: { trigger: "Report this listing", owner: "seller" },
+  user: { trigger: "Report this seller", owner: "user" },
+  post: { trigger: "Report this post", owner: "author" },
+  comment: { trigger: "Report", owner: "author" },
+};
+
 const REASON_OPTIONS = [
   { value: "prohibited_item", label: "Prohibited item (airbags, cats, VIN parts…)" },
   { value: "counterfeit", label: "Counterfeit or replica sold as genuine" },
@@ -30,7 +39,7 @@ export function ReportButton({
   triggerLabel,
   context,
 }: {
-  subjectType: "listing" | "user";
+  subjectType: ReportSubject;
   subjectId: string;
   subjectLabel: string;
   isLoggedIn: boolean;
@@ -73,7 +82,7 @@ export function ReportButton({
           setOpen(true);
         }}
       >
-        {triggerLabel ?? `Report ${subjectType === "listing" ? "this listing" : "this seller"}`}
+        {triggerLabel ?? SUBJECT_WORDS[subjectType].trigger}
       </button>
 
       <Dialog
@@ -85,7 +94,7 @@ export function ReportButton({
         <div className="sheet text-left">
           <span className="microlabel microlabel--ink">Report {subjectLabel}</span>
           <p className="field__hint mt-1">
-            Goes straight to DRVN&apos;s review queue. The {subjectType === "listing" ? "seller" : "user"}{" "}
+            Goes straight to DRVN&apos;s review queue. The {SUBJECT_WORDS[subjectType].owner}{" "}
             isn&apos;t told who reported.
           </p>
           <form onSubmit={(event) => { event.preventDefault(); void submit(new FormData(event.currentTarget)); }} className="mt-4 flex flex-col gap-3">

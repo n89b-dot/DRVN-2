@@ -71,6 +71,7 @@ export async function loadPostEngagement(
     body: c.body,
     date: relative(c.created_at),
     canDelete: Boolean(viewerId && (c.author_id === viewerId || viewerOwnsPost)),
+    mine: Boolean(viewerId && c.author_id === viewerId),
   }));
 
   return { reactions, comments };

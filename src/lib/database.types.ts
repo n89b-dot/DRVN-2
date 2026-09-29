@@ -923,7 +923,8 @@ export type ReportReason =
 export type Report = {
   id: string;
   reporter_id: string | null;
-  subject_type: "listing" | "user";
+  /** 'post' and 'comment' since 20260928182300 (a post, or a reply on one). */
+  subject_type: "listing" | "user" | "post" | "comment";
   subject_id: string;
   reason: ReportReason;
   detail: string | null;

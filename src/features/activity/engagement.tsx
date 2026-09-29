@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 
 import { AuthIntentDialog, Button, Message } from "@/components/ui";
+import { ReportButton } from "@/features/moderation/report-button";
 
 import { addComment, deleteComment, toggleReaction } from "./actions";
 import { ACTIVITY_EMOJIS } from "./constants";
@@ -17,6 +18,8 @@ export type CommentView = {
   date: string;
   /** The viewer wrote it, or wrote the post it's under. */
   canDelete?: boolean;
+  /** The viewer wrote it — no Report link on your own reply. */
+  mine?: boolean;
 };
 
 /** "Delete" under a reply — two taps, because it can't be undone. */
@@ -143,7 +146,21 @@ export function ActivityEngagement({
                 </>
               }
               body={comment.body}
-              meta={comment.canDelete ? <DeleteReply commentId={comment.id} path={path} /> : undefined}
+              meta={
+                comment.canDelete || !comment.mine ? (
+                  <span className="inline-flex flex-wrap items-center gap-3">
+                    {comment.canDelete && <DeleteReply commentId={comment.id} path={path} />}
+                    {!comment.mine && (
+                      <ReportButton
+                        subjectType="comment"
+                        subjectId={comment.id}
+                        subjectLabel="this reply"
+                        isLoggedIn={isLoggedIn}
+                      />
+                    )}
+                  </span>
+                ) : undefined
+              }
             />
           ))}
         </div>

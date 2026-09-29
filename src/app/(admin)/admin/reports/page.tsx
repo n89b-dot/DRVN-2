@@ -95,14 +95,10 @@ function ResolvedReportsPanel({
               <span className="flex items-baseline gap-2">
                 <span className="chip chip--live">{REASON_LABEL[r.reason]}</span>
                 <Link
-                  href={
-                    r.subject_type === "listing"
-                      ? `/admin/listings?q=${encodeURIComponent(r.subjectLabel)}`
-                      : `/admin/users?q=${encodeURIComponent(r.subjectLabel)}`
-                  }
+                  href={r.subjectHref}
                   className="order__name hover:text-live"
                 >
-                  {r.subject_type === "listing" ? "Listing" : "User"}: {r.subjectLabel}
+                  {r.subjectKind}: {r.subjectLabel}
                 </Link>
               </span>
               <span className="order__meta">

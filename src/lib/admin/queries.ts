@@ -19,6 +19,7 @@ import { buildOrderTimeline, type TimelineEvent } from "./diagnostics";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
+import { postHeadline } from "@/lib/activity/headline";
 
 /**
  * Admin console read layer. Server-only, service-role.
@@ -1147,6 +1148,11 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | n
 export type AdminReportRow = Report & {
   reporter: PartyRef | null;
   subjectLabel: string;
+  /** "Listing" · "User" · "Post" · "Reply" — what the row names. */
+  subjectKind: string;
+  /** Where the reviewer looks at it: the console search for a listing or a
+   *  member, the public post for a post or a reply. */
+  subjectHref: string;
 };
 
 export const REPORTS_PAGE_SIZE = 50;
@@ -1181,13 +1187,48 @@ export async function getReports(
 
   const listingIds = rows.filter((r) => r.subject_type === "listing").map((r) => r.subject_id);
   const userIds = rows.filter((r) => r.subject_type === "user").map((r) => r.subject_id);
-  const [{ data: listings }, users] = await Promise.all([
+  const postIds = rows.filter((r) => r.subject_type === "post").map((r) => r.subject_id);
+  const commentIds = rows.filter((r) => r.subject_type === "comment").map((r) => r.subject_id);
+  const [{ data: listings }, users, { data: posts }, { data: comments }] = await Promise.all([
     listingIds.length
       ? a.from("listings").select("id, title").in("id", listingIds)
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
     partiesFor(a, userIds),
+    postIds.length
+      ? a.from("activity_posts").select("id, title, intro, body").in("id", postIds)
+      : Promise.resolve({ data: [] }),
+    commentIds.length
+      ? a.from("activity_comments").select("id, post_id, body").in("id", commentIds)
+      : Promise.resolve({ data: [] }),
   ]);
   const listingTitles = new Map((listings ?? []).map((l) => [l.id, l.title]));
+  const postById = new Map((posts ?? []).map((p) => [p.id, p]));
+  const commentById = new Map((comments ?? []).map((c) => [c.id, c]));
+  const clip = (text: string) => (text.length > 80 ? `${text.slice(0, 79)}…` : text);
+  function subject(r: Report): { subjectLabel: string; subjectKind: string; subjectHref: string } {
+    if (r.subject_type === "listing") {
+      const label = listingTitles.get(r.subject_id) ?? "Listing (deleted)";
+      return { subjectLabel: label, subjectKind: "Listing", subjectHref: `/admin/listings?q=${encodeURIComponent(label)}` };
+    }
+    if (r.subject_type === "post") {
+      const post = postById.get(r.subject_id);
+      return {
+        subjectLabel: post ? clip(postHeadline(post)) : "Post (deleted)",
+        subjectKind: "Post",
+        subjectHref: `/posts/${r.subject_id}`,
+      };
+    }
+    if (r.subject_type === "comment") {
+      const comment = commentById.get(r.subject_id);
+      return {
+        subjectLabel: comment ? clip(comment.body) : "Reply (deleted)",
+        subjectKind: "Reply",
+        subjectHref: comment ? `/posts/${comment.post_id}` : "/admin/reports",
+      };
+    }
+    const label = users.get(r.subject_id)?.username ?? users.get(r.subject_id)?.displayName ?? "User";
+    return { subjectLabel: label, subjectKind: "User", subjectHref: `/admin/users?q=${encodeURIComponent(label)}` };
+  }
 
   return {
     page,
@@ -1196,10 +1237,7 @@ export async function getReports(
     rows: rows.map((r) => ({
       ...r,
       reporter: r.reporter_id ? (parties.get(r.reporter_id) ?? null) : null,
-      subjectLabel:
-        r.subject_type === "listing"
-          ? (listingTitles.get(r.subject_id) ?? "Listing (deleted)")
-          : (users.get(r.subject_id)?.username ?? users.get(r.subject_id)?.displayName ?? "User"),
+      ...subject(r),
     })),
   };
 }

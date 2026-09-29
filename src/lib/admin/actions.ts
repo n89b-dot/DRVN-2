@@ -88,6 +88,62 @@ async function notifyBothParties(
   }
 }
 
+/**
+ * Tells a member who filed a report that it was looked at (admin-22). They
+ * used to hear nothing, whatever the outcome. Best-effort: a failed
+ * notification never undoes the resolution.
+ */
+async function notifyReporter(
+  admin: ReturnType<typeof createAdminClient>,
+  reportId: string,
+  outcome: "actioned" | "dismissed"
+) {
+  const { data: report } = await admin
+    .from("reports")
+    .select("reporter_id, subject_type")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report?.reporter_id) return;
+  const what =
+    report.subject_type === "post" ? "post" : report.subject_type === "comment" ? "reply" : report.subject_type === "listing" ? "listing" : "member";
+  const { error } = await admin.from("notifications").insert({
+    user_id: report.reporter_id,
+    kind: "report_reviewed",
+    section: report.subject_type === "post" || report.subject_type === "comment" ? "engagement" : "marketplace",
+    title: "Thanks — we reviewed your report",
+    body:
+      outcome === "actioned"
+        ? `We took action on the ${what} you reported.`
+        : `We looked at the ${what} you reported and didn't find a breach of DRVN's rules.`,
+    href: null,
+    actor_id: null,
+  });
+  if (error) reportError("[admin] reporter notification failed", { reportId, error });
+}
+
+/** The member's own notice that their account was suspended or restored
+ *  (admin-10) — with the reason, so a listing vanishing isn't a mystery. */
+async function notifyAccountState(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  state: "suspended" | "restored",
+  reason: string
+) {
+  const { error } = await admin.from("notifications").insert({
+    user_id: userId,
+    kind: state === "suspended" ? "account_suspended" : "account_restored",
+    section: "marketplace",
+    title: state === "suspended" ? "Your account is suspended" : "Your account is restored",
+    body:
+      state === "suspended"
+        ? `Reason: ${reason}. While it lasts you can't post, reply or make offers, and your listings are paused.`
+        : "You can post, reply and make offers again. Listings paused by the suspension are live again.",
+    href: null,
+    actor_id: null,
+  });
+  if (error) reportError("[admin] account-state notification failed", { userId, state, error });
+}
+
 function revalidateOrder(orderId: string) {
   revalidatePath("/admin", "layout");
   revalidatePath("/orders");
@@ -400,8 +456,9 @@ export async function adminSuspendUser(
         return { pausedListingIds: (paused ?? []).map((l) => l.id) };
       }
     );
+    await notifyAccountState(ctx.admin, userId, "suspended", reason);
     revalidatePath("/admin", "layout");
-    return { ok: "User suspended; their active listings were paused." };
+    return { ok: "User suspended; their active listings were paused, and they were told why." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Suspension failed." };
   }
@@ -464,6 +521,7 @@ export async function adminUnsuspendUser(
         return { reactivatedListingIds: pausedIds };
       }
     );
+    await notifyAccountState(ctx.admin, userId, "restored", reason);
     revalidatePath("/admin", "layout");
     return { ok: "Suspension lifted; previously paused listings reactivated." };
   } catch (error) {
@@ -515,10 +573,109 @@ export async function adminResolveReport(
         return {};
       }
     );
+    await notifyReporter(ctx.admin, reportId, outcome as "actioned" | "dismissed");
     revalidatePath("/admin", "layout");
     return { ok: outcome === "actioned" ? "Report actioned." : "Report dismissed." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not resolve the report." };
+  }
+}
+
+/**
+ * Removes a reported post or reply (admin-11) — the post/comment equivalent
+ * of a listing takedown, run from the report's row. The row is deleted (a
+ * post has no "removed" state the feeds could honour); its text goes in the
+ * audit metadata, the author is told why, the report is marked actioned and
+ * the reporter is told it was reviewed.
+ */
+export async function adminRemoveReportedContent(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const reportId = field(formData, "report_id");
+  const reason = field(formData, "reason");
+  if (!reportId) return { error: "Missing report." };
+  if (!reason) return { error: "A reason is required — it is shown to the author." };
+
+  const { data: report } = await ctx.admin
+    .from("reports")
+    .select("id, subject_type, subject_id, status")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report) return { error: "Report not found." };
+  if (report.subject_type !== "post" && report.subject_type !== "comment") {
+    return { error: "Only a reported post or reply is removed from here." };
+  }
+  const isPost = report.subject_type === "post";
+
+  try {
+    await auditedAction(
+      ctx.admin,
+      {
+        actorId: ctx.userId,
+        action: isPost ? "report.remove_post" : "report.remove_comment",
+        subjectType: "report",
+        subjectId: reportId,
+        reason,
+        metadata: { subjectType: report.subject_type, subjectId: report.subject_id },
+      },
+      async () => {
+        const snapshot = isPost
+          ? await ctx.admin
+              .from("activity_posts")
+              .select("id, author_id, car_id, title, intro, body, published_at")
+              .eq("id", report.subject_id)
+              .maybeSingle()
+          : await ctx.admin
+              .from("activity_comments")
+              .select("id, author_id, post_id, body, created_at")
+              .eq("id", report.subject_id)
+              .maybeSingle();
+        if (snapshot.error) throw new Error(snapshot.error.message);
+        const row = snapshot.data as { author_id: string; title?: string | null; body: unknown } | null;
+        if (!row) throw new Error(isPost ? "That post is already gone." : "That reply is already gone.");
+
+        const { error } = await ctx.admin
+          .from(isPost ? "activity_posts" : "activity_comments")
+          .delete()
+          .eq("id", report.subject_id);
+        if (error) throw new Error(error.message);
+
+        await ctx.admin
+          .from("reports")
+          .update({
+            status: "actioned",
+            resolved_by: ctx.userId,
+            resolved_at: new Date().toISOString(),
+            resolution_note: `Removed: ${reason}`,
+          })
+          .eq("id", reportId)
+          .eq("status", "open");
+
+        const { error: noteError } = await ctx.admin.from("notifications").insert({
+          user_id: row.author_id,
+          kind: isPost ? "post_removed" : "comment_removed",
+          section: "engagement",
+          title: isPost ? "A post of yours was removed" : "A reply of yours was removed",
+          body: reason,
+          href: null,
+          actor_id: null,
+        });
+        if (noteError) reportError("[admin] removal notification failed", { reportId, noteError });
+        return { removed: row };
+      }
+    );
+    await notifyReporter(ctx.admin, reportId, "actioned");
+    revalidatePath("/admin", "layout");
+    revalidatePath("/home");
+    revalidatePath("/explore");
+    return { ok: isPost ? "Post removed; the author and the reporter were told." : "Reply removed; the author and the reporter were told." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not remove it." };
   }
 }
 
@@ -813,6 +970,7 @@ export async function adminResolveReports(
         }
       );
       done += 1;
+      await notifyReporter(ctx.admin, reportId, outcome as "actioned" | "dismissed");
     } catch (error) {
       failed.push({ id: reportId, error: error instanceof Error ? error.message : "Failed." });
     }

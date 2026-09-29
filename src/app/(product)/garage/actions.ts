@@ -21,6 +21,7 @@ import { matchCatalogByName, resolveCatalogSelection } from "@/lib/vehicles/cata
 import type { Car, CarImage, Json, ModStatus } from "@/lib/database.types";
 import { isKnownPlace } from "@/lib/geo/regions";
 import { postHref } from "@/lib/activity/href";
+import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
 export type ActionState = { error?: string; ok?: string; href?: string };
 
@@ -689,6 +690,7 @@ export async function createQuickPost(
     })
     .single();
   if (error || !post) {
+    if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
     reportError("[activity] quick post failed", { carId, operationId, error });
     return { error: "Couldn't confirm the post. Try again — repeating it is safe." };
   }
@@ -758,6 +760,7 @@ export async function createRichActivityPost(
     })
     .single();
   if (error || !post) {
+    if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
     reportError("[activity] publish failed", { carId, operationId, error });
     return { error: "Couldn't confirm this update was published. Try again with the same draft." };
   }
@@ -831,6 +834,7 @@ export async function saveActivityDraft(
     p_image_urls: [],
   });
   if (error) {
+    if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
     reportError("[activity] draft save failed", { carId, operationId, error });
     return { error: "Couldn't save this draft. Your local copy is still here — try again." };
   }
@@ -991,6 +995,7 @@ export async function updateActivityPost(
     ...(listingIds === null ? {} : { p_listing_ids: listingIds }),
   });
   if (error) {
+    if (await isSuspended(supabase, user.id)) return { error: SUSPENDED_MESSAGE };
     reportError("[activity] update failed", { postId, error });
     return { error: "Couldn't save this update. Try again." };
   }

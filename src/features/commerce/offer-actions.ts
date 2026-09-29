@@ -10,6 +10,7 @@ import { reportError } from "@/lib/monitoring";
 import type { CommerceState } from "./action-types";
 import { formatPrice } from "@/lib/payments/fee";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
+import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -102,6 +103,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     p_message: message || undefined,
   });
   if (created.error || !(created.data as { offer_id?: string } | null)?.offer_id) {
+    if (created.error && (await isSuspended(supabase, user.id))) return { error: SUSPENDED_MESSAGE };
     reportError("[commerce] atomic offer submission failed", { offerId, error: created.error });
     return {
       error: created.error?.code === "23505"

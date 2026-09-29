@@ -1,5 +1,18 @@
 # Applying migrations
 
+## September 28 — posts and replies can be reported; suspension stops posting (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928182300_moderation_posts_comments_suspension.sql` | shared dev project, 2026-09-28 |
+
+`reports.subject_type` accepts `post` and `comment` as well as `listing` and
+`user`. Restrictive policies (AND'd with the existing ones, which are
+unchanged) refuse a suspended member (`is_suspended(auth.uid())`) inserting
+or updating `activity_posts`, inserting `activity_comments`, and inserting
+`offers`. Messages are not changed here. Previous constraint and policies:
+`~/drvn-db-backups/pre-20260928182300-moderation.sql`.
+
 ## September 28 — a post's author can delete replies on it (shared dev project)
 
 | File | Applied to |

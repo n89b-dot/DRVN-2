@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
+import { adminRemoveReportedContent, adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
 import type { AdminReportRow } from "@/lib/admin/queries";
 
 import { ActionDialog } from "../_components/action-dialog";
@@ -23,7 +23,10 @@ const OUTCOME_FIELDS = [
     kind: "select" as const,
     name: "outcome",
     label: "Outcome",
+    // No default: "Actioned" used to be preselected, so a reviewer who only
+    // wrote a note recorded a takedown that never happened.
     options: [
+      { value: "", label: "Choose…" },
       { value: "actioned", label: "Actioned — content removed / seller handled" },
       { value: "dismissed", label: "Dismissed — no breach" },
     ],
@@ -92,15 +95,8 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                 />
                 <span className="flex flex-wrap items-baseline gap-2">
                   <span className="chip chip--live">{REASON_LABEL[r.reason]}</span>
-                  <Link
-                    href={
-                      r.subject_type === "listing"
-                        ? `/admin/listings?q=${encodeURIComponent(r.subjectLabel)}`
-                        : `/admin/users?q=${encodeURIComponent(r.subjectLabel)}`
-                    }
-                    className="order__name hover:text-live"
-                  >
-                    {r.subject_type === "listing" ? "Listing" : "User"}: {r.subjectLabel}
+                  <Link href={r.subjectHref} className="order__name hover:text-live">
+                    {r.subjectKind}: {r.subjectLabel}
                   </Link>
                 </span>
               </label>
@@ -117,10 +113,22 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                 trigger="Resolve"
                 triggerClassName="relbtn !static"
                 hidden={{ report_id: r.id }}
-                confirmNote="Actioned = you took the subject down or suspended the seller (do that from Listings/Users). Dismissed = no breach."
+                confirmNote="Actioned = you took the subject down or suspended the seller (do that from Listings/Users, or Remove below for a post or reply). Dismissed = no breach. The reporter is told it was reviewed."
                 fields={OUTCOME_FIELDS}
                 submitLabel="Resolve report"
               />
+              {(r.subject_type === "post" || r.subject_type === "comment") && (
+                <ActionDialog
+                  action={adminRemoveReportedContent}
+                  title={r.subject_type === "post" ? "Remove this post" : "Remove this reply"}
+                  trigger={r.subject_type === "post" ? "Remove post" : "Remove reply"}
+                  triggerClassName="relbtn !static"
+                  hidden={{ report_id: r.id }}
+                  confirmNote="Deletes it for everyone (its text is kept in the audit log), tells the author why, marks this report actioned and tells the reporter."
+                  fields={[{ kind: "reason" as const, name: "reason", label: "Reason — shown to the author" }]}
+                  submitLabel="Remove"
+                />
+              )}
             </div>
           </div>
         ))}
