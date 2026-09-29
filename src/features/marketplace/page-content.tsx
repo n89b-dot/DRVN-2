@@ -73,7 +73,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   }, {}));
   // The condition choices offered are the ones with parts in them: a filter
   // whose options always return nothing is worse than no option.
-  const conditionPromise = Promise.resolve(supabase.rpc("marketplace_browse_rows", {}).select("condition").limit(1000))
+  const conditionPromise = Promise.resolve(countsClient.rpc("marketplace_browse_rows", {}).select("condition").limit(1000))
     .then(({ data, error }) => (error ? undefined : [...new Set((data ?? []).flatMap(row => row.condition ? [row.condition] : []))]));
   // The sidebar's category list is handed to a client component as a prop,
   // where a Suspense boundary left BOTH its placeholder and its resolved

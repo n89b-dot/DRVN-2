@@ -17,7 +17,7 @@ import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
 import { countryLabel } from "@/lib/geo/countries";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { markNotificationsReadForPage } from "@/lib/notifications-read";
@@ -70,10 +70,8 @@ export default async function OrderDetailPage({
   const { id } = await params;
   const { placed, skipped, processing } = await searchParams;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabase = await getPageClient();
+  const user = await getViewer();
   if (!user) redirect("/login");
 
   // RLS restricts orders to their participants, so a miss here is either a bad
@@ -266,6 +264,20 @@ export default async function OrderDetailPage({
     id: c.id,
     name: c.name,
   }));
+  // An item already added to one of the buyer's cars names that car instead
+  // of offering "Add to a car" again.
+  const { data: addedRows } =
+    canAddToCar && itemIds.length && garageCars.length
+      ? await supabase
+          .from("mod_items")
+          .select("source_order_item_id, car:cars!mod_items_car_id_fkey(name, slug)")
+          .in("source_order_item_id", itemIds)
+          .in("car_id", garageCars.map((c) => c.id))
+      : { data: [] };
+  const addedTo = new Map<string, { name: string; slug: string }>();
+  for (const row of addedRows ?? []) {
+    if (row.source_order_item_id && row.car) addedTo.set(row.source_order_item_id, row.car);
+  }
 
   // Falls back to the snapshot label, so a deleted account still reads sensibly.
   const counterpartyName =
@@ -445,6 +457,7 @@ export default async function OrderDetailPage({
                         orderItemId={item.id}
                         title={item.title ?? "this part"}
                         cars={garageCars}
+                        addedTo={addedTo.get(item.id) ?? null}
                       />
                     ) : undefined
                   }
