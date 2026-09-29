@@ -35,14 +35,19 @@ export async function loadPostEngagement(
   postId: string,
   viewerId: string | null
 ): Promise<{ reactions: ReactionState; comments: CommentView[] }> {
-  const [{ data: reactionRows }, { data: commentRows }] = await Promise.all([
+  const [{ data: reactionRows }, { data: commentRows }, { data: postRow }] = await Promise.all([
     supabase.from("activity_reactions").select("emoji, user_id").eq("post_id", postId),
     supabase
       .from("activity_comments")
       .select("id, author_id, body, created_at")
       .eq("post_id", postId)
       .order("created_at"),
+    // Who wrote the post: they may delete any reply under it.
+    viewerId
+      ? supabase.from("activity_posts").select("author_id").eq("id", postId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const viewerOwnsPost = Boolean(viewerId && postRow?.author_id === viewerId);
 
   const reactions: ReactionState = Object.fromEntries(
     ACTIVITY_EMOJIS.map((emoji) => {
@@ -65,6 +70,7 @@ export async function loadPostEngagement(
     initials: initialsFor(nameOf(c.author_id)),
     body: c.body,
     date: relative(c.created_at),
+    canDelete: Boolean(viewerId && (c.author_id === viewerId || viewerOwnsPost)),
   }));
 
   return { reactions, comments };

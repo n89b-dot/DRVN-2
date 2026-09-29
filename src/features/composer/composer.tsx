@@ -16,6 +16,7 @@ import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activ
 import { blocksToDoc, docToBlocks, type PmDoc } from "./doc";
 import { composerNodes, type ComposerContext } from "./extensions";
 import { INSERT_ITEMS, type InsertItem } from "./inserts";
+import { PartPicker, type TaggablePart } from "./part-picker";
 import { composerRecoveryKey } from "./recovery";
 
 /**
@@ -99,6 +100,9 @@ export function BuildStoryComposer({
   publishAction,
   draftAction,
   extraHidden,
+  parts,
+  initialTagged = [],
+  discardAction,
 }: ComposerContext & {
   carId: string;
   userId: string;
@@ -115,10 +119,21 @@ export function BuildStoryComposer({
   draftAction?: ComposerServerAction;
   /** Extra hidden fields the publish action expects preserved (legacy intro/video). */
   extraHidden?: Record<string, string>;
+  /** The author's own active listings — "Tag a part", as on the quick box
+   *  (W-3). Omit to hide the picker. */
+  parts?: TaggablePart[];
+  /** Listings the post already tags (edit mode). */
+  initialTagged?: string[];
+  /** Create mode: throws away the car's saved draft ("Discard draft"). */
+  discardAction?: (carId: string) => Promise<ActionState>;
 }) {
   const isEdit = Boolean(postId);
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
+  const [tagged, setTagged] = useState<string[]>(initialTagged);
+  // Tags are sent only once they've been touched, so an edit that doesn't
+  // change them leaves the post's tags (a sold part among them) as they are.
+  const taggedChanged = tagged.join(",") !== initialTagged.join(",");
   const [blocksJson, setBlocksJson] = useState(() => JSON.stringify(initialBlocks));
   const [operationId, setOperationId] = useState(initialOperationId ?? postId ?? "");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error" | "recovered">(
@@ -399,6 +414,37 @@ export function BuildStoryComposer({
     }
   }
 
+  // "Discard draft": two taps, because the draft can't come back. Autosave
+  // is held off first so a pending save can't recreate what was discarded.
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const canDiscard =
+    !isEdit && Boolean(discardAction) && (Boolean(draftSavedAt) || saveState === "saved" || Boolean(draftState.ok));
+  async function discard() {
+    if (!discardAction || submittingRef.current) return;
+    submittingRef.current = true;
+    publishingRef.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setDiscarding(true);
+    setDraftState({});
+    try {
+      const result = await discardAction(carId);
+      if (result.error) {
+        setDraftState(result);
+        return;
+      }
+      try { localStorage.removeItem(localKey); } catch { /* Storage may be unavailable. */ }
+      router.push(result.href ?? "/home");
+    } catch (error) {
+      unstable_rethrow(error);
+      setDraftState({ error: "Couldn't confirm the draft was discarded. Try again." });
+    } finally {
+      publishingRef.current = false;
+      submittingRef.current = false;
+      setDiscarding(false);
+    }
+  }
+
   const showTemplates = !isEdit && isEmpty;
 
   // W-2: the server refuses to publish without a photo. Said up front, next
@@ -572,6 +618,7 @@ export function BuildStoryComposer({
         {!isEdit && <input type="hidden" name="operation_id" value={operationId} />}
         <input type="hidden" name="title" value={title} />
         <input type="hidden" name="blocks" value={blocksJson} />
+        {parts && taggedChanged && <input type="hidden" name="listing_ids" value={tagged.join(",")} />}
         {Object.entries(extraHidden ?? {}).map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
         ))}
@@ -602,6 +649,22 @@ export function BuildStoryComposer({
               Save draft
             </Button>
           )}
+          {parts && <PartPicker parts={parts} carId={carId} selected={tagged} onChange={setTagged} />}
+          {canDiscard &&
+            (confirmingDiscard ? (
+              <>
+                <Button variant="destructive" onClick={discard} loading={discarding} pendingLabel="Discarding…">
+                  Discard for good
+                </Button>
+                <Button variant="quiet" onClick={() => setConfirmingDiscard(false)} disabled={discarding}>
+                  Keep it
+                </Button>
+              </>
+            ) : (
+              <Button variant="quiet" onClick={() => setConfirmingDiscard(true)} disabled={publishing || draftPending}>
+                Discard draft
+              </Button>
+            ))}
           <span id="composer-status" className="microlabel !mb-0" aria-live="polite">
             {publishState.error || draftState.error ? (
               <span className="text-live" role="alert">{publishState.error ?? draftState.error}</span>

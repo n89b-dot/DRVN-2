@@ -79,3 +79,24 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
   if (path) revalidatePath(path);
   return {};
 }
+
+/**
+ * Removes a reply. Its writer can delete it, and so can the author of the
+ * post it sits under (20260928182200) — RLS decides which; a delete that
+ * matched nothing means neither, and says so.
+ */
+export async function deleteComment(commentId: string, path: string): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "login" };
+  if (!commentId) return { error: "That reply wasn't found." };
+
+  const { data, error } = await supabase.from("activity_comments").delete().eq("id", commentId).select("id");
+  if (error) return { error: "Couldn't delete that reply. Try again." };
+  if (!data?.length) return { error: "You can only delete your own replies, or replies on your post." };
+
+  if (path) revalidatePath(path);
+  return { ok: true };
+}

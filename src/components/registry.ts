@@ -1327,7 +1327,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     status: "active",
     description:
       "The one build-update editor (Tiptap runtime, DRVN-owned document): immediate writing surface, optional starter chips, / and + insert menus, draggable automotive blocks, quiet autosave, explicit publish.",
-    use: "Creating and editing build updates — pass the route's server actions as props.",
+    use: "Creating and editing build updates — pass the route's server actions as props. `parts` (+ `initialTagged` when editing) adds the quick box's \"Tag a part\" picker; `discardAction` adds \"Discard draft\" once a draft exists.",
     avoid: "Anything that isn't an activity post. Message threads use MessageComposer.",
     cssRecipe: ".bsc / .cblock / .cgal",
   },

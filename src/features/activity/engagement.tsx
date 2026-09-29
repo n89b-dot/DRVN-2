@@ -1,16 +1,67 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useOptimistic, useRef, useState, useTransition } from "react";
-
+import { useOptimistic, useState, useTransition } from "react";
 
 import { AuthIntentDialog, Button, Message } from "@/components/ui";
 
-import { addComment, toggleReaction, type CommentState } from "./actions";
+import { addComment, deleteComment, toggleReaction } from "./actions";
 import { ACTIVITY_EMOJIS } from "./constants";
 
 export type ReactionState = Record<string, { count: number; reacted: boolean }>;
-export type CommentView = { id: string; authorName: string; initials: string; body: string; date: string };
+export type CommentView = {
+  id: string;
+  authorName: string;
+  initials: string;
+  body: string;
+  date: string;
+  /** The viewer wrote it, or wrote the post it's under. */
+  canDelete?: boolean;
+};
+
+/** "Delete" under a reply — two taps, because it can't be undone. */
+function DeleteReply({ commentId, path }: { commentId: string; path: string }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function remove() {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteComment(commentId, path);
+      if ("error" in result) {
+        setError(result.error === "login" ? "Sign in again to delete this." : result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-3">
+      {confirming ? (
+        <>
+          <button type="button" className="jumplink" onClick={remove} disabled={pending}>
+            {pending ? "Deleting…" : "Delete reply"}
+          </button>
+          <button type="button" className="jumplink" onClick={() => setConfirming(false)} disabled={pending}>
+            Keep
+          </button>
+        </>
+      ) : (
+        <button type="button" className="jumplink" onClick={() => setConfirming(true)}>
+          Delete
+        </button>
+      )}
+      {error && (
+        <span role="alert" className="field__err">
+          {error}
+        </span>
+      )}
+    </span>
+  );
+}
 
 /**
  * Functional reply composer + emoji reactions on an activity post
@@ -50,8 +101,11 @@ export function ActivityEngagement({
   );
   const [reactError, setReactError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  const [state, action, pending] = useActionState<CommentState, FormData>(addComment, {});
-  const formRef = useRef<HTMLFormElement>(null);
+  // The reply box is controlled and only empties once the reply is saved: a
+  // failed send keeps what was typed, with the reason under it.
+  const [reply, setReply] = useState("");
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [pending, startReply] = useTransition();
   // Signed out, a reply or a reaction explains itself in the shared
   // auth-intent dialog instead of bouncing straight to /login (which also
   // threw away a typed reply).
@@ -89,6 +143,7 @@ export function ActivityEngagement({
                 </>
               }
               body={comment.body}
+              meta={comment.canDelete ? <DeleteReply commentId={comment.id} path={path} /> : undefined}
             />
           ))}
         </div>
@@ -126,17 +181,39 @@ export function ActivityEngagement({
           </Button>
         ) : (
           <form
-            ref={formRef}
-            action={(fd) => {
+            onSubmit={(event) => {
+              event.preventDefault();
               if (!isLoggedIn) return goLogin();
+              const body = reply.trim();
+              if (!body || pending) return;
+              const fd = new FormData();
               fd.set("post_id", postId);
               fd.set("path", path);
-              action(fd);
-              formRef.current?.reset();
+              fd.set("body", body);
+              setReplyError(null);
+              startReply(async () => {
+                try {
+                  const result = await addComment({}, fd);
+                  if (result.error) {
+                    setReplyError(result.error);
+                    return;
+                  }
+                  setReply("");
+                  router.refresh();
+                } catch {
+                  setReplyError("Your reply didn't send. It's still here — try again.");
+                }
+              });
             }}
             className="search w-full !py-2"
           >
-            <input name="body" required placeholder="Reply directly…" />
+            <input
+              name="body"
+              required
+              placeholder="Reply directly…"
+              value={reply}
+              onChange={(event) => setReply(event.target.value)}
+            />
             <button type="submit" disabled={pending} className="font-mono text-dim" aria-label="Send reply">
               ↵
             </button>
@@ -144,9 +221,9 @@ export function ActivityEngagement({
         )}
       </div>
 
-      {(state.error || reactError) && (
+      {(replyError || reactError) && (
         <p role="alert" aria-live="polite" className="field__err mt-2">
-          {state.error ?? reactError}
+          {replyError ?? reactError}
         </p>
       )}
 

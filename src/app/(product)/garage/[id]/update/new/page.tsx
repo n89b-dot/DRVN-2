@@ -5,8 +5,9 @@ import { notFound, redirect } from "next/navigation";
 import { normalizeBlocks } from "@/lib/activity-blocks";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { BuildStoryComposer } from "@/features/composer/composer";
+import { loadTaggableParts } from "@/features/composer/taggable-parts";
 
-import { createRichActivityPost, saveActivityDraft } from "../../../actions";
+import { createRichActivityPost, discardActivityDraft, saveActivityDraft } from "../../../actions";
 
 export const metadata = { title: "New update - DRVN" };
 
@@ -33,7 +34,7 @@ export default async function NewUpdatePage({
 
   // The car's draft, if one exists — the composer reopens it where you left
   // off. One draft per car: autosave overwrites, publishing converts.
-  const [{ data: draft }, { data: modRows }] = await Promise.all([
+  const [{ data: draft }, { data: modRows }, parts] = await Promise.all([
     supabase
       .from("activity_posts")
       .select("id, title, body, updated_at")
@@ -47,6 +48,7 @@ export default async function NewUpdatePage({
       .select("id, brand, product, raw_text, status")
       .eq("car_id", car.id)
       .order("position"),
+    loadTaggableParts(supabase, user.id),
   ]);
   const draftBlocks = draft ? normalizeBlocks(draft.body) : null;
   const mods = (modRows ?? []).map((mod) => ({
@@ -120,6 +122,8 @@ export default async function NewUpdatePage({
         draftSavedAt={draft?.updated_at ?? null}
         publishAction={createRichActivityPost}
         draftAction={saveActivityDraft}
+        parts={parts}
+        discardAction={discardActivityDraft}
       />
     </div>
   );

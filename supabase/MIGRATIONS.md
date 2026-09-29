@@ -1,5 +1,16 @@
 # Applying migrations
 
+## September 28 — a post's author can delete replies on it (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20260928182200_post_authors_delete_comments.sql` | shared dev project, 2026-09-28 |
+
+Adds the delete policy "post authors delete comments" on `activity_comments`:
+the author of a post may delete any reply under it (the writer of a reply
+already could). Existing policies unchanged; snapshot in
+`~/drvn-db-backups/pre-20260928182200-activity_comments-policies.sql`.
+
 ## September 28 — Trending chips carry catalog ids (shared dev project)
 
 | File | Applied to |

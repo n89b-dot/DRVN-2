@@ -613,6 +613,17 @@ export async function updateCarImageAlt(formData: FormData): Promise<ActionState
  * The operation id makes a lost response replay rather than double-post,
  * exactly as the full publish path does.
  */
+/** The editor's tagged parts: null when the form didn't send the field. */
+function parseListingIds(formData: FormData): string[] | null {
+  const raw = formData.get("listing_ids");
+  if (typeof raw !== "string") return null;
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
 export async function createQuickPost(
   _prev: ActionState,
   formData: FormData
@@ -732,6 +743,9 @@ export async function createRichActivityPost(
   let imageUrls = blocks.flatMap((b) => (b.type === "images" ? b.urls : []));
   if (!imageUrls.length) imageUrls = blockMediaUrls(blocks).slice(0, 24);
   if (!imageUrls.length) return { error: "Add at least one photo before you publish." };
+  // W-3 in the full editor: up to three of the author's own parts (the
+  // database checks they are theirs and active).
+  const listingIds = parseListingIds(formData);
   const { data: post, error } = await supabase
     .rpc("write_activity_post", {
       p_mode: "publish",
@@ -740,6 +754,7 @@ export async function createRichActivityPost(
       p_title: title,
       p_body: activityBlocksJson(blocks),
       p_image_urls: imageUrls,
+      p_listing_ids: listingIds?.length ? listingIds : undefined,
     })
     .single();
   if (error || !post) {
@@ -829,6 +844,37 @@ export async function saveActivityDraft(
 }
 
 /**
+ * Throws away the car's unpublished draft (social-15). A draft used to sit
+ * behind "Continue your draft" until it was published; nothing else could
+ * end it. Deleted rather than archived: nobody has seen it, and a draft is
+ * "where I left off", not a record. Photos only the draft used go too.
+ */
+export async function discardActivityDraft(carId: string): Promise<ActionState> {
+  const { supabase, user } = await requireUser();
+  if (!carId) return { error: "Draft not found." };
+
+  const { data: drafts, error } = await supabase
+    .from("activity_posts")
+    .delete()
+    .eq("car_id", carId)
+    .eq("author_id", user.id)
+    .is("published_at", null)
+    .select("id, body");
+  if (error) {
+    reportError("[activity] draft discard failed", { carId, error });
+    return { error: "Couldn't discard the draft. Try again." };
+  }
+
+  for (const draft of drafts ?? []) {
+    for (const url of blockMediaUrls(normalizeBlocks(draft.body))) await deleteMediaIfUnreferenced(url);
+  }
+
+  revalidatePath("/home");
+  revalidatePath(`/garage/${carId}/update/new`);
+  return { ok: "Draft discarded.", href: "/home" };
+}
+
+/**
  * Edits an existing update. Posts were create-only, so a typo in a title was
  * permanent and images could never be added or removed after filing.
  */
@@ -857,6 +903,11 @@ export async function updateActivityPost(
   const { data: car } = post.car_id
     ? await supabase.from("cars").select("slug").eq("id", post.car_id).maybeSingle()
     : { data: null };
+
+  const listingIds = parseListingIds(formData);
+  if (listingIds && !listingIds.length && !post.car_id) {
+    return { error: "A post with no car has to tag a part — keep at least one." };
+  }
 
   const videoUrl = String(formData.get("video_url") ?? "").trim();
   if (videoUrl && !isAllowedVideoUrl(videoUrl)) {
@@ -935,6 +986,9 @@ export async function updateActivityPost(
     }),
     p_intro: String(formData.get("intro") ?? "").trim() || undefined,
     p_video_url: videoUrl || undefined,
+    // Sent only when the editor's tags were changed; an empty list clears
+    // them (refused for a carless post, which needs a part to be about).
+    ...(listingIds === null ? {} : { p_listing_ids: listingIds }),
   });
   if (error) {
     reportError("[activity] update failed", { postId, error });

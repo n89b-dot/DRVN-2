@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 
 import type { ActivityBlock } from "@/lib/activity-blocks";
 import { BuildStoryComposer, type ComposerServerAction } from "@/features/composer/composer";
+import type { TaggablePart } from "@/features/composer/part-picker";
 
 import { deleteActivityPost, type ActionState } from "../../../../actions";
 
@@ -24,6 +25,8 @@ export function PostEditor({
   initialBlocks,
   publicHref,
   mods,
+  parts,
+  initialTagged,
   publishAction,
 }: {
   carId: string;
@@ -35,6 +38,8 @@ export function PostEditor({
   initialBlocks: ActivityBlock[];
   publicHref: string | null;
   mods: { id: string; label: string }[];
+  parts: TaggablePart[];
+  initialTagged: string[];
   publishAction: ComposerServerAction;
 }) {
   const router = useRouter();
@@ -78,6 +83,8 @@ export function PostEditor({
         initialBlocks={initialBlocks}
         publishAction={publishAction}
         extraHidden={{ intro, video_url: videoUrl }}
+        parts={parts}
+        initialTagged={initialTagged}
       />
 
       <section className="tile">

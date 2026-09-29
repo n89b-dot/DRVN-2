@@ -5,6 +5,7 @@ import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { normalizeBlocks } from "@/lib/activity-blocks";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { loadTaggableParts } from "@/features/composer/taggable-parts";
 
 import { PostEditor } from "./post-editor";
 import { updateActivityPost } from "../../../../actions";
@@ -57,11 +58,11 @@ export default async function EditActivityPostPage({
   // A quick post's photos live only in the gallery, never in a block, so the
   // editor couldn't show them — or remove a wrong one. They open as a photos
   // block at the top; saving writes back whatever the member leaves there.
-  const { data: gallery } = await supabase
-    .from("activity_images")
-    .select("url")
-    .eq("post_id", post.id)
-    .order("position");
+  const [{ data: gallery }, { data: taggedRows }, parts] = await Promise.all([
+    supabase.from("activity_images").select("url").eq("post_id", post.id).order("position"),
+    supabase.from("activity_post_listings").select("listing_id, position").eq("post_id", post.id).order("position"),
+    loadTaggableParts(supabase, user.id),
+  ]);
   const inBlocks = new Set(bodyBlocks.flatMap((b) => (b.type === "images" ? b.urls : [])));
   const loosePhotos = (gallery ?? []).map((image) => image.url).filter((url) => !inBlocks.has(url));
   const blocks = loosePhotos.length
@@ -108,6 +109,8 @@ export default async function EditActivityPostPage({
         initialBlocks={blocks}
         publicHref={car ? `/cars/${car.slug}/activity/${post.id}` : carless ? `/posts/${post.id}` : null}
         mods={mods}
+        parts={parts}
+        initialTagged={(taggedRows ?? []).map((row) => row.listing_id)}
         publishAction={updateActivityPost}
       />
 
