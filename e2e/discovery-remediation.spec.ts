@@ -225,7 +225,10 @@ test.describe.serial("discovery + marketplace remediation", () => {
     await page.goto("/explore");
     await assertNoNestedInteractives(page, "/explore");
     await expect(page.getByRole("button", { name: /buy now/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /add to cart/i })).toHaveCount(0);
+    // No checkout CTA on the wall: the only cart control is the compact
+    // square in a part card's engagement strip (c2a332b, bcc7bd5).
+    const cartControls = page.getByRole("button", { name: /add to cart/i });
+    await expect(cartControls).toHaveCount(await page.locator(".cardeng .cartbtn").count());
 
     const like = page.locator(".cardeng__act[data-tip]").first();
     await expect(like).toBeVisible();
