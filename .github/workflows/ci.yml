@@ -65,6 +65,11 @@ jobs:
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # On pull requests the action lists the PR's commits through the API;
+    # the default token can't, so it gets read access to exactly that.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
