@@ -1,13 +1,15 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { AUDIT_PAGE_SIZE, getAuditLog } from "@/lib/admin/queries";
+import { adminReconcileOperation } from "@/lib/admin/actions";
+import { AUDIT_PAGE_SIZE, getAuditLog, getOpenOperations } from "@/lib/admin/queries";
 import type { AdminAuditSubjectType } from "@/lib/database.types";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
+import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
 import { Pager } from "../_components/pager";
-import { SearchField } from "@/components/ui";
+import { SearchField, TileHead } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -56,14 +58,14 @@ export default async function AdminAuditPage({
     ? (subject as AdminAuditSubjectType)
     : undefined;
   const page = Math.max(0, Number.parseInt(pageParam ?? "0", 10) || 0);
-  const { rows, hasMore } = await getAuditLog({
+  const [pendingOps, { rows, hasMore }] = await Promise.all([getOpenOperations(), getAuditLog({
     action,
     actorQuery: actor,
     subjectType,
     page,
     from: fromIso,
     to: toIso,
-  });
+  })]);
 
   const link = (overrides: Record<string, string | undefined>) => {
     const params = { action, actor, subject: subjectType, from, to, ...overrides };
@@ -82,6 +84,63 @@ export default async function AdminAuditPage({
           level — nothing here can be edited or removed, by anyone.
         </p>
       </Rv>
+
+      {/* RR-15: provider-facing actions whose outcome was never recorded.
+          Each one blocks the same action on the same record until an
+          operator checks the provider and says what happened. */}
+      {pendingOps.length > 0 && (
+        <section id="pending" className="tile mb-6 scroll-mt-24" aria-label="Operations that need reconciliation">
+          <TileHead label={`Needs reconciliation · ${pendingOps.length}`} />
+          <p className="order__meta">
+            These ran against a provider and their outcome wasn&apos;t recorded. Check the provider
+            (Stripe, the carrier), then record what happened. Until you do, the same action on the
+            same record is refused.
+          </p>
+          <div className="rowlist mt-2">
+            {pendingOps.map((op) => (
+              <div key={op.operationId} className="jobrow auditrow">
+                <span className="auditrow__ts">{auditStamp(op.requestedAt)}</span>
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-baseline gap-x-2.5">
+                    <span className="auditrow__action">{op.action}</span>
+                    <span className="order__meta">
+                      {op.errored ? "errored partway" : "no answer recorded"} · op {op.operationId.slice(0, 8)}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-body">“{op.reason}”</p>
+                  {op.orderId && (
+                    <p className="order__meta mt-0.5">
+                      <Link href={`/admin/orders/${op.orderId}`} className="jumplink">
+                        order {op.orderId.slice(0, 8)} →
+                      </Link>
+                    </p>
+                  )}
+                </div>
+                <ActionDialog
+                  action={adminReconcileOperation}
+                  title="Record what happened"
+                  trigger="Resolve"
+                  hidden={{ operation_id: op.operationId }}
+                  confirmNote={`${op.action} on ${op.subjectType} ${op.subjectId.slice(0, 8)}. This records the outcome only; it doesn't call the provider.`}
+                  fields={[
+                    {
+                      kind: "select",
+                      name: "outcome",
+                      label: "Did it go through at the provider?",
+                      options: [
+                        { value: "applied", label: "Yes, it went through" },
+                        { value: "not_applied", label: "No, nothing happened" },
+                      ],
+                    },
+                    { kind: "reason", label: "How you checked (recorded in the audit log)" },
+                  ]}
+                  submitLabel="Record outcome"
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="finder mb-4">
       {/* Keeps its submit: several fields block implicit Enter submission. */}

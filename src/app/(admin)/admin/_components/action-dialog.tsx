@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { Dialog, TextField } from "@/components/ui";
+import { Button, Dialog, TextField } from "@/components/ui";
 import type { AdminActionState } from "@/lib/admin/actions";
 import { cx } from "@/lib/format";
 
@@ -53,6 +54,10 @@ export function ActionDialog({
   const router = useRouter();
   const [state, setState] = useState<AdminActionState>(null);
   const [pending, setPending] = useState(false);
+  // RR-15: the request went out and no answer came back. Whether it ran is
+  // unknown, so this dialog won't offer the command again — reopening it
+  // included — until the operator has reloaded and looked.
+  const [uncertain, setUncertain] = useState(false);
   const inFlight = useRef(false);
   const idBase = useId();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,9 +88,10 @@ export function ActionDialog({
       }
     } catch (error) {
       unstable_rethrow(error);
+      setUncertain(true);
       setState({
         error:
-          "Couldn't confirm whether the command completed. Your confirmation details are still here; reload the console before trying again.",
+          "We couldn't confirm whether this ran, so it isn't offered again here: reload the console before trying again. A provider action (refund, transfer) whose outcome stays unknown is listed under Audit log → Needs reconciliation.",
       });
     } finally {
       inFlight.current = false;
@@ -101,7 +107,7 @@ export function ActionDialog({
         disabled={triggerDisabled}
         onClick={() => {
           if (closeTimer.current) clearTimeout(closeTimer.current);
-          setState(null);
+          if (!uncertain) setState(null);
           setOpen(true);
         }}
       >
@@ -185,6 +191,14 @@ export function ActionDialog({
             {state?.error && (
               <p role="alert" aria-live="polite" className="field__err">
                 {state.error}
+                {/reconcil/i.test(state.error) && (
+                  <>
+                    {" "}
+                    <Link href="/admin/audit#pending" className="jumplink">
+                      Pending operations →
+                    </Link>
+                  </>
+                )}
               </p>
             )}
             {state?.results && state.results.failed.length > 0 && (
@@ -200,13 +214,26 @@ export function ActionDialog({
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={pending}
-              className={cx("btn", danger && "btn--live", pending && "opacity-60")}
-            >
-              {pending ? "Working…" : submitLabel}
-            </button>
+            {uncertain ? (
+              <Button
+                onClick={() => {
+                  setUncertain(false);
+                  setState(null);
+                  setOpen(false);
+                  router.refresh();
+                }}
+              >
+                Reload to see what happened
+              </Button>
+            ) : (
+              <button
+                type="submit"
+                disabled={pending}
+                className={cx("btn", danger && "btn--live", pending && "opacity-60")}
+              >
+                {pending ? "Working…" : submitLabel}
+              </button>
+            )}
           </form>
         </div>
       </Dialog>

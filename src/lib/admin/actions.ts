@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 
-import { auditedAction } from "./audit";
+import { auditedAction, writeAudit } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
 import { dispatchRecordedWebhookEvent } from "./replay-webhook";
@@ -857,6 +857,61 @@ export async function adminAddNote(
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not record the note." };
   }
+}
+
+/**
+ * Record what actually happened to an external operation whose outcome was
+ * lost (RR-15). The operator checks the provider (the Stripe dashboard, the
+ * carrier) and says whether it went through; that closes the operation, so
+ * the fence stops refusing the action and a "not applied" can be retried as
+ * a new operation. Nothing here calls the provider or moves money.
+ */
+export async function adminReconcileOperation(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const operationId = field(formData, "operation_id");
+  const outcome = field(formData, "outcome");
+  const reason = field(formData, "reason");
+  if (!/^[0-9a-f-]{36}$/i.test(operationId)) return { error: "Missing operation." };
+  if (outcome !== "applied" && outcome !== "not_applied") return { error: "Say whether it went through." };
+  if (!reason) return { error: "Say how you checked — it goes in the audit log." };
+
+  const { data: rows, error } = await ctx.admin
+    .from("admin_audit_log")
+    .select("action, subject_type, subject_id, order_id, metadata")
+    .eq("metadata->>operationId", operationId);
+  if (error) return { error: "Couldn't load that operation. Nothing was recorded." };
+  const requested = rows?.find((r) => (r.metadata as { phase?: string } | null)?.phase === "requested");
+  if (!requested) return { error: "No such pending operation." };
+  if (rows?.some((r) => ["completed", "reconciled"].includes((r.metadata as { phase?: string } | null)?.phase ?? ""))) {
+    return { ok: "Already resolved — nothing to do." };
+  }
+
+  try {
+    await writeAudit(ctx.admin, {
+      actorId: ctx.userId,
+      action: "operation.reconcile",
+      subjectType: requested.subject_type,
+      subjectId: requested.subject_id,
+      orderId: requested.order_id ?? undefined,
+      reason,
+      metadata: { operationId, phase: "reconciled", outcome, reconciles: requested.action },
+    });
+  } catch {
+    return { error: "Couldn't record the outcome. The operation is still pending." };
+  }
+  revalidatePath("/admin", "layout");
+  return {
+    ok:
+      outcome === "applied"
+        ? "Recorded as done. The operation is closed."
+        : "Recorded as not done. The operation is closed and can be run again.",
+  };
 }
 
 /**

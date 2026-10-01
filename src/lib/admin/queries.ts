@@ -1609,3 +1609,65 @@ export async function listOpsCases(opts: {
     };
   });
 }
+
+/**
+ * External operations still awaiting an outcome (RR-15). A provider-facing
+ * admin action (a refund, a transfer) writes `phase: "requested"` before it
+ * calls out; `completed` or `reconciled` closes it. Until one of those exists
+ * the operation fence refuses the same action on the same subject — so an
+ * operation whose outcome was lost (a timeout, a crash) blocks it for good
+ * unless someone looks and records what happened.
+ */
+export type OpenOperation = {
+  operationId: string;
+  action: string;
+  subjectType: AdminAuditLogEntry["subject_type"];
+  subjectId: string;
+  orderId: string | null;
+  reason: string;
+  requestedAt: string;
+  /** A "failed_or_requires_reconciliation" record exists: the call errored. */
+  errored: boolean;
+};
+
+export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
+  const a = admin();
+  const { data: requested, error } = await a
+    .from("admin_audit_log")
+    .select("action, subject_type, subject_id, order_id, reason, created_at, metadata")
+    .eq("metadata->>phase", "requested")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(`Could not load pending operations: ${error.message}`);
+  const opId = (m: unknown) =>
+    m && typeof m === "object" && "operationId" in m ? String((m as { operationId: unknown }).operationId) : null;
+  const ids = (requested ?? []).map((r) => opId(r.metadata)).filter((id): id is string => Boolean(id));
+  if (!ids.length) return [];
+  const { data: later, error: laterError } = await a
+    .from("admin_audit_log")
+    .select("metadata")
+    .in("metadata->>operationId", ids)
+    .neq("metadata->>phase", "requested");
+  if (laterError) throw new Error(`Could not load pending operations: ${laterError.message}`);
+  const phases = new Map<string, Set<string>>();
+  for (const row of later ?? []) {
+    const id = opId(row.metadata);
+    const phase = (row.metadata as { phase?: string } | null)?.phase;
+    if (!id || !phase) continue;
+    phases.set(id, (phases.get(id) ?? new Set()).add(phase));
+  }
+  return (requested ?? [])
+    .map((r) => ({ r, id: opId(r.metadata) }))
+    .filter(({ id }) => id && !phases.get(id)?.has("completed") && !phases.get(id)?.has("reconciled"))
+    .slice(0, limit)
+    .map(({ r, id }) => ({
+      operationId: id as string,
+      action: r.action,
+      subjectType: r.subject_type,
+      subjectId: r.subject_id,
+      orderId: r.order_id,
+      reason: r.reason,
+      requestedAt: r.created_at,
+      errored: Boolean(phases.get(id as string)?.has("failed_or_requires_reconciliation")),
+    }));
+}
