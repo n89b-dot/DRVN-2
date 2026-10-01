@@ -8,10 +8,14 @@ import { getAdminContext } from "@/lib/admin/guard";
 import { normalizeBetaEmail } from "@/lib/beta-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import type { InvitationRowData } from "./invitation-row";
+
 export type InvitationActionState = {
   ok?: string;
   error?: string;
   invitePath?: string;
+  /** The row just created, so the list can show it without waiting on a refresh. */
+  invitation?: InvitationRowData;
 } | null;
 
 async function adminMutationContext() {
@@ -85,6 +89,15 @@ export async function createBetaInvitation(
     return {
       ok: "Invitation created. Copy this link now; the token is never stored in readable form.",
       invitePath: `/signup?invite=${encodeURIComponent(token)}`,
+      invitation: {
+        id: invitationId,
+        email_normalized: email,
+        roles: [...roles],
+        expires_at: expiresAt,
+        consumed_at: null,
+        revoked_at: null,
+        revoke_reason: null,
+      },
     };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Invitation was not created." };

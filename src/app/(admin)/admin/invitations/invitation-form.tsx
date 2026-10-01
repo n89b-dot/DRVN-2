@@ -6,6 +6,7 @@ import { unstable_rethrow, useRouter } from "next/navigation";
 import { Alert, Button, TextField } from "@/components/ui";
 
 import { createBetaInvitation, type InvitationActionState } from "./actions";
+import type { InvitationRowData } from "./invitation-row";
 
 function CopyInvitationLink({ link }: { link: string }) {
   const [result, setResult] = useState<"idle" | "copied" | "failed">("idle");
@@ -35,7 +36,14 @@ function CopyInvitationLink({ link }: { link: string }) {
   );
 }
 
-export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
+export function InvitationForm({
+  siteOrigin,
+  onCreated,
+}: {
+  siteOrigin: string;
+  /** The confirmed new row — shown at once, whatever a refresh races to. */
+  onCreated?: (invitation: InvitationRowData) => void;
+}) {
   const [state, setState] = useState<InvitationActionState>(null);
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
@@ -53,6 +61,7 @@ export function InvitationForm({ siteOrigin }: { siteOrigin: string }) {
       try {
         const result = await createBetaInvitation(null, data);
         setState(result);
+        if (result?.ok && result.invitation) onCreated?.(result.invitation);
         if (result?.ok) router.refresh();
       } catch (error) {
         unstable_rethrow(error);

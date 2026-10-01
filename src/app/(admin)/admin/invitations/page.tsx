@@ -1,10 +1,10 @@
 
-import { EmptyState, PageHead } from "@/components/ui";
+import { PageHead } from "@/components/ui";
 import { getAdminContext } from "@/lib/admin/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { InvitationForm } from "./invitation-form";
-import { InvitationRow, type InvitationRowData } from "./invitation-row";
+import { type InvitationRowData } from "./invitation-row";
+import { InvitationsPanel } from "./invitations-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -45,36 +45,27 @@ export default async function InvitationsPage() {
         </span>
       </PageHead>
 
-      {context?.role === "admin" &&
-        (config?.enforced ? (
-          <InvitationForm siteOrigin={siteOrigin} />
-        ) : (
-          <p className="order__meta">
-            Invitations only matter while the beta gate is on — right now anyone can join, buy and
-            sell.
-          </p>
-        ))}
-
-      <section className="mt-8">
-        <h2 className="font-display text-section">Recent invitations</h2>
-        {invitationError || !invitations.length ? (
-          <EmptyState mark="—" title={invitationError ? "Invitations unavailable" : "No invitations yet"}>
-            {invitationError ? "The invitation register could not be read." : "Create the first controlled-beta invitation above."}
-          </EmptyState>
-        ) : (
-          <div className="rowlist mt-4">
-            {invitations.map((invitation) => (
-              <InvitationRow
-                key={invitation.id}
-                invitation={invitation}
-                expiresLabel={new Date(invitation.expires_at).toLocaleDateString()}
-                expired={expiredIds.has(invitation.id)}
-                canRevoke={context?.role === "admin"}
-              />
-            ))}
-          </div>
+      {/* Only an admin may act; a viewer sees the register without the
+          form or the gate note. */}
+      <InvitationsPanel
+        invitations={invitations}
+        expiresLabels={Object.fromEntries(
+          invitations.map((invitation) => [invitation.id, new Date(invitation.expires_at).toLocaleDateString()]),
         )}
-      </section>
+        expiredIds={[...expiredIds]}
+        canRevoke={context?.role === "admin"}
+        canCreate={context?.role === "admin" && Boolean(config?.enforced)}
+        siteOrigin={siteOrigin}
+        gateNote={
+          context?.role === "admin" ? (
+            <p className="order__meta">
+              Invitations only matter while the beta gate is on — right now anyone can join, buy and
+              sell.
+            </p>
+          ) : null
+        }
+        unavailable={Boolean(invitationError)}
+      />
     </>
   );
 }
