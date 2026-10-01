@@ -332,7 +332,7 @@ async function purchaseListings(
       orderIds: allOrderIds,
       purchased: [],
       skipped,
-      payment: { clientSecret: payment.clientSecret, orderIds: allOrderIds },
+      payment: { clientSecret: payment.clientSecret, orderIds: allOrderIds, amountCents: basketTotal },
     };
   } else if (payment.status === "processing") {
     return { ...empty, orderIds: allOrderIds, skipped, error: "Your payment is processing. Check your order before trying again." };
@@ -844,7 +844,7 @@ export async function completeReservedOrder(
       });
       return { error: "Payment setup is being reconciled. Check this order before trying again." };
     }
-    return { payment: { clientSecret: payment.clientSecret, orderIds: [orderId] } };
+    return { payment: { clientSecret: payment.clientSecret, orderIds: [orderId], amountCents: order.total_cents } };
   }
 
   if (payment.status === "processing") return { error: "Your payment is processing. Check this order before trying again." };

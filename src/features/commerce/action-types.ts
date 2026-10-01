@@ -5,8 +5,12 @@ export type CommerceState = {
   operationId?: string;
   /** Set when the processor needs the buyer to confirm in the browser
    *  (Stripe Payment Element). The form swaps to the confirmation step. */
-  payment?: { clientSecret: string; orderIds: string[] };
+  payment?: CheckoutPayment;
 };
+
+/** The payment the server created. `amountCents` is what will be charged —
+ *  the only total a checkout shows once it exists (RR-10). */
+export type CheckoutPayment = { clientSecret: string; orderIds: string[]; amountCents: number };
 
 export type CheckoutOutcome = {
   error?: string;
@@ -15,7 +19,7 @@ export type CheckoutOutcome = {
   skipped: { listingId: string; title: string; reason: string }[];
   /** Async processor: the buyer still has to confirm in the browser. Orders
    *  stay pending and listings reserved until the webhook settles them. */
-  payment?: { clientSecret: string; orderIds: string[] };
+  payment?: CheckoutPayment;
 };
 
 export type ShippingDetails = {

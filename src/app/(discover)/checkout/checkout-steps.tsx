@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Button, Select, Stepper, TextField } from "@/components/ui";
 import { springs, transitions } from "@/lib/motion";
 import { checkoutCart, type CommerceState } from "@/features/commerce/actions";
+import { checkoutTotals } from "@/features/commerce/checkout-totals";
 import {
   quoteCartShipping,
   type CartShippingQuotes,
@@ -18,6 +19,7 @@ import { formatPrice } from "@/lib/payments/fee";
 import { COUNTRIES, DEFAULT_COUNTRY_CODE, countryLabel } from "@/lib/geo/countries";
 
 import { PaymentConfirm } from "../cart/payment-confirm";
+import { useReportCheckoutTotals } from "./checkout-totals-context";
 import { SavedCardPay } from "./saved-card-pay";
 
 /** One line of the order-summary review, shown again before payment so the
@@ -69,7 +71,7 @@ export function CheckoutSteps({
   action = checkoutCart,
   orderId,
   drvnListings = [],
-  baseTotalCents,
+  totalsBase,
 }: {
   idempotencyKey: string;
   /** Signed-out checkout: collect the email the order confirmation goes to. */
@@ -92,8 +94,10 @@ export function CheckoutSteps({
   /** DRVN-Shipping lines (0053): the address submit first fetches live rates
    *  for these, and payment waits for a service selection. */
   drvnListings?: { id: string; title: string }[];
-  /** Cents backing `total`, so a selected rate can re-total live. */
-  baseTotalCents?: number;
+  /** The basket's goods and flat shipping in cents. With it, every total
+   *  shown comes from `checkoutTotals` (RR-10); without it (a single
+   *  reserved order) `total` is shown until the payment's amount is known. */
+  totalsBase?: { goodsCents: number; flatShippingCents: number };
 }) {
   const [state, formAction, pending] = useActionState<CommerceState, FormData>(async (previous, data) => {
     try {
@@ -146,10 +150,22 @@ export function CheckoutSteps({
     const option = group.options.find((o) => o.quoteId === chosen);
     return sum + (option?.amountCents ?? 0);
   }, 0);
-  const liveTotal =
-    needsRates && ratesReady && baseTotalCents != null
-      ? formatPrice(baseTotalCents + selectedShippingCents)
-      : total;
+  // RR-10: one totals model. Before admission, an estimate from what the
+  // server will charge; after, the amount of the payment it created.
+  const admittedCents = state.payment?.amountCents ?? null;
+  const selectedQuoteCents = needsRates && ratesReady ? selectedShippingCents : null;
+  const totals = totalsBase
+    ? checkoutTotals({
+        ...totalsBase,
+        quotedLines: drvnListings.length,
+        collection,
+        selectedQuoteCents,
+        admittedCents,
+      })
+    : null;
+  const liveTotal = totals?.total ?? (admittedCents != null ? formatPrice(admittedCents) : total);
+  const shownShipping = totals?.shipping ?? shippingLabel;
+  useReportCheckoutTotals({ collection, selectedQuoteCents, admittedCents });
 
   const stateRequired = STATE_REQUIRED_COUNTRIES.has(address.country);
   const paymentStep = Boolean(state.payment) && !editingAddress;
@@ -258,7 +274,7 @@ export function CheckoutSteps({
               </div>
             )}
 
-            {(subtotalLabel || shippingLabel) && (
+            {(subtotalLabel || shownShipping) && (
               <div>
                 {subtotalLabel && (
                   <div className="sheet__row">
@@ -266,10 +282,10 @@ export function CheckoutSteps({
                     <b>{subtotalLabel}</b>
                   </div>
                 )}
-                {!collection && shippingLabel && (
+                {shownShipping && (totals || !collection) && (
                   <div className="sheet__row">
                     <span>Shipping</span>
-                    <b>{shippingLabel}</b>
+                    <b>{shownShipping}</b>
                   </div>
                 )}
                 <div className="sheet__row sheet__total">

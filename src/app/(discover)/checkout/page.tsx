@@ -13,6 +13,7 @@ import { paymentsAreLive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 
 import { CheckoutSteps } from "./checkout-steps";
+import { CheckoutHeadlineTotal, CheckoutTotalRows, CheckoutTotalsProvider } from "./checkout-totals-context";
 
 export const metadata = { title: "Checkout - DRVN" };
 
@@ -63,6 +64,9 @@ export default async function CheckoutPage() {
         <h1>Nearly yours.</h1>
       </Rv>
 
+      <CheckoutTotalsProvider
+        base={{ goodsCents: cart.goodsCents, flatShippingCents: cart.shippingCents, quotedLines: cart.drvnLines.length }}
+      >
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div>
           {/* Phone/tablet only. The desktop aside is a persistent companion to
@@ -78,7 +82,7 @@ export default async function CheckoutPage() {
               <summary className="ordersum__line">
                 <span className="min-w-0">
                   <span className="microlabel block">Order total</span>
-                  <b className="ordersum__total">{formatPrice(cart.totalCents)}</b>
+                  <CheckoutHeadlineTotal className="ordersum__total" />
                 </span>
                 <span className="ordersum__meta">
                   {cart.lines.length} part{cart.lines.length === 1 ? "" : "s"}
@@ -100,18 +104,7 @@ export default async function CheckoutPage() {
                   ))}
                 </div>
                 <div className="mt-3">
-                  <div className="sheet__row">
-                    <span>Parts</span>
-                    <b>{formatPrice(cart.goodsCents)}</b>
-                  </div>
-                  <div className="sheet__row">
-                    <span>Shipping</span>
-                    <b>{cart.shippingCents > 0 ? formatPrice(cart.shippingCents) : "Free"}</b>
-                  </div>
-                  <div className="sheet__row sheet__total">
-                    <span>You pay</span>
-                    <b>{formatPrice(cart.totalCents)}</b>
-                  </div>
+                  <CheckoutTotalRows goodsCents={cart.goodsCents} />
                 </div>
                 {cart.sellerCount > 1 && (
                   <p className="spec-note">
@@ -134,19 +127,10 @@ export default async function CheckoutPage() {
               priceLabel: formatPrice(line.priceCents),
             }))}
             subtotalLabel={formatPrice(cart.goodsCents)}
-            shippingLabel={
-              cart.drvnLines.length
-                ? cart.shippingCents > 0
-                  ? `${formatPrice(cart.shippingCents)} + rates at checkout`
-                  : "Calculated from your address"
-                : cart.shippingCents > 0
-                  ? formatPrice(cart.shippingCents)
-                  : "Free"
-            }
             total={formatPrice(cart.totalCents)}
             savedCards={savedCards}
             drvnListings={cart.drvnLines}
-            baseTotalCents={cart.totalCents}
+            totalsBase={{ goodsCents: cart.goodsCents, flatShippingCents: cart.shippingCents }}
           />
 
           {/* The payment-mode notice and the terms/fees line live in the aside
@@ -189,18 +173,7 @@ export default async function CheckoutPage() {
               ))}
             </div>
             <div className="mt-3">
-              <div className="sheet__row">
-                <span>Parts</span>
-                <b>{formatPrice(cart.goodsCents)}</b>
-              </div>
-              <div className="sheet__row">
-                <span>Shipping</span>
-                <b>{cart.shippingCents > 0 ? formatPrice(cart.shippingCents) : "Free"}</b>
-              </div>
-              <div className="sheet__row sheet__total">
-                <span>You pay</span>
-                <b>{formatPrice(cart.totalCents)}</b>
-              </div>
+              <CheckoutTotalRows goodsCents={cart.goodsCents} />
             </div>
             {cart.sellerCount > 1 && (
               <p className="spec-note">
@@ -223,6 +196,7 @@ export default async function CheckoutPage() {
           </Rv>
         </aside>
       </div>
+      </CheckoutTotalsProvider>
 
       <Foot left="DRVN — nothing is charged until you confirm" right={<Link href="/cart">← Back to cart</Link>} />
     </div>
