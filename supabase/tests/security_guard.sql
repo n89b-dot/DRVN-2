@@ -522,13 +522,99 @@ begin
     raise notice 'PASS 15a: seller cannot clear a reservation by direct PATCH';
   end;
 
-  -- Also cannot self-declare 'sold' on an otherwise-active listing.
+  -- ...nor declare the reserved listing sold over the buyer's head.
   begin
-    update public.listings set status = 'sold' where id = v_listing;
-    raise exception 'FAIL 15b: seller marked an active listing sold directly';
+    update public.listings set status = 'sold' where id = v_listing_status;
+    raise exception 'FAIL 15b: seller marked a reserved listing sold directly';
   exception when insufficient_privilege then
-    raise notice 'PASS 15b: seller cannot set status=sold directly — that is checkout''s job';
+    raise notice 'PASS 15b: seller cannot mark a reserved listing sold';
   end;
+
+  -- 15c. "Mark sold" (20260929100000): a seller may close their own live or
+  -- paused part when it sold somewhere else. Only that move: a draft isn't on
+  -- the market, a sold part stays sold, a stranger can't do it, and it is never
+  -- counted as a sale (profile_sales_count reads paid orders, not listings).
+  perform pg_temp.back_to_admin();
+  declare
+    v_sold_active uuid;
+    v_sold_paused uuid;
+    v_sold_draft  uuid;
+    v_sales_before bigint := public.profile_sales_count(v_seller);
+    v_orders_before int;
+  begin
+    select count(*) into v_orders_before from public.orders where seller_id = v_seller;
+
+    insert into public.listings (seller_id, title, category, price_cents, shipping_cents, status, currency)
+    values (v_seller, 'Sec guard sold-elsewhere (active)', 'engine', 20000, 1000, 'active', 'USD')
+    returning id into v_sold_active;
+    insert into public.listings (seller_id, title, category, price_cents, shipping_cents, status, currency)
+    values (v_seller, 'Sec guard sold-elsewhere (paused)', 'engine', 20000, 1000, 'paused', 'USD')
+    returning id into v_sold_paused;
+    insert into public.listings (seller_id, title, category, price_cents, shipping_cents, status, currency)
+    values (v_seller, 'Sec guard sold-elsewhere (draft)', 'engine', 20000, 1000, 'draft', 'USD')
+    returning id into v_sold_draft;
+
+    -- A stranger: RLS may hide the row (0 rows) or refuse outright; either
+    -- way the listing must not move.
+    perform pg_temp.impersonate(v_other);
+    begin
+      update public.listings set status = 'sold' where id = v_sold_active;
+    exception when insufficient_privilege then null;
+    end;
+    perform pg_temp.back_to_admin();
+    select status into v_status from public.listings where id = v_sold_active;
+    if v_status <> 'active' then
+      raise exception 'FAIL 15c: a stranger marked someone else''s listing sold (now %)', v_status;
+    end if;
+
+    -- The owner, from active and from paused.
+    perform pg_temp.impersonate(v_seller);
+    begin
+      update public.listings set status = 'sold' where id = v_sold_active;
+      get diagnostics v_count = row_count;
+      if v_count <> 1 then
+        raise exception 'FAIL 15c: owner mark-sold on an active listing touched % rows', v_count;
+      end if;
+      update public.listings set status = 'sold' where id = v_sold_paused;
+      get diagnostics v_count = row_count;
+      if v_count <> 1 then
+        raise exception 'FAIL 15c: owner mark-sold on a paused listing touched % rows', v_count;
+      end if;
+    exception when insufficient_privilege then
+      raise exception 'FAIL 15c: owner was refused marking their own live/paused listing sold: %', sqlerrm;
+    end;
+
+    -- A draft was never on the market.
+    begin
+      update public.listings set status = 'sold' where id = v_sold_draft;
+      raise exception 'FAIL 15c: seller marked a draft sold';
+    exception when insufficient_privilege then null;
+    end;
+
+    -- Sold stays sold.
+    begin
+      update public.listings set status = 'active' where id = v_sold_active;
+      raise exception 'FAIL 15c: seller relisted a sold listing by direct PATCH';
+    exception when insufficient_privilege then null;
+    end;
+
+    perform pg_temp.back_to_admin();
+    if (select count(*) from public.listings
+         where id in (v_sold_active, v_sold_paused) and status = 'sold') <> 2 then
+      raise exception 'FAIL 15c: owner mark-sold did not persist';
+    end if;
+    select status into v_status from public.listings where id = v_sold_draft;
+    if v_status <> 'draft' then
+      raise exception 'FAIL 15c: draft moved to % on a refused mark-sold', v_status;
+    end if;
+    if (select count(*) from public.orders where seller_id = v_seller) <> v_orders_before then
+      raise exception 'FAIL 15c: mark-sold created an order';
+    end if;
+    if public.profile_sales_count(v_seller) <> v_sales_before then
+      raise exception 'FAIL 15c: mark-sold changed the public sales count';
+    end if;
+  end;
+  raise notice 'PASS 15c: owner marks active/paused sold; draft, sold, stranger and sales count hold';
 
   -- ---------- saved searches (0044): strictly private ----------
   perform pg_temp.impersonate(v_buyer);

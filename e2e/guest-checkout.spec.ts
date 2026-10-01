@@ -52,8 +52,13 @@ async function fillCheckout(page: Page, email: string | null) {
   if (email) await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="ship_name"]').fill("Guest Buyer");
   await page.locator('input[name="ship_line1"]').fill("1 Test Street");
-  await page.locator('input[name="ship_city"]').fill("Testville");
-  await page.locator('input[name="ship_postcode"]').fill("T35 7XX");
+  await page.locator('input[name="ship_city"]').fill("Reno");
+  await page.locator('input[name="ship_postcode"]').fill("89501");
+  // Checkout's country starts on the United States (11713ff), where State is
+  // required. The visible select is addressed by id (it submits through a
+  // state-bound hidden input — see checkout-steps).
+  await page.locator("#checkout-ship-country").selectOption("US");
+  await page.getByLabel(/state \/ province/i).fill("NV");
   await page.getByRole("button", { name: /continue to payment/i }).first().click();
 }
 
@@ -210,8 +215,10 @@ test.describe.serial("guest checkout", () => {
     });
     await page.locator('input[name="ship_name"]').fill("Guest Buyer");
     await page.locator('input[name="ship_line1"]').fill("1 Test Street");
-    await page.locator('input[name="ship_city"]').fill("Testville");
-    await page.locator('input[name="ship_postcode"]').fill("T35 7XX");
+    await page.locator('input[name="ship_city"]').fill("Reno");
+    await page.locator('input[name="ship_postcode"]').fill("89501");
+    await page.locator("#checkout-ship-country").selectOption("US");
+    await page.getByLabel(/state \/ province/i).fill("NV");
     await page.getByRole("button", { name: /continue to payment/i }).first().click();
 
     await expect(page.getByText(/email doesn't look right/i)).toBeVisible();

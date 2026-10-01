@@ -77,7 +77,9 @@ test("dispute and return controls stay retryable after failed Server Action requ
     await expect(propose.locator("xpath=ancestor::form").getByRole("alert").filter({ hasText: "Your details are still here" })).toBeVisible();
     await expect(excludedItem).not.toBeChecked();
     await propose.click();
-    await expect(page.getByRole("status").filter({ hasText: "Return authorized" })).toBeVisible();
+    // Once a return is running the proposal form is replaced by the return's
+    // own panel (orders/[id]/page.tsx hides it), so its confirmation goes too.
+    await expect(page.getByText("awaiting shipment", { exact: true })).toBeVisible();
     const returns = await admin.from("returns").select("id,status").eq("order_id", order.data.id);
     if (returns.error) throw returns.error;
     expect(returns.data).toHaveLength(1);

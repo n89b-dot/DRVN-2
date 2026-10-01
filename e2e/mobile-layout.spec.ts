@@ -103,7 +103,8 @@ test.describe.serial("mobile layout @ 375x812", () => {
 
   test("garage: build sheet — full-width plate, folded details, three-tool rail", async ({ page }) => {
     await signIn(page, seller);
-    await page.goto("/garage");
+    // /garage opens on the main car; the sheet list is ?car=all.
+    await page.goto("/garage?car=all");
     const sheet = page.locator(".gsheet").first();
     await expect(sheet).toBeVisible();
     // On phones the cover plate runs the sheet's full inner width above the
@@ -123,10 +124,13 @@ test.describe.serial("mobile layout @ 375x812", () => {
       const box = await tool.boundingBox();
       expect(box!.height).toBeGreaterThanOrEqual(44);
     }
-    // Unfold: four dimensions (Earned retired 22 Aug 2026), each label on one line.
+    // Unfold: up to four dimensions (Earned retired 22 Aug 2026), each label
+    // on one line. Zero-valued ones are left off (3daf293); this seller has a
+    // part live, so at least that one is drawn.
     await toggle.click();
     const dims = sheet.locator(".gsheet__dims .livedim");
-    await expect(dims).toHaveCount(4);
+    await expect(dims.first()).toBeVisible();
+    expect(await dims.count()).toBeLessThanOrEqual(4);
     for (const label of await dims.locator(".microlabel").all()) {
       const box = await label.boundingBox();
       expect(box!.height).toBeLessThanOrEqual(18);

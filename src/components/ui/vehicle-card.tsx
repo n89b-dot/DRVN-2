@@ -28,14 +28,18 @@ export type VehicleSummary = {
 export function VehicleCard({
   vehicle,
   stats,
+  href,
 }: {
   vehicle: VehicleSummary;
   /** The build's pulse: updates posted and followers. */
   stats?: { updates: number; followers: number };
+  /** Overrides the build-page link when the caller carries navigation
+   *  context, e.g. a listing's "Came off this car" keeps its way back. */
+  href?: string;
 }) {
   const meta = vehicleSubline(vehicle.name, vehicle);
   return (
-    <Link href={`/cars/${vehicle.slug}`} className="vehicle vehicle--row">
+    <Link href={href ?? `/cars/${vehicle.slug}`} className="vehicle vehicle--row">
       <span className="vehicle__img">
         <Media
           src={vehicle.cover_image_url ?? undefined}

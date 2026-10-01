@@ -71,6 +71,11 @@ async function settle(page: Page, path: string) {
       ".authstage { display: none !important; }",
     ].join("\n"),
   });
+  // The landing hero is the newest public car's cover photo, so whether it
+  // exists at all — and how far it pushes the page down — depends on what
+  // other suites left behind. Hidden like the auth backdrop (direct style:
+  // see the CSP note below).
+  await page.locator(".landing-hero").evaluateAll(elements => elements.forEach(element => { (element as HTMLElement).style.display = "none"; }));
   if (path === "/marketplace") {
     // Direct style properties work under the enforced nonce CSP; an unnonced
     // injected stylesheet is correctly blocked by the browser.

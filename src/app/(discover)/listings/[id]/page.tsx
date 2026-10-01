@@ -514,6 +514,9 @@ export default async function ListingPage({
                     model: sourceCar.model,
                     cover_image_url: sourceCar.cover_image_url,
                   }}
+                  // The build page offers "Back to the part" (and, through
+                  // it, back to the results) only when told where it came from.
+                  href={`/cars/${sourceCar.slug}?fromListing=${encodeURIComponent(id)}${returnTo ? `&from=${encodeURIComponent(returnTo)}` : ""}`}
                 />
               </div>
             )}

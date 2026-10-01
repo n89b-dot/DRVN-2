@@ -76,7 +76,15 @@ test("admin creates, copies and revokes an invitation while expired links fail c
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
-    await expect(page).toHaveURL(/\/admin$/);
+    // MFA returns to the page that asked for it (admin-verify keeps `next`).
+    await expect(page).toHaveURL(/\/admin\/invitations$/);
+    // The console only offers the invitation form while the gate is enforced
+    // (a75180c) — with it off, anyone can join and an invitation is moot.
+    const enforced = await admin
+      .from("beta_access_config")
+      .update({ enforced: true, updated_by: adminUserId, updated_at: new Date().toISOString() })
+      .eq("singleton", true);
+    if (enforced.error) throw enforced.error;
     await page.goto("/admin/invitations");
     await expect(page.getByRole("heading", { name: "Beta invitations" })).toBeVisible();
 
@@ -142,11 +150,6 @@ test("admin creates, copies and revokes an invitation while expired links fail c
     const expiredRow = page.locator(".jobrow").filter({ hasText: expiredEmail });
     await expect(expiredRow.getByText("expired", { exact: true })).toBeVisible();
 
-    const enforced = await admin
-      .from("beta_access_config")
-      .update({ enforced: true, updated_by: adminUserId, updated_at: new Date().toISOString() })
-      .eq("singleton", true);
-    if (enforced.error) throw enforced.error;
     await page.context().clearCookies();
 
     for (const attempt of [

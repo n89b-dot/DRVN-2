@@ -65,11 +65,11 @@ test.describe("offer decision interruption recovery", () => {
     await login(page, sellerEmail);
     await page.goto(`/offers/${row.id}`);
     await page.getByRole("button", { name: /counter/i }).click();
-    await page.getByPlaceholder("Your number").fill("90.00");
+    await page.getByLabel("Your counter").fill("90.00");
     await loseCommittedResponse(page, row.id);
     await page.getByRole("button", { name: /send counter/i }).click();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Retry to check the saved result" })).toBeVisible();
-    await expect(page.getByPlaceholder("Your number")).toHaveValue("90.00");
+    await expect(page.getByLabel("Your counter")).toHaveValue("90.00");
     await page.getByRole("button", { name: /send counter/i }).click();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Counter sent" })).toBeVisible();
     const saved = await fixtureAdmin().from("offers").select("status,counter_amount_cents").eq("id", row.id).single();
@@ -117,9 +117,11 @@ test.describe("offer decision interruption recovery", () => {
     await login(page, buyerEmail);
     await page.goto(`/offers/${row.id}`);
     await loseCommittedResponse(page, row.id);
-    await page.getByRole("button", { name: /accept counter/i }).click();
+    // The button names the counter's amount (9000 cents in the fixture).
+    const acceptCounter = page.getByRole("button", { name: /^\[?\s*Accept \$90(\.00)?\s*\]?$/ });
+    await acceptCounter.click();
     await expect(page.getByRole("main").getByRole("alert").filter({ hasText: "Retry to check the saved result" })).toBeVisible();
-    await page.getByRole("button", { name: /accept counter/i }).click();
+    await acceptCounter.click();
     await expect(page).toHaveURL(/\/orders\/[\w-]+\/checkout$/);
     const orders = await fixtureAdmin().from("orders").select("id").eq("origin_offer_id", row.id);
     expect(orders.data).toHaveLength(1);

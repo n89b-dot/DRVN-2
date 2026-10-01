@@ -1,4 +1,4 @@
-import { createDiscoveryFixture } from "./fixtures";
+import { createDiscoveryFixture, fixtureAdmin } from "./fixtures";
 import { expect, test, type Page } from "@playwright/test";
 
 import { addCar, cleanupE2eUsers, makeUser, signIn, signUp } from "./helpers";
@@ -94,8 +94,12 @@ test.describe.serial("mobile remediation", () => {
       const strip_ = await strip.evaluate((el) => {
         const tabs = [...el.querySelectorAll('[role="tab"]')];
         const boxes = tabs.map((t) => t.getBoundingClientRect());
+        const strip = el.getBoundingClientRect();
         return {
           flexWrap: getComputedStyle(el).flexWrap,
+          overflowX: getComputedStyle(el).overflowX,
+          // Tabs whose box runs past the strip's visible edge.
+          clipped: boxes.filter((b) => b.left < strip.left - 0.5 || b.right > strip.right + 0.5).length,
           scrollWidth: el.scrollWidth,
           clientWidth: el.clientWidth,
           tabCount: tabs.length,
@@ -114,10 +118,12 @@ test.describe.serial("mobile remediation", () => {
       }
 
       expect(strip_.flexWrap, `.tabstrip must not wrap @ ${width}`).toBe("nowrap");
-      expect(
-        strip_.scrollWidth,
-        `.tabstrip must scroll sideways rather than wrap @ ${width}`
-      ).toBeGreaterThan(strip_.clientWidth);
+      // Short tab sets fit a phone row (07-navigation.css tightens type and
+      // gaps); longer ones must scroll sideways, never wrap or clip.
+      expect(strip_.overflowX, `.tabstrip must be able to scroll sideways @ ${width}`).toMatch(/auto|scroll/);
+      if (strip_.scrollWidth <= strip_.clientWidth) {
+        expect(strip_.clipped, `a tab is clipped by a strip that doesn't scroll @ ${width}`).toBe(0);
+      }
       expect(strip_.rows, `every tab must share one row @ ${width}`).toBe(1);
       expect(strip_.minTabHeight, `smallest tab tap height @ ${width}`).toBeGreaterThanOrEqual(44);
     }
@@ -176,7 +182,8 @@ test.describe.serial("mobile remediation", () => {
     await signIn(page, owner);
     await page.goto(carEditPath);
 
-    const rows = page.locator(".modrow");
+    // Editable lines only — the column-caption header shares `.modrow`.
+    const rows = page.locator(".modrow:not(.modrow--cols)");
     if ((await rows.count()) === 0) {
       await page.getByRole("button", { name: /add a line manually/i }).click();
     }
@@ -266,6 +273,15 @@ test.describe.serial("mobile remediation", () => {
   });
 
   test("saved: search owns the phone column and Enter submits the query", async ({ page }) => {
+    // /saved shows only its empty state until something is saved (no search
+    // over an empty list), so the owner saves the fixture part first.
+    const admin = fixtureAdmin();
+    const profile = await admin.from("profiles").select("id").eq("username", owner.username).single().throwOnError();
+    await admin.from("saves").upsert({
+      user_id: profile.data.id,
+      target_type: "listing",
+      target_id: discovery.listingPath.split("/").pop()!,
+    }).throwOnError();
     await signIn(page, owner);
     await page.goto("/saved");
     const finder = page.locator(".finder").first();
@@ -287,6 +303,16 @@ test.describe.serial("mobile remediation", () => {
   test("notifications: two filter axes, one row each, still combining in the query", async ({
     page,
   }) => {
+    // A member with no notifications ever sees only the empty state — no
+    // filters over nothing (notifications/page.tsx) — so give the owner one.
+    const admin = fixtureAdmin();
+    const profile = await admin.from("profiles").select("id").eq("username", owner.username).single().throwOnError();
+    await admin.from("notifications").insert({
+      user_id: profile.data.id,
+      kind: "follow",
+      section: "engagement",
+      title: "Someone followed your profile",
+    }).throwOnError();
     await signIn(page, owner);
     await page.goto("/notifications");
 
@@ -330,6 +356,26 @@ test.describe.serial("mobile remediation", () => {
   });
 
   test("messages: search owns the phone column and Enter submits", async ({ page }) => {
+    // A brand-new inbox shows only its empty state, so the owner opens a
+    // thread first: an offer with a note on the fixture part (threads hang
+    // off an order or offer — message_attach_conversation).
+    const admin = fixtureAdmin();
+    const profile = await admin.from("profiles").select("id").eq("username", owner.username).single().throwOnError();
+    const listing = await admin.from("listings").select("id,seller_id,price_cents")
+      .eq("id", discovery.listingPath.split("/").pop()!).single().throwOnError();
+    const offer = await admin.from("offers").insert({
+      listing_id: listing.data.id,
+      buyer_id: profile.data.id,
+      amount_cents: Math.round(listing.data.price_cents * 0.8),
+      status: "open",
+    }).select("id").single().throwOnError();
+    await admin.from("messages").insert({
+      listing_id: listing.data.id,
+      offer_id: offer.data.id,
+      sender_id: profile.data.id,
+      recipient_id: listing.data.seller_id,
+      body: "Would you take a little less?",
+    }).throwOnError();
     await signIn(page, owner);
     await page.goto("/messages");
     const finder = page.locator(".finder").first();

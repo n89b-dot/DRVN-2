@@ -116,6 +116,16 @@ test("authenticated account, settings and garage dialog meet automated WCAG A/AA
   const trigger=page.getByRole("button",{name:/add a car|add car/i}).first();
   await trigger.click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  // Measure the dialog at rest: mid fade-in, its labels blend into the
+  // ground (e.g. --dim at 87% opacity reads 4.37:1) and axe reports the blend.
+  await expect.poll(() => page.getByRole("dialog").evaluate((el) => {
+    let opacity = 1;
+    // The Dialog fades its inner .dialogbox (dialog.tsx), so start there.
+    for (let node: Element | null = el.querySelector(".dialogbox") ?? el; node; node = node.parentElement) {
+      opacity *= Number(getComputedStyle(node).opacity);
+    }
+    return opacity;
+  })).toBe(1);
   await assertAccessible(page,"garage dialog");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);

@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
-import { enableSellerPayouts } from "./helpers";
+import { attachSellPhoto, enableSellerPayouts, sellCommitButton, signIn, signUp } from "./helpers";
 
 /**
  * The golden path, end to end: a seller lists a part off a car they own, a buyer
@@ -29,30 +29,6 @@ const buyer = {
 const carName = `E2E Test Car ${stamp}`;
 const partTitle = `E2E Test Downpipe ${stamp}`;
 const partPrice = "250";
-
-async function signUp(page: Page, user: typeof seller) {
-  await page.goto("/signup");
-  await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/^password$/i).fill(user.password);
-  // Specific on purpose: dev mode adds an "Open Next.js Dev Tools" button that
-  // a loose /open/i matcher collides with under strict mode.
-  await page.getByRole("button", { name: /sign up|create account/i }).click();
-
-  // With email confirmation off, signup lands on onboarding.
-  await page.waitForURL(/\/onboarding/);
-  await page.getByLabel(/handle|username/i).fill(user.username);
-  await page.getByLabel(/display name|keeper name/i).fill(user.displayName);
-  await page.getByRole("button", { name: /continue|finish|save|let.s go/i }).click();
-  await page.waitForURL(/\/home/);
-}
-
-async function signIn(page: Page, user: typeof seller) {
-  await page.goto("/login");
-  await page.getByLabel(/email/i).fill(user.email);
-  await page.getByLabel(/^password$/i).fill(user.password);
-  await page.getByRole("button", { name: /log in|sign in/i }).click();
-  await page.waitForURL(/\/home/);
-}
 
 test.describe.serial("golden path", () => {
   test("seller signs up and adds a car", async ({ page }) => {
@@ -89,7 +65,9 @@ test.describe.serial("golden path", () => {
     const sourceCar = page.locator('select[name="source_car_id"]');
     await sourceCar.selectOption({ label: `Off my sheet — ${carName}` });
 
-    await page.getByRole("button", { name: /publish/i }).click();
+    // A public listing leads with its photo; publishing needs one.
+    await attachSellPhoto(page);
+    await sellCommitButton(page).click();
 
     await expect(page).toHaveURL(/\/listings\/[\w-]+/);
     await expect(page.getByRole("heading", { name: partTitle })).toBeVisible();
@@ -98,8 +76,8 @@ test.describe.serial("golden path", () => {
   test("the part appears on the car sheet's For sale tab", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/garage");
-    // The sheet's name (and its plate) is the link to the build page.
-    await page.locator(".gsheet__namelink").first().click();
+    // The Garage opens on the main car (3daf293); its build page is one link away.
+    await page.getByRole("link", { name: /view the build page/i }).click();
 
     await page.getByRole("tab", { name: /for sale/i }).click();
     await expect(page.getByText(partTitle)).toBeVisible();
@@ -121,7 +99,8 @@ test.describe.serial("golden path", () => {
     // Add-to-cart stays on the listing (in-place confirmation, badge update);
     // going to the cart is the buyer's own step.
     await page.getByRole("button", { name: /add to cart/i }).click();
-    await expect(page.getByText(/added to cart/i).first()).toBeVisible();
+    // No toast since 3daf293: the button turns into the cart link.
+    await expect(page.getByRole("link", { name: /in cart.*view cart/i })).toBeVisible();
     await page.getByRole("link", { name: /in cart.*view cart/i }).click();
     await page.getByRole("link", { name: /proceed to checkout/i }).click();
     await expect(page).toHaveURL(/\/checkout/);

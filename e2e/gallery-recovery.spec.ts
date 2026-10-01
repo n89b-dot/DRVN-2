@@ -22,7 +22,7 @@ test("gallery order retries converge and a failed description save keeps the dra
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL(/\/home/);
     await page.goto(`/garage/${car.data.id}/edit`);
-    const gallery = page.locator("section").filter({ hasText: "Photos — drag" });
+    const gallery = page.locator("section").filter({ hasText: "Drag (or ↑↓) to reorder" });
     let loseCommit = true, failBeforeCommit = false;
     await page.route(`**/garage/${car.data.id}/edit*`, async route => {
       if (route.request().method() !== "POST" || !route.request().headers()["next-action"]) return route.continue();

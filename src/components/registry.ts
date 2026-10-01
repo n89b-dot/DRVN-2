@@ -496,7 +496,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     category: "card",
     status: "active",
     description: "A vehicle as a dashboard row — 3:2 media, identity (name; vehicle line only when it adds to the name), pulse stats, whole-row link.",
-    use: "Home garage tile. (The Garage's management card is the feature-level GarageSheetCard.)",
+    use: "Home garage tile; a listing's source car (pass `href` to carry the way back). (The Garage's management card is the feature-level GarageSheetCard.)",
     cssRecipe: ".vehicle--row",
   },
 

@@ -47,7 +47,8 @@ test("mod-sheet retry converges after a lost response and keeps adjacent draft e
     const editor = page.locator("section").filter({ hasText: "The build — seed the lines" });
     await editor.getByRole("button", { name: "+ Add a line manually" }).click();
     await editor.getByRole("button", { name: "+ Add a line manually" }).click();
-    const rows = editor.locator(".modrow");
+    // Editable lines only — the column-caption header shares `.modrow`.
+    const rows = editor.locator(".modrow:not(.modrow--cols)");
     await expect(rows).toHaveCount(2);
     await rows.nth(0).getByLabel("Brand").fill("APR");
     await rows.nth(0).getByLabel("Product").fill("Intake");
@@ -128,7 +129,8 @@ test("mod-sheet retry converges after a lost response and keeps adjacent draft e
     await details.getByRole("button", { name: "Save changes" }).click();
     await expect(details.getByRole("status")).toContainText("Changes saved.");
     await details.getByLabel("Color").fill("Sepang Blue Metallic");
-    await expect(details.getByRole("status")).toHaveCount(0);
+    // A new edit retires the stale confirmation; the form says it's dirty.
+    await expect(details.getByRole("status")).toHaveText("Unsaved changes");
 
     const danger = page.locator("section").filter({ hasText: "Delete this car — irreversible" });
     await danger.getByRole("button", { name: "Delete this car" }).click();

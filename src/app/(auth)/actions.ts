@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
@@ -224,6 +225,10 @@ export async function completeOnboarding(
   // No destination means a fresh account with nothing to resume: the first
   // step is the car (the garage opens on the add-car form when it's empty).
   // "Skip — just browsing" posts next=/home.
+  // A finished profile changes what every page shows this member (until now
+  // they all sent them to onboarding), so drop the client's copies — a /home
+  // prefetched mid-onboarding would otherwise bounce them straight back.
+  revalidatePath("/", "layout");
   redirect(safeRedirectPath(next, "/garage"));
 }
 

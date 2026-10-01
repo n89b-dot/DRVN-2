@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
-import { cleanupE2eUsers, enableSellerPayouts, makeUser, signUp } from "./helpers";
+import { cleanupE2eUsers, enableSellerPayouts, makeUser, publishListing, signUp } from "./helpers";
 
 /**
  * Transaction-completion golden paths (brief §44), against the stub payment
@@ -30,37 +30,6 @@ const WEBHOOK_SECRET = process.env.EASYPOST_WEBHOOK_SECRET ?? "e2e-webhook-secre
 test.describe.configure({ mode: "serial" });
 test.setTimeout(180_000);
 
-async function publishPart(
-  page: Page,
-  opts: {
-    title: string;
-    price: string;
-    shipping?: string;
-    pickup?: boolean;
-    drvn?: boolean;
-  }
-): Promise<string> {
-  await page.goto("/sell");
-  await page.getByLabel(/title/i).fill(opts.title);
-  await page.getByLabel(/^category/i).selectOption({ index: 1 });
-  await page.getByLabel(/asking price/i).fill(opts.price);
-  if (opts.drvn) {
-    await page.getByLabel(/how it ships/i).selectOption("drvn");
-    await page.getByLabel(/packed weight/i).fill("32");
-    await page.getByLabel(/length \(in\)/i).fill("14");
-    await page.getByLabel(/width \(in\)/i).fill("10");
-    await page.getByLabel(/height \(in\)/i).fill("8");
-  } else if (opts.shipping !== undefined) {
-    await page.locator('input[name="shipping"]').fill(opts.shipping);
-  }
-  if (opts.pickup) {
-    await page.locator('input[name="allows_collection"]').check();
-  }
-  await page.getByRole("button", { name: /publish/i }).click();
-  await expect(page).toHaveURL(/\/listings\/[\w-]+/, { timeout: 20_000 });
-  return new URL(page.url()).pathname;
-}
-
 async function fillCheckoutAddress(page: Page) {
   await page.getByLabel(/^name$/i).fill("E2E Buyer");
   await page.getByLabel(/^address$/i).fill("1 Test Street");
@@ -83,7 +52,8 @@ async function buyListing(
   // Wait for the in-place confirmation — navigating before the server action
   // lands loses the cart cookie (same rationale as golden-path.spec.ts).
   await page.getByRole("button", { name: /add to cart/i }).first().click();
-  await expect(page.getByText(/added to cart/i).first()).toBeVisible();
+  // No toast since 3daf293: the button turns into the cart link.
+  await expect(page.getByRole("link", { name: /in cart.*view cart/i })).toBeVisible();
   await page.goto("/cart");
   await page.getByRole("link", { name: /proceed to checkout/i }).click();
   await expect(page).toHaveURL(/\/checkout/);
@@ -208,7 +178,7 @@ test("Flow C — local pickup: ready → pass → redeem → delivered", async (
   await enableSellerPayouts(s.username);
   await signUp(buyer, b);
 
-  const listingPath = await publishPart(seller, {
+  const listingPath = await publishListing(seller, {
     title: `E2E Pickup Part ${stamp}`,
     price: "120",
     shipping: "0",
@@ -268,7 +238,7 @@ test("Flow A — DRVN Shipping: rates → label → webhook delivery", async ({ 
   await seller.getByRole("button", { name: /save shipping details/i }).click();
   await expect(seller.getByText(/saved and verified/i)).toBeVisible({ timeout: 15_000 });
 
-  const listingPath = await publishPart(seller, {
+  const listingPath = await publishListing(seller, {
     title: `E2E Rated Part ${stamp}`,
     price: "300",
     drvn: true,
@@ -373,7 +343,7 @@ test("Flow D — partial refund: buyer keeps the item, dispute settles", async (
   await enableSellerPayouts(s.username);
   await signUp(buyer, b);
 
-  const listingPath = await publishPart(seller, {
+  const listingPath = await publishListing(seller, {
     title: `E2E Partial Part ${stamp}`,
     price: "200",
     shipping: "10",
@@ -428,7 +398,7 @@ test("Flow E — return for refund: item travels back before money", async ({ br
   await expect(seller.getByText(/saved and verified/i)).toBeVisible({ timeout: 15_000 });
   await signUp(buyer, b);
 
-  const listingPath = await publishPart(seller, {
+  const listingPath = await publishListing(seller, {
     title: `E2E Return Part ${stamp}`,
     price: "150",
     shipping: "15",

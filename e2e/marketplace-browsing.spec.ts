@@ -59,7 +59,12 @@ test("Cancel discards draft filters; sort only changes applied state", async ({ 
   await page.getByRole("button", { name: "Filters, 1 active", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Filters", exact: true });
   await sheet.getByLabel("Maximum price", { exact: true }).fill("1");
-  await sheet.getByRole("button", { name: "Close Filters", exact: true }).click();
+  // With Reset/Apply in its footer the sheet has no close button; cancelling
+  // is Escape (or the scrim), which drops the draft and returns focus.
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: "Filters, 1 active", exact: true })).toBeFocused();
+  expect(new URL(page.url()).searchParams.get("max")).toBe("500");
   await page.getByLabel("Sort results", { exact: true }).selectOption("price_desc");
   await expect(page).toHaveURL(/sort=price_desc/);
   expect(new URL(page.url()).searchParams.get("max")).toBe("500");
@@ -96,13 +101,14 @@ test("Explore Parts uses the restored query and count", async ({ page }) => {
   await page.getByRole("button", { name: /Filters/ }).click();
   const sheet = page.getByRole("dialog", { name: "Filters", exact: true });
   await sheet.getByLabel("Maximum price", { exact: true }).fill("1");
-  await sheet.getByRole("button", { name: "Close Filters", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
   await page.getByLabel("Sort results", { exact: true }).selectOption("price_desc");
   await expect(page).toHaveURL(/sort=price_desc/);
   expect(new URL(page.url()).searchParams.get("max")).toBe("500");
   await page.getByRole("button", { name: /Filters/ }).click();
   await expect(sheet.getByLabel("Maximum price", { exact: true })).toHaveValue("500");
-  await sheet.getByRole("button", { name: /Reset filters/ }).click();
+  await sheet.getByRole("button", { name: /^\[?\s*Reset\s*\]?$/ }).click();
   await sheet.getByRole("button", { name: /Apply filters/ }).click();
   await expect(page.getByRole("heading", { name: "27 parts found" })).toBeVisible();
   expect(new URL(page.url()).searchParams.get("max")).toBeFalsy();

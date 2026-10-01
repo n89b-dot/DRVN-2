@@ -64,6 +64,37 @@ export async function addCar(page: Page, carName: string) {
 }
 
 /**
+ * Attaches one photo through /sell's own uploader and waits for it to land.
+ *
+ * Publishing needs a photo (M-5/W-2, sell/actions.ts PHOTO_REQUIRED); drafts
+ * don't. The upload goes through the real path — never seed an image URL.
+ */
+export async function attachSellPhoto(page: Page) {
+  await page.locator('#sell-photos input[type="file"]').setInputFiles({
+    name: "part.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64"
+    ),
+  });
+  // The drop zone retitles itself once the form holds an uploaded URL.
+  await expect(page.getByRole("button", { name: /add more photos/i })).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+/**
+ * /sell's commit button. The form renders the same button twice — in its
+ * in-flow footer (`.saverow`) and, below 981px, in the pinned MobileActionBar —
+ * so at phone widths an unscoped /publish/i matches both. Target the in-flow
+ * one, which exists at every width.
+ */
+export function sellCommitButton(page: Page) {
+  return page.locator(".saverow").getByRole("button", { name: /publish/i });
+}
+
+/**
  * Publishes a listing via /sell and returns its /listings/<id> path.
  * `shipping` and `price` are dollar strings, as typed into the form.
  */
@@ -76,6 +107,10 @@ export async function publishListing(
     partNumber?: string;
     /** Full option label, e.g. `Off my sheet — My Car` */
     sourceCarLabel?: string;
+    /** DRVN Shipping (integrated labels) with a packed size, instead of a flat rate. */
+    drvn?: boolean;
+    /** Also offer local pickup. */
+    pickup?: boolean;
   }
 ): Promise<string> {
   await page.goto("/sell");
@@ -83,14 +118,24 @@ export async function publishListing(
   await page.getByLabel(/^category/i).selectOption({ index: 1 });
   if (opts.partNumber) await page.getByLabel(/part number/i).fill(opts.partNumber);
   await page.getByLabel(/asking price/i).fill(opts.price);
-  if (opts.shipping !== undefined) {
+  if (opts.drvn) {
+    await page.getByLabel(/how it ships/i).selectOption("drvn");
+    await page.getByLabel(/packed weight/i).fill("32");
+    await page.getByLabel(/length \(in\)/i).fill("14");
+    await page.getByLabel(/width \(in\)/i).fill("10");
+    await page.getByLabel(/height \(in\)/i).fill("8");
+  } else if (opts.shipping !== undefined) {
     await page.locator('input[name="shipping"]').fill(opts.shipping);
+  }
+  if (opts.pickup) {
+    await page.locator('input[name="allows_collection"]').check();
   }
   if (opts.sourceCarLabel) {
     await page.locator('select[name="source_car_id"]').selectOption({ label: opts.sourceCarLabel });
   }
-  await page.getByRole("button", { name: /publish/i }).click();
-  await expect(page).toHaveURL(/\/listings\/[\w-]+/);
+  await attachSellPhoto(page);
+  await sellCommitButton(page).click();
+  await expect(page).toHaveURL(/\/listings\/[\w-]+/, { timeout: 20_000 });
   return new URL(page.url()).pathname;
 }
 

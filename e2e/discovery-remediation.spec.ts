@@ -53,6 +53,9 @@ test.describe.serial("discovery + marketplace remediation", () => {
     await signIn(page, seller);
     // The register moved into the Selling family (§J): discovery pages carry
     // no operational strip; sellers reach their stock from /selling.
+    // From 1081px the rail lists the same children and the plate stands down
+    // (11-responsive.css, selling-nav.tsx), so read the plate below that.
+    await page.setViewportSize(VIEWPORTS.tabletPortrait);
     await page.goto("/selling");
     const nav = page.getByRole("navigation", { name: /selling sections/i });
     await expect(nav.getByRole("link", { name: "My Listings" })).toBeVisible();

@@ -54,7 +54,7 @@ test("a lost committed photo-upload response leaves a recoverable orphan and att
     );
 
     await page.goto(editPath);
-    const gallery = page.locator("section").filter({ hasText: "Photos — drag" });
+    const gallery = page.locator("section").filter({ hasText: "Drag (or ↑↓) to reorder" });
     await expect(gallery.locator('input[type="file"]')).toBeEnabled();
     await expect(gallery.getByRole("button", { name: /Add the first photos/ })).not.toHaveAttribute("aria-disabled", "true");
     let lostResponse = false;

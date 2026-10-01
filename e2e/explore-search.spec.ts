@@ -1,4 +1,4 @@
-import { expect, test, type ConsoleMessage, type Request, type Response } from "@playwright/test";
+import { expect, test, type ConsoleMessage, type Page, type Request, type Response } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
 import { addCar, cleanupE2eUsers, enableSellerPayouts, makeUser, publishListing, signIn, signUp } from "./helpers";
@@ -57,6 +57,12 @@ function sanitizedRequestUrl(raw: string): string {
   } catch {
     return "[invalid-url]";
   }
+}
+
+/** A real suggestion — not the list's trailing "Search for “…”" row
+ *  (.combo__all), which echoes whatever was typed. */
+function suggestion(page: Page, name: string) {
+  return page.getByRole("option", { name: new RegExp(name, "i") }).and(page.locator(":not(.combo__all)"));
 }
 
 test("seeds a user with a public build, a private build and a listing", async ({ page }, testInfo) => {
@@ -232,7 +238,7 @@ test("a signed-out visitor finds parts in the segment, in search and in suggesti
   await input.click();
   await input.fill(partTitle);
   await expect(page.getByRole("listbox")).toBeVisible();
-  await expect(page.getByRole("option", { name: new RegExp(partTitle, "i") })).toBeVisible();
+  await expect(suggestion(page, partTitle)).toBeVisible();
 });
 
 test("scope transitions shed incompatible filters and keep compatible ones", async ({ page }) => {
@@ -260,7 +266,7 @@ test("autocomplete suggests, supports the keyboard, and excludes private builds"
 
   const listbox = page.getByRole("listbox");
   await expect(listbox).toBeVisible();
-  const option = page.getByRole("option", { name: new RegExp(publicCar, "i") });
+  const option = suggestion(page, publicCar);
   await expect(option).toBeVisible();
 
   // Escape closes the popover but keeps the text.
@@ -284,7 +290,7 @@ test("autocomplete suggests, supports the keyboard, and excludes private builds"
   });
   await input.fill(privateQuery);
   expect((await privateSuggestions).ok()).toBe(true);
-  await expect(page.getByRole("option", { name: new RegExp(privateCar, "i") })).toHaveCount(0);
+  await expect(suggestion(page, privateCar)).toHaveCount(0);
 });
 
 test("plain Enter submits the query as a URL search", async ({ page }) => {

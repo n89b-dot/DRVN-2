@@ -59,11 +59,14 @@ test("activity restores a browser draft and a lost publish response cannot dupli
     await page.reload();
     await expect(page.getByLabel(/^title$/i)).toHaveValue(titleText);
     await expect(page.getByLabel("Update body")).toContainText(bodyText);
-    await expect(page.getByText("Saved — only you can see it")).toBeVisible();
+    // Without a photo the status line leads with what publishing still needs
+    // (composer.tsx shows the publish reason ahead of the save state).
+    await expect(page.locator("#composer-status")).toHaveText("Add a photo to publish");
 
-    // W-2: a new publish needs a photo. Added after the recovery assertions
-    // so the interrupted publish below is the only thing under test.
+    // W-2: a new publish needs a photo. Once it's on, the status line can
+    // report the autosave — the restored draft reached the server.
     await addComposerPhoto(page);
+    await expect(page.getByText("Saved — only you can see it")).toBeVisible();
 
     let interrupted = false;
     await page.route(`**${editorPath}*`, async (route) => {

@@ -1275,6 +1275,12 @@ a.cartbtn:hover {
     min-height: 44px;
     flex: 1 1 100%;
   }
+  /* Quiet in voice, not in reach: the links keep a full 44px tap height. */
+  .gsheet__rail .jumplink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
   /* The digest wraps rather than truncating mid-word: it is only there to
      be read at a glance, and the toggle drops to its own line under it. */
   .gsheet__toggle {
@@ -1872,9 +1878,10 @@ a.cartbtn:hover {
   }
   /* A chip's count is a quiet number after the label. Unstyled outside the
      tab strip it fused into the word ("M4 COMPETITION2"). */
+  /* No opacity: at 0.6 the --dim count read 2.58:1 on paper (WCAG needs
+     4.5:1); it stays quiet by taking the chip's own --dim colour. */
   .fbtn .n {
     font-variant-numeric: tabular-nums;
-    opacity: 0.6;
   }
   /* A chip row that IS navigation shouldn't become a four-row wall on a
      phone — it scrolls sideways instead, which keeps the results above the

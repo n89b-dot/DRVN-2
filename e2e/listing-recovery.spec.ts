@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { attachSellPhoto } from "./helpers";
 
 test("listing create, publish and delete retries converge after committed responses are lost", async ({ page }) => {
   test.skip(
@@ -53,6 +54,9 @@ test("listing create, publish and delete retries converge after committed respon
     await page.getByLabel("Title").fill(title);
     await page.getByLabel("Category", { exact: true }).selectOption("performance");
     await page.getByLabel("Asking price").fill("125.00");
+    // Publishing the draft later needs a photo (setListingStatus applies
+    // createListing's rule). Uploaded before the response-loss route below.
+    await attachSellPhoto(page);
 
     let loseCreate = true;
     await page.route("**/sell*", async (route) => {
@@ -91,7 +95,16 @@ test("listing create, publish and delete retries converge after committed respon
     expect(created.data[0].status).toBe("draft");
 
     await page.goto("/listings");
-    let row = page.locator("tr.ledger__row").filter({ hasText: title });
+    // Lifecycle actions live in the listing's disclosed detail row
+    // (tr.ledger__detail#offers-<id>), not the summary row. Opening is
+    // idempotent, so it also re-resolves the row after a refresh.
+    const detail = page.locator(`#offers-${created.data[0].id}`);
+    const openDetail = async () => {
+      const toggle = page.locator("tr.ledger__row").filter({ hasText: title }).locator(".ledger__toggle");
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+      await expect(detail).toBeVisible();
+    };
+    await openDetail();
     let loseStatus = true;
     await page.route("**/listings*", async (route) => {
       if (
@@ -105,34 +118,34 @@ test("listing create, publish and delete retries converge after committed respon
       }
       return route.continue();
     });
-    await row.getByRole("button", { name: /^\[?\s*Publish\s*\]?$/ }).click();
+    await detail.getByRole("button", { name: /^\[?\s*Publish\s*\]?$/ }).click();
     await expect.poll(async () => {
       const result = await admin.from("listings").select("status").eq("id", created.data[0].id).single();
       if (result.error) throw result.error;
       return result.data.status;
     }).toBe("active");
-    await expect(row.getByRole("button", { name: /^\[?\s*Publish\s*\]?$/ })).toBeEnabled();
-    await row.getByRole("button", { name: /^\[?\s*Publish\s*\]?$/ }).click();
-    row = page.locator("tr.ledger__row").filter({ hasText: title });
-    await expect(row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeVisible();
+    await expect(detail.getByRole("button", { name: /^\[?\s*Publish\s*\]?$/ })).toBeEnabled();
+    await detail.getByRole("button", { name: /^\[?\s*Publish\s*\]?$/ }).click();
+    await openDetail();
+    await expect(detail.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeVisible();
 
     // Pause and reactivation are desired-state writes. Losing each committed
     // response leaves the control retryable, and the replay converges.
     loseStatus = true;
-    await row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ }).click();
+    await detail.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ }).click();
     await expect.poll(async () => (await admin.from("listings").select("status").eq("id", created.data[0].id).single()).data?.status).toBe("paused");
-    await expect(row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeEnabled();
-    await row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ }).click();
-    row = page.locator("tr.ledger__row").filter({ hasText: title });
-    await expect(row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ })).toBeVisible();
+    await expect(detail.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeEnabled();
+    await detail.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ }).click();
+    await openDetail();
+    await expect(detail.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ })).toBeVisible();
 
     loseStatus = true;
-    await row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ }).click();
+    await detail.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ }).click();
     await expect.poll(async () => (await admin.from("listings").select("status").eq("id", created.data[0].id).single()).data?.status).toBe("active");
-    await expect(row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ })).toBeEnabled();
-    await row.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ }).click();
-    row = page.locator("tr.ledger__row").filter({ hasText: title });
-    await expect(row.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeVisible();
+    await expect(detail.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ })).toBeEnabled();
+    await detail.getByRole("button", { name: /^\[?\s*Relist\s*\]?$/ }).click();
+    await openDetail();
+    await expect(detail.getByRole("button", { name: /^\[?\s*Pause\s*\]?$/ })).toBeVisible();
 
     let loseDelete = true;
     await page.route("**/listings*", async (route) => {
@@ -150,7 +163,7 @@ test("listing create, publish and delete retries converge after committed respon
       }
       return route.continue();
     });
-    await row.getByRole("button", { name: /^\[?\s*Delete\s*\]?$/ }).click();
+    await detail.getByRole("button", { name: /^\[?\s*Delete\s*\]?$/ }).click();
     const dialog = page.getByRole("dialog", { name: "Delete this listing?" });
     await dialog.getByRole("button", { name: "Delete permanently" }).click();
     await expect.poll(async () => {

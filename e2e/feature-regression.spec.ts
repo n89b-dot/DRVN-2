@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
 import {
   cleanupE2eUsers,
   enableSellerPayouts,
@@ -83,10 +84,46 @@ test.describe.serial("feature regressions", () => {
   });
 
   test("messages inbox filters by side of the deal", async ({ page }) => {
-    await signIn(page, seller);
-    await page.goto("/messages");
-    await expect(page.getByRole("link", { name: /^selling/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^buying/i })).toBeVisible();
+    // A brand-new inbox shows only its empty state (inbox-pane.tsx), so the
+    // seller needs a conversation first: a buyer makes an offer with a note.
+    // Threads hang off an order or offer (message_attach_conversation), and
+    // the offer is also what puts this person under Selling.
+    const admin = fixtureAdmin();
+    const buyer = await admin.auth.admin.createUser({
+      email: `e2e-fr-buyer-${stamp}@drvn.test`,
+      email_confirm: true,
+    });
+    if (buyer.error) throw buyer.error;
+    try {
+      const listing = await admin.from("listings").select("id,seller_id").eq("title", pnTitle).single().throwOnError();
+      const question = `Still have the downpipe? ${stamp}`;
+      const offer = await admin.from("offers").insert({
+        listing_id: listing.data.id,
+        buyer_id: buyer.data.user.id,
+        amount_cents: 15000,
+        status: "open",
+      }).select("id").single().throwOnError();
+      await admin.from("messages").insert({
+        listing_id: listing.data.id,
+        offer_id: offer.data.id,
+        sender_id: buyer.data.user.id,
+        recipient_id: listing.data.seller_id,
+        body: question,
+      }).throwOnError();
+
+      await signIn(page, seller);
+      await page.goto("/messages");
+      // Scoped to the page body: the rail also has a "Selling" link.
+      const main = page.getByRole("main");
+      await main.getByRole("link", { name: /^selling/i }).click();
+      await expect(page).toHaveURL(/filter=selling/);
+      await expect(main.getByText(question)).toBeVisible();
+      await main.getByRole("link", { name: /^buying/i }).click();
+      await expect(page).toHaveURL(/filter=buying/);
+      await expect(main.getByText(question)).toHaveCount(0);
+    } finally {
+      await cleanupFixtureUser(buyer.data.user.id);
+    }
   });
 
   test("home greets by time of day", async ({ page }) => {

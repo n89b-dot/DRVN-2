@@ -124,11 +124,13 @@ test("a leaf search saves all criteria, reopens from page one, and leaves alerts
   await expect(page.getByRole("heading", { name: "1 part found" })).toBeVisible();
   await page.getByRole("button", { name: "Save search", exact: true }).click();
   await expect(page.getByText(/Saved — find it under Saved/)).toBeVisible();
-  const saved = await admin.from("saved_searches").select("params,alert").eq("user_id", buyer).single().throwOnError();
+  const saved = await admin.from("saved_searches").select("name,params,alert").eq("user_id", buyer).single().throwOnError();
   expect(saved.data.alert).toBe(false); expect(saved.data.params._version).toBe("2");
   expect(saved.data.params.vyear).toBe("2018"); expect(saved.data.params.sort).toBe("price_desc");
   await page.goto("/saved");
-  await page.getByRole("link", { name: `“${prefix}”`, exact: true }).click();
+  // The list shows the persisted name (vehicle · “query” · subcategory).
+  expect(saved.data.name).toContain(`“${prefix}”`);
+  await page.getByRole("link", { name: saved.data.name, exact: true }).click();
   await expect(page).toHaveURL(/\/marketplace\/performance\/turbo\?/);
   const restored = new URL(page.url());
   expect(restored.pathname).toBe("/marketplace/performance/turbo");
@@ -208,7 +210,7 @@ for (const scheme of ["light", "dark"] as const) {
 test("guest Save search resumes the complete search after authentication", async ({ page }) => {
   await page.goto(`/marketplace/performance/intake?q=${encodeURIComponent(prefix)}&max=300&sort=price_asc`);
   await page.getByRole("button", { name: "Save search", exact: true }).click();
-  await page.getByRole("dialog", { name: "Sign in to save this search", exact: true }).getByRole("link", { name: "Sign in", exact: true }).click();
+  await page.getByRole("dialog", { name: "Sign in to save this search", exact: true }).getByRole("link", { name: /^\[?\s*Sign in\s*\]?$/ }).click();
   await page.getByLabel(/email/i).fill(email); await page.getByLabel(/^password$/i).fill(password);
   await page.getByRole("button", { name: /log in|sign in/i }).click();
   await expect(page).toHaveURL(/\/marketplace\/performance\/intake\?/);

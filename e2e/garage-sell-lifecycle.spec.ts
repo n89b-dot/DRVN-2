@@ -6,6 +6,7 @@ import {
   cleanupE2eUsers,
   enableSellerPayouts,
   makeUser,
+  sellCommitButton,
   signUp,
 } from "./helpers";
 
@@ -133,7 +134,7 @@ test("sell publish: respects the configured payment mode and payout readiness", 
 
   if (process.env.PAYMENTS_MODE === "stub") {
     // Stub checkout intentionally does not require a real Connect account.
-    await expect(page.getByRole("button", { name: /publish to market/i })).not.toHaveAttribute("aria-disabled", "true");
+    await expect(sellCommitButton(page)).not.toHaveAttribute("aria-disabled", "true");
     await expect(page.locator("#publish-checklist")).not.toContainText(/payouts aren't set up/i);
     return;
   }
@@ -142,7 +143,7 @@ test("sell publish: respects the configured payment mode and payout readiness", 
   // focusable, described by the checklist — not vanished from the tab order.
   const checklist = page.locator("#publish-checklist");
   await expect(checklist).toContainText(/payouts aren't set up/i);
-  const publish = page.getByRole("button", { name: /publish to market/i });
+  const publish = sellCommitButton(page);
   await expect(publish).toHaveAttribute("aria-disabled", "true");
   await expect(publish).toHaveAttribute("aria-describedby", "publish-checklist");
   await publish.focus();
@@ -156,9 +157,28 @@ test("sell publish: respects the configured payment mode and payout readiness", 
   // Flip payouts (what Connect onboarding earns) and the gate lifts.
   await enableSellerPayouts(seller.username);
   await page.reload();
-  await expect(page.getByRole("button", { name: /publish to market/i })).not.toHaveAttribute(
+  await expect(sellCommitButton(page)).not.toHaveAttribute(
     "aria-disabled",
     "true"
   );
   await expect(page.locator("#publish-checklist")).not.toContainText(/payouts aren't set up/i);
+});
+
+test("sell: a listing without a photo can't publish, but saves as a draft", async ({ page }) => {
+  await enableSellerPayouts(seller.username);
+  await signInFresh(page);
+  await page.goto("/sell");
+  await page.getByLabel(/title/i).fill(`E2E photo-less part ${stamp}`);
+  await page.getByLabel(/^category/i).selectOption({ index: 1 });
+  await page.getByLabel(/asking price/i).fill("90");
+  await page.locator('input[name="shipping"]').fill("10");
+
+  // M-5/W-2: a public listing leads with its photo — publishing is refused.
+  await sellCommitButton(page).click();
+  await expect(page).toHaveURL(/\/sell(\?|$)/);
+  await expect(page.getByText(/add at least one photo/i).first()).toBeVisible();
+
+  // Drafts are where the photos get added, so a draft saves without one.
+  await page.locator(".saverow").getByRole("button", { name: /save draft/i }).click();
+  await expect(page).toHaveURL(/\/listings\/[\w-]+\/edit\?saved=draft/);
 });

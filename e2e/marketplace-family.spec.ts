@@ -92,6 +92,9 @@ test.describe.serial("Marketplace family", () => {
   test("signed in: every Selling child is one interaction away, from anywhere in the family", async ({
     page,
   }) => {
+    // The Selling plate is the family nav below 1081px; at desktop widths the
+    // rail carries the same links and the plate stands down (selling-nav.tsx).
+    await page.setViewportSize({ width: 768, height: 1024 });
     await signIn(page, seller);
 
     // Marketplace is discovery — it carries no operational family strip.
@@ -151,6 +154,8 @@ test.describe.serial("Marketplace family", () => {
   test("signed in: a public listing sheet reads as Marketplace, the seller's register as My Listings", async ({
     page,
   }) => {
+    // The Selling plate is the family nav below 1081px (selling-nav.tsx).
+    await page.setViewportSize({ width: 768, height: 1024 });
     await signIn(page, seller);
 
     await page.goto("/listings");
@@ -214,7 +219,7 @@ test.describe.serial("Marketplace family", () => {
 
     await page.goto(listingPath);
     await page.getByRole("button", { name: "Make an offer" }).first().click();
-    await page.getByRole("dialog", { name: "Sign in to make an offer" }).getByRole("link", { name: "Sign in", exact: true }).click();
+    await page.getByRole("dialog", { name: "Sign in to make an offer" }).getByRole("link", { name: /^\[?\s*Sign in\s*\]?$/ }).click();
 
     await expect(page).toHaveURL(/\/login\?next=/);
     await page.getByLabel(/email/i).fill(buyer.email);
@@ -285,6 +290,8 @@ test.describe.serial("Marketplace family", () => {
   // ---------- Orders no longer carries Offers' furniture ----------
 
   test("Orders drops the offers promo card and the offer-expiry footer", async ({ page }) => {
+    // The Selling plate is the family nav below 1081px (selling-nav.tsx).
+    await page.setViewportSize({ width: 768, height: 1024 });
     await signIn(page, buyer);
     await page.goto("/orders");
 

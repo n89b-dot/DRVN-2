@@ -65,7 +65,8 @@ test("admin user, report and case commands recover, persist and enforce permissi
     await expect(secret).toBeVisible();
     await page.getByLabel("Authenticator code").fill(totp((await secret.textContent())!));
     await page.getByRole("button", { name: /verify/i }).click();
-    await expect(page).toHaveURL(/\/admin$/);
+    // MFA returns to the page that asked for it (admin-verify keeps `next`).
+    await expect(page).toHaveURL(new RegExp(`/admin/users/${targetId}$`));
 
     await page.goto(`/admin/listings?q=${encodeURIComponent(listingTitle)}`);
     const listingRow = page.getByRole("row").filter({ hasText: listingTitle });

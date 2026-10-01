@@ -78,7 +78,7 @@ test("journey 1 — replacing a part keeps the old record, and listing it keeps 
 
   const editor = page.locator("section").filter({ hasText: "The build — seed the lines" });
   await editor.getByRole("button", { name: "+ Add a line manually" }).click();
-  const rows = editor.locator(".modrow:not(.modrow--off)");
+  const rows = editor.locator(".modrow:not(.modrow--cols):not(.modrow--off)");
   await rows.nth(0).getByLabel("Brand").fill("KW");
   await rows.nth(0).getByLabel("Product").fill("V3 coilovers");
   await editor.getByRole("button", { name: "Save the build" }).click();
@@ -86,8 +86,8 @@ test("journey 1 — replacing a part keeps the old record, and listing it keeps 
 
   // Replace: the old line is marked off and a new one takes its position.
   await page.reload();
-  await editor.locator(".modrow:not(.modrow--off)").first().getByRole("button", { name: "Replace" }).click();
-  const fresh = editor.locator(".modrow:not(.modrow--off)").first();
+  await editor.locator(".modrow:not(.modrow--cols):not(.modrow--off)").first().getByRole("button", { name: "Replace" }).click();
+  const fresh = editor.locator(".modrow:not(.modrow--cols):not(.modrow--off)").first();
   await fresh.getByLabel("Brand").fill("Öhlins");
   await fresh.getByLabel("Product").fill("Road & Track");
   await editor.getByRole("button", { name: "Save the build" }).click();
@@ -98,7 +98,7 @@ test("journey 1 — replacing a part keeps the old record, and listing it keeps 
   // The old part is a record now — read-only text under "Came off this car".
   await expect(editor.locator(".modrow--off")).toContainText("KW V3 coilovers");
   // The new one is a live row in its position, so it is an input value.
-  const replacement = editor.locator(".modrow:not(.modrow--off)").first();
+  const replacement = editor.locator(".modrow:not(.modrow--cols):not(.modrow--off)").first();
   await expect(replacement.getByLabel("Brand")).toHaveValue("Öhlins");
   await expect(replacement.getByLabel("Product")).toHaveValue("Road & Track");
 
@@ -346,7 +346,19 @@ test("journey 5 — a quick post leaves a half-written update exactly where it w
   await page.getByLabel(/title/i).first().fill(draftTitle);
   await page.locator(".ProseMirror").first().click();
   await page.keyboard.type(draftText);
-  await expect(page.getByText(/saved — only you can see it/i)).toBeVisible({ timeout: 20_000 });
+  // Without a photo the status line names what publishing still needs, ahead
+  // of the save state (composer.tsx) — so confirm the autosave landed on the
+  // server: an unpublished post with this title.
+  await expect(page.locator("#composer-status")).toHaveText("Add a photo to publish");
+  await expect.poll(async () => {
+    const draft = await fixtureAdmin()
+      .from("activity_posts")
+      .select("id")
+      .eq("title", draftTitle)
+      .is("published_at", null);
+    if (draft.error) throw draft.error;
+    return draft.data.length;
+  }, { timeout: 20_000 }).toBe(1);
 
   // A quick post about something else entirely.
   await page.goto("/home");
@@ -469,6 +481,10 @@ test("journey 6 — a delivered order becomes a line on the build sheet, once", 
   expect(item.error).toBeNull();
 
   await buyerPage.goto(`/orders/${order.data!.id}`);
+  // A second tab, opened before the add, still offers the button — the only
+  // way left to send a repeat once the order row names the car (2300a10).
+  const staleTab = await buyerPage.context().newPage();
+  await staleTab.goto(`/orders/${order.data!.id}`);
   // One car in the garage, so there is nothing to choose: the button names
   // the car and adds it. (With several cars it opens a picker instead.)
   const add = buyerPage.getByRole("button", { name: "Add to Journey Six Buyer Car" }).first();
@@ -480,13 +496,18 @@ test("journey 6 — a delivered order becomes a line on the build sheet, once", 
 
   // A second tap adds nothing — idempotent through source_order_item_id —
   // and says so, rather than erroring or pretending it was added again.
-  await buyerPage.reload();
-  const again = buyerPage.getByRole("button", { name: "Add to Journey Six Buyer Car" }).first();
+  const again = staleTab.getByRole("button", { name: "Add to Journey Six Buyer Car" }).first();
   await expect(again).toBeVisible({ timeout: 30_000 });
   await again.click();
-  await expect(buyerPage.getByRole("status").filter({ hasText: /already on this car/i })).toBeVisible({
+  await expect(staleTab.getByRole("status").filter({ hasText: /already on this car/i })).toBeVisible({
     timeout: 30_000,
   });
+  await staleTab.close();
+
+  // Fresh, the order row names the car instead of offering the button again.
+  await buyerPage.reload();
+  await expect(buyerPage.getByRole("link", { name: /On Journey Six Buyer Car/ })).toBeVisible();
+  await expect(buyerPage.getByRole("button", { name: "Add to Journey Six Buyer Car" })).toHaveCount(0);
 
   const { data: buyerCar } = await admin
     .from("cars")

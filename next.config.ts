@@ -49,13 +49,11 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 2560],
   },
 
-  experimental: {
-    // Revisiting a page by link within 30 s reuses the client's copy instead
-    // of re-rendering it on the server. Server actions that revalidate still
-    // clear it, so edits show straight away; passive data (badge counts, feed
-    // order) can be up to 30 s old on a quick return.
-    staleTimes: { dynamic: 30 },
-  },
+  // No `experimental.staleTimes.dynamic` (added in a164315, removed 1 Oct):
+  // with a 30 s client copy, a prefetched page could be served stale after a
+  // server action + router.refresh() — creating a beta invitation left it
+  // out of "Recent invitations" until a manual reload (e2e/beta-invitations).
+  // Bring back client reuse only with a fix that keeps action results fresh.
 
   async headers() {
     return [

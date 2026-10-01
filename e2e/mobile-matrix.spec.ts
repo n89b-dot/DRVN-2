@@ -104,7 +104,7 @@ for (const tier of PHONE_TIERS) {
       await refine.click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
-      await dialog.getByLabel(/location/i).fill("Portland");
+      await dialog.getByLabel("Ships from").fill("Portland");
       await page.keyboard.press("Escape");
       await expect(refine).toBeFocused();
       // Closing without Apply is Cancel, and Cancel discards the draft
@@ -112,7 +112,7 @@ for (const tier of PHONE_TIERS) {
       // the next search). Applied values are what survive — see
       // marketplace-browsing's "Cancel discards draft filters".
       await refine.click();
-      await expect(dialog.getByLabel(/location/i)).toHaveValue("");
+      await expect(dialog.getByLabel("Ships from")).toHaveValue("");
       await page.keyboard.press("Escape");
       await expect(refine).toBeFocused();
     });
@@ -155,7 +155,11 @@ for (const tier of PHONE_TIERS) {
       expect(order).not.toBeNull();
       expect(order!.buyHeight!).toBeGreaterThanOrEqual(44);
       expect(order!.price!).toBeLessThan(order!.buy!);
-      expect(order!.buy!).toBeLessThan(order!.watching!);
+      // "Watching" is omitted at zero for non-owners (and a guest can't read
+      // watch counts at all — saves RLS), so it is ordered only when drawn.
+      // The dispatch note is always part of the record.
+      if (order!.watching !== null) expect(order!.buy!).toBeLessThan(order!.watching);
+      expect(order!.dispatch, "the dispatch note must render").not.toBeNull();
       expect(order!.buy!).toBeLessThan(order!.dispatch!);
 
       // The sticky buybar takes over once the in-rail actions scroll out of
@@ -270,7 +274,8 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
   // viewport. The sheet anatomy itself is covered in mobile-layout.spec.
   test("garage: first sheet's management rail inside the first viewport", async ({ page }) => {
     await signIn(page, seller);
-    await page.goto("/garage");
+    // /garage opens on the main car; the sheet list is ?car=all.
+    await page.goto("/garage?car=all");
     const sheets = page.locator(".gsheet");
     await expect(sheets).toHaveCount(3);
 
@@ -322,11 +327,14 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     await expect(page).toHaveURL(/\/offers\/[\w-]+/);
     const accept = page.getByRole("button", { name: /accept \$/i }).first();
     await expect(accept).toBeVisible();
-    const composerInput = page.getByPlaceholder(/message/i).first();
+    // The conversation lives in Messages now (one thread per person,
+    // 33dd259); the offer page links to it below the decision.
+    const conversation = page.getByRole("link", { name: /open the conversation|^message .+→/i }).first();
+    await expect(conversation).toBeVisible();
     const acceptBox = await accept.boundingBox();
-    const composerBox = await composerInput.boundingBox();
-    expect(acceptBox!.y, "decision actions must precede the composer").toBeLessThan(
-      composerBox!.y
+    const conversationBox = await conversation.boundingBox();
+    expect(acceptBox!.y, "decision actions must precede the conversation").toBeLessThan(
+      conversationBox!.y
     );
     await assertNoHorizontalOverflow(page);
   });
@@ -338,7 +346,8 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     await signIn(page, buyer);
     await page.goto(listingA);
     await page.getByRole("button", { name: /add to cart/i }).click();
-    await expect(page.getByText(/added to cart/i).first()).toBeVisible();
+    // No toast since 3daf293: the button turns into the cart link.
+    await expect(page.getByRole("link", { name: /in cart.*view cart/i })).toBeVisible();
     await page.goto("/cart");
     await page.getByRole("link", { name: /proceed to checkout/i }).first().click();
     await expect(page).toHaveURL(/\/checkout/);
@@ -411,8 +420,11 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
   test("seller can fully delete a listing from the ledger", async ({ page }) => {
     await signIn(page, seller);
     await page.goto("/listings");
-    const row = page.locator("tr", { hasText: partB }).first();
-    await row.getByRole("button", { name: /delete/i }).click();
+    // Lifecycle actions live in the listing's disclosed detail row.
+    const toggle = page.locator("tr.ledger__row", { hasText: partB }).first().locator(".ledger__toggle");
+    await toggle.click();
+    const detail = page.locator(`#${await toggle.getAttribute("aria-controls")}`);
+    await detail.getByRole("button", { name: /delete/i }).click();
 
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: /delete permanently/i }).click();
