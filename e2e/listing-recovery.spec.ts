@@ -63,7 +63,8 @@ test("listing create, publish and delete retries converge after committed respon
       ) {
         loseCreate = false;
         const response = await route.fetch();
-        expect(response.status()).toBe(303);
+        // Next 16.3 answers a fetch-action redirect 200 + x-action-redirect (16.2 sent 303).
+        expect([200, 303]).toContain(response.status());
         expect(response.headers()["x-action-redirect"]).toContain("/listings/");
         return route.abort("failed");
       }
@@ -142,7 +143,8 @@ test("listing create, publish and delete retries converge after committed respon
       ) {
         loseDelete = false;
         const response = await route.fetch();
-        expect(response.status()).toBe(303);
+        // Next 16.3 answers a fetch-action redirect 200 + x-action-redirect (16.2 sent 303).
+        expect([200, 303]).toContain(response.status());
         expect(response.headers()["x-action-redirect"]).toContain("/listings?deleted=1");
         return route.abort("failed");
       }

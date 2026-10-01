@@ -142,7 +142,8 @@ test.describe.serial("golden path", () => {
       if (!interruptedCheckout && route.request().method() === "POST" && route.request().headers()["next-action"]) {
         interruptedCheckout = true;
         const response = await route.fetch();
-        expect(response.status()).toBe(303);
+        // Next 16.3 answers a fetch-action redirect 200 + x-action-redirect (16.2 sent 303).
+        expect([200, 303]).toContain(response.status());
         expect(response.headers()["x-action-redirect"]).toContain("/orders/");
         await route.abort("failed");
       } else await route.continue();
@@ -190,7 +191,8 @@ test.describe.serial("golden path", () => {
       if (!interruptedDispatch && route.request().method() === "POST" && route.request().headers()["next-action"]) {
         interruptedDispatch = true;
         const response = await route.fetch();
-        expect(response.status()).toBe(303);
+        // Next 16.3 answers a fetch-action redirect 200 + x-action-redirect (16.2 sent 303).
+        expect([200, 303]).toContain(response.status());
         expect(response.headers()["x-action-redirect"]).toContain("/orders/");
         await route.abort("failed");
       } else await route.continue();
