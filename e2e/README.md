@@ -63,12 +63,16 @@ Playwright starts the dev server itself. Each run creates two throwaway accounts
 (a buyer and a seller) with timestamped addresses and deletes them afterwards, so
 runs don't collide.
 
-## Why this isn't in CI yet
+## In CI
 
-CI has no Supabase project to point at. Wiring it up means either a dedicated
-test project with a reset step between runs, or `supabase start` in the workflow
-plus applying the migrations. Worth doing — deliberately deferred rather than
-faked with mocks, which would test nothing about RLS or the RPCs.
+The `e2e` job runs the whole suite on every push and pull request against its
+own `supabase start` stack (Auth, Storage, Mailpit and Realtime; migrations
+applied by `scripts/prepare-ci-supabase.mjs`), first attempt only. The
+`release-gate` job fails unless it ran and passed, with zero unexpected or
+flaky results and only the named exclusions. Live message delivery is proven
+by `realtime-delivery.spec.ts`, which waits less than the 20-second fallback
+refresh so polling can't pass it. (Until 1 October 2026 this section said E2E
+wasn't in CI; it has been since September.)
 
 ## Additions (Aug 2026)
 

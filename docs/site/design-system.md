@@ -125,9 +125,12 @@ stagger via its `stagger` prop, still emitting `is-in` for the CSS draw
 cascade), `LiveDim` (the signature measured value — `live` red + pulsing
 dot, `blank` dashed spine) and `Countdown` (server-authoritative H:MM:SS
 from `expiresAt`). The real hooks live in `src/lib/hooks/`:
-`useFinePointer`, `useReducedMotion`, `useKonamiCode`. Live-updating counts
-over Supabase Realtime are **planned**, not built — no Realtime subscription
-exists in the codebase today.
+`useFinePointer`, `useReducedMotion`, `useKonamiCode`. Supabase Realtime is
+used in one place: `src/features/commerce/live-messages.tsx` subscribes to
+`messages` (an open conversation) and `conversation_unreads` (the Messages
+badge) and calls `router.refresh()` — the server render stays the source of
+truth. It hands Realtime the member's session before subscribing; without
+that the join is anonymous and RLS delivers nothing.
 
 `prefers-reduced-motion`: Motion-driven transforms are disabled globally by
 `MotionPolicy` (opacity still communicates state); reveals/draws render

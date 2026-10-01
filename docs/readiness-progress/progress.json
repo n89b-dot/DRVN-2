@@ -5,7 +5,7 @@
   "baselineCommit": "d6f3be6",
   "headline": "Making DRVN ready for real people.",
   "summary": "Follow the work from safer payments to a carefully observed invited beta. Every bar is backed by named checkpoints.",
-  "current": "The remaining local remediation is implemented and verified: 27 expanded browser cases, 645 unit tests, restore, rollback and concurrent-checkout rehearsals pass. PR #2 checks record candidate-wide CI results. Remaining launch work requires hosted services, provider access, policy decisions or human acceptance.",
+  "current": "Snapshot from 6 September 2026 (baseline d6f3be6), kept as history. It is not evidence for a later commit. The 1 October 2026 release-readiness review (candidate 4e01df5) is the current assessment; its fixes and the remaining hosted/owner gates are tracked in docs/plans/2026-10-release-unblock-plan.md and the release-readiness fix tracker. Release approval needs the 15 candidate-bound gates in scripts/release-candidate.mjs.",
   "designSource": {
     "name": "Distill / YT-Digest-2",
     "commit": "37feb29a22a62f2b5abe4f39af7b547b4b2bd219",
@@ -608,6 +608,11 @@
     }
   ],
   "activity": [
+    {
+      "at": "2026-10-01T23:00:00+00:00",
+      "title": "Marked as a historical snapshot",
+      "detail": "The 1 October release-readiness review found this tracker still described 6 September counts and blockers. Checkpoint states are left as they were recorded; the current assessment and evidence live with the October review."
+    },
     {
       "at": "2026-09-06T04:52:33.726237+00:00",
       "title": "Full-suite invitation refresh issue corrected",

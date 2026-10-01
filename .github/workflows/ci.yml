@@ -31,6 +31,12 @@ jobs:
 
       - run: npm ci
 
+      # RR-23: a production dependency with a known high or critical advisory
+      # fails the build. Dev-only tooling is reviewed separately so a test
+      # runner advisory can't block a release it never ships in.
+      - name: Production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -52,6 +58,20 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
           SUPABASE_SECRET_KEY: sb_secret_placeholder
           NEXT_PUBLIC_SITE_URL: https://example.com
+
+  # RR-23: no credential in the code or its history. Scans every commit, so
+  # a key that was committed and later deleted still fails the build until
+  # it is rotated and allowlisted with a reason.
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # The commerce guarantees live in Postgres (conditional UPDATEs, terminal-
   # state guards, dispute constraints, notification triggers) — Node tests
@@ -134,10 +154,13 @@ jobs:
           node-version: 22.22.0
           cache: npm
       - run: npm ci
+      # RR-16: Realtime runs here, so live message and badge delivery is
+      # tested by subscription (e2e/realtime-delivery.spec.ts), not by the
+      # fallback refresh.
       - name: Start isolated Supabase with captured email
         run: |
           for attempt in 1 2 3; do
-            if npx --yes supabase@2.116.0 start -x logflare,vector,studio,realtime,edge-runtime,imgproxy; then
+            if npx --yes supabase@2.116.0 start -x logflare,vector,studio,edge-runtime,imgproxy; then
               exit 0
             fi
             npx --yes supabase@2.116.0 stop --no-backup || true
@@ -256,11 +279,12 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, sql-guard, e2e, stripe-integration]
+    needs: [verify, secrets, sql-guard, e2e, stripe-integration]
     steps:
       - name: Require executed verification
         env:
           VERIFY: ${{ needs.verify.result }}
+          SECRETS: ${{ needs.secrets.result }}
           SQL: ${{ needs.sql-guard.result }}
           E2E: ${{ needs.e2e.result }}
           STRIPE: ${{ needs.stripe-integration.result }}
@@ -268,6 +292,7 @@ jobs:
           STRIPE_RAN: ${{ needs.stripe-integration.outputs.ran }}
         run: |
           test "$VERIFY" = success
+          test "$SECRETS" = success
           test "$SQL" = success
           test "$E2E" = success && test "$E2E_RAN" = true
           test "$STRIPE" = success && test "$STRIPE_RAN" = true
@@ -277,7 +302,7 @@ jobs:
   summary:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, sql-guard, e2e, stripe-integration]
+    needs: [verify, secrets, sql-guard, e2e, stripe-integration]
     if: always()
     steps:
       - name: Coverage summary
@@ -287,7 +312,8 @@ jobs:
             echo ""
             echo "| Suite | Result |"
             echo "|---|---|"
-            echo "| Typecheck / lint / unit / build | ${{ needs.verify.result }} |"
+            echo "| Typecheck / lint / unit / build / production advisories | ${{ needs.verify.result }} |"
+            echo "| Secret scan (full history) | ${{ needs.secrets.result }} |"
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
             echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"

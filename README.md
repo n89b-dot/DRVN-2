@@ -124,12 +124,17 @@ Public buckets for car/listing media; **`dispute-evidence` is private**
 |---|---|
 | `npm run typecheck` / `npm run lint` | Static checks |
 | `npm run test` | Vitest unit tests (fees, refund shares, payment modes, addresses, evidence URLs…) |
-| SQL guards | `supabase/tests/{purchase,admin,security,money}_guard.sql` — run in CI against a fresh schema; each prints an "all … checks passed" line and rolls back |
-| `npm run test:e2e` | Playwright golden path (needs a **non-production** Supabase project — see `e2e/README.md`) |
+| SQL guards | every `supabase/tests/*_guard.sql` (`bash scripts/test-sql-guards.sh` against a disposable database) — each prints an "all … checks passed" line and rolls back |
+| `npm run test:e2e` | The full Playwright suite against an isolated local Supabase stack — see `e2e/README.md` |
 
-CI (`.github/workflows/ci.yml`): typecheck, lint, unit, build, then the four
-SQL guards on `supabase/postgres`. Secret-backed suites (Stripe integration,
-full E2E) do not run in CI — treat a green build accordingly.
+CI (`.github/workflows/ci.yml`), as of 1 October 2026: `verify` (production
+dependency advisories, typecheck, lint, unit, monitor contract, build),
+`secrets` (gitleaks over the full history), `sql-guard` (every guard file,
+then generated-schema parity), `e2e` (the full browser suite on a local
+`supabase start` stack with Realtime) and `stripe-integration` (test mode).
+`release-gate` fails unless all of them ran and passed; nothing self-skips.
+A green release gate is CI evidence for one commit — the hosted gates in
+`scripts/release-candidate.mjs` still need their own evidence.
 
 ## Admin access
 
@@ -148,7 +153,9 @@ workstream status: `docs/remediation-status.md`.
 
 ## Known limitations
 
-- Stripe integration tests require test-mode secrets and are not in CI.
+- Stripe integration runs in CI with a test-mode key (`STRIPE_TEST_SECRET_KEY`);
+  hosted 3D Secure, Connect payouts and provider disputes are not yet proven
+  in a browser.
 - Admin `viewer` read-only enforcement is app-layer (admin actions use the
   service role, which RLS cannot distinguish) — documented, regression-tested
   at the TypeScript gate.

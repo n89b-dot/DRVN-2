@@ -256,12 +256,15 @@ gh api -X POST repos/n89b-dot/DRVN-2/rulesets --input - <<'JSON'
      "require_last_push_approval":false,"required_review_thread_resolution":false}},
    {"type":"required_status_checks","parameters":{
      "strict_required_status_checks_policy":false,
-     "required_status_checks":[{"context":"verify"},{"context":"sql-guard"}]}}]}
+     "required_status_checks":[{"context":"release-gate"}]}}]}
 JSON
 ```
 
-The `e2e` job stays unrequired — it self-skips without secrets and must not
-block merges. Revisit once E2E secrets are permanent.
+Require `release-gate` alone: it is the aggregate check, and it fails unless
+`verify`, `secrets`, `sql-guard`, `e2e` and `stripe-integration` all ran and
+passed (updated 1 October 2026 — e2e no longer self-skips; it runs on a local
+stack in CI). Enforce the same check at the deployment boundary too: a
+protected branch doesn't stop a deploy of an unchecked commit.
 
 ## 9. Saved-search alert worker
 

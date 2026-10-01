@@ -23,7 +23,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Surfaces:** `.github/workflows/ci.yml`, `GitHub repository settings`
 - **User benefit:** The safety machinery that already exists cannot be accidentally skipped, so a broken money path can't land on main unnoticed.
 - **Approach:** Attempted via `gh api`: both branch protection and rulesets return 403 on this private Free-plan repository. The exact ruleset (PRs required, `verify` + `sql-guard` required checks, no force push) is documented in the production runbook §8 for one-click application once available.
-- **Validation:** Configuration attempt executed and refused by GitHub (403 requires Pro/public); documentation shipped.
+- **Validation:** Configuration attempt executed and refused by GitHub (403 requires Pro/public); documentation shipped. Re-checked 1 Oct 2026: `main` still reports protected:false. The required check is now the aggregate `release-gate` job (it needs verify, secrets, sql-guard, e2e and stripe-integration to have run and passed), not verify + sql-guard alone.
 - **External step:** Upgrade the GitHub account to Pro (or make the repo public), then run the documented `gh api` ruleset call in production-runbook §8.
 - **Docs:** docs/production-runbook.md
 
@@ -36,7 +36,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** The paths that move real money are proven against real Stripe test infrastructure instead of being assumed correct.
 - **Approach:** Vitest integration suite driving the payment provider + webhook dispatcher against Stripe test keys; secrets documented; skipped coverage stated in the CI summary — never faked.
 - **Decisions:** Suite lives in tests/stripe (own vitest config) so `npm test` stays network-free; it throws on non-sk_test_ keys and self-skips loudly without one. Multi-seller settlement/transfers/disputes stay with the stub-mode golden path; the CI summary now names that gap on every build instead of the old blanket 'never runs' line.
-- **Validation:** 8/8 passing locally against the real Stripe test API (intents + metadata, confirm, decline, create/refund idempotency replay, over-refund refusal, refund metadata attribution). CI job `stripe-integration` gated on STRIPE_TEST_SECRET_KEY.
+- **Validation:** 8/8 passing locally against the real Stripe test API (intents + metadata, confirm, decline, create/refund idempotency replay, over-refund refusal, refund metadata attribution). CI job `stripe-integration` gated on STRIPE_TEST_SECRET_KEY. Superseded 1 Oct 2026: CI now runs every `supabase/tests/*_guard.sql` file (about 50), the full browser suite on a local `supabase start` stack (Realtime included), and `release-gate` fails unless e2e and stripe-integration actually ran — nothing self-skips.
 - **Docs:** tests/stripe/README.md
 
 #### Authorization boundaries & future roles groundwork — Validated
