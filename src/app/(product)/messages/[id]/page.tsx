@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
 import { DealCard } from "@/components/commerce";
@@ -11,6 +12,7 @@ import { markNotificationsReadForPage } from "@/lib/notifications-read";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadUnreadMessages } from "@/lib/shell-counts";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { validTimeZone, VIEWER_TZ_COOKIE } from "@/lib/viewer-timezone";
 
 import { InboxPane, inboxQuery, parseInboxParams } from "../inbox-pane";
 import { ThreadView } from "./thread-view";
@@ -179,6 +181,7 @@ export default async function ConversationPage({
             earliest={thread.earliest}
             viewingHistory={Boolean(raw.before)}
             basePath={`/messages/${target.conversationId ?? id}`}
+            initialTimeZone={validTimeZone((await cookies()).get(VIEWER_TZ_COOKIE)?.value) ?? "UTC"}
           />
         </section>
       </div>

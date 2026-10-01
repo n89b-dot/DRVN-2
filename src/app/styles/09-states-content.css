@@ -889,6 +889,20 @@
     background: var(--paper);
     border-top: 1px solid var(--rule-soft);
   }
+  /* Floats above the pinned composer (the sticky .chatbox is its containing
+     block), centred over the thread — the "N new messages" jump. */
+  .chatbox__float {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .chatbox__float > * {
+    pointer-events: auto;
+  }
   .chatbox__row {
     display: flex;
     align-items: flex-end;

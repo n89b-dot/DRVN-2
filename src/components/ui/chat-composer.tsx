@@ -29,6 +29,7 @@ export function ChatComposer({
   attachDisabled = false,
   above,
   below,
+  floating,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -47,6 +48,10 @@ export function ChatComposer({
   above?: ReactNode;
   /** Under the field — the send result. */
   below?: ReactNode;
+  /** Floats just above the pinned composer, clear of the field — a "new
+   *  messages" jump, say. Anything placed over the thread at the bottom of
+   *  the viewport would sit under the composer. */
+  floating?: ReactNode;
 }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const inputId = useId();
@@ -72,6 +77,7 @@ export function ChatComposer({
         if (canSend && !pending) onSend();
       }}
     >
+      {floating && <div className="chatbox__float">{floating}</div>}
       {above}
       <div className="chatbox__row">
         {onFiles && (

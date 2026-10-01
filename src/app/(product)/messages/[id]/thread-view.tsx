@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { MessageBubble, MessageRun, ThreadDivider, ThreadEvent } from "@/components/ui";
+import { Button, MessageBubble, MessageRun, ThreadDivider, ThreadEvent } from "@/components/ui";
 import { buildTimeline, type TimelineMessage } from "@/features/commerce/conversation-timeline";
 import { ConversationComposer, type ComposerDeal } from "@/features/commerce/conversation-composer";
 import type { DealEvent } from "@/features/commerce/deals";
 import { LiveConversation } from "@/features/commerce/live-messages";
 import { OfferDecision } from "@/features/commerce/offer-decision";
+import { dayKeyIn, validTimeZone, VIEWER_TZ_COOKIE } from "@/lib/viewer-timezone";
 
 export type LiveOffer = {
   id: string;
@@ -20,28 +21,36 @@ export type LiveOffer = {
   expiresAt: string | null;
 };
 
-function localDay(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
-
-function dayLabel(iso: string): string {
-  const date = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (localDay(iso) === localDay(today.toISOString())) return "Today";
-  if (localDay(iso) === localDay(yesterday.toISOString())) return "Yesterday";
-  return date.toLocaleDateString(undefined, {
+function dayLabel(iso: string, timeZone: string): string {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 86_400_000);
+  const day = dayKeyIn(iso, timeZone);
+  if (day === dayKeyIn(now.toISOString(), timeZone)) return "Today";
+  if (day === dayKeyIn(yesterday.toISOString(), timeZone)) return "Yesterday";
+  const sameYear = day.slice(0, 4) === dayKeyIn(now.toISOString(), timeZone).slice(0, 4);
+  return new Date(iso).toLocaleDateString(undefined, {
+    timeZone,
     weekday: "short",
     day: "numeric",
     month: "short",
-    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+    year: sameYear ? undefined : "numeric",
   });
 }
 
-function timeLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+function timeLabel(iso: string, timeZone: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { timeZone, hour: "numeric", minute: "2-digit" });
+}
+
+/** Within this distance of the end, the reader is "at the latest" and new
+ *  messages are followed; further up, they're reading history (RR-14). */
+const PINNED_SLACK_PX = 160;
+
+/** The browser's zone doesn't change while the page is open. */
+const noSubscription = () => () => {};
+
+function nearPageEnd(): boolean {
+  const doc = document.documentElement;
+  return window.innerHeight + window.scrollY >= doc.scrollHeight - PINNED_SLACK_PX;
 }
 
 /**
@@ -65,6 +74,7 @@ export function ThreadView({
   earliest,
   viewingHistory,
   basePath,
+  initialTimeZone,
 }: {
   conversationId: string | null;
   me: string;
@@ -81,20 +91,69 @@ export function ThreadView({
   earliest: string | null;
   viewingHistory: boolean;
   basePath: string;
+  /** The zone the server rendered in (the viewer's cookie, else UTC). The
+   *  first browser render uses it too, so both build the same tree. */
+  initialTimeZone: string;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
+  // RR-13: hydrate in the zone the server rendered in, then switch to the
+  // reader's real zone — and remember it, so the next server render uses it.
+  const timeZone = useSyncExternalStore(
+    noSubscription,
+    () => validTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? initialTimeZone,
+    () => initialTimeZone,
+  );
+  useEffect(() => {
+    if (timeZone === initialTimeZone) return;
+    document.cookie = `${VIEWER_TZ_COOKIE}=${encodeURIComponent(timeZone)}; path=/; max-age=31536000; samesite=lax`;
+  }, [timeZone, initialTimeZone]);
   const timeline = useMemo(
-    () => buildTimeline({ messages, events, me, otherName, dayOf: localDay }),
-    [messages, events, me, otherName],
+    () => buildTimeline({ messages, events, me, otherName, dayOf: (iso) => dayKeyIn(iso, timeZone) }),
+    [messages, events, me, otherName, timeZone],
   );
   // The about tag only earns its place when there's more than one deal.
   const showAbout = Object.keys(aboutLabels).length > 1;
 
-  // Land on the newest message, and follow new ones as they arrive.
-  const latestId = messages.at(-1)?.id ?? null;
+  // RR-14: land on the newest message once, then follow new ones only while
+  // the reader is at the latest (or sent it themselves). Someone scrolled up
+  // reading history keeps their place and gets a "new messages" button.
+  const latest = messages.at(-1);
+  const latestId = latest?.id ?? null;
+  const latestMine = latest?.sender_id === me;
+  const messageCount = messages.length;
+  const pinned = useRef(true);
+  const landed = useRef(false);
+  // How many messages the reader had at the latest; a refresh can bring
+  // several at once, and the button counts all of them.
+  const seenCount = useRef(0);
+  const countRef = useRef(messageCount);
   useEffect(() => {
-    if (!viewingHistory) endRef.current?.scrollIntoView({ block: "end" });
-  }, [viewingHistory, latestId]);
+    countRef.current = messageCount;
+  });
+  const [unseen, setUnseen] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      pinned.current = nearPageEnd();
+      if (pinned.current) {
+        seenCount.current = countRef.current;
+        setUnseen(0);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  useEffect(() => {
+    if (viewingHistory || !latestId) return;
+    if (!landed.current || pinned.current || latestMine) {
+      landed.current = true;
+      endRef.current?.scrollIntoView({ block: "end" });
+      pinned.current = true;
+      seenCount.current = messageCount;
+      setUnseen(0);
+    } else {
+      setUnseen(Math.max(1, messageCount - seenCount.current));
+    }
+  }, [viewingHistory, latestId, latestMine, messageCount]);
 
   return (
     <>
@@ -127,7 +186,7 @@ export function ThreadView({
             return (
               <div key={item.key} className="convthread__day">
                 <ThreadDivider>
-                  <span suppressHydrationWarning>{dayLabel(item.at)}</span>
+                  <span suppressHydrationWarning>{dayLabel(item.at, timeZone)}</span>
                 </ThreadDivider>
               </div>
             );
@@ -153,7 +212,7 @@ export function ThreadView({
               me={item.me}
               who={item.me ? "You" : otherName}
               when={item.at}
-              whenLabel={timeLabel(item.at)}
+              whenLabel={timeLabel(item.at, timeZone)}
               about={showAbout && item.dealKey ? aboutLabels[item.dealKey] : undefined}
               foot={item.seen ? "Seen" : undefined}
             >
@@ -195,6 +254,21 @@ export function ThreadView({
           otherFirstName={otherName}
           deals={composerDeals}
           defaultDealKey={composerDefault}
+          floating={
+            unseen > 0 ? (
+              <Button
+                variant="live"
+                onClick={() => {
+                  endRef.current?.scrollIntoView({ block: "end" });
+                  pinned.current = true;
+                  seenCount.current = messageCount;
+                  setUnseen(0);
+                }}
+              >
+                {unseen === 1 ? "1 new message" : `${unseen} new messages`} ↓
+              </Button>
+            ) : undefined
+          }
         />
       )}
       <div ref={endRef} aria-hidden="true" />

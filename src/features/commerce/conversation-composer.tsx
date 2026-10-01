@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { ChatComposer, ResultNote } from "@/components/ui";
@@ -31,12 +31,15 @@ export function ConversationComposer({
   otherFirstName,
   deals,
   defaultDealKey,
+  floating,
 }: {
   meId: string;
   otherId: string;
   otherFirstName: string;
   deals: ComposerDeal[];
   defaultDealKey: string | null;
+  /** Passed to ChatComposer — floats above the pinned composer. */
+  floating?: ReactNode;
 }) {
   const router = useRouter();
   const identity = useRef<string | null>(null);
@@ -154,6 +157,7 @@ export function ConversationComposer({
       inputLabel={`Message ${otherFirstName}`}
       onFiles={(files) => void addPhotos(files)}
       attachDisabled={photos.length >= MAX_PHOTOS}
+      floating={floating}
       above={
         <>
           {deals.length > 1 ? (
