@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+import { fixtureAdmin } from "./fixtures";
 import {
   addCar,
   addComposerPhoto,
   cleanupE2eUsers,
   enableSellerPayouts,
   makeUser,
+  publishListing,
   sellCommitButton,
   signUp,
 } from "./helpers";
@@ -181,4 +183,18 @@ test("sell: a listing without a photo can't publish, but saves as a draft", asyn
   // Drafts are where the photos get added, so a draft saves without one.
   await page.locator(".saverow").getByRole("button", { name: /save draft/i }).click();
   await expect(page).toHaveURL(/\/listings\/[\w-]+\/edit\?saved=draft/);
+});
+
+test("sell: one chosen photo is one photo on the listing", async ({ page }) => {
+  // The upload queue once started uploads inside a React state updater, which
+  // React may run more than once — one file became 3–5 gallery rows.
+  await enableSellerPayouts(seller.username);
+  await signInFresh(page);
+  const path = await publishListing(page, { title: `E2E one photo ${stamp}`, price: "60", shipping: "10" });
+  const images = await fixtureAdmin()
+    .from("listing_images")
+    .select("url")
+    .eq("listing_id", path.split("/").pop()!)
+    .throwOnError();
+  expect(images.data).toHaveLength(1);
 });

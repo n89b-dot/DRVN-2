@@ -45,6 +45,17 @@ export function useUploadQueue({
   onUploaded?: (item: { id: string; url: string }) => void;
 }) {
   const [items, setItems] = useState<QueuedUpload[]>([]);
+  // The queue's source of truth, updated synchronously. Uploads are side
+  // effects, so they must never start inside a setState updater: React may
+  // run an updater more than once (Strict Mode, or re-applying queued
+  // updates), and each run started another upload of the same file — one
+  // chosen photo became 3–5 gallery rows. Every change goes through
+  // `update`, which runs its function exactly once and then renders.
+  const queueRef = useRef<QueuedUpload[]>([]);
+  const update = useCallback((change: (current: QueuedUpload[]) => QueuedUpload[]) => {
+    queueRef.current = change(queueRef.current);
+    setItems(queueRef.current);
+  }, []);
   const active = useRef(0);
   const onUploadedRef = useRef(onUploaded);
   const pumpRef = useRef<() => void>(() => {});
@@ -53,31 +64,32 @@ export function useUploadQueue({
   }, [onUploaded]);
 
   const pump = useCallback(() => {
-    setItems((current) => {
-      const startIds: string[] = [];
-      let slots = CONCURRENCY - active.current;
-      const next = current.map((item) => {
+    const startIds: string[] = [];
+    let slots = CONCURRENCY - active.current;
+    update((current) =>
+      current.map((item) => {
         if (slots > 0 && item.status === "queued") {
           slots -= 1;
           startIds.push(item.id);
           return { ...item, status: "uploading" as const };
         }
         return item;
-      });
-      active.current += startIds.length;
+      }),
+    );
+    active.current += startIds.length;
 
-      for (const id of startIds) {
-        const item = next.find((entry) => entry.id === id)!;
-        void uploadImages({ files: [item.file], bucket, pathPrefix, maxBytes, normalize }).then(
-          ({ uploaded, failed }) => {
-            active.current -= 1;
-            setItems((state) =>
+    for (const id of startIds) {
+      const item = queueRef.current.find((entry) => entry.id === id)!;
+      void uploadImages({ files: [item.file], bucket, pathPrefix, maxBytes, normalize }).then(
+        ({ uploaded, failed }) => {
+          active.current -= 1;
+          // Removed while uploading: nothing to report.
+          if (queueRef.current.some((entry) => entry.id === id)) {
+            if (uploaded[0]) onUploadedRef.current?.({ id, url: uploaded[0].url });
+            update((state) =>
               state.map((entry) => {
                 if (entry.id !== id) return entry;
-                if (uploaded[0]) {
-                  onUploadedRef.current?.({ id: entry.id, url: uploaded[0].url });
-                  return { ...entry, status: "done" as const, url: uploaded[0].url };
-                }
+                if (uploaded[0]) return { ...entry, status: "done" as const, url: uploaded[0].url };
                 const failure = failed[0];
                 return {
                   ...entry,
@@ -87,13 +99,12 @@ export function useUploadQueue({
                 };
               }),
             );
-            pumpRef.current();
-          },
-        );
-      }
-      return startIds.length ? next : current;
-    });
-  }, [bucket, pathPrefix, maxBytes, normalize]);
+          }
+          pumpRef.current();
+        },
+      );
+    }
+  }, [bucket, pathPrefix, maxBytes, normalize, update]);
   useEffect(() => {
     pumpRef.current = pump;
   }, [pump]);
@@ -108,52 +119,46 @@ export function useUploadQueue({
         file,
       }));
       if (!fresh.length) return;
-      setItems((current) => [...current, ...fresh]);
-      // Let the state land before pumping.
-      queueMicrotask(pump);
+      update((current) => [...current, ...fresh]);
+      pump();
     },
-    [pump],
+    [pump, update],
   );
 
   const retry = useCallback(
     (id: string) => {
-      setItems((current) =>
+      update((current) =>
         current.map((item) =>
           item.id === id && item.status === "failed" ? { ...item, status: "queued", error: undefined } : item,
         ),
       );
-      queueMicrotask(pump);
+      pump();
     },
-    [pump],
+    [pump, update],
   );
 
-  const remove = useCallback((id: string) => {
-    setItems((current) => {
-      const item = current.find((entry) => entry.id === id);
+  const remove = useCallback(
+    (id: string) => {
+      const item = queueRef.current.find((entry) => entry.id === id);
       if (item) {
         URL.revokeObjectURL(item.previewUrl);
         if (item.url) void deleteStagedIfUnconsumed(item.url).catch(() => {});
       }
-      return current.filter((entry) => entry.id !== id);
-    });
-  }, []);
+      update((current) => current.filter((entry) => entry.id !== id));
+    },
+    [update],
+  );
 
   /** Drop finished entries from the queue view (previews revoked). */
   const clearDone = useCallback(() => {
-    setItems((current) => {
-      for (const item of current) if (item.status === "done") URL.revokeObjectURL(item.previewUrl);
-      return current.filter((item) => item.status !== "done");
-    });
-  }, []);
+    for (const item of queueRef.current) if (item.status === "done") URL.revokeObjectURL(item.previewUrl);
+    update((current) => current.filter((item) => item.status !== "done"));
+  }, [update]);
 
   // Revoke previews on unmount.
-  const itemsRef = useRef(items);
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
   useEffect(
     () => () => {
-      for (const item of itemsRef.current) URL.revokeObjectURL(item.previewUrl);
+      for (const item of queueRef.current) URL.revokeObjectURL(item.previewUrl);
     },
     [],
   );
