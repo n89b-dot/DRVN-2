@@ -82,5 +82,8 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: false,
     timeout: process.env.CI ? 120_000 : 300_000,
+    // In CI, keep the build's own output: Next prints a failed build to
+    // stdout, and without this a webServer failure is a bare "exit code 1".
+    stdout: process.env.CI ? "pipe" : "ignore",
   },
 });
