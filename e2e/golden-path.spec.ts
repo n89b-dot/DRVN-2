@@ -166,7 +166,8 @@ test.describe.serial("golden path", () => {
     await dispatchDialog.getByLabel(/carrier/i).fill("Royal Mail");
     await dispatchDialog.getByLabel(/tracking/i).fill(`E2E${stamp}`);
     let interruptedDispatch = false;
-    await page.route(`**${new URL(page.url()).pathname}`, async (route) => {
+    const orderRoute = `**${new URL(page.url()).pathname}`;
+    await page.route(orderRoute, async (route) => {
       if (!interruptedDispatch && route.request().method() === "POST" && route.request().headers()["next-action"]) {
         interruptedDispatch = true;
         const response = await route.fetch();
@@ -180,6 +181,9 @@ test.describe.serial("golden path", () => {
     await expect(dispatchDialog.getByRole("alert")).toContainText("Your details are still here");
     await expect(dispatchDialog.getByLabel(/carrier/i)).toHaveValue("Royal Mail");
     await expect(dispatchDialog.getByLabel(/tracking/i)).toHaveValue(`E2E${stamp}`);
+    // Only the first dispatch is intercepted; the retry and its redirect run
+    // untouched (an intercepted 303 came back aborted in CI's browsers).
+    await page.unroute(orderRoute);
     await dispatchDialog.getByRole("button", { name: /mark dispatched/i }).click();
     await expect(page.getByText(`E2E${stamp}`).first()).toBeVisible({ timeout: 30_000 });
   });

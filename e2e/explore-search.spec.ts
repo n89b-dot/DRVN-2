@@ -158,7 +158,8 @@ test("seeds a user with a public build, a private build and a listing", async ({
 test("free-text search finds the public build; browse mode stays the feed", async ({ page }) => {
   // Browse mode: no query — the normal wall, no search empty state.
   await page.goto("/explore");
-  await expect(page.getByRole("search")).toBeVisible();
+  // Explore's own finder — the top bar carries a site search form too.
+  await expect(page.getByRole("main").getByRole("search")).toBeVisible();
   await expect(page.getByText(/no results/i)).toHaveCount(0);
 
   // Search mode via URL (shareable/reload-safe by construction). Assert the
