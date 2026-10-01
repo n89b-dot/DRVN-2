@@ -145,9 +145,10 @@ export async function GarageCarOverview({
               </Link>
             </p>
           )}
-          {sheet.earnedCents > 0 && (
+          {sheet.salesCents > 0 && (
             <p className="mt-3 text-body text-dim">
-              {formatPrice(sheet.earnedCents)} earned from parts off this car.
+              {formatPrice(sheet.salesCents)} in DRVN sales from parts off this car, after refunds and
+              before fees.
             </p>
           )}
         </section>

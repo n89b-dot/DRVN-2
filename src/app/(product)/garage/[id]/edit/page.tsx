@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { requiredRead } from "@/lib/supabase/required-read";
 
 import { CarDetailsForm } from "./car-details-form";
 import { GalleryManager } from "./gallery-manager";
@@ -20,16 +21,16 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("*")
-    .eq("id", id)
-    .eq("owner_id", user.id)
-    .single();
+  // RR-11: a failed read is a failed page, not "no such car" and not an
+  // empty editor — the mod editor's save replaces the whole list.
+  const car = requiredRead(
+    await supabase.from("cars").select("*").eq("id", id).eq("owner_id", user.id).maybeSingle(),
+    "this car"
+  );
 
   if (!car) notFound();
 
-  const [{ data: images }, { data: mods }, postsResult, { data: hotspots }, { data: profile }] =
+  const [imagesResult, modsResult, postsResult, hotspotsResult, profileResult] =
     await Promise.all([
       supabase.from("car_images").select("*").eq("car_id", id).order("position"),
       supabase
@@ -46,18 +47,24 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
       supabase.from("car_hotspots").select("*").eq("car_id", id).order("created_at"),
       supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle(),
     ]);
+  const images = requiredRead(imagesResult, "this car's photos");
+  const mods = requiredRead(modsResult, "this car's mod list");
+  const hotspots = requiredRead(hotspotsResult, "this car's showcase");
+  const profile = requiredRead(profileResult, "your profile");
   // An error here was read as "no posts", so a car with three published
   // updates said "Nothing posted yet". Where the archive column isn't there
   // (a database behind its migrations) nothing can have been archived, so
   // the unfiltered list is the right one.
   let posts = postsResult.data;
   if (postsResult.error) {
-    const { data: fallback } = await supabase
-      .from("activity_posts")
-      .select("id, title, intro, body, published_at")
-      .eq("car_id", id)
-      .order("published_at", { ascending: false });
-    posts = fallback;
+    posts = requiredRead(
+      await supabase
+        .from("activity_posts")
+        .select("id, title, intro, body, published_at")
+        .eq("car_id", id)
+        .order("published_at", { ascending: false }),
+      "this car's updates"
+    );
   }
 
   return (

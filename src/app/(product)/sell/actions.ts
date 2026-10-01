@@ -22,7 +22,13 @@ import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
-export type SellState = { error?: string; ok?: string };
+export type SellState = {
+  error?: string;
+  ok?: string;
+  /** After an edit saves: the listing's new version, so the next save from
+   *  the same form isn't refused as stale (RR-05). */
+  version?: string;
+};
 
 async function requireUser() {
   const supabase = await createClient();
@@ -372,12 +378,19 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
 
   const id = String(formData.get("id") ?? "");
   if (!id) return { error: "Missing listing." };
+  // RR-05: the version the form was opened with. The save is refused if the
+  // listing changed since — another tab, or a checkout reserving it.
+  const expected = String(formData.get("expected_updated_at") ?? "");
+  if (!expected || Number.isNaN(Date.parse(expected))) {
+    return { error: "This form is out of date. Reload the page, then save again." };
+  }
 
-  const { data: existing } = await supabase
+  const { data: existing, error: readError } = await supabase
     .from("listings")
-    .select("id, seller_id, status, price_cents")
+    .select("id, seller_id, status")
     .eq("id", id)
     .maybeSingle();
+  if (readError) return { error: "Couldn't load this listing. Try again." };
   if (!existing || existing.seller_id !== user.id) return { error: "Listing not found." };
   if (["sold", "reserved"].includes(existing.status)) {
     return { error: "A sold or reserved part can't be edited." };
@@ -386,88 +399,62 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
 
-  // A live listing can't be edited down to no photos (M-5/W-2) — the same
-  // rule publishing enforces. Drafts and paused listings may be photoless.
+  // The gallery is replaced only when the form submitted one. Array order
+  // carries reorder + cover choices (index 0 is the cover) and alt text.
   const imagesField = formData.get("image_urls");
-  if (
-    existing.status === "active" &&
-    typeof imagesField === "string" &&
-    imagesField &&
-    keepValidGalleryImages(safeParseJson(imagesField), 12, user.id).length === 0
-  ) {
+  const images =
+    typeof imagesField === "string" && imagesField
+      ? keepValidGalleryImages(safeParseJson(imagesField), 12, user.id)
+      : null;
+  // A live listing can't be edited down to no photos (M-5/W-2) — checked
+  // here for the message, and again inside the transaction.
+  if (existing.status === "active" && images && images.length === 0) {
     return { error: PHOTO_REQUIRED };
   }
 
-  const { error } = await supabase.from("listings").update(parsed.fields).eq("id", id);
-  if (error) return { error: error.message };
-
-  // Replace the gallery only when the form actually submitted one. Array
-  // order carries reorder + cover choices (index 0 is the cover) and alt
-  // text set in the editor, so a plain delete-and-reinsert on `position`
-  // is enough — no separate reorder/cover/alt actions needed.
-  if (typeof imagesField === "string" && imagesField) {
-    const images = keepValidGalleryImages(safeParseJson(imagesField), 12, user.id);
-
-    // Read the current gallery before touching anything, so a failed insert
-    // below can be undone rather than leaving the listing with no photos
-    // while still reporting success.
-    const { data: previousImages } = await supabase
-      .from("listing_images")
-      .select("url, alt, position")
-      .eq("listing_id", id)
-      .order("position");
-
-    await supabase.from("listing_images").delete().eq("listing_id", id);
-
-    if (images.length) {
-      const { error: imageError } = await supabase.from("listing_images").insert(
-        images.map((img, index) => ({
-          listing_id: id,
-          url: img.url,
-          alt: img.alt,
-          position: index,
-        }))
-      );
-
-      if (imageError) {
-        if (previousImages?.length) {
-          await supabase.from("listing_images").insert(
-            previousImages.map((img) => ({
-              listing_id: id,
-              url: img.url,
-              alt: img.alt,
-              position: img.position,
-            }))
-          );
-        }
-        return { error: "Photos couldn't be saved — try again." };
-      }
+  // One transaction: the listing, its photos, fitment and alternate part
+  // numbers all change, or none of them do.
+  const saved = await supabase.rpc("update_listing_atomic", {
+    p_listing: id,
+    p_expected_updated_at: expected,
+    p_fields: parsed.fields,
+    p_images: images,
+    p_fitments: parsed.fitments,
+    p_alt_numbers: parsed.altNumbers,
+  });
+  if (saved.error) {
+    const message =
+      saved.error.code === "40001"
+        ? "This listing changed since you opened it — maybe in another tab. Reload to see the latest, then make your edit again."
+        : saved.error.code === "55000"
+          ? "A sold or reserved part can't be edited."
+          : saved.error.code === "23514"
+            ? PHOTO_REQUIRED
+            : saved.error.code === "P0002"
+              ? "Listing not found."
+              : "Couldn't save your changes. Nothing was changed — try again.";
+    if (!["40001", "55000", "23514", "P0002"].includes(saved.error.code)) {
+      reportError("[sell] atomic listing edit failed", { id, error: saved.error });
     }
-
-    await finalizeMediaUrls(supabase, images.map((img) => img.url));
-
-    // Photos dropped by this edit may have lost their last reference — GC
-    // their storage objects. The helper re-checks every referencing table
-    // (covers, other listings, activity posts) before touching storage, and
-    // never fails the save.
-    const kept = new Set(images.map((img) => img.url));
-    for (const prev of previousImages ?? []) {
-      if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url);
-    }
+    return { error: message };
   }
+  const result = saved.data as unknown as { updated_at?: string; removed_image_urls?: string[] } | null;
+  if (!result?.updated_at) return { error: "Couldn't confirm your changes saved. Reload to check." };
 
-  const { error: fitmentError } = await saveFitments(supabase, id, parsed.fitments);
-  const { error: altNumberError } = await saveAltPartNumbers(supabase, id, parsed.altNumbers);
-
+  // Storage follows the committed rows, never the other way round: kept
+  // photos are marked used, and dropped ones are garbage-collected only now
+  // that no saved row points at them. The helper re-checks every referencing
+  // table before touching storage, and never fails the save.
+  if (images?.length) await finalizeMediaUrls(supabase, images.map((img) => img.url));
+  for (const url of result.removed_image_urls ?? []) await deleteMediaIfUnreferenced(url);
 
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/marketplace");
   revalidatePath("/sell");
-  if (fitmentError || altNumberError) {
-    return { error: `Listing updated, but: ${fitmentError ?? altNumberError}` };
-  }
-  return { ok: "Listing updated." };
+  revalidatePath("/garage");
+  if (parsed.fields.source_car_id) revalidatePath(`/garage/${parsed.fields.source_car_id}/edit`);
+  return { ok: "Listing updated.", version: result.updated_at };
 }
 
 const SETTABLE_STATUSES: ListingStatus[] = ["draft", "active", "paused", "sold", "archived"];
@@ -557,6 +544,9 @@ export async function setListingStatus(
   revalidatePath("/sell");
   revalidatePath("/listings");
   revalidatePath(`/listings/${id}`);
+  // The editor holds the listing's version (RR-05); a status change from its
+  // header bumps it, so the form must re-render with the new one.
+  revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/marketplace");
   return {
     ok:
@@ -670,32 +660,6 @@ function readFitments(formData: FormData): FitmentInput[] {
 }
 
 /**
- * Mirrors the picker's rows to listing_fitments — delete-and-reinsert, the
- * same shape the gallery uses. RLS ("sellers manage fitment") scopes both
- * statements to listings this user owns.
- */
-async function saveFitments(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  listingId: string,
-  fitments: FitmentInput[]
-): Promise<{ error?: string }> {
-  const cleared = await supabase.from("listing_fitments").delete().eq("listing_id", listingId);
-  if (cleared.error) {
-    reportError("[sell] prior fitment rows couldn't be cleared", { listingId, error: cleared.error });
-    return { error: "Fitment rows couldn't be saved — re-add them from Edit." };
-  }
-  if (!fitments.length) return {};
-  const { error } = await supabase
-    .from("listing_fitments")
-    .insert(fitments.map((f) => ({ listing_id: listingId, ...f })));
-  if (error) {
-    reportError("[sell] fitment rows failed", { listingId, error });
-    return { error: "Fitment rows couldn't be saved — re-add them from Edit." };
-  }
-  return {};
-}
-
-/**
  * Alternate part numbers (0042) — "also known as" identifiers, comma/space
  * separated in one optional field. Bounded (5 numbers, 2–64 chars each),
  * deduped on the compact form the search lane matches.
@@ -715,25 +679,6 @@ function readAltPartNumbers(formData: FormData): string[] {
     if (numbers.length >= 5) break;
   }
   return numbers;
-}
-
-/** Delete-and-reinsert like saveFitments; RLS scopes both to the seller. */
-async function saveAltPartNumbers(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  listingId: string,
-  numbers: string[]
-): Promise<{ error?: string }> {
-  const cleared = await supabase.from("listing_part_numbers").delete().eq("listing_id", listingId);
-  if (cleared.error) return { error: "Alternate part numbers couldn't be saved." };
-  if (!numbers.length) return {};
-  const { error } = await supabase
-    .from("listing_part_numbers")
-    .insert(numbers.map((number) => ({ listing_id: listingId, number })));
-  if (error) {
-    reportError("[sell] alt part numbers failed", { listingId, error });
-    return { error: "Alternate part numbers couldn't be saved." };
-  }
-  return {};
 }
 
 function safeParseJson(value: FormDataEntryValue | null): unknown {

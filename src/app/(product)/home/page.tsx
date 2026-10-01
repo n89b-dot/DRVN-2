@@ -21,12 +21,13 @@ import {
 } from "@/lib/feed";
 import { recommendListings } from "@/lib/recommendations";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { requiredRead } from "@/lib/supabase/required-read";
 
 import { HomeFeedMore } from "./feed-more";
 import { Greeting } from "./greeting";
 import { HOME_FEED_PAGE_SIZE, type HomeTab } from "./tabs";
 import { PostUpdatePrompt } from "./post-update-prompt";
-import { orderCars } from "@/lib/cars/order";
+import { orderCars, withMainCar } from "@/lib/cars/order";
 import { AccountRowList, ListingRow } from "@/components/commerce";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { QuickPost } from "@/features/composer/quick-post";
@@ -119,26 +120,34 @@ export default async function HomePage({
     (error ? [] : (data ?? [])).filter((b) => b.avatar_url && b.display_name?.trim()).slice(0, 4)
   );
 
-  const [{ data: profile }, { data: cars, count: carCountRaw }, { count: followCount }] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("display_name, username, main_car_id, country, region")
-        .eq("id", user.id)
-        .single(),
-      supabase
-        .from("cars")
-        .select("id, slug, name, make, model, year, cover_image_url, created_at", { count: "exact" })
-        .eq("owner_id", user.id)
-        // Ordered before it is limited: an unordered limit could leave the
-        // main car out of the rows `orderCars` is about to lead with.
-        .order("created_at", { ascending: false })
-        .limit(24),
-      supabase
-        .from("follows")
-        .select("target_id", { count: "exact", head: true })
-        .eq("follower_id", user.id),
-    ]);
+  const [profileResult, carsResult, followsResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      // RR-12: the main car rides along with the profile, so it leads the
+      // garage tile even when it is older than the newest 24 below.
+      .select(
+        "display_name, username, main_car_id, country, region, main_car:cars!profiles_main_car_id_fkey(id, slug, name, make, model, year, cover_image_url, created_at, owner_id)"
+      )
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("cars")
+      .select("id, slug, name, make, model, year, cover_image_url, created_at", { count: "exact" })
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(24),
+    supabase
+      .from("follows")
+      .select("target_id", { count: "exact", head: true })
+      .eq("follower_id", user.id),
+  ]);
+  // RR-11: these decide what Home is — which tab it opens on, whether it
+  // says "add your car", who it greets. A failed read is a failed page.
+  const profile = requiredRead(profileResult, "your profile");
+  const cars = requiredRead(carsResult, "your cars");
+  requiredRead(followsResult, "who you follow");
+  const carCountRaw = carsResult.count;
+  const followCount = followsResult.count;
 
   // H-2: Local exists once they've said where they are. A tab whose whole
   // content is "tell us your location first" is a tab that exists to ask for
@@ -181,7 +190,7 @@ export default async function HomePage({
             excludeOwnerId: user.id,
           });
 
-  const garage = orderCars(cars ?? [], profile?.main_car_id);
+  const garage = orderCars(withMainCar(cars ?? [], profile?.main_car, user.id), profile?.main_car_id);
   const carCount = carCountRaw ?? garage.length;
   const shownCars = garage.slice(0, HOME_GARAGE_MAX);
 

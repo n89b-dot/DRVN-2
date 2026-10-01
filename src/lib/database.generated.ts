@@ -4511,6 +4511,23 @@ export type Database = {
         Args: { p_buyer: string; p_idempotency_key: string; p_order: string }
         Returns: Json
       }
+      garage_car_stats: {
+        Args: { p_cars: string[] }
+        Returns: {
+          car_id: string
+          followers: number
+          latest_update: Json
+          likes: number
+          mods: number
+          open_offers: number
+          parts_held: number
+          parts_live: number
+          parts_sold: number
+          sales_cents: number
+          sales_count: number
+          updates: number
+        }[]
+      }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
@@ -5173,12 +5190,23 @@ export type Database = {
         Args: { p_days?: number; p_limit?: number }
         Returns: {
           builds: number
-          catalog_make_id: number | null
-          catalog_model_id: number | null
+          catalog_make_id: number
+          catalog_model_id: number
           make: string
           model: string
           updates: number
         }[]
+      }
+      update_listing_atomic: {
+        Args: {
+          p_alt_numbers: Json
+          p_expected_updated_at: string
+          p_fields: Json
+          p_fitments: Json
+          p_images: Json
+          p_listing: string
+        }
+        Returns: Json
       }
       worker_health_snapshot: { Args: never; Returns: Json }
       write_account_export: {

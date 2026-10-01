@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { leadCar, orderCars } from "./order";
+import { leadCar, orderCars, withMainCar } from "./order";
 
 const cars = [
   { id: "old", created_at: "2026-01-01T00:00:00Z" },
@@ -37,5 +37,32 @@ describe("car order (P-5)", () => {
     expect(leadCar(cars, "mid")?.id).toBe("mid");
     expect(leadCar(cars, null)?.id).toBe("new");
     expect(leadCar([], null)).toBeNull();
+  });
+});
+
+describe("withMainCar (RR-12)", () => {
+  // 25 cars, newest first, and the read was limited to the newest 24 — the
+  // oldest car, which is the member's main car, didn't make the cut.
+  const all = Array.from({ length: 25 }, (_, i) => ({
+    id: `car-${i}`,
+    created_at: `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`,
+  })).reverse();
+  const newest24 = all.slice(0, 24);
+  const oldest = { ...all[24], owner_id: "me" };
+
+  it("leads with a main car older than the limited read", () => {
+    const garage = orderCars(withMainCar(newest24, oldest, "me"), oldest.id);
+    expect(garage[0].id).toBe("car-0");
+    expect(garage).toHaveLength(25);
+  });
+
+  it("doesn't duplicate a main car the read already has", () => {
+    const main = { ...newest24[3], owner_id: "me" };
+    expect(withMainCar(newest24, main, "me")).toHaveLength(24);
+  });
+
+  it("ignores a missing or someone else's main car", () => {
+    expect(withMainCar(newest24, null, "me")).toBe(newest24);
+    expect(withMainCar(newest24, { ...oldest, owner_id: "them" }, "me")).toBe(newest24);
   });
 });

@@ -41,3 +41,18 @@ export function leadCar<T extends OrderableCar>(
 ): T | null {
   return orderCars(cars, mainCarId)[0] ?? null;
 }
+
+/**
+ * A bounded "newest N" read can't lead with a main car older than its N
+ * (RR-12): sorting can only reorder the rows it was given. Surfaces that
+ * limit their car read fetch the main car on its own and merge it in here —
+ * once, and only when it really is the owner's.
+ */
+export function withMainCar<T extends OrderableCar>(
+  recent: T[],
+  main: (T & { owner_id: string }) | null | undefined,
+  ownerId: string
+): T[] {
+  if (!main || main.owner_id !== ownerId || recent.some((c) => c.id === main.id)) return recent;
+  return [...recent, main];
+}

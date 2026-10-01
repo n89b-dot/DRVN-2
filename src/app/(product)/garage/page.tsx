@@ -4,6 +4,7 @@ import { Rv } from "@/components/livesheet";
 import { Foot } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { requiredRead } from "@/lib/supabase/required-read";
 
 import { AddCarForm } from "./add-car-form";
 import { loadGarageCars, measureGarageSheets } from "./garage-data";
@@ -43,7 +44,7 @@ export default async function GaragePage({
   // same editors the full car page mounts, given the same rows. Loaded only
   // when a car is focused (the list view needs none of it), and beside the
   // sheets' measuring rather than after it.
-  const [sheets, [{ data: focusedCar }, { data: focusedImages }, { data: focusedMods }]] = await Promise.all([
+  const [sheets, [focusedCarResult, focusedImagesResult, focusedModsResult]] = await Promise.all([
     measureGarageSheets(supabase, cars),
     focusedId
       ? Promise.all([
@@ -60,8 +61,18 @@ export default async function GaragePage({
             .eq("car_id", focusedId)
             .order("position"),
         ])
-      : Promise.resolve([{ data: null }, { data: null }, { data: null }] as const),
+      : Promise.resolve([
+          { data: null, error: null },
+          { data: null, error: null },
+          { data: null, error: null },
+        ] as const),
   ]);
+  // RR-11: the editors below are mounted with these rows, and the mod
+  // editor's save replaces the car's whole list. A failed read must never
+  // reach them as an empty list.
+  const focusedCar = requiredRead(focusedCarResult, "this car");
+  const focusedImages = requiredRead(focusedImagesResult, "this car's photos");
+  const focusedMods = requiredRead(focusedModsResult, "this car's mod list");
   const focused = focusedId ? sheets.find((s) => s.id === focusedId) : undefined;
 
   // The garage's own tally — what the whole drawer has done.
@@ -69,10 +80,10 @@ export default async function GaragePage({
     (t, s) => ({
       updates: t.updates + s.updates,
       live: t.live + s.partsLive,
-      earned: t.earned + s.earnedCents,
+      sales: t.sales + s.salesCents,
       offers: t.offers + s.openOffers,
     }),
-    { updates: 0, live: 0, earned: 0, offers: 0 }
+    { updates: 0, live: 0, sales: 0, offers: 0 }
   );
   const tally =
     sheets.length > 0
@@ -95,8 +106,8 @@ export default async function GaragePage({
                   page's name in the nav already. */}
               <span className="max-sm:hidden">Garage{tally ? " — " : ""}</span>
               {tally}
-              {totals.earned > 0 && (
-                <span className="max-sm:hidden"> · {formatPrice(totals.earned)} earned off them</span>
+              {totals.sales > 0 && (
+                <span className="max-sm:hidden"> · {formatPrice(totals.sales)} in sales off them</span>
               )}
             </span>
             {/* Provenance stays a supporting fact (brand doc): the headline is

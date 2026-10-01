@@ -68,7 +68,7 @@ export function workOrders(s: GarageSheet): WorkOrder[] {
       label: `Quiet for ${ago(s.latestUpdate.published_at).replace(" ago", "")} — post an update`,
       href: `/garage/${s.id}/update/new`,
     });
-  if (s.partsLive === 0 && s.mods > 0)
+  if (s.partsLive === 0 && s.partsHeld === 0 && s.mods > 0)
     out.push({ label: "Nothing listed off it yet", href: `/sell?car=${s.id}` });
   return out.slice(0, 3);
 }
@@ -86,6 +86,7 @@ export function GarageSheetCard({
   const dims = [
     { label: "Updates", value: s.updates },
     { label: "Parts live", value: s.partsLive, live: s.openOffers > 0 },
+    { label: "In checkout", value: s.partsHeld },
     { label: "Sold", value: s.partsSold },
     { label: "Followers", value: s.followers },
   ].filter((d) => d.value > 0);

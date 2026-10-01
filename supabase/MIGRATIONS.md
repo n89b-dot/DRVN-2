@@ -1,5 +1,19 @@
 # Applying migrations
 
+## October 1 — atomic listing edits; garage sales from paid orders (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261001120000_update_listing_atomic.sql` | shared dev project, 2026-10-01 |
+| `20261001130000_garage_car_stats.sql` | shared dev project, 2026-10-01 |
+
+Release-readiness fixes RR-05 and RR-09/RR-25. Each adds one SECURITY
+INVOKER function and its grants, nothing else. Dev was checked for every
+column, function and trigger the two depend on before applying. Applied
+twice each with `node scripts/apply-migration.mjs` (idempotency check). Guard
+tests `listing_edit_atomic_guard.sql` and `garage_car_stats_guard.sql` pass
+on a fresh disposable database with the full chain.
+
 ## September 29 — suspended members can't post in listing Q&A (shared dev project)
 
 | File | Applied to |

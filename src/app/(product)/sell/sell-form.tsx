@@ -61,6 +61,9 @@ export type ListingDraft = {
   compatibility_notes: string | null;
   source_car_id: string | null;
   status: string;
+  /** The version this form was opened with (RR-05); a save is refused if
+   *  the listing has changed since. */
+  updated_at?: string;
   images: GalleryImage[];
   fitments: FitmentRow[];
   /** "Also known as" identifiers (0042) — search matches these too. */
@@ -402,6 +405,9 @@ export function SellForm({
     >
       <input type="hidden" name="image_urls" value={JSON.stringify(images)} />
       {listing && <input type="hidden" name="id" value={listing.id} />}
+      {listing?.updated_at && (
+        <input type="hidden" name="expected_updated_at" value={latestVersion(listing.updated_at, state.version)} />
+      )}
       {prefill?.modItemId && (
         <input type="hidden" name="mod_item_id" value={prefill.modItemId} />
       )}
@@ -1174,4 +1180,11 @@ export function SellForm({
       </MobileActionBar>
     </form>
   );
+}
+
+/** The newer of the version the page rendered with and the one the last save
+ *  returned — whichever arrived last, the next save expects it. */
+function latestVersion(rendered: string, saved: string | undefined): string {
+  if (!saved) return rendered;
+  return Date.parse(saved) >= Date.parse(rendered) ? saved : rendered;
 }

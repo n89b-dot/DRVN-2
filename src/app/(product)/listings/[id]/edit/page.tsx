@@ -6,6 +6,7 @@ import { Alert, ButtonLink, Foot, Media, PageHead } from "@/components/ui";
 import { formatPrice } from "@/lib/payments/fee";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { requiredRead } from "@/lib/supabase/required-read";
 import { getVehicleMakes } from "@/lib/vehicles/vpic";
 import {
   fulfillmentProfileReady,
@@ -47,7 +48,7 @@ export default async function EditListingPage({
   }
   if (!listing || listing.seller_id !== user.id) notFound();
 
-  const [{ data: cars }, { data: images }, { data: fitments }, { data: altNumbers }, makes] =
+  const [carsResult, imagesResult, fitmentsResult, altNumbersResult, makes] =
     await Promise.all([
       supabase
         .from("cars")
@@ -71,6 +72,13 @@ export default async function EditListingPage({
         .order("created_at"),
       getVehicleMakes(createAdminClient()),
     ]);
+
+  // RR-11: the form saves photos, fitment and alternate numbers whole — a
+  // failed read here must never reach it as an empty list.
+  const cars = requiredRead(carsResult, "your cars");
+  const images = requiredRead(imagesResult, "this listing's photos");
+  const fitments = requiredRead(fitmentsResult, "this listing's fitment");
+  const altNumbers = requiredRead(altNumbersResult, "this listing's part numbers");
 
   const locked = ["sold", "reserved"].includes(listing.status);
   const statusLabel: Record<string, string> = {
@@ -177,6 +185,7 @@ export default async function EditListingPage({
             location: listing.location,
             compatibility_notes: listing.compatibility_notes,
             source_car_id: listing.source_car_id,
+            updated_at: listing.updated_at,
             status: listing.status,
             images: (images ?? []).map((i) => ({ url: i.url, alt: i.alt })),
             fitments: fitments ?? [],

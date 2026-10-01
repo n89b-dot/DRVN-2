@@ -37,6 +37,7 @@ export function FocusedCar({
     sheet.mods > 0 ? { label: "Mods", value: String(sheet.mods) } : null,
     sheet.updates > 0 ? { label: "Updates", value: String(sheet.updates) } : null,
     sheet.partsLive > 0 ? { label: "Parts live", value: String(sheet.partsLive) } : null,
+    sheet.partsHeld > 0 ? { label: "In checkout", value: String(sheet.partsHeld) } : null,
     sheet.partsSold > 0 ? { label: "Sold", value: String(sheet.partsSold) } : null,
     sheet.followers > 0 ? { label: "Followers", value: String(sheet.followers) } : null,
   ].filter((s): s is { label: string; value: string } => s !== null);
