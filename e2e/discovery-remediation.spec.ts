@@ -91,8 +91,10 @@ test.describe.serial("discovery + marketplace remediation", () => {
     await expect(
       page.getByRole("group", { name: /which feed to show/i }).getByRole("link", { name: "For you" })
     ).toHaveAttribute("aria-current", "true");
-    // Rows, or the tab's own named empty state — never a blank column.
-    await expect(page.locator(".deck--main__feed--lead").locator(".rowlist, .undrawn").first()).toBeVisible();
+    // Cards, rows, or the tab's own named empty state — never a blank column.
+    // (Home's lead feed renders FeedList as cards; an empty database shows
+    // the empty state, which is why this only failed on a populated stack.)
+    await expect(page.locator(".deck--main__feed--lead").locator(".feedcards, .rowlist, .undrawn").first()).toBeVisible();
 
     // An unknown tab is the default, not an empty page.
     await page.goto("/home?tab=for-sale");

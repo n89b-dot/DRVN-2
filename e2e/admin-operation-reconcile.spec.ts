@@ -84,6 +84,19 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
     await row.getByRole("button", { name: "Resolve" }).click();
     const dialog = page.getByRole("dialog", { name: "Record what happened" });
     await expect(dialog).toBeVisible();
+    // Measure the dialog at rest: mid fade-in its text blends into the ground
+    // and axe reports the blend (the same wait as a11y.spec.ts's dialog scan).
+    await expect
+      .poll(() =>
+        dialog.evaluate((el) => {
+          let opacity = 1;
+          for (let node: Element | null = el.querySelector(".dialogbox") ?? el; node; node = node.parentElement) {
+            opacity *= Number(getComputedStyle(node).opacity);
+          }
+          return opacity;
+        })
+      )
+      .toBe(1);
     await assertAccessible(page, "record-outcome dialog");
     await dialog.getByLabel("Did it go through at the provider?").selectOption("not_applied");
     await dialog.getByLabel(/How you checked/).fill(`Stripe dashboard shows no refund ${stamp}`);
