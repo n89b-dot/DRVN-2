@@ -48,6 +48,8 @@ export function LoginForm({
       {message === "auth-error" && (
         <Alert tone="live" className="mt-5" role="alert" title="Link unavailable">
           This sign-in or reset link is invalid, expired, or already used. Request a new password link if needed.
+          If you just confirmed your email in another browser or on another device, your account is
+          ready: sign in below to carry on where you left off.
         </Alert>
       )}
 

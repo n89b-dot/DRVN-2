@@ -43,6 +43,20 @@ function isProductPath(pathname: string) {
 }
 
 /**
+ * A redirect that keeps the session (RR-06). A refresh inside getClaims()
+ * rotates the refresh token and writes the new cookies onto the pass-through
+ * response; a fresh NextResponse.redirect() would drop them, leaving the
+ * browser with a refresh token the server has already spent — signed out on
+ * the next request, or looping through /login. Every redirect after the
+ * session check carries the latest cookies, options and removals included.
+ */
+function redirectKeepingSession(url: URL | string, from: NextResponse) {
+  const response = NextResponse.redirect(url);
+  for (const cookie of from.cookies.getAll()) response.cookies.set(cookie);
+  return response;
+}
+
+/**
  * Fail closed. If we cannot establish who the caller is, a product route must
  * not render — previously this path returned the request unchanged, so a
  * misconfigured or unreachable Supabase left every authed route ungated.
@@ -56,9 +70,10 @@ function denyProductRoutes(request: NextRequest, response: NextResponse, reason:
   const url = request.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
-  url.searchParams.set("next", pathname);
+  // The whole destination, query included, as on the signed-out redirect.
+  url.searchParams.set("next", pathname + request.nextUrl.search);
   url.searchParams.set("error", "session-unavailable");
-  return NextResponse.redirect(url);
+  return redirectKeepingSession(url, response);
 }
 
 export async function updateSession(request: NextRequest) {
@@ -132,7 +147,9 @@ export async function updateSession(request: NextRequest) {
     // The whole destination, query included — /orders?view=sales comes back
     // to Sales, not to whichever tab Orders defaults to.
     url.searchParams.set("next", pathname + request.nextUrl.search);
-    return NextResponse.redirect(url);
+    // A failed refresh clears the session cookies; the redirect carries
+    // those removals too.
+    return redirectKeepingSession(url, supabaseResponse);
   }
 
   if (user && (isAuthPage || pathname === "/")) {
@@ -140,7 +157,7 @@ export async function updateSession(request: NextRequest) {
     // /notifications should open Notifications), never another auth page.
     const next = isAuthPage ? safeRedirectPath(request.nextUrl.searchParams.get("next"), "/home") : "/home";
     const dest = /^\/(login|signup)(\/|\?|$)/.test(next) ? "/home" : next;
-    return NextResponse.redirect(new URL(dest, request.url));
+    return redirectKeepingSession(new URL(dest, request.url), supabaseResponse);
   }
 
   return supabaseResponse;

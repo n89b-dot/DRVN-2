@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
+import { siteUrl } from "@/lib/site";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 import { betaCommerceError, getBetaAccess, prepareBetaSignup } from "@/lib/beta-access";
@@ -107,11 +108,22 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   const prepared = await prepareBetaSignup(email, String(formData.get("invite") ?? ""));
   if (prepared.error) return fail(prepared.error);
 
+  // RR-07: the confirmation email opens in a new tab, often on another
+  // device, so the destination has to travel inside its link. /callback
+  // finishes the sign-in and re-validates `next` as an internal path; if the
+  // link is opened where the signup didn't start, it lands on /login with the
+  // same destination and the account already confirmed.
+  const confirmed = new URL("/callback", siteUrl());
+  if (next) confirmed.searchParams.set("next", next);
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: prepared.claimId ? { data: { beta_claim_id: prepared.claimId } } : undefined,
+    options: {
+      emailRedirectTo: confirmed.toString(),
+      ...(prepared.claimId ? { data: { beta_claim_id: prepared.claimId } } : {}),
+    },
   });
 
   if (error) {
