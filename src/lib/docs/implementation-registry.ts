@@ -122,7 +122,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Attempted via `gh api`: both branch protection and rulesets return 403 on this private Free-plan repository. The exact ruleset (PRs required, `verify` + `sql-guard` required checks, no force push) is documented in the production runbook §8 for one-click application once available.",
     validation:
-      "Configuration attempt executed and refused by GitHub (403 requires Pro/public); documentation shipped. Re-checked 1 Oct 2026: `main` still reports protected:false. The required check is now the aggregate `release-gate` job (it needs verify, secrets, sql-guard, e2e and stripe-integration to have run and passed), not verify + sql-guard alone.",
+      "Configuration attempt executed and refused by GitHub (403 requires Pro/public); documentation shipped. Re-checked 1 Oct 2026: `main` still reports protected:false. The required check is now the aggregate `release-gate` job (it needs verify, secrets, secrets-full, sql-guard, e2e and stripe-integration to have run and passed; secrets is the incremental PR/push scan, secrets-full the full-history + tracked-tree scan), not verify + sql-guard alone.",
     docs: ["docs/production-runbook.md"],
     externalStep:
       "Upgrade the GitHub account to Pro (or make the repo public), then run the documented `gh api` ruleset call in production-runbook §8.",

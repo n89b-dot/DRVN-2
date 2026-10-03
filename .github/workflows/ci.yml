@@ -59,9 +59,17 @@ jobs:
           SUPABASE_SECRET_KEY: sb_secret_placeholder
           NEXT_PUBLIC_SITE_URL: https://example.com
 
-  # RR-23: no credential in the code or its history. Scans every commit, so
-  # a key that was committed and later deleted still fails the build until
-  # it is rotated and allowlisted with a reason.
+  # RR-23: no credential in the code or its history — two lanes.
+  #
+  # `secrets` is the INCREMENTAL lane: gitleaks-action scans only what this
+  # event added — on a pull request `--no-merges --first-parent base^..head`,
+  # on a push the pushed commits. It annotates the PR. It does not see merge
+  # commits, or anything already on the base branch.
+  #
+  # `secrets-full` (below) is the FULL lane: every commit reachable from any
+  # fetched ref, merge commits included, plus the tracked tree as checked out.
+  # That is the lane that fails a key which was committed and later deleted,
+  # until it is rotated and allowlisted with a reason.
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -77,6 +85,127 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The action's own default, made explicit so both lanes run the
+          # same scanner. Bump together with secrets-full's version + checksum.
+          GITLEAKS_VERSION: 8.24.3
+
+  secrets-full:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.24.3
+      # sha256 of gitleaks_8.24.3_linux_x64.tar.gz, from the release's
+      # gitleaks_8.24.3_checksums.txt. A different download fails the job.
+      GITLEAKS_SHA256: 9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Every branch and tag, with full history — the scope of the scan.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      # History: `git log -p -U0 --all --diff-merges=separate`. --all is every
+      # fetched ref (branches, tags, this PR's merge ref); --diff-merges=separate
+      # diffs a merge commit against each parent, so a secret introduced while
+      # resolving a merge is seen — plain `git log -p` prints no diff for merges.
+      # Tree: the tracked files at HEAD, exported with `git archive` so an
+      # untracked or ignored file on the runner can't enter the scope. Both
+      # lanes run before the job decides; reports are --redact'ed.
+      - name: Scan full history and tracked tree
+        run: |
+          set -u
+          out="$RUNNER_TEMP/secret-scan"
+          tree="$RUNNER_TEMP/tracked-tree"
+          mkdir -p "$out" "$tree"
+          git archive --format=tar HEAD | tar -x -C "$tree"
+
+          # One config for both lanes, pinned by path: the repo's own if it
+          # has one, otherwise gitleaks' built-in rules.
+          config="gitleaks built-in default rules (no .gitleaks.toml)"
+          if [ -f .gitleaks.toml ]; then
+            export GITLEAKS_CONFIG="$PWD/.gitleaks.toml"
+            config=".gitleaks.toml (blob $(git hash-object .gitleaks.toml))"
+          fi
+          ignore="none"
+          if [ -f .gitleaksignore ]; then ignore=".gitleaksignore (blob $(git hash-object .gitleaksignore))"; fi
+          common=(--redact --no-banner --exit-code=2 --report-format=json)
+
+          history_opts="--all --diff-merges=separate"
+          # The step shell is `bash -e`: capture each exit so the second lane
+          # and the reports still run when the first finds something.
+          history_exit=0
+          gitleaks git "${common[@]}" --log-opts="$history_opts" \
+            --report-path="$out/history.json" . || history_exit=$?
+          # Run from inside the export so fingerprints are repo-relative and
+          # the tracked .gitleaksignore applies.
+          tree_exit=0
+          (cd "$tree" && gitleaks dir "${common[@]}" --report-path="$out/tree.json" .) || tree_exit=$?
+
+          count() { [ -s "$1" ] && jq 'length' "$1" || echo "n/a"; }
+          jq -n \
+            --arg version "$(gitleaks version)" \
+            --arg config "$config" \
+            --arg ignore "$ignore" \
+            --arg source_sha "$(git rev-parse HEAD)" \
+            --arg github_sha "$GITHUB_SHA" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            --arg ref "$GITHUB_REF" \
+            --arg history_opts "git log -p -U0 $history_opts" \
+            --argjson refs "$(git for-each-ref --format='%(refname)' | wc -l)" \
+            --argjson commits "$(git rev-list --all --count)" \
+            --argjson merges "$(git rev-list --all --merges --count)" \
+            --argjson tracked_files "$(git ls-files | wc -l)" \
+            --arg history_findings "$(count "$out/history.json")" \
+            --arg tree_findings "$(count "$out/tree.json")" \
+            --argjson history_exit "$history_exit" \
+            --argjson tree_exit "$tree_exit" \
+            '{scanner: "gitleaks", version: $version, config: $config, ignore: $ignore,
+              source_sha: $source_sha, github_sha: $github_sha, event: $event, ref: $ref,
+              history: {scope: "all reachable commits incl. merges", log_opts: $history_opts,
+                        refs: $refs, commits: $commits, merges: $merges,
+                        findings: $history_findings, exit: $history_exit},
+              tree: {scope: "tracked files at source_sha (git archive)", files: $tracked_files,
+                     findings: $tree_findings, exit: $tree_exit}}' > "$out/scope.json"
+
+          {
+            echo "### Secret scan — full history + tracked tree"
+            echo ""
+            echo '```json'
+            cat "$out/scope.json"
+            echo '```'
+            # Rule, file, commit and line only — never the match.
+            for lane in history tree; do
+              if [ -s "$out/$lane.json" ] && [ "$(jq 'length' "$out/$lane.json")" -gt 0 ]; then
+                echo ""
+                echo "**$lane findings** (redacted)"
+                echo ""
+                jq -r '.[] | "- \(.RuleID) · \(.File):\(.StartLine)" + (if .Commit != "" then " · \(.Commit[0:12])" else "" end)' "$out/$lane.json"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          test "$history_exit" -eq 0 && test "$tree_exit" -eq 0
+
+      - name: Upload secret-scan reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: secret-scan-full
+          path: ${{ runner.temp }}/secret-scan/
+          retention-days: 14
+          if-no-files-found: error
 
   # The commerce guarantees live in Postgres (conditional UPDATEs, terminal-
   # state guards, dispute constraints, notification triggers) — Node tests
@@ -284,12 +413,13 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, secrets, sql-guard, e2e, stripe-integration]
+    needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
     steps:
       - name: Require executed verification
         env:
           VERIFY: ${{ needs.verify.result }}
           SECRETS: ${{ needs.secrets.result }}
+          SECRETS_FULL: ${{ needs.secrets-full.result }}
           SQL: ${{ needs.sql-guard.result }}
           E2E: ${{ needs.e2e.result }}
           STRIPE: ${{ needs.stripe-integration.result }}
@@ -298,6 +428,7 @@ jobs:
         run: |
           test "$VERIFY" = success
           test "$SECRETS" = success
+          test "$SECRETS_FULL" = success
           test "$SQL" = success
           test "$E2E" = success && test "$E2E_RAN" = true
           test "$STRIPE" = success && test "$STRIPE_RAN" = true
@@ -307,7 +438,7 @@ jobs:
   summary:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    needs: [verify, secrets, sql-guard, e2e, stripe-integration]
+    needs: [verify, secrets, secrets-full, sql-guard, e2e, stripe-integration]
     if: always()
     steps:
       - name: Coverage summary
@@ -318,7 +449,8 @@ jobs:
             echo "| Suite | Result |"
             echo "|---|---|"
             echo "| Typecheck / lint / unit / build / production advisories | ${{ needs.verify.result }} |"
-            echo "| Secret scan (full history) | ${{ needs.secrets.result }} |"
+            echo "| Secret scan, incremental (this PR's / push's first-parent, non-merge commits) | ${{ needs.secrets.result }} |"
+            echo "| Secret scan, full (all reachable commits incl. merges + tracked tree) | ${{ needs.secrets-full.result }} |"
             echo "| SQL guards (all registered suites) | ${{ needs.sql-guard.result }} |"
             echo "| Required browser regression suite | ${{ needs.e2e.result }}; executed=${{ needs.e2e.outputs.ran }} |"
             echo "| Stripe test-mode integration | ${{ needs.stripe-integration.result }}; executed=${{ needs.stripe-integration.outputs.ran }} |"
