@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { unstable_rethrow } from "next/navigation";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -149,6 +149,12 @@ export function SellForm({
   const [state, setState] = useState<SellState>({});
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
+  // The save runs inside this transition so a redirect the action throws
+  // (createListing redirects on every success) is rethrown into Next's
+  // RedirectBoundary, which already handles it. Rethrown from a plain
+  // handler, it became an unhandled rejection that Next followed a second
+  // time, while the first navigation was still in flight.
+  const [, startSubmit] = useTransition();
   const [sourceCarId, setSourceCarId] = useState(listing?.source_car_id ?? prefill?.carId ?? "");
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
   const [subcategory, setSubcategory] = useState(
@@ -396,7 +402,7 @@ export function SellForm({
   return (
     <form
       noValidate
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
         if (submitting.current) return;
         const formData = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter);
@@ -430,23 +436,25 @@ export function SellForm({
         setPending(true);
         // Keep the last saved version: the next save expects it.
         setState((previous) => ({ version: previous.version }));
-        try {
-          const next = await (isEdit ? updateListing : createListing)({}, formData);
-          if (isEdit && next.outcome === "saved") editRequest.current = null;
-          setState((previous) => ({ ...next, version: next.version ?? previous.version }));
-          if (isEdit && next.outcome === "unknown") await reconcileEdit();
-        } catch (error) {
-          unstable_rethrow(error);
-          if (isEdit) {
-            setState((previous) => ({ version: previous.version, ...UNCONFIRMED_EDIT }));
-            await reconcileEdit();
-          } else {
-            setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
+        startSubmit(async () => {
+          try {
+            const next = await (isEdit ? updateListing : createListing)({}, formData);
+            if (isEdit && next.outcome === "saved") editRequest.current = null;
+            setState((previous) => ({ ...next, version: next.version ?? previous.version }));
+            if (isEdit && next.outcome === "unknown") await reconcileEdit();
+          } catch (error) {
+            unstable_rethrow(error);
+            if (isEdit) {
+              setState((previous) => ({ version: previous.version, ...UNCONFIRMED_EDIT }));
+              await reconcileEdit();
+            } else {
+              setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
+            }
+          } finally {
+            submitting.current = false;
+            setPending(false);
           }
-        } finally {
-          submitting.current = false;
-          setPending(false);
-        }
+        });
       }}
       className="deck !pb-0"
     >
