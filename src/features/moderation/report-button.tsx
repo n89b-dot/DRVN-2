@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow, useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 
 import { Dialog } from "@/components/ui";
 
@@ -57,15 +57,21 @@ export function ReportButton({
   const [state, setState] = useState<ReportState>(null);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
-  async function submit(data: FormData) {
+  // A transition, so a redirect the action already followed (sign-in lapsed)
+  // lands in Next's redirect boundary instead of a second navigation.
+  const [, startTransition] = useTransition();
+
+  function submit(data: FormData) {
     if (inFlight.current) return;
     inFlight.current = true;
     setPending(true);
     reportId.current ??= crypto.randomUUID();
     data.set("report_id", reportId.current);
-    try { setState(await fileReport(state, data)); }
-    catch (error) { unstable_rethrow(error); setState({ error: "Couldn't confirm your report was filed. Your details are still here; try again." }); }
-    finally { inFlight.current = false; setPending(false); }
+    startTransition(async () => {
+      try { setState(await fileReport(state, data)); }
+      catch (error) { unstable_rethrow(error); setState({ error: "Couldn't confirm your report was filed. Your details are still here; try again." }); }
+      finally { inFlight.current = false; setPending(false); }
+    });
   }
   const idBase = useId();
 

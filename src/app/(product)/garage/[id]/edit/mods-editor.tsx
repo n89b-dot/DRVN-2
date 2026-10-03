@@ -215,6 +215,10 @@ export function ModsEditor({
   const [unlinkPending, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  // Saves call the action in their own transition, so a redirect it already
+  // followed (sign-in lapsed) lands in Next's redirect boundary instead of a
+  // second navigation.
+  const [, startSave] = useTransition();
   const pending = saving || unlinkPending;
   const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);
   // Passive post-save affordance (brief §W1): when a save meaningfully changed
@@ -388,8 +392,8 @@ export function ModsEditor({
    * rows explicitly so a caller that just changed them doesn't have to wait
    * for React to hand the new state back.
    */
-  async function persist(rowsToSave: Row[]): Promise<boolean> {
-    if (savingRef.current || unlinkPending) return false;
+  function persist(rowsToSave: Row[]): Promise<boolean> {
+    if (savingRef.current || unlinkPending) return Promise.resolve(false);
     savingRef.current = true;
     setSaving(true);
     setStatus(null);
@@ -414,64 +418,78 @@ export function ModsEditor({
       ref_price_cents: r.ref_price_cents,
       ref_price_currency: r.ref_price_currency,
     }));
-    try {
-      let result: Awaited<ReturnType<typeof saveModItems>>;
+    // Only the call runs in the transition: `saving` and the cleared status
+    // above stay urgent, so the button is disabled before a second click.
+    const commit = async (): Promise<boolean> => {
       try {
-        result = await saveModItems(carId, items);
-      } catch (error) {
-        unstable_rethrow(error);
-        // The request may have committed before its response disappeared. Keep
-        // every draft value and the client UUIDs so retrying converges on the
-        // same rows instead of forcing a reload or creating duplicates.
-        setStatus({
-          kind: "error",
-          message: "Couldn't confirm the save. Your changes are still here — try again.",
-        });
-        return false;
+        let result: Awaited<ReturnType<typeof saveModItems>>;
+        try {
+          result = await saveModItems(carId, items);
+        } catch (error) {
+          unstable_rethrow(error);
+          // The request may have committed before its response disappeared. Keep
+          // every draft value and the client UUIDs so retrying converges on the
+          // same rows instead of forcing a reload or creating duplicates.
+          setStatus({
+            kind: "error",
+            message: "Couldn't confirm the save. Your changes are still here — try again.",
+          });
+          return false;
+        }
+        setStatus(
+          result.error
+            ? { kind: "error", message: result.error }
+            : { kind: "ok", message: "Saved ✓" }
+        );
+        if (!result.error) {
+          // New rows use their client UUID as the durable database id. Promote
+          // that id locally so an ordinary second save and a response-loss retry
+          // update the same row instead of inserting a duplicate.
+          // A part that just came off gets its date now, so the row reads
+          // "Off since …" instead of still promising to come off.
+          const today = new Date().toISOString();
+          setRows((current) =>
+            current
+              .filter((row) => !dropped.has(row.key))
+              .map((row) => ({
+                ...row,
+                id: row.id ?? row.key,
+                removed_at: row.status === "removed" ? (row.removed_at ?? today) : row.removed_at,
+              }))
+          );
+          setSavedSnap(snapshot(kept));
+          setReplaced(null);
+          const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
+            [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
+          // "What changed" is now a question about state, not about presence: a
+          // part that came off is still in the sheet, so comparing the two sets
+          // of labels would report nothing removed.
+          const before = new Set(
+            initialMods.filter((m) => m.status === "installed").map((m) => label(m)).filter(Boolean)
+          );
+          const after = new Set(
+            kept.filter((r) => r.status === "installed").map((r) => label(r)).filter(Boolean)
+          );
+          const added = [...after].filter((l) => !before.has(l)).slice(0, 3);
+          const removed = [...before].filter((l) => !after.has(l)).slice(0, 3);
+          setSuggestion(added.length || removed.length ? { added, removed } : null);
+        }
+        return !result.error;
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
       }
-      setStatus(
-        result.error
-          ? { kind: "error", message: result.error }
-          : { kind: "ok", message: "Saved ✓" }
-      );
-      if (!result.error) {
-        // New rows use their client UUID as the durable database id. Promote
-        // that id locally so an ordinary second save and a response-loss retry
-        // update the same row instead of inserting a duplicate.
-        // A part that just came off gets its date now, so the row reads
-        // "Off since …" instead of still promising to come off.
-        const today = new Date().toISOString();
-        setRows((current) =>
-          current
-            .filter((row) => !dropped.has(row.key))
-            .map((row) => ({
-              ...row,
-              id: row.id ?? row.key,
-              removed_at: row.status === "removed" ? (row.removed_at ?? today) : row.removed_at,
-            }))
-        );
-        setSavedSnap(snapshot(kept));
-        setReplaced(null);
-        const label = (row: { brand?: string | null; product?: string | null; raw_text?: string | null }) =>
-          [row.brand, row.product].filter(Boolean).join(" ").trim() || (row.raw_text ?? "").trim();
-        // "What changed" is now a question about state, not about presence: a
-        // part that came off is still in the sheet, so comparing the two sets
-        // of labels would report nothing removed.
-        const before = new Set(
-          initialMods.filter((m) => m.status === "installed").map((m) => label(m)).filter(Boolean)
-        );
-        const after = new Set(
-          kept.filter((r) => r.status === "installed").map((r) => label(r)).filter(Boolean)
-        );
-        const added = [...after].filter((l) => !before.has(l)).slice(0, 3);
-        const removed = [...before].filter((l) => !after.has(l)).slice(0, 3);
-        setSuggestion(added.length || removed.length ? { added, removed } : null);
-      }
-      return !result.error;
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
+    };
+    return new Promise((resolve) => {
+      startSave(async () => {
+        let saved = false;
+        try {
+          saved = await commit();
+        } finally {
+          resolve(saved);
+        }
+      });
+    });
   }
 
   const save = () => persist(rows);

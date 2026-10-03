@@ -6,7 +6,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { unstable_rethrow, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/format";
@@ -383,7 +383,11 @@ export function BuildStoryComposer({
   const [draftPending, setDraftPending] = useState(false);
   const submittingRef = useRef(false);
 
-  async function submit(mode: "publish" | "draft", formData: FormData) {
+  // A transition, so a redirect the action already followed (sign-in lapsed)
+  // lands in Next's redirect boundary instead of a second navigation.
+  const [, startTransition] = useTransition();
+
+  function submit(mode: "publish" | "draft", formData: FormData) {
     if (submittingRef.current) return;
     submittingRef.current = true;
     publishingRef.current = true;
@@ -393,25 +397,27 @@ export function BuildStoryComposer({
     const setResult = mode === "publish" ? setPublishState : setDraftState;
     const setPending = mode === "publish" ? setPublishing : setDraftPending;
     setPending(true);
-    try {
-      const result = mode === "publish"
-        ? await publishAction({}, formData)
-        : draftAction ? await draftAction({}, formData) : {};
-      setResult(result);
-      if (result.ok) {
-        try { localStorage.removeItem(localKey); } catch { /* Storage may be unavailable. */ }
+    startTransition(async () => {
+      try {
+        const result = mode === "publish"
+          ? await publishAction({}, formData)
+          : draftAction ? await draftAction({}, formData) : {};
+        setResult(result);
+        if (result.ok) {
+          try { localStorage.removeItem(localKey); } catch { /* Storage may be unavailable. */ }
+        }
+        // Act on the confirmed response directly. A revalidated server tree must
+        // not leave navigation waiting for a deferred action-state effect.
+        if (result.href) router.push(result.href);
+      } catch (error) {
+        unstable_rethrow(error);
+        setResult({ error: "The response was interrupted. Your draft is still here — try again." });
+      } finally {
+        publishingRef.current = false;
+        submittingRef.current = false;
+        setPending(false);
       }
-      // Act on the confirmed response directly. A revalidated server tree must
-      // not leave navigation waiting for a deferred action-state effect.
-      if (result.href) router.push(result.href);
-    } catch (error) {
-      unstable_rethrow(error);
-      setResult({ error: "The response was interrupted. Your draft is still here — try again." });
-    } finally {
-      publishingRef.current = false;
-      submittingRef.current = false;
-      setPending(false);
-    }
+    });
   }
 
   // "Discard draft": two taps, because the draft can't come back. Autosave
@@ -420,29 +426,31 @@ export function BuildStoryComposer({
   const [discarding, setDiscarding] = useState(false);
   const canDiscard =
     !isEdit && Boolean(discardAction) && (Boolean(draftSavedAt) || saveState === "saved" || Boolean(draftState.ok));
-  async function discard() {
+  function discard() {
     if (!discardAction || submittingRef.current) return;
     submittingRef.current = true;
     publishingRef.current = true;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setDiscarding(true);
     setDraftState({});
-    try {
-      const result = await discardAction(carId);
-      if (result.error) {
-        setDraftState(result);
-        return;
+    startTransition(async () => {
+      try {
+        const result = await discardAction(carId);
+        if (result.error) {
+          setDraftState(result);
+          return;
+        }
+        try { localStorage.removeItem(localKey); } catch { /* Storage may be unavailable. */ }
+        router.push(result.href ?? "/home");
+      } catch (error) {
+        unstable_rethrow(error);
+        setDraftState({ error: "Couldn't confirm the draft was discarded. Try again." });
+      } finally {
+        publishingRef.current = false;
+        submittingRef.current = false;
+        setDiscarding(false);
       }
-      try { localStorage.removeItem(localKey); } catch { /* Storage may be unavailable. */ }
-      router.push(result.href ?? "/home");
-    } catch (error) {
-      unstable_rethrow(error);
-      setDraftState({ error: "Couldn't confirm the draft was discarded. Try again." });
-    } finally {
-      publishingRef.current = false;
-      submittingRef.current = false;
-      setDiscarding(false);
-    }
+    });
   }
 
   const showTemplates = !isEdit && isEmpty;

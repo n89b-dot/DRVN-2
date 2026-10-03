@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
 
@@ -8,8 +8,16 @@ import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
 // below is shorter than the fallback, so only a working subscription passes.
 const LIVE = { timeout: 10_000 };
 
+// Contexts opened from `browser` outlive the test unless closed; their pages
+// would keep running through every later spec in the worker.
+const contexts: BrowserContext[] = [];
+test.afterEach(async () => {
+  await Promise.all(contexts.splice(0).map((context) => context.close()));
+});
+
 async function member(browser: Browser, email: string, password: string): Promise<Page> {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  contexts.push(context);
   const page = await context.newPage();
   await page.goto("/login");
   await page.getByLabel(/^email$/i).fill(email);

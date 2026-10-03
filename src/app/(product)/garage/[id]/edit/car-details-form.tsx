@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { unstable_rethrow } from "next/navigation";
 
 import { Button, TextArea, TextField } from "@/components/ui";
@@ -17,13 +17,16 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
   const revision = useRef(0);
   const [dirty, setDirty] = useState(false);
   useUnsavedGuard(dirty);
+  // A transition, so a redirect the action already followed (sign-in lapsed)
+  // lands in Next's redirect boundary instead of a second navigation.
+  const [, startTransition] = useTransition();
 
   return (
     <section className="tile">
       <div className="tile__head">
         <span className="microlabel microlabel--ink">Details — shown on the build page</span>
       </div>
-      <form className="flex flex-col gap-4" onChange={() => { revision.current += 1; setDirty(true); }} onSubmit={async (event) => {
+      <form className="flex flex-col gap-4" onChange={() => { revision.current += 1; setDirty(true); }} onSubmit={(event) => {
         event.preventDefault();
         if (submitting.current) return;
         const data = new FormData(event.currentTarget);
@@ -31,17 +34,19 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
         submitting.current = true;
         setPending(true);
         setState({});
-        try {
-          const result = await updateCar({}, data);
-          setState(result);
-          if (result.ok && revision.current === submittedRevision) setDirty(false);
-        } catch (error) {
-          unstable_rethrow(error);
-          setState({ error: "Couldn’t confirm the save. Your changes are still here; try again." });
-        } finally {
-          submitting.current = false;
-          setPending(false);
-        }
+        startTransition(async () => {
+          try {
+            const result = await updateCar({}, data);
+            setState(result);
+            if (result.ok && revision.current === submittedRevision) setDirty(false);
+          } catch (error) {
+            unstable_rethrow(error);
+            setState({ error: "Couldn’t confirm the save. Your changes are still here; try again." });
+          } finally {
+            submitting.current = false;
+            setPending(false);
+          }
+        });
       }}>
         <input type="hidden" name="id" value={car.id} />
         <TextField

@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
 import {
@@ -49,8 +49,17 @@ const PIXEL = Buffer.from(
  */
 async function freshPage(browser: Browser): Promise<Page> {
   const context = await browser.newContext();
+  freshContexts.push(context);
   return context.newPage();
 }
+
+// A context opened from `browser` outlives its test unless it is closed: its
+// pages kept running — prefetching and polling the server — through every
+// later spec in the worker, and showed up in their failure screenshots.
+const freshContexts: BrowserContext[] = [];
+test.afterEach(async () => {
+  await Promise.all(freshContexts.splice(0).map((context) => context.close()));
+});
 
 async function attachPhoto(page: Page) {
   await page.locator('input[type="file"]').first().setInputFiles({
