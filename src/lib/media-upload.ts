@@ -112,24 +112,31 @@ export async function uploadImages({
     // Only private buckets upload straight from the browser. The client is
     // loaded here, on demand, so every page that merely offers a public photo
     // upload (Home's quick post, garage, profile) doesn't ship supabase-js.
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `${pathPrefix}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(path, file, { contentType: file.type });
-    if (error) {
-      failed.push({ file, reason: error.message, retryable: true });
-      continue;
+    // A throw anywhere in here (the chunk failing to load, the network) is
+    // this file's retryable failure, never a rejection that loses the batch
+    // (R2-10) — the same contract as the public path above.
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${pathPrefix}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, { contentType: file.type });
+      if (error) {
+        failed.push({ file, reason: error.message, retryable: true });
+        continue;
+      }
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(bucket).getPublicUrl(path);
+      // Ledger the upload for GC (0029) before any DB row exists — if the
+      // caller's persist step fails, the 48h sweep reclaims the object.
+      void recordStagedUpload(bucket, path, publicUrl).catch(() => {});
+      uploaded.push({ url: publicUrl, path, file });
+    } catch (error) {
+      failed.push({ file, reason: error instanceof Error && error.message ? error.message : "Upload failed.", retryable: true });
     }
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(bucket).getPublicUrl(path);
-    // Ledger the upload for GC (0029) before any DB row exists — if the
-    // caller's persist step fails, the 48h sweep reclaims the object.
-    void recordStagedUpload(bucket, path, publicUrl).catch(() => {});
-    uploaded.push({ url: publicUrl, path, file });
   }
 
   return { uploaded, failed };
