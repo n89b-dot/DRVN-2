@@ -3,7 +3,12 @@ import Link from "next/link";
 import { TileHead } from "@/components/ui";
 
 import { formatPrice } from "@/lib/payments/fee";
-import { CLEARING_HOLD_DAYS, type SellerLedger, type LedgerState } from "@/lib/payments/ledger";
+import {
+  CLEARING_HOLD_DAYS,
+  LEDGER_FETCH_CAP,
+  type SellerLedger,
+  type LedgerState,
+} from "@/lib/payments/ledger";
 
 const STATE_LABEL: Record<LedgerState, string> = {
   held: "On hold",
@@ -42,9 +47,25 @@ export function PayoutsSection({
   ledger,
   paymentsLive,
 }: {
-  ledger: SellerLedger;
+  /** Null when the ledger couldn't be read (R2-05) — shown as unavailable,
+   *  never as $0. */
+  ledger: SellerLedger | null;
   paymentsLive: boolean;
 }) {
+  if (!ledger) {
+    return (
+      <section id="payouts" className="tile tile--deep">
+        <TileHead label="What you've earned" />
+        <p role="status" className="field__hint max-w-[62ch]">
+          We couldn&apos;t load your earnings just now, so there are no totals to show. Your
+          sales and payouts are unaffected.
+        </p>
+        <a href="/payouts" className="jumplink mt-3 inline-block">
+          Try again →
+        </a>
+      </section>
+    );
+  }
   const lifetimeCents =
     ledger.heldCents + ledger.clearingCents + ledger.availableCents + ledger.paidOutCents;
   const lines = ledger.lines.slice(0, RECENT_LINES);
@@ -71,10 +92,16 @@ export function PayoutsSection({
           <b>{compactMoney(ledger.availableCents)}</b>
         </div>
         <div className="sheet__row items-baseline">
-          <span>Lifetime net</span>
+          <span>{ledger.truncated ? `Net, latest ${LEDGER_FETCH_CAP} sales` : "Lifetime net"}</span>
           <b>{compactMoney(lifetimeCents)}</b>
         </div>
       </div>
+      {ledger.truncated && (
+        <p className="field__hint mt-2 max-w-[62ch]">
+          These totals cover your latest {LEDGER_FETCH_CAP} sales only. Older sales keep their
+          breakdown on each order.
+        </p>
+      )}
 
       {lines.length === 0 ? (
         <p className="field__hint mt-4 max-w-[62ch]">
@@ -108,6 +135,12 @@ export function PayoutsSection({
                         ? `Delivered ${new Date(line.deliveredAt).toLocaleDateString()}`
                         : "Awaiting delivery confirmation"}
                     </span>
+                    {line.refundedCents > 0 && (
+                      <span className="order__meta block">
+                        {formatPrice(line.refundedCents)} refunded to the buyer · −
+                        {formatPrice(line.refundShareCents)} from your share
+                      </span>
+                    )}
                   </td>
                   <td className="ledger__num" data-label="Net">
                     {formatPrice(line.netCents)}
