@@ -28,7 +28,7 @@ import { SortableGrid, SortableItem } from "@/components/ui";
 import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
 import { isLowConfidence } from "@/lib/mods/parse";
 
-import { createListing, updateListing, type SellState } from "./actions";
+import { checkListingEdit, createListing, updateListing, type SellState } from "./actions";
 import { FitmentPicker, type FitmentRow } from "./fitment-picker";
 
 /** A gallery photo, in save order — index 0 is always the cover. */
@@ -165,6 +165,11 @@ export function SellForm({
   // Kept for the lifetime of this form so a retry after a lost Server Action
   // response addresses the same listing creation request.
   const creationRequestId = useRef<string | null>(null);
+  // R2-01: an edit keeps its request id until its outcome is known. The same
+  // draft resubmitted reuses it, so a retry after a lost answer replays the
+  // committed save instead of tripping the version check; a changed draft is
+  // a new edit and gets a new id.
+  const editRequest = useRef<{ id: string; fingerprint: string } | null>(null);
 
   const subcategories = CATEGORIES.find((c) => c.slug === category)?.subcategories ?? [];
   const money = (cents: number | null | undefined) =>
@@ -361,6 +366,33 @@ export function SellForm({
     </Button>
   );
 
+  /** An edit whose answer was lost: ask, read-only, whether it committed.
+   *  The draft stays in the form whatever the answer. */
+  async function reconcileEdit() {
+    const request = editRequest.current;
+    if (!listing || !request) return;
+    let check: Awaited<ReturnType<typeof checkListingEdit>>;
+    try {
+      check = await checkListingEdit(listing.id, request.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      check = { outcome: "unavailable" };
+    }
+    if (check.outcome === "saved") {
+      editRequest.current = null;
+      setState({ ok: "Listing updated.", version: check.version, outcome: "saved" });
+    } else {
+      setState((previous) => ({
+        version: previous.version,
+        outcome: "unknown",
+        error:
+          check.outcome === "not_found"
+            ? "We couldn’t confirm that save went through. Your changes are still here — save again; it won’t be applied twice."
+            : "We still can’t confirm whether that saved. Your changes are still here — save again to retry safely; it won’t be applied twice.",
+      }));
+    }
+  }
+
   return (
     <form
       noValidate
@@ -387,15 +419,30 @@ export function SellForm({
         if (!isEdit) {
           creationRequestId.current ??= crypto.randomUUID();
           formData.set("request_id", creationRequestId.current);
+        } else {
+          const fingerprint = JSON.stringify([...formData.entries()].map(([key, value]) => [key, String(value)]));
+          if (editRequest.current?.fingerprint !== fingerprint) {
+            editRequest.current = { id: crypto.randomUUID(), fingerprint };
+          }
+          formData.set("request_id", editRequest.current.id);
         }
         submitting.current = true;
         setPending(true);
-        setState({});
+        // Keep the last saved version: the next save expects it.
+        setState((previous) => ({ version: previous.version }));
         try {
-          setState(await (isEdit ? updateListing : createListing)({}, formData));
+          const next = await (isEdit ? updateListing : createListing)({}, formData);
+          if (isEdit && next.outcome === "saved") editRequest.current = null;
+          setState((previous) => ({ ...next, version: next.version ?? previous.version }));
+          if (isEdit && next.outcome === "unknown") await reconcileEdit();
         } catch (error) {
           unstable_rethrow(error);
-          setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
+          if (isEdit) {
+            setState((previous) => ({ version: previous.version, ...UNCONFIRMED_EDIT }));
+            await reconcileEdit();
+          } else {
+            setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
+          }
         } finally {
           submitting.current = false;
           setPending(false);
@@ -1181,6 +1228,11 @@ export function SellForm({
     </form>
   );
 }
+
+const UNCONFIRMED_EDIT: SellState = {
+  error: "We couldn’t confirm the save. Checking its status…",
+  outcome: "unknown",
+};
 
 /** The newer of the version the page rendered with and the one the last save
  *  returned — whichever arrived last, the next save expects it. */

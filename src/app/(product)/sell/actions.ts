@@ -28,7 +28,13 @@ export type SellState = {
   /** After an edit saves: the listing's new version, so the next save from
    *  the same form isn't refused as stale (RR-05). */
   version?: string;
+  /** How an edit ended (R2-01). `unknown` means the save may have committed
+   *  and its answer was lost — the form keeps the draft and its request id,
+   *  and checks rather than claiming nothing changed. */
+  outcome?: ListingEditOutcome;
 };
+
+export type ListingEditOutcome = "saved" | "conflict" | "rejected" | "unknown";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -377,27 +383,22 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   const { supabase, user } = await requireUser();
 
   const id = String(formData.get("id") ?? "");
-  if (!id) return { error: "Missing listing." };
+  if (!id) return { error: "Missing listing.", outcome: "rejected" };
   // RR-05: the version the form was opened with. The save is refused if the
   // listing changed since — another tab, or a checkout reserving it.
   const expected = String(formData.get("expected_updated_at") ?? "");
   if (!expected || Number.isNaN(Date.parse(expected))) {
-    return { error: "This form is out of date. Reload the page, then save again." };
+    return { error: "This form is out of date. Reload the page, then save again.", outcome: "rejected" };
   }
-
-  const { data: existing, error: readError } = await supabase
-    .from("listings")
-    .select("id, seller_id, status")
-    .eq("id", id)
-    .maybeSingle();
-  if (readError) return { error: "Couldn't load this listing. Try again." };
-  if (!existing || existing.seller_id !== user.id) return { error: "Listing not found." };
-  if (["sold", "reserved"].includes(existing.status)) {
-    return { error: "A sold or reserved part can't be edited." };
+  // R2-01: the form keeps one request id per edit until its outcome is
+  // known, so a retry after a lost answer replays instead of re-editing.
+  const requestId = String(formData.get("request_id") ?? "");
+  if (!UUID.test(requestId)) {
+    return { error: "Reload the listing form and try again.", outcome: "rejected" };
   }
 
   const parsed = await readListingFields(formData, user.id);
-  if ("error" in parsed) return { error: parsed.error };
+  if ("error" in parsed) return { error: parsed.error, outcome: "rejected" };
 
   // The gallery is replaced only when the form submitted one. Array order
   // carries reorder + cover choices (index 0 is the cover) and alt text.
@@ -406,15 +407,27 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
     typeof imagesField === "string" && imagesField
       ? keepValidGalleryImages(safeParseJson(imagesField), 12, user.id)
       : null;
-  // A live listing can't be edited down to no photos (M-5/W-2) — checked
-  // here for the message, and again inside the transaction.
-  if (existing.status === "active" && images && images.length === 0) {
-    return { error: PHOTO_REQUIRED };
-  }
+
+  // Ownership, status (sold/reserved/removed), the live-listing photo rule
+  // and the version are all decided inside the transaction — not by a read
+  // here that a replay of an already-committed edit would trip over.
+  const payloadHash = createHash("sha256")
+    .update(JSON.stringify({
+      listing: id,
+      expected,
+      fields: parsed.fields,
+      images,
+      fitments: parsed.fitments,
+      altNumbers: parsed.altNumbers,
+    }))
+    .digest("hex");
 
   // One transaction: the listing, its photos, fitment and alternate part
-  // numbers all change, or none of them do.
-  const saved = await supabase.rpc("update_listing_atomic", {
+  // numbers all change, or none of them do — and the outcome is recorded
+  // against the request in the same commit.
+  const saved = await supabase.rpc("save_listing_edit", {
+    p_request: requestId,
+    p_payload_hash: payloadHash,
     p_listing: id,
     p_expected_updated_at: expected,
     p_fields: parsed.fields,
@@ -422,39 +435,114 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
     p_fitments: parsed.fitments,
     p_alt_numbers: parsed.altNumbers,
   });
+
+  let result = saved.data as unknown as EditResult | null;
   if (saved.error) {
-    const message =
-      saved.error.code === "40001"
-        ? "This listing changed since you opened it — maybe in another tab. Reload to see the latest, then make your edit again."
-        : saved.error.code === "55000"
-          ? "A sold or reserved part can't be edited."
-          : saved.error.code === "23514"
-            ? PHOTO_REQUIRED
-            : saved.error.code === "P0002"
-              ? "Listing not found."
-              : "Couldn't save your changes. Nothing was changed — try again.";
-    if (!["40001", "55000", "23514", "P0002"].includes(saved.error.code)) {
-      reportError("[sell] atomic listing edit failed", { id, error: saved.error });
+    const code = saved.error.code ?? "";
+    // The database answered: whatever it said, the transaction rolled back.
+    if (code === "40001") {
+      return {
+        error: "This listing changed since you opened it — maybe in another tab. Reload to see the latest, then make your edit again.",
+        outcome: "conflict",
+      };
     }
-    return { error: message };
+    if (DATABASE_ANSWERED.test(code)) {
+      const message =
+        code === "55000"
+          ? "A sold or reserved part can't be edited."
+          : code === "23514"
+            ? PHOTO_REQUIRED
+            : code === "P0002"
+              ? "Listing not found."
+              : code === "22023"
+                ? "This save no longer matches the form. Reload the page, then make your edit again."
+                : code === "42501"
+                  ? "This account can't edit listings right now."
+                  : "Couldn't save your changes. Nothing was changed — try again.";
+      if (!["55000", "23514", "P0002", "22023", "42501"].includes(code)) {
+        reportError("[sell] atomic listing edit failed", { id, requestId, error: saved.error });
+      }
+      return { error: message, outcome: "rejected" };
+    }
+    // No database answer (a dropped connection, a timeout): the edit may
+    // have committed. Ask once before saying anything about it.
+    reportError("[sell] listing edit outcome unknown", { id, requestId, error: saved.error });
+    const check = await readListingEdit(supabase, id, requestId);
+    if (check.outcome !== "saved") return UNKNOWN_EDIT;
+    result = check.result;
   }
-  const result = saved.data as unknown as { updated_at?: string; removed_image_urls?: string[] } | null;
-  if (!result?.updated_at) return { error: "Couldn't confirm your changes saved. Reload to check." };
+  if (!result?.updated_at) return UNKNOWN_EDIT;
 
   // Storage follows the committed rows, never the other way round: kept
   // photos are marked used, and dropped ones are garbage-collected only now
   // that no saved row points at them. The helper re-checks every referencing
-  // table before touching storage, and never fails the save.
+  // table before touching storage, and never fails the save. Both are safe
+  // to repeat when a replay recovers an earlier commit.
   if (images?.length) await finalizeMediaUrls(supabase, images.map((img) => img.url));
   for (const url of result.removed_image_urls ?? []) await deleteMediaIfUnreferenced(url);
 
+  revalidateListingEdit(id, parsed.fields.source_car_id);
+  return { ok: "Listing updated.", version: result.updated_at, outcome: "saved" };
+}
+
+type EditResult = { updated_at?: string; removed_image_urls?: string[]; replayed?: boolean };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** A SQLSTATE or PostgREST code: the database (or its gateway) answered. */
+const DATABASE_ANSWERED = /^([0-9A-Z]{5}|PGRST\d+)$/;
+const UNKNOWN_EDIT: SellState = {
+  error: "We couldn't confirm the save. Checking its status…",
+  outcome: "unknown",
+};
+
+function revalidateListingEdit(id: string, sourceCarId: string | null | undefined) {
   revalidatePath(`/listings/${id}`);
   revalidatePath(`/listings/${id}/edit`);
   revalidatePath("/marketplace");
   revalidatePath("/sell");
   revalidatePath("/garage");
-  if (parsed.fields.source_car_id) revalidatePath(`/garage/${parsed.fields.source_car_id}/edit`);
-  return { ok: "Listing updated.", version: result.updated_at };
+  if (sourceCarId) revalidatePath(`/garage/${sourceCarId}/edit`);
+}
+
+type EditCheck =
+  | { outcome: "saved"; result: EditResult }
+  | { outcome: "not_found" }
+  | { outcome: "unavailable" };
+
+async function readListingEdit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  listingId: string,
+  requestId: string
+): Promise<EditCheck> {
+  const { data, error } = await supabase.rpc("listing_edit_status", {
+    p_request: requestId,
+    p_listing: listingId,
+  });
+  if (error) {
+    reportError("[sell] listing edit status unavailable", { listingId, requestId, error });
+    return { outcome: "unavailable" };
+  }
+  const status = data as unknown as { committed?: boolean; result?: EditResult } | null;
+  if (status?.committed && status.result?.updated_at) return { outcome: "saved", result: status.result };
+  return { outcome: "not_found" };
+}
+
+/**
+ * Read-only reconciliation for an edit whose outcome is unknown (R2-01): did
+ * this request commit? Never edits anything. "not_found" isn't proof the
+ * first attempt can't still land, which is why the form resubmits the same
+ * request id — a replay, never a second edit.
+ */
+export async function checkListingEdit(
+  listingId: string,
+  requestId: string
+): Promise<{ outcome: "saved"; version: string } | { outcome: "not_found" | "unavailable" }> {
+  const { supabase } = await requireUser();
+  if (!UUID.test(listingId) || !UUID.test(requestId)) return { outcome: "unavailable" };
+  const check = await readListingEdit(supabase, listingId, requestId);
+  if (check.outcome !== "saved") return check;
+  revalidateListingEdit(listingId, null);
+  return { outcome: "saved", version: check.result.updated_at! };
 }
 
 const SETTABLE_STATUSES: ListingStatus[] = ["draft", "active", "paused", "sold", "archived"];
