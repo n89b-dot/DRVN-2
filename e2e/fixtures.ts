@@ -12,18 +12,31 @@ export function fixtureAdmin() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-export async function createDiscoveryFixture() {
+/** A public car and its live part. `watchers` adds that many other accounts
+ *  that have saved the part, so the public "N watching" count is real. */
+export async function createDiscoveryFixture({ watchers = 0 }: { watchers?: number } = {}) {
   const admin = fixtureAdmin();
   const token = randomUUID();
   const user = await admin.auth.admin.createUser({ email: `e2e-discovery-${token}@drvn.test`, email_confirm: true });
   if (user.error || !user.data.user) throw user.error ?? new Error("Missing fixture user");
   const userId = user.data.user.id;
-  const cleanup = () => cleanupFixtureUser(userId);
+  const watcherIds: string[] = [];
+  const cleanup = async () => {
+    for (const id of watcherIds) await cleanupFixtureUser(id);
+    await cleanupFixtureUser(userId);
+  };
   try {
     const car = await admin.from("cars").insert({ owner_id: userId, slug: `fixture-${token}`, name: "Fixture public build", is_public: true }).select("id,slug").single();
     if (car.error) throw car.error;
     const listing = await admin.from("listings").insert({ seller_id: userId, title: "Fixture brake set", category: "performance", price_cents: 10000, shipping_cents: 0, currency: "USD", status: "active", source_car_id: car.data.id }).select("id").single();
     if (listing.error) throw listing.error;
+    for (let n = 0; n < watchers; n += 1) {
+      const watcher = await admin.auth.admin.createUser({ email: `e2e-watcher-${n}-${token}@drvn.test`, email_confirm: true });
+      if (watcher.error || !watcher.data.user) throw watcher.error ?? new Error("Missing watcher");
+      watcherIds.push(watcher.data.user.id);
+      const saved = await admin.from("saves").insert({ user_id: watcher.data.user.id, target_type: "listing", target_id: listing.data.id });
+      if (saved.error) throw saved.error;
+    }
     return { listingPath: `/listings/${listing.data.id}`, carPath: `/cars/${car.data.slug}`, cleanup };
   } catch (error) { await cleanup(); throw error; }
 }

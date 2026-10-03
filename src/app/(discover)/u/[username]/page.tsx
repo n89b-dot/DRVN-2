@@ -18,6 +18,7 @@ import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-co
 import { reportError } from "@/lib/monitoring";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
 import { profileBannerUrl } from "@/lib/cars/banner";
+import { profileHref, resolveProfileView } from "@/lib/profile-href";
 
 /** One profile read per request, shared by the metadata and the page (they
  *  each used to fetch it). React's cache is per render, never cross-user. */
@@ -61,36 +62,17 @@ export async function generateMetadata({
   };
 }
 
-const TAB_KEYS = ["overview", "garage", "updates", "parts", "reviews"];
-
-/**
- * The old tab keys still work (P-3). Links to `?view=forsale` are out in the
- * world — in messages, in bookmarks — and renaming a tab is not a good
- * enough reason to break them. Nothing in SQL reads these; the only other
- * consumer is profile-body's own tab list.
- */
-const TAB_ALIASES: Record<string, string> = {
-  about: "overview",
-  forsale: "parts",
-  activity: "updates",
-};
-
-function resolveTab(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  const key = TAB_ALIASES[raw] ?? raw;
-  return TAB_KEYS.includes(key) ? key : undefined;
-}
-
 export default async function PublicProfilePage({
   params,
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ view?: string; listingsPage?: string; reviewsPage?: string; updatesPage?: string; status?: string }>;
+  searchParams: Promise<{ view?: string; tab?: string; listingsPage?: string; reviewsPage?: string; updatesPage?: string; status?: string }>;
 }) {
   const { username } = await params;
   const {
     view: viewParam,
+    tab: legacyTabParam,
     listingsPage: listingsPageParam,
     reviewsPage: reviewsPageParam,
     updatesPage: updatesPageParam,
@@ -99,6 +81,10 @@ export default async function PublicProfilePage({
   const listingsPage = Math.max(1, Number(listingsPageParam) || 1);
   const reviewsPage = Math.max(1, Number(reviewsPageParam) || 1);
   const updatesPage = Math.max(1, Number(updatesPageParam) || 1);
+  // `view` is the key; `?tab=` is a legacy alias read only without it — the
+  // listing page's seller link used it, and those links are out there.
+  // Old tab names (?view=forsale) still resolve too — see profile-href.
+  const requestedTab = resolveProfileView(viewParam, legacyTabParam);
   const supabase = await createClient();
 
   const [{ data: profile, error }, user] = await Promise.all([loadProfileByUsername(username), getViewer()]);
@@ -219,8 +205,8 @@ export default async function PublicProfilePage({
               />
             )}
             {/* Not while you are already standing in it. */}
-            {(partsForSale ?? 0) > 0 && resolveTab(viewParam) !== "parts" && (
-              <ButtonLink href={`/u/${profile.username}?view=parts`} variant="live">
+            {(partsForSale ?? 0) > 0 && requestedTab !== "parts" && (
+              <ButtonLink href={profileHref(profile.username ?? username, "parts")} variant="live">
                 Store
               </ButtonLink>
             )}
@@ -232,12 +218,12 @@ export default async function PublicProfilePage({
         /* Remount on a server-side tab change (the Store button links to
            ?view=parts): the tabs hold their own state, and without a new key
            the URL changed but the Overview stayed on screen. */
-        key={resolveTab(viewParam) ?? "overview"}
+        key={requestedTab ?? "overview"}
         bio={profile.bio}
         view={view}
         contactLinks={rest}
         initialTab={
-          resolveTab(viewParam) ??
+          requestedTab ??
           // §36: a shop is storefront-first — it opens on its parts.
           (isShop ? "parts" : undefined)
         }

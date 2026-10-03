@@ -27,32 +27,33 @@ export type ListingPage = ListingPageContext & (
 export const PAGE_SIZE = 24;
 
 /**
- * How many people are watching each of these listings.
+ * How many people are watching each of these listings (R2-09).
  *
- * Counted from `saves` rather than a denormalised column: the number is small,
- * always current, and a stored counter would need a trigger to stay honest.
- * Returns a map so callers can render "—" for anything with no watchers rather
- * than a misleading 0.
+ * Asks `listing_watch_counts`, which counts saves for every listing the
+ * caller can see and returns the number only — never who saved. Reading
+ * `saves` directly can't work: RLS shows a listing's saves to its seller
+ * alone, so every buyer counted 0.
+ *
+ * A listing in the map has a real count, 0 included. `null` means the count
+ * couldn't be read; callers show nothing then rather than a misleading 0.
  */
 export async function fetchWatchCounts(
   supabase: SupabaseClient<Database>,
   listingIds: string[]
-): Promise<Map<string, number>> {
+): Promise<Map<string, number> | null> {
   const counts = new Map<string, number>();
   if (!listingIds.length) return counts;
 
-  const { data, error } = await supabase
-    .from("saves")
-    .select("target_id")
-    .eq("target_type", "listing")
-    .in("target_id", listingIds);
-
-  if (error) {
-    reportError("[marketplace] watch counts failed", error);
-    return counts;
-  }
-  for (const row of data ?? []) {
-    counts.set(row.target_id, (counts.get(row.target_id) ?? 0) + 1);
+  // The function takes at most 200 ids; pages are smaller, but stay safe.
+  for (let i = 0; i < listingIds.length; i += 200) {
+    const { data, error } = await supabase.rpc("listing_watch_counts", {
+      p_listings: listingIds.slice(i, i + 200),
+    });
+    if (error) {
+      reportError("[marketplace] watch counts failed", error);
+      return null;
+    }
+    for (const row of data ?? []) counts.set(row.listing_id, row.watchers);
   }
   return counts;
 }
@@ -201,7 +202,7 @@ export async function hydrateListingCards(
       // The seller's own first line, not a generated summary — a card that
       // paraphrases is a card that can be wrong.
       summary: firstLine(r.description),
-      watch_count: watchCounts.get(r.id) ?? 0,
+      watch_count: watchCounts?.get(r.id),
       seller: r.seller_id ? (sellerById.get(r.seller_id) ?? null) : null,
       seller_id: r.seller_id ?? null,
       source_car_name: sourceName || null,

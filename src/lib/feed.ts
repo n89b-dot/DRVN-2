@@ -227,7 +227,8 @@ type HydrationData = {
   carLastActivity: Map<string, string>;
   carForSaleCount: Map<string, number>;
   listingCover: Map<string, string>;
-  watchCounts: Map<string, number>;
+  /** null when the counts couldn't be read (R2-09: unknown, not 0). */
+  watchCounts: Map<string, number> | null;
   questionCountByListing: Map<string, number>;
   likeCountByKey: Map<string, number>;
   viewerSavedKeys: Set<string>;
@@ -450,7 +451,7 @@ async function loadHydrationByTable(
     sourceCarIds.length
       ? supabase.from("cars").select("id, year, make, model, slug, is_public").in("id", sourceCarIds)
       : Promise.resolve({ data: [] }),
-    listingIds.length ? fetchWatchCounts(supabase, listingIds) : Promise.resolve(new Map<string, number>()),
+    listingIds.length ? fetchWatchCounts(supabase, listingIds) : Promise.resolve(new Map<string, number>() as Map<string, number> | null),
     // The viewer's own marks, so every card renders its toggles pre-fired:
     // saves over this page's listings+cars+posts, 🔥 reactions over posts.
     viewerId && (listingIds.length || carIds.length || postIds.length)
@@ -684,7 +685,7 @@ function buildFeedItems(rows: FeedEventRow[], data: HydrationData): FeedItem[] {
         sellerName: ownerById.get(l.seller_id) ?? null,
         sellerAvatarUrl: avatarById.get(l.seller_id) ?? null,
         partNumber: l.part_number,
-        watchCount: watchCounts.get(l.id) ?? 0,
+        watchCount: watchCounts?.get(l.id) ?? null,
         fitsCarName: sourceCar
           ? matchGarageFitment(garageIndex, sourceCar.make, sourceCar.model)
           : null,
