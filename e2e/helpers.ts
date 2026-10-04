@@ -50,6 +50,29 @@ export async function signIn(page: Page, user: TestUser) {
   await page.waitForURL(/\/home/);
 }
 
+/**
+ * Records Server Action redirects that escaped to `window`. The router has
+ * already followed an action's redirect when the action's promise rejects
+ * with it; caught and rethrown outside a transition, the same error becomes
+ * an unhandled rejection and Next follows it a second time, mid-navigation
+ * (on Next 16.2 that left the page stuck). Chromium reports nothing, because
+ * Next marks the event handled — so listen for it before Next does.
+ */
+export async function watchEscapedRedirects(page: Page): Promise<() => Promise<string[]>> {
+  await page.addInitScript(() => {
+    const escaped: string[] = [];
+    (window as unknown as { __escapedRedirects: string[] }).__escapedRedirects = escaped;
+    const record = (reason: unknown) => {
+      const digest = (reason as { digest?: unknown } | null)?.digest;
+      if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) escaped.push(digest);
+    };
+    window.addEventListener("unhandledrejection", (event) => record(event.reason));
+    window.addEventListener("error", (event) => record(event.error));
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { __escapedRedirects?: string[] }).__escapedRedirects ?? []);
+}
+
 /** Adds a car through the garage dialog. Leaves the page on the car's edit view. */
 export async function addCar(page: Page, carName: string) {
   await page.goto("/garage");
