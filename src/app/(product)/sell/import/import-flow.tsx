@@ -102,11 +102,11 @@ export function ImportFlow({
   const importId = importOverride === "cleared" ? null : (importOverride ?? startedId);
 
   // Choosing an item and retrying are Server Actions called from a click.
-  // They run in a transition, so a redirect the action already followed (a
-  // session that ended server-side) lands in Next's redirect boundary instead
-  // of a second navigation. Any other failure needs nothing here: the import
-  // is durable and the poll loop below picks it back up from wherever the
-  // server got to.
+  // They run in a transition, so a redirect the action already followed —
+  // the sign-in redirect when the session has ended, for one — lands in
+  // Next's redirect boundary instead of being followed a second time. Any
+  // other failure needs nothing here: the import is durable and the poll loop
+  // below picks it back up from wherever the server got to.
   const [, startStep] = useTransition();
   function runStep(step: () => Promise<ImportProgress | { error: string }>) {
     setProgress(null);

@@ -30,10 +30,10 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
   const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState(false);
-  // A transition, so a redirect the action already followed (a session that
-  // ended server-side) lands in Next's redirect boundary instead of a second
-  // navigation. The ref stops a double click from starting two setups before
-  // `starting` renders.
+  // A transition, so a redirect the action already followed — the sign-in
+  // redirect when the session has ended, for one — lands in Next's redirect
+  // boundary instead of being followed a second time. The ref stops a double
+  // click from starting two setups before `starting` renders.
   const [starting, startTransition] = useTransition();
   const startingRef = useRef(false);
 
