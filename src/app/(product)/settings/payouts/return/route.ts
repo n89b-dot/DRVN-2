@@ -17,7 +17,12 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const accountId = await getConnectAccountId(user.id);
+  // An unreadable pointer skips the sync; /payouts says the account state
+  // is unavailable rather than guessing.
+  const accountId = await getConnectAccountId(user.id).catch((error) => {
+    reportError("[connect] return lookup failed", { error });
+    return null;
+  });
   if (accountId) {
     try {
       await syncConnectAccount(accountId);

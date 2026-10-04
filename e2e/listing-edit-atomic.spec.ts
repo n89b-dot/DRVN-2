@@ -19,16 +19,8 @@ async function attachSellPhoto(page: Page) {
 /** The in-flow commit button (the phone's pinned bar repeats it). */
 const sellCommitButton = (page: Page) => page.locator(".saverow").getByRole("button", { name: /publish/i });
 
-// RR-05: a listing edit saves whole, the same form can save twice in a row,
-// and a second tab still holding the old version is refused instead of
-// silently overwriting the newer save.
-test("listing edits save whole and a stale tab can't overwrite a newer save", async ({ page, context }) => {
-  test.skip(
-    process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation",
-    "Listing edit fixtures are restricted to the isolated local stack"
-  );
-  test.setTimeout(120_000);
-
+/** A signed-in, invited seller with one live listing (made through /sell). */
+async function sellerWithListing(page: Page) {
   const admin = fixtureAdmin();
   const stamp = randomUUID();
   const email = `e2e-listing-edit-${stamp}@drvn.test`;
@@ -82,15 +74,35 @@ test("listing edits save whole and a stale tab can't overwrite a newer save", as
     const listingRow = async () => {
       const result = await admin
         .from("listings")
-        .select("title, price_cents, listing_images(url)")
+        .select("title, price_cents, updated_at, listing_images(url)")
         .eq("id", listingId)
         .single();
       if (result.error) throw result.error;
       return result.data;
     };
+    return { userId, title, listingId, listingRow };
+  } catch (error) {
+    await cleanupFixtureUser(userId);
+    throw error;
+  }
+}
+
+const save = (p: Page) => p.locator(".saverow").getByRole("button", { name: "Save changes" });
+
+// RR-05: a listing edit saves whole, the same form can save twice in a row,
+// and a second tab still holding the old version is refused instead of
+// silently overwriting the newer save.
+test("listing edits save whole and a stale tab can't overwrite a newer save", async ({ page, context }) => {
+  test.skip(
+    process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation",
+    "Listing edit fixtures are restricted to the isolated local stack"
+  );
+  test.setTimeout(120_000);
+
+  const { userId, title, listingId, listingRow } = await sellerWithListing(page);
+  try {
     const photosAtCreation = (await listingRow()).listing_images.map((i) => i.url).sort();
     expect(photosAtCreation.length).toBeGreaterThan(0);
-    const save = (p: typeof page) => p.locator(".saverow").getByRole("button", { name: "Save changes" });
 
     // Two tabs open the same listing at the same version.
     await page.goto(`/listings/${listingId}/edit`);
@@ -117,6 +129,60 @@ test("listing edits save whole and a stale tab can't overwrite a newer save", as
     expect(after.price_cents).toBe(9800);
     // Neither the saves nor the refused stale save touched the photos.
     expect(after.listing_images.map((i) => i.url).sort()).toEqual(photosAtCreation);
+  } finally {
+    await cleanupFixtureUser(userId);
+  }
+});
+
+// R2-01: the edit commits but its answer is lost, and so is the first status
+// check. The form must not claim nothing changed; it keeps the draft, and
+// saving the same draft again recovers the committed edit instead of being
+// refused as stale or applying it twice.
+test("a listing save whose answer is lost is recovered, not reported as unchanged", async ({ page }) => {
+  test.skip(
+    process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation",
+    "Listing edit fixtures are restricted to the isolated local stack"
+  );
+  test.setTimeout(120_000);
+
+  const { userId, listingId, listingRow } = await sellerWithListing(page);
+  try {
+    await page.goto(`/listings/${listingId}/edit`);
+    await page.getByLabel("Asking price").fill("97.00");
+
+    let actionPosts = 0;
+    await page.route(`**/listings/${listingId}/edit`, async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"] || actionPosts >= 2) {
+        return route.continue();
+      }
+      actionPosts += 1;
+      // The save reaches the server and commits; the status check doesn't.
+      if (actionPosts === 1) await route.fetch();
+      await route.abort("failed");
+    });
+    await save(page).click();
+
+    await expect(page.getByText(/still can.t confirm whether that saved/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/nothing was changed/i)).toHaveCount(0);
+    await expect(page.getByLabel("Asking price")).toHaveValue("97.00");
+    await expect.poll(async () => (await listingRow()).price_cents).toBe(9700);
+    const committed = (await listingRow()).updated_at;
+
+    // Same draft, same request: the server replays the committed outcome.
+    await page.unroute(`**/listings/${listingId}/edit`);
+    await save(page).click();
+    await expect(page.getByText("Listing updated.")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/changed since you opened it/i)).toHaveCount(0);
+    const after = await listingRow();
+    expect(after.price_cents).toBe(9700);
+    expect(after.updated_at).toBe(committed);
+
+    // The form now holds the new version, so a fresh edit saves normally.
+    await page.getByLabel("Asking price").fill("96.00");
+    await save(page).click();
+    await expect.poll(async () => (await listingRow()).price_cents).toBe(9600);
+    await expect(page.getByText(/changed since you opened it/i)).toHaveCount(0);
   } finally {
     await cleanupFixtureUser(userId);
   }

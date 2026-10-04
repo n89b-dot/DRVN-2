@@ -1611,12 +1611,15 @@ export async function listOpsCases(opts: {
 }
 
 /**
- * External operations still awaiting an outcome (RR-15). A provider-facing
- * admin action (a refund, a transfer) writes `phase: "requested"` before it
- * calls out; `completed` or `reconciled` closes it. Until one of those exists
- * the operation fence refuses the same action on the same subject — so an
- * operation whose outcome was lost (a timeout, a crash) blocks it for good
- * unless someone looks and records what happened.
+ * External operations still awaiting an outcome (RR-15, R2-02). A
+ * provider-facing admin action (a refund, a transfer) writes
+ * `phase: "requested"` before it calls out — which records the intent, not
+ * that a provider call happened. `completed` or `reconciled` closes it; an
+ * `escalated` record (outcome unknown) keeps it open. Until it closes, the
+ * operation fence refuses the same action on the same subject.
+ *
+ * For refunds, the durable refund records this request created say where
+ * the money actually is, so the console can show that instead of a guess.
  */
 export type OpenOperation = {
   operationId: string;
@@ -1626,15 +1629,19 @@ export type OpenOperation = {
   orderId: string | null;
   reason: string;
   requestedAt: string;
-  /** A "failed_or_requires_reconciliation" record exists: the call errored. */
-  errored: boolean;
+  /** The newest audit id for this operation — the version an answer is
+   *  recorded against, so a stale view can't close it. */
+  seenThrough: number;
+  /** What is known: only the request; the call errored; an operator marked
+   *  it unknown; or (refunds) what the refund records show. */
+  state: "requested" | "errored" | "escalated" | "refund_running" | "refund_completed" | "refund_failed";
 };
 
 export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
   const a = admin();
   const { data: requested, error } = await a
     .from("admin_audit_log")
-    .select("action, subject_type, subject_id, order_id, reason, created_at, metadata")
+    .select("id, action, subject_type, subject_id, order_id, reason, created_at, actor_id, metadata")
     .eq("metadata->>phase", "requested")
     .order("created_at", { ascending: false })
     .limit(200);
@@ -1645,22 +1652,53 @@ export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
   if (!ids.length) return [];
   const { data: later, error: laterError } = await a
     .from("admin_audit_log")
-    .select("metadata")
+    .select("id, metadata")
     .in("metadata->>operationId", ids)
     .neq("metadata->>phase", "requested");
   if (laterError) throw new Error(`Could not load pending operations: ${laterError.message}`);
   const phases = new Map<string, Set<string>>();
+  const latest = new Map<string, number>();
   for (const row of later ?? []) {
     const id = opId(row.metadata);
     const phase = (row.metadata as { phase?: string } | null)?.phase;
     if (!id || !phase) continue;
     phases.set(id, (phases.get(id) ?? new Set()).add(phase));
+    latest.set(id, Math.max(latest.get(id) ?? 0, row.id));
   }
-  return (requested ?? [])
+  const open = (requested ?? [])
     .map((r) => ({ r, id: opId(r.metadata) }))
     .filter(({ id }) => id && !phases.get(id)?.has("completed") && !phases.get(id)?.has("reconciled"))
-    .slice(0, limit)
-    .map(({ r, id }) => ({
+    .slice(0, limit);
+
+  // Refund records created by these requests (same rule as the database's
+  // reconciliation: this admin's refunds on the order since the request).
+  const refundOrders = open.filter(({ r }) => r.action === "order.force_refund").map(({ r }) => r.subject_id);
+  const refunds = new Map<string, { status: string; created_at: string; requested_by: string }[]>();
+  if (refundOrders.length) {
+    const { data: ops, error: opsError } = await a
+      .from("refund_operations")
+      .select("order_id, status, created_at, requested_by")
+      .in("order_id", refundOrders);
+    if (opsError) throw new Error(`Could not load pending operations: ${opsError.message}`);
+    for (const op of ops ?? []) refunds.set(op.order_id, [...(refunds.get(op.order_id) ?? []), op]);
+  }
+
+  return open.map(({ r, id }) => {
+    const seen = phases.get(id as string);
+    let state: OpenOperation["state"] = seen?.has("escalated")
+      ? "escalated"
+      : seen?.has("failed_or_requires_reconciliation")
+        ? "errored"
+        : "requested";
+    if (r.action === "order.force_refund") {
+      const mine = (refunds.get(r.subject_id) ?? []).filter(
+        (op) => op.created_at >= r.created_at && op.requested_by === `admin:${r.actor_id}`
+      );
+      if (mine.some((op) => !["completed", "reversal_pending", "failed"].includes(op.status))) state = "refund_running";
+      else if (mine.some((op) => ["completed", "reversal_pending"].includes(op.status))) state = "refund_completed";
+      else if (mine.length) state = "refund_failed";
+    }
+    return {
       operationId: id as string,
       action: r.action,
       subjectType: r.subject_type,
@@ -1668,6 +1706,8 @@ export async function getOpenOperations(limit = 50): Promise<OpenOperation[]> {
       orderId: r.order_id,
       reason: r.reason,
       requestedAt: r.created_at,
-      errored: Boolean(phases.get(id as string)?.has("failed_or_requires_reconciliation")),
-    }));
+      seenThrough: Math.max(r.id, latest.get(id as string) ?? 0),
+      state,
+    };
+  });
 }

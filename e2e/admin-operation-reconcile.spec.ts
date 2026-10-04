@@ -45,7 +45,21 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
     if (order.error) throw order.error;
     const orderId = order.data.id;
 
-    // A refund that went out to the provider and never came back.
+    // A refund requested an hour ago whose answer never came back — past
+    // the window in which its provider call could still be running. No
+    // refund was ever reserved for it, so "not applied" is provable.
+    const operationId = randomUUID();
+    const requested = await admin.from("admin_audit_log").insert({
+      actor_id: actorId,
+      action: "order.force_refund",
+      subject_type: "order",
+      subject_id: orderId,
+      order_id: orderId,
+      reason: `Refund fixture ${stamp}`,
+      metadata: { operationId, phase: "requested" },
+      created_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+    });
+    if (requested.error) throw requested.error;
     const begin = () =>
       admin.rpc("begin_admin_external_operation", {
         p_actor: actorId,
@@ -56,11 +70,9 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
         p_reason: `Refund fixture ${stamp}`,
         p_metadata: {},
       });
-    const first = await begin();
-    if (first.error) throw first.error;
-    const operationId = (first.data as { operationId: string }).operationId;
     const blocked = await begin();
-    expect((blocked.data as { reused: boolean }).reused).toBe(true);
+    expect((blocked.data as { reused: boolean; operationId: string }).reused).toBe(true);
+    expect((blocked.data as { operationId: string }).operationId).toBe(operationId);
 
     await page.goto("/login");
     await page.getByLabel(/^email$/i).fill(actor.data.user.email!);
@@ -98,15 +110,29 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
       )
       .toBe(1);
     await assertAccessible(page, "record-outcome dialog");
+    // No answer is pre-selected: an operator has to choose one.
+    await expect(dialog.getByLabel("Did it go through at the provider?")).toHaveValue("");
+
+    // "Can't tell yet" is recorded, and the operation stays blocked.
+    await dialog.getByLabel("Did it go through at the provider?").selectOption("unknown");
+    await dialog.getByLabel(/How you checked/).fill(`Stripe search inconclusive ${stamp}`);
+    await dialog.getByRole("button", { name: "Record outcome" }).click();
+    await expect(page.locator("output.toast").filter({ hasText: "Recorded as unknown" })).toBeVisible();
+    expect(((await begin()).data as { reused: boolean }).reused).toBe(true);
+
+    // The real answer commits but its response is lost. The dialog doesn't
+    // offer the command again, even after closing and reopening, until a
+    // reload — which shows it was recorded, once.
+    await page.reload();
+    await expect(row).toContainText("marked unknown");
+    await row.getByRole("button", { name: "Resolve" }).click();
     await dialog.getByLabel("Did it go through at the provider?").selectOption("not_applied");
     await dialog.getByLabel(/How you checked/).fill(`Stripe dashboard shows no refund ${stamp}`);
-
-    // The answer to the first attempt is lost: the dialog doesn't offer the
-    // command again, even after closing and reopening, until a reload.
     let interrupted = false;
     await page.route("**/admin/audit", async (route) => {
       if (!interrupted && route.request().method() === "POST" && route.request().headers()["next-action"]) {
         interrupted = true;
+        await route.fetch();
         await route.abort("failed");
       } else await route.continue();
     });
@@ -119,16 +145,7 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
     await dialog.getByRole("button", { name: "Reload to see what happened" }).click();
     await page.unroute("**/admin/audit");
 
-    // Nothing was recorded (the request never reached the server), so it is
-    // still pending; resolve it for real.
-    await row.getByRole("button", { name: "Resolve" }).click();
-    await dialog.getByLabel("Did it go through at the provider?").selectOption("not_applied");
-    await dialog.getByLabel(/How you checked/).fill(`Stripe dashboard shows no refund ${stamp}`);
-    await dialog.getByRole("button", { name: "Record outcome" }).click();
-    await expect(page.locator("output.toast").filter({ hasText: "Recorded as not done" })).toBeVisible();
-
-    await page.reload();
-    await expect(page.locator(".auditrow").filter({ hasText: operationId.slice(0, 8) }).filter({ hasText: "no answer recorded" })).toHaveCount(0);
+    await expect(page.locator(".auditrow").filter({ hasText: operationId.slice(0, 8) }).filter({ hasText: /requested|unknown/ })).toHaveCount(0);
     const record = await admin
       .from("admin_audit_log")
       .select("actor_id, metadata")
@@ -136,7 +153,11 @@ test("a stuck provider operation is listed, resolved by an admin, and stops bloc
       .eq("metadata->>phase", "reconciled")
       .single();
     expect(record.data?.actor_id).toBe(actorId);
-    expect(record.data?.metadata).toMatchObject({ outcome: "not_applied", reconciles: "order.force_refund" });
+    expect(record.data?.metadata).toMatchObject({
+      outcome: "not_applied",
+      reconciles: "order.force_refund",
+      evidence: { source: "refund_operations", operations: [] },
+    });
 
     // The block has lifted: the same action on the same order starts fresh.
     const again = await begin();

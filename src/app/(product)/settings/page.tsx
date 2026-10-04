@@ -47,7 +47,8 @@ export default async function SettingsPage() {
     // query above made the whole row come back null (blank profile form that
     // would save empty strings over the member's public profile). The pointer
     // is read server-side instead, like every other Connect check.
-    getConnectAccountId(user.id).catch(() => null),
+    // A failed read is "unavailable", not "no account" (R2-05).
+    getConnectAccountId(user.id).catch(() => undefined),
     // P-9: the floor has no client select grant — a buyer who could read it
     // would bid exactly it — so the owner asks through a function that can
     // only answer about themselves.
@@ -77,11 +78,15 @@ export default async function SettingsPage() {
       <SettingsPanel
         paymentsLive={paymentsAreLive()}
         savedCards={savedCards}
-        connect={{
-          stripeConfigured: getPaymentProvider().name === "stripe",
-          hasAccount: Boolean(connectAccountId),
-          payoutsEnabled: profile?.payouts_enabled ?? false,
-        }}
+        connect={
+          connectAccountId === undefined
+            ? { stripeConfigured: getPaymentProvider().name === "stripe", unavailable: true }
+            : {
+                stripeConfigured: getPaymentProvider().name === "stripe",
+                hasAccount: Boolean(connectAccountId),
+                payoutsEnabled: profile?.payouts_enabled ?? false,
+              }
+        }
         profile={{
           email: user.email ?? "",
           username: profile?.username ?? "",

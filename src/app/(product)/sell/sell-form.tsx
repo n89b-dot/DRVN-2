@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { unstable_rethrow } from "next/navigation";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -28,7 +28,7 @@ import { SortableGrid, SortableItem } from "@/components/ui";
 import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
 import { isLowConfidence } from "@/lib/mods/parse";
 
-import { createListing, updateListing, type SellState } from "./actions";
+import { checkListingEdit, createListing, updateListing, type SellState } from "./actions";
 import { FitmentPicker, type FitmentRow } from "./fitment-picker";
 
 /** A gallery photo, in save order — index 0 is always the cover. */
@@ -149,6 +149,12 @@ export function SellForm({
   const [state, setState] = useState<SellState>({});
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
+  // The save runs inside this transition so a redirect the action throws
+  // (createListing redirects on every success) is rethrown into Next's
+  // RedirectBoundary, which already handles it. Rethrown from a plain
+  // handler, it became an unhandled rejection that Next followed a second
+  // time, while the first navigation was still in flight.
+  const [, startSubmit] = useTransition();
   const [sourceCarId, setSourceCarId] = useState(listing?.source_car_id ?? prefill?.carId ?? "");
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
   const [subcategory, setSubcategory] = useState(
@@ -165,6 +171,11 @@ export function SellForm({
   // Kept for the lifetime of this form so a retry after a lost Server Action
   // response addresses the same listing creation request.
   const creationRequestId = useRef<string | null>(null);
+  // R2-01: an edit keeps its request id until its outcome is known. The same
+  // draft resubmitted reuses it, so a retry after a lost answer replays the
+  // committed save instead of tripping the version check; a changed draft is
+  // a new edit and gets a new id.
+  const editRequest = useRef<{ id: string; fingerprint: string } | null>(null);
 
   const subcategories = CATEGORIES.find((c) => c.slug === category)?.subcategories ?? [];
   const money = (cents: number | null | undefined) =>
@@ -361,10 +372,37 @@ export function SellForm({
     </Button>
   );
 
+  /** An edit whose answer was lost: ask, read-only, whether it committed.
+   *  The draft stays in the form whatever the answer. */
+  async function reconcileEdit() {
+    const request = editRequest.current;
+    if (!listing || !request) return;
+    let check: Awaited<ReturnType<typeof checkListingEdit>>;
+    try {
+      check = await checkListingEdit(listing.id, request.id);
+    } catch (error) {
+      unstable_rethrow(error);
+      check = { outcome: "unavailable" };
+    }
+    if (check.outcome === "saved") {
+      editRequest.current = null;
+      setState({ ok: "Listing updated.", version: check.version, outcome: "saved" });
+    } else {
+      setState((previous) => ({
+        version: previous.version,
+        outcome: "unknown",
+        error:
+          check.outcome === "not_found"
+            ? "We couldn’t confirm that save went through. Your changes are still here — save again; it won’t be applied twice."
+            : "We still can’t confirm whether that saved. Your changes are still here — save again to retry safely; it won’t be applied twice.",
+      }));
+    }
+  }
+
   return (
     <form
       noValidate
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
         if (submitting.current) return;
         const formData = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter);
@@ -387,19 +425,36 @@ export function SellForm({
         if (!isEdit) {
           creationRequestId.current ??= crypto.randomUUID();
           formData.set("request_id", creationRequestId.current);
+        } else {
+          const fingerprint = JSON.stringify([...formData.entries()].map(([key, value]) => [key, String(value)]));
+          if (editRequest.current?.fingerprint !== fingerprint) {
+            editRequest.current = { id: crypto.randomUUID(), fingerprint };
+          }
+          formData.set("request_id", editRequest.current.id);
         }
         submitting.current = true;
         setPending(true);
-        setState({});
-        try {
-          setState(await (isEdit ? updateListing : createListing)({}, formData));
-        } catch (error) {
-          unstable_rethrow(error);
-          setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
-        } finally {
-          submitting.current = false;
-          setPending(false);
-        }
+        // Keep the last saved version: the next save expects it.
+        setState((previous) => ({ version: previous.version }));
+        startSubmit(async () => {
+          try {
+            const next = await (isEdit ? updateListing : createListing)({}, formData);
+            if (isEdit && next.outcome === "saved") editRequest.current = null;
+            setState((previous) => ({ ...next, version: next.version ?? previous.version }));
+            if (isEdit && next.outcome === "unknown") await reconcileEdit();
+          } catch (error) {
+            unstable_rethrow(error);
+            if (isEdit) {
+              setState((previous) => ({ version: previous.version, ...UNCONFIRMED_EDIT }));
+              await reconcileEdit();
+            } else {
+              setState({ error: "Couldn’t confirm the save. Your draft is still here; try again." });
+            }
+          } finally {
+            submitting.current = false;
+            setPending(false);
+          }
+        });
       }}
       className="deck !pb-0"
     >
@@ -1181,6 +1236,11 @@ export function SellForm({
     </form>
   );
 }
+
+const UNCONFIRMED_EDIT: SellState = {
+  error: "We couldn’t confirm the save. Checking its status…",
+  outcome: "unknown",
+};
 
 /** The newer of the version the page rendered with and the one the last save
  *  returned — whichever arrived last, the next save expects it. */

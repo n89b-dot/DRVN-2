@@ -21,13 +21,18 @@ export type ConnectStatus = {
   requirementsDue: boolean;
 };
 
+/** The seller's connected account, or null when they have none. A failed
+ *  read throws (R2-05): null means "no account", and treating an outage as
+ *  that would show a connected seller "Not set up" and let onboarding
+ *  create a second account. */
 export async function getConnectAccountId(userId: string): Promise<string | null> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("stripe_account_id")
     .eq("id", userId)
     .maybeSingle();
+  if (error) throw new Error(`Connect account lookup failed: ${error.message}`);
   return data?.stripe_account_id ?? null;
 }
 
