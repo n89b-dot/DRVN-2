@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
-import { Avatar, Dialog, Media } from "@/components/ui";
+import { Avatar, Button, Dialog, FormField, Media, ResultNote, TextArea, TextField } from "@/components/ui";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 import { initialsFrom } from "@/components/profile/helpers";
 import { uploadImages } from "@/lib/media-upload";
 
@@ -25,7 +26,8 @@ export function ProfileEditor({
   };
 }) {
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState<ActionState, FormData>(updateProfile, {});
+  // A lost response keeps the dialog and says so; saving again is safe.
+  const [state, action, pending] = useRecoverableAction<ActionState>(updateProfile);
 
   const [submitted, setSubmitted] = useState(false);
   const saved = submitted && !pending && !state.error;
@@ -69,9 +71,9 @@ export function ProfileEditor({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="btn btn--ghost">
+      <Button variant="ghost" onClick={() => setOpen(true)}>
         Edit profile
-      </button>
+      </Button>
 
       {/* Shared Dialog primitive: dialog role, Escape, focus trap, scroll
           lock — the hand-rolled sheetwrap had none of the four. */}
@@ -81,28 +83,27 @@ export function ProfileEditor({
             <form
               action={(fd) => {
                 setSubmitted(true);
-                action(fd);
+                return action(fd);
               }}
               onChange={() => setSubmitted(false)}
               className="mt-4"
             >
               <input type="hidden" name="avatar_url" value={avatarUrl ?? ""} />
-              <div className="field">
-                <label htmlFor={fid("avatar")} className="microlabel">Avatar</label>
+              <FormField id={fid("avatar")} label="Avatar" error={avatarError}>
                 <div className="flex items-center gap-4">
                   {avatarUrl ? (
                     <Media src={avatarUrl} alt="Your avatar" className="h-16 w-16 shrink-0 rounded-ctl" role="avatar" />
                   ) : (
                     <Avatar size="lg" initials={initialsFrom(profile.display_name)} />
                   )}
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
                     onClick={() => avatarFileRef.current?.click()}
-                    disabled={uploadingAvatar}
-                    className="btn btn--ghost"
+                    loading={uploadingAvatar}
+                    pendingLabel="Uploading…"
                   >
-                    {uploadingAvatar ? "Uploading…" : "Change photo"}
-                  </button>
+                    Change photo
+                  </Button>
                   <input
                     id={fid("avatar")}
                     ref={avatarFileRef}
@@ -112,58 +113,28 @@ export function ProfileEditor({
                     onChange={(e) => handleAvatarFile(e.target.files)}
                   />
                 </div>
-                {avatarError && (
-                  <p role="alert" aria-live="polite" className="field__err">
-                    {avatarError}
-                  </p>
-                )}
-              </div>
-              <div className="field">
-                <label htmlFor={fid("display_name")} className="microlabel">Display name</label>
-                <input id={fid("display_name")} name="display_name" defaultValue={profile.display_name} required className="ctl max-w-none" />
-              </div>
-              <div className="field">
-                <label htmlFor={fid("headline")} className="microlabel">Headline</label>
-                <input
-                  id={fid("headline")}
-                  name="headline"
-                  defaultValue={profile.headline}
-                  placeholder="e.g. B9 S4 owner, slowly going single-turbo"
-                  className="ctl max-w-none"
-                />
-              </div>
-              <div className="field">
-                <label htmlFor={fid("location")} className="microlabel">Location</label>
-                <input id={fid("location")} name="location" defaultValue={profile.location} className="ctl max-w-none" />
-              </div>
-              <div className="field">
-                <label htmlFor={fid("bio")} className="microlabel">Bio</label>
-                <textarea id={fid("bio")} name="bio" defaultValue={profile.bio} rows={3} className="ctl" />
-              </div>
-              <div className="field">
-                <label htmlFor={fid("link_website")} className="microlabel">Website</label>
-                <input id={fid("link_website")} name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="ctl max-w-none" />
-              </div>
-              <div className="field">
-                <label htmlFor={fid("link_instagram")} className="microlabel">Instagram</label>
-                <input id={fid("link_instagram")} name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="ctl max-w-none" />
-              </div>
-              <div className="field">
-                <label htmlFor={fid("link_youtube")} className="microlabel">YouTube</label>
-                <input id={fid("link_youtube")} name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="ctl max-w-none" />
-              </div>
-              {state.error && (
-                <p role="alert" aria-live="polite" className="field__err">
-                  {state.error}
-                </p>
-              )}
-              {saved && <span className="chip chip--ok">Profile saved</span>}
+              </FormField>
+              <TextField id={fid("display_name")} label="Display name" name="display_name" defaultValue={profile.display_name} required className="max-w-none" />
+              <TextField
+                id={fid("headline")}
+                label="Headline"
+                name="headline"
+                defaultValue={profile.headline}
+                placeholder="e.g. B9 S4 owner, slowly going single-turbo"
+                className="max-w-none"
+              />
+              <TextField id={fid("location")} label="Location" name="location" defaultValue={profile.location} className="max-w-none" />
+              <TextArea id={fid("bio")} label="Bio" name="bio" defaultValue={profile.bio} rows={3} />
+              <TextField id={fid("link_website")} label="Website" name="link_website" defaultValue={linkValue("website")} placeholder="https://…" className="max-w-none" />
+              <TextField id={fid("link_instagram")} label="Instagram" name="link_instagram" defaultValue={linkValue("instagram")} placeholder="https://instagram.com/…" className="max-w-none" />
+              <TextField id={fid("link_youtube")} label="YouTube" name="link_youtube" defaultValue={linkValue("youtube")} placeholder="https://youtube.com/…" className="max-w-none" />
+              <ResultNote error={state.error} ok={saved ? "Profile saved" : null} />
               {/* Dialog primitive already appends its own Close button below —
                   a second one here duplicated it. */}
               <div className="sheet__actions">
-                <button type="submit" disabled={pending} className="btn btn--live flex-1">
-                  {pending ? "Saving…" : "Save profile"}
-                </button>
+                <Button type="submit" variant="live" loading={pending} pendingLabel="Saving…" className="flex-1">
+                  Save profile
+                </Button>
               </div>
             </form>
         </div>

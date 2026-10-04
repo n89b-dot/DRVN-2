@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (85)
+### Primitives (86)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -216,6 +216,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `TileHead` | Primitive | `@/components/ui` | Tile rule line — ink microlabel left, optional chip/jumplink right. — `.tile__head` | The head of any `.tile` section. *Not for:* Heads with bespoke inner structure — keep those raw. |
 | `TimelineRow` | Primitive | `@/components/ui` | Date-rail timeline row — mono date column beside content. | Activity/history feeds on profiles and sheets. |
 | `Toast` | Primitive | `@/components/ui` | Bottom-center transient confirmation, portalled to <body>. — `.toast` | Post-action confirmations that need no reply. |
+| `UnconfirmedOutcome` | Primitive | `@/components/ui` | A mutation whose Server Action response was lost — says what couldn't be confirmed and offers a reload to read the real state. | In place of a money or destructive action (label purchase, deletion, hand-off) once useRecoverableAction reports a lost response, so the action isn't offered again blindly. *Not for:* Ordinary validation or refusal errors — that's ResultNote. Safe-to-retry actions can keep their button and show the error. |
 | `ValidationSummary` | Primitive | `@/components/ui` | Assertive submit-blocking error list with per-field jump links. | Above long forms on failed submit; fields keep their inline errors. |
 | `WebsitePill` | Primitive | `@/components/ui` | Quiet mono external-link pill. | Profile websites. |
 
@@ -342,6 +343,7 @@ Two grammars, by audience:
 - **A conversation between two people** (/messages — one conversation per person since 20260928): **`MessageRun`** (consecutive messages from one side, one meta line, optional *about* tag naming the part) → **`MessageBubble`** (text and/or up to four photos) · **`ThreadEvent`** (a lifecycle fact: offer made/countered, shipped, dispute note — `messages.kind = 'event'`) · **`ThreadDivider`** (day) · **`ChatComposer`** (reply). In the inbox, **`ConversationRow`** is one person, with the deals between you as **`DealChip`**s (`move` = your turn); the conversation header shows **`DealCard`**s; a live offer is an **`OfferCard`** (wired as the feature `OfferDecision`, shared with the offer page). Run grouping, timezones, uploads, send and live refresh stay feature-local (`ThreadView`, `ConversationComposer`, `src/features/commerce/conversation-timeline.ts`).
 - **Public discussion** (listing Q&A, activity comments): **`MessageThread` / `Message` / `MessageComposer`** — the annotation idiom, a sender line over a ruled body. `me` = the seller in Q&A. Never use it for a private conversation, and never use bubbles for public Q&A.
 - **`ResultNote`** — the ok-chip/error outcome line beside any action form.
+- **`UnconfirmedOutcome`** — a lost Server Action response on money or destructive work (`useRecoverableAction` with a distinct failure message): replaces the action with "reload to check" so it is never offered again blindly. Safe-to-retry actions keep their button and show the error instead.
 
 ### Status & chips
 
