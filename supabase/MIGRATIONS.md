@@ -1,5 +1,32 @@
 # Applying migrations
 
+## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (isolated local stack only)
+
+| File | Applied to |
+|---|---|
+| `20261005100000_message_photos_server_normalized.sql` | isolated local stack, 2026-10-04 |
+| `20261005101000_guest_orders_unproven_buyers.sql` | isolated local stack, 2026-10-04 |
+| `20261005102000_unsuspend_refuses_pending_deletion.sql` | isolated local stack, 2026-10-04 |
+| `20261005110000_accepted_offer_collection.sql` | isolated local stack, 2026-10-04 |
+| `20261005110100_seller_carry_forward.sql` | isolated local stack, 2026-10-04 |
+
+Release readiness round four (`docs/plans/2026-10-release-r4-record.md`).
+
+- `20261005100000`: client uploads into the `message-photos` bucket are
+  refused; message photos go through the server re-encode. Apply with the
+  app that routes them there, or message photos stop uploading.
+- `20261005102000` re-creates `execute_admin_command` (only the
+  `user.unsuspend` branch changes; diffed against a fresh database).
+- `20261005110000` re-creates `freeze_accepted_offer_checkout` and
+  `guard_order_item_immutable`; `20261005110100` re-creates
+  `complete_transfer_intent` and `settle_refund_operation` (marked lines
+  only; diffs recorded in the round-four record). Reversals are now capped at
+  the amount actually transferred.
+- New: `seller_carry_entries`, `transfer_intents.dispatch_carry_cents`,
+  `private.unproven_buyer_orders`, `order_buyer_reviewable`,
+  `freeze_transfer_carry`, `seller_carry_available_cents`,
+  `record_seller_carry`.
+
 ## October 4 — round three: closed definer functions, refund request keys, payout clocks, charge bounds, admin money window, import sweep, VIN privacy (shared dev project)
 
 | File | Applied to |
