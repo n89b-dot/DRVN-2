@@ -34,8 +34,10 @@ export async function POST(request: Request) {
   const { data: { user } } = await client.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to upload photos." }, { status: 401 });
   // The target isn't known until the body is read, so the limit is chosen
-  // from the query string the uploader sets; the body must then agree.
-  const target = new URL(request.url).searchParams.get("bucket") === MESSAGE_BUCKET ? MESSAGE_BUCKET : null;
+  // from the header the uploader sets; the body must then agree. (A header,
+  // not a query string: the URL stays the one path every caller and test
+  // addresses.)
+  const target = request.headers.get("x-upload-bucket") === MESSAGE_BUCKET ? MESSAGE_BUCKET : null;
   if (!(await allowAction(target ? MESSAGE_RULE : PUBLIC_RULE, user.id))) return Response.json({ error: "Upload limit reached. Try again later." }, { status: 429 });
   if (Number(request.headers.get("content-length")) > LIMIT) return new Response(null, { status: 413 });
   try {

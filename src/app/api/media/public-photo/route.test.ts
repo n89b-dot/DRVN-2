@@ -10,10 +10,14 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
 import { POST } from "./route";
 const ME = "11111111-1111-4111-8111-111111111111";
 const THEM = "22222222-2222-4222-8222-222222222222";
-function request(bytes: Uint8Array, bucket = "avatars", prefix = ME, query = bucket === "message-photos" ? "?bucket=message-photos" : "") {
+function request(bytes: Uint8Array, bucket = "avatars", prefix = ME, target = bucket === "message-photos" ? "message-photos" : "") {
   const form = new FormData(); form.set("bucket", bucket); form.set("pathPrefix", prefix);
   form.set("file", new File([Buffer.from(bytes)], "small.jpg", { type: "image/jpeg" }));
-  return new Request(`http://localhost/api/media/public-photo${query}`, { method: "POST", body: form });
+  return new Request("http://localhost/api/media/public-photo", {
+    method: "POST",
+    body: form,
+    headers: target ? { "x-upload-bucket": target } : {},
+  });
 }
 async function gpsPhoto() {
   return sharp({ create: { width: 20, height: 20, channels: 3, background: "red" } })
@@ -49,7 +53,7 @@ describe("public photo trust boundary", () => {
     }
     // The body's bucket must match the one the limit was chosen for.
     expect((await POST(request(Buffer.from("x"), "message-photos", `${ME}/${THEM}`, ""))).status).toBe(400);
-    expect((await POST(request(Buffer.from("x"), "avatars", ME, "?bucket=message-photos"))).status).toBe(400);
+    expect((await POST(request(Buffer.from("x"), "avatars", ME, "message-photos"))).status).toBe(400);
     expect(fixture.staged).not.toHaveBeenCalled();
   });
   it("still refuses buckets it doesn't normalise, including evidence", async () => {

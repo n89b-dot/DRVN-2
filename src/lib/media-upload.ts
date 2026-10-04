@@ -109,9 +109,13 @@ export async function uploadImages({
     if (SERVER_NORMALIZED_BUCKETS.includes(bucket)) {
       const body = new FormData(); body.set("file", file); body.set("bucket", bucket); body.set("pathPrefix", pathPrefix);
       try {
-        // The bucket rides in the query too, so the route can pick its rate
+        // The bucket rides in a header too, so the route can pick its rate
         // limit before reading the body.
-        const response = await fetch(`/api/media/public-photo?bucket=${encodeURIComponent(bucket)}`, { method: "POST", body });
+        const response = await fetch("/api/media/public-photo", {
+          method: "POST",
+          body,
+          headers: { "x-upload-bucket": bucket },
+        });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Photo upload failed.");
         uploaded.push({ url: result.url, path: result.path, file });

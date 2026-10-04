@@ -50,7 +50,10 @@ describe("uploadImages — message photos", () => {
     const result = await uploadImages({ files: [file("a.png")], bucket: "message-photos", pathPrefix: "u1/u2" });
 
     expect(upload).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledWith("/api/media/public-photo?bucket=message-photos", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/media/public-photo",
+      expect.objectContaining({ method: "POST", headers: { "x-upload-bucket": "message-photos" } })
+    );
     const body = (fetch.mock.calls[0] as unknown as [string, { body: FormData }])[1].body;
     expect(body.get("bucket")).toBe("message-photos");
     expect(body.get("pathPrefix")).toBe("u1/u2");
