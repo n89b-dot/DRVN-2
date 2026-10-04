@@ -131,7 +131,7 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ data: { user: { id: "buyer-1" } } });
   mocks.beta.mockResolvedValue({ enforced: true, eligible: true });
   mocks.orderRead.mockResolvedValue({ data: pendingOfferOrder, error: null });
-  mocks.freeze.mockResolvedValue({ data: { ok: true, applied: true }, error: null });
+  mocks.freeze.mockResolvedValue({ data: { ok: true, applied: true, total_cents: 5500 }, error: null });
   mocks.finalize.mockResolvedValue({ data: { applied: true }, error: null });
   mocks.paymentWrite.mockResolvedValue({ data: { id: "payment-1" }, error: null });
   mocks.createPayment.mockResolvedValue({ status: "requires_action", reference: "pi_1", clientSecret: "secret" });
@@ -380,6 +380,50 @@ it("does not cross the provider boundary when the immutable shipping freeze fail
   const result = await completeReservedOrder({}, checkoutForm());
   expect(result.error).toContain("Check this order");
   expect(result.error).not.toContain("Nothing was charged");
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("charges a collected accepted offer the total the freeze priced, without shipping", async () => {
+  // The order was read at 5500 (goods + flat shipping); collecting takes the
+  // 500 of shipping off inside the freeze.
+  mocks.freeze.mockResolvedValue({ data: { ok: true, applied: true, total_cents: 5000 }, error: null });
+  mocks.createPayment.mockResolvedValue({ status: "requires_action", reference: "pi_1", clientSecret: "secret_1" });
+  mocks.paymentWrite.mockResolvedValue({ data: { id: "pay-1" }, error: null });
+  const form = checkoutForm(false);
+  form.set("is_collection", "on");
+  form.set("ship_name", "Buyer One");
+  const result = await completeReservedOrder({}, form);
+  expect(mocks.freeze).toHaveBeenCalledWith(
+    expect.objectContaining({ p_shipping: expect.objectContaining({ isCollection: true }) })
+  );
+  expect(mocks.createPayment).toHaveBeenCalledWith(expect.objectContaining({ totalCents: 5000 }));
+  expect(result.payment?.amountCents).toBe(5000);
+});
+
+it("says why a collected offer below the card minimum can't be paid", async () => {
+  mocks.freeze.mockResolvedValue({ data: null, error: { code: "22003", message: "out of bounds" } });
+  const result = await completeReservedOrder({}, checkoutForm());
+  expect(result.error).toContain("less than $0.50");
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("passes on the freeze's reason when pickup isn't offered", async () => {
+  mocks.freeze.mockResolvedValue({
+    data: { ok: false, applied: false, reason: "Local pickup isn't offered for this part — choose delivery instead." },
+    error: null,
+  });
+  mocks.orderRead
+    .mockResolvedValueOnce({ data: pendingOfferOrder, error: null })
+    .mockResolvedValueOnce({ data: { status: "pending" }, error: null });
+  const result = await completeReservedOrder({}, checkoutForm());
+  expect(result.error).toContain("Local pickup isn't offered");
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+});
+
+it("never charges a total the freeze didn't confirm", async () => {
+  mocks.freeze.mockResolvedValue({ data: { ok: true, applied: true }, error: null });
+  const result = await completeReservedOrder({}, checkoutForm());
+  expect(result.error).toContain("Check the order");
   expect(mocks.createPayment).not.toHaveBeenCalled();
 });
 
