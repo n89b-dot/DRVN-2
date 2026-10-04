@@ -7,9 +7,13 @@ import { getSellerLedger } from "./ledger";
 
 type Result = { data: unknown; error: unknown };
 
-/** A query builder that answers each table with a fixed result. */
+/** A query builder that answers each table — and each function, by name —
+ *  with a fixed result. */
 function fakeClient(tables: Record<string, Result>) {
   return {
+    rpc(name: string) {
+      return Promise.resolve(tables[name] ?? { data: [], error: null });
+    },
     from(table: string) {
       const result = tables[table] ?? { data: [], error: null };
       const builder: Record<string, unknown> = {};
@@ -182,6 +186,42 @@ describe("getSellerLedger", () => {
       "seller"
     );
     expect(result).toMatchObject({ status: "ok", ledger: { lines: [{ availableAt: "2026-11-01T00:00:00.000Z" }] } });
+  });
+
+  it("shows the date the database set at delivery, not today's rule (20261006100300)", async () => {
+    // Delivered 2 Sep under a 7-day hold, so the transfer is payable on the
+    // 9th. The setting has since moved to the claim window, whose rule would
+    // say 2 Oct — and would call money that is already payable "clearing".
+    const delivered = { ...order, refunded_cents: 0 };
+    const result = await getSellerLedger(
+      fakeClient({
+        orders: { data: [delivered, { ...delivered, id: "order-2" }], error: null },
+        settlement_settings: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
+        // Only order-1 has a stamped date; order-2 falls back to the rule.
+        seller_payout_dates: { data: [{ order_id: "order-1", available_at: "2026-09-09T00:00:00+00:00" }], error: null },
+      }),
+      "seller"
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      ledger: {
+        lines: [
+          { orderId: "order-1", availableAt: "2026-09-09T00:00:00.000Z", state: "available" },
+          { orderId: "order-2", availableAt: "2026-10-02T00:00:00.000Z" },
+        ],
+      },
+    });
+  });
+
+  it("is unavailable, not re-dated, when the payout dates can't be read", async () => {
+    const result = await getSellerLedger(
+      fakeClient({
+        orders: { data: [order], error: null },
+        seller_payout_dates: { data: null, error: { message: "timeout" } },
+      }),
+      "seller"
+    );
+    expect(result).toEqual({ status: "unavailable" });
   });
 
   it("is unavailable, not guessed, when the clearing hold can't be read", async () => {

@@ -118,7 +118,7 @@ function lineState(order: {
   status: OrderStatus;
   delivered_at: string | null;
   transfer_reference: string | null;
-}, now: number, hold: PayoutHoldPolicy, returnWindowDays: number | null): { state: LedgerState; availableAt: string | null } {
+}, now: number, stampedAvailableAt: string | null, hold: PayoutHoldPolicy, returnWindowDays: number | null): { state: LedgerState; availableAt: string | null } {
   // Disputed orders have money on hold pending resolution — never
   // "available," regardless of delivery timing.
   if (order.status === "disputed") {
@@ -132,9 +132,14 @@ function lineState(order: {
   if (!order.delivered_at) {
     return { state: "clearing", availableAt: null };
   }
-  // The same rule the database used to set the transfer's available_at,
-  // from the same delivery timestamp.
-  const availableAt = payoutAvailableAt(order.delivered_at, hold, returnWindowDays);
+  // The date the database set on the transfer at delivery is the one it
+  // pays on, and it never moves — so it is the date shown. Today's rule would
+  // misdate every order delivered before the owner last changed the setting.
+  // Only an order with no stamped date (a stub-settled one has no transfer
+  // intent) is dated by the rule.
+  const availableAt = stampedAvailableAt
+    ? new Date(stampedAvailableAt).toISOString()
+    : payoutAvailableAt(order.delivered_at, hold, returnWindowDays);
   const state: LedgerState = now >= new Date(availableAt).getTime() ? "available" : "clearing";
   return { state, availableAt };
 }
@@ -166,7 +171,7 @@ export async function getSellerLedger(
   const captured = orders;
   const orderIds = captured.map((o) => o.id);
 
-  const [{ data: items, error: itemsError }, adjustments, carry, hold] = await Promise.all([
+  const [{ data: items, error: itemsError }, adjustments, carry, hold, { data: payoutDates, error: payoutDatesError }] = await Promise.all([
     orderIds.length
       ? supabase
           .from("order_items")
@@ -176,6 +181,11 @@ export async function getSellerLedger(
     adjustmentsByOrder(supabase, orderIds),
     readSellerCarry(supabase, sellerId),
     readPayoutHoldPolicy(supabase),
+    // The payout dates already set, for the signed-in seller's own orders
+    // (seller_payout_dates, 20261006100300).
+    orderIds.length
+      ? supabase.rpc("seller_payout_dates", { p_orders: orderIds })
+      : Promise.resolve({ data: [] as { order_id: string; available_at: string }[], error: null }),
   ]);
   // Without the carry-forward entries a refunded order's labels, or what a
   // payout kept back, would be missing — the same confident wrong answer.
@@ -185,6 +195,13 @@ export async function getSellerLedger(
     reportError("[payouts] failed to load the clearing hold", { sellerId });
     return { status: "unavailable" };
   }
+  // Without the dates the database set, a line could show a date the payout
+  // won't happen on.
+  if (payoutDatesError || !payoutDates) {
+    reportError("[payouts] failed to load payout dates", { sellerId, error: payoutDatesError });
+    return { status: "unavailable" };
+  }
+  const stampedByOrder = new Map(payoutDates.map((row) => [row.order_id, row.available_at]));
   // Titles only label the lines; without them the money is still right —
   // unless the hold runs to each shop's return window, which the items carry.
   if (itemsError) {
@@ -233,7 +250,13 @@ export async function getSellerLedger(
       carriedCents: carried.carriedCents,
       carriedInCents: carried.carriedInCents,
     });
-    const { state, availableAt } = lineState(order, nowMs, hold, returnWindowByOrder.get(order.id) ?? null);
+    const { state, availableAt } = lineState(
+      order,
+      nowMs,
+      stampedByOrder.get(order.id) ?? null,
+      hold,
+      returnWindowByOrder.get(order.id) ?? null
+    );
 
     return {
       orderId: order.id,

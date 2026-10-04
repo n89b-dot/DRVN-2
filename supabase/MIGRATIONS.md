@@ -7,6 +7,7 @@
 | `20261006100000_payout_hold_setting.sql` | not yet |
 | `20261006100100_untracked_delivery_auto_confirm.sql` | not yet |
 | `20261006100200_owner_settlement_decisions.sql` | not yet |
+| `20261006100300_seller_payout_dates.sql` | not yet |
 
 The first two add `public.settlement_settings` (one row) with neutral defaults:
 `payout_hold_days` stays 7 in `fixed` mode, and `auto_confirm_after_days` is
@@ -19,6 +20,11 @@ were diffed against a fresh database: only the intended lines changed.
 `20261006100200` then sets the owner's decisions (Neil, 4 Oct): hold mode
 `claim_window` (7-day floor) and auto-confirm after 21 days. Guards that test
 the fixed 7-day mechanism pin it inside their own rolled-back transaction.
+`20261006100300` adds `seller_payout_dates()`: a seller reads the payout date
+already set on their own orders, so the ledger shows the date the database
+pays on rather than re-dating delivered orders with whatever the setting is
+now. Apply it before deploying the app that calls it — without the function
+the ledger says "unavailable".
 
 ## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (shared dev project)
 

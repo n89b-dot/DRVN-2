@@ -23,9 +23,12 @@ hold reduces this risk but can't remove it.
 
 The hold is now **one value in one row** (`public.settlement_settings`). Every
 path that starts a payout clock reads it: a carrier scan, the buyer's
-"received", a collection handover, and the untracked auto-confirm. The seller's
-ledger dates, the payouts tile ("Clears … after delivery") and the terms (§6)
-read the same row. There are two modes:
+"received", a collection handover, and the untracked auto-confirm. The payouts
+tile ("Clears … after delivery") and the terms (§6) read the same row. The
+seller's ledger shows each delivered order's date as the database set it
+(`seller_payout_dates()`, migration `20261006100300`), so an order delivered
+before the setting changed keeps the date it will actually be paid on. There
+are two modes:
 
 - `fixed`: delivery + `payout_hold_days` (0–30).
 - `claim_window`: whichever is latest of the hold, the 30-day problem window,

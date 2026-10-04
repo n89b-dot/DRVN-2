@@ -5365,6 +5365,13 @@ export type Database = {
         }[]
       }
       seller_open_questions: { Args: { p_seller: string }; Returns: number }
+      seller_payout_dates: {
+        Args: { p_orders: string[] }
+        Returns: {
+          available_at: string
+          order_id: string
+        }[]
+      }
       seller_register_tally: {
         Args: { p_seller: string }
         Returns: {
