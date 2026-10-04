@@ -40,6 +40,16 @@ import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
 import { profileHref } from "@/lib/profile-href";
 
+/** What a listing that can't be bought says about itself — the same words
+ *  the cart uses, never the raw status value. */
+const UNAVAILABLE_STATUS: Record<string, string> = {
+  sold: "Sold",
+  paused: "Paused by the seller",
+  archived: "No longer listed",
+  removed: "Taken down",
+  draft: "Not published yet",
+};
+
 /** The listing row and its photos, read once per request and shared by the
  *  metadata and the page (each used to fetch its own). React's cache is per
  *  render, never shared between users. */
@@ -143,27 +153,15 @@ export default async function ListingPage({
     ]);
   if (!listing) notFound();
   const isOwn = user?.id === listing.seller_id;
-  // The viewer's own live offer, so the page points at it instead of
-  // inviting a second one the server would refuse.
-  const { data: myOfferRow } =
-    user && !isOwn
-      ? await supabase
-          .from("offers")
-          .select("id, amount_cents, counter_amount_cents")
-          .eq("listing_id", listing.id)
-          .eq("buyer_id", user.id)
-          .in("status", ["open", "countered"])
-          .limit(1)
-          .maybeSingle()
-      : { data: null };
 
   // Round 2: everything that needs listing.seller_id / listing.source_car_id
   // (known the moment the listing row lands) or the viewer. No dependency on
   // each other, so they fire together.
   const [
+    { data: myOfferRow },
     { data: seller },
     { data: sourceCar },
-    { data: moreFromSeller },
+    moreFromSellerCards,
     { data: sourceModLine },
     watchCounts,
     { data: reviews },
@@ -174,6 +172,18 @@ export default async function ListingPage({
     { count: soldCount },
     { count: openOfferCount },
   ] = await Promise.all([
+    // The viewer's own live offer, so the page points at it instead of
+    // inviting a second one the server would refuse.
+    user && !isOwn
+      ? supabase
+          .from("offers")
+          .select("id, amount_cents, counter_amount_cents")
+          .eq("listing_id", listing.id)
+          .eq("buyer_id", user.id)
+          .in("status", ["open", "countered"])
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase
       .from("profiles")
       .select("username, display_name, location, avatar_url")
@@ -192,7 +202,12 @@ export default async function ListingPage({
       .eq("seller_id", listing.seller_id)
       .eq("status", "active")
       .neq("id", id)
-      .limit(4),
+      .limit(4)
+      // The seller rail's cards need these rows; hydrating them as soon as
+      // they land overlaps the rest of this round instead of following it.
+      // Same card shape as the search grid — the rails previously selected a
+      // thinner row and rendered a visibly different card on the same page.
+      .then(({ data }) => hydrateListingCards(supabase, data ?? [])),
     // Provenance: the build line this listing was released off, if any —
     // names the line rather than just linking to the whole car sheet.
     // Deliberately unfiltered by status: the part being sold here is usually
@@ -268,10 +283,6 @@ export default async function ListingPage({
     void supabase.rpc("bump_listing_view", { p_listing: id });
   }
 
-  // Round 3: the seller rail's cards need the rows from round 2. Same card
-  // shape as the search grid — the rails previously selected a thinner row
-  // and rendered a visibly different card on the same page.
-  const moreFromSellerCards = await hydrateListingCards(supabase, moreFromSeller ?? []);
   const isSaved = Boolean(save);
 
   const fitmentClaims = fitments ?? [];
@@ -401,7 +412,9 @@ export default async function ListingPage({
               </div>
             ) : listing.status !== "active" ? (
               <p className="mb-3">
-                <Badge tone="spent">This listing is {listing.status}</Badge>
+                <Badge tone="spent">
+                  {UNAVAILABLE_STATUS[listing.status] ?? "No longer available"}
+                </Badge>
               </p>
             ) : null}
             {isOwn && listing.status === "active" && (
@@ -462,6 +475,7 @@ export default async function ListingPage({
                 isLoggedIn={Boolean(user)}
                 betaEnforced={betaBuyerAccess.enforced}
                 buyerEligible={betaBuyerAccess.eligible}
+                accessUnavailable={Boolean(betaBuyerAccess.unavailable)}
                 isOwn={false}
                 isActive={listing.status === "active"}
                 paymentsLive={paymentsAreLive()}

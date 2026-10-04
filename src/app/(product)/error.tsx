@@ -1,16 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect } from "react";
 
-import { Alert } from "@/components/ui";
+import { Alert, Button, ButtonLink } from "@/components/ui";
 
 export default function GroupError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  /** Re-fetches and re-renders the segment (Next 16.3) — `reset` only
+   *  re-rendered, which can't recover from a failed server read. */
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[route-error]", error);
@@ -39,12 +40,13 @@ export default function GroupError({
         )}
       </Alert>
       <div className="mt-5 flex flex-wrap gap-3">
-        <button type="button" onClick={reset} className="btn btn--live">
+        <Button variant="live" onClick={() => retry()}>
           Try again
-        </button>
-        <Link href="/marketplace" className="btn btn--ghost">
-          Back to the marketplace
-        </Link>
+        </Button>
+        {/* The member's own surfaces: home is the way out, not the shop. */}
+        <ButtonLink href="/home" variant="ghost">
+          Back to home
+        </ButtonLink>
       </div>
     </div>
   );

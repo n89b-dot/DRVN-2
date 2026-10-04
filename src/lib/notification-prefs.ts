@@ -112,3 +112,45 @@ export function kindIsShown(prefs: unknown, kind: string): boolean {
   const key = prefKeyForKind(kind);
   return key ? prefEnabled(prefs, key) : true;
 }
+
+/** The kinds each preference governs, as `prefKeyForKind` decides them —
+ *  exact kinds plus kind prefixes, minus exact kinds a prefix must not take. */
+const PREF_KIND_RULES: Record<NotificationPrefKey, { kinds?: string[]; prefixes?: string[]; except?: string[] }> = {
+  profile_follows: { kinds: ["follow"] },
+  car_engagement: { kinds: ["car_follow", "save"] },
+  comments: { kinds: ["comment", "reaction"] },
+  reviews: { kinds: ["review"] },
+  listing_saves: { kinds: ["listing_save"] },
+  questions: { kinds: ["question"] },
+  offers_sales: { kinds: ["order_sold", "order_paid"], prefixes: ["offer"] },
+  // `order…` is dispatch and delivery except the two sale kinds above.
+  order_updates: { prefixes: ["order", "dispute"], except: ["order_sold", "order_paid"] },
+  saved_searches: { kinds: ["saved_search"] },
+};
+
+/**
+ * `kindIsShown` as one PostgREST `or` filter, so muted kinds are left out by
+ * the query itself and a page of results is a full page. Null when nothing
+ * is muted. Pass it to `.or()`: the single `and(...)` term inside means
+ * every condition holds.
+ */
+export function mutedKindFilter(prefs: unknown): string | null {
+  const muted = NOTIFICATION_PREFS.map((p) => p.key).filter((key) => !prefEnabled(prefs, key));
+  const exact = new Set<string>();
+  const terms: string[] = [];
+  for (const key of muted) {
+    const rule = PREF_KIND_RULES[key];
+    for (const kind of rule.kinds ?? []) exact.add(kind);
+    for (const prefix of rule.prefixes ?? []) {
+      // A prefix's exceptions stay visible unless they are muted themselves.
+      const keep = (rule.except ?? []).filter((kind) => kindIsShown(prefs, kind));
+      terms.push(
+        keep.length
+          ? `or(kind.not.like.${prefix}*,kind.in.(${keep.join(",")}))`
+          : `kind.not.like.${prefix}*`
+      );
+    }
+  }
+  if (exact.size) terms.unshift(`kind.not.in.(${[...exact].join(",")})`);
+  return terms.length ? `and(${terms.join(",")})` : null;
+}
