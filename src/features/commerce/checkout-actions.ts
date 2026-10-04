@@ -13,6 +13,7 @@ import { resolveGuestBuyer, sendOrderAccessLink } from "./guest-buyer";
 import { freezeOrderShipping, hashDestination, planCartFulfillment, type FulfillmentPlan } from "./checkout-shipping";
 import { getPaymentProvider } from "@/lib/payments/provider";
 import { getStripeCustomerId } from "@/lib/payments/customers";
+import { CHARGE_OUT_OF_BOUNDS_CODE, CHECKOUT_OUT_OF_BOUNDS_MESSAGE } from "@/lib/payments/charge-bounds";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -75,6 +76,19 @@ async function purchaseListings(
   const titleFor = (id: string) =>
     requested?.find((l) => l.id === id)?.title ?? "That part";
 
+  // The saved Stripe customer is read before anything is reserved: a failed
+  // read throws (it must not pass for "no customer"), and failing here leaves
+  // nothing to unwind.
+  let customerId: string | null = null;
+  if (options.useSavedCustomer) {
+    try {
+      customerId = await getStripeCustomerId(buyerId);
+    } catch (customerError) {
+      reportError("[commerce] saved customer lookup failed", { buyerId, customerError });
+      return { ...empty, error: "We couldn't start that purchase. Nothing was charged — try again." };
+    }
+  }
+
   const overrides = options.fulfillment?.overrides ?? {};
   const { data, error } = await admin.rpc("purchase_begin", {
     p_buyer_id: buyerId,
@@ -86,6 +100,7 @@ async function purchaseListings(
   });
 
   if (error) {
+    if (error.code === CHARGE_OUT_OF_BOUNDS_CODE) return { ...empty, error: CHECKOUT_OUT_OF_BOUNDS_MESSAGE };
     reportError("[commerce] purchase_begin failed", { buyerId, error });
     return { ...empty, error: error.message?.includes("at most") ? error.message : "We couldn't start that purchase. Nothing was charged." };
   }
@@ -242,7 +257,7 @@ async function purchaseListings(
     totalCents: basketTotal,
     currency: result.orders[0].currency,
     idempotencyKey,
-    customerId: options.useSavedCustomer ? await getStripeCustomerId(buyerId) : null,
+    customerId,
   });
 
   if (payment.status === "succeeded") {
@@ -816,6 +831,16 @@ export async function completeReservedOrder(
     return { error: freezeResult?.reason ?? "This order changed before checkout. Check the order before trying again." };
   }
 
+  // A failed read throws rather than passing for "no saved customer". Nothing
+  // has been sent to the provider yet, so the buyer can simply retry.
+  let customerId: string | null;
+  try {
+    customerId = await getStripeCustomerId(user.id);
+  } catch (customerError) {
+    reportError("[commerce] saved customer lookup failed", { orderId, customerError });
+    return { error: "We couldn't start the payment. Nothing was charged — try again." };
+  }
+
   const provider = getPaymentProvider();
   // Diagnostics identity (0039) — offer-completion orders get one too.
   await bindCheckoutAnalytics([orderId]);
@@ -826,7 +851,7 @@ export async function completeReservedOrder(
     totalCents: order.total_cents,
     currency: order.currency,
     idempotencyKey: `order:${orderId}`,
-    customerId: await getStripeCustomerId(user.id),
+    customerId,
   });
 
   // Async processor: the buyer confirms in the browser; the webhook settles.

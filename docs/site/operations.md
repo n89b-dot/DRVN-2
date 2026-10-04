@@ -9,8 +9,11 @@
 DRVN's async architecture is **Postgres-owned**, deliberately:
 
 - **In-database (pg_cron):** reservation release (5 min), rate-limit pruning
-  (daily), transfer-worker invocation via pg_net (10 min), dispute-SLA sweep
-  (daily).
+  (daily), dispute-SLA sweep (daily), and the HTTP invokers via pg_net —
+  transfer worker (10 min), search (2 min), account deletions (5 min),
+  saved searches (30 min), media GC and the listing-import sweep (daily).
+  Nine jobs in all; the table is in `docs/production-runbook.md` §4. Every
+  HTTP job reaches the app through `job_config`'s worker URL and secret.
 - **Worker routes** (bearer `CRON_SECRET`, 404 otherwise):
   - `/api/jobs/transfers` — one money pass (`runMoneyWorkerPass`,
     `src/lib/money-worker.ts`): expired holds, capture reconciliation, due
@@ -25,8 +28,9 @@ DRVN's async architecture is **Postgres-owned**, deliberately:
     notification per search per pass.
   - `/api/jobs/listing-imports` — importer retention sweep (0047): expires
     overdue imports (48h) and scrubs source payloads from week-old terminal
-    rows. Run daily beside media-gc — it has no database schedule, so it
-    needs its own. See [listing-import](listing-import.md).
+    rows. pg_cron runs it daily beside media-gc
+    (`drvn-listing-import-sweep`, 20261004150000), tracked as the
+    `listingImports` worker family. See [listing-import](listing-import.md).
 - **Local dev:** the shared dev database's pg_net can't reach a dev server on
   localhost, so there `scripts/dev-jobs.sh` (launchd agent `cc.drvn2.jobs`,
   every 2 minutes) calls the same routes on the database's schedule, and

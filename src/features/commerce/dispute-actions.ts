@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formatPrice } from "@/lib/payments/fee";
 import { refundOrder } from "@/lib/payments/refunds";
+import { reportError } from "@/lib/monitoring";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { isOwnedDisputeEvidenceRef } from "@/lib/media-url";
 import { deriveEvidenceStoragePath } from "@/lib/evidence-urls";
@@ -120,16 +121,20 @@ export async function acceptRefund(
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };
 
-  const { data: order } = await admin
+  const { data: order, error: orderError } = await admin
     .from("orders")
-    .select("id, buyer_id, seller_id, status, refund_offer_cents")
+    .select("id, buyer_id, seller_id, status, refund_offer_cents, refund_offered_at")
     .eq("id", orderId)
     .maybeSingle();
+  if (orderError) return { error: "Couldn't load this order. Nothing changed — try again." };
   if (!order) return { error: "Order not found." };
   if (order.buyer_id !== user.id) return { error: "That isn't your order." };
-  if (order.status !== "disputed" || !order.refund_offer_cents) {
+  if (order.status !== "disputed" || !order.refund_offer_cents || !order.refund_offered_at) {
     return { error: "There's no refund offer to accept." };
   }
+  // This offer's identity: the refund it starts is keyed to it, so accepting
+  // again after an unconfirmed answer drives the same refund, never a second.
+  const offeredAt = order.refund_offered_at;
 
   const { data: payment } = await admin
     .from("payments")
@@ -144,13 +149,14 @@ export async function acceptRefund(
   }
 
   // Atomic claim: only one request can null the still-set refund_offered_at.
-  const { data: claimed } = await admin
+  const { data: claimed, error: claimError } = await admin
     .from("orders")
     .update({ refund_offered_at: null })
     .eq("id", orderId)
     .eq("status", "disputed")
-    .not("refund_offered_at", "is", null)
+    .eq("refund_offered_at", offeredAt)
     .select("refund_offer_cents");
+  if (claimError) return { error: "Couldn't accept the offer. Nothing changed — try again." };
   const claimedAmount = claimed?.[0]?.refund_offer_cents;
   if (!claimedAmount) {
     return { error: "This refund is already being processed." };
@@ -168,15 +174,27 @@ export async function acceptRefund(
     reason: "Refund accepted by buyer after dispute",
     initiator: { kind: "buyer_accept", buyerId: user.id },
     resolveDispute: true,
+    requestKey: `offer:${orderId}:${offeredAt}`,
   });
   if (!outcome.ok) {
-    // Give the offer back so the buyer can retry.
-    await admin
+    // Give the SAME offer back (its original timestamp, so its refund key is
+    // unchanged): accepting again adopts this refund rather than starting a
+    // second one.
+    const { error: restoreError } = await admin
       .from("orders")
-      .update({ refund_offered_at: new Date().toISOString() })
+      .update({ refund_offered_at: offeredAt })
       .eq("id", orderId)
-      .eq("status", "disputed");
-    return { error: outcome.error };
+      .eq("status", "disputed")
+      .is("refund_offered_at", null);
+    if (restoreError) {
+      reportError("[disputes] refund offer not restored after a failed refund", { orderId, restoreError });
+    }
+    revalidatePath(`/orders/${orderId}`);
+    return {
+      error: outcome.pending
+        ? "Your refund is being confirmed with the card provider. It completes on its own — there's no need to accept again."
+        : outcome.error,
+    };
   }
 
   if (order.seller_id) {

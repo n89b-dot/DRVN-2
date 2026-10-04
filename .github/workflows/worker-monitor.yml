@@ -8,13 +8,15 @@ permissions:
 jobs:
   health:
     if: vars.DRVN_MONITOR_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
       - run: node scripts/check-worker-health.mjs
         env:
           DRVN_MONITOR_ORIGIN: ${{ vars.DRVN_MONITOR_ORIGIN }}

@@ -93,7 +93,9 @@ sentence from `messageForImportError` — never `error_detail`.
 ## Jobs & retention
 
 `POST /api/jobs/listing-imports` (bearer `CRON_SECRET`, 404 unauthenticated;
-run daily alongside `media-gc`):
+run daily at 03:37 UTC by pg_cron's `drvn-listing-import-sweep` through
+`invoke_remediation_worker('listing-imports')` — migration 20261004150000 —
+and reported to worker health as the `listingImports` family):
 
 1. moves overdue non-terminal rows to `expired`;
 2. clears `normalized_source` / `extracted` / `imported_images` from terminal

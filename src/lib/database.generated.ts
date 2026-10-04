@@ -2414,6 +2414,8 @@ export type Database = {
           next_reconcile_at: string
           operation_key: string
           provider_reference: string | null
+          provider_rejected_at: string | null
+          provider_rejection: string | null
           request: Json
         }
         Insert: {
@@ -2422,6 +2424,8 @@ export type Database = {
           next_reconcile_at?: string
           operation_key: string
           provider_reference?: string | null
+          provider_rejected_at?: string | null
+          provider_rejection?: string | null
           request: Json
         }
         Update: {
@@ -2430,6 +2434,8 @@ export type Database = {
           next_reconcile_at?: string
           operation_key?: string
           provider_reference?: string | null
+          provider_rejected_at?: string | null
+          provider_rejection?: string | null
           request?: Json
         }
         Relationships: []
@@ -2765,6 +2771,7 @@ export type Database = {
           remaining_before_cents: number
           replacement_transfer_reference: string | null
           replaces_adjustment_id: string | null
+          request_key: string | null
           requested_by: string
           resolve_dispute: boolean
           reversal_amount_cents: number | null
@@ -2811,6 +2818,7 @@ export type Database = {
           remaining_before_cents: number
           replacement_transfer_reference?: string | null
           replaces_adjustment_id?: string | null
+          request_key?: string | null
           requested_by: string
           resolve_dispute?: boolean
           reversal_amount_cents?: number | null
@@ -2857,6 +2865,7 @@ export type Database = {
           remaining_before_cents?: number
           replacement_transfer_reference?: string | null
           replaces_adjustment_id?: string | null
+          request_key?: string | null
           requested_by?: string
           resolve_dispute?: boolean
           reversal_amount_cents?: number | null
@@ -4172,6 +4181,10 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
+      admin_order_money_window: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
       admin_role: { Args: never; Returns: string }
       advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
       apply_stripe_dispute_event: {
@@ -4226,6 +4239,20 @@ export type Database = {
         Args: { p_actor: string; p_recovery: string }
         Returns: string
       }
+      begin_request_refund_operation: {
+        Args: {
+          p_actor_role: string
+          p_amount_cents: number
+          p_dispute_outcome: string
+          p_order_id: string
+          p_payment_reference: string
+          p_reason: string
+          p_request_key: string
+          p_requested_by: string
+          p_resolve_dispute: boolean
+        }
+        Returns: Json
+      }
       beta_access_status: {
         Args: { p_role?: string; p_user_id?: string }
         Returns: Json
@@ -4246,6 +4273,7 @@ export type Database = {
       }
       bump_listing_view: { Args: { p_listing: string }; Returns: undefined }
       capture_reconciliation_candidates: { Args: never; Returns: Json }
+      charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
         Returns: Json
@@ -4816,6 +4844,7 @@ export type Database = {
           source_car_id: string
         }[]
       }
+      my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       notify: {
         Args: {
@@ -4990,6 +5019,10 @@ export type Database = {
       record_payment_reference: {
         Args: { p_key: string; p_reference: string }
         Returns: undefined
+      }
+      record_payment_request_rejection: {
+        Args: { p_key: string; p_reason: string }
+        Returns: Json
       }
       record_refund_provider_event: {
         Args: {

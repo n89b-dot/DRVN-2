@@ -53,14 +53,21 @@ export async function getOrCreateConnectAccount(userId: string, email?: string |
   );
 
   const admin = createAdminClient();
-  await admin
+  const { data: stored, error } = await admin
     .from("profiles")
     .update({ stripe_account_id: account.id })
     .eq("id", userId)
-    .is("stripe_account_id", null);
+    .is("stripe_account_id", null)
+    .select("stripe_account_id");
+  // An unsaved pointer would orphan this account and create another on a
+  // later visit, so the caller gets a retryable error instead of the id.
+  if (error) throw new Error(`Connect account pointer write failed: ${error.message}`);
+  if (stored?.length) return account.id;
 
-  // If a concurrent request won the write, prefer the stored id.
-  return (await getConnectAccountId(userId)) ?? account.id;
+  // Nothing matched: a concurrent request stored its id first. Use that one.
+  const winner = await getConnectAccountId(userId);
+  if (!winner) throw new Error("Connect account pointer was not saved");
+  return winner;
 }
 
 /** Stripe-hosted onboarding (or resumption) link for the seller's account. */

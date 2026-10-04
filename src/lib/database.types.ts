@@ -966,6 +966,8 @@ export type TransferIntent = {
   transfer_reference: string | null;
   /** The charge the transfer draws on (migration 0020). */
   source_transaction: string | null;
+  /** Frozen at dispatch (20260905173052): what the transfer actually sent. */
+  dispatch_amount_cents: number | null;
   attempts: number;
   last_error: string | null;
   /** Lease fields (0026): who claimed the row and until when. */
@@ -1247,6 +1249,7 @@ type NullableArgs = {
   beta_access_status: "p_user_id";
   begin_admin_external_operation: "p_order";
   begin_refund_operation: "p_amount_cents" | "p_payment_reference" | "p_refund_reference";
+  begin_request_refund_operation: "p_amount_cents";
   complete_transfer_intent: "p_operation_key";
   release_transfer_intent: "p_attempts" | "p_last_error" | "p_next_attempt_at";
   record_refund_provider_event: "p_operation_id" | "p_order_id" | "p_payment_reference" | "p_balance_transaction" | "p_failure_balance_transaction" | "p_failure_reason" | "p_pending_reason";

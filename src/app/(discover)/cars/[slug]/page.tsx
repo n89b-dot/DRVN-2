@@ -14,6 +14,7 @@ import { listingHref, shoppingReturn } from "@/lib/marketplace/state";
 import { vehicleSubline } from "@/lib/vehicles/label";
 import { fetchModProvenance } from "@/lib/mods/provenance";
 import { postHeadline } from "@/lib/activity/headline";
+import { CAR_COLUMNS } from "@/lib/cars/columns";
 
 const TAB_KEYS = ["build", "forsale", "activity", "gallery"];
 
@@ -95,7 +96,7 @@ export default async function CarPage({
 
   const { data: car, error: carError } = await supabase
     .from("cars")
-    .select("*")
+    .select(CAR_COLUMNS)
     .eq("slug", slug)
     .maybeSingle();
 

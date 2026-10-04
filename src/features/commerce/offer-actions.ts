@@ -11,6 +11,12 @@ import type { CommerceState } from "./action-types";
 import { formatPrice } from "@/lib/payments/fee";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
+import {
+  CHARGE_OUT_OF_BOUNDS_CODE,
+  MAX_CHARGE_CENTS,
+  MIN_CHARGE_CENTS,
+  OFFER_OUT_OF_BOUNDS_MESSAGE,
+} from "@/lib/payments/charge-bounds";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -34,8 +40,12 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   if (!listingId || !Number.isFinite(amount) || amount <= 0) {
     return { error: "Enter a valid offer amount." };
   }
-  // Bounded well below int4 overflow, which used to surface as a raw Postgres error.
-  if (amount > 100_000_000) {
+  // An accepted offer becomes one card charge, so it has the charge's bounds
+  // (shipping only adds to it; offer_accept_begin re-checks the total).
+  if (amount < MIN_CHARGE_CENTS) {
+    return { error: "Offers start at $0.50." };
+  }
+  if (amount > MAX_CHARGE_CENTS) {
     return { error: "That offer is above the maximum we handle." };
   }
   if (message.length > 2000) {
@@ -259,6 +269,7 @@ export async function respondToOffer(
   });
 
   if (acceptError) {
+    if (acceptError.code === CHARGE_OUT_OF_BOUNDS_CODE) return { error: OFFER_OUT_OF_BOUNDS_MESSAGE };
     reportError("[commerce] offer_accept_begin failed", { offerId, acceptError });
     return { error: "We couldn't accept that offer. Nothing was charged." };
   }
@@ -382,6 +393,7 @@ export async function acceptCounter(
     p_offer_id: offerId,
     p_seller_id: listing.seller_id,
   });
+  if (acceptError?.code === CHARGE_OUT_OF_BOUNDS_CODE) return { error: OFFER_OUT_OF_BOUNDS_MESSAGE };
   if (acceptError || !orderId) {
     return { error: "That part was claimed by someone else first." };
   }

@@ -28,6 +28,28 @@ const INTENT_STATE: Record<string, string> = {
   cancelled: "no transfer — cancelled",
 };
 
+/**
+ * What actually moved to the seller: the amount the transfer was dispatched
+ * with (or, for intents from before dispatch amounts were frozen, the intent's
+ * amount). total − fee is what the seller was owed before refunds and label
+ * costs, not what was sent, so it is never shown as the transfer.
+ */
+function transferredValue(
+  order: { transfer_reference: string | null; transferred_at: string | null },
+  intent: { status: string; amount_cents: number; dispatch_amount_cents: number | null; transfer_reference: string | null } | null
+): string {
+  if (intent?.status === "transferred") {
+    return `${formatPrice(intent.dispatch_amount_cents ?? intent.amount_cents)} · ${days(order.transferred_at)}`;
+  }
+  if (order.transfer_reference) {
+    // A transfer recorded on the order with no intent row predates intents;
+    // its amount isn't held locally — Stripe has it under the reference.
+    return `Transferred (amount not recorded) · ${order.transfer_reference} · ${days(order.transferred_at)}`;
+  }
+  if (intent) return INTENT_STATE[intent.status] ?? intent.status;
+  return "Not transferred";
+}
+
 function days(iso: string | null): string {
   if (!iso) return "—";
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
@@ -127,14 +149,7 @@ export default async function AdminOrderPage({
             rows={[
               { label: "Charged", value: payment ? formatPrice(payment.amount_cents) : "—" },
               { label: "Payment ref", value: payment?.provider_reference ?? "—" },
-              {
-                label: "Transferred to seller",
-                value: order.transfer_reference
-                  ? `${formatPrice(order.total_cents - order.platform_fee_cents)} · ${days(order.transferred_at)}`
-                  : transferIntent
-                    ? (INTENT_STATE[transferIntent.status] ?? transferIntent.status)
-                    : "not yet",
-              },
+              { label: "Transferred to seller", value: transferredValue(order, transferIntent) },
               { label: "Platform fee", value: formatPrice(order.platform_fee_cents) },
               {
                 label: "Refunded",
