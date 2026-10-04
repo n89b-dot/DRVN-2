@@ -1,5 +1,17 @@
 # Applying migrations
 
+## October 7 — review fixes (not yet applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261007100000_refund_reversal_remaining_cap.sql` | not yet |
+
+`20261007100000` restates `settle_refund_operation` with one change: a refund
+after the payout is capped at what the transfer can still give back (sent,
+less earlier reversals), not at the cumulative refund share. A refund made
+before the payout used to cancel the reversal of every later one by its share.
+Guard: `supabase/tests/refund_reversal_cap_guard.sql`.
+
 ## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (isolated local stack only)
 
 | File | Applied to |
