@@ -15,6 +15,8 @@ import {
 import { fitmentLabel, readCommercialSnapshot } from "@/features/commerce/snapshot";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
+import { adjustmentsByOrder } from "@/lib/payments/adjustments";
+import { sellerProceeds } from "@/lib/payments/proceeds";
 import { countryLabel } from "@/lib/geo/countries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
@@ -112,6 +114,7 @@ export default async function OrderDetailPage({
     { data: reviews },
     { data: payment },
     { data: evidence },
+    sellerAdjustments,
   ] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id),
     counterpartyId
@@ -141,6 +144,8 @@ export default async function OrderDetailPage({
       .select("id, uploader_id, url, storage_path, note, created_at")
       .eq("order_id", id)
       .order("created_at"),
+    // The seller's label costs come off their payout. Null = unreadable.
+    isSeller ? adjustmentsByOrder(supabase, [id]) : Promise.resolve(new Map<string, number>()),
   ]);
 
   // dispute-evidence is a private bucket (0027) — the stored `url` is stale
@@ -340,7 +345,17 @@ export default async function OrderDetailPage({
   const reviewedByMe = Boolean(myReview);
   const canReview =
     ["delivered", "completed"].includes(order.status) && !reviewedByMe;
-  const payout = order.total_cents - order.platform_fee_cents;
+  // R2-04: the same projection the Payouts ledger uses — refunds take back
+  // their share and label costs come off. Unreadable adjustments leave the
+  // payout unknown rather than higher than it is (R2-05).
+  const proceeds = sellerAdjustments
+    ? sellerProceeds({
+        totalCents: order.total_cents,
+        feeCents: order.platform_fee_cents,
+        refundedCents: order.refunded_cents ?? 0,
+        adjustmentsCents: sellerAdjustments.get(id) ?? 0,
+      })
+    : null;
 
   const threadMessages = (messages ?? []).map((m) => ({
     id: m.id,
@@ -638,6 +653,21 @@ export default async function OrderDetailPage({
                   <b>−{formatPrice(order.platform_fee_cents)}</b>
                 </div>
               )}
+              {isSeller && proceeds && proceeds.refundShareCents > 0 && (
+                <div className="sheet__row">
+                  <span>Refunds — your share of {formatPrice(order.refunded_cents)}</span>
+                  <b>−{formatPrice(proceeds.refundShareCents)}</b>
+                </div>
+              )}
+              {isSeller && proceeds && proceeds.adjustmentsCents !== 0 && (
+                <div className="sheet__row">
+                  <span>Shipping labels</span>
+                  <b>
+                    {proceeds.adjustmentsCents < 0 ? "−" : "+"}
+                    {formatPrice(Math.abs(proceeds.adjustmentsCents))}
+                  </b>
+                </div>
+              )}
               <div className="sheet__row sheet__total">
                 <span>
                   {order.status === "cancelled" && !moneyMoved
@@ -650,7 +680,13 @@ export default async function OrderDetailPage({
                         ? "You paid"
                         : "To pay"}
                 </span>
-                <b>{formatPrice(isSeller ? payout : order.total_cents)}</b>
+                <b>
+                  {!isSeller
+                    ? formatPrice(order.total_cents)
+                    : proceeds
+                      ? formatPrice(proceeds.netCents)
+                      : "Unavailable"}
+                </b>
               </div>
             </div>
             {isSeller && moneyMoved && !["cancelled", "refunded"].includes(order.status) && (

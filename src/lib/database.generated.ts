@@ -4583,9 +4583,20 @@ export type Database = {
         }
         Returns: Json
       }
+      listing_edit_status: {
+        Args: { p_listing: string; p_request: string }
+        Returns: Json
+      }
       listing_question_parent_matches: {
         Args: { p_listing_id: string; p_parent_id: string }
         Returns: boolean
+      }
+      listing_watch_counts: {
+        Args: { p_listings: string[] }
+        Returns: {
+          listing_id: string
+          watchers: number
+        }[]
       }
       local_feed_rows: {
         Args: { p_country: string; p_region?: string }
@@ -4931,9 +4942,28 @@ export type Database = {
           title: string
         }[]
       }
+      reconcile_admin_external_operation: {
+        Args: {
+          p_operation: string
+          p_outcome: string
+          p_reason: string
+          p_seen_through: number
+        }
+        Returns: Json
+      }
       record_capture_recovery: {
         Args: { p_amount?: number; p_detail: string; p_key: string }
         Returns: string
+      }
+      record_listing_edit: {
+        Args: {
+          p_expected_updated_at: string
+          p_listing: string
+          p_payload_hash: string
+          p_request: string
+          p_result: Json
+        }
+        Returns: undefined
       }
       record_outbound_label_void_observation: {
         Args: {
@@ -5044,6 +5074,15 @@ export type Database = {
         Args: { p_actor: string; p_shipment: string }
         Returns: Json
       }
+      replay_listing_edit: {
+        Args: {
+          p_expected_updated_at: string
+          p_listing: string
+          p_payload_hash: string
+          p_request: string
+        }
+        Returns: Json
+      }
       request_account_deletion: { Args: never; Returns: Json }
       request_account_export: { Args: never; Returns: string }
       respond_shop_policy_return: {
@@ -5062,6 +5101,19 @@ export type Database = {
           p_images: Json
           p_listing: Json
           p_mod_item?: string
+          p_payload_hash: string
+          p_request: string
+        }
+        Returns: Json
+      }
+      save_listing_edit: {
+        Args: {
+          p_alt_numbers: Json
+          p_expected_updated_at: string
+          p_fields: Json
+          p_fitments: Json
+          p_images: Json
+          p_listing: string
           p_payload_hash: string
           p_request: string
         }

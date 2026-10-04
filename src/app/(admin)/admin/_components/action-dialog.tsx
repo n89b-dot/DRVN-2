@@ -14,7 +14,15 @@ export type ActionField =
   | { kind: "text"; name: string; label: string; hint?: string }
   | { kind: "reason"; name?: string; label?: string; placeholder?: string }
   | { kind: "amount"; name?: string; label: string; hint?: string }
-  | { kind: "select"; name: string; label: string; options: { value: string; label: string }[] };
+  | {
+      kind: "select";
+      name: string;
+      label: string;
+      options: { value: string; label: string }[];
+      /** Starts on this blank, unsubmittable choice instead of the first option —
+       *  for answers that must never be given by default. */
+      placeholder?: string;
+    };
 
 /**
  * One pattern for every admin mutation: a trigger button opening the shared
@@ -177,7 +185,18 @@ export function ActionDialog({
                   <label htmlFor={fieldId} className="microlabel">
                     {f.label}
                   </label>
-                  <select id={fieldId} name={f.name} required className="ctl">
+                  <select
+                    id={fieldId}
+                    name={f.name}
+                    required
+                    className="ctl"
+                    defaultValue={f.placeholder ? "" : undefined}
+                  >
+                    {f.placeholder && (
+                      <option value="" disabled>
+                        {f.placeholder}
+                      </option>
+                    )}
                     {f.options.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
