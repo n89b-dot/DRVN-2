@@ -50,14 +50,14 @@ export async function processAccountDeletions() {
     try {
       const uid = job.payload.user_id;
       const heartbeat = jobHeartbeat(admin, job);
-      const deletionRequest = await admin.from("account_deletion_requests" as never).select("id" as never).eq("user_id" as never, uid).maybeSingle();
+      const deletionRequest = await admin.from("account_deletion_requests").select("id").eq("user_id", uid).maybeSingle();
       if (deletionRequest.error || !deletionRequest.data) throw new Error("Deletion request record is missing");
-      const deletionRequestId = (deletionRequest.data as unknown as { id: string }).id;
+      const deletionRequestId = deletionRequest.data.id;
       await heartbeat();
-      const blockers = await admin.rpc("account_deletion_blockers" as never, { p_user: uid } as never);
+      const blockers = await admin.rpc("account_deletion_blockers", { p_user: uid });
       if (blockers.error) throw new Error("Deletion blocker check failed");
       if (deletionOutcome(blockers.data as unknown as { financial_hold?: boolean }) === "temporary_financial_hold") {
-        await admin.rpc("pause_account_deletion_hold" as never, { p_job: job.id, p_lease: job.lease_id, p_user: uid } as never).throwOnError();
+        await admin.rpc("pause_account_deletion_hold", { p_job: job.id, p_lease: job.lease_id, p_user: uid }).throwOnError();
         return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
       }
       // Preserve the external identity before profile/Auth cascades can remove it.
@@ -86,17 +86,17 @@ export async function processAccountDeletions() {
         return { completed, continued: 1 };
       }
       await heartbeat();
-      const recheck = await admin.rpc("account_deletion_blockers" as never, { p_user: uid } as never);
+      const recheck = await admin.rpc("account_deletion_blockers", { p_user: uid });
       if (recheck.error) throw new Error("Deletion blocker recheck failed");
       const blockersAfterCleanup = recheck.data as unknown as { financial_hold?: boolean; retained_identity?: boolean };
       const outcome = deletionOutcome(blockersAfterCleanup);
       if (outcome === "temporary_financial_hold") {
-        await admin.rpc("pause_account_deletion_hold" as never, { p_job: job.id, p_lease: job.lease_id, p_user: uid } as never).throwOnError();
+        await admin.rpc("pause_account_deletion_hold", { p_job: job.id, p_lease: job.lease_id, p_user: uid }).throwOnError();
         return { completed, continued: 1, outcome: "temporary_financial_hold" as const };
       }
       await purgeAccountExportsForUser(uid);
       if (outcome === "operator_attention") {
-        const retained = await admin.from("account_deletion_requests" as never).update({
+        const retained = await admin.from("account_deletion_requests").update({
           outcome: "operator_attention",
           blocker_code: "immutable_retained_identity",
           affected_data_classes: ["orders", "financial records", "audit or reporting references"],
@@ -105,7 +105,7 @@ export async function processAccountDeletions() {
           review_at: null,
           policy_decisions_pending: ["financial record retention duration", "audit/log retention", "eventual identity anonymization", "backup expiry"],
           updated_at: new Date().toISOString(),
-        } as never).eq("user_id" as never, uid);
+        }).eq("user_id", uid);
         if (retained.error) throw new Error("Could not record retained identity outcome");
         completed++;
         const acknowledged = await admin.rpc("finish_remediation_job", { p_id: job.id, p_lease: job.lease_id, p_error: undefined });
@@ -125,7 +125,7 @@ export async function processAccountDeletions() {
         const deleted = await admin.auth.admin.deleteUser(uid);
         if (deleted.error) throw new Error("Auth deletion needs retry; retained media may require operator review");
       }
-      await admin.from("account_deletion_requests" as never).update({ outcome: "completed", blocker_code: null, next_action: "No further action is required.", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never).eq("id" as never, deletionRequestId).throwOnError();
+      await admin.from("account_deletion_requests").update({ outcome: "completed", blocker_code: null, next_action: "No further action is required.", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", deletionRequestId).throwOnError();
       completed++;
     } catch (error) {
       failure = error instanceof Error ? error.message : "Account deletion failed";
