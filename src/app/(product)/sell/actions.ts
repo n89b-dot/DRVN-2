@@ -20,6 +20,13 @@ import { capture } from "@/lib/analytics";
 import { consumeListingImport } from "@/lib/listing-import/consume";
 import type { ListingStatus } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
+import {
+  CHARGE_OUT_OF_BOUNDS_CODE,
+  LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE,
+  MAX_CHARGE_CENTS,
+  MIN_CHARGE_CENTS,
+  chargeWithinBounds,
+} from "@/lib/payments/charge-bounds";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 
 export type SellState = {
@@ -60,7 +67,10 @@ async function readListingFields(formData: FormData, userId: string) {
   if (title.length > 140) return { error: "Keep the title under 140 characters." };
   if (!getCategory(category)) return { error: "Pick a category." };
   if (!priceRaw || !Number.isFinite(price) || price < 0) return { error: "Enter a valid price." };
-  if (price > 100_000_000) return { error: "That price is above the maximum we handle." };
+  // Drafts may hold any price up to the ceiling; publishing needs at least
+  // MIN_CHARGE_CENTS (checked by the callers, which know whether this is a
+  // draft — and by the database for every write).
+  if (price > MAX_CHARGE_CENTS) return { error: LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE };
   if (!Number.isFinite(shipping) || shipping < 0) return { error: "Enter a valid shipping cost." };
   if (floor !== null && (!Number.isFinite(floor) || floor <= 0 || floor > price)) {
     return { error: "The offer floor must be above zero and no more than your asking price." };
@@ -238,6 +248,10 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!uuid.test(requestId)) return { error: "Reload the listing form and try again." };
 
+  if (!asDraft && parsed.fields.price_cents < MIN_CHARGE_CENTS) {
+    return { error: LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE };
+  }
+
   const images = keepValidGalleryImages(safeParseJson(formData.get("image_urls")), 12, user.id);
   // M-5/W-2: a public listing leads with its photo, so publishing needs one.
   // Drafts are exempt — they're where the photos get added.
@@ -318,7 +332,9 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
     return {
       error: saved.error.code === "40001"
         ? "This listing changed while the save was being recovered. Refresh before continuing."
-        : "Couldn't save the complete listing. Your form is still here — try again.",
+        : saved.error.code === CHARGE_OUT_OF_BOUNDS_CODE
+          ? LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE
+          : "Couldn't save the complete listing. Your form is still here — try again.",
     };
   }
   const saveResult = saved.data as unknown as {
@@ -452,6 +468,8 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
           ? "A sold or reserved part can't be edited."
           : code === "23514"
             ? PHOTO_REQUIRED
+            : code === CHARGE_OUT_OF_BOUNDS_CODE
+              ? LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE
             : code === "P0002"
               ? "Listing not found."
               : code === "22023"
@@ -459,7 +477,7 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
                 : code === "42501"
                   ? "This account can't edit listings right now."
                   : "Couldn't save your changes. Nothing was changed — try again.";
-      if (!["55000", "23514", "P0002", "22023", "42501"].includes(code)) {
+      if (!["55000", "23514", CHARGE_OUT_OF_BOUNDS_CODE, "P0002", "22023", "42501"].includes(code)) {
         reportError("[sell] atomic listing edit failed", { id, requestId, error: saved.error });
       }
       return { error: message, outcome: "rejected" };
@@ -577,11 +595,15 @@ export async function setListingStatus(
 
   const { data: existing } = await supabase
     .from("listings")
-    .select("id, status")
+    .select("id, status, price_cents")
     .eq("id", id)
     .eq("seller_id", user.id)
     .maybeSingle();
   if (!existing) return { error: "Listing not found." };
+  // A draft can hold a price no card could be charged; it can't go live with it.
+  if (status === "active" && existing.status !== "active" && !chargeWithinBounds(existing.price_cents)) {
+    return { error: LISTING_PRICE_OUT_OF_BOUNDS_MESSAGE };
+  }
 
   // A part that has actually sold must not be flipped back on sale — that used
   // to be possible and would re-sell something already paid for.

@@ -3,7 +3,7 @@ do $$
 declare buyer uuid:=gen_random_uuid(); seller uuid:=gen_random_uuid(); listing uuid; oid uuid; r jsonb; version uuid:=gen_random_uuid();
 begin
  insert into auth.users(id,email) values(buyer,'consent-buyer@example.test'),(seller,'consent-seller@example.test');
- insert into public.listings(seller_id,title,category,price_cents,status,currency) values(seller,'Consent purchase','engine',1000,'active','GBP') returning id into listing;
+ insert into public.listings(seller_id,title,category,price_cents,status,currency) values(seller,'Consent purchase','engine',1000,'active','USD') returning id into listing;
  r:=public.purchase_begin(buyer,array[listing],'consent:purchase');oid:=(r->'orders'->0->>'order_id')::uuid;
  insert into public.analytics_consents(user_id,allowed,version) values(buyer,true,version);
  update public.orders set analytics_consent_version=version where id=oid;

@@ -488,8 +488,8 @@ export function SettingsPanel({
               <b>10%</b>
             </div>
             <div className="sheet__row">
-              <span>Fee on shipping</span>
-              <b>None</b>
+              <span>Charged on</span>
+              <b>Price + shipping</b>
             </div>
             <div className="sheet__row">
               <span>Cost to list</span>
@@ -497,8 +497,8 @@ export function SettingsPanel({
             </div>
           </div>
           <p className="field__hint mt-3 max-w-[62ch]">
-            The buyer pays the asking price plus your shipping; DRVN&apos;s fee comes out of your
-            payout, so what you list is what they see.
+            The buyer pays the asking price plus your shipping. DRVN&apos;s 10% is taken on that
+            whole amount and comes out of your payout, so what you list is what they see.
           </p>
           <div className="mt-4 flex flex-wrap gap-4">
             <Link href="/orders" className="jumplink">

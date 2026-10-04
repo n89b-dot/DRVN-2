@@ -270,33 +270,66 @@ export async function confirmReturnReceived(
   }
 
   // A confirm ahead of the carrier scan walks the legal ladder explicitly.
+  // Each step is conditional on the status it expects, so a second click or
+  // a carrier scan landing in between is harmless — but a failed write is a
+  // failure, not a confirmation.
   if (ret.status === "in_transit") {
-    await admin
+    const { error: deliveredError } = await admin
       .from("returns")
       .update({ status: "delivered", delivered_at: new Date().toISOString() })
       .eq("id", returnId)
       .eq("status", "in_transit");
+    if (deliveredError) {
+      reportError("[returns] confirm-received delivered step failed", { returnId, error: deliveredError });
+      return { error: "Couldn't record that the return arrived. Nothing changed — try again." };
+    }
   }
-  await admin
+  const { error: receivedError } = await admin
     .from("returns")
     .update({ status: "received", received_at: new Date().toISOString() })
     .eq("id", returnId)
     .eq("status", "delivered");
-
-  const { data: fresh } = await admin.from("returns").select("*").eq("id", returnId).single();
-  if (fresh?.status === "received") {
-    const result = await completeReturn(admin, fresh);
-    if (!result.ok) {
-      return {
-        ok: "Receipt recorded — the refund is queued and will complete automatically.",
-      };
-    }
+  if (receivedError) {
+    reportError("[returns] confirm-received step failed", { returnId, error: receivedError });
+    return { error: "Couldn't record that the return arrived. Nothing changed — try again." };
   }
 
-  await postOrderEvent(admin, order.id, user.id, "Return received — refund issued.");
+  const { data: fresh, error: freshError } = await admin
+    .from("returns")
+    .select("*")
+    .eq("id", returnId)
+    .single();
+  if (freshError || !fresh) {
+    reportError("[returns] confirm-received reread failed", { returnId, error: freshError });
+    return { error: "Couldn't confirm the return's state. Reload to see where it stands." };
+  }
   revalidatePath(`/orders/${order.id}`);
   revalidatePath("/orders");
-  return { ok: "Return received — the buyer's refund is on its way." };
+  // Already past this step (a second click, or the worker got there first).
+  if (fresh.status === "completed") return { ok: "This return is already complete." };
+  if (fresh.status !== "received") {
+    return { error: "This return isn't awaiting your confirmation any more. Reload to see where it stands." };
+  }
+
+  // Only a refund that actually went through is announced as issued.
+  const result = await completeReturn(admin, fresh);
+  if (result.ok) {
+    await postOrderEvent(admin, order.id, user.id, "Return received — refund issued.");
+    return { ok: "Return received — the buyer's refund is on its way." };
+  }
+  await postOrderEvent(
+    admin,
+    order.id,
+    user.id,
+    result.pending
+      ? "Return received — the refund is being confirmed with the card provider."
+      : "Return received — the refund will be retried automatically."
+  );
+  return {
+    ok: result.pending
+      ? "Receipt recorded. The refund is being confirmed with the card provider."
+      : "Receipt recorded. The refund didn't go through yet; it retries automatically.",
+  };
 }
 
 /**

@@ -571,7 +571,7 @@ export async function markRequiresAction(
 export async function applyAccountUpdate(
   admin: Admin,
   account: Stripe.Account
-): Promise<"committed" | "retry"> {
+): Promise<"committed" | "retry" | "irrelevant"> {
   const payable = account.payouts_enabled === true;
   const { data: sellers, error } = await admin
     .from("profiles")
@@ -581,7 +581,11 @@ export async function applyAccountUpdate(
   if (error) {
     persistenceFailure("failed to sync payouts_enabled", { account: account.id, error });
   }
-  if (!sellers?.length) return "retry";
+  // An account DRVN created carries its member in metadata; until the
+  // pointer write lands (getOrCreateConnectAccount) the update has no row to
+  // match, so Stripe should redeliver. Any other account isn't one of ours —
+  // retrying it would only fail for three days.
+  if (!sellers?.length) return account.metadata?.user_id ? "retry" : "irrelevant";
 
   // A seller who just became payable unblocks their stuck funds eagerly —
   // the worker's next run pays them out instead of waiting on a retry cycle.

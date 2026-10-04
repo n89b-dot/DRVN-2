@@ -63,3 +63,33 @@ describe("Stripe webhook acknowledgement", () => {
     }
   );
 });
+
+describe("Stripe webhook signing secrets", () => {
+  const signedWith = (accepted: string) => (_payload: string, _signature: string, secret: string) => {
+    if (secret !== accepted) throw new Error("No signatures found matching the expected signature");
+    return { id: "evt_connect", type: "account.updated" };
+  };
+
+  it("accepts an event from the Connect endpoint, signed with its own secret", async () => {
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_connect";
+    stripeMocks.constructEvent.mockImplementation(signedWith("whsec_connect"));
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(settlementMocks.dispatchStripeEvent).toHaveBeenCalledWith({}, { id: "evt_connect", type: "account.updated" });
+  });
+
+  it("rejects an event that matches neither secret", async () => {
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_connect";
+    stripeMocks.constructEvent.mockImplementation(signedWith("whsec_someone_else"));
+    const response = await POST(request());
+    expect(response.status).toBe(400);
+    expect(settlementMocks.claimWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  it("still works with only the platform secret configured", async () => {
+    delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+    stripeMocks.constructEvent.mockImplementation(signedWith("whsec_test"));
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+  });
+});

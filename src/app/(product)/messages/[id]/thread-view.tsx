@@ -54,6 +54,19 @@ function nearPageEnd(): boolean {
 }
 
 /**
+ * Take the reader to the latest message without animating. The page's
+ * `scroll-behavior: smooth` would otherwise run the scroll through the whole
+ * history, and every frame of it fires the scroll listener below with the
+ * reader far from the end — un-pinning them, so a message landing mid-scroll
+ * showed "1 new message" instead of being followed. It also kept moving the
+ * page after it looked settled: a reader who scrolled up at that moment was
+ * carried a frame further down.
+ */
+function scrollToLatest(end: HTMLElement | null) {
+  end?.scrollIntoView({ block: "end", behavior: "instant" });
+}
+
+/**
  * A person-first conversation: what was said and what happened, in order,
  * in the reader's own timezone. Runs of one side's messages share a name and
  * time; events (offers, shipping, dispute notes) sit between them; a live
@@ -146,7 +159,7 @@ export function ThreadView({
     if (viewingHistory || !latestId) return;
     if (!landed.current || pinned.current || latestMine) {
       landed.current = true;
-      endRef.current?.scrollIntoView({ block: "end" });
+      scrollToLatest(endRef.current);
       pinned.current = true;
       seenCount.current = messageCount;
       setUnseen(0);
@@ -259,7 +272,7 @@ export function ThreadView({
               <Button
                 variant="live"
                 onClick={() => {
-                  endRef.current?.scrollIntoView({ block: "end" });
+                  scrollToLatest(endRef.current);
                   pinned.current = true;
                   seenCount.current = messageCount;
                   setUnseen(0);

@@ -89,6 +89,10 @@ begin
   update public.orders set status = 'paid' where id = v_order;
   insert into public.pickup_confirmations (order_id, token_hash, code_hash, expires_at)
   values (v_order, v_hash, encode(sha256('000000'::bytea), 'hex'), now() + interval '1 hour');
+  -- The seller's payout is waiting on the handoff (no clock yet).
+  insert into public.transfer_intents (order_id, seller_id, amount_cents, currency, status, available_at)
+  values (v_order, v_seller, 1000, 'USD', 'holding', null)
+  on conflict (order_id) do update set status = 'holding', available_at = null;
 
   v_result := public.pickup_redeem(v_order, v_buyer, v_hash);
   if (v_result->>'ok')::boolean then
@@ -110,6 +114,12 @@ begin
     raise exception 'FAIL: redemption did not deliver the order';
   end if;
   raise notice 'PASS: valid pass delivers the order';
+  if (select available_at from public.transfer_intents where order_id = v_order) is null
+     or (select available_at from public.transfer_intents where order_id = v_order)
+        not between now() + interval '7 days' - interval '1 minute' and now() + interval '7 days' + interval '1 minute' then
+    raise exception 'FAIL: the handoff did not start the payout clock (20261004120000)';
+  end if;
+  raise notice 'PASS: the handoff starts the seller''s payout clock';
 
   v_result := public.pickup_redeem(v_order, v_seller, v_hash);
   if (v_result->>'ok')::boolean then

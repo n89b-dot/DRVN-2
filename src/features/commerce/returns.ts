@@ -75,7 +75,7 @@ export async function orderHasActiveReturn(admin: Admin, orderId: string): Promi
 export async function completeReturn(
   admin: Admin,
   ret: OrderReturn
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; pending?: boolean }> {
   if (ret.status !== "received") {
     return { ok: false, error: `return is ${ret.status}, not received` };
   }
@@ -98,13 +98,19 @@ export async function completeReturn(
           : "Shop-policy return received — refund per policy",
       initiator: { kind: "return_completed", returnId: ret.id },
       resolveDispute: ret.return_type === "protection" && order?.status === "disputed",
+      // One refund per return: the worker retries a return whose refund is
+      // still pending at Stripe, and each retry must drive that same
+      // refund, never start a second one.
+      requestKey: `return:${ret.id}`,
     });
     if (!outcome.ok) {
-      reportError("[returns] refund failed on completion", {
-        returnId: ret.id,
-        error: outcome.error,
-      });
-      return { ok: false, error: outcome.error };
+      if (!outcome.pending) {
+        reportError("[returns] refund failed on completion", {
+          returnId: ret.id,
+          error: outcome.error,
+        });
+      }
+      return { ok: false, error: outcome.error, pending: outcome.pending };
     }
   }
 

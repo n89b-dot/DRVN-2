@@ -14,7 +14,7 @@ begin
  values('account_export','health-export-guard','{}',now()-interval '31 minutes');
  snapshot:=public.worker_health_snapshot();
  if not exists(select 1 from jsonb_array_elements(snapshot->'queues') q where q->>'kind'='account_export' and (q->>'overdue')::boolean) then raise exception 'Overdue pending exports must be visible'; end if;
- if jsonb_array_length(snapshot->'families')<>15
+ if jsonb_array_length(snapshot->'families')<>16
     or (select count(*) from jsonb_array_elements(snapshot->'families') f where f->>'family'='labelVoids')<>1 then
    raise exception 'Required worker inventory changed';
  end if;
