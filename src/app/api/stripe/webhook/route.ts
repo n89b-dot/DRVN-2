@@ -21,8 +21,14 @@ import { flushMonitoring, reportError } from "@/lib/monitoring";
  * Stripe's redeliveries (up to 3 days of retries) are safe to replay.
  */
 export async function POST(request: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
+  // Two Stripe endpoints point here: the platform endpoint (payments,
+  // refunds, disputes) and the Connect endpoint, which carries events on
+  // sellers' connected accounts — account.updated, the only signal that a
+  // seller's payouts were enabled or switched off after onboarding. Each has
+  // its own signing secret; an event must verify against one of them.
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET]
+    .filter((value): value is string => Boolean(value));
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
     reportError("[stripe:webhook] STRIPE_WEBHOOK_SECRET is not configured");
     return new Response("webhook not configured", { status: 500 });
   }
@@ -33,11 +39,17 @@ export async function POST(request: Request) {
   // Signature verification needs the exact raw body, before any JSON parse.
   const payload = await request.text();
 
-  let event: Stripe.Event;
-  try {
-    event = stripeClient().webhooks.constructEvent(payload, signature, secret);
-  } catch (error) {
-    reportError("[stripe:webhook] signature verification failed", error);
+  let event: Stripe.Event | null = null;
+  for (const secret of secrets) {
+    try {
+      event = stripeClient().webhooks.constructEvent(payload, signature, secret);
+      break;
+    } catch {
+      // Try the other endpoint's secret.
+    }
+  }
+  if (!event) {
+    reportError("[stripe:webhook] signature verification failed");
     return new Response("invalid signature", { status: 400 });
   }
 
