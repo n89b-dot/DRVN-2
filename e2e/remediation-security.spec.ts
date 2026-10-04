@@ -325,8 +325,12 @@ test("an ended session sends a member's action to sign in, back to the same page
     // followed, so the save failed in place instead of asking for a sign-in.
     await page.goto("/profile");
     await page.getByRole("button", { name: /Edit profile/ }).click();
+    const details = page.getByRole("dialog", { name: "Profile details" });
+    // Display name is required; this fixture has none, and the browser would
+    // refuse the submit before any request went out.
+    await details.getByLabel("Display name").fill("Ended session");
     await page.context().clearCookies({ name: /^sb-/ });
-    await page.getByRole("dialog", { name: "Profile details" }).getByRole("button", { name: /Save profile/ }).click();
+    await details.getByRole("button", { name: /Save profile/ }).click();
     await page.waitForURL((url) => url.pathname === "/login" && url.searchParams.get("next") === "/profile");
 
     // A click handler running its action in a transition.
