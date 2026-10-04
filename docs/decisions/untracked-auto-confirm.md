@@ -1,6 +1,6 @@
 # Decision: auto-confirm untracked shipments
 
-**Status: built, OFF. Owner picks N (or leaves it off).**
+**Status: decided 4 October 2026 (Neil): on, 21 days** (3-day warning), set by migration `20261006100200_owner_settlement_decisions.sql`. Caveat from the recommendation below still applies: the warning is in-app only until an email channel exists, so a guest buyer won't see it before their order auto-confirms.
 Migration `20261006100100_untracked_delivery_auto_confirm.sql`; guard
 `supabase/tests/delivery_auto_confirm_guard.sql`.
 

@@ -1,13 +1,14 @@
 # Applying migrations
 
-## October 6 — owner decisions behind settings: payout hold, untracked-shipment auto-confirm (not applied anywhere yet)
+## October 6 — owner decisions: payout hold until claim windows close, auto-confirm untracked shipments after 21 days
 
 | File | Applied to |
 |---|---|
 | `20261006100000_payout_hold_setting.sql` | not yet |
 | `20261006100100_untracked_delivery_auto_confirm.sql` | not yet |
+| `20261006100200_owner_settlement_decisions.sql` | not yet |
 
-Both add `public.settlement_settings` (one row) and change nothing by default:
+The first two add `public.settlement_settings` (one row) with neutral defaults:
 `payout_hold_days` stays 7 in `fixed` mode, and `auto_confirm_after_days` is
 NULL (off). `payout_available_at()` becomes the one rule for a payout date
 (delivery trigger, `pickup_redeem`, `mark_order_received`, auto-confirm);
@@ -15,6 +16,9 @@ NULL (off). `payout_available_at()` becomes the one rule for a payout date
 The auto-confirm job (`drvn-delivery-auto-confirm`, hourly) runs and records
 health even while off. Decision notes: `docs/decisions/`. Replaced functions
 were diffed against a fresh database: only the intended lines changed.
+`20261006100200` then sets the owner's decisions (Neil, 4 Oct): hold mode
+`claim_window` (7-day floor) and auto-confirm after 21 days. Guards that test
+the fixed 7-day mechanism pin it inside their own rolled-back transaction.
 
 ## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (shared dev project)
 

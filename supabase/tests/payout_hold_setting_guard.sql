@@ -20,10 +20,13 @@ declare
   hash text := encode(sha256('guard-pass'::bytea), 'hex');
   result jsonb;
 begin
-  -- 1. Defaults: today's rule, readable by anyone, writable by no client.
+  -- 1. The deployed decision (20261006100200: hold until the claim windows
+  --    close, 7-day floor), readable by anyone, writable by no client. The
+  --    checks below pin the rule they test inside this rolled-back
+  --    transaction, so they test the mechanism whatever is deployed.
   if (select (payout_hold_days, payout_hold_mode) from public.settlement_settings where id)
-     is distinct from (7, 'fixed'::text) then
-    raise exception 'FAIL 1: the default hold is not a fixed 7 days';
+     is distinct from (7, 'claim_window'::text) then
+    raise exception 'FAIL 1: the deployed hold is not claim_window with a 7-day floor';
   end if;
   if not has_table_privilege('anon', 'public.settlement_settings', 'select')
      or has_table_privilege('authenticated', 'public.settlement_settings', 'update')
@@ -31,6 +34,7 @@ begin
      or has_table_privilege('authenticated', 'public.settlement_settings', 'delete') then
     raise exception 'FAIL 1: settlement_settings privileges are wrong';
   end if;
+  update public.settlement_settings set payout_hold_days = 7, payout_hold_mode = 'fixed' where id;
   if has_function_privilege('anon', 'public.payout_available_at(uuid,timestamptz)', 'execute')
      or has_function_privilege('authenticated', 'public.payout_available_at(uuid,timestamptz)', 'execute') then
     raise exception 'FAIL 1: payout_available_at is client-callable';

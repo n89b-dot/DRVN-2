@@ -1,6 +1,6 @@
 # Decision: how long to hold a seller's payout after delivery
 
-**Status: built. Default unchanged: 7 days. Owner picks the value.**
+**Status: decided 4 October 2026 (Neil): `claim_window` with a 7-day floor.** Set by migration `20261006100200_owner_settlement_decisions.sql`, so every environment gets it. Payout dates already set don't move.
 Migration `20261006100000_payout_hold_setting.sql`; guard
 `supabase/tests/payout_hold_setting_guard.sql`.
 

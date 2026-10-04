@@ -64,10 +64,13 @@ begin
   select id, seller, 4500, 'USD', 'holding', null
     from public.orders where id in (eligible, tracked, disputed, returned, recent, self_confirmed, late_dispute, switched_off);
 
-  -- 1. Off by default: the run is recorded and nothing else happens.
-  if (select auto_confirm_after_days from public.settlement_settings where id) is not null then
-    raise exception 'FAIL 1: auto-confirm is not off by default';
+  -- 1. The deployed decision is 21 days (20261006100200). Switched off, a
+  --    run is recorded and nothing else happens. The checks below pin their
+  --    own values inside this rolled-back transaction.
+  if (select auto_confirm_after_days from public.settlement_settings where id) is distinct from 21 then
+    raise exception 'FAIL 1: the deployed auto-confirm is not 21 days';
   end if;
+  update public.settlement_settings set auto_confirm_after_days = null, payout_hold_mode = 'fixed', payout_hold_days = 7 where id;
   summary := public.auto_confirm_untracked_deliveries();
   if (summary->>'enabled')::boolean
      or exists (select 1 from public.delivery_auto_confirmations)
