@@ -23,7 +23,7 @@ export default async function ImportPage({
   if (!user) redirect("/login");
 
   const betaAccess = await getBetaAccess(user.id, "seller");
-  if (!betaAccess.eligible) return <SellerAccessNotice />;
+  if (!betaAccess.eligible) return <SellerAccessNotice unavailable={betaAccess.unavailable} />;
 
   const [{ data: profile }, config] = await Promise.all([
     supabase.from("profiles").select("import_attested_at").eq("id", user.id).maybeSingle(),

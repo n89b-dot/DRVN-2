@@ -49,6 +49,13 @@ export default async function CartPage() {
     ? "/login?next=%2Fcheckout"
     : "/checkout";
   const checkoutLabel = betaAccess.enforced && !user ? "Sign in to check out" : "Proceed to checkout";
+  // Said up front rather than after the click: a signed-in member without
+  // buyer access (or whose check failed) has no checkout to proceed to.
+  const checkoutBlocked = betaAccess.unavailable
+    ? "We couldn't check your buying access just now. Reload the page to try again."
+    : user && !betaAccess.eligible
+      ? "Buying is limited to invited members during the beta. Your cart stays here, and existing orders are unaffected."
+      : null;
 
   const { data: listings, error } = ids.length
     ? await supabase
@@ -290,7 +297,11 @@ export default async function CartPage() {
               )}
             </p>
 
-            {active.length > 0 ? (
+            {active.length > 0 && checkoutBlocked ? (
+              <p role="status" className="field__hint mt-4">
+                {checkoutBlocked}
+              </p>
+            ) : active.length > 0 ? (
               <ButtonLink href={checkoutHref} variant="live" className="mt-4 w-full">
                 {checkoutLabel}
               </ButtonLink>
@@ -313,7 +324,7 @@ export default async function CartPage() {
           the cart actually regains its side column. Rendered only when there
           is something buyable — an all-unavailable cart has no action to
           offer, and the in-page summary says so instead. */}
-      {active.length > 0 && (
+      {active.length > 0 && !checkoutBlocked && (
         <MobileActionBar label="Checkout" total={formatPrice(total)} wide>
           <ButtonLink href={checkoutHref} variant="live" className="min-w-0 flex-1">
             {checkoutLabel}
