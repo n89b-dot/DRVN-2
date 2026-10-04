@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { ActionFooter, Button, Checkbox, TileHead } from "@/components/ui";
@@ -60,6 +61,19 @@ export function AnalyticsConsentForm({ initialEnabled }: { initialEnabled: boole
           </Button>
         </ActionFooter>
       </form>
+      {/* The signed-in shell has no page foot, so the policies a member
+          agreed to are linked here, beside the one privacy choice. */}
+      <div className="mt-4 flex flex-wrap gap-4">
+        <Link href="/privacy" className="jumplink">
+          Privacy policy →
+        </Link>
+        <Link href="/terms" className="jumplink">
+          Terms of service →
+        </Link>
+        <Link href="/protection" className="jumplink">
+          Buyer &amp; seller protection →
+        </Link>
+      </div>
     </section>
   );
 }

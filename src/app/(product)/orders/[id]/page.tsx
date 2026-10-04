@@ -640,7 +640,7 @@ export default async function OrderDetailPage({
                 <b>{formatPrice(order.subtotal_cents)}</b>
               </div>
               <div className="sheet__row">
-                <span>Shipping{isSeller ? " — passed on" : ""}</span>
+                <span>Shipping{isSeller ? " — paid by the buyer" : ""}</span>
                 <b>
                   {order.shipping_cents > 0
                     ? formatPrice(order.shipping_cents)
@@ -649,7 +649,7 @@ export default async function OrderDetailPage({
               </div>
               {isSeller && (
                 <div className="sheet__row">
-                  <span>DRVN fee — 10%</span>
+                  <span>DRVN fee — 10% of sale + shipping</span>
                   <b>−{formatPrice(order.platform_fee_cents)}</b>
                 </div>
               )}
