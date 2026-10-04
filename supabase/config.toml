@@ -417,3 +417,18 @@ enabled = true
 [auth.email.template.magic_link]
 subject = "Your DRVN order access link"
 content_path = "./supabase/templates/magic-link.html"
+
+# Signup confirmation. Guest checkout accounts (user_metadata.drvn_guest) also
+# get this template when they are sent an order-access link while email
+# confirmation is on — see docs/owner/email-provider.md.
+[auth.email.template.confirmation]
+subject = "Confirm your email for DRVN"
+content_path = "./supabase/templates/confirm-signup.html"
+
+[auth.email.template.recovery]
+subject = "Reset your DRVN password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new DRVN email"
+content_path = "./supabase/templates/email-change.html"

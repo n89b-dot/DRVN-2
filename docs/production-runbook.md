@@ -114,7 +114,8 @@ if any is missing or invalid.
 | `POSTHOG_KEY`, `POSTHOG_HOST` | optional | consented analytics only; unset = the `analytics` health family reports disabled |
 | `SENTRY_RELEASE` | optional | release tag; falls back to the platform's commit SHA |
 
-Stripe (live mode):
+Stripe (live mode). `scripts/owner/stripe-webhooks.mjs --live` creates or
+updates both endpoints below (dry run by default; `docs/owner/README.md`).
 
 1. Webhook endpoint (events on **your account**) →
    `https://<domain>/api/stripe/webhook`, subscribed to exactly the events
@@ -305,6 +306,11 @@ gh api -X POST repos/n89b-dot/DRVN-2/rulesets --input - <<'JSON'
      "required_status_checks":[{"context":"release-gate"}]}}]}
 JSON
 ```
+
+`scripts/owner/branch-protection.sh` applies this ruleset with two more rules
+the JSON above leaves out, `non_fast_forward` (block force pushes) and
+`deletion`: rulesets created through the API don't add them by default. It
+also verifies the result (`docs/owner/branch-protection.md`).
 
 Require `release-gate` alone: it is the aggregate check, and it fails unless
 `verify`, `secrets`, `secrets-full`, `sql-guard`, `e2e` and

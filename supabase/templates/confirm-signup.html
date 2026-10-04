@@ -1,0 +1,11 @@
+{{ if .Data.drvn_guest }}
+<h2>Open your DRVN orders</h2>
+<p><a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=%2Forders">Securely access your orders</a></p>
+<p>You placed an order on DRVN with this email address. This link opens your orders and confirms the address, so you can track delivery, message the seller or report a problem.</p>
+<p>This single-use link expires in one hour. If you did not place an order, ignore this email.</p>
+{{ else }}
+<h2>Confirm your email</h2>
+<p><a href="{{ .ConfirmationURL }}">Confirm your email and sign in</a></p>
+<p>You signed up to DRVN with this address. Open the link to finish setting up your account.</p>
+<p>This link expires in one hour. If you did not sign up, ignore this email. The account stays unconfirmed and nobody can sign in to it.</p>
+{{ end }}
