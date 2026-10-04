@@ -71,22 +71,27 @@ export async function removeSavedCard(
 /**
  * Marks a checkout's PaymentIntent to save the card being used (P21's
  * "save this card for next time"). Ownership proven via intent metadata.
+ * The browser confirms the payment only after `ok`: a card the buyer asked to
+ * keep must not be charged and then quietly not kept. Safe to repeat.
  */
-export async function saveCardOnIntent(formData: FormData): Promise<void> {
+export async function saveCardOnIntent(formData: FormData): Promise<CommerceState> {
   const user = await requireUser();
   const reference = String(formData.get("reference") ?? "");
-  if (!reference) return;
+  const refused = { error: "We couldn't set up saving this card, so nothing was charged. Try again, or untick “Save this card for next time”." };
+  if (!reference) return refused;
 
   try {
     const intent = await stripeClient().paymentIntents.retrieve(reference);
-    if (intent.metadata.buyer_id !== user.id) return;
+    if (intent.metadata.buyer_id !== user.id) return refused;
     const customerId = await getOrCreateStripeCustomer(user.id, user.email);
     await stripeClient().paymentIntents.update(reference, {
       customer: customerId,
       setup_future_usage: "off_session",
     });
+    return { ok: "Card will be saved." };
   } catch (error) {
     reportError("[payments] saveCardOnIntent failed", error);
+    return refused;
   }
 }
 
