@@ -7,7 +7,9 @@
 -- privileges, the same way profiles hides its Stripe and email columns:
 --   * SELECT on cars is granted column by column, every column but vin;
 --   * my_car_vin(car) returns the VIN to the car's owner and nobody else;
---   * edit_car_gallery read the whole row (select *) and now names columns.
+--   * edit_car_gallery read the whole row (select *) and now names columns;
+--   * explore_build_rows returned whole rows (select c.*) and now returns
+--     them with vin null.
 -- A column added to cars later is not readable by clients until it is
 -- granted here deliberately; car_vin_privacy_guard.sql checks the set.
 -- INSERT/UPDATE privileges are unchanged: owners still write their VIN.
@@ -105,6 +107,20 @@ begin
   end if;
   return jsonb_build_object('ok',true,'image',case when p_operation='add' then to_jsonb(photo) else null end,'deleted_url',deleted_url);
 end $function$;
+
+-- Explore's free-text build search returns whole cars rows to its caller
+-- (setof public.cars, select c.*), which now needs a column the caller can't
+-- read. Same rows, same order, vin always null: callers select id and
+-- created_at, and a VIN was never meant to leave this way.
+create or replace function public.explore_build_rows(p_query text) returns setof public.cars
+language sql stable security invoker set search_path=public,extensions,pg_temp as $$
+ select c.id, c.owner_id, c.slug, c.name, c.make, c.model, c.year, c.color, c.about, c.tags,
+        c.cover_image_url, c.is_public, c.created_at, c.updated_at, null::text as vin, c.trim,
+        c.engine, c.drivetrain, c.body_class, c.vin_decoded_at, c.catalog_make_id, c.catalog_model_id,
+        c.identity_source, c.cover_focal_x, c.cover_focal_y
+ from public.search_car_ids(p_query) with ordinality ranked(id,rank)
+ join public.cars c on c.id=ranked.id where c.is_public order by ranked.rank,c.id;
+$$;
 
 notify pgrst, 'reload schema';
 

@@ -42,6 +42,11 @@ begin
   if not denied then raise exception 'FAIL 4: a guest read a VIN'; end if;
   denied := false;
 
+  -- Explore's build search still answers a guest, without the VIN.
+  if not exists (select 1 from public.explore_build_rows('Public build') r where r.id = car and r.vin is null) then
+    raise exception 'FAIL 4b: explore build search refused a guest or leaked the VIN';
+  end if;
+
   -- Another member: no VIN, directly or through the owner function.
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', stranger, 'role', 'authenticated')::text, true);
