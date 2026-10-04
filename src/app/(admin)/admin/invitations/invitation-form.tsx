@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { Alert, Button, TextField } from "@/components/ui";
@@ -48,29 +48,34 @@ export function InvitationForm({
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const router = useRouter();
+  // A transition, so a redirect the action already followed (MFA step-up)
+  // lands in Next's redirect boundary instead of a second navigation.
+  const [, startTransition] = useTransition();
   const link = state?.invitePath ? `${siteOrigin}${state.invitePath}` : null;
 
   return (
-    <form className="tile tile--deep grid gap-4" onSubmit={async (event) => {
+    <form className="tile tile--deep grid gap-4" onSubmit={(event) => {
       event.preventDefault();
       if (submitting.current) return;
       const data = new FormData(event.currentTarget);
       submitting.current = true;
       setPending(true);
       setState(null);
-      try {
-        const result = await createBetaInvitation(null, data);
-        setState(result);
-        if (result?.ok && result.invitation) onCreated?.(result.invitation);
-        if (result?.ok) router.refresh();
-      } catch (error) {
-        unstable_rethrow(error);
-        setState({ error: "Couldn't confirm invitation creation. Check recent invitations before issuing another." });
-        router.refresh();
-      } finally {
-        submitting.current = false;
-        setPending(false);
-      }
+      startTransition(async () => {
+        try {
+          const result = await createBetaInvitation(null, data);
+          setState(result);
+          if (result?.ok && result.invitation) onCreated?.(result.invitation);
+          if (result?.ok) router.refresh();
+        } catch (error) {
+          unstable_rethrow(error);
+          setState({ error: "Couldn't confirm invitation creation. Check recent invitations before issuing another." });
+          router.refresh();
+        } finally {
+          submitting.current = false;
+          setPending(false);
+        }
+      });
     }}>
       <div>
         <span className="microlabel microlabel--ink">Issue an invitation</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui";
@@ -12,30 +12,35 @@ export function RevokeInvitationForm({ invitationId, onRevoked }: { invitationId
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const router = useRouter();
+  // A transition, so a redirect the action already followed (MFA step-up)
+  // lands in Next's redirect boundary instead of a second navigation.
+  const [, startTransition] = useTransition();
 
   return (
-    <form className="mt-3 flex flex-wrap gap-2" onSubmit={async (event) => {
+    <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => {
       event.preventDefault();
       if (submitting.current) return;
       const data = new FormData(event.currentTarget);
       submitting.current = true;
       setPending(true);
       setState(null);
-      try {
-        const result = await revokeBetaInvitation(null, data);
-        setState(result);
-        if (result?.ok) {
-          onRevoked?.(String(data.get("reason") ?? "").trim());
+      startTransition(async () => {
+        try {
+          const result = await revokeBetaInvitation(null, data);
+          setState(result);
+          if (result?.ok) {
+            onRevoked?.(String(data.get("reason") ?? "").trim());
+            router.refresh();
+          }
+        } catch (error) {
+          unstable_rethrow(error);
+          setState({ error: "Couldn't confirm revocation. Check the invitation status and retry if needed." });
           router.refresh();
+        } finally {
+          submitting.current = false;
+          setPending(false);
         }
-      } catch (error) {
-        unstable_rethrow(error);
-        setState({ error: "Couldn't confirm revocation. Check the invitation status and retry if needed." });
-        router.refresh();
-      } finally {
-        submitting.current = false;
-        setPending(false);
-      }
+      });
     }}>
       <input type="hidden" name="invitation_id" value={invitationId} />
       <input

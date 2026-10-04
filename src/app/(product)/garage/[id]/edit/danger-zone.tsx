@@ -1,7 +1,7 @@
 "use client";
 
 import { unstable_rethrow, useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { ConfirmDialog } from "@/components/ui";
 
@@ -12,23 +12,29 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
   const submitting = useRef(false);
   const [state, setState] = useState<ActionState>({});
   const [pending, setPending] = useState(false);
+  // A transition, so a redirect the action already followed — the sign-in
+  // redirect when the session has ended, for one — lands in Next's redirect
+  // boundary instead of being followed a second time.
+  const [, startTransition] = useTransition();
 
-  async function submit(data: FormData) {
+  function submit(data: FormData) {
     if (submitting.current) return;
     submitting.current = true;
     setPending(true);
     setState({});
-    try {
-      const result = await deleteCar({}, data);
-      setState(result);
-      if (result.href) router.push(result.href);
-    } catch (error) {
-      unstable_rethrow(error);
-      setState({ error: "Couldn’t confirm the deletion. Try again to check the same car." });
-    } finally {
-      submitting.current = false;
-      setPending(false);
-    }
+    startTransition(async () => {
+      try {
+        const result = await deleteCar({}, data);
+        setState(result);
+        if (result.href) router.push(result.href);
+      } catch (error) {
+        unstable_rethrow(error);
+        setState({ error: "Couldn’t confirm the deletion. Try again to check the same car." });
+      } finally {
+        submitting.current = false;
+        setPending(false);
+      }
+    });
   }
 
   return (

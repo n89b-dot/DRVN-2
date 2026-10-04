@@ -36,6 +36,16 @@ export function AddToCar({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // The answer first: the action revalidates the order, and the refreshed
+  // row (now naming the car) can arrive before or with this state — checked
+  // the other way round, the confirmation was replaced before it was seen.
+  if (done) {
+    return (
+      <p role="status" className="field__ok !block">
+        {done}
+      </p>
+    );
+  }
   if (addedTo) {
     return (
       <Link href={`/cars/${addedTo.slug}`} className="jumplink">
@@ -44,13 +54,6 @@ export function AddToCar({
     );
   }
   if (!cars.length) return null;
-  if (done) {
-    return (
-      <p role="status" className="field__ok !block">
-        {done}
-      </p>
-    );
-  }
 
   function add(carId: string) {
     setError(null);

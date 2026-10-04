@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { unstable_rethrow, useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import type { ActivityBlock } from "@/lib/activity-blocks";
 import { BuildStoryComposer, type ComposerServerAction } from "@/features/composer/composer";
@@ -48,22 +48,29 @@ export function PostEditor({
   const [deletePending, setDeletePending] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  async function submitDelete(data: FormData) {
+  // A transition, so a redirect the action already followed — the sign-in
+  // redirect when the session has ended, for one — lands in Next's redirect
+  // boundary instead of being followed a second time.
+  const [, startTransition] = useTransition();
+
+  function submitDelete(data: FormData) {
     if (deleting.current) return;
     deleting.current = true;
     setDeletePending(true);
     setDeleteState({});
-    try {
-      const result = await deleteActivityPost({}, data);
-      setDeleteState(result);
-      if (result.href) router.push(result.href);
-    } catch (error) {
-      unstable_rethrow(error);
-      setDeleteState({ error: "Couldn’t confirm the deletion. Try again to check the same entry." });
-    } finally {
-      deleting.current = false;
-      setDeletePending(false);
-    }
+    startTransition(async () => {
+      try {
+        const result = await deleteActivityPost({}, data);
+        setDeleteState(result);
+        if (result.href) router.push(result.href);
+      } catch (error) {
+        unstable_rethrow(error);
+        setDeleteState({ error: "Couldn’t confirm the deletion. Try again to check the same entry." });
+      } finally {
+        deleting.current = false;
+        setDeletePending(false);
+      }
+    });
   }
 
   return (

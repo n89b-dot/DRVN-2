@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { fixtureAdmin } from "./fixtures";
-import { attachSellPhoto, enableSellerPayouts, sellCommitButton, signIn, signUp } from "./helpers";
+import { attachSellPhoto, enableSellerPayouts, sellCommitButton, signIn, signUp, watchEscapedRedirects } from "./helpers";
 
 /**
  * The golden path, end to end: a seller lists a part off a car they own, a buyer
@@ -152,6 +152,7 @@ test.describe.serial("golden path", () => {
   });
 
   test("seller dispatches with tracking", async ({ page }) => {
+    const escapedRedirects = await watchEscapedRedirects(page);
     await signIn(page, seller);
     // Orders is tabbed now — sales live on their own view.
     await page.goto("/orders?view=sales");
@@ -166,8 +167,7 @@ test.describe.serial("golden path", () => {
     await dispatchDialog.getByLabel(/carrier/i).fill("Royal Mail");
     await dispatchDialog.getByLabel(/tracking/i).fill(`E2E${stamp}`);
     let interruptedDispatch = false;
-    const orderRoute = `**${new URL(page.url()).pathname}`;
-    await page.route(orderRoute, async (route) => {
+    await page.route(`**${new URL(page.url()).pathname}`, async (route) => {
       if (!interruptedDispatch && route.request().method() === "POST" && route.request().headers()["next-action"]) {
         interruptedDispatch = true;
         const response = await route.fetch();
@@ -181,11 +181,12 @@ test.describe.serial("golden path", () => {
     await expect(dispatchDialog.getByRole("alert")).toContainText("Your details are still here");
     await expect(dispatchDialog.getByLabel(/carrier/i)).toHaveValue("Royal Mail");
     await expect(dispatchDialog.getByLabel(/tracking/i)).toHaveValue(`E2E${stamp}`);
-    // Only the first dispatch is intercepted; the retry and its redirect run
-    // untouched (an intercepted 303 came back aborted in CI's browsers).
-    await page.unroute(orderRoute);
     await dispatchDialog.getByRole("button", { name: /mark dispatched/i }).click();
     await expect(page.getByText(`E2E${stamp}`).first()).toBeVisible({ timeout: 30_000 });
+    // The router follows the dispatch redirect once. When the form let it
+    // escape, Next pushed it again mid-navigation, and on Next 16.2 the order
+    // page never updated (CI run 36917505731).
+    expect(await escapedRedirects()).toEqual([]);
   });
 
   test("buyer confirms receipt and reviews", async ({ page }) => {

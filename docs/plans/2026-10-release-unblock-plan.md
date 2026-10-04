@@ -151,6 +151,56 @@ once the serial dependents actually run get recorded here, not skipped.
 Phases 1, 2 and 3 are independent and can run in parallel. Phase 4 should come after Phase 2, because several D tests depend on the
 publishing fixture. Expect new failures in Phase 6: about 88 tests that never ran will now run.
 
+## Follow-up (3 Oct): the "aborted server action" flakes
+
+Two PR runs failed with a server action POST marked `net::ERR_ABORTED` and the UI waiting forever:
+`feedback-settings-recovery:143` stuck on "Saving…" (run 36925773472) and golden-path "seller dispatches
+with tracking" (run 36917505731). Both runs used **Next 16.2.12**; main has been on 16.3.8 since `41d21e0`.
+
+- **`ERR_ABORTED` is not the cause.** Next cancels the rest of an action or RSC body once it has what it
+  needs, so a successful save reports the same error locally. The real symptom is that the router never
+  commits the post-action page. In CI, the re-prefetches after the save went out without `next-url`.
+- **Cause of both hangs: Next 16.2's client router.** After an action that revalidates (or redirects and
+  revalidates), 16.2.12 sometimes never commits the new page, and no follow-up request goes out. It
+  reproduced locally on 16.2.12 for both flows:
+  - Profile save: 4 of 37 runs, only with Realtime unavailable. CI ran without Realtime before `fff72f2`.
+    The prefetch hashes matched CI exactly, and no app code dispatches anything in that flow.
+  - Golden-path dispatch: 4 of 5 runs.
+
+  On 16.3.8 none of them hung: profile 60/60 with Realtime down, golden path 10/10, and a full local suite.
+  The 16.3.0 action-queue rewrite (vercel/next.js#95391, which also closed the deadlock in #84299) is the
+  likely fix. I didn't isolate the exact 16.2 code path. Main has required `^16.3.8` since `41d21e0`, so
+  the gate is already off 16.2. **Fix: stay on ≥16.3.** No retries or timeouts.
+- **Our bug that made it worse: redirects escaping to `window`.** Forms ran the action from a plain submit
+  handler and `unstable_rethrow`'d its redirect into a dropped promise. The router has already followed
+  that redirect. Next's window `unhandledrejection` handler ignores the `handled` flag and `router.push`es
+  it a second time, which discards the action mid-navigation. Every successful dispatch logged
+  `NEXT_REDIRECT;push;/orders/…`, on 16.3.8 too. Removing the duplicate cut golden-path on 16.2.12 from 4/5
+  failures to 2/5; the rest is the 16.2 stall above. On 16.3.8 it's a redundant navigation per redirecting
+  action.
+  **Fix:** every client call site that rethrows now calls the action inside `useTransition`'s
+  `startTransition`, so the error lands in Next's RedirectBoundary, which skips handled redirects. The
+  pending/disabled state stays an urgent update outside the transition, so a second click is still
+  blocked. That covers `useRecoverableAction` (dispatch, receive, cancel, review, returns, disputes,
+  offers) plus 11 one-off forms. The golden-path test now asserts no redirect escapes
+  (`watchEscapedRedirects`) and no longer `unroute`s before the retry (that only hid the problem).
+- **Found on the way:**
+  - `direction-journeys` never closed its `freshPage` contexts, so 9 pages kept running through every later
+    spec. That's why the profile failure's screenshot showed a "Journey two manifold" listing. Now closed
+    `afterEach`, and the same for `realtime-delivery`.
+  - `AddToCar` checked `addedTo` before `done`, so the refreshed order row could replace "Added to your
+    build" before it was seen. Journey 6 failed 3 of 6 locally on 16.3.8 because of it.
+- **Not done here:**
+  - `sell-form`'s `onSubmit` had the same rethrow pattern, and `createListing` redirects on every success.
+    It's fixed in PR #4 (fix/release-r2), which had already rewritten that handler for R2-01.
+  - `cart/payment-confirm`, `settings/payment-methods` and two `sell/import` callbacks called actions with
+    no catch at all. They're fixed in PR #6 (checkout) and PR #7 (settings and import).
+  - On a member route (`/settings`, `/orders`, `/garage`, `/sell`, …), a session that has ended never
+    reached the action's `redirect("/login")`. The proxy answered the action's POST itself with a 307,
+    fetch followed it by re-posting to `/login`, and the page saw a failed call instead of a sign-in. The
+    proxy fix answers a signed-out Server Action the way Next's `redirect()` does
+    (`x-action-redirect`), so it lands on `/login?next=<page>`.
+
 ## After the gate is green (not part of this plan)
 `scripts/release-candidate.mjs` still needs current evidence for its 15 gates (hosted provider, restore/rollback,
 staging soak and others). The readiness tracker is dated 6 Sep. The README, e2e README and runbook §8 still say e2e isn't in CI.

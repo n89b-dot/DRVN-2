@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { ChatComposer, ResultNote } from "@/components/ui";
@@ -105,7 +105,12 @@ export function ConversationComposer({
     });
   }
 
-  async function send() {
+  // A transition, so a redirect the action already followed — the sign-in
+  // redirect when the session has ended, for one — lands in Next's redirect
+  // boundary instead of being followed a second time.
+  const [, startTransition] = useTransition();
+
+  function send() {
     if (inFlight.current || !canSend) return;
     inFlight.current = true;
     setPending(true);
@@ -117,25 +122,27 @@ export function ConversationComposer({
     data.set("body", body);
     data.set(kind === "order" ? "order_id" : "offer_id", id);
     for (const photo of ready) data.append("attachment", photo.path!);
-    try {
-      const result = await sendThreadMessage({}, data);
-      if (result.ok) {
-        setBody("");
-        photos.forEach((p) => URL.revokeObjectURL(p.preview));
-        setPhotos([]);
-        identity.current = null;
-        setState({});
-        router.refresh();
-      } else {
-        setState(result);
+    startTransition(async () => {
+      try {
+        const result = await sendThreadMessage({}, data);
+        if (result.ok) {
+          setBody("");
+          photos.forEach((p) => URL.revokeObjectURL(p.preview));
+          setPhotos([]);
+          identity.current = null;
+          setState({});
+          router.refresh();
+        } else {
+          setState(result);
+        }
+      } catch (error) {
+        unstable_rethrow(error);
+        setState({ error: "Couldn't confirm your message was sent. Your draft is still here; try again." });
+      } finally {
+        inFlight.current = false;
+        setPending(false);
       }
-    } catch (error) {
-      unstable_rethrow(error);
-      setState({ error: "Couldn't confirm your message was sent. Your draft is still here; try again." });
-    } finally {
-      inFlight.current = false;
-      setPending(false);
-    }
+    });
   }
 
   if (!deals.length) {
