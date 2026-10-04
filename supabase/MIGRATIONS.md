@@ -5,12 +5,18 @@
 | File | Applied to |
 |---|---|
 | `20261007100000_refund_reversal_remaining_cap.sql` | not yet |
+| `20261007100100_unsuspend_refuses_requested_deletion.sql` | not yet |
+| `20261004155900_my_car_vin_first.sql` | not yet (no-op where `20261004160000` has run) |
 
 `20261007100000` restates `settle_refund_operation` with one change: a refund
 after the payout is capped at what the transfer can still give back (sent,
 less earlier reversals), not at the cumulative refund share. A refund made
 before the payout used to cancel the reversal of every later one by its share.
 Guard: `supabase/tests/refund_reversal_cap_guard.sql`.
+`20261007100100` restates `execute_admin_command` with one added line:
+unsuspend is refused for any account with a deletion request on record, not
+only while its job is unfinished (a member with orders keeps a scrubbed,
+suspended profile after the job completes).
 
 ## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (isolated local stack only)
 
@@ -58,6 +64,11 @@ Release readiness round three (`docs/plans/2026-10-release-r3-record.md`).
   `cars` and grants every column but `vin`. App code that still does
   `select("*")` on cars (main before this round) is refused, so apply it
   only once the round-three app is deployed.
+  The round-three app in turn needs `my_car_vin()`, which that same file
+  creates — so `20261004155900_my_car_vin_first.sql` (added 7 Oct) creates the
+  function alone. On a live environment: apply `20261004155900`, deploy the
+  app, then apply `20261004160000`. On a fresh database the files simply run
+  in order.
 - `20261004130000` re-creates `purchase_begin`, `offer_accept_begin`,
   `prepare_payment_request`, `finish_reservation_expiry` and
   `claim_unmapped_payment_requests`. They are the previous definitions plus
