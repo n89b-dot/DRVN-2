@@ -143,6 +143,7 @@ async function notifyAccountState(
     actor_id: null,
   });
   if (error) reportError("[admin] account-state notification failed", { userId, state, error });
+  return !error;
 }
 
 function revalidateOrder(orderId: string) {
@@ -419,7 +420,12 @@ export async function adminSuspendUser(
   if (userId === ctx.userId) return { error: "You cannot suspend yourself." };
 
   try {
-    await auditedAction(
+    // user.suspend is a transactional command: auditedAction runs it as
+    // execute_admin_command, which refuses an admin target, suspends, pauses
+    // the listings and writes the audit row in one transaction (raising on a
+    // zero-row suspend). The closure below runs only if the action ever
+    // leaves that set, and checks every step the same way.
+    const result = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -430,11 +436,12 @@ export async function adminSuspendUser(
       },
       async () => {
         // Refuse to suspend another admin from the console; that's a SQL job.
-        const { data: isTargetAdmin } = await ctx.admin
+        const { data: isTargetAdmin, error: adminReadError } = await ctx.admin
           .from("admin_users")
           .select("user_id")
           .eq("user_id", userId)
           .maybeSingle();
+        if (adminReadError) throw new Error("Couldn't check whether this user is an admin. Nothing changed.");
         if (isTargetAdmin) throw new Error("Admins are managed in SQL, not from the console.");
 
         const { data: suspended, error } = await ctx.admin
@@ -448,18 +455,28 @@ export async function adminSuspendUser(
 
         // Pause their live stock; record which listings, so unsuspend can
         // restore exactly this set and nothing else.
-        const { data: paused } = await ctx.admin
+        const { data: paused, error: pauseError } = await ctx.admin
           .from("listings")
           .update({ status: "paused" })
           .eq("seller_id", userId)
           .eq("status", "active")
           .select("id");
+        if (pauseError) {
+          throw new Error("The user is suspended, but their listings couldn't be paused. Pause them before retrying.");
+        }
         return { pausedListingIds: (paused ?? []).map((l) => l.id) };
       }
     );
-    await notifyAccountState(ctx.admin, userId, "suspended", reason);
+    const paused = Array.isArray(result?.pausedListingIds) ? result.pausedListingIds.length : null;
+    const told = await notifyAccountState(ctx.admin, userId, "suspended", reason);
     revalidatePath("/admin", "layout");
-    return { ok: "User suspended; their active listings were paused, and they were told why." };
+    const listings =
+      paused == null ? "their active listings were paused" : `${paused} active listing${paused === 1 ? "" : "s"} paused`;
+    return {
+      ok: told
+        ? `User suspended; ${listings}, and they were told why.`
+        : `User suspended; ${listings}. Their notification failed — tell them directly.`,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Suspension failed." };
   }
@@ -479,7 +496,10 @@ export async function adminUnsuspendUser(
   if (!reason) return { error: "A reason is required — it goes in the audit log." };
 
   try {
-    await auditedAction(
+    // Transactional, like user.suspend: execute_admin_command lifts the
+    // suspension, reactivates the recorded listings and audits it at once.
+    // The closure is the checked fallback should the action leave that set.
+    const result = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -501,30 +521,52 @@ export async function adminUnsuspendUser(
         if (!cleared?.length) throw new Error("This user isn't suspended, or their account is being deleted.");
 
         // Reactivate exactly the set the suspension paused.
-        const { data: lastSuspend } = await ctx.admin
+        const { data: lastSuspend, error: auditError } = await ctx.admin
           .from("admin_audit_log")
           .select("metadata")
           .eq("subject_type", "user")
           .eq("subject_id", userId)
           .eq("action", "user.suspend")
+          .not("metadata->result", "is", null)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
+        if (auditError) {
+          throw new Error("The suspension is lifted, but its paused listings couldn't be looked up. Reactivate them by hand.");
+        }
         const meta = lastSuspend?.metadata as { result?: { pausedListingIds?: string[] } } | null;
         const pausedIds = meta?.result?.pausedListingIds ?? [];
+        let reactivated: string[] = [];
         if (pausedIds.length) {
-          await ctx.admin
+          const { data: restored, error: restoreError } = await ctx.admin
             .from("listings")
             .update({ status: "active" })
             .in("id", pausedIds)
-            .eq("status", "paused");
+            .eq("seller_id", userId)
+            .eq("status", "paused")
+            .select("id");
+          if (restoreError) {
+            throw new Error("The suspension is lifted, but its paused listings couldn't be reactivated. Reactivate them by hand.");
+          }
+          reactivated = (restored ?? []).map((l) => l.id);
         }
-        return { reactivatedListingIds: pausedIds };
+        return { reactivatedListingIds: reactivated };
       }
     );
-    await notifyAccountState(ctx.admin, userId, "restored", reason);
+    const reactivated = Array.isArray(result?.reactivatedListingIds) ? result.reactivatedListingIds.length : null;
+    const told = await notifyAccountState(ctx.admin, userId, "restored", reason);
     revalidatePath("/admin", "layout");
-    return { ok: "Suspension lifted; previously paused listings reactivated." };
+    const listings =
+      reactivated == null
+        ? "previously paused listings reactivated"
+        : reactivated === 0
+          ? "no paused listings to reactivate"
+          : `${reactivated} paused listing${reactivated === 1 ? "" : "s"} reactivated`;
+    return {
+      ok: told
+        ? `Suspension lifted; ${listings}.`
+        : `Suspension lifted; ${listings}. Their notification failed — tell them directly.`,
+    };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not lift the suspension." };
   }

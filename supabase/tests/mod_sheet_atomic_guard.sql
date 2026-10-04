@@ -284,7 +284,7 @@ begin
   -- link intact.
   reset role;
   insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, currency, status)
-  values (stale_listing_id, owner_id, 'Guard part', 'performance', 10000, 0, 'usd', 'draft');
+  values (stale_listing_id, owner_id, 'Guard part', 'performance', 10000, 0, 'USD', 'draft');
   update public.mod_items set linked_listing_id = stale_listing_id where id = kept_id;
 
   perform set_config('role', 'authenticated', true);

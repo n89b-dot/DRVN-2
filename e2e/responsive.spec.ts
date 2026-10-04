@@ -26,7 +26,7 @@ test.beforeAll(async () => {
   const cover = admin.storage.from("car-images").getPublicUrl(path).data.publicUrl;
   const car = await admin.from("cars").insert({ owner_id: visualUserId, slug: `visual-${visualId}`, name: "Visual fixture build", is_public: true, cover_image_url: cover });
   if (car.error) throw car.error;
-  const listing = await admin.from("listings").insert({ seller_id: visualUserId, title: "Visual fixture part", category: "performance", price_cents: 10000, shipping_cents: 0, currency: "GBP", status: "active" });
+  const listing = await admin.from("listings").insert({ seller_id: visualUserId, title: "Visual fixture part", category: "performance", price_cents: 10000, shipping_cents: 0, currency: "USD", status: "active" });
   if (listing.error) throw listing.error;
 });
 test.afterAll(async () => {

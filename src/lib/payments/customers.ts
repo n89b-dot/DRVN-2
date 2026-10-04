@@ -19,13 +19,17 @@ export type SavedCard = {
   email: string | null;
 };
 
+/** The user's Stripe customer, or null when they have none. A failed read
+ *  throws: null means "no customer", and treating an outage as that would
+ *  create a second customer once the 24h idempotency window has passed. */
 export async function getStripeCustomerId(userId: string): Promise<string | null> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("stripe_customer_id")
     .eq("id", userId)
     .maybeSingle();
+  if (error) throw new Error(`Stripe customer lookup failed: ${error.message}`);
   return data?.stripe_customer_id ?? null;
 }
 
@@ -40,14 +44,21 @@ export async function getOrCreateStripeCustomer(userId: string, email?: string |
   );
 
   const admin = createAdminClient();
-  await admin
+  const { data: stored, error } = await admin
     .from("profiles")
     .update({ stripe_customer_id: customer.id })
     .eq("id", userId)
-    .is("stripe_customer_id", null);
+    .is("stripe_customer_id", null)
+    .select("stripe_customer_id");
+  // An unsaved pointer would orphan this customer and mint another on a later
+  // visit, so the caller gets a retryable error instead of the id.
+  if (error) throw new Error(`Stripe customer pointer write failed: ${error.message}`);
+  if (stored?.length) return customer.id;
 
-  // If a concurrent request won the write, prefer the stored id.
-  return (await getStripeCustomerId(userId)) ?? customer.id;
+  // Nothing matched: a concurrent request stored its id first. Use that one.
+  const winner = await getStripeCustomerId(userId);
+  if (!winner) throw new Error("Stripe customer pointer was not saved");
+  return winner;
 }
 
 export async function listSavedCards(userId: string): Promise<SavedCard[]> {

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-export const REQUIRED_FAMILIES = ['expiries', 'captures', 'transfers', 'transferReconciliation', 'refunds', 'labelVoids', 'returns', 'disputes', 'alerts', 'receipts', 'analytics', 'search', 'deletions', 'savedSearches', 'media'];
+export const REQUIRED_FAMILIES = ['expiries', 'captures', 'transfers', 'transferReconciliation', 'refunds', 'labelVoids', 'returns', 'disputes', 'alerts', 'receipts', 'analytics', 'search', 'deletions', 'savedSearches', 'media', 'listingImports'];
 class MonitorError extends Error { constructor(code) { super(code); this.name = 'MonitorError'; } }
 function endpoint(value, local = false) {
   let target;

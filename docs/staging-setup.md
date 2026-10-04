@@ -1,0 +1,341 @@
+# Hosted staging — setup checklist
+
+An ordered checklist for standing up DRVN's hosted staging environment: the
+environment the release-candidate gates (`scripts/release-candidate.mjs`) are
+observed against. Staging runs the production build (`NODE_ENV=production`)
+with **Stripe and EasyPost in test mode** — so every live-money check in
+`src/lib/env.ts` applies to it, but no real money or postage moves.
+
+Who does each step:
+
+- **[OWNER]** needs the owner's accounts, a payment method, or a decision only
+  the owner can make.
+- **[ENGINEER]** can be done by an engineer once the owner has created the
+  accounts and shared credentials through a password manager — never chat,
+  email or the repo.
+
+Details live in `docs/production-runbook.md` (the same steps for
+production); this file is the order to do them in for staging. Record every
+value you create in the password manager entry "DRVN staging".
+
+---
+
+## 0. Before you start [OWNER]
+
+1. **Domain.** Pick the staging origin, e.g. `https://staging.<your-domain>`.
+   It must be HTTPS and is used verbatim as `NEXT_PUBLIC_SITE_URL` (origin
+   only, no path or trailing slash).
+2. **Accounts the owner must hold** (each with 2FA on): Supabase, the hosting
+   provider (Vercel assumed below — the code only reads Vercel's
+   `VERCEL_*` variables as fallbacks), Stripe, EasyPost, Sentry, an email
+   delivery (SMTP) provider, GitHub (Pro, step 11), and an alert destination
+   (e.g. a Slack workspace for an incoming webhook).
+3. **Decide whether staging uses the real importer and search.** Optional
+   services can stay off: no `ANTHROPIC_API_KEY` (importer shows
+   "temporarily unavailable" in production builds), no Typesense (Postgres
+   search), no PostHog (analytics off). Write the decision down — it becomes
+   `analyticsEnabled` / `searchEnabled` in the release-candidate config.
+
+## 1. Supabase project [OWNER]
+
+1. **Capacity.** The current Supabase organisation is on the Free plan and
+   has no free active-project slot (`docs/remediation-release-and-monitoring.md`).
+   Choose one: upgrade the organisation to a paid plan (recommended — the
+   `restore-rollback` gate needs a real hosted recovery point, and backups /
+   point-in-time recovery are paid-plan features; check what the chosen plan
+   actually includes), or create a separate organisation. Do **not** pause or
+   reuse the shared dev project `grunnjojhdevhuckujmc`.
+2. Create the project `drvn-staging`, region close to the UK user base.
+   Generate a strong database password.
+3. From **Project Settings → API keys**, record: project ref, project URL,
+   the publishable key (`sb_publishable_…`) and a secret key (`sb_secret_…`).
+   Record the database password.
+4. If the engineer's network has no IPv6, buy the IPv4 add-on or plan to run
+   step 2 from a host with IPv6: `scripts/apply-migration.mjs` connects
+   directly to `db.<ref>.supabase.co:5432`.
+
+## 2. Apply the schema [ENGINEER]
+
+This is a **fresh, empty** project, so the whole chain applies in filename
+order. Never do this to a project that already has a schema — 0001 drops
+every table in `public`.
+
+1. Use a separate checkout (or `git worktree`) at the release-candidate
+   commit, with its own `.env.local` containing only:
+   `NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co` and
+   `SUPABASE_DB_PASSWORD=<staging password>`. The runner reads `.env.local`
+   from the current directory — doing this in your normal checkout would
+   target the dev project.
+2. Apply every migration in order, stopping on the first failure:
+   ```bash
+   for f in supabase/migrations/*.sql; do
+     echo "== $f"; node scripts/apply-migration.mjs "$f" || break
+   done
+   ```
+   Do **not** apply `supabase/tests/ci_shim.sql` — it is CI-only and rewrites
+   auth helpers.
+3. Seed the CLI migration history from the same files —
+   `docs/production-runbook.md` §3 has the generator. Re-run it after every
+   later migration.
+4. Verify in the SQL editor:
+   - `select extname from pg_extension where extname in ('pg_cron','pg_net');`
+     → both. (0020 swallows a pg_net install failure with a NOTICE; if it is
+     missing, enable it under Database → Extensions and re-apply
+     `0020_transfer_scheduling.sql`.)
+   - `select jobname, schedule from cron.job order by 1;` → the nine jobs in
+     runbook §4.
+   - `select id, public from storage.buckets order by 1;` → `account-exports`
+     f, `activity-images` t, `avatars` t, `car-images` t, `dispute-evidence`
+     f, `listing-images` t, `message-photos` f. **Buckets and their policies
+     are created by the migrations** — create nothing by hand.
+   - The CI `sql-guard` job is green for this exact commit (guards are never
+     run against a hosted project).
+5. **After step 12** (the first admin has to sign up while the gate is still
+   off), turn on the invited-beta gate — the release-candidate config
+   requires `betaRequired: true` and the migration leaves it off:
+   ```sql
+   update public.beta_access_config set enforced = true, updated_at = now() where singleton;
+   ```
+   Admin → Invitations then shows "Beta gate enforced".
+
+## 3. Supabase Auth [OWNER clicks, ENGINEER can drive]
+
+Authentication → URL configuration:
+
+1. **Site URL:** the staging origin.
+2. **Redirect URLs** (allowlist): `https://<staging-origin>/callback` and
+   `https://<staging-origin>/callback?**` (signup confirmation, password
+   reset `?next=/login/reset`, Google return), and
+   `https://<staging-origin>/confirm?**` (guest order-access link). Nothing
+   else — a wildcard host would let a link land anywhere.
+
+Authentication → Providers / settings:
+
+3. Email provider on, **Confirm email on** (dev has it off for e2e). Leave
+   "secure email change" on.
+4. Google (optional): only if staging should offer it. Needs a Google Cloud
+   OAuth client [OWNER] whose authorised redirect URI is Supabase's
+   `https://<ref>.supabase.co/auth/v1/callback`. The signup page hides the
+   button automatically when the provider is off.
+5. MFA: TOTP enabled — every admin must enrol at `/admin-verify`.
+
+Emails:
+
+6. **Custom SMTP is required** [OWNER: choose and pay for a provider; verify
+   the sending domain with SPF/DKIM]. Supabase's built-in sender is
+   rate-limited and not for real recipients. Enter host, port, user,
+   password and sender under Authentication → SMTP. Record the provider's
+   name — the privacy policy must name it (`docs/legal-review-checklist.md`).
+7. Templates. The repo's only custom template is the magic link
+   (`supabase/templates/magic-link.html`, subject "Your DRVN order access
+   link"; `supabase/config.toml` wires it locally). Paste it into
+   **Magic Link** — it links to `{{ .SiteURL }}/confirm?token_hash=…` and is
+   used only for guest order access. Confirm signup, Reset password and
+   Change email can keep the default `{{ .ConfirmationURL }}` body (the app
+   passes `/callback` as the redirect); restyle them if wanted.
+
+## 4. Hosting project [OWNER creates, ENGINEER configures]
+
+1. Create the Vercel project from the GitHub repo [OWNER — needs the paid
+   tier the owner chooses]; production branch = the release-candidate
+   branch or `main`. Node 22 (CI uses 22.22.0). Build command `npm run
+   build`, install `npm ci`.
+2. Attach the staging domain; confirm HTTPS.
+3. Set the environment variables below for the deployment environment that
+   serves the staging domain.
+
+| Variable | Value / where to get it |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | step 1.3 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | step 1.3 |
+| `SUPABASE_SECRET_KEY` | step 1.3 — server only |
+| `NEXT_PUBLIC_SITE_URL` | the staging origin, `https://…`, no path |
+| `PAYMENTS_MODE` | `stripe` |
+| `STRIPE_SECRET_KEY` | Stripe **test mode** → Developers → API keys (`sk_test_…`). A test key keeps the site's test-mode notices on |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | same page (`pk_test_…`) |
+| `STRIPE_WEBHOOK_SECRET` | step 5.1 (`whsec_…`) |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | step 5.2 (`whsec_…`, the Connect endpoint) |
+| `CRON_SECRET` | generate: `openssl rand -hex 32`. Also goes into `job_config` (step 7) and GitHub (step 10) |
+| `GUEST_RECEIPT_SECRET` | generate: `openssl rand -hex 32` (different from `CRON_SECRET`) |
+| `SENTRY_DSN` | step 8 — `https://<key>@<host>/<project id>` |
+| `ADMIN_ALERT_WEBHOOK_URL` | step 9 — must be `https:` |
+| `TRUST_PROXY_HEADERS` | `true` only after confirming the host overwrites client `X-Forwarded-For` (check its docs, then send a request with a forged header and confirm rate limits key on the real address). Leave unset until then |
+| `FLAG_INTEGRATED_SHIPPING_V1` | `true` if staging exercises DRVN Shipping (`shippingMode: "easypost-test"`); unset for `"stub"` |
+| `EASYPOST_API_KEY` | EasyPost **test** key (`EZTK…`), step 6 |
+| `EASYPOST_WEBHOOK_SECRET` | step 6 |
+| `SHIPPING_MODE` + `SHIPPING_ALLOW_STUB_IN_PRODUCTION=true` | only if the candidate declares `shippingMode: "stub"` |
+| `ANTHROPIC_API_KEY` | optional (step 0.3), from the Anthropic console |
+| `TYPESENSE_URL`, `TYPESENSE_API_KEY` | optional (step 0.3) |
+| `POSTHOG_KEY`, `POSTHOG_HOST` | optional (step 0.3) |
+
+Never set `PAYMENTS_ALLOW_STUB_IN_PRODUCTION` on staging — the candidate
+declares `paymentMode: "stripe-test"`. Deploy; the build must start without a
+`PaymentsConfigError` in the logs. A boot failure lists every missing or
+invalid variable at once.
+
+## 5. Stripe, test mode [OWNER account, ENGINEER configures]
+
+1. Developers → Webhooks → add endpoint, **events on your account**:
+   `https://<staging-origin>/api/stripe/webhook`, events exactly:
+   `payment_intent.succeeded`, `payment_intent.payment_failed`,
+   `payment_intent.requires_action`, `charge.refunded`, `refund.created`,
+   `refund.updated`, `refund.failed`, `charge.dispute.created`,
+   `charge.dispute.closed`, `account.updated`. Copy the signing secret into
+   `STRIPE_WEBHOOK_SECRET` and redeploy.
+2. Connect → enable Connect in test mode, **Express** accounts, platform
+   profile and branding filled in [OWNER: platform business details]. Sellers
+   onboard from `/payouts`; they return to `/settings/payouts/return`, which
+   syncs `payouts_enabled`.
+   Then add a **second** webhook endpoint, "events on connected accounts",
+   at the same URL `https://<staging-origin>/api/stripe/webhook`, with the
+   single event `account.updated`. Copy its signing secret into
+   `STRIPE_CONNECT_WEBHOOK_SECRET` and redeploy. This is how a seller's
+   payout status reaches DRVN after onboarding.
+3. Send a test event from the dashboard and confirm a `200` in the endpoint's
+   log.
+
+## 6. EasyPost, test mode [OWNER account, ENGINEER configures]
+
+Only if staging declares `shippingMode: "easypost-test"`.
+
+1. Copy the **test** API key (`EZTK…`) into `EASYPOST_API_KEY`.
+2. Settings → Webhooks → add `https://<staging-origin>/api/shipping/easypost`
+   (test mode), set a webhook secret, and put the same value in
+   `EASYPOST_WEBHOOK_SECRET`. The route acts on `tracker.created` and
+   `tracker.updated`, refuses everything while the secret is unset, and
+   rejects bad HMACs.
+3. Runbook §10 covers the marketplace-account question to settle with
+   EasyPost before any production key.
+
+## 7. Scheduler → app [ENGINEER]
+
+The migrations already created the nine pg_cron jobs; the HTTP ones do
+nothing until the database knows where the app is. In the SQL editor:
+
+```sql
+insert into public.job_config (key, value) values
+  ('transfer_worker_url', 'https://<staging-origin>/api/jobs/transfers'),
+  ('transfer_worker_secret', '<CRON_SECRET value>')
+on conflict (key) do update set value = excluded.value, updated_at = now();
+```
+
+There are no other database-side secrets: nothing in the migrations reads
+Vault or custom `current_setting` keys for workers. The URL must end in
+`/api/jobs/transfers` — the other workers derive their routes from it.
+Within ~10 minutes Admin → Settings → Background jobs shows each family
+running; daily families (`media`, `listingImports`) show "never ran" until
+their first 03:17 / 03:37 UTC run. Trigger one by hand to confirm:
+`curl -X POST https://<staging-origin>/api/jobs/listing-imports -H "Authorization: Bearer $CRON_SECRET"`.
+
+## 8. Sentry [OWNER account, ENGINEER configures]
+
+Create a project (platform: Node/Next.js). Copy its DSN into `SENTRY_DSN`.
+Reporting is server-side only (`src/lib/monitoring.ts`); there is no browser
+SDK or replay to configure. Optionally set `SENTRY_RELEASE` (defaults to the
+commit SHA). Trigger a test error and confirm it arrives.
+
+## 9. Operator alerts [OWNER]
+
+Create a Slack incoming webhook (or any HTTPS endpoint accepting a JSON body
+with a Slack-compatible `text`) in a channel the operator watches. Put it in
+`ADMIN_ALERT_WEBHOOK_URL`. Confirm a delivery: Admin → Payments shows the
+alert outbox; a `disabled` row means the variable was not set when raised.
+
+## 10. Independent monitor [OWNER sets repo settings]
+
+GitHub → repository → Settings → Secrets and variables → Actions:
+
+- variable `DRVN_MONITOR_ENABLED` = `true`
+- variable `DRVN_MONITOR_ORIGIN` = the staging origin
+- secret `DRVN_MONITOR_SECRET` = the staging `CRON_SECRET`
+
+Run "Independent worker monitor" once by hand (Actions → workflow_dispatch).
+It fails while any daily family has never run — expected until after the
+first 03:37 UTC. Then pause the worker (clear `job_config`), confirm the
+failure notification reaches the operator, restore it, and confirm recovery.
+For minute-level alerting with a dead-man heartbeat, run the `--watch` mode
+on a separate host (`docs/remediation-release-and-monitoring.md`).
+
+## 11. GitHub plan and branch protection [OWNER]
+
+1. Upgrade the account to **GitHub Pro** (or make the repository public) —
+   rulesets are unavailable on Free for private repositories.
+2. Add the repository secret `STRIPE_TEST_SECRET_KEY` = a Stripe test-mode
+   secret key. Without it the `stripe-integration` job fails on purpose and
+   `release-gate` can never pass.
+3. Apply the `protect-main` ruleset from runbook §8: pull requests required,
+   **`release-gate` the only required status check**, force pushes blocked.
+4. If the host deploys straight from `main`, also require that check before
+   promotion (a protected branch doesn't stop a deploy of an unchecked
+   commit).
+
+## 12. First admin [ENGINEER]
+
+While the beta gate is still off (step 2.5 comes after this), sign up on
+staging with the operator's email and confirm it, then:
+
+```sql
+insert into public.admin_users (user_id, note)
+values ('<auth.users id>', 'staging operator') on conflict do nothing;
+```
+
+Enrol TOTP at `/admin-verify`. Now do step 2.5 (turn the gate on), then
+create invitations for testers from Admin → Invitations.
+
+## 13. Release-candidate evidence — the 15 gates [ENGINEER, OWNER reviews]
+
+1. Write the candidate config **outside the checkout** (no secrets in it):
+   ```json
+   {
+     "environmentId": "drvn-staging",
+     "canonicalOrigin": "https://<staging-origin>",
+     "supabaseProjectRef": "<ref>",
+     "paymentMode": "stripe-test",
+     "shippingMode": "easypost-test",
+     "analyticsEnabled": false,
+     "searchEnabled": false,
+     "betaRequired": true,
+     "operator": "<responsible person>"
+   }
+   ```
+2. From a **clean committed checkout** of the deployed commit:
+   `node scripts/release-candidate.mjs build /path/config.json /path/outside/candidate.json`.
+   It runs `npm run build` and binds source SHA, build digest, migrations
+   digest, lockfile and runtime.
+3. Produce one report per gate in `REQUIRED_GATES`, each with `gate`,
+   `sourceSha`, `buildDigest`, `migrationsDigest`, `environmentId`,
+   `passed: true`, `observedAt` (within the last seven days),
+   `evidencePath` (a file beneath the reports JSON's directory) and that
+   file's SHA-256 as `evidenceDigest`:
+
+   | Gate | Evidence |
+   |---|---|
+   | `unit` | `npm test` output for the commit |
+   | `typecheck` | `npx tsc --noEmit -p .` |
+   | `lint` | `npm run lint` |
+   | `sql` | CI `sql-guard` log: every guard's "all … checks passed" |
+   | `schema-parity` | CI "Generated database contract matches migrations" step |
+   | `build` | the build log from step 2 |
+   | `browser-first-attempt` | Playwright run with zero retries; report must carry `counts.expected > 0`, `counts.flaky = 0`, `counts.unexpected = 0` |
+   | `stripe-api` | CI `stripe-integration` job against the test key |
+   | `hosted-provider` | a purchase, refund, dispute and payout on staging in Stripe test mode, plus a test label and tracker if EasyPost is on |
+   | `invitation-boundaries` | uninvited signup/buy/sell refused, invited accepted, on staging |
+   | `privacy` | an export downloaded and checked, a deletion completed, private buckets refusing anonymous reads |
+   | `accessibility` | the axe/e2e accessibility run against staging |
+   | `operations` | worker health green, a monitor failure + recovery delivered (step 10), an alert delivered (step 9) |
+   | `restore-rollback` | a hosted restore of a recovery point into an isolated target and a previous-build rollback (runbook §6) |
+   | `staging-soak` | the agreed soak period with workers green and no unexpected Sentry errors |
+
+4. `node scripts/release-candidate.mjs verify /path/candidate.json /path/reports.json`.
+   Missing, duplicated, stale, future or mismatched evidence blocks
+   promotion. The script checks the package, not its contents — the owner
+   (or a reviewer they name) still reads each evidence file.
+
+## What only the owner can do — summary
+
+Supabase plan/organisation (1.1), SMTP provider and sending domain (3.6),
+Google OAuth client if used (3.4), hosting project and domain (4.1–4.2),
+Stripe and Connect platform details (5), EasyPost account (6), Sentry
+project (8), alert channel (9), GitHub Pro, repo secrets/variables and the
+ruleset (10–11), the staging soak's duration, and sign-off on the evidence
+(13.4).

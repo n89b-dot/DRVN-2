@@ -5,6 +5,7 @@ import Stripe from "stripe";
 
 import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, RefundResult } from "./provider";
 import { reportError } from "@/lib/monitoring";
+import { chargeWithinBounds } from "./charge-bounds";
 
 /**
  * Stripe, via PaymentIntents.
@@ -80,12 +81,39 @@ export function mapStripeRefundResult(refund: Stripe.Refund): RefundResult {
   }
 }
 
+/**
+ * True only when Stripe refused the create request itself — a 400 validation
+ * error such as `amount_too_small` — which means no PaymentIntent exists.
+ * Everything else (a timeout, a 5xx, a rate limit, an idempotency conflict
+ * that points at an earlier request) leaves the outcome unknown.
+ */
+export function provablyNotCreated(error: unknown): error is Stripe.errors.StripeInvalidRequestError {
+  return (
+    error instanceof Stripe.errors.StripeInvalidRequestError &&
+    error.statusCode === 400 &&
+    error.rawType === "invalid_request_error" &&
+    !(error.code ?? "").startsWith("idempotency")
+  );
+}
+
+/** The buyer-facing half of "Payment failed: …" for a refused create. */
+export function rejectionReason(error: Stripe.errors.StripeInvalidRequestError): string {
+  return error.code === "amount_too_small" || error.code === "amount_too_large"
+    ? "card payments must come to between $0.50 and $999,999.99"
+    : "the payment couldn't be set up";
+}
+
 export class StripePaymentProvider implements PaymentProvider {
   readonly name = "stripe";
   /** sk_test keys move no real money — test-mode banners must stay up. */
   readonly isLive = stripeSecretKey()?.startsWith("sk_live_") ?? false;
 
   async createPayment(request: PaymentRequest): Promise<PaymentResult> {
+    // Stripe would refuse it; refusing before anything is persisted leaves
+    // the caller free to release the reservation.
+    if (!chargeWithinBounds(request.totalCents)) {
+      return { status: "failed", reason: "card payments must come to between $0.50 and $999,999.99" };
+    }
     try {
       const admin = createAdminClient();
       const orderIds = request.orderId.split(",").sort();
@@ -93,17 +121,38 @@ export class StripePaymentProvider implements PaymentProvider {
       const immutable = { orderIds, buyerId: request.buyerId, sellerId: request.sellerId, totalCents: request.totalCents, currency: request.currency.toLowerCase(), customerId: request.customerId ?? null };
       const { data, error } = await admin.rpc("prepare_payment_request", { p_key: operationKey, p_request: immutable as Json });
       if (error || !data) throw new Error("Payment attempt could not be persisted");
-      const saved = data as { correlation_id: string; reference: string | null; created_at: string };
+      const saved = data as { correlation_id: string; reference: string | null; created_at: string; rejected?: boolean };
+      // Stripe already refused this exact request; its orders were released.
+      if (saved.rejected) return { status: "failed", reason: "the payment couldn't be set up" };
       if (!saved.reference && Date.now() - Date.parse(saved.created_at) > 23 * 60 * 60 * 1000) {
         return { status: "unknown", reason: "This payment needs reconciliation before retrying. Contact support with your order reference." };
       }
-      const intent = saved.reference ? await stripe().paymentIntents.retrieve(saved.reference) : await stripe().paymentIntents.create({
-        amount: request.totalCents,
-        currency: immutable.currency,
-        payment_method_types: ["card"],
-        ...(request.customerId ? { customer: request.customerId } : {}),
-        metadata: { order_id: orderIds.join(","), buyer_id: request.buyerId, seller_id: request.sellerId, correlation_id: saved.correlation_id },
-      }, { idempotencyKey: operationKey });
+      let intent: Stripe.PaymentIntent;
+      if (saved.reference) {
+        intent = await stripe().paymentIntents.retrieve(saved.reference);
+      } else {
+        try {
+          intent = await stripe().paymentIntents.create({
+            amount: request.totalCents,
+            currency: immutable.currency,
+            payment_method_types: ["card"],
+            ...(request.customerId ? { customer: request.customerId } : {}),
+            metadata: { order_id: orderIds.join(","), buyer_id: request.buyerId, seller_id: request.sellerId, correlation_id: saved.correlation_id },
+          }, { idempotencyKey: operationKey });
+        } catch (createError) {
+          if (!provablyNotCreated(createError)) throw createError;
+          // No PaymentIntent exists, so the persisted request can be closed
+          // and its orders released in one transaction. If that write fails
+          // the outcome stays "unknown"; a retry gets the same refusal.
+          const recorded = await admin.rpc("record_payment_request_rejection", {
+            p_key: operationKey,
+            p_reason: createError.code ?? createError.message,
+          });
+          if (recorded.error) throw new Error("Provider rejection could not be recorded");
+          reportError("[stripe] createPayment refused by provider", { orderId: request.orderId, code: createError.code });
+          return { status: "failed", reason: rejectionReason(createError) };
+        }
+      }
       const recorded = await admin.rpc("record_payment_reference", { p_key: operationKey, p_reference: intent.id });
       if (recorded.error) throw new Error("Payment reference persistence needs reconciliation");
       await admin.from("orders").update({ correlation_id: saved.correlation_id }).in("id", orderIds);

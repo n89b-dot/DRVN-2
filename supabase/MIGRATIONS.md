@@ -1,5 +1,40 @@
 # Applying migrations
 
+## October 4 — round three: closed definer functions, refund request keys, payout clocks, charge bounds, admin money window, import sweep, VIN privacy (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261004100000_revoke_internal_definer_functions.sql` | shared dev project + isolated local stack, 2026-10-03 |
+| `20261004110000_refund_request_keys.sql` | shared dev project + isolated local stack, 2026-10-03 |
+| `20261004120000_pickup_starts_payout_clock.sql` | shared dev project + isolated local stack, 2026-10-04 |
+| `20261004130000_checkout_charge_bounds.sql` | shared dev project + isolated local stack, 2026-10-04 |
+| `20261004131000_admin_money_window.sql` | shared dev project + isolated local stack, 2026-10-04 |
+| `20261004140000_delivery_starts_payout_clock.sql` | shared dev project + isolated local stack, 2026-10-04 |
+| `20261004150000_listing_import_sweep_schedule.sql` | shared dev project + isolated local stack, 2026-10-04 |
+| `20261004160000_car_vin_private.sql` | isolated local stack; shared dev **after** the app that reads cars by named columns is merged |
+
+Release readiness round three (`docs/plans/2026-10-release-r3-record.md`).
+
+- **Order matters for `20261004160000`.** It revokes table-wide SELECT on
+  `cars` and grants every column but `vin`. App code that still does
+  `select("*")` on cars (main before this round) is refused, so apply it
+  only once the round-three app is deployed.
+- `20261004130000` re-creates `purchase_begin`, `offer_accept_begin`,
+  `prepare_payment_request`, `finish_reservation_expiry` and
+  `claim_unmapped_payment_requests`. They are the previous definitions plus
+  the charge-bound and rejected-request changes (diffed against a database
+  built from main). It normalises lowercase `usd` rows to `USD` before
+  adding the USD-only constraints, so they validate.
+- `20261004140000` backfills `available_at` for already-delivered orders
+  whose seller was waiting on a buyer click; on a database with history the
+  transfer worker will then release those that are past clearing.
+- The replaced definitions on shared dev were backed up first to
+  `~/drvn-db-backups/pre-20261004-r3-functions.sql`; the live bodies were
+  identical to the repository's before applying.
+
+All apply twice cleanly. All 62 SQL guards pass on a fresh disposable
+database built from the full chain, and generated types match.
+
 ## October 3 — edit replay, admin reconciliation, garage refund allocation, public watcher counts (shared dev project)
 
 | File | Applied to |

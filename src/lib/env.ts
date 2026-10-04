@@ -162,6 +162,9 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
   if (mode === "stripe" && production) {
     const missing: string[] = [];
     if (!env.STRIPE_WEBHOOK_SECRET) missing.push("STRIPE_WEBHOOK_SECRET");
+    // The Connect endpoint's secret: without it a seller whose payouts are
+    // switched on after onboarding stays blocked, and their transfers with them.
+    if (!env.STRIPE_CONNECT_WEBHOOK_SECRET) missing.push("STRIPE_CONNECT_WEBHOOK_SECRET");
     if (!env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) missing.push("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY");
     // Live money without error reporting is flying blind — required, not advised.
     if (!env.SENTRY_DSN) missing.push("SENTRY_DSN");

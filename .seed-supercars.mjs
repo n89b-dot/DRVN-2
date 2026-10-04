@@ -386,7 +386,7 @@ for (const person of PEOPLE) {
           price_cents: listing.price_cents,
           shipping_cents: listing.shipping_cents,
           allows_collection: true,
-          currency: "usd",
+          currency: "USD",
           location: listing.location,
           status: "active",
         })

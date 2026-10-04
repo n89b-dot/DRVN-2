@@ -279,8 +279,8 @@ export default async function CartPage() {
               </div>
             </div>
             <p className="spec-note">
-              DRVN&apos;s 10% fee ({formatPrice(fee)}) comes out of the seller&apos;s payout, not
-              your total. Shipping passes through untouched.
+              DRVN&apos;s fee — 10% of the parts plus shipping ({formatPrice(fee)}) — comes out
+              of the seller&apos;s payout, not your total.
               {sellerIds.length > 1 && (
                 <>
                   {" "}

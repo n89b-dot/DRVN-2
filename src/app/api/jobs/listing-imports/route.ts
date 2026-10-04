@@ -1,5 +1,6 @@
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { trackedWorker } from "@/lib/tracked-worker";
 
 /**
  * Listing-import sweep (0047) — the retention half of the importer:
@@ -13,7 +14,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *     are cleared — DRVN keeps the operational metadata (source domain,
  *     status, error code), never an archive of external pages.
  *
- * Point the same external cron that runs media-gc at this route daily:
+ * SCHEDULING — pg_cron's drvn-listing-import-sweep job (20261004150000)
+ * calls this route daily through invoke_remediation_worker, the same door as
+ * media-gc. Each run is recorded as the `listingImports` worker family, so a
+ * sweep that stops running shows as overdue in worker health. By hand:
  *   curl -X POST https://<host>/api/jobs/listing-imports \
  *        -H "Authorization: Bearer $CRON_SECRET"
  */
@@ -23,7 +27,7 @@ export const dynamic = "force-dynamic";
 const BATCH = 200;
 const SCRUB_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
-export async function POST(request: Request) {
+async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
   // 404, not 401 — the worker route pattern (0020): unauthenticated callers
   // learn nothing about which job endpoints exist.
@@ -84,4 +88,8 @@ export async function POST(request: Request) {
   } finally {
     await flushMonitoring();
   }
+}
+
+export async function POST(request: Request) {
+  return trackedWorker("listingImports", request, () => run(request));
 }

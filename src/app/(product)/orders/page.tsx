@@ -27,6 +27,8 @@ import {
 } from "./next-action";
 import { ReceivedButton } from "./[id]/fulfilment";
 import { reportError } from "@/lib/monitoring";
+import { adjustmentsByOrder } from "@/lib/payments/adjustments";
+import { sellerProceeds } from "@/lib/payments/proceeds";
 
 export const metadata = { title: "Orders - DRVN" };
 
@@ -193,6 +195,14 @@ export default async function OrdersPage({
   if (ordersError) reportError("[orders] failed to load orders", ordersError);
 
   const rows = orders ?? [];
+  const isSale = view === "sales";
+  // R2-04: a sale's payout is the same projection the order page and the
+  // Payouts ledger use — refunds take back their share and label costs come
+  // off. One batched read for the page; null (unreadable) shows the payout
+  // as unavailable rather than higher than it is (R2-05).
+  const adjustments = isSale
+    ? await adjustmentsByOrder(supabase, rows.map((o) => o.id))
+    : new Map<string, number>();
   const items = rows.flatMap((o) => o.order_items ?? []);
 
   // The embedded rows, keyed the way the row renderer looks them up.
@@ -228,7 +238,18 @@ export default async function OrdersPage({
     state: stateParam,
     status: statusParam,
   };
-  const isSale = view === "sales";
+
+  const payoutLabel = (order: (typeof rows)[number]) => {
+    if (["cancelled", "payment_failed"].includes(order.status)) return "No payout";
+    if (!adjustments) return "Payout unavailable";
+    const { netCents } = sellerProceeds({
+      totalCents: order.total_cents,
+      feeCents: order.platform_fee_cents,
+      refundedCents: order.refunded_cents ?? 0,
+      adjustmentsCents: adjustments.get(order.id) ?? 0,
+    });
+    return `${formatPrice(netCents)} payout`;
+  };
 
   const OrderRow = ({ order }: { order: (typeof rows)[number] }) => {
     const action = nextAction(order, isSale);
@@ -253,11 +274,7 @@ export default async function OrdersPage({
         className="order--under"
         actions={
           <span className="kv font-medium">
-            {isSale
-              ? ["cancelled", "payment_failed", "refunded"].includes(order.status)
-                ? "No payout"
-                : `${formatPrice(order.total_cents - order.platform_fee_cents)} payout`
-              : formatPrice(order.total_cents)}
+            {isSale ? payoutLabel(order) : formatPrice(order.total_cents)}
           </span>
         }
       >
