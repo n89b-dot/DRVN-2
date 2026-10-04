@@ -310,3 +310,37 @@ test("login keeps early input safe while its client code is loading", async ({ p
     release();
   }
 });
+
+test("an ended session sends a member's action to sign in, back to the same page", async ({ page }) => {
+  const user = await fixture();
+  try {
+    await page.goto("/login");
+    await page.getByLabel(/^email$/i).fill(user.email);
+    await page.getByLabel(/^password$/i).fill(user.password);
+    await page.getByRole("button", { name: /log in|sign in/i }).click();
+    await page.waitForURL(/\/home/);
+
+    // A form action (useActionState). The proxy refuses the signed-out call
+    // before the action runs; it used to answer with a 307 that fetch
+    // followed, so the save failed in place instead of asking for a sign-in.
+    await page.goto("/profile");
+    await page.getByRole("button", { name: /Edit profile/ }).click();
+    await page.context().clearCookies({ name: /^sb-/ });
+    await page.getByRole("dialog", { name: "Profile details" }).getByRole("button", { name: /Save profile/ }).click();
+    await page.waitForURL((url) => url.pathname === "/login" && url.searchParams.get("next") === "/profile");
+
+    // A click handler running its action in a transition.
+    await page.getByLabel(/^email$/i).fill(user.email);
+    await page.getByLabel(/^password$/i).fill(user.password);
+    await page.getByRole("button", { name: /log in|sign in/i }).click();
+    await page.waitForURL((url) => url.pathname === "/profile");
+    await page.goto("/settings#payments");
+    const addCard = page.getByRole("button", { name: /add a card/i });
+    await expect(addCard).toBeVisible();
+    await page.context().clearCookies({ name: /^sb-/ });
+    await addCard.click();
+    await page.waitForURL((url) => url.pathname === "/login" && url.searchParams.get("next") === "/settings");
+  } finally {
+    const removed = await user.client.auth.admin.deleteUser(user.id); if (removed.error) throw removed.error;
+  }
+});
