@@ -5,12 +5,38 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { allowAction } from "@/lib/rate-limit";
 
 const BUCKETS = new Set(["avatars", "car-images", "activity-images", "listing-images"]);
+/**
+ * Message photos are private, but a phone photo's GPS is no less personal in
+ * a DM — the browser used to upload originals straight to the bucket whenever
+ * the client-side re-encode skipped a small file or failed. They now come
+ * through the same re-encode, into `<sender>/<recipient>/`, and the bucket
+ * refuses browser uploads (20261005100000). Dispute evidence deliberately
+ * never comes here: it is kept exactly as uploaded, as a record.
+ */
+const MESSAGE_BUCKET = "message-photos";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIMIT = 11 * 1024 * 1024;
+const PUBLIC_RULE = { action: "public-photo", limit: 60, windowSeconds: 3600, failClosed: true };
+// A busy conversation sends more photos than a profile ever uploads; the
+// message limit itself (40 per 10 minutes, up to four photos each) still caps it.
+const MESSAGE_RULE = { action: "message-photo", limit: 160, windowSeconds: 3600, failClosed: true };
+
+function validPrefix(bucket: string, prefix: string, userId: string): boolean {
+  if (prefix.length > 300 || !/^[a-zA-Z0-9_/-]+$/.test(prefix)) return false;
+  const parts = prefix.split("/");
+  if (parts[0] !== userId) return false;
+  if (bucket === MESSAGE_BUCKET) return parts.length === 2 && UUID.test(parts[1]) && parts[1] !== userId;
+  return BUCKETS.has(bucket) && parts.length <= 4;
+}
+
 export async function POST(request: Request) {
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
   if (!user) return Response.json({ error: "Sign in to upload photos." }, { status: 401 });
-  if (!(await allowAction({ action: "public-photo", limit: 60, windowSeconds: 3600, failClosed: true }, user.id))) return Response.json({ error: "Upload limit reached. Try again later." }, { status: 429 });
+  // The target isn't known until the body is read, so the limit is chosen
+  // from the query string the uploader sets; the body must then agree.
+  const target = new URL(request.url).searchParams.get("bucket") === MESSAGE_BUCKET ? MESSAGE_BUCKET : null;
+  if (!(await allowAction(target ? MESSAGE_RULE : PUBLIC_RULE, user.id))) return Response.json({ error: "Upload limit reached. Try again later." }, { status: 429 });
   if (Number(request.headers.get("content-length")) > LIMIT) return new Response(null, { status: 413 });
   try {
     const reader = request.body?.getReader();
@@ -28,7 +54,7 @@ export async function POST(request: Request) {
     const bucket = String(form.get("bucket"));
     const prefix = String(form.get("pathPrefix"));
     const file = form.get("file");
-    if (!BUCKETS.has(bucket) || prefix.length > 300 || prefix.split("/").length > 4 || !prefix.startsWith(user.id) || prefix.split("/")[0] !== user.id || !/^[a-zA-Z0-9_/-]+$/.test(prefix) || !(file instanceof File)) return new Response(null, { status: 400 });
+    if ((bucket === MESSAGE_BUCKET) !== (target === MESSAGE_BUCKET) || !validPrefix(bucket, prefix, user.id) || !(file instanceof File)) return new Response(null, { status: 400 });
     if (file.size > (bucket === "avatars" ? 2 : 10) * 1024 * 1024) return new Response(null, { status: 413 });
     // Always decode and re-encode. Sharp drops EXIF/XMP/GPS by default.
     const photo = sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 40_000_000, animated: false, failOn: "warning" });

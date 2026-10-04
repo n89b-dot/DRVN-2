@@ -20,12 +20,21 @@ export type UploadFailure = { file: File; reason: string; retryable: boolean };
 export type UploadImagesResult = { uploaded: UploadedImage[]; failed: UploadFailure[] };
 
 /**
- * Client-side photo normalization for PUBLIC photography (brief §S4): correct
- * orientation, cap the long edge at 2560px, re-encode as JPEG q0.85 — which
- * also strips EXIF including GPS, so nobody publishes their home coordinates
- * with a wheel shot. Small files pass through untouched; any failure returns
- * the original (upload never blocks on a codec). Dispute evidence must NOT go
- * through this — evidence keeps its original bytes.
+ * Buckets whose photos are re-encoded on the server (/api/media/public-photo),
+ * which is what actually strips EXIF/GPS: Sharp decodes and re-encodes every
+ * file, however small. The public buckets and message photos both go there;
+ * the database refuses browser uploads into any of them. Dispute evidence is
+ * deliberately not in this list — it is kept exactly as uploaded, as a record.
+ */
+const SERVER_NORMALIZED_BUCKETS = ["avatars", "car-images", "activity-images", "listing-images", "message-photos"];
+
+/**
+ * Client-side pre-shrink for photography (brief §S4): correct orientation,
+ * cap the long edge at 2560px, re-encode as JPEG q0.85. This only saves
+ * upload time on big camera files — small files pass through untouched and
+ * any failure returns the original — so it is never what removes location
+ * data; the server re-encode above is. Dispute evidence must NOT go through
+ * this — evidence keeps its original bytes.
  */
 export async function normalizePublicPhoto(file: File): Promise<File> {
   const MAX_EDGE = 2560;
@@ -97,10 +106,12 @@ export async function uploadImages({
       failed.push({ file, reason: `${file.name} is over ${maxMb}MB.`, retryable: false });
       continue;
     }
-    if (["avatars", "car-images", "activity-images", "listing-images"].includes(bucket)) {
+    if (SERVER_NORMALIZED_BUCKETS.includes(bucket)) {
       const body = new FormData(); body.set("file", file); body.set("bucket", bucket); body.set("pathPrefix", pathPrefix);
       try {
-        const response = await fetch("/api/media/public-photo", { method: "POST", body });
+        // The bucket rides in the query too, so the route can pick its rate
+        // limit before reading the body.
+        const response = await fetch(`/api/media/public-photo?bucket=${encodeURIComponent(bucket)}`, { method: "POST", body });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || "Photo upload failed.");
         uploaded.push({ url: result.url, path: result.path, file });
@@ -109,7 +120,8 @@ export async function uploadImages({
       }
       continue;
     }
-    // Only private buckets upload straight from the browser. The client is
+    // Only private buckets that keep original bytes (evidence) upload straight
+    // from the browser. The client is
     // loaded here, on demand, so every page that merely offers a public photo
     // upload (Home's quick post, garage, profile) doesn't ship supabase-js.
     // A throw anywhere in here (the chunk failing to load, the network) is
