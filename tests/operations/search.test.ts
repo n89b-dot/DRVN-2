@@ -16,7 +16,7 @@ it("finds matching rows beyond the API cap and counts before pagination", async 
   const uid = user.data.user.id;
   try {
     for (let offset = 0; offset < 1100; offset += 100) {
-      await admin.from("listings").insert(Array.from({ length: 100 }, (_, i) => ({ seller_id: uid, title: `OpsScaleRotor ${offset + i}`, category: "engine", price_cents: offset + i + 100, status: "active", currency: "GBP" }))).throwOnError();
+      await admin.from("listings").insert(Array.from({ length: 100 }, (_, i) => ({ seller_id: uid, title: `OpsScaleRotor ${offset + i}`, category: "engine", price_cents: offset + i + 100, status: "active", currency: "USD" }))).throwOnError();
     }
     const first = await anon.rpc("marketplace_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents,created_at").eq("seller_id", uid).gte("price_cents", 1180).order("price_cents").order("id").range(0, 9).throwOnError();
     expect(first.count).toBe(20); expect(first.data).toHaveLength(10); expect(first.data[0].price_cents).toBe(1180);
@@ -50,7 +50,7 @@ it("rebuilds actual Typesense documents and removes private and suspended conten
   let carId = "", listingId = "";
   try {
     const car = await admin.from("cars").insert({ owner_id: uid, name: "Operations fixture", slug: `ops-${crypto.randomUUID()}`, is_public: true }).select("id").single().throwOnError(); carId = car.data.id;
-    const listing = await admin.from("listings").insert({ seller_id: uid, title: "Operations rotor", category: "engine", price_cents: 2000, status: "active", currency: "GBP" }).select("id").single().throwOnError(); listingId = listing.data.id;
+    const listing = await admin.from("listings").insert({ seller_id: uid, title: "Operations rotor", category: "engine", price_cents: 2000, status: "active", currency: "USD" }).select("id").single().throwOnError(); listingId = listing.data.id;
     await indexCarNow(carId); await indexListingNow(listingId);
     expect((await typesenseRequest(`/collections/drvn-cars/documents/${carId}`)).ok).toBe(true);
     await expect(indexCarNow(carId, async () => { throw new Error("expired lease"); })).rejects.toThrow("expired lease");

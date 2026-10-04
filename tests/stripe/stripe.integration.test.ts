@@ -97,12 +97,12 @@ suite("Stripe test-mode integration", () => {
         const { data, error } = await raw.auth.admin.createUser({ email: `stripe-remediation-${crypto.randomUUID()}@drvn.test`, email_confirm: true });
         if (error || !data.user) throw error || new Error("Fixture account missing"); users.push(data.user.id);
       }
-      const listed = await raw.from("listings").insert(users.slice(1).map((seller_id) => ({ seller_id, title: "Stripe settlement fixture", category: "engine", status: "active", price_cents: 1000, shipping_cents: 0, currency: "GBP" }))).select("id");
+      const listed = await raw.from("listings").insert(users.slice(1).map((seller_id) => ({ seller_id, title: "Stripe settlement fixture", category: "engine", status: "active", price_cents: 1000, shipping_cents: 0, currency: "USD" }))).select("id");
       if (listed.error) throw listed.error;
       const begun = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: listed.data.map((l) => l.id), p_idempotency_key: `stripe-fixture:${crypto.randomUUID()}` });
       if (begun.error) throw begun.error;
       const basket = begun.data as { orders: { order_id: string }[] }; orders.push(...basket.orders.map((o) => o.order_id));
-      const created = await provider.createPayment({ orderId: orders.join(","), buyerId: users[0], sellerId: "multiple", totalCents: 2000, currency: "GBP" });
+      const created = await provider.createPayment({ orderId: orders.join(","), buyerId: users[0], sellerId: "multiple", totalCents: 2000, currency: "USD" });
       if (created.status !== "requires_action") throw new Error(`Fixture payment: ${created.status}`);
       references.push(created.reference);
       const intent = await stripe.paymentIntents.confirm(created.reference, { payment_method: "pm_card_visa" });
@@ -111,12 +111,12 @@ suite("Stripe test-mode integration", () => {
       const obligations = await raw.from("transfer_intents").select("order_id,amount_cents").in("order_id", orders);
       expect(obligations.error).toBeNull(); expect(obligations.data).toHaveLength(2);
       expect(obligations.data?.map((o) => o.amount_cents)).toEqual([900,900]);
-      const lateListing = await raw.from("listings").insert({ seller_id: users[1], title: "Late capture fixture", category: "engine", status: "active", price_cents: 1500, currency: "GBP" }).select("id").single();
+      const lateListing = await raw.from("listings").insert({ seller_id: users[1], title: "Late capture fixture", category: "engine", status: "active", price_cents: 1500, currency: "USD" }).select("id").single();
       if (lateListing.error) throw lateListing.error;
       const lateBegin = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: [lateListing.data.id], p_idempotency_key: `stripe-late:${crypto.randomUUID()}` });
       if (lateBegin.error) throw lateBegin.error;
       const lateId = (lateBegin.data as { orders: { order_id: string }[] }).orders[0].order_id; orders.push(lateId);
-      const latePayment = await provider.createPayment({ orderId: lateId, buyerId: users[0], sellerId: users[1], totalCents: 1500, currency: "GBP" });
+      const latePayment = await provider.createPayment({ orderId: lateId, buyerId: users[0], sellerId: users[1], totalCents: 1500, currency: "USD" });
       if (latePayment.status !== "requires_action") throw new Error(`Late fixture: ${latePayment.status}`);
       references.push(latePayment.reference);
       await admin.rpc("purchase_finalize", { p_order_id: lateId, p_success: false, p_provider: "stripe", p_failure_reason: "Simulated expiry" });
@@ -151,12 +151,12 @@ suite("Stripe test-mode integration", () => {
         if (created.error || !created.data.user) throw created.error ?? new Error("Missing expiry user");
         users.push(created.data.user.id);
       }
-      const listing = await admin.from("listings").insert({ seller_id: users[1], title: "Stripe expiry fixture", category: "engine", status: "active", price_cents: 1200, currency: "GBP" }).select("id").single();
+      const listing = await admin.from("listings").insert({ seller_id: users[1], title: "Stripe expiry fixture", category: "engine", status: "active", price_cents: 1200, currency: "USD" }).select("id").single();
       if (listing.error) throw listing.error;
       const begun = await admin.rpc("purchase_begin", { p_buyer_id: users[0], p_listing_ids: [listing.data.id], p_idempotency_key: `expiry:${crypto.randomUUID()}` });
       if (begun.error) throw begun.error;
       orderId = (begun.data as { orders: { order_id: string }[] }).orders[0].order_id;
-      const payment = await provider.createPayment({ orderId, buyerId: users[0], sellerId: users[1], totalCents: 1200, currency: "GBP" });
+      const payment = await provider.createPayment({ orderId, buyerId: users[0], sellerId: users[1], totalCents: 1200, currency: "USD" });
       if (payment.status !== "requires_action") throw new Error(`Expiry payment: ${payment.status}`);
       reference = payment.reference;
       const clock = await admin.from("listings").update({ reserved_until: "2000-01-01T00:00:00Z" }).eq("id", listing.data.id);
