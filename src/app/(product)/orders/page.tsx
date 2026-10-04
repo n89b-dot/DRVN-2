@@ -28,6 +28,7 @@ import {
 import { ReceivedButton } from "./[id]/fulfilment";
 import { reportError } from "@/lib/monitoring";
 import { adjustmentsByOrder } from "@/lib/payments/adjustments";
+import { orderCarry, readSellerCarry } from "@/lib/payments/carry";
 import { sellerProceeds } from "@/lib/payments/proceeds";
 
 export const metadata = { title: "Orders - DRVN" };
@@ -199,10 +200,14 @@ export default async function OrdersPage({
   // R2-04: a sale's payout is the same projection the order page and the
   // Payouts ledger use — refunds take back their share and label costs come
   // off. One batched read for the page; null (unreadable) shows the payout
-  // as unavailable rather than higher than it is (R2-05).
-  const adjustments = isSale
-    ? await adjustmentsByOrder(supabase, rows.map((o) => o.id))
-    : new Map<string, number>();
+  // as unavailable rather than higher than it is (R2-05). The same goes for
+  // label costs carried to or from another payout (20261005110100).
+  const [adjustments, carry] = isSale
+    ? await Promise.all([
+        adjustmentsByOrder(supabase, rows.map((o) => o.id)),
+        readSellerCarry(supabase, user.id),
+      ])
+    : [new Map<string, number>(), null];
   const items = rows.flatMap((o) => o.order_items ?? []);
 
   // The embedded rows, keyed the way the row renderer looks them up.
@@ -241,14 +246,19 @@ export default async function OrdersPage({
 
   const payoutLabel = (order: (typeof rows)[number]) => {
     if (["cancelled", "payment_failed"].includes(order.status)) return "No payout";
-    if (!adjustments) return "Payout unavailable";
-    const { netCents } = sellerProceeds({
+    if (!adjustments || !carry) return "Payout unavailable";
+    const carried = orderCarry(carry, order.id);
+    // What this order's payout pays: never below zero — labels it can't
+    // cover are owed separately and come off the next payout.
+    const { payoutCents } = sellerProceeds({
       totalCents: order.total_cents,
       feeCents: order.platform_fee_cents,
       refundedCents: order.refunded_cents ?? 0,
       adjustmentsCents: adjustments.get(order.id) ?? 0,
+      carriedCents: carried.carriedCents,
+      carriedInCents: carried.carriedInCents,
     });
-    return `${formatPrice(netCents)} payout`;
+    return `${formatPrice(payoutCents)} payout`;
   };
 
   const OrderRow = ({ order }: { order: (typeof rows)[number] }) => {

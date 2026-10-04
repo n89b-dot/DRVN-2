@@ -1,25 +1,34 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 
-import { TextField } from "@/components/ui";
+import { Button, TextField, UnconfirmedOutcome } from "@/components/ui";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 import { deleteAccount, type ActionState } from "../garage/actions";
+
+const UNCONFIRMED =
+  "Couldn't confirm whether your deletion request went through. Reload to check — if it did, you'll be signed out.";
 
 /**
  * Deliberately awkward: two steps, a typed confirmation, and cancel as the
  * prominent choice. The action refuses while orders are in flight so a
  * counterparty is never left stranded mid-trade.
+ *
+ * A lost response never puts "Delete permanently" back: the request may
+ * already be in, so the member reloads to see where it stands.
  */
 export function DeleteAccount() {
-  const [state, action, pending] = useActionState<ActionState, FormData>(deleteAccount, {});
+  const [state, action, pending] = useRecoverableAction<ActionState>(deleteAccount, UNCONFIRMED);
   const [open, setOpen] = useState(false);
+
+  if (state.error === UNCONFIRMED) return <UnconfirmedOutcome>{UNCONFIRMED}</UnconfirmedOutcome>;
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="relbtn !static">
+      <Button variant="quiet" onClick={() => setOpen(true)}>
         Delete my account
-      </button>
+      </Button>
     );
   }
 
@@ -39,12 +48,12 @@ export function DeleteAccount() {
         className="!max-w-none"
       />
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => setOpen(false)} className="btn btn--ghost">
+        <Button variant="ghost" onClick={() => setOpen(false)}>
           Keep my account
-        </button>
-        <button type="submit" disabled={pending} className="relbtn !static">
-          {pending ? "Deleting…" : "Delete permanently"}
-        </button>
+        </Button>
+        <Button type="submit" variant="quiet" loading={pending} pendingLabel="Deleting…">
+          Delete permanently
+        </Button>
       </div>
       {state.error && (
         <p role="alert" aria-live="polite" className="field__err">

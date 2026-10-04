@@ -817,6 +817,19 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     use: "useActionState results next to a form.",
     a11y: "role=alert + aria-live announce regardless of motion; reduced motion keeps the opacity change only.",
   },
+  {
+    name: "UnconfirmedOutcome",
+    importPath: UI,
+    file: "src/components/ui/unconfirmed-outcome.tsx",
+    layer: "primitive",
+    category: "feedback",
+    status: "active",
+    description:
+      "A mutation whose Server Action response was lost — says what couldn't be confirmed and offers a reload to read the real state.",
+    use: "In place of a money or destructive action (label purchase, deletion, hand-off) once useRecoverableAction reports a lost response, so the action isn't offered again blindly.",
+    avoid: "Ordinary validation or refusal errors — that's ResultNote. Safe-to-retry actions can keep their button and show the error.",
+    a11y: "role=alert + aria-live; the reload is a real button.",
+  },
 
   /* ---------------- overlays / actions ---------------- */
   {

@@ -155,7 +155,12 @@ export class StripePaymentProvider implements PaymentProvider {
       }
       const recorded = await admin.rpc("record_payment_reference", { p_key: operationKey, p_reference: intent.id });
       if (recorded.error) throw new Error("Payment reference persistence needs reconciliation");
-      await admin.from("orders").update({ correlation_id: saved.correlation_id }).in("id", orderIds);
+      // Diagnostics only — the payment reference above is what settles the
+      // orders — so a missed stamp is reported, never a failed payment.
+      const stamped = await admin.from("orders").update({ correlation_id: saved.correlation_id }).in("id", orderIds);
+      if (stamped.error) {
+        reportError("[stripe] order correlation stamp failed", { orderId: request.orderId, error: stamped.error });
+      }
       if (intent.status === "canceled") return { status: "failed", reason: "Payment was cancelled." };
       // A captured retry awaits local webhook settlement; never ask the buyer
       // to confirm an already successful PaymentIntent again.

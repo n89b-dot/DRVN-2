@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { Avatar, EmbeddedVideo, Icon, Media, NarrowColumn, ObjectRow, ShareButton } from "@/components/ui";
 import { SaveButton } from "@/features/social/buttons";
@@ -13,9 +15,59 @@ import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { MarkRemovedOffer } from "./mark-removed-offer";
 
 import { normalizeBlocks, postLead } from "@/lib/activity-blocks";
-import { pageHeadline } from "@/lib/activity/headline";
+import { pageHeadline, postHeadline } from "@/lib/activity/headline";
 import { ListingCartButton } from "@/features/commerce/quick-commerce";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+
+/** The car and the post, read once per request and shared by the metadata
+ *  and the page. React's cache is per render, never shared between users —
+ *  RLS decides what this viewer may read (a private build's posts only
+ *  reach its owner). */
+const loadCar = cache(async (slug: string) => {
+  const supabase = await createClient();
+  return supabase
+    .from("cars")
+    .select("id, name, slug, owner_id, year, make, model, is_public")
+    .eq("slug", slug)
+    .single();
+});
+const loadPost = cache(async (carId: string, postId: string) => {
+  const supabase = await createClient();
+  return supabase.from("activity_posts").select("*").eq("id", postId).eq("car_id", carId).single();
+});
+
+/**
+ * Per-post metadata, as /posts/[postId] and listings have. The share card
+ * itself is opengraph-image.tsx next door (the cover photo with the title),
+ * so no `images` here — an explicit array would override it. A post on a
+ * private build, or an unpublished one, is noindexed and says nothing
+ * beyond a generic title.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; postId: string }>;
+}): Promise<Metadata> {
+  const { slug, postId } = await params;
+  const { data: car } = await loadCar(slug);
+  const { data: post } = car ? await loadPost(car.id, postId) : { data: null };
+  if (!car || !post) return { title: "Update not found - DRVN" };
+
+  if (!car.is_public || !post.published_at) {
+    return { title: "Build update - DRVN", robots: { index: false, follow: false } };
+  }
+
+  const headline = postHeadline(post);
+  const path = `/cars/${slug}/activity/${post.id}`;
+  const description = post.intro?.trim().slice(0, 155) || `${headline} — a build update on ${car.name}, on DRVN.`;
+  return {
+    title: `${headline} · ${car.name} - DRVN`,
+    description,
+    alternates: { canonical: path },
+    openGraph: { title: headline, description, url: path, type: "article" },
+    twitter: { card: "summary_large_image", title: headline, description },
+  };
+}
 
 export default async function ActivityDetailPage({
   params,
@@ -25,19 +77,10 @@ export default async function ActivityDetailPage({
   const { slug, postId } = await params;
   const supabase = await createClient();
 
-  const { data: car } = await supabase
-    .from("cars")
-    .select("id, name, slug, owner_id, year, make, model")
-    .eq("slug", slug)
-    .single();
+  const { data: car } = await loadCar(slug);
   if (!car) notFound();
 
-  const { data: post } = await supabase
-    .from("activity_posts")
-    .select("*")
-    .eq("id", postId)
-    .eq("car_id", car.id)
-    .single();
+  const { data: post } = await loadPost(car.id, postId);
   if (!post) notFound();
 
   const user = await getViewer();

@@ -18,8 +18,9 @@ import {
  *   · /cart and /checkout are publicly reachable, /orders and /sell are not.
  *   · Checkout creates a real, claimable account and a real order attached to
  *     it, so RLS, disputes, payouts and messaging keep working unchanged.
- *   · A guest checkout against an email that already has an account attaches
- *     to that account instead of creating a duplicate.
+ *   · A guest checkout against a member's (proven) email is refused with a
+ *     "sign in" prompt — typing an address never puts an order in someone
+ *     else's account (20261005101000) — and no duplicate account is made.
  *   · Making an offer is still gated — that one genuinely needs an identity.
  *
  * Not covered here: confirming the card in Stripe's iframe. The tests stop at
@@ -168,7 +169,7 @@ test.describe.serial("guest checkout", () => {
     expect(profile?.display_name).toBe("Guest Buyer");
   });
 
-  test("a guest checkout on a registered email attaches to that account", async ({ page }) => {
+  test("a guest checkout on a member's email is refused, not attached", async ({ page }) => {
     await signUp(page, member);
     const admin = await serviceClient();
     const { data: before } = await admin
@@ -184,8 +185,11 @@ test.describe.serial("guest checkout", () => {
     await page.getByRole("button", { name: /buy now/i }).first().click();
     await page.getByRole("link", { name: /proceed to checkout/i }).first().click();
     await fillCheckout(page, member.email);
-    await expect(page.getByText(/delivery & contact|order placed|paid and confirmed/i).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/already has a drvn account\. sign in/i).first()).toBeVisible({ timeout: 30_000 });
 
+    // No order landed in the member's account, and no duplicate was made.
+    const { data: orders } = await admin.from("orders").select("id").eq("buyer_id", before!.user_id);
+    expect(orders ?? [], "a typed email must not place an order in a member's account").toHaveLength(0);
     const { data: after } = await admin
       .from("account_emails")
       .select("user_id")

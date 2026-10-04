@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   revalidatePath: vi.fn(),
   reportError: vi.fn(),
+  allowAction: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -12,6 +13,11 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
+vi.mock("@/lib/rate-limit", () => ({
+  allowAction: mocks.allowAction,
+  rateLimitMessage: () => "slow down",
+  RATE_LIMITS: { follow: { action: "follow" }, react: { action: "react" } },
+}));
 
 import { removeFollow, removeSave, toggleFollow, toggleLike, toggleSave } from "./actions";
 
@@ -19,6 +25,24 @@ describe("social relationship actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mocks.allowAction.mockResolvedValue(true);
+  });
+
+  it("throttles turning likes and follows on, never turning them off or saving", async () => {
+    mocks.rpc.mockImplementation(async (_name, args: { p_active: boolean }) => ({ data: args.p_active, error: null }));
+    mocks.allowAction.mockResolvedValue(false);
+
+    await expect(toggleFollow("profile", "target-1", "/home", true)).resolves.toEqual({ error: "slow down" });
+    await expect(toggleLike("car", "target-1", "/home", true)).resolves.toEqual({ error: "slow down" });
+    expect(mocks.allowAction.mock.calls.map(([rule, subject]) => [rule.action, subject])).toEqual([
+      ["follow", "user-1"],
+      ["react", "user-1"],
+    ]);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+
+    await expect(toggleFollow("profile", "target-1", "/home", false)).resolves.toEqual({ following: false });
+    await expect(toggleSave("listing", "target-1", "/home", true)).resolves.toEqual({ saved: true });
+    expect(mocks.allowAction).toHaveBeenCalledTimes(2);
   });
 
   it("sends the desired state so repeated save, like, and follow requests converge", async () => {

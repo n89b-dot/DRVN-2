@@ -25,6 +25,7 @@ export function PurchaseActions({
   isLoggedIn,
   betaEnforced,
   buyerEligible,
+  accessUnavailable = false,
   isOwn,
   isActive,
   paymentsLive,
@@ -43,6 +44,8 @@ export function PurchaseActions({
   isLoggedIn: boolean;
   betaEnforced: boolean;
   buyerEligible: boolean;
+  /** The beta check itself failed — still no buying, but it isn't a "no". */
+  accessUnavailable?: boolean;
   isOwn: boolean;
   isActive: boolean;
   paymentsLive: boolean;
@@ -121,6 +124,12 @@ export function PurchaseActions({
   }
 
   function runBuyNow() {
+    if (accessUnavailable) {
+      setCartState({
+        error: "We couldn't check your buying access just now. Reload the page and try again.",
+      });
+      return;
+    }
     if (betaEnforced && !isLoggedIn) {
       router.push(`/login?next=${encodeURIComponent(detailPath)}`);
       return;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolvePaymentsMode, validatePaymentsEnv, PaymentsConfigError } from "./env";
+import { clientAddressSource, resolvePaymentsMode, validatePaymentsEnv, PaymentsConfigError } from "./env";
 
 /**
  * The fail-closed matrix. The one behavior these exist to pin down forever:
@@ -68,15 +68,31 @@ describe("resolvePaymentsMode", () => {
   });
 });
 
+describe("clientAddressSource", () => {
+  it("trusts Vercel by default, another proxy only by opt-in, and nothing when switched off", () => {
+    expect(clientAddressSource({})).toBeNull();
+    expect(clientAddressSource({ VERCEL: "1" })).toBe("vercel");
+    expect(clientAddressSource({ TRUST_PROXY_HEADERS: "true" })).toBe("proxy");
+    expect(clientAddressSource({ VERCEL: "1", TRUST_PROXY_HEADERS: "false" })).toBeNull();
+  });
+});
+
 describe("validatePaymentsEnv", () => {
   it("passes a fully configured live production", () => {
     const { mode, warnings } = validatePaymentsEnv({
       ...LIVE,
       ADMIN_ALERT_WEBHOOK_URL: "https://hooks.example/x",
       CRON_SECRET: LIVE.CRON_SECRET,
+      VERCEL: "1",
     });
     expect(mode).toBe("stripe");
     expect(warnings).toEqual([]);
+  });
+
+  it("warns, without failing, when live production can't attribute signed-out visitors", () => {
+    expect(validatePaymentsEnv(LIVE).warnings).toEqual([expect.stringMatching(/shares one rate-limit bucket/)]);
+    expect(validatePaymentsEnv({ ...LIVE, VERCEL: "1", TRUST_PROXY_HEADERS: "false" }).warnings).toHaveLength(1);
+    expect(validatePaymentsEnv({ ...LIVE, TRUST_PROXY_HEADERS: "true" }).warnings).toEqual([]);
   });
 
   it("throws when live production lacks webhook secret, publishable key, or monitoring", () => {

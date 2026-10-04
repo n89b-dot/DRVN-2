@@ -90,7 +90,11 @@ export async function processDueTransfers(admin: Admin): Promise<TransferWorkerS
 }
 
 type TransferIntentRow = Database["public"]["Tables"]["transfer_intents"]["Row"];
-type IntentRow = Pick<
+type IntentRow = {
+  /** Charges from earlier orders this transfer keeps back (20261005110100),
+   *  frozen with the dispatch. Not yet in the generated types. */
+  dispatch_carry_cents?: number | null;
+} & Pick<
   TransferIntentRow,
   | "order_id"
   | "seller_id"
@@ -560,6 +564,8 @@ async function processOne(
       return "requeued";
     }
 
+    // The frozen dispatch already kept back the carried-forward charges
+    // (dispatch_carry_cents), so the comparison takes them off too.
     const currentAdjustmentCents = await orderAdjustmentCents(admin, intent.order_id);
     const currentPayableCents =
       intent.amount_cents -
@@ -568,7 +574,8 @@ async function processOne(
         currentOrder.total_cents,
         intent.amount_cents
       ) +
-      currentAdjustmentCents;
+      currentAdjustmentCents -
+      (intent.dispatch_carry_cents ?? 0);
     if (currentPayableCents !== dispatch.amountCents) {
       await recordOperatorRecovery(
         admin,
@@ -659,10 +666,16 @@ async function processOne(
   }
   if (!sourceTransaction) throw new Error("Stripe payment has no source charge");
 
+  // Charges an earlier payout couldn't cover (a refunded order's label, a
+  // return label bought after its transfer) come off this one. The database
+  // decides the amount under the seller's lock and freezes it on the intent,
+  // always leaving at least 1¢ to transfer; the rest stays owed.
+  const carryCents = await freezeCarry(admin, intent.order_id, workerId, payableCents);
+
   const dispatch: TransferDispatch = {
     operationKey: `transfer:${intent.order_id}`,
     orderId: intent.order_id,
-    amountCents: payableCents,
+    amountCents: payableCents - carryCents,
     currency: intent.currency.toLowerCase(),
     destination: seller.stripe_account_id,
     sourceTransaction,
@@ -680,6 +693,29 @@ async function processOne(
     true
   );
   return "transferred";
+}
+
+/**
+ * How much of the seller's carried-forward balance this transfer keeps back
+ * (freeze_transfer_carry, 20261005110100).
+ */
+async function freezeCarry(
+  admin: Admin,
+  orderId: string,
+  workerId: string,
+  payableCents: number
+): Promise<number> {
+  const { data, error } = await admin.rpc("freeze_transfer_carry", {
+    p_order: orderId,
+    p_worker: workerId,
+    p_payable_cents: payableCents,
+  });
+  if (error) throw new Error(`freeze_transfer_carry persistence failed: ${error.message}`);
+  if (data === null) throw new LeaseLostError(orderId);
+  if (!Number.isInteger(data) || data < 0 || data >= payableCents) {
+    throw new Error(`freeze_transfer_carry returned an impossible amount for order ${orderId}`);
+  }
+  return data;
 }
 
 async function recordTransfer(

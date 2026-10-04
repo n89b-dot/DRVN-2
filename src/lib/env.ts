@@ -117,6 +117,28 @@ type EnvLike = Record<string, string | undefined>;
  *  - Unset mode: secret present → stripe; absent in production → throw
  *    (fail closed); absent elsewhere → stub (the dev default).
  */
+/**
+ * Where a signed-out visitor's address may be read from, if anywhere.
+ *
+ * A forwarded-address header is only evidence when the platform in front of
+ * the app replaces whatever the client sent. Vercel documents exactly that:
+ * its edge overwrites `X-Forwarded-For` and sets `X-Vercel-Forwarded-For`, and
+ * a client cannot inject either (docs/production-runbook.md links the page).
+ * So a Vercel deployment trusts them by default, while any other host needs
+ * an operator to opt in with TRUST_PROXY_HEADERS=true after checking its own
+ * proxy. TRUST_PROXY_HEADERS=false switches both off.
+ *
+ * `null` means every signed-out visitor shares one abuse bucket.
+ */
+export type ClientAddressSource = "vercel" | "proxy" | null;
+
+export function clientAddressSource(env: EnvLike = process.env): ClientAddressSource {
+  if (env.TRUST_PROXY_HEADERS === "false") return null;
+  if (env.VERCEL === "1") return "vercel";
+  if (env.TRUST_PROXY_HEADERS === "true") return "proxy";
+  return null;
+}
+
 export function resolvePaymentsMode(env: EnvLike = process.env): PaymentsMode {
   const explicit = env.PAYMENTS_MODE;
   const production = env.NODE_ENV === "production";
@@ -185,6 +207,14 @@ export function validatePaymentsEnv(env: EnvLike = process.env): {
       } catch { invalid.push(name); }
     }
     if (invalid.length) throw new PaymentsConfigError(`Production operations configuration is invalid: ${invalid.join(", ")}.`);
+    // Not fatal — the shared bucket is the safe failure — but in live money it
+    // means one busy guest can rate-limit every other guest's checkout and
+    // sign-in, so it has to be visible at boot rather than discovered later.
+    if (!clientAddressSource(env)) {
+      warnings.push(
+        "No trusted client address source (not on Vercel and TRUST_PROXY_HEADERS is not true): every signed-out visitor shares one rate-limit bucket."
+      );
+    }
   }
   return { mode, warnings };
 }

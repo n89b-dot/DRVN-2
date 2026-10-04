@@ -175,7 +175,7 @@ export default async function SellPage({
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  if (!betaAccess.eligible) return <SellerAccessNotice />;
+  if (!betaAccess.eligible) return <SellerAccessNotice unavailable={betaAccess.unavailable} />;
 
   const drvnShipping = {
     enabled: integratedShippingEnabled(),

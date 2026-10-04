@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { allowAction, RATE_LIMITS, rateLimitMessage } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 
@@ -39,6 +40,12 @@ export async function toggleReaction(
   if (want === true && existing) return { reacted: true };
   if (want === false && !existing) return { reacted: false };
 
+  // Only adding is limited: each new reaction can notify the post's author,
+  // and taking one back must always work.
+  if (!existing && !(await allowAction(RATE_LIMITS.react, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.react) };
+  }
+
   if (existing) {
     await supabase
       .from("activity_reactions")
@@ -71,6 +78,11 @@ export async function addComment(_prev: CommentState, formData: FormData): Promi
   const body = String(formData.get("body") ?? "").trim();
   const path = String(formData.get("path") ?? "");
   if (!postId || !body) return { error: "Write a reply first." };
+  // Every reply notifies the post's author, so an unthrottled loop was a
+  // notification flood aimed at one member.
+  if (!(await allowAction(RATE_LIMITS.addComment, user.id))) {
+    return { error: rateLimitMessage(RATE_LIMITS.addComment) };
+  }
 
   const { error } = await supabase
     .from("activity_comments")

@@ -43,7 +43,7 @@ The SQL guard runner requires PostgreSQL client binaries on PATH and explicit co
 
 Stripe production startup validates PAYMENTS_MODE, Stripe secret/publishable/webhook keys, an HTTPS SENTRY_DSN, HTTPS NEXT_PUBLIC_SITE_URL, HTTPS ADMIN_ALERT_WEBHOOK_URL, CRON_SECRET and GUEST_RECEIPT_SECRET. Both application secrets must have at least 32 characters and be generated independently. Store them in the deployment secret store. Remove all E2E settings and the production stub override from public deployments.
 
-Set TRUST_PROXY_HEADERS=true only after verifying that the ingress removes client-supplied X-Forwarded-For and supplies a trusted address. Otherwise anonymous requests intentionally share a conservative abuse bucket. Rotating GUEST_RECEIPT_SECRET invalidates outstanding guest receipts and changes hashed network identities; existing members can use normal sign-in/email access.
+On Vercel, leave TRUST_PROXY_HEADERS unset: Vercel overwrites X-Forwarded-For at its edge and the app trusts its headers automatically. On any other host, set TRUST_PROXY_HEADERS=true only after verifying that the ingress removes client-supplied X-Forwarded-For and supplies a trusted address. Otherwise anonymous requests intentionally share a conservative abuse bucket. Rotating GUEST_RECEIPT_SECRET invalidates outstanding guest receipts and changes hashed network identities; existing members can use normal sign-in/email access.
 
 HTML pages now use fresh script nonces and dynamic rendering. Do not cache nonce-bearing HTML in a shared CDN; static assets remain cacheable. Inline styles remain allowed for the existing UI. Verify Stripe Payment Element/3DS under this policy in staging.
 

@@ -90,7 +90,7 @@ export default async function SavedPage({
   // Cheap either way — just the id columns — so both are fetched unbounded
   // to know the true shape of what a user has saved/followed, even though
   // only one tab's worth gets fully hydrated below.
-  const [{ data: saves, error: savesError }, { data: follows }, { data: savedSearches, error: searchesError }] =
+  const [{ data: saves, error: savesError }, { data: follows, error: followsError }, { data: savedSearches, error: searchesError }] =
     await Promise.all([
       supabase
         .from("saves")
@@ -110,6 +110,7 @@ export default async function SavedPage({
     ]);
 
   if (savesError) reportError("[saved] failed to load saves", savesError);
+  if (followsError) reportError("[saved] failed to load follows", followsError);
 
   const listingIds = (saves ?? [])
     .filter((s) => s.target_type === "listing")
@@ -242,7 +243,7 @@ export default async function SavedPage({
   // this tab, count the posts that are still there so the header never
   // promises a post the page doesn't show.
   const postCount = tab === "saved" && totalPostSaves <= SECONDARY_CAP ? savedUpdates.length : totalPostSaves;
-  const isEmpty = !savesError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !postCount && !(savedSearches ?? []).length;
+  const isEmpty = !savesError && !followsError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !postCount && !(savedSearches ?? []).length;
   const hasMoreListings = tab === "saved" && (listingsTotal ?? 0) > from + PAGE_SIZE;
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
@@ -310,6 +311,9 @@ export default async function SavedPage({
       </FilterGroup>
 
       {(savesError || searchesError) && <p role="alert" className="field__err">Some saved items couldn’t be loaded. Reload this page to try again.</p>}
+      {/* An unread follows list is not an empty one: say so on the tab it
+          feeds instead of offering "Not following anyone yet". */}
+      {followsError && tab === "following" && <p role="alert" className="field__err">The builds and sellers you follow couldn’t be loaded. Reload this page to try again.</p>}
       {/* Nothing anywhere: one empty state, and nothing around it — no
           section heads, search or sort over lists with nothing in them. */}
       {isEmpty && (
@@ -554,7 +558,7 @@ export default async function SavedPage({
         </section>
       )}
 
-      {!isEmpty && tab === "following" && followedCars.length === 0 && sellerCount === 0 && (
+      {!isEmpty && !followsError && tab === "following" && followedCars.length === 0 && sellerCount === 0 && (
         <section className="deck">
           <Rv>
             <EmptyState

@@ -28,6 +28,22 @@ export default async function CheckoutPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const betaAccess = await getBetaAccess(user?.id, "buyer");
+  if (betaAccess.unavailable) {
+    // The check failed — not a "no". Still no checkout, but the buyer is
+    // told to try again rather than that they aren't invited.
+    return (
+      <div className="wrap pb-10">
+        <EmptyState
+          mark="!"
+          title="We couldn't check your checkout access"
+          action={<ButtonLink href="/checkout">Try again</ButtonLink>}
+        >
+          Something went wrong on our side, so checkout is paused for a moment. Nothing new has been
+          charged.
+        </EmptyState>
+      </div>
+    );
+  }
   if (betaAccess.enforced && !user) redirect("/login?next=%2Fcheckout");
   if (!betaAccess.eligible) {
     return (

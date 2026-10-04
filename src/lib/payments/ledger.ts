@@ -19,9 +19,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OrderStatus } from "@/lib/database.types";
 
 import { adjustmentsByOrder } from "./adjustments";
+import { orderCarry, readSellerCarry } from "./carry";
 import { sellerProceeds } from "./proceeds";
 import { platformFeeCents } from "./provider";
 import { reportError } from "@/lib/monitoring";
+
+/**
+ * The one currency the marketplace charges in (listings and orders are
+ * constrained to it since 20261004130000). Totals are only meaningful in one
+ * currency, so a line in any other is left out of them and reported.
+ */
+export const LEDGER_CURRENCY = "USD";
 
 /** Orders whose payment has actually captured — the only ones with money to ledger. */
 const CAPTURED_STATUSES: OrderStatus[] = ["paid", "shipped", "delivered", "completed", "disputed"];
@@ -53,12 +61,24 @@ export type LedgerLine = {
   refundedCents: number;
   /** The seller's share of those refunds — what comes off their proceeds. */
   refundShareCents: number;
+  /** DRVN's fee share of the same refunds. With refundShareCents it can be a
+   *  cent off the refund, because each rounds on its own. */
+  feeRefundShareCents: number;
   /** Net effect of shipping-label adjustments (0052): ≤ 0 when DRVN bought
    *  labels on the seller's behalf, restored by voids/refunds. */
   adjustmentsCents: number;
   /** What remains for the seller (see proceeds.ts): gross − fee − refund
-   *  share + adjustments. */
+   *  share + adjustments. Can be below zero when labels outweigh what's left. */
   netCents: number;
+  /** This order's charges carried to a later payout (≤ 0), or credits (≥ 0). */
+  carriedCents: number;
+  /** True once a later payout has collected every charge this order carried. */
+  carrySettled: boolean;
+  /** Earlier orders' charges this order's transfer kept back (≥ 0). */
+  carriedInCents: number;
+  /** What this order's own payout comes to — never negative. The totals
+   *  below add these, because that is what moves. */
+  payoutCents: number;
   state: LedgerState;
   /** When this line does/did clear the holding window. Null until delivered. */
   availableAt: string | null;
@@ -70,6 +90,9 @@ export type SellerLedger = {
   clearingCents: number;
   availableCents: number;
   paidOutCents: number;
+  /** Label costs earlier payouts couldn't cover, still to come off the next
+   *  transfer (20261005110100). Not in the totals above: those are per order. */
+  owedCents: number;
   /** True if the fetch hit its cap: the totals cover only the latest
    *  FETCH_CAP sales and must be labelled that way, not as a lifetime. */
   truncated: boolean;
@@ -144,13 +167,16 @@ export async function getSellerLedger(
   const captured = orders;
   const orderIds = captured.map((o) => o.id);
 
-  const [{ data: items, error: itemsError }, adjustments] = await Promise.all([
+  const [{ data: items, error: itemsError }, adjustments, carry] = await Promise.all([
     orderIds.length
       ? supabase.from("order_items").select("order_id, title, quantity").in("order_id", orderIds)
       : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number }[], error: null }),
     adjustmentsByOrder(supabase, orderIds),
+    readSellerCarry(supabase, sellerId),
   ]);
-  if (adjustments === null) return { status: "unavailable" };
+  // Without the carry-forward entries a refunded order's labels, or what a
+  // payout kept back, would be missing — the same confident wrong answer.
+  if (adjustments === null || carry === null) return { status: "unavailable" };
   // Titles only label the lines; without them the money is still right.
   if (itemsError) reportError("[payouts] failed to load order titles", { sellerId, error: itemsError });
 
@@ -181,11 +207,14 @@ export async function getSellerLedger(
         : platformFeeCents(order.subtotal_cents);
     const grossCents = order.total_cents;
     const refundedCents = order.refunded_cents ?? 0;
+    const carried = orderCarry(carry, order.id);
     const proceeds = sellerProceeds({
       totalCents: grossCents,
       feeCents,
       refundedCents,
       adjustmentsCents: adjustments.get(order.id) ?? 0,
+      carriedCents: carried.carriedCents,
+      carriedInCents: carried.carriedInCents,
     });
     const { state, availableAt } = lineState(order, nowMs);
 
@@ -201,8 +230,14 @@ export async function getSellerLedger(
       shippingCents: order.shipping_cents,
       refundedCents,
       refundShareCents: proceeds.refundShareCents,
+      feeRefundShareCents: proceeds.feeRefundShareCents,
       adjustmentsCents: proceeds.adjustmentsCents,
       netCents: proceeds.netCents,
+      carriedCents: proceeds.carriedCents,
+      // A shortfall the open payout hasn't recorded yet is still to come.
+      carrySettled: carried.settled && carried.carriedCents === proceeds.carriedCents,
+      carriedInCents: proceeds.carriedInCents,
+      payoutCents: proceeds.payoutCents,
       state,
       availableAt,
     };
@@ -213,11 +248,18 @@ export async function getSellerLedger(
   let availableCents = 0;
   let paidOutCents = 0;
 
+  // Totals add what each payout pays (never below zero): a refunded order's
+  // labels used to drag a total down although nothing was taken from it —
+  // they are owed separately (owedCents) and come off the next transfer.
   for (const line of lines) {
-    if (line.state === "held") heldCents += line.netCents;
-    else if (line.state === "clearing") clearingCents += line.netCents;
-    else if (line.state === "available") availableCents += line.netCents;
-    else if (line.state === "paid_out") paidOutCents += line.netCents;
+    if (line.currency.toUpperCase() !== LEDGER_CURRENCY) {
+      reportError("[payouts] ledger line in an unexpected currency", { orderId: line.orderId, currency: line.currency });
+      continue;
+    }
+    if (line.state === "held") heldCents += line.payoutCents;
+    else if (line.state === "clearing") clearingCents += line.payoutCents;
+    else if (line.state === "available") availableCents += line.payoutCents;
+    else if (line.state === "paid_out") paidOutCents += line.payoutCents;
   }
 
   return {
@@ -228,6 +270,7 @@ export async function getSellerLedger(
       clearingCents,
       availableCents,
       paidOutCents,
+      owedCents: carry.owedCents,
       truncated: captured.length === FETCH_CAP,
     },
   };

@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   order: vi.fn(),
   updateResult: vi.fn(),
   inStatuses: vi.fn(),
+  rpc: vi.fn(),
+  insert: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -20,7 +22,9 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
+    rpc: mocks.rpc,
     from: (table: string) => ({
+      insert: mocks.insert,
       select: () => ({ eq: () => ({ maybeSingle: table === "offers" ? mocks.offer : table === "orders" ? mocks.order : mocks.listing }) }),
       update: () => ({
         eq: () => ({
@@ -55,6 +59,8 @@ beforeEach(() => {
   mocks.listing.mockResolvedValue({ data: { id: "listing-1", seller_id: "seller-1", status: "active", price_cents: 2000 } });
   mocks.order.mockResolvedValue({ data: null });
   mocks.updateResult.mockResolvedValue({ data: [], error: null });
+  mocks.rpc.mockResolvedValue({ data: "order-1", error: null });
+  mocks.insert.mockResolvedValue({ error: null });
 });
 
 it("does not overwrite an offer accepted while a decline was waiting", async () => {
@@ -122,4 +128,27 @@ it("confirms an accepted offer replay only when its order exists", async () => {
   data.set("offer_id", "offer-1");
   data.set("decision", "accepted");
   await expect(respondToOffer({}, data)).resolves.toEqual({ ok: "Offer accepted — the buyer has 24 hours to complete checkout." });
+});
+
+function acceptForm() {
+  const data = new FormData();
+  data.set("offer_id", "offer-1");
+  data.set("decision", "accepted");
+  return data;
+}
+
+it("tells the seller when the buyer couldn't be notified of an acceptance", async () => {
+  mocks.order.mockResolvedValue({ data: { buyer_id: "buyer-1", seller_id: "seller-1" }, error: null });
+  mocks.insert.mockResolvedValue({ error: { message: "timeout" } });
+  const result = await respondToOffer({}, acceptForm());
+  // The acceptance itself stands: the order was reserved.
+  expect(result.ok).toMatch(/^Offer accepted\. We couldn't notify the buyer/);
+  expect(result.error).toBeUndefined();
+});
+
+it("confirms an acceptance whose notice went out", async () => {
+  mocks.order.mockResolvedValue({ data: { buyer_id: "buyer-1", seller_id: "seller-1" }, error: null });
+  await expect(respondToOffer({}, acceptForm())).resolves.toEqual({
+    ok: "Offer accepted — the buyer has 24 hours to complete checkout.",
+  });
 });

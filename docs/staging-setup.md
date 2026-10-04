@@ -159,7 +159,7 @@ Emails:
 | `GUEST_RECEIPT_SECRET` | generate: `openssl rand -hex 32` (different from `CRON_SECRET`) |
 | `SENTRY_DSN` | step 8 — `https://<key>@<host>/<project id>` |
 | `ADMIN_ALERT_WEBHOOK_URL` | step 9 — must be `https:` |
-| `TRUST_PROXY_HEADERS` | `true` only after confirming the host overwrites client `X-Forwarded-For` (check its docs, then send a request with a forged header and confirm rate limits key on the real address). Leave unset until then |
+| `TRUST_PROXY_HEADERS` | **Leave unset on Vercel** — the app trusts Vercel's own `X-Vercel-Forwarded-For` / `X-Forwarded-For` automatically (Vercel overwrites both at its edge; see the production runbook). On any other host, `true` only after confirming it overwrites client `X-Forwarded-For` (check its docs, then send a request with a forged header and confirm rate limits key on the real address). `false` disables both |
 | `FLAG_INTEGRATED_SHIPPING_V1` | `true` if staging exercises DRVN Shipping (`shippingMode: "easypost-test"`); unset for `"stub"` |
 | `EASYPOST_API_KEY` | EasyPost **test** key (`EZTK…`), step 6 |
 | `EASYPOST_WEBHOOK_SECRET` | step 6 |
