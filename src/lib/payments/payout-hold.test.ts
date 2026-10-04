@@ -9,6 +9,7 @@ import {
   payoutAvailableAt,
   payoutHoldDaysFor,
   payoutHoldPhrase,
+  readAutoConfirmDays,
   readPayoutHoldPolicy,
   returnWindowDays,
 } from "./payout-hold";
@@ -74,5 +75,14 @@ describe("payout hold", () => {
     await expect(
       readPayoutHoldPolicy(fakeClient({ data: [{ payout_hold_days: 7, payout_hold_mode: "weekly" }], error: null }))
     ).resolves.toBeNull();
+  });
+
+  it("reads the auto-confirm period: a number when on, null when off, undefined when unreadable", async () => {
+    const client = (result: { data: unknown; error: unknown }) =>
+      ({ from: () => ({ select: () => ({ limit: async () => result }) }) }) as never;
+    expect(await readAutoConfirmDays(client({ data: [{ auto_confirm_after_days: 21 }], error: null }))).toBe(21);
+    expect(await readAutoConfirmDays(client({ data: [{ auto_confirm_after_days: null }], error: null }))).toBeNull();
+    expect(await readAutoConfirmDays(client({ data: [], error: null }))).toBeNull();
+    expect(await readAutoConfirmDays(client({ data: null, error: { message: "timeout" } }))).toBeUndefined();
   });
 });

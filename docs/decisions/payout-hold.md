@@ -93,4 +93,5 @@ The terms page picks up the change within 5 minutes, and the payouts tile on
 the next page load. Before switching, have counsel read the resulting sentence
 in terms §6 (`docs/legal-review-checklist.md`, "Holding funds"). For example,
 window-based mode reads: *"A sale is paid out 30 days (or once the shop's
-return window closes, if later) after the buyer confirms the order arrived."*
+return window closes, if later) after the order is delivered …"* — delivery
+being the buyer's confirmation, a carrier scan or a pickup handover.

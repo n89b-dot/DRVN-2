@@ -78,6 +78,26 @@ function readPolicy(row: { payout_hold_days: number; payout_hold_mode: string } 
 }
 
 /**
+ * After how many days an untracked shipment the buyer never confirmed is
+ * treated as delivered (settlement_settings.auto_confirm_after_days,
+ * 20261006100100), for the terms to state. `null` means the rule is off;
+ * `undefined` means it couldn't be read, and the caller words it without a
+ * number rather than leave a live rule out.
+ */
+export async function readAutoConfirmDays(
+  supabase: SupabaseClient<Database>
+): Promise<number | null | undefined> {
+  const { data, error } = await supabase
+    .from("settlement_settings")
+    .select("auto_confirm_after_days")
+    .limit(1);
+  if (error || !data) return undefined;
+  const days = data[0]?.auto_confirm_after_days ?? null;
+  if (days === null) return null;
+  return Number.isInteger(days) && days > 0 ? days : undefined;
+}
+
+/**
  * The owner's current setting. Null when it can't be read: a payout date
  * computed from a guessed rule would be a confident wrong answer, so callers
  * say the date is unavailable (or fall back to wording without a number).
