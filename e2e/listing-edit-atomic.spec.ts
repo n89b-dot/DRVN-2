@@ -187,3 +187,35 @@ test("a listing save whose answer is lost is recovered, not reported as unchange
     await cleanupFixtureUser(userId);
   }
 });
+
+test("an edit can't be typed before the form is live, so hydration never resets it", async ({ page }) => {
+  test.skip(
+    process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation",
+    "Listing edit fixtures are restricted to the isolated local stack"
+  );
+  test.setTimeout(120_000);
+
+  const { userId, listingId } = await sellerWithListing(page);
+  let release!: () => void;
+  const scripts = new Promise<void>((resolve) => { release = resolve; });
+  try {
+    // Hold the client code: the form is server-rendered but not yet live.
+    await page.route("**/_next/static/**/*.js", async (route) => {
+      await scripts;
+      await route.continue();
+    });
+    await page.goto(`/listings/${listingId}/edit`, { waitUntil: "commit" });
+    const price = page.getByLabel("Asking price");
+    // Typed now, React would reset this controlled field to the saved price
+    // when it hydrates (CI run 37172858009: 97.00 became 125.00).
+    await expect(price).toBeDisabled();
+    release();
+    await expect(price).toBeEnabled();
+    await price.fill("97.00");
+    await expect(price).toHaveValue("97.00");
+    await expect(page.locator(".saverow").getByRole("button", { name: "Save changes" })).toBeEnabled();
+  } finally {
+    release();
+    await cleanupFixtureUser(userId);
+  }
+});
