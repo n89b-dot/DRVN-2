@@ -216,8 +216,8 @@ export function ModsEditor({
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   // Saves call the action in their own transition, so a redirect it already
-  // followed (sign-in lapsed) lands in Next's redirect boundary instead of a
-  // second navigation.
+  // followed — the sign-in redirect when the session has ended, for one —
+  // lands in Next's redirect boundary instead of being followed a second time.
   const [, startSave] = useTransition();
   const pending = saving || unlinkPending;
   const [unlinkingKey, setUnlinkingKey] = useState<string | null>(null);

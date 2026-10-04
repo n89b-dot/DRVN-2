@@ -17,8 +17,9 @@ export function CarDetailsForm({ car, isMain }: { car: Car; isMain: boolean }) {
   const revision = useRef(0);
   const [dirty, setDirty] = useState(false);
   useUnsavedGuard(dirty);
-  // A transition, so a redirect the action already followed (sign-in lapsed)
-  // lands in Next's redirect boundary instead of a second navigation.
+  // A transition, so a redirect the action already followed — the sign-in
+  // redirect when the session has ended, for one — lands in Next's redirect
+  // boundary instead of being followed a second time.
   const [, startTransition] = useTransition();
 
   return (

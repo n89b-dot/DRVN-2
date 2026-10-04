@@ -193,8 +193,13 @@ with tracking" (run 36917505731). Both runs used **Next 16.2.12**; main has been
 - **Not done here:**
   - `sell-form`'s `onSubmit` had the same rethrow pattern, and `createListing` redirects on every success.
     It's fixed in PR #4 (fix/release-r2), which had already rewritten that handler for R2-01.
-  - `cart/payment-confirm`, `settings/payment-methods` and two `sell/import` callbacks call actions with no
-    catch at all, so a lapsed session escapes there too.
+  - `cart/payment-confirm`, `settings/payment-methods` and two `sell/import` callbacks called actions with
+    no catch at all. They're fixed in PR #6 (checkout) and PR #7 (settings and import).
+  - On a member route (`/settings`, `/orders`, `/garage`, `/sell`, …), a session that has ended never
+    reached the action's `redirect("/login")`. The proxy answered the action's POST itself with a 307,
+    fetch followed it by re-posting to `/login`, and the page saw a failed call instead of a sign-in. The
+    proxy fix answers a signed-out Server Action the way Next's `redirect()` does
+    (`x-action-redirect`), so it lands on `/login?next=<page>`.
 
 ## After the gate is green (not part of this plan)
 `scripts/release-candidate.mjs` still needs current evidence for its 15 gates (hosted provider, restore/rollback,
