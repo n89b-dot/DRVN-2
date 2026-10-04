@@ -27,7 +27,12 @@ if (!manifestPath) throw new Error("pass the image manifest path");
 /** @type {Record<string, string>} key → local image file */
 const images = JSON.parse(readFileSync(manifestPath, "utf8"));
 
-const PASSWORD = "drvn-community-2026";
+// The seeded accounts' shared test password — never committed. Set it in
+// the shell or .env.local (the same value across the three seed scripts).
+const PASSWORD = process.env.DRVN_SEED_PASSWORD ?? env.DRVN_SEED_PASSWORD;
+if (!PASSWORD) {
+  throw new Error("Set DRVN_SEED_PASSWORD (shell or .env.local) to the seeded accounts' test password.");
+}
 
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
 

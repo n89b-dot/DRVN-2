@@ -815,10 +815,15 @@ export async function completeReservedOrder(
     { p_order: orderId, p_actor: user.id, p_shipping: shipping as unknown as Json }
   );
   if (shippingWriteError) {
+    // Collecting takes shipping off; an offer that only reached the minimum
+    // charge with shipping can't then be paid by card.
+    if (shippingWriteError.code === CHARGE_OUT_OF_BOUNDS_CODE) {
+      return { error: "Without shipping this order comes to less than $0.50, which a card can't be charged. Choose delivery instead." };
+    }
     reportError("[commerce] accepted-offer delivery write failed", { orderId, shippingWriteError });
     return { error: "Delivery details could not be confirmed. Check this order before trying again." };
   }
-  const freezeResult = frozenOrder as { ok?: boolean; reason?: string } | null;
+  const freezeResult = frozenOrder as { ok?: boolean; reason?: string; total_cents?: number } | null;
   if (!freezeResult?.ok) {
     const { data: currentOrder } = await admin
       .from("orders")
@@ -829,6 +834,14 @@ export async function completeReservedOrder(
       redirect(`/orders/${orderId}`);
     }
     return { error: freezeResult?.reason ?? "This order changed before checkout. Check the order before trying again." };
+  }
+  // The freeze prices the order for the buyer's choice (a collected order
+  // charges no shipping), so the amount read before it may be stale. The
+  // payment is for what the freeze returned, never the earlier read.
+  const totalCents = freezeResult.total_cents;
+  if (typeof totalCents !== "number" || !Number.isInteger(totalCents) || totalCents <= 0) {
+    reportError("[commerce] accepted-offer freeze returned no total", { orderId });
+    return { error: "This order changed before checkout. Check the order before trying again." };
   }
 
   // A failed read throws rather than passing for "no saved customer". Nothing
@@ -848,7 +861,7 @@ export async function completeReservedOrder(
     orderId,
     buyerId: user.id,
     sellerId: order.seller_id ?? "",
-    totalCents: order.total_cents,
+    totalCents,
     currency: order.currency,
     idempotencyKey: `order:${orderId}`,
     customerId,
@@ -869,7 +882,7 @@ export async function completeReservedOrder(
       });
       return { error: "Payment setup is being reconciled. Check this order before trying again." };
     }
-    return { payment: { clientSecret: payment.clientSecret, orderIds: [orderId], amountCents: order.total_cents } };
+    return { payment: { clientSecret: payment.clientSecret, orderIds: [orderId], amountCents: totalCents } };
   }
 
   if (payment.status === "processing") return { error: "Your payment is processing. Check this order before trying again." };

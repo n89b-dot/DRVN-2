@@ -97,7 +97,9 @@ export async function offerRefund(
     user.id,
     `Offered a refund of ${formatPrice(amount)}.`
   );
-  await admin.from("notifications").insert({
+  // The offer is already recorded; a failed notice must not undo that. The
+  // seller is told, because they'd otherwise wait on a buyer who wasn't told.
+  const { error: noticeError } = await admin.from("notifications").insert({
     user_id: order.buyer_id,
     kind: "refund_offered",
     section: "marketplace",
@@ -106,10 +108,15 @@ export async function offerRefund(
     href: `/orders/${orderId}`,
     actor_id: user.id,
   });
+  if (noticeError) reportError("[disputes] refund offer notification failed", { orderId, noticeError });
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${orderId}`);
-  return { ok: "Refund offer sent to the buyer." };
+  return {
+    ok: noticeError
+      ? "Refund offer saved. We couldn't notify the buyer just now — they'll see it on the order."
+      : "Refund offer sent to the buyer.",
+  };
 }
 
 export async function acceptRefund(
@@ -309,7 +316,9 @@ export async function escalateDispute(
       user.id,
       "Asked DRVN to step in — the case is now with support."
     );
-    await admin.from("notifications").insert({
+    // The escalation stands either way; support works from the case queue,
+    // so a missed seller notice is reported rather than shown to the buyer.
+    const { error: noticeError } = await admin.from("notifications").insert({
       user_id: order.seller_id,
       kind: "dispute_escalated",
       section: "marketplace",
@@ -318,6 +327,7 @@ export async function escalateDispute(
       href: `/orders/${orderId}`,
       actor_id: user.id,
     });
+    if (noticeError) reportError("[disputes] escalation notification failed", { orderId, noticeError });
   }
   await sendAdminAlert({
     kind: "dispute_escalated",

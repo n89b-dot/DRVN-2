@@ -1,11 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState } from "react";
 
 import { motion } from "motion/react";
 
-import { Button, TextField } from "@/components/ui";
+import { Button, TextField, UnconfirmedOutcome } from "@/components/ui";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 import { springs, transitions } from "@/lib/motion";
 import {
   markReadyForPickup,
@@ -16,7 +16,14 @@ import {
 } from "@/features/commerce/pickup-actions";
 
 /** Local pickup handshake UI (0054): seller readies, buyer shows the pass,
- *  seller burns it at handoff. */
+ *  seller burns it at handoff.
+ *
+ *  A lost response keeps the page: readying notifies the buyer and the
+ *  hand-off completes the order, so neither is offered again until a reload
+ *  shows whether it landed. Opening a pass only mints a fresh one — that
+ *  one simply says to try again. */
+const READY_UNCONFIRMED = "Couldn't confirm whether the order was marked ready. Reload to check before trying again.";
+const HANDOFF_UNCONFIRMED = "Couldn't confirm the hand-off. Reload to check whether the order completed before trying again.";
 
 function Feedback({ state }: { state: PickupState }) {
   if (state.error) {
@@ -37,10 +44,11 @@ function Feedback({ state }: { state: PickupState }) {
 }
 
 export function ReadyForPickupButton({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<PickupState, FormData>(
+  const [state, action, pending] = useRecoverableAction<PickupState>(
     markReadyForPickup,
-    {}
+    READY_UNCONFIRMED
   );
+  if (state.error === READY_UNCONFIRMED) return <UnconfirmedOutcome>{READY_UNCONFIRMED}</UnconfirmedOutcome>;
   return (
     <form action={action} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
@@ -65,7 +73,8 @@ export function RedeemPickupForm({
   /** Present when the seller arrived via the scanned QR. */
   initialToken?: string;
 }) {
-  const [state, action, pending] = useActionState<PickupState, FormData>(redeemPickup, {});
+  const [state, action, pending] = useRecoverableAction<PickupState>(redeemPickup, HANDOFF_UNCONFIRMED);
+  if (state.error === HANDOFF_UNCONFIRMED) return <UnconfirmedOutcome>{HANDOFF_UNCONFIRMED}</UnconfirmedOutcome>;
   return (
     <form action={action} className="grid gap-3">
       <input type="hidden" name="order_id" value={orderId} />
@@ -99,9 +108,9 @@ export function RedeemPickupForm({
 }
 
 export function PickupPassPanel({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useActionState<PickupPassState, FormData>(
+  const [state, action, pending] = useRecoverableAction<PickupPassState>(
     showPickupPass,
-    {}
+    "Couldn't open the pass just now. Try again."
   );
   return (
     <div className="grid gap-3">

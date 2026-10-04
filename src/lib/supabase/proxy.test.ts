@@ -34,6 +34,9 @@ import { updateSession } from "./proxy";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 
 const request = (path: string) => new NextRequest(new URL(path, "https://drvn.test"));
+/** A Server Action called from the page: a POST to the page's own URL. */
+const action = (path: string) =>
+  new NextRequest(new URL(path, "https://drvn.test"), { method: "POST", headers: { "next-action": "abc123" } });
 
 function expectRotatedCookies(response: Response & { cookies: { get(name: string): unknown } }) {
   const jar = response as unknown as { cookies: { get(n: string): { value: string; maxAge?: number; httpOnly?: boolean } | undefined } };
@@ -94,5 +97,52 @@ describe("updateSession keeps a refreshed session on every response", () => {
     expect(location.searchParams.get("next")).toBe("/garage?car=all");
     expect(location.searchParams.get("error")).toBe("session-unavailable");
     expectRotatedCookies(response);
+  });
+});
+
+describe("updateSession signs out a Server Action into a sign-in, not a failed call", () => {
+  beforeEach(() => {
+    scenario = { claims: null, refresh: false };
+  });
+
+  it("answers a signed-out action on a product route the way Next's redirect() does", async () => {
+    scenario = { claims: null, refresh: true };
+    const response = await updateSession(action("/sell/import?import=i1"));
+    // Not an HTTP redirect: fetch would follow that and re-post the action to /login.
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    const [target, type] = response.headers.get("x-action-redirect")!.split(";");
+    const url = new URL(target, "https://drvn.test");
+    expect(url.pathname).toBe("/login");
+    expect(url.searchParams.get("next")).toBe("/sell/import?import=i1");
+    expect(type).toBe("replace");
+    expectRotatedCookies(response);
+  });
+
+  it("keeps the outage reason on an action too", async () => {
+    scenario = { claims: null, refresh: false, throws: true };
+    const response = await updateSession(action("/settings"));
+    const url = new URL(response.headers.get("x-action-redirect")!.split(";")[0], "https://drvn.test");
+    expect(url.searchParams.get("next")).toBe("/settings");
+    expect(url.searchParams.get("error")).toBe("session-unavailable");
+  });
+
+  it("sends a form posted without JavaScript to sign in with a GET", async () => {
+    const response = await updateSession(new NextRequest(new URL("/profile", "https://drvn.test"), { method: "POST" }));
+    expect(response.status).toBe(303);
+    expect(new URL(response.headers.get("location")!).pathname).toBe("/login");
+  });
+
+  it("leaves a page visit as it was", async () => {
+    const response = await updateSession(request("/profile"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("x-action-redirect")).toBeNull();
+  });
+
+  it("lets a signed-in member's action through untouched", async () => {
+    scenario = { claims: { sub: "u1" }, refresh: false };
+    const response = await updateSession(action("/settings"));
+    expect(response.headers.get("x-action-redirect")).toBeNull();
+    expect(response.headers.get("location")).toBeNull();
   });
 });

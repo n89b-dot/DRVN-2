@@ -852,12 +852,19 @@ export async function recordExternalRefund(
  * route alongside the transfer worker and from the admin console. Bounded and
  * oldest-first; every path it calls is idempotent, so overlapping sweeps are
  * safe.
+ *
+ * Only operations that are due are read. The backoff used to be applied after
+ * the limit, so a batch of three whose head was three backed-off operations
+ * did nothing for up to an hour while due ones waited behind them. Filtering
+ * before the limit, oldest-touched first, means every due operation gets its
+ * turn: an attempt touches the row, which sends it to the back.
  */
 export async function resumeIncompleteRefunds(
   admin: Admin,
   opts: { batch?: number; olderThanMs?: number } = {}
 ): Promise<{ scanned: number; completed: number; retrying: number }> {
   const olderThan = new Date(Date.now() - (opts.olderThanMs ?? 5 * 60_000)).toISOString();
+  const dueBy = new Date().toISOString();
   const { data: stale, error: staleError } = await admin
     .from("refund_operations")
     .select("id, status, next_attempt_at")
@@ -869,6 +876,7 @@ export async function resumeIncompleteRefunds(
       "reversal_pending",
     ])
     .lt("updated_at", olderThan)
+    .or(`next_attempt_at.is.null,next_attempt_at.lte.${dueBy}`)
     .order("updated_at", { ascending: true })
     .limit(opts.batch ?? 20);
   if (staleError) throw new Error("Refund queue unavailable");
@@ -876,6 +884,8 @@ export async function resumeIncompleteRefunds(
   const summary = { scanned: 0, completed: 0, retrying: 0 };
   const now = Date.now();
   for (const row of stale ?? []) {
+    // The query already filters on this; the check stays so a row read just
+    // before another sweep backed it off still waits its turn.
     if (row.next_attempt_at && new Date(row.next_attempt_at).getTime() > now) continue;
     summary.scanned += 1;
     const outcome = await runRefundOperation(admin, row.id);

@@ -1,9 +1,13 @@
 "use server";
 
+import { createHash } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
+import { attributedNetworkIdentity } from "@/lib/abuse-identity";
+import { allowAction, RATE_LIMITS, type RateLimitRule } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site";
 import { onboardingPath, safeRedirectPath } from "@/lib/safe-redirect";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
@@ -69,6 +73,32 @@ function authErrorCopy(error: { code?: string; message: string }): string {
   }
 }
 
+/**
+ * App-level throttle for sign-in and password reset. Supabase's own per-IP
+ * limits only ever see this server's address, so without this every attempt
+ * from every visitor counted against one bucket — or, for a targeted attack,
+ * against nothing.
+ *
+ * Two keys, each counted on every attempt: the normalized email (hashed, so
+ * the limiter never stores addresses), which stops one account being
+ * hammered from many places; and the visitor's network, which stops one place
+ * spraying many accounts. The network key applies only when the address can
+ * be attributed — on the shared "unattributed" bucket it would let one
+ * attacker lock every signed-out visitor out of their own account.
+ *
+ * Neither key looks at whether the account exists, so a throttled answer says
+ * nothing about registration.
+ */
+async function throttled(byEmail: RateLimitRule, byNetwork: RateLimitRule, email: string): Promise<boolean> {
+  const subject = `email:${createHash("sha256").update(email.trim().toLowerCase()).digest("hex")}`;
+  const network = attributedNetworkIdentity(await headers());
+  const [emailAllowed, networkAllowed] = await Promise.all([
+    allowAction(byEmail, subject),
+    network ? allowAction(byNetwork, network) : Promise.resolve(true),
+  ]);
+  return !(emailAllowed && networkAllowed);
+}
+
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -76,6 +106,9 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
 
   if (!email || !password) {
     return { error: "Email and password are required." };
+  }
+  if (await throttled(RATE_LIMITS.signIn, RATE_LIMITS.signInNetwork, email)) {
+    return { error: "Too many sign-in attempts. Wait a few minutes and try again." };
   }
 
   const supabase = await createClient();
@@ -244,6 +277,10 @@ export async function requestPasswordReset(
 ): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { error: "Enter the email address on your account." };
+  const sent: AuthState = { ok: "If that address has an account, a reset link is on its way." };
+  // A throttled request gets the same answer as any other, so neither the
+  // limit nor the account's existence can be probed through this form.
+  if (await throttled(RATE_LIMITS.passwordReset, RATE_LIMITS.passwordResetNetwork, email)) return sent;
 
   const supabase = await createClient();
   const origin = (await headers()).get("origin") ?? "";
@@ -255,7 +292,7 @@ export async function requestPasswordReset(
     redirectTo: `${origin}/callback?next=${encodeURIComponent("/login/reset")}`,
   });
 
-  return { ok: "If that address has an account, a reset link is on its way." };
+  return sent;
 }
 
 /** Runs with the recovery session established by the emailed link. */

@@ -66,8 +66,14 @@ export function PayoutsSection({
       </section>
     );
   }
+  // Payouts never go below zero; label costs a payout couldn't cover are
+  // owed separately and come off the next one (20261005110100).
   const lifetimeCents =
-    ledger.heldCents + ledger.clearingCents + ledger.availableCents + ledger.paidOutCents;
+    ledger.heldCents +
+    ledger.clearingCents +
+    ledger.availableCents +
+    ledger.paidOutCents -
+    ledger.owedCents;
   const lines = ledger.lines.slice(0, RECENT_LINES);
 
   return (
@@ -91,6 +97,12 @@ export function PayoutsSection({
           <span>Available</span>
           <b>{compactMoney(ledger.availableCents)}</b>
         </div>
+        {ledger.owedCents > 0 && (
+          <div className="sheet__row items-baseline">
+            <span>Label costs owed — off your next payout</span>
+            <b>−{compactMoney(ledger.owedCents)}</b>
+          </div>
+        )}
         <div className="sheet__row items-baseline">
           <span>{ledger.truncated ? `Net, latest ${LEDGER_FETCH_CAP} sales` : "Lifetime net"}</span>
           <b>{compactMoney(lifetimeCents)}</b>
@@ -115,7 +127,7 @@ export function PayoutsSection({
               <tr>
                 <th scope="col">Order</th>
                 <th scope="col" className="text-right">
-                  Net
+                  Payout
                 </th>
                 <th scope="col">State</th>
               </tr>
@@ -138,12 +150,24 @@ export function PayoutsSection({
                     {line.refundedCents > 0 && (
                       <span className="order__meta block">
                         {formatPrice(line.refundedCents)} refunded to the buyer · −
-                        {formatPrice(line.refundShareCents)} from your share
+                        {formatPrice(line.refundShareCents)} from your share,{" "}
+                        {formatPrice(line.feeRefundShareCents)} from DRVN&apos;s fee
+                      </span>
+                    )}
+                    {line.carriedCents < 0 && (
+                      <span className="order__meta block">
+                        {formatPrice(-line.carriedCents)} of label costs{" "}
+                        {line.carrySettled ? "taken from a later payout" : "come off your next payout"}
+                      </span>
+                    )}
+                    {line.carriedInCents > 0 && (
+                      <span className="order__meta block">
+                        −{formatPrice(line.carriedInCents)} kept back for earlier orders&apos; label costs
                       </span>
                     )}
                   </td>
-                  <td className="ledger__num" data-label="Net">
-                    {formatPrice(line.netCents)}
+                  <td className="ledger__num" data-label="Payout">
+                    {formatPrice(line.payoutCents)}
                   </td>
                   <td>
                     <span className={STATE_CHIP[line.state]}>{STATE_LABEL[line.state]}</span>

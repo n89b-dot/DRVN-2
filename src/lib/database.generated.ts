@@ -3519,6 +3519,64 @@ export type Database = {
           },
         ]
       }
+      seller_carry_entries: {
+        Row: {
+          adjustment_id: string | null
+          amount_cents: number
+          created_at: string
+          currency: string
+          entry_key: string
+          id: string
+          kind: string
+          order_id: string | null
+          seller_id: string | null
+        }
+        Insert: {
+          adjustment_id?: string | null
+          amount_cents: number
+          created_at?: string
+          currency?: string
+          entry_key: string
+          id?: string
+          kind: string
+          order_id?: string | null
+          seller_id?: string | null
+        }
+        Update: {
+          adjustment_id?: string | null
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          entry_key?: string
+          id?: string
+          kind?: string
+          order_id?: string | null
+          seller_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seller_carry_entries_adjustment_id_fkey"
+            columns: ["adjustment_id"]
+            isOneToOne: false
+            referencedRelation: "seller_adjustments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seller_carry_entries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "seller_carry_entries_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seller_fulfillment_profiles: {
         Row: {
           address_verified_at: string | null
@@ -3974,6 +4032,7 @@ export type Database = {
           created_at: string
           currency: string
           dispatch_amount_cents: number | null
+          dispatch_carry_cents: number | null
           dispatch_currency: string | null
           dispatch_destination: string | null
           dispatch_source_transaction: string | null
@@ -4000,6 +4059,7 @@ export type Database = {
           created_at?: string
           currency: string
           dispatch_amount_cents?: number | null
+          dispatch_carry_cents?: number | null
           dispatch_currency?: string | null
           dispatch_destination?: string | null
           dispatch_source_transaction?: string | null
@@ -4026,6 +4086,7 @@ export type Database = {
           created_at?: string
           currency?: string
           dispatch_amount_cents?: number | null
+          dispatch_carry_cents?: number | null
           dispatch_currency?: string | null
           dispatch_destination?: string | null
           dispatch_source_transaction?: string | null
@@ -4317,6 +4378,7 @@ export type Database = {
           created_at: string
           currency: string
           dispatch_amount_cents: number | null
+          dispatch_carry_cents: number | null
           dispatch_currency: string | null
           dispatch_destination: string | null
           dispatch_source_transaction: string | null
@@ -4538,6 +4600,10 @@ export type Database = {
       freeze_cart_checkout_shipping: {
         Args: { p_buyer: string; p_idempotency_key: string; p_order: string }
         Returns: Json
+      }
+      freeze_transfer_carry: {
+        Args: { p_order: string; p_payable_cents: number; p_worker: string }
+        Returns: number
       }
       garage_car_stats: {
         Args: { p_cars: string[] }
@@ -4866,6 +4932,7 @@ export type Database = {
         }
         Returns: string
       }
+      order_buyer_reviewable: { Args: { p_order: string }; Returns: boolean }
       pause_account_deletion_hold: {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: undefined
@@ -5055,6 +5122,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      record_seller_carry: {
+        Args: {
+          p_adjustment: string
+          p_amount: number
+          p_key: string
+          p_kind: string
+          p_order: string
+          p_seller: string
+        }
+        Returns: undefined
+      }
       record_transfer_recovery: {
         Args: {
           p_amount?: number
@@ -5171,6 +5249,10 @@ export type Database = {
           seller_id: string
           total: number
         }[]
+      }
+      seller_carry_available_cents: {
+        Args: { p_except_order: string; p_seller: string }
+        Returns: number
       }
       seller_listing_stats: {
         Args: {

@@ -165,6 +165,9 @@ export default async function CompleteOrderPage({
               idempotencyKey={randomUUID()}
               allowsCollection={allowsCollection}
               total={formatPrice(order.total_cents)}
+              // Collecting takes the flat shipping off (20261005110000), so
+              // the totals come from checkoutTotals like cart checkout's.
+              totalsBase={{ goodsCents: order.subtotal_cents, flatShippingCents: order.shipping_cents }}
               savedCards={await listSavedCards(user.id).catch(() => [])}
               action={completeReservedOrder}
               orderId={id}

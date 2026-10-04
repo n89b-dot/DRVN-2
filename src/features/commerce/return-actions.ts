@@ -355,24 +355,30 @@ export async function reportReturnProblem(
   }
 
   if (ret.status === "in_transit") {
-    await admin
+    // A failed step shows up below as nothing to escalate; this says why.
+    const { error: deliveredError } = await admin
       .from("returns")
       .update({ status: "delivered", delivered_at: new Date().toISOString() })
       .eq("id", returnId)
       .eq("status", "in_transit");
+    if (deliveredError) reportError("[returns] mark delivered before escalation failed", { returnId, deliveredError });
   }
-  const { data: escalated } = await admin
+  const { data: escalated, error: escalateError } = await admin
     .from("returns")
     .update({ status: "escalated" })
     .eq("id", returnId)
     .eq("status", "delivered")
     .select("id");
+  if (escalateError) reportError("[returns] escalation failed", { returnId, escalateError });
   if (!escalated?.length) return { error: "Couldn't escalate — refresh and try again." };
 
-  await admin
+  // The escalation already holds the refund; the note is the reviewer's
+  // evidence, so a lost one is reported and the seller asked to resend it.
+  const { error: noteError } = await admin
     .from("return_items")
     .update({ inspection_status: "mismatch", inspection_note: note })
     .eq("return_id", returnId);
+  if (noteError) reportError("[returns] inspection note write failed", { returnId, noteError });
 
   // Route into the existing ops-case layer (§29) — reopen the order's
   // dispute case rather than inventing a queue.
@@ -396,7 +402,11 @@ export async function reportReturnProblem(
     "Seller reported a problem with the returned item — DRVN is reviewing before any refund."
   );
   revalidatePath(`/orders/${order.id}`);
-  return { ok: "Flagged — DRVN will review the evidence before any refund moves." };
+  return {
+    ok: noteError
+      ? "Flagged — no refund moves until DRVN reviews it. Your note didn't save, so add the details in the order messages."
+      : "Flagged — DRVN will review the evidence before any refund moves.",
+  };
 }
 
 /** Buyer: withdraw a return that hasn't shipped. The dispute (if any) stays

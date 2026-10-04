@@ -20,7 +20,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * owning it, so a session would be an account-takeover hole: anyone could type
  * a stranger's email and land in their account. Ownership is proved later, by
  * opening the emailed magic link.
+ *
+ * For the same reason a guest order never lands in an account whose owner has
+ * already proven the address. It used to: anyone could buy as a guest with a
+ * member's email, the order appeared in that member's history, and the seller
+ * could then review "the buyer" — a paid-for rating on someone else's profile.
+ * That address now has to sign in to buy. The database backs this up: the
+ * seller can't review a buyer on any order placed before the buyer proved the
+ * address (20261005101000).
  */
+
+/** Shown when the typed address belongs to a member who has proven it. */
+export const MEMBER_EMAIL_AT_GUEST_CHECKOUT =
+  "That email already has a DRVN account. Sign in to buy with it, or use a different email.";
 
 export type GuestBuyer = {
   id: string;
@@ -53,9 +65,24 @@ export async function resolveGuestBuyer(
     reportError("[commerce] guest buyer lookup failed", lookupError);
     return { error: "We couldn't start that purchase. Nothing was charged." };
   }
-  // An existing account keeps its own name and settings — a guest checkout
-  // against a registered address attaches the order and stops there.
-  if (existing) return { buyer: { id: existing.user_id, created: false } };
+  if (existing) {
+    // An account nobody has proven yet — one an earlier guest checkout made,
+    // or a signup still waiting on its confirmation link — is no more anyone's
+    // than a new one would be, so the order joins it. Whoever opens the
+    // emailed link claims them together; until then the database treats these
+    // orders as guest orders. An account with a proven address is a member's,
+    // and only that member, signed in, can place orders in it.
+    const { data: account, error: accountError } = await admin.auth.admin.getUserById(existing.user_id);
+    if (accountError || !account?.user) {
+      reportError("[commerce] guest buyer account lookup failed", accountError);
+      return { error: "We couldn't start that purchase. Nothing was charged." };
+    }
+    if (account.user.email_confirmed_at || account.user.confirmed_at) {
+      return { error: MEMBER_EMAIL_AT_GUEST_CHECKOUT };
+    }
+    // It keeps its own name and settings — the order attaches and stops there.
+    return { buyer: { id: existing.user_id, created: false } };
+  }
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: normalized,

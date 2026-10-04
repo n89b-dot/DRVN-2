@@ -59,11 +59,14 @@ async function deliver(row: OutboxRow, url: string): Promise<void> {
   const order = row.order_id ? ` · order ${row.order_id.slice(0, 8)}` : "";
   const text = `[DRVN console] ${row.title}${amount}${order}${row.detail ? ` — ${row.detail}` : ""}`;
 
+  // The row id goes with every attempt, so a receiver that can deduplicate
+  // sees a re-send (after a lost "delivered" write) as the same alert.
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "idempotency-key": row.id },
     body: JSON.stringify({
       text,
+      alertId: row.id,
       kind: row.kind,
       title: row.title,
       detail: row.detail,
@@ -75,18 +78,57 @@ async function deliver(row: OutboxRow, url: string): Promise<void> {
   if (!res.ok) throw new Error(`webhook rejected delivery: HTTP ${res.status}`);
 }
 
-async function markDelivered(admin: Admin, id: string): Promise<void> {
-  await admin
+/** How long one delivery attempt holds a row before it can be tried again. */
+const DELIVERY_LEASE_MS = 10 * 60_000;
+
+/**
+ * Takes a pending row for one delivery attempt by pushing its next attempt
+ * out first. The inline send and the sweep can then never both deliver the
+ * same row, and if the "delivered" write below fails the row isn't re-sent
+ * until the lease runs out.
+ */
+async function claimForDelivery(admin: Admin, id: string): Promise<boolean> {
+  const now = Date.now();
+  const { data, error } = await admin
     .from("admin_alert_outbox")
-    .update({ status: "delivered", delivered_at: new Date().toISOString(), last_error: null })
-    .eq("id", id);
+    .update({ next_attempt_at: new Date(now + DELIVERY_LEASE_MS).toISOString() })
+    .eq("id", id)
+    .eq("status", "pending")
+    .lte("next_attempt_at", new Date(now).toISOString())
+    .select("id");
+  if (error) {
+    reportError("[alerts] outbox claim failed", { alertId: id, error });
+    return false;
+  }
+  return Boolean(data?.length);
+}
+
+/**
+ * Records a delivery. One retry, because a row left pending is sent again
+ * when its lease ends; if both writes fail that duplicate is reported, and
+ * the receiver can recognise it by the alert id.
+ */
+async function markDelivered(admin: Admin, id: string): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { error } = await admin
+      .from("admin_alert_outbox")
+      .update({ status: "delivered", delivered_at: new Date().toISOString(), last_error: null })
+      .eq("id", id);
+    if (!error) return;
+    if (attempt === 1) {
+      reportError("[alerts] delivered alert could not be marked; it will be re-sent", {
+        alertId: id,
+        error,
+      });
+    }
+  }
 }
 
 async function markAttemptFailed(admin: Admin, row: OutboxRow, error: unknown): Promise<void> {
   const attempts = row.attempts + 1;
   const exhausted = attempts >= MAX_DELIVERY_ATTEMPTS;
   const backoffMinutes = Math.min(2 ** Math.min(attempts, 7), 120);
-  await admin
+  const { error: writeError } = await admin
     .from("admin_alert_outbox")
     .update({
       status: exhausted ? "failed" : "pending",
@@ -95,6 +137,11 @@ async function markAttemptFailed(admin: Admin, row: OutboxRow, error: unknown): 
       last_error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
     })
     .eq("id", row.id);
+  // Unrecorded, the attempt still ends with the claim's lease, so the row is
+  // retried; only the attempt count and the reason are lost.
+  if (writeError) {
+    reportError("[alerts] failed delivery could not be recorded", { alertId: row.id, writeError });
+  }
   if (exhausted) {
     reportError("[alerts] delivery attempts exhausted", { alertId: row.id, kind: row.kind });
   }
@@ -128,6 +175,7 @@ export async function sendAdminAlert(alert: AdminAlert): Promise<void> {
     if (!inserted || !url) return;
 
     // Immediate best-effort delivery; the outbox owns any retry.
+    if (!(await claimForDelivery(admin, inserted.id))) return;
     try {
       await deliver(inserted, url);
       await markDelivered(admin, inserted.id);
@@ -159,6 +207,11 @@ export async function processAlertOutbox(
   if (pendingError) throw new Error("Alert queue unavailable");
 
   for (const row of pending ?? []) {
+    // Another sweep or the inline send has it; leave it to them.
+    if (!(await claimForDelivery(admin, row.id))) {
+      summary.skipped += 1;
+      continue;
+    }
     try {
       await deliver(row, url);
       await markDelivered(admin, row.id);

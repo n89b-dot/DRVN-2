@@ -5,13 +5,14 @@ const state = vi.hoisted(() => ({
   rpc: vi.fn(),
   create: vi.fn(),
   retrieve: vi.fn(),
+  stampError: null as { message: string } | null,
 }));
 
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: state.rpc,
-    from: () => ({ update: () => ({ in: async () => ({ error: null }) }) }),
+    from: () => ({ update: () => ({ in: async () => ({ error: state.stampError }) }) }),
   }),
 }));
 vi.mock("stripe", async (importOriginal) => {
@@ -56,6 +57,7 @@ beforeEach(() => {
   state.rpc.mockReset();
   state.create.mockReset();
   state.retrieve.mockReset();
+  state.stampError = null;
 });
 
 describe("provablyNotCreated", () => {
@@ -113,6 +115,18 @@ describe("StripePaymentProvider.createPayment", () => {
     state.create.mockRejectedValue(invalidRequest("amount_too_small"));
     const result = await new StripePaymentProvider().createPayment({ ...request, totalCents: 5000 });
     expect(result.status).toBe("unknown");
+  });
+
+  it("hands back the payment even when the diagnostics stamp fails", async () => {
+    state.rpc.mockImplementation(async (name: string) =>
+      name === "prepare_payment_request" ? prepared() : { data: true, error: null }
+    );
+    state.create.mockResolvedValue({ id: "pi_1", status: "requires_payment_method", client_secret: "secret_1" });
+    state.stampError = { message: "timeout" };
+    const result = await new StripePaymentProvider().createPayment({ ...request, totalCents: 5000 });
+    expect(result).toEqual({ status: "requires_action", reference: "pi_1", clientSecret: "secret_1" });
+    const { reportError } = await import("@/lib/monitoring");
+    expect(reportError).toHaveBeenCalledWith("[stripe] order correlation stamp failed", expect.anything());
   });
 
   it("never sends a rejected request to Stripe again", async () => {
