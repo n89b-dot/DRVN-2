@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { unstable_rethrow } from "next/navigation";
 
 import { AnimatePresence, motion } from "motion/react";
@@ -23,6 +23,7 @@ import {
 import { expand } from "@/lib/motion";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { useUploadQueue } from "@/lib/use-upload-queue";
 import { SortableGrid, SortableItem } from "@/components/ui";
 import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
@@ -112,8 +113,6 @@ export type SellFormInitialValues = {
   };
 };
 
-const subscribeNever = () => () => {};
-
 export function SellForm({
   cars,
   makes,
@@ -161,7 +160,7 @@ export function SellForm({
   // resets a controlled field to its state when it hydrates, so a price typed
   // while the page was still loading snapped back to the saved one. The form
   // stays disabled until it's live, as the sign-in form does.
-  const ready = useSyncExternalStore(subscribeNever, () => true, () => false);
+  const ready = useHydrated();
   const [sourceCarId, setSourceCarId] = useState(listing?.source_car_id ?? prefill?.carId ?? "");
   const [category, setCategory] = useState(listing?.category ?? prefill?.category ?? "");
   const [subcategory, setSubcategory] = useState(

@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition, type ReactNode } fro
 import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { ChatComposer, ResultNote } from "@/components/ui";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { uploadImages } from "@/lib/media-upload";
 import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
 
@@ -44,6 +45,9 @@ export function ConversationComposer({
   const router = useRouter();
   const identity = useRef<string | null>(null);
   const inFlight = useRef(false);
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const hydrated = useHydrated();
   const [body, setBody] = useState("");
   // The picked topic survives live refreshes; it falls back to the default
   // only when the deal it pointed at is gone.
@@ -154,6 +158,7 @@ export function ConversationComposer({
   }
 
   return (
+    <fieldset disabled={!hydrated} className="contents">
     <ChatComposer
       value={body}
       onValueChange={setBody}
@@ -199,5 +204,6 @@ export function ConversationComposer({
       }
       below={<ResultNote error={state.error ?? photos.find((p) => p.error)?.error} />}
     />
+    </fieldset>
   );
 }

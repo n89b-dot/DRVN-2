@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { Button, CountedField, TextField } from "@/components/ui";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { DISPLAY_NAME_MAX } from "@/lib/limits";
 
 import { completeOnboarding, type AuthState } from "../actions";
@@ -11,6 +12,9 @@ type Availability = "idle" | "checking" | "available" | "taken" | "invalid" | "u
 
 export function OnboardingForm({ email, next }: { email: string; next?: string }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(completeOnboarding, {});
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [username, setUsername] = useState("");
   const [availability, setAvailability] = useState<Availability>("idle");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,6 +65,7 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
       <p className="kv mt-3 text-dim">Signed up as {email}</p>
 
       <form action={action} className="mt-6">
+        <fieldset disabled={!ready} className="contents">
         {/* Where this account was headed before it had to pick a handle. */}
         {next && <input type="hidden" name="next" value={next} />}
         <TextField
@@ -136,6 +141,7 @@ export function OnboardingForm({ email, next }: { email: string; next?: string }
             </Button>
           </div>
         )}
+        </fieldset>
       </form>
     </div>
   );

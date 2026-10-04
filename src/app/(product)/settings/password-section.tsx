@@ -4,6 +4,7 @@ import { unstable_rethrow } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { Button, PasswordField, TextField } from "@/components/ui";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { changeEmail, changePassword, type AccountState } from "./account-actions";
 
@@ -22,6 +23,9 @@ function Feedback({ state }: { state: AccountState }) {
 
 /** Change email and password — neither was possible before. */
 export function PasswordSection({ currentEmail }: { currentEmail: string }) {
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [email, setEmail] = useState(currentEmail);
   const [emailState, setEmailState] = useState<AccountState>({});
   const [emailPending, startEmailTransition] = useTransition();
@@ -55,6 +59,7 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
         }}
         className="grid gap-3"
       >
+        <fieldset disabled={!ready} className="contents">
         <TextField
           id="account-email"
           label="Sign-in email"
@@ -92,6 +97,7 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           )}
         </div>
         <Feedback state={emailState} />
+        </fieldset>
       </form>
 
       <form
@@ -118,6 +124,7 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
         }}
         className="grid gap-3"
       >
+        <fieldset disabled={!ready} className="contents">
         <PasswordField
           id="account-current-password"
           label="Current password"
@@ -173,6 +180,7 @@ export function PasswordSection({ currentEmail }: { currentEmail: string }) {
           </Button>
         </div>
         <Feedback state={passwordState} />
+        </fieldset>
       </form>
     </div>
   );

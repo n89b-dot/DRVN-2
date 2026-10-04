@@ -311,6 +311,39 @@ test("login keeps early input safe while its client code is loading", async ({ p
   }
 });
 
+test("account settings keep early input safe while their client code is loading", async ({ page }) => {
+  const user = await fixture();
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  try {
+    await page.goto("/login");
+    await page.getByLabel(/^email$/i).fill(user.email);
+    await page.getByLabel(/^password$/i).fill(user.password);
+    await page.getByRole("button", { name: /log in|sign in/i }).click();
+    await page.waitForURL(/\/home/);
+
+    await page.route("**/_next/static/**/*.js", async (route) => {
+      await ready;
+      await route.continue();
+    });
+    await page.goto("/settings", { waitUntil: "commit" });
+    const email = page.getByLabel(/^sign-in email$/i);
+    const current = page.getByLabel(/^current password$/i);
+    await expect(email).toBeDisabled();
+    await expect(current).toBeDisabled();
+    release();
+    await expect(email).toBeEnabled();
+    await email.fill("early-settings-input@drvn.test");
+    await current.fill("Retain-this-input-123!");
+    await expect(email).toHaveValue("early-settings-input@drvn.test");
+    await expect(current).toHaveValue("Retain-this-input-123!");
+    await expect(page.getByRole("button", { name: /update email/i })).toBeEnabled();
+  } finally {
+    release();
+    const removed = await user.client.auth.admin.deleteUser(user.id); if (removed.error) throw removed.error;
+  }
+});
+
 test("an ended session sends a member's action to sign in, back to the same page", async ({ page }) => {
   const user = await fixture();
   try {

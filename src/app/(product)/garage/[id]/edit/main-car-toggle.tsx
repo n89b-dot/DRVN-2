@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 
+import { useHydrated } from "@/lib/hooks/useHydrated";
+
 import { setMainCar } from "../../actions";
 
 /**
@@ -14,6 +16,9 @@ import { setMainCar } from "../../actions";
  * did before this existed.
  */
 export function MainCarToggle({ carId, isMain }: { carId: string; isMain: boolean }) {
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [main, setMain] = useState(isMain);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -39,7 +44,7 @@ export function MainCarToggle({ carId, isMain }: { carId: string; isMain: boolea
         <input
           type="checkbox"
           checked={main}
-          disabled={pending}
+          disabled={pending || !ready}
           onChange={(e) => {
             // It saves by itself — kept from bubbling to the details form it
             // sits in, which would otherwise mark "Unsaved changes".

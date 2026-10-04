@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { adminRemoveReportedContent, adminResolveReport, adminResolveReports } from "@/lib/admin/actions";
 import type { AdminReportRow } from "@/lib/admin/queries";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { ActionDialog } from "../_components/action-dialog";
 
@@ -43,6 +44,9 @@ const OUTCOME_FIELDS = [
  * aborting the rest (see adminResolveReports).
  */
 export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
@@ -63,6 +67,7 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
             type="checkbox"
             className="sq"
             checked={allSelected}
+            disabled={!ready}
             onChange={toggleAll}
             aria-label="Select all reports shown"
           />
@@ -90,6 +95,7 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                   type="checkbox"
                   className="sq mt-1"
                   checked={selected.has(r.id)}
+                  disabled={!ready}
                   onChange={() => toggleOne(r.id)}
                   aria-label={`Select report on ${r.subjectLabel}`}
                 />
