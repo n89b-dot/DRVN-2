@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { allowAction, RATE_LIMITS, rateLimitMessage } from "@/lib/rate-limit";
 
 export type SaveTargetType = "listing" | "car" | "profile" | "post";
 export type LikeTargetType = "listing" | "car";
@@ -43,6 +44,12 @@ async function setRelationship(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "login" } as const;
+
+  // Likes and follows notify the member on the other end, so turning them on
+  // is throttled like any other notification source. Turning one off, and
+  // saves (private to the saver), are never limited.
+  const rule = !active ? null : kind === "follow" ? RATE_LIMITS.follow : kind === "like" ? RATE_LIMITS.react : null;
+  if (rule && !(await allowAction(rule, user.id))) return { error: rateLimitMessage(rule) } as const;
 
   const result = await supabase.rpc("set_social_relationship", {
     p_kind: kind,
