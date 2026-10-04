@@ -101,6 +101,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 import { checkoutCart, completeReservedOrder } from "./checkout-actions";
+import { getStripeCustomerId } from "@/lib/payments/customers";
 
 const pendingOfferOrder = {
   id: "order-1",
@@ -408,4 +409,26 @@ it("recognizes settlement that committed before its RPC response was lost", asyn
     .mockResolvedValueOnce({ data: { status: "paid" }, error: null });
   await expect(completeReservedOrder({}, checkoutForm())).rejects.toThrow("redirect:/orders/order-1");
   expect(mocks.redirect).toHaveBeenCalledWith("/orders/order-1");
+});
+
+it("says why a basket outside the card-charge bounds was refused, before anything is reserved", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  mocks.purchaseBegin.mockResolvedValue({ data: null, error: { code: "22003", message: "out of bounds" } });
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("between $0.50 and $999,999.99");
+  expect(mocks.createPayment).not.toHaveBeenCalled();
+  expect(mocks.reportError).not.toHaveBeenCalled();
+});
+
+it("reserves nothing when the saved Stripe customer can't be read", async () => {
+  mocks.cartIds.mockResolvedValue(["listing-1"]);
+  vi.mocked(getStripeCustomerId).mockRejectedValueOnce(new Error("Stripe customer lookup failed"));
+
+  const result = await checkoutCart({}, cartCheckoutForm());
+
+  expect(result.error).toContain("Nothing was charged");
+  expect(mocks.purchaseBegin).not.toHaveBeenCalled();
+  expect(mocks.createPayment).not.toHaveBeenCalled();
 });

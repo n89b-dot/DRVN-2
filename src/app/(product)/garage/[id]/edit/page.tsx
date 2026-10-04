@@ -12,6 +12,7 @@ import { ModsEditor } from "./mods-editor";
 import { ActivityComposer } from "./activity-composer";
 import { DangerZone } from "./danger-zone";
 import { postHeadline } from "@/lib/activity/headline";
+import { CAR_COLUMNS } from "@/lib/cars/columns";
 
 export const metadata = { title: "Manage car - DRVN" };
 
@@ -23,12 +24,17 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
 
   // RR-11: a failed read is a failed page, not "no such car" and not an
   // empty editor — the mod editor's save replaces the whole list.
-  const car = requiredRead(
-    await supabase.from("cars").select("*").eq("id", id).eq("owner_id", user.id).maybeSingle(),
+  const carRow = requiredRead(
+    await supabase.from("cars").select(CAR_COLUMNS).eq("id", id).eq("owner_id", user.id).maybeSingle(),
     "this car"
   );
 
-  if (!car) notFound();
+  if (!carRow) notFound();
+  // The VIN is the owner's alone (20261004160000): read through the one
+  // function that returns it only to them.
+  const { data: vin, error: vinError } = await supabase.rpc("my_car_vin", { p_car: id });
+  if (vinError) throw new Error("Couldn't load this car's VIN.");
+  const car = { ...carRow, vin: vin ?? null };
 
   const [imagesResult, modsResult, postsResult, hotspotsResult, profileResult] =
     await Promise.all([

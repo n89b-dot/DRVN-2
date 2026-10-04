@@ -91,106 +91,102 @@ export type AdminOverview = {
   removedListings: number;
 };
 
-const GMV_STATUSES: OrderStatus[] = [
-  "paid",
-  "shipped",
-  "delivered",
-  "completed",
-  "disputed",
-  "refunded",
-];
+type MoneyWindow = {
+  orders: number;
+  gmv_cents: number;
+  fee_cents: number;
+  refunded_cents: number;
+  fee_refunded_cents: number;
+};
 
+/** One window's order count and money, summed in the database
+ *  (admin_order_money_window): summing PostgREST rows here was capped at
+ *  max_rows and under-reported a busy week without saying so. */
+async function moneyWindow(a: Admin, from: string, to: string): Promise<MoneyWindow> {
+  const { data, error } = await a.rpc("admin_order_money_window", { p_from: from, p_to: to });
+  unlessFailed("the money totals", error);
+  const w = data as Partial<MoneyWindow> | null;
+  const keys = ["orders", "gmv_cents", "fee_cents", "refunded_cents", "fee_refunded_cents"] as const;
+  if (!w || keys.some((k) => typeof w[k] !== "number")) {
+    unlessFailed("the money totals", { message: "malformed money window" });
+  }
+  return w as MoneyWindow;
+}
+
+/** Every overview read is checked: a failed count must not render as 0. */
 export async function getOverview(): Promise<AdminOverview> {
   const a = admin();
+  const now = new Date().toISOString();
   const since7d = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const since14d = new Date(Date.now() - 14 * 86_400_000).toISOString();
   const slaCutoff = new Date(Date.now() - DISPUTE_SLA_DAYS * 86_400_000).toISOString();
 
-  const [
-    disputes,
-    overSla,
-    oldest,
-    reports,
-    recoveries,
-    stuck,
-    orders7,
-    orders7Prev,
-    refunds7,
-    refunds7Prev,
-    suspended,
-    removed,
-  ] = await Promise.all([
-    a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
-    a
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "disputed")
-      .lt("disputed_at", slaCutoff),
-    a
-      .from("orders")
-      .select("disputed_at")
-      .eq("status", "disputed")
-      .order("disputed_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
-    a.from("payment_recoveries").select("id", { count: "exact", head: true }).eq("status", "open"),
-    a
-      .from("transfer_intents")
-      .select("order_id", { count: "exact", head: true })
-      .in("status", ["blocked_unpayable", "failed"]),
-    a
-      .from("orders")
-      .select("total_cents, platform_fee_cents")
-      .gte("created_at", since7d)
-      .in("status", GMV_STATUSES),
-    a
-      .from("orders")
-      .select("total_cents, platform_fee_cents")
-      .gte("created_at", since14d)
-      .lt("created_at", since7d)
-      .in("status", GMV_STATUSES),
-    a
-      .from("orders")
-      .select("refunded_cents, platform_fee_refunded_cents")
-      .gt("refunded_cents", 0)
-      .gte("refunded_at", since7d),
-    a
-      .from("orders")
-      .select("refunded_cents, platform_fee_refunded_cents")
-      .gt("refunded_cents", 0)
-      .gte("refunded_at", since14d)
-      .lt("refunded_at", since7d),
-    a.from("profiles").select("id", { count: "exact", head: true }).not("suspended_at", "is", null),
-    a.from("listings").select("id", { count: "exact", head: true }).eq("status", "removed"),
-  ]);
+  const [disputes, overSla, oldest, reports, recoveries, stuck, week, prevWeek, suspended, removed] =
+    await Promise.all([
+      a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
+      a
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "disputed")
+        .lt("disputed_at", slaCutoff),
+      a
+        .from("orders")
+        .select("disputed_at")
+        .eq("status", "disputed")
+        .order("disputed_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
+      a.from("payment_recoveries").select("id", { count: "exact", head: true }).eq("status", "open"),
+      a
+        .from("transfer_intents")
+        .select("order_id", { count: "exact", head: true })
+        .in("status", ["blocked_unpayable", "failed"]),
+      // The current window runs to now, so it can't double-count with the
+      // previous one at the boundary.
+      moneyWindow(a, since7d, now),
+      moneyWindow(a, since14d, since7d),
+      a.from("profiles").select("id", { count: "exact", head: true }).not("suspended_at", "is", null),
+      a.from("listings").select("id", { count: "exact", head: true }).eq("status", "removed"),
+    ]);
+
+  unlessFailed("open disputes", disputes.error);
+  unlessFailed("disputes over SLA", overSla.error);
+  unlessFailed("the oldest dispute", oldest.error);
+  unlessFailed("open reports", reports.error);
+  unlessFailed("open payment recoveries", recoveries.error);
+  unlessFailed("stuck transfers", stuck.error);
+  unlessFailed("suspended members", suspended.error);
+  unlessFailed("removed listings", removed.error);
 
   const oldestDisputeDays = oldest.data?.disputed_at
     ? Math.floor((Date.now() - new Date(oldest.data.disputed_at).getTime()) / 86_400_000)
     : null;
 
   return {
-    openDisputes: disputes.count ?? 0,
-    disputesOverSla: overSla.count ?? 0,
+    openDisputes: counted(disputes.count),
+    disputesOverSla: counted(overSla.count),
     oldestDisputeDays,
-    openReports: reports.count ?? 0,
-    openRecoveries: recoveries.count ?? 0,
-    stuckTransfers: stuck.count ?? 0,
-    orders7d: orders7.data?.length ?? 0,
-    gmv7dCents: (orders7.data ?? []).reduce((s, o) => s + o.total_cents, 0),
-    refunds7dCents: (refunds7.data ?? []).reduce((s, o) => s + o.refunded_cents, 0),
-    fees7dCents:
-      (orders7.data ?? []).reduce((s, o) => s + o.platform_fee_cents, 0) -
-      (refunds7.data ?? []).reduce((s, o) => s + o.platform_fee_refunded_cents, 0),
-    orders7dPrev: orders7Prev.data?.length ?? 0,
-    gmv7dPrevCents: (orders7Prev.data ?? []).reduce((s, o) => s + o.total_cents, 0),
-    refunds7dPrevCents: (refunds7Prev.data ?? []).reduce((s, o) => s + o.refunded_cents, 0),
-    fees7dPrevCents:
-      (orders7Prev.data ?? []).reduce((s, o) => s + o.platform_fee_cents, 0) -
-      (refunds7Prev.data ?? []).reduce((s, o) => s + o.platform_fee_refunded_cents, 0),
-    suspendedSellers: suspended.count ?? 0,
-    removedListings: removed.count ?? 0,
+    openReports: counted(reports.count),
+    openRecoveries: counted(recoveries.count),
+    stuckTransfers: counted(stuck.count),
+    orders7d: week.orders,
+    gmv7dCents: week.gmv_cents,
+    refunds7dCents: week.refunded_cents,
+    fees7dCents: week.fee_cents - week.fee_refunded_cents,
+    orders7dPrev: prevWeek.orders,
+    gmv7dPrevCents: prevWeek.gmv_cents,
+    refunds7dPrevCents: prevWeek.refunded_cents,
+    fees7dPrevCents: prevWeek.fee_cents - prevWeek.fee_refunded_cents,
+    suspendedSellers: counted(suspended.count),
+    removedListings: counted(removed.count),
   };
+}
+
+/** An exact count PostgREST answered without one is a failure, not zero. */
+function counted(count: number | null): number {
+  if (count == null) unlessFailed("a queue count", { message: "count missing" });
+  return count as number;
 }
 
 // ---------- Shared party shape ----------
@@ -458,7 +454,8 @@ export type AdminOrderDetail = {
 
 export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail | null> {
   const a = admin();
-  const { data: order } = await a.from("orders").select("*").eq("id", orderId).maybeSingle();
+  const { data: order, error: orderError } = await a.from("orders").select("*").eq("id", orderId).maybeSingle();
+  unlessFailed("the order", orderError);
   if (!order) return null;
 
   const [items, payment, intent, messages, evidence, audit] = await Promise.all([
@@ -486,6 +483,11 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
+
+  // The money panel reads these two: unread must not show as "not charged"
+  // or "not transferred".
+  unlessFailed("the order's payment", payment.error);
+  unlessFailed("the order's transfer", intent.error);
 
   // Diagnostics feed (§AF): refund operations by order id; retained webhook
   // events matched on the payment-intent reference (either the event object
@@ -1298,6 +1300,14 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
       .limit(50),
   ]);
 
+  // Each panel is a queue an operator acts on; an unread one must not look
+  // empty.
+  unlessFailed("payment recoveries", recoveries.error);
+  unlessFailed("transfer intents", intents.error);
+  unlessFailed("webhook events", events.error);
+  unlessFailed("refund operations", refundOps.error);
+  unlessFailed("the admin alert backlog", alerts.error);
+
   const recoveryRows = recoveries.data ?? [];
   const intentRows = intents.data ?? [];
   const refundOpRows = refundOps.data ?? [];
@@ -1413,9 +1423,13 @@ export async function getAuditLog(
 
 // ---------- Nav counts ----------
 
-export type NavCounts = { disputes: number; reports: number; money: number };
+/** null = the count couldn't be read. The nav shows that, rather than a
+ *  missing badge that would read as "nothing waiting". */
+export type NavCounts = { disputes: number | null; reports: number | null; money: number | null };
 
-/** Live queue badges for the console nav — the backlog visible from anywhere. */
+/** Live queue badges for the console nav — the backlog visible from anywhere.
+ *  This runs in the console layout, so a failed count degrades its badge
+ *  instead of throwing the whole console into the error page. */
 export async function getNavCounts(): Promise<NavCounts> {
   const a = admin();
   const [disputes, reports, recoveries, stuck] = await Promise.all([
@@ -1427,10 +1441,17 @@ export async function getNavCounts(): Promise<NavCounts> {
       .select("order_id", { count: "exact", head: true })
       .in("status", ["blocked_unpayable", "failed"]),
   ]);
+  const read = (label: string, result: { count: number | null; error: { message: string } | null }) => {
+    if (!result.error && result.count != null) return result.count;
+    reportError(`[admin] nav count ${label} failed`, result.error ?? { message: "count missing" });
+    return null;
+  };
+  const recoveryCount = read("recoveries", recoveries);
+  const stuckCount = read("stuck transfers", stuck);
   return {
-    disputes: disputes.count ?? 0,
-    reports: reports.count ?? 0,
-    money: (recoveries.count ?? 0) + (stuck.count ?? 0),
+    disputes: read("disputes", disputes),
+    reports: read("reports", reports),
+    money: recoveryCount == null || stuckCount == null ? null : recoveryCount + stuckCount,
   };
 }
 
@@ -1568,22 +1589,31 @@ export async function listOpsCases(opts: {
   else query = query.neq("status", "resolved");
   if (opts.kind) query = query.eq("kind", opts.kind);
   if (opts.assignee) query = query.eq("assigned_to", opts.assignee);
-  const { data: cases } = await query;
+  const { data: cases, error: casesError } = await query;
+  unlessFailed("the case queue", casesError);
 
   const orderIds = (cases ?? []).flatMap((c) => (c.order_id ? [c.order_id] : []));
   const reportIds = (cases ?? []).flatMap((c) => (c.report_id ? [c.report_id] : []));
   const assigneeIds = [...new Set((cases ?? []).flatMap((c) => (c.assigned_to ? [c.assigned_to] : [])))];
-  const [{ data: items }, { data: reports }, { data: assignees }] = await Promise.all([
+  const none = { error: null };
+  const [
+    { data: items, error: itemsError },
+    { data: reports, error: reportsError },
+    { data: assignees, error: assigneesError },
+  ] = await Promise.all([
     orderIds.length
       ? a.from("order_items").select("order_id, title").in("order_id", orderIds)
-      : Promise.resolve({ data: [] as { order_id: string; title: string | null }[] }),
+      : Promise.resolve({ ...none, data: [] as { order_id: string; title: string | null }[] }),
     reportIds.length
       ? a.from("reports").select("id, subject_type, reason").in("id", reportIds)
-      : Promise.resolve({ data: [] as { id: string; subject_type: string; reason: string }[] }),
+      : Promise.resolve({ ...none, data: [] as { id: string; subject_type: string; reason: string }[] }),
     assigneeIds.length
       ? a.from("profiles").select("id, username, display_name").in("id", assigneeIds)
-      : Promise.resolve({ data: [] as { id: string; username: string | null; display_name: string | null }[] }),
+      : Promise.resolve({ ...none, data: [] as { id: string; username: string | null; display_name: string | null }[] }),
   ]);
+  unlessFailed("case subjects", itemsError);
+  unlessFailed("case reports", reportsError);
+  unlessFailed("case assignees", assigneesError);
 
   return (cases ?? []).map((c) => {
     const orderTitle = (items ?? []).find((i) => i.order_id === c.order_id)?.title;

@@ -201,12 +201,16 @@ export async function updateCar(_prev: ActionState, formData: FormData): Promise
   if (vinRaw && (vinRaw.length < 11 || vinRaw.length > 17)) {
     return { error: "That VIN doesn't look right — 17 characters on modern cars." };
   }
-  const { data: existing, error: existingError } = await supabase
+  const { data: existingCar, error: existingError } = await supabase
     .from("cars")
-    .select("vin, slug")
+    .select("slug")
     .eq("id", id)
     .maybeSingle();
-  if (existingError || !existing) return { error: "Car not found." };
+  if (existingError || !existingCar) return { error: "Car not found." };
+  // The VIN isn't a readable column (20261004160000); the owner gets it here.
+  const { data: existingVin, error: vinError } = await supabase.rpc("my_car_vin", { p_car: id });
+  if (vinError) return { error: "Couldn't load this car. Nothing was changed — try again." };
+  const existing = { ...existingCar, vin: existingVin ?? null };
 
   let make = String(formData.get("make") ?? "").trim() || null;
   let model = String(formData.get("model") ?? "").trim() || null;

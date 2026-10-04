@@ -83,19 +83,26 @@ Ops:
 
 | Variable | Purpose |
 |---|---|
-| `SENTRY_DSN` | Error reporting (required in live-money production) |
-| `ADMIN_ALERT_WEBHOOK_URL` | Operator alert destination (unset = alerts recorded as `disabled`, visible in admin) |
-| `CRON_SECRET` | Bearer token for `/api/jobs/transfers` |
-| `SUPABASE_DB_PASSWORD` | Direct-connection migrations (see `supabase/MIGRATIONS.md`) |
+| `SENTRY_DSN` | Error reporting. Live-money production: required, `https:` DSN |
+| `ADMIN_ALERT_WEBHOOK_URL` | Operator alert destination. Live-money production: required, `https:`; elsewhere unset = alerts recorded as `disabled`, visible in admin |
+| `CRON_SECRET` | Bearer for every `/api/jobs/*` route and `/api/health/workers`. Live-money production: required, ≥ 32 characters |
+| `GUEST_RECEIPT_SECRET` | Signs guest checkout cookies and keys guest abuse limits. Live-money production: required, ≥ 32 characters (any production build throws without it on first use) |
+| `TRUST_PROXY_HEADERS` | `true` only behind a proxy that overwrites `X-Forwarded-For`; otherwise all signed-out visitors share one rate-limit bucket |
+| `SUPABASE_DB_PASSWORD` | Direct-connection migrations (`scripts/apply-migration.mjs`, see `supabase/MIGRATIONS.md`) |
 
 **Production cannot silently run fake payments**: a missing Stripe key in
-production fails the boot (`src/instrumentation.ts` → `validatePaymentsEnv`).
+production fails the boot (`src/instrumentation.ts` → `validatePaymentsEnv`),
+and so does live-money production missing any of the values above or
+`NEXT_PUBLIC_SITE_URL` as an `https:` origin. The full table, with what each
+check enforces, is §4 of `docs/production-runbook.md`.
 
 ## Database & migrations
 
-Migrations live in `supabase/migrations/` (0001–0028), applied **in order**
-over a direct pg connection or the SQL editor — never `supabase db push`
-(no CLI history exists; it would run the destructive 0001). Full procedure,
+Migrations live in `supabase/migrations/` (`0001`–`0057`, then timestamped
+files), applied **in order** with `node scripts/apply-migration.mjs <file>` or
+the SQL editor — never `supabase db push` on the dev project (no CLI history
+exists there; it would run the destructive 0001). A new project seeds its
+history instead (`docs/production-runbook.md` §3). Full procedure,
 order table, and per-migration record: `supabase/MIGRATIONS.md`. Each file is
 idempotent with self-checks that raise on failure.
 
@@ -103,14 +110,17 @@ idempotent with self-checks that raise on failure.
 
 1. Test-mode keys in `.env.local`; webhook endpoint `/api/stripe/webhook`
    subscribing to `payment_intent.succeeded`, `payment_intent.payment_failed`,
-   `payment_intent.requires_action`, `charge.refunded`,
-   `charge.dispute.created`, `charge.dispute.closed`, `account.updated`.
+   `payment_intent.requires_action`, `charge.refunded`, `refund.created`,
+   `refund.updated`, `refund.failed`, `charge.dispute.created`,
+   `charge.dispute.closed`, `account.updated` (the cases in
+   `dispatchStripeEvent`, `src/lib/payments/settlement.ts`).
 2. Connect (Express) for sellers — onboarding from Selling → Payouts
    (`/payouts`; Settings → Payments links there); `payouts_enabled` syncs via
    `account.updated`.
-3. Schedule the worker: POST `/api/jobs/transfers` with `Authorization:
-   Bearer $CRON_SECRET` every ~10 min (pg_cron + pg_net wiring in
-   `supabase/MIGRATIONS.md`), or run it from Admin → Payments.
+3. Point the scheduler at the app: the migrations create nine pg_cron jobs;
+   the HTTP ones reach `/api/jobs/*` once `job_config` holds the worker URL
+   and `CRON_SECRET` (`docs/production-runbook.md` §4). Admin → Payments →
+   "Run worker now" runs the money pass by hand.
 
 ## Storage
 

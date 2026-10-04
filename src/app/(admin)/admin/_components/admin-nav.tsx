@@ -88,7 +88,7 @@ export function AdminNav({
 
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
-  const badgeFor: Record<string, number> = {
+  const badgeFor: Record<string, number | null> = {
     "/admin/disputes": counts.disputes,
     "/admin/reports": counts.reports,
     "/admin/payments": counts.money,
@@ -127,7 +127,7 @@ export function AdminNav({
       <nav aria-label="Console sections" className="filters console-nav !mb-0">
         {LINKS.map(({ href, label, icon }) => {
           const active = isActive(href);
-          const badge = badgeFor[href] ?? 0;
+          const badge = href in badgeFor ? badgeFor[href] : 0;
           return (
             <Link
               key={href}
@@ -137,11 +137,15 @@ export function AdminNav({
             >
               <Icon name={icon} className="h-[14px] w-[14px]" />
               {label}
-              {badge > 0 && (
+              {badge === null ? (
+                <span className="n n--live" aria-label="Count unavailable" title="Count unavailable">
+                  ?
+                </span>
+              ) : badge > 0 ? (
                 <span className="n n--live" aria-label={`${badge} waiting`}>
                   {badge}
                 </span>
-              )}
+              ) : null}
             </Link>
           );
         })}
@@ -190,7 +194,7 @@ export function AdminNav({
             <nav className="index__rows" aria-label="All console sections">
               {LINKS.map(({ href, label, note, icon }, i) => {
                 const here = isActive(href);
-                const badge = badgeFor[href] ?? 0;
+                const badge = href in badgeFor ? badgeFor[href] : 0;
                 return (
                   <Link
                     key={href}
@@ -208,6 +212,10 @@ export function AdminNav({
                     <span className="indexrow__note">{note}</span>
                     {here ? (
                       <span className="indexrow__end chip chip--live">Here</span>
+                    ) : badge === null ? (
+                      <span className="indexrow__end chip chip--live" aria-label="Count unavailable">
+                        Unavailable
+                      </span>
                     ) : badge > 0 ? (
                       <span
                         className="indexrow__end chip chip--live"

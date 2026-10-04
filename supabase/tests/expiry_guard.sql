@@ -3,7 +3,7 @@ do $$
 declare buyer uuid:=gen_random_uuid(); seller uuid:=gen_random_uuid(); listing uuid; oid uuid; r jsonb; job uuid; lease uuid;
 begin
  insert into auth.users(id,email) values(buyer,'expiry-buyer@example.test'),(seller,'expiry-seller@example.test');
- insert into public.listings(seller_id,title,category,price_cents,shipping_cents,status,currency) values(seller,'Expiry guard','engine',10000,0,'active','GBP') returning id into listing;
+ insert into public.listings(seller_id,title,category,price_cents,shipping_cents,status,currency) values(seller,'Expiry guard','engine',10000,0,'active','USD') returning id into listing;
  r:=public.purchase_begin(buyer,array[listing],'expiry:fixture'); oid:=(r->'orders'->0->>'order_id')::uuid;
  if oid is null then raise exception 'Fixture order missing'; end if;
  -- A persisted creation with no returned reference is uncertain, never unpaid.
@@ -40,7 +40,7 @@ begin
   raise exception 'Closed order accepted new payment';
  exception when raise_exception then if sqlerrm not like 'Checkout is closing%' then raise; end if; end;
  -- Late capture remains compensated, even after confirmed cancellation was recorded locally.
- perform public.settle_payment_capture('pi_expiry_guard',array[oid],10000,'gbp','ch_expiry',buyer);
+ perform public.settle_payment_capture('pi_expiry_guard',array[oid],10000,'usd','ch_expiry',buyer);
  if not exists(select 1 from public.refund_operations where order_id=oid and purpose='late_capture') then raise exception 'Late compensation missing'; end if;
  if not exists(select 1 from public.listings where id=listing and status='active') then raise exception 'Late capture reclaimed listing'; end if;
  if has_function_privilege('authenticated','public.finish_reservation_expiry(uuid,uuid,text)','EXECUTE') then raise exception 'Public expiry permission'; end if;
@@ -50,7 +50,7 @@ do $$
 declare buyer uuid:=gen_random_uuid(); seller uuid:=gen_random_uuid(); listing uuid; oid uuid; r jsonb; job uuid; lease uuid:=gen_random_uuid();
 begin
  insert into auth.users(id,email) values(buyer,'expiry-empty-buyer@example.test'),(seller,'expiry-empty-seller@example.test');
- insert into public.listings(seller_id,title,category,price_cents,status,currency) values(seller,'No provider creation','engine',1000,'active','GBP') returning id into listing;
+ insert into public.listings(seller_id,title,category,price_cents,status,currency) values(seller,'No provider creation','engine',1000,'active','USD') returning id into listing;
  r:=public.purchase_begin(buyer,array[listing],'expiry:empty'); oid:=(r->'orders'->0->>'order_id')::uuid;
  update public.listings set reserved_until=now()-interval '1 minute' where id=listing;
  perform public.release_expired_reservations();

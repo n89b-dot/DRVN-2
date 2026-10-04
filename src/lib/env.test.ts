@@ -13,6 +13,7 @@ const LIVE = {
   NODE_ENV: "production",
   STRIPE_SECRET_KEY: "sk_live_x",
   STRIPE_WEBHOOK_SECRET: "whsec_x",
+  STRIPE_CONNECT_WEBHOOK_SECRET: "whsec_connect_x",
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_live_x",
   SENTRY_DSN: "https://k@o.ingest.sentry.io/1",
   ADMIN_ALERT_WEBHOOK_URL: "https://hooks.example/x",
@@ -81,6 +82,7 @@ describe("validatePaymentsEnv", () => {
   it("throws when live production lacks webhook secret, publishable key, or monitoring", () => {
     for (const missing of [
       "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_CONNECT_WEBHOOK_SECRET",
       "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
       "SENTRY_DSN",
     ]) {

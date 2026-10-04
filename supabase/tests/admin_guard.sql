@@ -60,11 +60,11 @@ begin
   insert into public.listings
     (seller_id, title, category, price_cents, shipping_cents, status, currency)
   values
-    (v_seller, 'Admin guard manifold', 'engine', 30000, 1000, 'active', 'GBP')
+    (v_seller, 'Admin guard manifold', 'engine', 30000, 1000, 'active', 'USD')
   returning id into v_listing;
 
   insert into public.orders (buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, shipping_cents, total_cents, currency)
-  values (v_civilian, v_seller, 'paid', 30000, 3000, 1000, 31000, 'GBP')
+  values (v_civilian, v_seller, 'paid', 30000, 3000, 1000, 31000, 'USD')
   returning id into v_order;
 
   insert into public.admin_users (user_id, note) values (v_admin, 'guard fixture');
