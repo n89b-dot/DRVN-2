@@ -2,8 +2,8 @@
 
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { useRouter } from "next/navigation";
-import { useActionState, useMemo, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useActionState, useMemo, useRef, useState, useTransition } from "react";
 
 import {
   createCardSetupIntent,
@@ -12,6 +12,8 @@ import {
 import type { CommerceState } from "@/features/commerce/actions";
 import type { SavedCard } from "@/lib/payments/customers";
 import { Dialog, ObjectRow, Toast } from "@/components/ui";
+
+import { setupAlreadySaved } from "./card-setup";
 
 /**
  * P22 — saved cards in Settings. Reference pass: Preply (concise section),
@@ -28,16 +30,33 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
   const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [savedToast, setSavedToast] = useState(false);
+  // A transition, so a redirect the action already followed (a session that
+  // ended server-side) lands in Next's redirect boundary instead of a second
+  // navigation. The ref stops a double click from starting two setups before
+  // `starting` renders.
+  const [starting, startTransition] = useTransition();
+  const startingRef = useRef(false);
 
-  async function startAdd() {
+  function startAdd() {
+    if (startingRef.current) return;
+    startingRef.current = true;
     setSetupError(null);
-    const result = await createCardSetupIntent();
-    if (result.clientSecret) {
-      setSetupSecret(result.clientSecret);
-      setAdding(true);
-    } else {
-      setSetupError(result.error ?? "Couldn't start card setup.");
-    }
+    startTransition(async () => {
+      try {
+        const result = await createCardSetupIntent();
+        if (result.clientSecret) {
+          setSetupSecret(result.clientSecret);
+          setAdding(true);
+        } else {
+          setSetupError(result.error ?? "Couldn't start card setup.");
+        }
+      } catch (error) {
+        unstable_rethrow(error);
+        setSetupError("Couldn't start card setup. Check your connection and try again.");
+      } finally {
+        startingRef.current = false;
+      }
+    });
   }
 
   return (
@@ -77,8 +96,8 @@ export function PaymentMethods({ cards }: { cards: SavedCard[] }) {
         </div>
       )}
 
-      <button type="button" onClick={startAdd} className="jumplink mt-3 text-left">
-        + Add a card
+      <button type="button" onClick={startAdd} disabled={starting} className="jumplink mt-3 text-left">
+        {starting ? "Starting…" : "+ Add a card"}
       </button>
       <p className="field__hint mt-2">
         Card details are held by Stripe — DRVN never sees them.
@@ -155,22 +174,35 @@ function AddCardInner({ onSaved, onClose }: { onSaved: () => void; onClose: () =
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `disabled` only lands on the next render; a quick second submit must not
+  // start a second confirmation.
+  const inFlight = useRef(false);
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError(null);
-    const { error: setupError } = await stripe.confirmSetup({
-      elements,
-      redirect: "if_required",
-    });
-    if (setupError) {
-      setError(setupError.message ?? "Couldn't save the card.");
+    try {
+      const { error: setupError } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+      });
+      if (setupError && !setupAlreadySaved(setupError)) {
+        setError(setupError.message ?? "Couldn't save the card.");
+        return;
+      }
+      onSaved();
+    } catch {
+      // Stripe.js itself failed (usually the network). Confirming the same
+      // SetupIntent again can't add the card twice: if it was saved, the
+      // retry is refused and counted as saved above.
+      setError("We couldn't reach the payment provider. Try again — the card can only be added once.");
+    } finally {
+      inFlight.current = false;
       setSubmitting(false);
-      return;
     }
-    onSaved();
   }
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { Alert, Button, Checkbox, Stepper, TextArea, TextField } from "@/components/ui";
 import type { ImportProgress } from "@/lib/listing-import/engine";
@@ -100,6 +100,26 @@ export function ImportFlow({
   }
 
   const importId = importOverride === "cleared" ? null : (importOverride ?? startedId);
+
+  // Choosing an item and retrying are Server Actions called from a click.
+  // They run in a transition, so a redirect the action already followed (a
+  // session that ended server-side) lands in Next's redirect boundary instead
+  // of a second navigation. Any other failure needs nothing here: the import
+  // is durable and the poll loop below picks it back up from wherever the
+  // server got to.
+  const [, startStep] = useTransition();
+  function runStep(step: () => Promise<ImportProgress | { error: string }>) {
+    setProgress(null);
+    startStep(async () => {
+      try {
+        const result = await step();
+        if ("error" in result) setFatal(result.error);
+        else setProgress(result);
+      } catch (error) {
+        unstable_rethrow(error);
+      }
+    });
+  }
 
   const ready = progress?.status === "ready" && !progress.multipleItems;
 
@@ -246,13 +266,7 @@ export function ImportFlow({
               <button
                 type="button"
                 className="tile w-full text-left transition hover:border-[var(--ink)]"
-                onClick={() => {
-                  setProgress(null);
-                  void chooseImportItem(progress.id, index).then((result) => {
-                    if ("error" in result) setFatal(result.error);
-                    else setProgress(result);
-                  });
-                }}
+                onClick={() => runStep(() => chooseImportItem(progress.id, index))}
               >
                 <span className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-body">{item.label}</span>
@@ -314,13 +328,7 @@ export function ImportFlow({
             <Button
               type="button"
               variant="ghost"
-              onClick={() => {
-                setProgress(null);
-                void retryImport(progress.id).then((result) => {
-                  if ("error" in result) setFatal(result.error);
-                  else setProgress(result);
-                });
-              }}
+              onClick={() => runStep(() => retryImport(progress.id))}
             >
               Try again
             </Button>
