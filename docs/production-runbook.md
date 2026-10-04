@@ -19,93 +19,125 @@ baselined migration history, rehearsed restore.
 
 ## 2. Apply the schema
 
-On a **fresh** project the whole migration tree applies cleanly in order —
-0001 is only destructive against an existing schema:
+On a **fresh, empty** project the whole migration tree applies cleanly in
+filename order. 0001 drops every table in `public` — it is only safe on an
+empty database. **Never replay the tree (or 0001) against a project that
+already has a schema**; for an existing project apply only the reviewed,
+unapplied files, as recorded in `supabase/MIGRATIONS.md`.
+
+`scripts/apply-migration.mjs` is the committed runner: it reads
+`SUPABASE_DB_PASSWORD` and `NEXT_PUBLIC_SUPABASE_URL` from `.env.local`,
+connects directly to `db.<ref>.supabase.co:5432` (IPv6 unless the project has
+the IPv4 add-on), runs one file and notifies PostgREST to reload its schema.
+Point `.env.local` at the target project first, then:
 
 ```bash
-# from the repo root; DB_URL is the production connection string
+# from the repo root, against a FRESH project only
 for f in supabase/migrations/*.sql; do
   echo "== $f"
-  node scripts/apply-migration.mjs "$f"   # or paste each into the SQL editor
+  node scripts/apply-migration.mjs "$f" || break
 done
 ```
 
-(There is no `scripts/apply-migration.mjs` committed — use the node-postgres
-runner documented in `supabase/MIGRATIONS.md`, or the SQL editor. CI proves
-the tree applies cleanly to a blank Postgres on every push.)
+Each file is a transaction with its own self-checks; a failing self-check
+raises and the loop stops. The dashboard SQL editor is the alternative.
+`supabase db push` is not used (see §3 for why history is seeded instead).
 
-Then verify, exactly as CI does:
+Then verify:
 
-- `supabase/tests/purchase_guard.sql` — all nine PASS notices
-- `supabase/tests/admin_guard.sql` — "all admin-guard checks passed"
-- `supabase/tests/security_guard.sql` — "all security-guard checks passed"
-- `supabase/tests/money_guard.sql` — "all money-guard checks passed"
+- The guard suites are **not** run against a hosted project — they insert
+  fixture rows (rolled back) and `scripts/test-sql-guards.sh` refuses any
+  non-local host. CI's `sql-guard` job builds a blank Postgres from the same
+  chain on every push and runs every `supabase/tests/*_guard.sql` (55+
+  suites; each must print `all … checks passed`). Confirm that job is green
+  for the exact commit you applied.
+- On the hosted project: every file's self-check NOTICEs appeared with no
+  error; `select jobname, schedule from cron.job order by 1;` lists the nine
+  jobs in §4; `select id, public from storage.buckets order by 1;` lists the
+  buckets the migrations create (avatars, car-images, activity-images,
+  listing-images public; dispute-evidence, message-photos, account-exports
+  private).
 
-## 3. Baseline the migration history
+## 3. Seed the migration history
 
-So the Supabase CLI is usable against production from day one (unlike dev,
-where 0001–0005 predate any recorded history and `supabase db push` would
-re-run 0001):
+So the Supabase CLI recognises what has been applied (and never tries to run
+0001), record every applied file in `supabase_migrations.schema_migrations`.
+The version is the filename up to the first underscore (`0001`, …,
+`20261004150000`); the name is the rest. Generate the statement from the
+files actually applied rather than maintaining a list by hand:
 
-```sql
-create schema if not exists supabase_migrations;
-create table if not exists supabase_migrations.schema_migrations (
-  version text primary key,
-  statements text[],
-  name text
-);
-insert into supabase_migrations.schema_migrations (version, name)
-select
-  split_part(f, '_', 1),
-  f
-from unnest(array[
-  '0001_v3_schema', '0002_engagement_visibility', '0003_activity_engagement',
-  '0004_profile_headline', '0005_notification_prefs', '0006_security_hardening',
-  '0007_commerce_lifecycle', '0008_indexes_and_search', '0009_notifications',
-  '0010_listing_part_number', '0011_listing_views', '0012_commerce_hardening',
-  '0013_scheduled_jobs', '0014_disputes', '0015_stripe_customers',
-  '0016_connect_accounts', '0017_lock_payment_columns', '0018_admin',
-  '0019_money_infra', '0020_transfer_scheduling', '0021_dispute_sla',
-  '0022_sla_alert_stamp', '0023_admin_roles_webhook_payloads',
-  '0024_grading_dispute_process', '0025_fitment', '0026_money_durability',
-  '0027_evidence_privacy', '0028_shipping_address_region'
-]) as f
-on conflict do nothing;
+```bash
+{
+  echo "create schema if not exists supabase_migrations;"
+  echo "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text);"
+  echo "insert into supabase_migrations.schema_migrations (version, name) values"
+  for f in supabase/migrations/*.sql; do
+    b=$(basename "$f" .sql); printf "  ('%s', '%s'),\n" "${b%%_*}" "${b#*_}"
+  done | sed '$ s/),$/)/'
+  echo "on conflict (version) do nothing;"
+} > /tmp/drvn-migration-history.sql
 ```
 
-Keep this list in lockstep with `supabase/migrations/` whenever a new file
-lands.
+Review the file, then run it in the SQL editor (or with
+`node scripts/apply-migration.mjs /tmp/drvn-migration-history.sql`). Re-run
+it after each later migration lands; `on conflict do nothing` makes it
+idempotent. Keep `supabase/MIGRATIONS.md` as the human record of what was
+applied where and when.
 
 ## 4. Wire the app
 
-Environment (deployment platform):
+Environment (deployment platform). Boot-time validation:
+`src/instrumentation.ts` runs `validatePaymentsEnv()` (`src/lib/env.ts`). In
+**live-money mode** — `NODE_ENV=production` with Stripe selected — every row
+marked *required (live)* is checked together and the server refuses to start
+if any is missing or invalid.
 
-| Variable | Notes |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | production project |
-| `SUPABASE_SECRET_KEY` | service role — server only |
-| `STRIPE_SECRET_KEY` | `sk_live_…` flips `paymentsAreLive()`; the terms' test-mode clause must be removed at the same moment |
-| `STRIPE_WEBHOOK_SECRET` | from the production webhook endpoint below |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | live publishable key |
-| `CRON_SECRET` | random 32+ chars; gates every `/api/jobs/*` route (transfers, search, account-deletions, saved-searches, media-gc, listing-imports) |
-| `SENTRY_DSN` | **required in live-money production** — boot fails without it (`validatePaymentsEnv`) |
-| `ADMIN_ALERT_WEBHOOK_URL` | operator alerts (Slack-compatible). Unset = alerts accumulate as `disabled` outbox rows, visible in Admin → Payments |
-| `PAYMENTS_MODE` | optional; set `stripe` explicitly in production. Production **refuses** stub mode without `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true` |
-| `NEXT_PUBLIC_SITE_URL` | production origin |
-
-Boot-time validation: `src/instrumentation.ts` runs `validatePaymentsEnv()` —
-a production deploy missing Stripe keys, webhook secret, publishable key, or
-`SENTRY_DSN` fails at startup, loudly, instead of running fake payments.
+| Variable | Live-money production | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | required | production project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (or legacy `…_ANON_KEY`) | required | browser-safe key |
+| `SUPABASE_SECRET_KEY` (or legacy `SUPABASE_SERVICE_ROLE_KEY`) | required | server only; bypasses RLS |
+| `PAYMENTS_MODE` | recommended `stripe` | unset = `stripe` when `STRIPE_SECRET_KEY` is set. Production refuses stub mode (or a missing key) unless `PAYMENTS_ALLOW_STUB_IN_PRODUCTION=true`, which is for non-public sandboxes only |
+| `STRIPE_SECRET_KEY` | required | `sk_live_…` flips `paymentsAreLive()`; the terms' and fees page's test-mode notices disappear at the same moment |
+| `STRIPE_WEBHOOK_SECRET` | required (live) | signing secret of the platform endpoint below |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | required (live) | signing secret of the Connect endpoint (`account.updated` on sellers' accounts) |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | required (live) | live publishable key |
+| `SENTRY_DSN` | required (live) | must be an `https:` DSN with a key and a numeric project path (`https://<key>@<host>/<project id>`) |
+| `ADMIN_ALERT_WEBHOOK_URL` | required (live), `https:` | operator alerts (Slack-compatible body). Outside live-money mode it may be unset; alerts then accumulate as `disabled` outbox rows in Admin → Payments |
+| `NEXT_PUBLIC_SITE_URL` | required (live), `https:` | the canonical origin only — no path, query, fragment or credentials |
+| `CRON_SECRET` | required (live), ≥ 32 chars | bearer for every `/api/jobs/*` route and `/api/health/workers`; the same value goes in `job_config.transfer_worker_secret` and the monitor's `DRVN_MONITOR_SECRET` |
+| `GUEST_RECEIPT_SECRET` | required (live), ≥ 32 chars | signs guest receipt and checkout-identity cookies and keys the hashed network identity used for guest abuse limits. Any production build without it throws on the first guest checkout or anonymous rate-limit check. Rotating it invalidates outstanding guest receipts |
+| `TRUST_PROXY_HEADERS` | set `true` only behind a verified proxy | when `true`, the first `X-Forwarded-For` address (hashed) identifies signed-out visitors for checkout and error-report rate limits. Unset/`false`: every signed-out visitor shares one `unattributed` bucket — safe, but one busy visitor can rate-limit all guests. Only enable once you have confirmed (from the host's documentation and a test request with a forged header) that the ingress replaces client-supplied `X-Forwarded-For` with the real client address |
+| `FLAG_INTEGRATED_SHIPPING_V1`, `EASYPOST_API_KEY`, `EASYPOST_WEBHOOK_SECRET` | optional | DRVN Shipping; see §10. `SHIPPING_MODE` / `SHIPPING_ALLOW_STUB_IN_PRODUCTION` override |
+| `ANTHROPIC_API_KEY` (+ `LISTING_IMPORT_MODEL`, `LISTING_IMPORT_AI_MODE`) | optional | listing importer; unset in production = importing shows "temporarily unavailable" |
+| `TYPESENSE_URL`, `TYPESENSE_API_KEY` | optional | both set = Typesense search; unset = Postgres search, and the `search` health family reports disabled |
+| `POSTHOG_KEY`, `POSTHOG_HOST` | optional | consented analytics only; unset = the `analytics` health family reports disabled |
+| `SENTRY_RELEASE` | optional | release tag; falls back to the platform's commit SHA |
 
 Stripe (live mode):
 
-1. Webhook endpoint → `https://<domain>/api/stripe/webhook`, events:
+1. Webhook endpoint (events on **your account**) →
+   `https://<domain>/api/stripe/webhook`, subscribed to exactly the events
+   `dispatchStripeEvent` (`src/lib/payments/settlement.ts`) handles:
    `payment_intent.succeeded`, `payment_intent.payment_failed`,
-   `payment_intent.requires_action`, `charge.refunded`,
-   `charge.dispute.created`, `charge.dispute.closed`, `account.updated`.
-2. Connect enabled, Express accounts, GB.
+   `payment_intent.requires_action`, `charge.refunded`, `refund.created`,
+   `refund.updated`, `refund.failed`, `charge.dispute.created`,
+   `charge.dispute.closed`, `account.updated`. Anything else is acknowledged
+   as irrelevant. Its signing secret is `STRIPE_WEBHOOK_SECRET`.
+2. Connect enabled, Express accounts (transfers capability). Charges are
+   separate charges and transfers on the platform account, so payment, refund
+   and dispute events arrive on the platform endpoint above.
+   `account.updated` for a seller's Express account is an event on the
+   *connected* account, delivered only to a **Connect endpoint**: add a second
+   endpoint ("events on connected accounts") at the same URL with the single
+   event `account.updated`, and put its signing secret in
+   `STRIPE_CONNECT_WEBHOOK_SECRET`. The route accepts an event signed with
+   either secret. Without it a seller whose payouts are switched on (or off)
+   after onboarding isn't picked up, and transfers blocked on an unpayable
+   seller stay blocked; live mode refuses to start without it.
 
-Scheduler → worker handoff (0020):
+Scheduler → worker handoff (0020). All HTTP workers derive their URL from
+this one row and authenticate with this secret:
 
 ```sql
 insert into public.job_config (key, value) values
@@ -114,9 +146,23 @@ insert into public.job_config (key, value) values
 on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
 
-Confirm the four cron jobs exist: `select jobname, schedule from cron.job;` →
-`drvn-release-reservations`, `drvn-prune-rate-limits`,
-`drvn-transfer-worker`, `drvn-dispute-sla`.
+Confirm the nine pg_cron jobs (times are the database's UTC):
+
+| Job | Schedule | Runs |
+|---|---|---|
+| `drvn-release-reservations` | `*/5 * * * *` | `release_expired_reservations()` (SQL) — lapsed checkout holds and offers |
+| `drvn-prune-rate-limits` | `15 3 * * *` | `prune_rate_limits()` (SQL) — counters older than a day |
+| `drvn-transfer-worker` | `*/10 * * * *` | `mark_due_transfer_intents()` then `invoke_transfer_worker()` → `POST /api/jobs/transfers` (the whole money pass) |
+| `drvn-dispute-sla` | `5 8 * * *` | `escalate_stale_disputes()` (SQL) |
+| `drvn-search-worker` | `*/2 * * * *` | `invoke_remediation_worker('search')` → `/api/jobs/search` |
+| `drvn-deletion-worker` | `*/5 * * * *` | `invoke_remediation_worker('account-deletions')` → `/api/jobs/account-deletions` (deletions and exports) |
+| `drvn-media-gc` | `17 3 * * *` | `invoke_remediation_worker('media-gc')` → `/api/jobs/media-gc` |
+| `drvn-saved-search-worker` | `*/30 * * * *` | `invoke_remediation_worker('saved-searches')` → `/api/jobs/saved-searches` |
+| `drvn-listing-import-sweep` | `37 3 * * *` | `invoke_remediation_worker('listing-imports')` → `/api/jobs/listing-imports` (20261004150000) |
+
+`select jobname, schedule from cron.job order by 1;` must return exactly
+these. Without the `job_config` rows the SQL jobs still run, but every HTTP
+worker returns immediately without calling the app.
 
 ## 5. Seed the first admin
 
@@ -226,7 +272,7 @@ Hosted acceptance still requires:
 
 - [ ] Legal pages carry the real entity/jurisdiction/tax terms (being handled
       separately) and the test-mode clause is gone.
-- [ ] CI is a required check (public repo or paid plan — branch protection).
+- [ ] `release-gate` is the required check on `main` (§8; public repo or GitHub Pro).
 - [ ] `job_config` points at the production worker URL.
 - [ ] A dispute, a refund, and a payout have each been exercised once in live
       mode with a real card and a Connect test seller before public launch.
@@ -243,7 +289,7 @@ the API call below):
 - **Rules:**
   - Require a pull request before merging — 0 required approvals (solo-maintained;
     the point is routing changes through CI, not review bureaucracy)
-  - Require status checks to pass: `verify`, `sql-guard`
+  - Require status checks to pass: `release-gate` (only — see below)
   - Block force pushes (on by default in rulesets)
 
 ```bash
@@ -267,18 +313,45 @@ longer self-skips; it runs on a local stack in CI). `secrets` scans only the
 commits a PR or push adds (first-parent, no merges); `secrets-full` is the
 full-history lane — every reachable commit, merges included, plus the tracked
 tree — and is what fails a key committed and later deleted (added 3 October
-2026). Enforce the same check at the deployment boundary too: a
+2026). `stripe-integration` needs the repository secret
+`STRIPE_TEST_SECRET_KEY` (a Stripe **test-mode** secret key, `sk_test_…`);
+without it that job fails on purpose, so `release-gate` cannot pass. Enforce the same check at the deployment boundary too: a
 protected branch doesn't stop a deploy of an unchecked commit.
 
 ## 9. Saved-search alert worker
 
-Schedule `POST /api/jobs/saved-searches` with `Authorization: Bearer
-$CRON_SECRET` every ~30 minutes (same pattern as `/api/jobs/transfers` —
-pg_cron + pg_net, or any external cron). One pass checks every alert-enabled
+Scheduled by pg_cron (`drvn-saved-search-worker`, every 30 minutes — §4);
+nothing to set up beyond `job_config`. One pass checks every alert-enabled
 saved search for listings created since its last check and raises at most one
 in-app notification per search per pass. A search's first pass after opt-in
 only stamps the baseline — nobody is alerted about inventory that predates
-their opt-in. `/api/jobs/media-gc` shares the same scheduling posture.
+their opt-in. `/api/jobs/media-gc` and `/api/jobs/listing-imports` are
+scheduled the same way. To run any of them by hand:
+`curl -X POST https://<domain>/api/jobs/<name> -H "Authorization: Bearer $CRON_SECRET"`.
+
+## 9b. Independent worker monitor (GitHub Actions)
+
+`.github/workflows/worker-monitor.yml` runs `node scripts/check-worker-health.mjs`
+every 15 minutes (GitHub may delay or skip scheduled runs under load) and on
+manual dispatch. It calls `GET <origin>/api/health/workers` and fails the run when any worker
+family is stale, missing or failing, or a queue is overdue. GitHub sends
+failure notifications for scheduled runs to the account that last changed the
+workflow's `cron` line — make sure that is the operator. It is skipped entirely until
+configured. In **Settings → Secrets and variables → Actions**:
+
+| Kind | Name | Value |
+|---|---|---|
+| Repository **variable** | `DRVN_MONITOR_ENABLED` | `true` — anything else skips the job |
+| Repository **variable** | `DRVN_MONITOR_ORIGIN` | the canonical `https://` origin, no path (e.g. `https://drvn.app`) |
+| Repository **secret** | `DRVN_MONITOR_SECRET` | the deployment's `CRON_SECRET` — `/api/health/workers` accepts only that bearer |
+
+This mode alerts only through GitHub's failed-workflow notifications. The
+`--watch` mode (transition alerts to `DRVN_MONITOR_ALERT_URL`, dead-man
+heartbeats to `DRVN_MONITOR_HEARTBEAT_URL`, state in
+`DRVN_MONITOR_STATE_FILE`) runs on a separately administered host, not in
+this workflow — see `docs/remediation-release-and-monitoring.md`. Before
+relying on either, pause a worker in staging and confirm an alert and a
+recovery actually arrive.
 
 ## 10. DRVN Shipping — EasyPost setup (migrations 0051-0056)
 
@@ -299,7 +372,8 @@ shipping its own inventory. Before any production postage is enabled:
    an opaque reference and passes it through the provider seam only — a move
    between models changes `src/lib/shipping/easypost.ts`, nothing else.
 3. **Webhook**: create an EasyPost webhook pointing at
-   `https://<domain>/api/shipping/easypost`, generate a webhook secret, and
+   `https://<domain>/api/shipping/easypost` (it acts on `tracker.created`
+   and `tracker.updated`), generate a webhook secret, and
    set the same value as `EASYPOST_WEBHOOK_SECRET`. The endpoint refuses
    everything (500) while unset, rejects bad HMACs (400), dedupes by event
    id in `webhook_events` (prefixed `easypost:`), and 500s on real failures
