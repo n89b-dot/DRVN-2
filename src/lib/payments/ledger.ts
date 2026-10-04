@@ -16,10 +16,16 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { Database, OrderStatus } from "@/lib/database.types";
+import type { Database, Json, OrderStatus } from "@/lib/database.types";
 
 import { adjustmentsByOrder } from "./adjustments";
 import { orderCarry, readSellerCarry } from "./carry";
+import {
+  payoutAvailableAt,
+  readPayoutHoldPolicy,
+  returnWindowDays,
+  type PayoutHoldPolicy,
+} from "./payout-hold";
 import { sellerProceeds } from "./proceeds";
 import { platformFeeCents } from "./provider";
 import { reportError } from "@/lib/monitoring";
@@ -33,16 +39,6 @@ export const LEDGER_CURRENCY = "USD";
 
 /** Orders whose payment has actually captured — the only ones with money to ledger. */
 const CAPTURED_STATUSES: OrderStatus[] = ["paid", "shipped", "delivered", "completed", "disputed"];
-
-/**
- * Days a delivered order's payout sits in "clearing" before it would be
- * "available" to withdraw. There is no real payout rail yet, so this is a
- * modelled holding window (a standard marketplace escrow period), applied to
- * the real `delivered_at` timestamp — not a fabricated number dressed up as
- * fact. Whatever Stripe Connect's actual payout schedule turns out to be will
- * replace this constant, not the shape around it.
- */
-export const CLEARING_HOLD_DAYS = 7;
 
 export type LedgerState = "held" | "clearing" | "available" | "paid_out";
 
@@ -93,6 +89,9 @@ export type SellerLedger = {
   /** Label costs earlier payouts couldn't cover, still to come off the next
    *  transfer (20261005110100). Not in the totals above: those are per order. */
   owedCents: number;
+  /** The clearing rule the dates above were worked out with (the owner's
+   *  settlement_settings, 20261006100000) — the tile states it. */
+  hold: PayoutHoldPolicy;
   /** True if the fetch hit its cap: the totals cover only the latest
    *  FETCH_CAP sales and must be labelled that way, not as a lifetime. */
   truncated: boolean;
@@ -119,7 +118,7 @@ function lineState(order: {
   status: OrderStatus;
   delivered_at: string | null;
   transfer_reference: string | null;
-}, now: number): { state: LedgerState; availableAt: string | null } {
+}, now: number, hold: PayoutHoldPolicy, returnWindowDays: number | null): { state: LedgerState; availableAt: string | null } {
   // Disputed orders have money on hold pending resolution — never
   // "available," regardless of delivery timing.
   if (order.status === "disputed") {
@@ -133,9 +132,9 @@ function lineState(order: {
   if (!order.delivered_at) {
     return { state: "clearing", availableAt: null };
   }
-  const availableAt = new Date(
-    new Date(order.delivered_at).getTime() + CLEARING_HOLD_DAYS * 86_400_000
-  ).toISOString();
+  // The same rule the database used to set the transfer's available_at,
+  // from the same delivery timestamp.
+  const availableAt = payoutAvailableAt(order.delivered_at, hold, returnWindowDays);
   const state: LedgerState = now >= new Date(availableAt).getTime() ? "available" : "clearing";
   return { state, availableAt };
 }
@@ -167,24 +166,42 @@ export async function getSellerLedger(
   const captured = orders;
   const orderIds = captured.map((o) => o.id);
 
-  const [{ data: items, error: itemsError }, adjustments, carry] = await Promise.all([
+  const [{ data: items, error: itemsError }, adjustments, carry, hold] = await Promise.all([
     orderIds.length
-      ? supabase.from("order_items").select("order_id, title, quantity").in("order_id", orderIds)
-      : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number }[], error: null }),
+      ? supabase
+          .from("order_items")
+          .select("order_id, title, quantity, return_policy:commercial_snapshot->commercial->return_policy")
+          .in("order_id", orderIds)
+      : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number; return_policy: Json }[], error: null }),
     adjustmentsByOrder(supabase, orderIds),
     readSellerCarry(supabase, sellerId),
+    readPayoutHoldPolicy(supabase),
   ]);
   // Without the carry-forward entries a refunded order's labels, or what a
   // payout kept back, would be missing — the same confident wrong answer.
+  // Likewise without the clearing rule every date would be a guess.
   if (adjustments === null || carry === null) return { status: "unavailable" };
-  // Titles only label the lines; without them the money is still right.
-  if (itemsError) reportError("[payouts] failed to load order titles", { sellerId, error: itemsError });
+  if (hold === null) {
+    reportError("[payouts] failed to load the clearing hold", { sellerId });
+    return { status: "unavailable" };
+  }
+  // Titles only label the lines; without them the money is still right —
+  // unless the hold runs to each shop's return window, which the items carry.
+  if (itemsError) {
+    reportError("[payouts] failed to load order titles", { sellerId, error: itemsError });
+    if (hold.mode === "claim_window") return { status: "unavailable" };
+  }
 
   const itemsByOrder = new Map<string, { title: string | null; quantity: number }[]>();
+  const returnWindowByOrder = new Map<string, number>();
   for (const item of items ?? []) {
     const list = itemsByOrder.get(item.order_id) ?? [];
     list.push({ title: item.title, quantity: item.quantity });
     itemsByOrder.set(item.order_id, list);
+    const windowDays = returnWindowDays(item.return_policy);
+    if (windowDays !== null) {
+      returnWindowByOrder.set(item.order_id, Math.max(windowDays, returnWindowByOrder.get(item.order_id) ?? 0));
+    }
   }
 
   const titleFor = (orderId: string) => {
@@ -216,7 +233,7 @@ export async function getSellerLedger(
       carriedCents: carried.carriedCents,
       carriedInCents: carried.carriedInCents,
     });
-    const { state, availableAt } = lineState(order, nowMs);
+    const { state, availableAt } = lineState(order, nowMs, hold, returnWindowByOrder.get(order.id) ?? null);
 
     return {
       orderId: order.id,
@@ -271,6 +288,7 @@ export async function getSellerLedger(
       availableCents,
       paidOutCents,
       owedCents: carry.owedCents,
+      hold,
       truncated: captured.length === FETCH_CAP,
     },
   };

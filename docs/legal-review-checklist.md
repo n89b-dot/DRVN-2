@@ -40,10 +40,11 @@ payments or public launch; none of them has been decided in code.
       payment processor". Counsel to confirm how DRVN's role is described
       (commercial agent? payment collection on the seller's behalf?) and any
       regulatory consequence.
-- [ ] **Holding funds.** Sellers are paid 7 days (`CLEARING_HOLD_DAYS`) after
-      the buyer confirms receipt. The old draft said DRVN "is not an escrow
-      service"; that sentence was removed because funds are in fact held.
-      Confirm wording.
+- [ ] **Holding funds.** Sellers are paid 7 days after delivery by default
+      (the owner's `settlement_settings` hold, `docs/decisions/payout-hold.md`;
+      the terms quote the live value). The old draft said DRVN "is not an
+      escrow service"; that sentence was removed because funds are in fact
+      held. Confirm wording.
 - [ ] **Tax.** No sales tax / VAT is calculated or collected anywhere
       (no Stripe Tax). Listing copy says tax is "confirmed at checkout".
       Decide the tax position and who is responsible.

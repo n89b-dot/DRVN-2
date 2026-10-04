@@ -8,8 +8,9 @@ import {
 } from "@/features/commerce/disputes";
 import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
 import { PLATFORM_FEE_BPS } from "@/lib/payments/fee";
-import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
+import { payoutHoldPhrase, readPayoutHoldPolicy } from "@/lib/payments/payout-hold";
 import { paymentsAreLive } from "@/lib/payments/provider";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export const metadata = {
   title: "Terms of Service - DRVN",
@@ -29,13 +30,21 @@ const UPDATED = "3 October 2026";
  * docs/legal-review-checklist.md.
  *
  * Every number below is imported from the constant the code enforces — fee
- * (src/lib/payments/fee.ts), payout hold (src/lib/payments/ledger.ts), dispute
- * clocks (src/features/commerce/disputes.ts), return clocks
- * (src/lib/domain/return-policy.ts) — so the terms cannot drift from what
+ * (src/lib/payments/fee.ts), dispute clocks (src/features/commerce/disputes.ts),
+ * return clocks (src/lib/domain/return-policy.ts) — or read from the setting
+ * the database applies: the payout hold (settlement_settings, see
+ * src/lib/payments/payout-hold.ts) — so the terms cannot drift from what
  * actually happens. Durations that live only in SQL are noted where used.
  */
-export default function TermsPage() {
+export default async function TermsPage() {
   const feePercent = PLATFORM_FEE_BPS / 100;
+  // Cached like the landing page's reads; an owner's change shows within
+  // five minutes. If the setting can't be read the sentence names no number
+  // rather than a possibly wrong one.
+  const hold = await readPayoutHoldPolicy(
+    createPublicClient({ revalidate: 300, tags: ["settlement-settings"] })
+  );
+  const holdText = hold ? payoutHoldPhrase(hold) : "a clearing period";
 
   return (
     <>
@@ -152,7 +161,7 @@ export default function TermsPage() {
         </p>
         <p>
           Sellers are paid through Stripe Connect, into a Stripe account the seller sets up and
-          verifies with Stripe. A sale is paid out {CLEARING_HOLD_DAYS} days after the buyer
+          verifies with Stripe. A sale is paid out {holdText} after the buyer
           confirms the order arrived, unless a problem has been reported on it — then it waits for
           the outcome. Stripe then pays the seller&apos;s bank on its own schedule.
         </p>

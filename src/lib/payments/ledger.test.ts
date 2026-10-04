@@ -155,6 +155,46 @@ describe("getSellerLedger", () => {
     if (result.status === "ok") expect(result.ledger.lines[0]).toMatchObject({ title: "Order", netCents: 4_500 });
   });
 
+  it("dates each line with the owner's clearing hold (20261006100000)", async () => {
+    const result = await getSellerLedger(
+      fakeClient({
+        orders: { data: [{ ...order, refunded_cents: 0 }], error: null },
+        settlement_settings: { data: [{ payout_hold_days: 14, payout_hold_mode: "fixed" }], error: null },
+      }),
+      "seller"
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      ledger: { hold: { mode: "fixed", holdDays: 14 }, lines: [{ availableAt: "2026-09-16T00:00:00.000Z" }] },
+    });
+  });
+
+  it("holds to the shop's return window in claim-window mode", async () => {
+    const result = await getSellerLedger(
+      fakeClient({
+        orders: { data: [{ ...order, refunded_cents: 0 }], error: null },
+        order_items: {
+          data: [{ order_id: "order-1", title: "Intake", quantity: 1, return_policy: { returns_accepted: true, window_days: 60 } }],
+          error: null,
+        },
+        settlement_settings: { data: [{ payout_hold_days: 7, payout_hold_mode: "claim_window" }], error: null },
+      }),
+      "seller"
+    );
+    expect(result).toMatchObject({ status: "ok", ledger: { lines: [{ availableAt: "2026-11-01T00:00:00.000Z" }] } });
+  });
+
+  it("is unavailable, not guessed, when the clearing hold can't be read", async () => {
+    const result = await getSellerLedger(
+      fakeClient({
+        orders: { data: [order], error: null },
+        settlement_settings: { data: null, error: { message: "timeout" } },
+      }),
+      "seller"
+    );
+    expect(result).toEqual({ status: "unavailable" });
+  });
+
   it("is a genuine empty ledger when the seller has no sales", async () => {
     const result = await getSellerLedger(fakeClient({ orders: { data: [], error: null } }), "seller");
     expect(result).toMatchObject({ status: "ok", ledger: { lines: [], availableCents: 0, truncated: false } });
