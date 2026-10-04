@@ -40,7 +40,16 @@ export const RATE_LIMITS = {
    *  one page fetch, one thumbnail, no AI — so it gets a looser limit: a
    *  member filling in a build sheet in one sitting pastes a lot of links. */
   fetchPartLink: { action: "part-link", limit: 30, windowSeconds: 60 * 60 },
+  /** Sign-in and reset are keyed twice (src/app/(auth)/actions.ts): by the
+   *  normalized email, so one account can't be hammered from many addresses,
+   *  and by the visitor's attributed address, so one address can't spray
+   *  many accounts. Supabase's own per-IP limits only ever see this server. */
+  signIn: { action: "sign-in", limit: 10, windowSeconds: 60 * 15 },
+  signInNetwork: { action: "sign-in-network", limit: 30, windowSeconds: 60 * 15 },
   passwordReset: { action: "password-reset", limit: 5, windowSeconds: 60 * 30 },
+  passwordResetNetwork: { action: "password-reset-network", limit: 15, windowSeconds: 60 * 30 },
+  /** Following notifies the followed member, so it is a spam vector too. */
+  follow: { action: "follow", limit: 60, windowSeconds: 60 * 10 },
   fileReport: { action: "report", limit: 5, windowSeconds: 60 * 60 },
 } as const satisfies Record<string, RateLimitRule>;
 

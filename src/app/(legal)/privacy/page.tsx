@@ -96,7 +96,7 @@ export default function PrivacyPage() {
           Phone photos can carry hidden details, including where they were taken. Photos you post
           publicly — avatars, cars, build posts and listings — are re-processed on our server,
           which removes that embedded information. Photos sent in messages are private and are
-          only re-processed when they&apos;re large, so a small one can keep it. Dispute evidence
+          re-processed the same way, so they don&apos;t carry it either. Dispute evidence
           is private and kept exactly as uploaded, on purpose, as a record.
         </p>
 

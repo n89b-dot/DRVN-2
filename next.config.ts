@@ -68,8 +68,15 @@ const nextConfig: NextConfig = {
             value: "max-age=63072000; includeSubDomains; preload",
           },
           {
+            // `payment=()` blocked the Payment Request API everywhere,
+            // including inside Stripe's Payment Element frame, which is how
+            // Apple Pay and Google Pay render — so wallets silently never
+            // appeared at checkout. Payment is now delegable to this origin
+            // and to Stripe.js's frame origin (the only Stripe frame origin
+            // the CSP's frame-src admits, src/proxy.ts); every other origin,
+            // and every other sensitive feature, stays blocked.
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), payment=()",
+            value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://js.stripe.com")',
           },
         ],
       },

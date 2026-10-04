@@ -16,6 +16,7 @@ import { fitmentLabel, readCommercialSnapshot } from "@/features/commerce/snapsh
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { formatPrice } from "@/lib/payments/fee";
 import { adjustmentsByOrder } from "@/lib/payments/adjustments";
+import { orderCarry, readSellerCarry } from "@/lib/payments/carry";
 import { sellerProceeds } from "@/lib/payments/proceeds";
 import { countryLabel } from "@/lib/geo/countries";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -102,11 +103,16 @@ export default async function OrderDetailPage({
   // Computed here, not in JSX — `new Date()`, the purity lint's house pattern.
   const reportWindowClosed = Boolean(reportClosesAt && reportClosesAt.getTime() < new Date().getTime());
 
-  // Opening the order deals with what its notifications were about.
-  await markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]);
-
   const counterpartyId = isBuyer ? order.seller_id : order.buyer_id;
+  // C-1: the buyer's own cars are offered only once the part has arrived.
+  const canAddToCar = isBuyer && ["delivered", "completed"].includes(order.status);
+  // Shipments (0052) — the authoritative movement record. Admin client
+  // because label_reference is deliberately not client-readable; the page
+  // has already proven the viewer is a participant, and only the seller's
+  // branch renders the label.
+  const adminForShipping = createAdminClient();
 
+  // Round 1: every read that needs only the order and the viewer, at once.
   const [
     { data: items },
     { data: counterparty },
@@ -115,6 +121,12 @@ export default async function OrderDetailPage({
     { data: payment },
     { data: evidence },
     sellerAdjustments,
+    { data: allShipments },
+    { data: orderReturns },
+    { data: garageRows },
+    { data: buyerProfile },
+    offersCount,
+    { data: originOffer },
   ] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id),
     counterpartyId
@@ -146,16 +158,34 @@ export default async function OrderDetailPage({
       .order("created_at"),
     // The seller's label costs come off their payout. Null = unreadable.
     isSeller ? adjustmentsByOrder(supabase, [id]) : Promise.resolve(new Map<string, number>()),
+    adminForShipping.from("shipments").select("*").eq("order_id", id).order("created_at"),
+    // Returns (0055): RLS scopes to participants; terminal-but-informative
+    // states still render as history.
+    supabase
+      .from("returns")
+      .select("*")
+      .eq("order_id", id)
+      .order("created_at", { ascending: false }),
+    canAddToCar
+      ? supabase.from("cars").select("id, name, created_at").eq("owner_id", user.id)
+      : Promise.resolve({ data: [] }),
+    canAddToCar
+      ? supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    // The family nav's Offers badge, and the offer this order came from — a
+    // real column since 0034, so an order can name its negotiation without
+    // the page reconstructing the link from order items and timestamps.
+    loadOffersNeedingAttention(supabase, user.id),
+    order.origin_offer_id
+      ? supabase
+          .from("offers")
+          .select("id, amount_cents, counter_amount_cents")
+          .eq("id", order.origin_offer_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    // Opening the order deals with what its notifications were about.
+    markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]),
   ]);
-
-  // dispute-evidence is a private bucket (0027) — the stored `url` is stale
-  // (public-shaped or a bare path), so render a short-lived signed one
-  // instead. Signing needs the admin storage client; RLS already gated the
-  // `evidence` select above to this order's participants.
-  const signedEvidence = await signEvidenceUrls(
-    createAdminClient(),
-    evidence ?? [],
-  );
 
   // "As purchased" reads snapshot data only (0049): covers come from the
   // gallery frozen onto the order, and category/part identity/fitment from
@@ -163,13 +193,52 @@ export default async function OrderDetailPage({
   // never evidence of what was bought — the seller may have edited or deleted
   // it since.
   const itemIds = (items ?? []).map((i) => i.id);
-  const { data: snapshotImages } = itemIds.length
-    ? await supabase
-        .from("order_item_snapshot_images")
-        .select("order_item_id, url, alt, position")
-        .in("order_item_id", itemIds)
-        .order("position")
-    : { data: [] };
+  const liveShipments = (allShipments ?? []).filter(
+    (s) => !["cancelled", "failed"].includes(s.status),
+  );
+  // The buyer's cars, main first. A buyer with no garage sees nothing rather
+  // than an empty picker.
+  const garageCars = orderCars(garageRows ?? [], buyerProfile?.main_car_id).map((c) => ({
+    id: c.id,
+    name: c.name,
+  }));
+
+  // Round 2: the reads that depend on round 1's rows.
+  const [signedEvidence, { data: snapshotImages }, { data: shipmentEvents }, { data: addedRows }] =
+    await Promise.all([
+      // dispute-evidence is a private bucket (0027) — the stored `url` is
+      // stale (public-shaped or a bare path), so render a short-lived signed
+      // one instead. Signing needs the admin storage client; RLS already
+      // gated the `evidence` select above to this order's participants.
+      signEvidenceUrls(createAdminClient(), evidence ?? []),
+      itemIds.length
+        ? supabase
+            .from("order_item_snapshot_images")
+            .select("order_item_id, url, alt, position")
+            .in("order_item_id", itemIds)
+            .order("position")
+        : Promise.resolve({ data: [] }),
+      liveShipments.length
+        ? adminForShipping
+            .from("shipment_events")
+            .select("shipment_id, status, description, occurred_at, city, state")
+            .in(
+              "shipment_id",
+              liveShipments.map((s) => s.id),
+            )
+            .order("occurred_at", { ascending: false })
+            .limit(12)
+        : Promise.resolve({ data: [] }),
+      // An item already added to one of the buyer's cars names that car
+      // instead of offering "Add to a car" again.
+      canAddToCar && itemIds.length && garageCars.length
+        ? supabase
+            .from("mod_items")
+            .select("source_order_item_id, car:cars!mod_items_car_id_fkey(name, slug)")
+            .in("source_order_item_id", itemIds)
+            .in("car_id", garageCars.map((c) => c.id))
+        : Promise.resolve({ data: [] }),
+    ]);
   const frozenGallery = new Map<string, { url: string; alt: string | null }[]>();
   for (const img of snapshotImages ?? []) {
     const list = frozenGallery.get(img.order_item_id) ?? [];
@@ -182,30 +251,6 @@ export default async function OrderDetailPage({
     ),
   );
 
-  // Shipments (0052) — the authoritative movement record. Admin client
-  // because label_reference is deliberately not client-readable; the page
-  // has already proven the viewer is a participant, and only the seller's
-  // branch renders the label.
-  const adminForShipping = createAdminClient();
-  const { data: allShipments } = await adminForShipping
-    .from("shipments")
-    .select("*")
-    .eq("order_id", id)
-    .order("created_at");
-  const liveShipments = (allShipments ?? []).filter(
-    (s) => !["cancelled", "failed"].includes(s.status),
-  );
-  const { data: shipmentEvents } = liveShipments.length
-    ? await adminForShipping
-        .from("shipment_events")
-        .select("shipment_id, status, description, occurred_at, city, state")
-        .in(
-          "shipment_id",
-          liveShipments.map((s) => s.id),
-        )
-        .order("occurred_at", { ascending: false })
-        .limit(12)
-    : { data: [] };
   const latestEventFor = (shipmentId: string) =>
     (shipmentEvents ?? []).find((e) => e.shipment_id === shipmentId);
   const pendingLabel = liveShipments.find(
@@ -221,13 +266,7 @@ export default async function OrderDetailPage({
       s.status === "label_purchased",
   );
 
-  // Returns (0055): the latest RMA that still matters. RLS scopes to
-  // participants; terminal-but-informative states still render as history.
-  const { data: orderReturns } = await supabase
-    .from("returns")
-    .select("*")
-    .eq("order_id", id)
-    .order("created_at", { ascending: false });
+  // Returns (0055): the latest RMA that still matters.
   const activeReturn =
     (orderReturns ?? []).find(
       (r) => !["cancelled", "expired", "rejected"].includes(r.status),
@@ -253,32 +292,6 @@ export default async function OrderDetailPage({
     Boolean(shopReturnDeadline) &&
     new Date().getTime() < (shopReturnDeadline?.getTime() ?? 0);
 
-  // C-1: the buyer's own cars, main first, offered only once the part has
-  // arrived. A buyer with no garage sees nothing rather than an empty picker.
-  const canAddToCar = isBuyer && ["delivered", "completed"].includes(order.status);
-  const { data: garageRows } = canAddToCar
-    ? await supabase
-        .from("cars")
-        .select("id, name, created_at")
-        .eq("owner_id", user.id)
-    : { data: [] };
-  const { data: buyerProfile } = canAddToCar
-    ? await supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle()
-    : { data: null };
-  const garageCars = orderCars(garageRows ?? [], buyerProfile?.main_car_id).map((c) => ({
-    id: c.id,
-    name: c.name,
-  }));
-  // An item already added to one of the buyer's cars names that car instead
-  // of offering "Add to a car" again.
-  const { data: addedRows } =
-    canAddToCar && itemIds.length && garageCars.length
-      ? await supabase
-          .from("mod_items")
-          .select("source_order_item_id, car:cars!mod_items_car_id_fkey(name, slug)")
-          .in("source_order_item_id", itemIds)
-          .in("car_id", garageCars.map((c) => c.id))
-      : { data: [] };
   const addedTo = new Map<string, { name: string; slug: string }>();
   for (const row of addedRows ?? []) {
     if (row.source_order_item_id && row.car) addedTo.set(row.source_order_item_id, row.car);
@@ -316,20 +329,6 @@ export default async function OrderDetailPage({
     sellerResponseDueBy && new Date().getTime() > sellerResponseDueBy.getTime(),
   );
 
-  // The family nav's Offers badge, and the offer this order came from — a
-  // real column since 0034, so an order can name its negotiation without the
-  // page reconstructing the link from order items and timestamps.
-  const [offersCount, { data: originOffer }] = await Promise.all([
-    loadOffersNeedingAttention(supabase, user.id),
-    order.origin_offer_id
-      ? supabase
-          .from("offers")
-          .select("id, amount_cents, counter_amount_cents")
-          .eq("id", order.origin_offer_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-
   // Stripe sent the buyer back before its webhook settled the order: the
   // money is on its way, so don't ask them to pay again.
   const confirmingPayment = Boolean(processing) && isBuyer && order.status === "pending";
@@ -347,15 +346,26 @@ export default async function OrderDetailPage({
     ["delivered", "completed"].includes(order.status) && !reviewedByMe;
   // R2-04: the same projection the Payouts ledger uses — refunds take back
   // their share and label costs come off. Unreadable adjustments leave the
-  // payout unknown rather than higher than it is (R2-05).
-  const proceeds = sellerAdjustments
+  // payout unknown rather than higher than it is (R2-05). Charges carried to
+  // or from another payout (20261005110100) are read the same way: only for
+  // the seller, and unreadable means unknown.
+  const sellerCarry = isSeller && sellerAdjustments ? await readSellerCarry(supabase, user.id) : null;
+  const carried = sellerCarry ? orderCarry(sellerCarry, id) : null;
+  const proceeds = sellerAdjustments && carried
     ? sellerProceeds({
         totalCents: order.total_cents,
         feeCents: order.platform_fee_cents,
         refundedCents: order.refunded_cents ?? 0,
         adjustmentsCents: sellerAdjustments.get(id) ?? 0,
+        carriedCents: carried.carriedCents,
+        carriedInCents: carried.carriedInCents,
       })
     : null;
+  // Carried charges are "taken" once recorded and collected; a shortfall the
+  // still-open payout will carry, or one not yet collected, is still to come.
+  const carryTaken = Boolean(
+    proceeds && carried && carried.settled && carried.carriedCents === proceeds.carriedCents
+  );
 
   const threadMessages = (messages ?? []).map((m) => ({
     id: m.id,
@@ -668,6 +678,27 @@ export default async function OrderDetailPage({
                   </b>
                 </div>
               )}
+              {isSeller && proceeds && proceeds.carriedCents !== 0 && (
+                <div className="sheet__row">
+                  <span>
+                    {proceeds.carriedCents < 0
+                      ? carryTaken
+                        ? "Label costs — taken from a later payout"
+                        : "Label costs — come off your next payout"
+                      : "Label refund — credited against future label costs"}
+                  </span>
+                  <b>
+                    {proceeds.carriedCents < 0 ? "+" : "−"}
+                    {formatPrice(Math.abs(proceeds.carriedCents))}
+                  </b>
+                </div>
+              )}
+              {isSeller && proceeds && proceeds.carriedInCents > 0 && (
+                <div className="sheet__row">
+                  <span>Earlier orders&apos; label costs, kept back</span>
+                  <b>−{formatPrice(proceeds.carriedInCents)}</b>
+                </div>
+              )}
               <div className="sheet__row sheet__total">
                 <span>
                   {order.status === "cancelled" && !moneyMoved
@@ -684,7 +715,7 @@ export default async function OrderDetailPage({
                   {!isSeller
                     ? formatPrice(order.total_cents)
                     : proceeds
-                      ? formatPrice(proceeds.netCents)
+                      ? formatPrice(proceeds.payoutCents)
                       : "Unavailable"}
                 </b>
               </div>

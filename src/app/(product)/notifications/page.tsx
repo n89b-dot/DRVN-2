@@ -12,7 +12,7 @@ import {
   NarrowColumn,
   Pagination,
 } from "@/components/ui";
-import { kindIsShown } from "@/lib/notification-prefs";
+import { mutedKindFilter } from "@/lib/notification-prefs";
 import { loadUnreadNotificationCount } from "@/lib/shell-counts";
 import { withParams as buildParams } from "@/lib/url-params";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
@@ -119,11 +119,9 @@ function Section({
 /**
  * Reads the real `notifications` table (migration 0009).
  *
- * Filters (`?filter=unread`, `?section=`) and pagination (`?page=`, 25/page)
- * are applied at the query level. Preference filtering (a user can mute a
- * kind entirely) still happens in memory afterwards, since it depends on a
- * JSON column rather than a plain filterable one — the one place a page can
- * come back with fewer than 25 rows even though more exist.
+ * Filters (`?filter=unread`, `?section=`), muted kinds (Settings) and
+ * pagination (`?page=`, 25/page) are all applied at the query level, so a
+ * page is never short — or empty — while more notifications exist.
  */
 export default async function NotificationsPage({
   searchParams,
@@ -141,25 +139,34 @@ export default async function NotificationsPage({
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
 
+  // The member's muted kinds shape the page query itself; the badge count
+  // starts alongside, since it reads the preferences on its own.
+  const unreadCountRead = loadUnreadNotificationCount(supabase, user.id);
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("notification_prefs")
+    .eq("id", user.id)
+    .maybeSingle();
+
   let query = supabase
     .from("notifications")
     .select("id, kind, section, title, body, href, read_at, created_at", { count: "exact" })
     .eq("user_id", user.id);
   if (unreadOnly) query = query.is("read_at", null);
   if (section) query = query.eq("section", section);
+  const muted = mutedKindFilter(me?.notification_prefs);
+  if (muted) query = query.or(muted);
   query = query.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
 
   const filtered = unreadOnly || Boolean(section);
   const [
     { data: rows, count, error },
-    { data: me },
     totalUnreadCount,
     { count: everCount },
   ] =
     await Promise.all([
       query,
-      supabase.from("profiles").select("notification_prefs").eq("id", user.id).maybeSingle(),
-      loadUnreadNotificationCount(supabase, user.id),
+      unreadCountRead,
       // Whether there is anything at all — with filters on, the page count
       // above can't say. Unfiltered it is the same number, so no second trip.
       filtered
@@ -175,8 +182,7 @@ export default async function NotificationsPage({
     throw new Error("Could not load your notifications");
   }
 
-  const prefs = me?.notification_prefs;
-  const visible = (rows ?? []).filter((row) => kindIsShown(prefs, row.kind));
+  const visible = rows ?? [];
 
   const engagement = visible.filter((r) => r.section === "engagement");
   const marketplace = visible.filter((r) => r.section === "marketplace");

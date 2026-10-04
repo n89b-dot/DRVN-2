@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-
 import { Button, TileHead } from "@/components/ui";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 import { startConnectOnboarding } from "./payouts-actions";
 import { formatPrice } from "@/lib/payments/fee";
@@ -34,9 +33,11 @@ export function PayoutSetup({
   /** Sale money that can't be paid out until payouts are set up. */
   waitingCents?: number;
 }) {
-  const [state, action, pending] = useActionState<{ error?: string }, FormData>(
+  // Safe to retry after a lost response: an existing payout account is
+  // reused, and the worst case is a second Stripe link.
+  const [state, action, pending] = useRecoverableAction<{ error?: string }>(
     async () => (await startConnectOnboarding()) ?? {},
-    {}
+    "Couldn't open Stripe just now. Try again."
   );
 
   if (!connect.stripeConfigured) {

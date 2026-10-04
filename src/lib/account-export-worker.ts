@@ -316,7 +316,7 @@ export async function processAccountExports() {
         pages++;
       }
       if (request.current_section < ACCOUNT_EXPORT_SECTIONS.length) {
-        await admin.rpc("continue_account_export" as never, { p_job: job.id, p_lease: job.lease_id } as never).throwOnError();
+        await admin.rpc("continue_account_export", { p_job: job.id, p_lease: job.lease_id }).throwOnError();
         continued++;
         continue;
       }

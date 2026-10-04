@@ -387,10 +387,10 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
     ref_price_currency: item.ref_price_currency ?? null,
     };
   });
-  const { data, error } = await supabase.rpc(
-    "save_mod_items" as never,
-    { p_car_id: carId, p_items: payload } as never
-  );
+  const { data, error } = await supabase.rpc("save_mod_items", {
+    p_car_id: carId,
+    p_items: payload,
+  });
   if (error) return { error: error.message };
   if ((data as unknown as { outcome?: string } | null)?.outcome !== "saved") {
     return { error: "The modification sheet was not saved." };
@@ -1244,7 +1244,7 @@ export async function deleteAccount(_prev: ActionState, formData: FormData): Pro
     return { error: 'Type DELETE to confirm.' };
   }
 
-  const { data, error } = await supabase.rpc("request_account_deletion" as never, {} as never);
+  const { data, error } = await supabase.rpc("request_account_deletion");
   if (error) return { error: error.message };
   const result = data as unknown as { outcome?: string; job_id?: string; message?: string };
   if (result.outcome !== "cleanup_pending" || !result.job_id) {

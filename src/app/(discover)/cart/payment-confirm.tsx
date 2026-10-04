@@ -2,9 +2,12 @@
 
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import { useMemo, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { useMemo, useRef, useState, useTransition } from "react";
 
 import { saveCardOnIntent } from "@/features/commerce/payment-methods";
+
+import { afterConfirmError, completeUrl } from "./payment-outcome";
 
 /** Livesheet tokens → Stripe appearance. Reads the computed CSS custom
  *  properties so the iframe follows any palette retune; hexes are only the
@@ -108,32 +111,69 @@ function ConfirmInner({
   const [submitting, setSubmitting] = useState(false);
   const [saveCard, setSaveCard] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // `disabled` only lands on the next render; a quick second submit must not
+  // start a second confirmation.
+  const inFlight = useRef(false);
+  // The save-card flag is a Server Action: run it in a transition, so a
+  // redirect it already followed (signed out mid-checkout) lands in Next's
+  // redirect boundary instead of escaping and being followed a second time.
+  const [, startTransition] = useTransition();
 
-  async function confirm(event: React.FormEvent) {
+  function fail(message: string) {
+    inFlight.current = false;
+    setSubmitting(false);
+    setError(message);
+  }
+
+  async function pay() {
+    if (!stripe || !elements) return fail("The payment form isn't ready yet. Try again.");
+    try {
+      const { error: confirmError } = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: completeUrl(window.location.origin, orderIds) },
+      });
+      // Only reached when the payment didn't leave for the return URL.
+      if (confirmError) {
+        const next = afterConfirmError(confirmError);
+        if (next.verify) window.location.assign(completeUrl(window.location.origin, orderIds, reference));
+        else fail(next.message);
+      }
+    } catch {
+      // Stripe.js itself failed (usually the network). Confirming this same
+      // PaymentIntent again can't charge twice: if the first attempt took the
+      // money, the retry is refused and sent to verification above.
+      fail("We couldn't reach the payment provider. Try again — this payment can only be taken once.");
+    }
+  }
+
+  function confirm(event: React.FormEvent) {
     event.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError(null);
 
-    if (canSaveCard && saveCard) {
+    if (!(canSaveCard && saveCard)) {
+      void pay();
+      return;
+    }
+    startTransition(async () => {
       // Flag the intent before confirming so Stripe attaches the card to the
-      // customer on success.
+      // customer on success. If the flag isn't confirmed, stop before any
+      // charge: paying anyway would silently not save the card they asked for.
       const fd = new FormData();
       fd.set("reference", reference);
-      await saveCardOnIntent(fd);
-    }
-
-    const { error: confirmError } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/cart/complete?orders=${orderIds.join(",")}`,
-      },
+      try {
+        const flagged = await saveCardOnIntent(fd);
+        if (flagged.error) return fail(flagged.error);
+      } catch (cause) {
+        unstable_rethrow(cause);
+        return fail("We couldn't set up saving this card, so nothing was charged. Try again, or untick “Save this card for next time”.");
+      }
+      // Not awaited: the payment itself isn't part of the transition, and it
+      // handles its own failures.
+      void pay();
     });
-    // Only reached on immediate failure — success navigates away.
-    if (confirmError) {
-      setError(confirmError.message ?? "Payment failed. Try another card.");
-      setSubmitting(false);
-    }
   }
 
   return (

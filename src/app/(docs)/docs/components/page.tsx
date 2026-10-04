@@ -29,6 +29,7 @@ import {
   Pagination,
   RatingStars,
   ResultNote,
+  UnconfirmedOutcome,
   SearchField,
   Select,
   Stepper,
@@ -1424,6 +1425,15 @@ export default function ComponentsPage() {
             <ResultNote ok="Message sent." />
             <ResultNote error="That didn&rsquo;t send — try again." />
           </div>
+        </Specimen>
+        <Specimen
+          name="UnconfirmedOutcome"
+          klass="UnconfirmedOutcome → .field__err + .jumplink"
+          note="A lost Server Action response: the outcome is unknown, so the money or destructive action is replaced by a reload, never offered again blindly."
+        >
+          <UnconfirmedOutcome>
+            Couldn&rsquo;t confirm whether the label was bought. Reload before trying again.
+          </UnconfirmedOutcome>
         </Specimen>
         <Specimen
           name="FormSection + ValidationSummary"

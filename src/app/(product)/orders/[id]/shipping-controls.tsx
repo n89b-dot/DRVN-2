@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
-
 import { motion } from "motion/react";
 
-import { Button, ButtonLink, ResultNote } from "@/components/ui";
+import { Button, ButtonLink, ResultNote, UnconfirmedOutcome } from "@/components/ui";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 import { springs, transitions } from "@/lib/motion";
 import {
   buyShippingLabel,
@@ -17,7 +16,13 @@ import { formatPrice } from "@/lib/payments/fee";
  * Seller-side DRVN Shipping controls on the order sheet (§15.10-12).
  * The label URL only ever reaches this component server-side for the seller —
  * shipments' label_reference is not client-readable by column grant (0052).
+ *
+ * Both actions move money, so a lost response never puts the button back:
+ * the seller reloads to see whether the label was bought (or voided) first.
  */
+const BUY_UNCONFIRMED = "Couldn't confirm whether the label was bought. Reload to check before buying again.";
+const VOID_UNCONFIRMED = "Couldn't confirm whether the label was voided. Reload to check before trying again.";
+
 export function BuyLabelPanel({
   orderId,
   quotedCents,
@@ -25,10 +30,11 @@ export function BuyLabelPanel({
   orderId: string;
   quotedCents: number | null;
 }) {
-  const [state, action, pending] = useActionState<FulfillmentState, FormData>(
+  const [state, action, pending] = useRecoverableAction<FulfillmentState>(
     buyShippingLabel,
-    {}
+    BUY_UNCONFIRMED
   );
+  if (state.error === BUY_UNCONFIRMED) return <UnconfirmedOutcome>{BUY_UNCONFIRMED}</UnconfirmedOutcome>;
   return (
     <form action={action} className="grid gap-2">
       <input type="hidden" name="order_id" value={orderId} />
@@ -68,10 +74,11 @@ export function LabelReadyPanel({
   trackingCode: string | null;
   carrier: string | null;
 }) {
-  const [state, action, pending] = useActionState<FulfillmentState, FormData>(
+  const [state, action, pending] = useRecoverableAction<FulfillmentState>(
     voidShippingLabel,
-    {}
+    VOID_UNCONFIRMED
   );
+  const unconfirmed = state.error === VOID_UNCONFIRMED;
   return (
     <div className="grid gap-2">
       {labelUrl && (
@@ -85,13 +92,19 @@ export function LabelReadyPanel({
           automatically.
         </p>
       )}
-      <form action={action}>
-        <input type="hidden" name="shipment_id" value={shipmentId} />
-        <button type="submit" disabled={pending} className="jumplink">
-          {pending ? "Voiding…" : "Bought by mistake? Void the label"}
-        </button>
-      </form>
-      <ResultNote error={state.error} ok={!state.error ? state.ok : null} />
+      {unconfirmed ? (
+        <UnconfirmedOutcome>{VOID_UNCONFIRMED}</UnconfirmedOutcome>
+      ) : (
+        <>
+          <form action={action}>
+            <input type="hidden" name="shipment_id" value={shipmentId} />
+            <button type="submit" disabled={pending} className="jumplink">
+              {pending ? "Voiding…" : "Bought by mistake? Void the label"}
+            </button>
+          </form>
+          <ResultNote error={state.error} ok={!state.error ? state.ok : null} />
+        </>
+      )}
     </div>
   );
 }

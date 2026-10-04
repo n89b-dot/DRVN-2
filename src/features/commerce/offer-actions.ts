@@ -282,27 +282,37 @@ export async function respondToOffer(
   // seller's click billed someone who had never seen a checkout, consented to
   // an amount, or said where to send it. The reservation gives them 24 hours;
   // the sweeper releases it after that.
-  await notifyOfferAccepted(admin, orderId);
+  const notified = await notifyOfferAccepted(admin, orderId);
 
   revalidatePath("/orders");
   revalidatePath("/offers");
   revalidatePath(`/offers/${offerId}`);
   revalidatePath(`/listings/${listing.id}`);
-  return { ok: "Offer accepted — the buyer has 24 hours to complete checkout." };
+  // The acceptance stands whether or not the notice went out. The buyer has
+  // only 24 hours, so the seller hears when they may not know yet.
+  return {
+    ok: notified
+      ? "Offer accepted — the buyer has 24 hours to complete checkout."
+      : "Offer accepted. We couldn't notify the buyer just now — message them so they check out within 24 hours.",
+  };
 }
 
+/** False when the buyer's notice could not be written (already reported). */
 async function notifyOfferAccepted(
   admin: ReturnType<typeof createAdminClient>,
   orderId: string
-) {
-  const { data: order } = await admin
+): Promise<boolean> {
+  const { data: order, error: orderError } = await admin
     .from("orders")
     .select("buyer_id, seller_id")
     .eq("id", orderId)
     .maybeSingle();
-  if (!order?.buyer_id) return;
+  if (orderError || !order?.buyer_id) {
+    reportError("[commerce] offer accepted notification skipped: order unreadable", { orderId, orderError });
+    return false;
+  }
 
-  await admin.from("notifications").insert({
+  const { error } = await admin.from("notifications").insert({
     user_id: order.buyer_id,
     kind: "offer_accepted",
     section: "marketplace",
@@ -311,6 +321,11 @@ async function notifyOfferAccepted(
     href: `/orders/${orderId}/checkout`,
     actor_id: order.seller_id,
   });
+  if (error) {
+    reportError("[commerce] offer accepted notification failed", { orderId, error });
+    return false;
+  }
+  return true;
 }
 
 export async function withdrawOffer(

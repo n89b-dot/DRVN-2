@@ -9,7 +9,7 @@
  *
  * Usage: node .seed-stories.mjs <manifest.json>   (image key -> local jpg)
  * Anon-key sign-in (RLS-clean); idempotent by car slug / post title.
- * Password for all: drvn-community-2026. NOT e2e-prefixed (survives sweeps).
+ * Password for all: $DRVN_SEED_PASSWORD. NOT e2e-prefixed (survives sweeps).
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
@@ -22,7 +22,12 @@ const env = Object.fromEntries(
 const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const images = JSON.parse(readFileSync(process.argv[2], "utf8"));
-const PASSWORD = "drvn-community-2026";
+// The seeded accounts' shared test password — never committed. Set it in
+// the shell or .env.local (the same value across the three seed scripts).
+const PASSWORD = process.env.DRVN_SEED_PASSWORD ?? env.DRVN_SEED_PASSWORD;
+if (!PASSWORD) {
+  throw new Error("Set DRVN_SEED_PASSWORD (shell or .env.local) to the seeded accounts' test password.");
+}
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
 
 /** People to ensure. `avatar` optional (existing accounts keep theirs). */

@@ -1,17 +1,24 @@
 "use client";
 
-import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
-import { Alert } from "@/components/ui";
+import { Alert, Button, ButtonLink } from "@/components/ui";
+
+/** Shopping pages exit to the marketplace; cars, posts and people to Explore. */
+const SHOPPING = ["/marketplace", "/listings", "/cart", "/checkout", "/order-placed"];
 
 export default function GroupError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  /** Re-fetches and re-renders the segment (Next 16.3) — `reset` only
+   *  re-rendered, which can't recover from a failed server read. */
+  retry: () => void;
 }) {
+  const pathname = usePathname() ?? "";
+  const shopping = SHOPPING.some((root) => pathname === root || pathname.startsWith(`${root}/`));
   useEffect(() => {
     console.error("[route-error]", error);
     // Server-relayed Sentry capture — the DSN never ships to the browser.
@@ -39,12 +46,12 @@ export default function GroupError({
         )}
       </Alert>
       <div className="mt-5 flex flex-wrap gap-3">
-        <button type="button" onClick={reset} className="btn btn--live">
+        <Button variant="live" onClick={() => retry()}>
           Try again
-        </button>
-        <Link href="/marketplace" className="btn btn--ghost">
-          Back to the marketplace
-        </Link>
+        </Button>
+        <ButtonLink href={shopping ? "/marketplace" : "/explore"} variant="ghost">
+          {shopping ? "Back to the marketplace" : "Back to Explore"}
+        </ButtonLink>
       </div>
     </div>
   );

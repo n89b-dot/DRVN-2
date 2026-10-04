@@ -100,6 +100,7 @@ export {
 } from "./messaging";
 export { ChatComposer } from "./chat-composer";
 export { ResultNote } from "./result-note";
+export { UnconfirmedOutcome } from "./unconfirmed-outcome";
 export { FormSection, ValidationSummary, type ValidationEntry } from "./form-section";
 export {
   SkeletonRows,

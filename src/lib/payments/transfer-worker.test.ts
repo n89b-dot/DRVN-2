@@ -64,6 +64,7 @@ type IntentOverrides = Partial<{
   dispatch_transfer_group: string | null;
   provider_call_may_have_occurred: boolean;
   source_transaction: string | null;
+  dispatch_carry_cents: number | null;
 }>;
 
 function intent(overrides: IntentOverrides = {}) {
@@ -127,8 +128,12 @@ function fakeAdmin(options: {
         ? "completed"
         : name === "record_transfer_recovery"
           ? "recovery-a"
-          : true;
-    return { data: behavior?.data ?? defaultData, error: behavior?.error ?? null };
+          : name === "freeze_transfer_carry"
+            ? 0
+            : true;
+    // An explicit `data: null` is a real answer (a lost lease), not "default".
+    const data = behavior && "data" in behavior ? behavior.data : defaultData;
+    return { data, error: behavior?.error ?? null };
   });
 
   const from = vi.fn((table: string) => {
@@ -353,6 +358,60 @@ describe("transfer worker crash recovery", () => {
     await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
     expect(mocks.transferCreate).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith("release_transfer_intent", expect.any(Object));
+  });
+
+  it("keeps a carried-forward charge back from a fresh transfer", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [intent()],
+      rpc: { freeze_transfer_carry: { data: 800 } },
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 1 });
+    expect(rpc).toHaveBeenCalledWith("freeze_transfer_carry", {
+      p_order: "order-a",
+      p_worker: expect.any(String),
+      p_payable_cents: 4500,
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "prepare_transfer_dispatch",
+      expect.objectContaining({ p_amount_cents: 3700 })
+    );
+    expect(mocks.transferCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 3700 }),
+      expect.anything()
+    );
+  });
+
+  it("does not transfer when the carry-forward freeze loses the lease", async () => {
+    const { admin } = fakeAdmin({
+      claimed: [intent()],
+      rpc: { freeze_transfer_carry: { data: null } },
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a carry-forward amount that would empty the transfer", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [intent()],
+      rpc: { freeze_transfer_carry: { data: 4500 }, release_transfer_intent: { data: true } },
+    });
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ failed: 1 });
+    expect(mocks.transferCreate).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("prepare_transfer_dispatch", expect.anything());
+  });
+
+  it("re-sends a frozen carry-reduced transfer without calling it a changed amount", async () => {
+    const { admin, rpc } = fakeAdmin({
+      claimed: [frozenIntent({ dispatch_amount_cents: 3700, dispatch_carry_cents: 800 })],
+    });
+    mocks.transferCreate.mockResolvedValue(transfer({ amount: 3700 }));
+    await expect(processDueTransfers(admin)).resolves.toMatchObject({ transferred: 1 });
+    expect(rpc).not.toHaveBeenCalledWith("record_transfer_recovery", expect.anything());
+    expect(rpc).not.toHaveBeenCalledWith("freeze_transfer_carry", expect.anything());
+    expect(mocks.transferCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 3700 }),
+      expect.anything()
+    );
   });
 
   it("recovers success after a failed completion write without creating twice", async () => {
