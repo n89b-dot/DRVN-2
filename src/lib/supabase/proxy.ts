@@ -50,10 +50,31 @@ function isProductPath(pathname: string) {
  * the next request, or looping through /login. Every redirect after the
  * session check carries the latest cookies, options and removals included.
  */
-function redirectKeepingSession(url: URL | string, from: NextResponse) {
-  const response = NextResponse.redirect(url);
+function redirectKeepingSession(url: URL | string, from: NextResponse, request: NextRequest) {
+  const response = request.headers.has("next-action")
+    ? actionRedirect(new URL(url, request.url))
+    : NextResponse.redirect(url, request.method === "GET" || request.method === "HEAD" ? 307 : 303);
   for (const cookie of from.cookies.getAll()) response.cookies.set(cookie);
   return response;
+}
+
+/**
+ * A Server Action called from the page is a fetch, and fetch follows an HTTP
+ * redirect by itself: a 307 re-sent the action as a POST to /login, which
+ * answered with something unrelated, so the page saw a failed call ("Couldn't
+ * confirm the update", a spinner that never ends) instead of a sign-in.
+ *
+ * So answer in the shape Next's own `redirect()` uses for a fetch action — a
+ * 200 with `x-action-redirect: <path>;<push|replace>` and no body — and the
+ * client router loads the destination as a full page. Any other non-GET (a
+ * form posted without JavaScript) gets a 303, so the browser lands on the
+ * sign-in page with a GET rather than re-posting to it.
+ */
+function actionRedirect(url: URL) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: { "x-action-redirect": `${url.pathname}${url.search};replace` },
+  });
 }
 
 /**
@@ -73,7 +94,7 @@ function denyProductRoutes(request: NextRequest, response: NextResponse, reason:
   // The whole destination, query included, as on the signed-out redirect.
   url.searchParams.set("next", pathname + request.nextUrl.search);
   url.searchParams.set("error", "session-unavailable");
-  return redirectKeepingSession(url, response);
+  return redirectKeepingSession(url, response, request);
 }
 
 export async function updateSession(request: NextRequest) {
@@ -149,7 +170,7 @@ export async function updateSession(request: NextRequest) {
     url.searchParams.set("next", pathname + request.nextUrl.search);
     // A failed refresh clears the session cookies; the redirect carries
     // those removals too.
-    return redirectKeepingSession(url, supabaseResponse);
+    return redirectKeepingSession(url, supabaseResponse, request);
   }
 
   if (user && (isAuthPage || pathname === "/")) {
@@ -157,7 +178,7 @@ export async function updateSession(request: NextRequest) {
     // /notifications should open Notifications), never another auth page.
     const next = isAuthPage ? safeRedirectPath(request.nextUrl.searchParams.get("next"), "/home") : "/home";
     const dest = /^\/(login|signup)(\/|\?|$)/.test(next) ? "/home" : next;
-    return redirectKeepingSession(new URL(dest, request.url), supabaseResponse);
+    return redirectKeepingSession(new URL(dest, request.url), supabaseResponse, request);
   }
 
   return supabaseResponse;
