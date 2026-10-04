@@ -79,6 +79,10 @@ export async function processDisputeSla(admin: Admin): Promise<DisputeSlaSummary
     .eq("status", "disputed")
     .lt("disputed_at", cutoff)
     .is("refund_offered_at", null)
+    // A card chargeback is the bank's process, not an unanswered in-app
+    // dispute: Stripe refuses refunds on a disputed charge, so auto-refunding
+    // one only failed, opened a recovery case and alerted, every pass.
+    .is("stripe_dispute_id", null)
     .order("updated_at").limit(5).throwOnError();
 
   for (const order of stale ?? []) {

@@ -60,6 +60,10 @@ export type RefundOrderInput = {
   initiator: RefundInitiator;
   /** When the order is disputed, also settle the dispute bookkeeping. */
   resolveDispute?: boolean;
+  /** The business request this refund belongs to (`return:<id>`,
+   *  `offer:<order>:<offered_at>`). With one, a retry adopts that request's
+   *  live operation instead of starting another refund. */
+  requestKey?: string;
 };
 
 export type RefundOrderOutcome =
@@ -73,7 +77,13 @@ export type RefundOrderOutcome =
       /** Set when the reversal failed and a recovery case was opened. */
       recoveryId?: string;
     }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /** The refund exists or may exist at the provider and is still being
+       *  confirmed — not a failure, and not a reason to ask again. */
+      pending?: boolean;
+    };
 
 function initiatorLabel(initiator: RefundInitiator): string {
   switch (initiator.kind) {
@@ -347,18 +357,32 @@ export async function refundOrder(
   // Atomic reservation: the refundable remainder is computed under a row lock
   // with in-flight operations counted, so concurrent refunds cannot
   // oversubscribe and the ledger column is never used as a mutex.
-  const { data: begun, error: beginError } = await admin.rpc("begin_refund_operation", {
-    p_order_id: orderId,
-    p_amount_cents: input.amountCents ?? null,
-    p_reason: reason,
-    p_requested_by: initiatorLabel(initiator),
-    p_actor_role: actorRole(initiator),
-    p_resolve_dispute: input.resolveDispute ?? false,
-    p_dispute_outcome: disputeOutcome,
-    p_payment_reference: payment.provider_reference,
-    p_refund_reference: null,
-    p_external: false,
-  });
+  // With a request key, a retry of the same return or offer adopts its live
+  // operation rather than reserving a second refund (20261004110000).
+  const { data: begun, error: beginError } = input.requestKey
+    ? await admin.rpc("begin_request_refund_operation", {
+        p_request_key: input.requestKey,
+        p_order_id: orderId,
+        p_amount_cents: input.amountCents ?? null,
+        p_reason: reason,
+        p_requested_by: initiatorLabel(initiator),
+        p_actor_role: actorRole(initiator),
+        p_resolve_dispute: input.resolveDispute ?? false,
+        p_dispute_outcome: disputeOutcome,
+        p_payment_reference: payment.provider_reference,
+      })
+    : await admin.rpc("begin_refund_operation", {
+        p_order_id: orderId,
+        p_amount_cents: input.amountCents ?? null,
+        p_reason: reason,
+        p_requested_by: initiatorLabel(initiator),
+        p_actor_role: actorRole(initiator),
+        p_resolve_dispute: input.resolveDispute ?? false,
+        p_dispute_outcome: disputeOutcome,
+        p_payment_reference: payment.provider_reference,
+        p_refund_reference: null,
+        p_external: false,
+      });
   if (beginError) {
     reportError("[refunds] begin_refund_operation failed", { orderId, beginError });
     return { ok: false, error: "The refund could not be started — try again." };
@@ -466,7 +490,7 @@ export async function runRefundOperation(
     return { ok: false, error: "Refund failed." };
   }
   if (op.status === "provider_pending" || op.status === "requested") {
-    return { ok: false, error: "The refund is pending provider confirmation." };
+    return { ok: false, pending: true, error: "The refund is pending provider confirmation." };
   }
   return { ok: false, error: "The refund needs recovery before it can continue." };
 }
@@ -483,7 +507,7 @@ export async function runRefundOperation(
 async function ensureProviderRefund(
   admin: Admin,
   op: RefundOpRow
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; pending?: boolean }> {
   let wasPending = op.status === "provider_pending";
   if (op.replaces_adjustment_id) {
     const {data: claim, error} = await admin.rpc("claim_refund_replacement_provider", {p_operation: op.id});
@@ -545,7 +569,7 @@ async function ensureProviderRefund(
         );
         if (recorded.action === "settle" || recorded.action === "committed") return { ok: true };
         if (recorded.action === "pending") {
-          return { ok: false, error: "The refund is pending provider confirmation." };
+          return { ok: false, pending: true, error: "The refund is pending provider confirmation." };
         }
         return { ok: false, error: "The provider refund needs recovery." };
       }
@@ -554,7 +578,7 @@ async function ensureProviderRefund(
       // Can't prove the refund doesn't exist, so don't re-call — outside
       // Stripe's 24 h idempotency window that could refund twice. The sweep
       // retries the lookup.
-      return { ok: false, error: "Could not verify refund state with Stripe — will retry." };
+      return { ok: false, pending: true, error: "Could not verify refund state with Stripe — will retry." };
     }
   }
 
@@ -577,7 +601,7 @@ async function ensureProviderRefund(
     });
     if (result.status === "unknown") {
       await deferUnknownProviderOutcome(admin, op, result.reason ?? "Provider outcome is unknown");
-      return { ok: false, error: "The refund could not be confirmed — it will be reconciled." };
+      return { ok: false, pending: true, error: "The refund could not be confirmed — it will be reconciled." };
     }
     if ((result.status === "failed" || result.status === "canceled") && !result.reference) {
       failureReason = result.reason ?? "The provider refused the refund.";
@@ -592,7 +616,7 @@ async function ensureProviderRefund(
     );
     if (recorded.action === "settle" || recorded.action === "committed") return { ok: true };
     if (recorded.action === "pending") {
-      return { ok: false, error: "The refund is pending provider confirmation." };
+      return { ok: false, pending: true, error: "The refund is pending provider confirmation." };
     }
     failureReason = result.reason ?? "The provider refund failed.";
   } catch (error) {
@@ -604,7 +628,7 @@ async function ensureProviderRefund(
       op,
       error instanceof Error ? error.message : String(error)
     );
-    return { ok: false, error: "The refund could not be confirmed — it will be retried." };
+    return { ok: false, pending: true, error: "The refund could not be confirmed — it will be retried." };
   }
 
   // The lifecycle RPC persisted Stripe's terminal response and recovery
