@@ -19,8 +19,10 @@ vi.mock("@/lib/rate-limit", () => ({
   allowAction: mocks.allowAction,
   RATE_LIMITS: {
     signIn: { action: "sign-in", limit: 10, windowSeconds: 900 },
+    signInEmailCeiling: { action: "sign-in-email", limit: 50, windowSeconds: 900 },
     signInNetwork: { action: "sign-in-network", limit: 30, windowSeconds: 900 },
     passwordReset: { action: "password-reset", limit: 5, windowSeconds: 1800 },
+    passwordResetEmailCeiling: { action: "password-reset-email", limit: 10, windowSeconds: 1800 },
     passwordResetNetwork: { action: "password-reset-network", limit: 15, windowSeconds: 1800 },
   },
 }));
@@ -52,16 +54,38 @@ beforeEach(() => {
 describe("sign-in throttling", () => {
   it("counts the normalized email and the visitor's network before asking Supabase", async () => {
     await expect(login({}, form({ email: " Kaito@DRVN.test ", password: "pw" }))).rejects.toThrow("redirect:/home");
-    const [[emailAction, emailKey], [networkAction, networkKey]] = subjects();
+    const [[emailAction, emailKey], [ceilingAction, ceilingKey], [networkAction, networkKey]] = subjects();
     expect(emailAction).toBe("sign-in");
-    expect(emailKey).toMatch(/^email:[0-9a-f]{64}$/);
+    expect(emailKey).toMatch(/^email:[0-9a-f]{64}:network:abc$/);
     expect(emailKey).not.toContain("kaito");
+    expect(ceilingAction).toBe("sign-in-email");
+    expect(ceilingKey).toMatch(/^email:[0-9a-f]{64}$/);
     expect([networkAction, networkKey]).toEqual(["sign-in-network", "network:abc"]);
 
     // Case and spacing don't open a second bucket.
     mocks.allowAction.mockClear();
     await expect(login({}, form({ email: "kaito@drvn.test", password: "pw" }))).rejects.toThrow("redirect:");
     expect(subjects()[0][1]).toBe(emailKey);
+  });
+
+  it("does not let attempts from elsewhere use up the owner's own tries", async () => {
+    // The tight limit is spent for the attacker's network only.
+    mocks.allowAction.mockImplementation(
+      async (rule: { action: string }, subject: string) => !(rule.action === "sign-in" && subject.endsWith(":network:attacker"))
+    );
+    mocks.network.mockReturnValue("network:attacker");
+    await expect(login({}, form({ email: "a@drvn.test", password: "junk" }))).resolves.toHaveProperty("error");
+    expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+
+    mocks.network.mockReturnValue("network:owner");
+    await expect(login({}, form({ email: "a@drvn.test", password: "pw" }))).rejects.toThrow("redirect:");
+    expect(mocks.signInWithPassword).toHaveBeenCalledOnce();
+  });
+
+  it("still stops one account being tried from many places", async () => {
+    mocks.allowAction.mockImplementation(async (rule: { action: string }) => rule.action !== "sign-in-email");
+    await expect(login({}, form({ email: "a@drvn.test", password: "pw" }))).resolves.toHaveProperty("error");
+    expect(mocks.signInWithPassword).not.toHaveBeenCalled();
   });
 
   it("refuses without calling Supabase once either key is exhausted", async () => {
@@ -78,6 +102,7 @@ describe("sign-in throttling", () => {
     mocks.network.mockReturnValue(null);
     await expect(login({}, form({ email: "a@drvn.test", password: "pw" }))).rejects.toThrow("redirect:");
     expect(subjects().map(([action]) => action)).toEqual(["sign-in"]);
+    expect(subjects()[0][1]).toMatch(/^email:[0-9a-f]{64}$/);
   });
 });
 
@@ -86,7 +111,24 @@ describe("password reset throttling", () => {
 
   it("sends while within both limits", async () => {
     await expect(requestPasswordReset({}, form({ email: "a@drvn.test" }))).resolves.toEqual(sent);
-    expect(subjects().map(([action]) => action)).toEqual(["password-reset", "password-reset-network"]);
+    expect(subjects().map(([action]) => action)).toEqual([
+      "password-reset",
+      "password-reset-email",
+      "password-reset-network",
+    ]);
+    expect(mocks.resetPasswordForEmail).toHaveBeenCalledOnce();
+  });
+
+  it("still sends the owner's reset after someone elsewhere has used up theirs", async () => {
+    mocks.allowAction.mockImplementation(
+      async (rule: { action: string }, subject: string) =>
+        !(rule.action === "password-reset" && subject.endsWith(":network:attacker"))
+    );
+    mocks.network.mockReturnValue("network:attacker");
+    await requestPasswordReset({}, form({ email: "a@drvn.test" }));
+    expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
+    mocks.network.mockReturnValue("network:owner");
+    await expect(requestPasswordReset({}, form({ email: "a@drvn.test" }))).resolves.toEqual(sent);
     expect(mocks.resetPasswordForEmail).toHaveBeenCalledOnce();
   });
 
