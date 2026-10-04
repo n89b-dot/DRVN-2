@@ -7,11 +7,16 @@ import { Button, TileHead } from "@/components/ui";
 import { startConnectOnboarding } from "./payouts-actions";
 import { formatPrice } from "@/lib/payments/fee";
 
-export type ConnectSummary = {
-  stripeConfigured: boolean;
-  hasAccount: boolean;
-  payoutsEnabled: boolean;
-};
+export type ConnectSummary =
+  | {
+      stripeConfigured: boolean;
+      hasAccount: boolean;
+      payoutsEnabled: boolean;
+      unavailable?: never;
+    }
+  /** The account state couldn't be read (R2-05). Not "not set up": that
+   *  would offer to create a payout account the seller may already have. */
+  | { stripeConfigured: boolean; unavailable: true };
 
 /**
  * The payout account's state and its one action — whether money has
@@ -45,6 +50,23 @@ export function PayoutSetup({
           Payments run through a test provider, so there&apos;s no payout account to connect and
           no money moves. Live payouts go through Stripe once payments are switched on.
         </p>
+      </section>
+    );
+  }
+
+  if (connect.unavailable) {
+    return (
+      <section className="tile" aria-labelledby="payout-account">
+        <TileHead
+          label={<span id="payout-account">Payout account</span>}
+          end={<span className="chip">Unavailable</span>}
+        />
+        <p role="status" className="max-w-[62ch] text-dim">
+          We couldn&apos;t check your payout account just now. Nothing has changed with it.
+        </p>
+        <a href="/payouts" className="jumplink mt-3 inline-block">
+          Try again →
+        </a>
       </section>
     );
   }

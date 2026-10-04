@@ -138,6 +138,8 @@ function PayoutPointer({ connect }: { connect: ConnectSummary }) {
         <span className="microlabel microlabel--ink">Payout account</span>
         {!connect.stripeConfigured ? (
           <span className="chip">Test mode</span>
+        ) : connect.unavailable ? (
+          <span className="chip">Unavailable</span>
         ) : connect.payoutsEnabled ? (
           <span className="chip chip--ok">Payouts enabled</span>
         ) : connect.hasAccount ? (
@@ -148,7 +150,7 @@ function PayoutPointer({ connect }: { connect: ConnectSummary }) {
       </div>
       <p className="mt-2">
         <Link href="/payouts" className="jumplink">
-          {connect.stripeConfigured && !connect.payoutsEnabled
+          {connect.stripeConfigured && !connect.unavailable && !connect.payoutsEnabled
             ? "Set up payouts →"
             : "Payouts and earnings →"}
         </Link>

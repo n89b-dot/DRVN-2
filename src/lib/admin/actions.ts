@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 
-import { auditedAction, writeAudit } from "./audit";
+import { auditedAction } from "./audit";
 import { sendAdminAlert } from "./alerts";
 import { markWebhookEventProcessed } from "@/lib/payments/settlement";
 import { dispatchRecordedWebhookEvent } from "./replay-webhook";
@@ -15,6 +15,7 @@ import { ACCOUNT_DELETION_REASON } from "./presentation";
 import { getAdminContext } from "./guard";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
 
@@ -875,40 +876,55 @@ export async function adminReconcileOperation(
   if (!isCtx(ctx)) return ctx;
 
   const operationId = field(formData, "operation_id");
+  const seenThrough = Number(field(formData, "seen_through"));
   const outcome = field(formData, "outcome");
   const reason = field(formData, "reason");
   if (!/^[0-9a-f-]{36}$/i.test(operationId)) return { error: "Missing operation." };
-  if (outcome !== "applied" && outcome !== "not_applied") return { error: "Say whether it went through." };
+  if (!Number.isSafeInteger(seenThrough) || seenThrough <= 0) {
+    return { error: "This page is out of date. Reload it, then record the outcome." };
+  }
+  if (!["applied", "not_applied", "unknown"].includes(outcome)) {
+    return { error: "Say whether it went through, or that you can't tell yet." };
+  }
   if (!reason) return { error: "Say how you checked — it goes in the audit log." };
 
-  const { data: rows, error } = await ctx.admin
-    .from("admin_audit_log")
-    .select("action, subject_type, subject_id, order_id, metadata")
-    .eq("metadata->>operationId", operationId);
-  if (error) return { error: "Couldn't load that operation. Nothing was recorded." };
-  const requested = rows?.find((r) => (r.metadata as { phase?: string } | null)?.phase === "requested");
-  if (!requested) return { error: "No such pending operation." };
-  if (rows?.some((r) => ["completed", "reconciled"].includes((r.metadata as { phase?: string } | null)?.phase ?? ""))) {
-    return { ok: "Already resolved — nothing to do." };
-  }
-
-  try {
-    await writeAudit(ctx.admin, {
-      actorId: ctx.userId,
-      action: "operation.reconcile",
-      subjectType: requested.subject_type,
-      subjectId: requested.subject_id,
-      orderId: requested.order_id ?? undefined,
-      reason,
-      metadata: { operationId, phase: "reconciled", outcome, reconciles: requested.action },
-    });
-  } catch {
-    return { error: "Couldn't record the outcome. The operation is still pending." };
+  // R2-02: one transaction as the signed-in admin (fresh MFA, checked in the
+  // database). It takes the operation fence's lock, rechecks the operation
+  // and the refund records it created, and admits one terminal answer.
+  const session = await createClient();
+  const { data, error } = await session.rpc("reconcile_admin_external_operation", {
+    p_operation: operationId,
+    p_seen_through: seenThrough,
+    p_outcome: outcome,
+    p_reason: reason,
+  });
+  if (error) {
+    const code = error.code ?? "";
+    if (code === "40001") {
+      return { error: "Something new was recorded for this operation since you opened it. Reload, check again, then record." };
+    }
+    if (code === "55000" || code === "22023") return { error: error.message };
+    if (code === "P0002") return { error: "No such pending operation." };
+    if (code === "42501") return { error: "Recording an outcome needs a fresh authenticator check. Reload to verify again." };
+    reportError("[admin] reconcile outcome unknown", { operationId, error });
+    return { error: "Couldn't confirm the outcome was recorded. Reload to see the operation's current state." };
   }
   revalidatePath("/admin", "layout");
+  const result = data as unknown as { status?: string; outcome?: string; phase?: string } | null;
+  if (result?.status === "escalated") {
+    return { ok: "Recorded as unknown. The operation stays blocked until its outcome is confirmed." };
+  }
+  if (result?.status === "already_resolved") {
+    return {
+      error:
+        result.phase === "completed"
+          ? "This operation completed in the meantime — nothing to record."
+          : `Someone already recorded this as ${result.outcome === "applied" ? "done" : "not done"}. Nothing changed.`,
+    };
+  }
   return {
     ok:
-      outcome === "applied"
+      result?.outcome === "applied"
         ? "Recorded as done. The operation is closed."
         : "Recorded as not done. The operation is closed and can be run again.",
   };

@@ -74,7 +74,11 @@ async function settle(page: Page, path: string) {
   // The landing hero is the newest public car's cover photo, so whether it
   // exists at all — and how far it pushes the page down — depends on what
   // other suites left behind. Hidden like the auth backdrop (direct style:
-  // see the CSP note below).
+  // see the CSP note below). That means neither the baselines nor the
+  // overflow checks here (the 320 smoke included) see the hero's geometry:
+  // e2e/landing-hero.spec.ts covers it on the unmodified page, with the hero
+  // visible, at 320–1440 in both themes, with and without reduced motion,
+  // with a failed photo, with long content, and by keyboard.
   await page.locator(".landing-hero").evaluateAll(elements => elements.forEach(element => { (element as HTMLElement).style.display = "none"; }));
   if (path === "/marketplace") {
     // Direct style properties work under the enforced nonce CSP; an unnonced

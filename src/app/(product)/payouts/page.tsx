@@ -5,6 +5,7 @@ import { Foot, PageHead, SellingNav } from "@/components/ui";
 import { getConnectAccountId } from "@/lib/payments/connect";
 import { getSellerLedger } from "@/lib/payments/ledger";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
+import { reportError } from "@/lib/monitoring";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
@@ -24,14 +25,24 @@ export default async function PayoutsPage() {
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  const [ledger, offersCount, connectAccountId, { data: profile }] = await Promise.all([
+  const [ledgerRead, offersCount, connectAccount, profileRead] = await Promise.all([
     getSellerLedger(supabase, user.id),
     loadOffersNeedingAttention(supabase, user.id),
     // No client select grant on the Connect pointer — read server-side, the
-    // same way Settings does.
-    getConnectAccountId(user.id).catch(() => null),
+    // same way Settings does. A failed read is "unavailable", never "no
+    // account" (R2-05): that would offer to set up payouts a second time.
+    getConnectAccountId(user.id).then(
+      (id) => ({ ok: true as const, id }),
+      (error) => {
+        reportError("[payouts] connect lookup failed", { error });
+        return { ok: false as const };
+      }
+    ),
     supabase.from("profiles").select("payouts_enabled").eq("id", user.id).maybeSingle(),
   ]);
+  if (profileRead.error) reportError("[payouts] payout status read failed", { error: profileRead.error });
+  const connectKnown = connectAccount.ok && !profileRead.error && Boolean(profileRead.data);
+  const ledger = ledgerRead.status === "ok" ? ledgerRead.ledger : null;
 
   return (
     <div className="wrap">
@@ -50,12 +61,16 @@ export default async function PayoutsPage() {
 
       <section className="deck">
         <PayoutSetup
-          connect={{
-            stripeConfigured: getPaymentProvider().name === "stripe",
-            hasAccount: Boolean(connectAccountId),
-            payoutsEnabled: profile?.payouts_enabled ?? false,
-          }}
-          waitingCents={ledger.heldCents + ledger.clearingCents + ledger.availableCents}
+          connect={
+            connectKnown
+              ? {
+                  stripeConfigured: getPaymentProvider().name === "stripe",
+                  hasAccount: Boolean(connectAccount.ok && connectAccount.id),
+                  payoutsEnabled: profileRead.data?.payouts_enabled ?? false,
+                }
+              : { stripeConfigured: getPaymentProvider().name === "stripe", unavailable: true }
+          }
+          waitingCents={ledger ? ledger.heldCents + ledger.clearingCents + ledger.availableCents : 0}
         />
         <PayoutsSection ledger={ledger} paymentsLive={paymentsAreLive()} />
       </section>

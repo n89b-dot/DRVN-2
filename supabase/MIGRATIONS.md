@@ -1,5 +1,46 @@
 # Applying migrations
 
+## October 3 — edit replay, admin reconciliation, garage refund allocation, public watcher counts (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261003120000_listing_edit_request_replay.sql` | shared dev project + isolated local stack, 2026-10-03 |
+| `20261003130000_admin_operation_reconciliation.sql` | shared dev project + isolated local stack, 2026-10-03 |
+| `20261003140000_garage_refund_allocation.sql` | shared dev project + isolated local stack, 2026-10-03 |
+| `20261003150000_listing_watch_counts.sql` | shared dev project + isolated local stack, 2026-10-03 |
+
+Release-readiness round two (R2-01, R2-02, R2-03, R2-09). Additive:
+- `listing_edit_requests` (private ledger) plus `save_listing_edit`,
+  `replay_listing_edit`, `record_listing_edit` and `listing_edit_status`.
+  `update_listing_atomic` is unchanged; the app now calls `save_listing_edit`,
+  so **apply this before deploying the app that calls it**.
+- `reconcile_admin_external_operation` and a unique partial index allowing
+  one terminal (`completed`/`reconciled`) audit row per operationId. Before
+  applying to a database with history, check
+  `select metadata->>'operationId', count(*) from admin_audit_log where metadata->>'phase' in ('completed','reconciled') and metadata ? 'operationId' group by 1 having count(*) > 1`
+  returns no rows. Rows without an operationId don't conflict.
+- `garage_car_stats` replaced in place (same signature).
+- `listing_watch_counts` (count-only, definer, mirrors the listing read
+  policies) and `feed_hydration` re-created to take `watch_count` from it.
+  Apply before the app that calls it.
+
+Each applies twice cleanly (idempotent). All 55 SQL guards, including the new
+`listing_edit_replay_guard.sql`, `admin_operation_reconcile_guard.sql`,
+`garage_refund_allocation_guard.sql` and `listing_watch_counts_guard.sql`, pass on a fresh disposable database
+built from the full chain, and generated types match.
+
+Shared dev, 2026-10-03, with `node scripts/apply-migration.mjs`, twice each.
+Checked first: every function, column and table they depend on exists; no
+operationId has two terminal audit rows; the live `feed_hydration` body was
+identical to `20260928170000`'s. The replaced `feed_hydration` and
+`garage_car_stats` definitions are backed up to
+`~/drvn-db-backups/pre-20261003-r2-functions.sql`. Afterwards: the edit ledger
+is unreadable to `authenticated`; anon can't call `save_listing_edit` or
+`reconcile_admin_external_operation`; a guest call to `listing_watch_counts`
+through the API returned the real count (1) while a direct guest read of
+`saves` still returned no rows. The app on `main` (still calling
+`update_listing_atomic`) is unaffected — that function is unchanged.
+
 ## October 1 — atomic listing edits; garage sales from paid orders (shared dev project)
 
 | File | Applied to |

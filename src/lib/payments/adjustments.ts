@@ -110,12 +110,13 @@ export async function orderAdjustmentCents(admin: Admin, orderId: string): Promi
     .reduce((sum, row) => sum + row.amount_cents, 0);
 }
 
-/** Batched per-order adjustment sums for ledger display. Read-only; errors
- *  degrade to an empty map (display, not money movement). */
+/** Batched per-order adjustment sums for ledger display. Read-only. A failed
+ *  read is null, not an empty map (R2-05): an empty map would show a net
+ *  without the label costs — higher than the seller will actually receive. */
 export async function adjustmentsByOrder(
   client: Pick<Admin, "from">,
   orderIds: string[]
-): Promise<Map<string, number>> {
+): Promise<Map<string, number> | null> {
   const map = new Map<string, number>();
   if (!orderIds.length) return map;
   const { data, error } = await client
@@ -124,7 +125,7 @@ export async function adjustmentsByOrder(
     .in("order_id", orderIds);
   if (error) {
     reportError("[adjustments] ledger read failed", { error });
-    return map;
+    return null;
   }
   for (const row of data ?? []) {
     if (row.voided_at || !row.order_id) continue;

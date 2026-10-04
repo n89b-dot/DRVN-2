@@ -129,7 +129,10 @@ Public buckets for car/listing media; **`dispute-evidence` is private**
 
 CI (`.github/workflows/ci.yml`), as of 1 October 2026: `verify` (production
 dependency advisories, typecheck, lint, unit, monitor contract, build),
-`secrets` (gitleaks over the full history), `sql-guard` (every guard file,
+`secrets` (gitleaks over this event's own commits only — a PR's first-parent,
+non-merge commits, or a push's), `secrets-full` (gitleaks 8.24.3, checksum-
+verified, over every reachable commit including merges plus the tracked tree
+at HEAD; redacted reports and a scope record uploaded), `sql-guard` (every guard file,
 then generated-schema parity), `e2e` (the full browser suite on a local
 `supabase start` stack with Realtime) and `stripe-integration` (test mode).
 `release-gate` fails unless all of them ran and passed; nothing self-skips.

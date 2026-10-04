@@ -31,7 +31,9 @@ import { PHONE_TIERS, VIEWPORTS } from "./viewports";
  */
 
 let discovery: Awaited<ReturnType<typeof createDiscoveryFixture>>;
-test.beforeAll(async () => { discovery = await createDiscoveryFixture(); });
+// One watcher, so the public "Watching" line is drawn and its place in the
+// record is measured, not skipped (D8, R2-09).
+test.beforeAll(async () => { discovery = await createDiscoveryFixture({ watchers: 1 }); });
 test.afterAll(async () => { await discovery?.cleanup(); });
 
 const stamp = Date.now();
@@ -155,10 +157,12 @@ for (const tier of PHONE_TIERS) {
       expect(order).not.toBeNull();
       expect(order!.buyHeight!).toBeGreaterThanOrEqual(44);
       expect(order!.price!).toBeLessThan(order!.buy!);
-      // "Watching" is omitted at zero for non-owners (and a guest can't read
-      // watch counts at all — saves RLS), so it is ordered only when drawn.
-      // The dispatch note is always part of the record.
-      if (order!.watching !== null) expect(order!.buy!).toBeLessThan(order!.watching);
+      // The fixture's one watcher is public (listing_watch_counts, R2-09),
+      // so "Watching" is drawn for a guest and sits after the actions. The
+      // dispatch note is always part of the record.
+      expect(order!.watching, "a guest sees the public watcher count").not.toBeNull();
+      expect(order!.buy!).toBeLessThan(order!.watching!);
+      await expect(page.locator(".pdp__rail").getByText("1 watching")).toBeVisible();
       expect(order!.dispatch, "the dispatch note must render").not.toBeNull();
       expect(order!.buy!).toBeLessThan(order!.dispatch!);
 

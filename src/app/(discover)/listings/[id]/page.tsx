@@ -38,6 +38,7 @@ import { PurchaseActions } from "./purchase-actions";
 import { QASection, type QAItem } from "./qa-section";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
+import { profileHref } from "@/lib/profile-href";
 
 /** The listing row and its photos, read once per request and shared by the
  *  metadata and the page (each used to fetch its own). React's cache is per
@@ -253,7 +254,8 @@ export default async function ListingPage({
       sourceModLine.raw_text ||
       null
     : null;
-  const watchCount = watchCounts.get(id) ?? 0;
+  // R2-09: a public count from listing_watch_counts. null = couldn't read it.
+  const watchCount = watchCounts?.get(id) ?? null;
 
   const avgRating = (reviews ?? []).length
     ? (reviews!.reduce((s, r) => s + r.rating, 0) / reviews!.length).toFixed(1)
@@ -481,7 +483,7 @@ export default async function ListingPage({
                 at the foot of the page. */}
             {seller && !isOwn && (
               <Link
-                href={seller.username ? `/u/${seller.username}?tab=parts` : "#"}
+                href={seller.username ? profileHref(seller.username, "parts") : "#"}
                 className="pdp__seller"
               >
                 <span className="monogram monogram--sm pdp__seller-face" aria-hidden="true">
@@ -529,12 +531,12 @@ export default async function ListingPage({
               {/* Watchers only when there are some: an empty metric with a
                   dash read as a value that failed to load. The owner sees
                   their numbers, zeros included — that is the answer. */}
-              {(watchCount > 0 || isOwn) && (
+              {((watchCount ?? 0) > 0 || isOwn) && (
                 <LiveDim
                   label="Watching"
-                  value={`${watchCount} watching`}
-                  live={watchCount > 0}
-                  blank={watchCount === 0}
+                  value={watchCount === null ? "Unavailable" : `${watchCount} watching`}
+                  live={(watchCount ?? 0) > 0}
+                  blank={!watchCount}
                 />
               )}
               {isOwn && (

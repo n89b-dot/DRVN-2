@@ -19,6 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, OrderStatus } from "@/lib/database.types";
 
 import { adjustmentsByOrder } from "./adjustments";
+import { sellerProceeds } from "./proceeds";
 import { platformFeeCents } from "./provider";
 import { reportError } from "@/lib/monitoring";
 
@@ -48,10 +49,15 @@ export type LedgerLine = {
   grossCents: number;
   feeCents: number;
   shippingCents: number;
+  /** Refunded to the buyer so far (R2-04). */
+  refundedCents: number;
+  /** The seller's share of those refunds — what comes off their proceeds. */
+  refundShareCents: number;
   /** Net effect of shipping-label adjustments (0052): ≤ 0 when DRVN bought
    *  labels on the seller's behalf, restored by voids/refunds. */
   adjustmentsCents: number;
-  /** What lands in the seller's balance: gross − platform fee + adjustments. */
+  /** What remains for the seller (see proceeds.ts): gross − fee − refund
+   *  share + adjustments. */
   netCents: number;
   state: LedgerState;
   /** When this line does/did clear the holding window. Null until delivered. */
@@ -64,13 +70,27 @@ export type SellerLedger = {
   clearingCents: number;
   availableCents: number;
   paidOutCents: number;
-  /** True if the fetch hit its cap — the totals above may undercount. */
+  /** True if the fetch hit its cap: the totals cover only the latest
+   *  FETCH_CAP sales and must be labelled that way, not as a lifetime. */
   truncated: boolean;
 };
 
+/**
+ * A ledger is all or nothing (R2-05): a failed read of the orders or of
+ * their label adjustments is "unavailable", never an empty or cost-free
+ * ledger — a $0 balance or a net that skipped the label costs would be a
+ * confident wrong answer.
+ */
+export type SellerLedgerResult =
+  | { status: "ok"; ledger: SellerLedger }
+  | { status: "unavailable" };
+
+/** The cap on the ledger's read, exported so the page can say what it covers. */
+export const LEDGER_FETCH_CAP = 500;
+
 // Bounded the same way /listings and /orders bound their reads — a seller's
 // full order history, not literally everything ever.
-const FETCH_CAP = 500;
+const FETCH_CAP = LEDGER_FETCH_CAP;
 
 function lineState(order: {
   status: OrderStatus;
@@ -105,28 +125,34 @@ function lineState(order: {
 export async function getSellerLedger(
   supabase: SupabaseClient<Database>,
   sellerId: string
-): Promise<SellerLedger> {
+): Promise<SellerLedgerResult> {
   const nowMs = new Date().getTime();
 
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, currency, created_at, delivered_at, transfer_reference")
+    .select("id, status, subtotal_cents, shipping_cents, platform_fee_cents, total_cents, refunded_cents, currency, created_at, delivered_at, transfer_reference")
     .eq("seller_id", sellerId)
     .in("status", CAPTURED_STATUSES)
     .order("created_at", { ascending: false })
     .limit(FETCH_CAP);
 
-  if (error) reportError("[payouts] failed to load orders", error);
+  if (error || !orders) {
+    reportError("[payouts] failed to load orders", { sellerId, error });
+    return { status: "unavailable" };
+  }
 
-  const captured = orders ?? [];
+  const captured = orders;
   const orderIds = captured.map((o) => o.id);
 
-  const [{ data: items }, adjustments] = await Promise.all([
+  const [{ data: items, error: itemsError }, adjustments] = await Promise.all([
     orderIds.length
       ? supabase.from("order_items").select("order_id, title, quantity").in("order_id", orderIds)
-      : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number }[] }),
+      : Promise.resolve({ data: [] as { order_id: string; title: string | null; quantity: number }[], error: null }),
     adjustmentsByOrder(supabase, orderIds),
   ]);
+  if (adjustments === null) return { status: "unavailable" };
+  // Titles only label the lines; without them the money is still right.
+  if (itemsError) reportError("[payouts] failed to load order titles", { sellerId, error: itemsError });
 
   const itemsByOrder = new Map<string, { title: string | null; quantity: number }[]>();
   for (const item of items ?? []) {
@@ -154,8 +180,13 @@ export async function getSellerLedger(
         ? order.platform_fee_cents
         : platformFeeCents(order.subtotal_cents);
     const grossCents = order.total_cents;
-    const adjustmentsCents = adjustments.get(order.id) ?? 0;
-    const netCents = grossCents - feeCents + adjustmentsCents;
+    const refundedCents = order.refunded_cents ?? 0;
+    const proceeds = sellerProceeds({
+      totalCents: grossCents,
+      feeCents,
+      refundedCents,
+      adjustmentsCents: adjustments.get(order.id) ?? 0,
+    });
     const { state, availableAt } = lineState(order, nowMs);
 
     return {
@@ -168,8 +199,10 @@ export async function getSellerLedger(
       grossCents,
       feeCents,
       shippingCents: order.shipping_cents,
-      adjustmentsCents,
-      netCents,
+      refundedCents,
+      refundShareCents: proceeds.refundShareCents,
+      adjustmentsCents: proceeds.adjustmentsCents,
+      netCents: proceeds.netCents,
       state,
       availableAt,
     };
@@ -188,11 +221,14 @@ export async function getSellerLedger(
   }
 
   return {
-    lines,
-    heldCents,
-    clearingCents,
-    availableCents,
-    paidOutCents,
-    truncated: captured.length === FETCH_CAP,
+    status: "ok",
+    ledger: {
+      lines,
+      heldCents,
+      clearingCents,
+      availableCents,
+      paidOutCents,
+      truncated: captured.length === FETCH_CAP,
+    },
   };
 }

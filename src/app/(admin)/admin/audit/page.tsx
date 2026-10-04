@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
 import { adminReconcileOperation } from "@/lib/admin/actions";
-import { AUDIT_PAGE_SIZE, getAuditLog, getOpenOperations } from "@/lib/admin/queries";
+import { AUDIT_PAGE_SIZE, getAuditLog, getOpenOperations, type OpenOperation } from "@/lib/admin/queries";
 import type { AdminAuditSubjectType } from "@/lib/database.types";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
@@ -37,6 +37,15 @@ function auditStamp(iso: string): string {
  * CI-asserted). Filterable by action prefix, actor, and subject, and paged,
  * so "every refund ever" and "everything Dana did in March" are both links.
  */
+const OPERATION_STATE: Record<OpenOperation["state"], string> = {
+  requested: "requested · no outcome recorded",
+  errored: "errored partway",
+  escalated: "marked unknown · still blocked",
+  refund_running: "refund still processing",
+  refund_completed: "refund completed · record it",
+  refund_failed: "refund refused by provider",
+};
+
 export default async function AdminAuditPage({
   searchParams,
 }: {
@@ -92,9 +101,11 @@ export default async function AdminAuditPage({
         <section id="pending" className="tile mb-6 scroll-mt-24" aria-label="Operations that need reconciliation">
           <TileHead label={`Needs reconciliation · ${pendingOps.length}`} />
           <p className="order__meta">
-            These ran against a provider and their outcome wasn&apos;t recorded. Check the provider
-            (Stripe, the carrier), then record what happened. Until you do, the same action on the
-            same record is refused.
+            Each of these was requested and never recorded an outcome. A request doesn&apos;t prove a
+            provider call happened. Check what the records and the provider (Stripe, the carrier)
+            show, then record it. Refunds are checked against DRVN&apos;s own refund records, and an
+            outcome that contradicts them is refused. Until an outcome is recorded, the same action on
+            the same record is refused. &ldquo;Can&apos;t tell yet&rdquo; keeps it blocked.
           </p>
           <div className="rowlist mt-2">
             {pendingOps.map((op) => (
@@ -104,7 +115,7 @@ export default async function AdminAuditPage({
                   <p className="flex flex-wrap items-baseline gap-x-2.5">
                     <span className="auditrow__action">{op.action}</span>
                     <span className="order__meta">
-                      {op.errored ? "errored partway" : "no answer recorded"} · op {op.operationId.slice(0, 8)}
+                      {OPERATION_STATE[op.state]} · op {op.operationId.slice(0, 8)}
                     </span>
                   </p>
                   <p className="mt-1 text-body">“{op.reason}”</p>
@@ -120,16 +131,18 @@ export default async function AdminAuditPage({
                   action={adminReconcileOperation}
                   title="Record what happened"
                   trigger="Resolve"
-                  hidden={{ operation_id: op.operationId }}
-                  confirmNote={`${op.action} on ${op.subjectType} ${op.subjectId.slice(0, 8)}. This records the outcome only; it doesn't call the provider.`}
+                  hidden={{ operation_id: op.operationId, seen_through: String(op.seenThrough) }}
+                  confirmNote={`${op.action} on ${op.subjectType} ${op.subjectId.slice(0, 8)}. This records the outcome only; it never calls the provider or starts another refund.`}
                   fields={[
                     {
                       kind: "select",
                       name: "outcome",
                       label: "Did it go through at the provider?",
+                      placeholder: "Choose what you found…",
                       options: [
                         { value: "applied", label: "Yes, it went through" },
                         { value: "not_applied", label: "No, nothing happened" },
+                        { value: "unknown", label: "Can't tell yet — keep it blocked" },
                       ],
                     },
                     { kind: "reason", label: "How you checked (recorded in the audit log)" },

@@ -35,7 +35,7 @@ export default async function SellingPage() {
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  const [offersCount, tallyRes, questionsRes, toShipRes, ledger, canPublish, soonestRes, viewRes, recentRes] = await Promise.all([
+  const [offersCount, tallyRes, questionsRes, toShipRes, ledgerRead, canPublish, soonestRes, viewRes, recentRes] = await Promise.all([
     loadOffersNeedingAttention(supabase, user.id),
     supabase.rpc("seller_register_tally", { p_seller: user.id }),
     supabase.rpc("seller_open_questions", { p_seller: user.id }),
@@ -91,7 +91,9 @@ export default async function SellingPage() {
       [...(l.listing_images ?? [])].sort((a, b) => a.position - b.position)[0]?.url ?? null,
   }));
 
-  const waitingCents = ledger.heldCents + ledger.clearingCents + ledger.availableCents;
+  // R2-05: an unreadable ledger is unavailable, not $0.
+  const ledger = ledgerRead.status === "ok" ? ledgerRead.ledger : null;
+  const waitingCents = ledger ? ledger.heldCents + ledger.clearingCents + ledger.availableCents : 0;
 
   const attention: { label: string; href: string; count: number }[] = [
     { label: "Offers waiting on you", href: "/offers", count: offersCount },
@@ -185,11 +187,15 @@ export default async function SellingPage() {
         />
         <MetricCard
           label="Available to pay out"
-          value={money(ledger.availableCents)}
-          blank={ledger.availableCents === 0}
+          value={ledger ? money(ledger.availableCents) : "Unavailable"}
+          blank={!ledger || ledger.availableCents === 0}
           footer={
             <Link href="/payouts" className="jumplink">
-              {ledger.clearingCents > 0 ? `${money(ledger.clearingCents)} clearing · ` : ""}
+              {!ledger
+                ? "Couldn't load — "
+                : ledger.clearingCents > 0
+                  ? `${money(ledger.clearingCents)} clearing · `
+                  : ""}
               Payouts →
             </Link>
           }
