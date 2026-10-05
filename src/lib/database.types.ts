@@ -1252,6 +1252,7 @@ type NullableArgs = {
   begin_request_refund_operation: "p_amount_cents";
   complete_transfer_intent: "p_operation_key";
   release_transfer_intent: "p_attempts" | "p_last_error" | "p_next_attempt_at";
+  release_seller_carry_payout: "p_attempts" | "p_last_error" | "p_next_attempt_at";
   record_refund_provider_event: "p_operation_id" | "p_order_id" | "p_payment_reference" | "p_balance_transaction" | "p_failure_balance_transaction" | "p_failure_reason" | "p_pending_reason";
   settle_payment_capture: "p_source";
   purchase_begin: "p_idempotency_key";

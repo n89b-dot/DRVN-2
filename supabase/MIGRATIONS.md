@@ -40,6 +40,26 @@ app with it: the old app keeps working (it calls with four arguments) but
 can't register a tracker first, so $1,000+ orders need a DRVN label until the
 new app is live. Guard: `payout_release_guard.sql`; three existing guards
 updated for the new deployed values.
+## October 8 — round five: export contract v5, carry-forward credit payouts
+
+| File | Applied to |
+|---|---|
+| `20261008100000_account_export_contract_v5.sql` | not yet |
+| `20261008100100_seller_carry_payouts.sql` | shared dev, 2026-10-05 (applied twice) |
+
+`20261008100000` moves the account export to contract `2026-10-08.v5`
+(message photos, `seller_carry_entries`, `seller_carry_payouts`): it widens
+the version check, expires unfinished requests and restates
+`request_account_export` with only the version literal changed. Apply it with
+the app that carries the v5 contract — an app on v4 purges every request the
+database stamps v5, and the reverse (see `20260919205000`).
+`20261008100100` adds `seller_carry_payouts`, two `seller_carry_entries`
+kinds (`paid_out`, `paid_out_reversed`) and five service-role functions
+(`open_`, `claim_`, `prepare_`, `complete_`, `release_seller_carry_payout(s)`).
+A seller's credit balance is paid to their Stripe balance by the transfers
+job once its newest entry is a day old. It restates no existing function.
+Apply after `20261005110100` and `20261007100400`. Guard:
+`supabase/tests/seller_carry_payout_guard.sql`.
 
 ## October 7 — review fixes (shared dev project)
 

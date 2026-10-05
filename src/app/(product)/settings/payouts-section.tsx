@@ -103,6 +103,12 @@ export function PayoutsSection({
             <b>−{compactMoney(ledger.owedCents)}</b>
           </div>
         )}
+        {ledger.creditCents > 0 && (
+          <div className="sheet__row items-baseline">
+            <span>Label refund credit — sent to your Stripe balance within a day</span>
+            <b>{compactMoney(ledger.creditCents)}</b>
+          </div>
+        )}
         <div className="sheet__row items-baseline">
           <span>{ledger.truncated ? `Net, latest ${LEDGER_FETCH_CAP} sales` : "Lifetime net"}</span>
           <b>{compactMoney(lifetimeCents)}</b>
