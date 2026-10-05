@@ -1,5 +1,22 @@
 # Applying migrations
 
+## October 10 — refund events for unknown orders (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261010100000_refund_event_unknown_order.sql` | shared dev project (2026-10-05) |
+
+Restates `record_refund_provider_event` (live body diffed against
+`20261007100200` first, no drift; backed up to
+`~/drvn-db-backups/pre-refund-unknown-order-function-20261005.sql`). A refund
+whose metadata names an order this database does not hold used to fail on the
+`orders` foreign key, so the webhook answered 500 and Stripe redelivered it.
+The order is now looked up once: an unknown one is kept only as
+`reported_order_id` and the refund goes to the `refund_lifecycle_unresolved`
+recovery. Seen on shared dev since 2026-10-01 because `stripe listen` forwards
+every event on the test account, including refunds made by `npm run
+test:stripe` against its own database. Guard: `refund_unknown_order_guard.sql`.
+
 ## October 9 — payout release and risk controls (shared dev project)
 
 **Shared dev, 2026-10-05.** The October 6 set and `20261009100000` were applied in that order by the "Seller payment hold policy" session (round five's `20261008100200` went on between them). The six functions they replace were diffed against their latest repo definitions first (no drift) and backed up to `~/drvn-db-backups/pre-payout-release-functions-20261005.sql`. Live `settlement_settings`: fixed hold, 2 days, receipt release 3 days, tracking from $1,000, card verification from $500, auto-confirm after 21 days with 3 days' notice; `drvn-delivery-auto-confirm` cron active (`23 * * * *`). The October 7 set was found already live: every replaced function's body matches the repo, so it was applied earlier without being recorded here. `supabase_migrations.schema_migrations` records none of these; this file is the record. **Never re-run `20261006100200`** on an environment that has `20261009100000`: it would restore the claim-window hold.
