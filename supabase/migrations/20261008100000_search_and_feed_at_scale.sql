@@ -8,7 +8,7 @@
 -- docs/performance/query-plans.md.
 --
 -- Three causes, three fixes. No function here changes WHAT is returned —
--- supabase/tests/search_scale_guard.sql holds each to its old answer.
+-- supabase/tests/search_at_volume_guard.sql holds each to its old answer.
 --
 -- 1. Search read every row. The word-matching functions compared every car,
 --    update and part against every word. They now start from trigram
@@ -314,7 +314,7 @@ $function$;
 -- A text search starts from the parts the words matched, then applies the
 -- browse function's rules to exactly those parts. The rules are repeated
 -- here rather than called: joined through the function, the planner reads
--- every active part first. marketplace_search_parity_guard.sql holds the two
+-- every active part first. search_at_volume_guard.sql holds the two
 -- to the same answer.
 create or replace function public.marketplace_search_browse_rows(
   p_query text, p_vehicle text default ''::text, p_vyear integer default 0,

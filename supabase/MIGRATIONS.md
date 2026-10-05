@@ -19,7 +19,7 @@ and `explore_update_rows` without their `SET search_path` clause so the
 planner can read a page off an index (they are SECURITY INVOKER with every
 name schema-qualified). Results are unchanged. The index builds take locks
 for as long as they run: seconds on today's tables.
-Guard: `supabase/tests/search_scale_guard.sql`. Measurements and what is
+Guard: `supabase/tests/search_at_volume_guard.sql`. Measurements and what is
 still slow: `docs/performance/query-plans.md`.
 
 ## October 7 — review fixes (not yet applied anywhere)

@@ -82,7 +82,7 @@ the functions these pages use, and adds separate search entry points for 4.
 Search returns exactly what it did before, in the same order: 20 searches
 (292,725 rows) and 17 marketplace searches and filters (41,066 rows) were
 compared row for row against the old functions on the seeded database, and
-`supabase/tests/search_scale_guard.sql` keeps a small version of that check
+`supabase/tests/search_at_volume_guard.sql` keeps a small version of that check
 in CI together with the visibility rules the definer functions now carry.
 
 The app sends searches to the new entry points and pages the Explore wall
