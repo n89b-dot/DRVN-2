@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -23,6 +31,16 @@ import { Icon } from "./icons";
  * AbortController), and Enter without an active option is a normal form
  * submit. Escape closes the popover first and only then falls through to
  * the input's native clear.
+ *
+ * The typed text belongs to the input, not to React state. The field is
+ * server-rendered and usable before its code arrives, so a visitor can type
+ * (and submit) before hydration; a React-controlled `value` would put the
+ * field back to its initial text the moment React took over. So the input is
+ * uncontrolled and the component reads its text from the DOM
+ * (`useSyncExternalStore` over the input's own `input` events): whatever is
+ * in the box when React arrives is the query, and suggestions carry on from
+ * it. React only mirrors that text into the `value` attribute — as it did
+ * when the field was controlled — so a `form.reset()` leaves the query alone.
  */
 
 export type SearchSuggestItem = {
@@ -82,7 +100,25 @@ export function SuggestingSearchField({
 }) {
   const router = useRouter();
   const listboxId = useId();
-  const [query, setQuery] = useState(defaultValue ?? "");
+  const initialQuery = defaultValue ?? "";
+  const inputRef = useRef<HTMLInputElement>(null);
+  // The input is the store. Subscribed natively on the element so the text
+  // is re-read on every edit, whoever made it.
+  const subscribeQuery = useCallback((onChange: () => void) => {
+    const input = inputRef.current;
+    if (!input) return () => {};
+    input.addEventListener("input", onChange);
+    return () => input.removeEventListener("input", onChange);
+  }, []);
+  // Server and hydration render with the server's text; straight after
+  // hydration React compares it with the box and re-renders if a visitor has
+  // already typed something else. Before the input exists (a client-side
+  // first render) the text can only be the initial one.
+  const query = useSyncExternalStore(
+    subscribeQuery,
+    () => inputRef.current?.value ?? initialQuery,
+    () => initialQuery
+  );
   const [groups, setGroups] = useState<SearchSuggestGroup[]>([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -157,6 +193,18 @@ export function SuggestingSearchField({
     };
   }, [query, endpoint, minQuery, fetcher]);
 
+  // Text typed before this component was live counts as interaction when the
+  // visitor is still in the field: the re-render that adopts it then fetches
+  // suggestions for it. Text the browser restored into an unfocused field
+  // stays quiet. Declared after the fetch effect on purpose — on the first
+  // pass that effect must still see "not interacted" (its query is the
+  // server's); the adopting re-render comes after this has run.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input || input.value === input.defaultValue) return;
+    if (document.activeElement === input) interactedRef.current = true;
+  }, []);
+
   // Close on outside pointerdown — blur alone misfires when clicking options.
   useEffect(() => {
     if (!open) return;
@@ -216,9 +264,12 @@ export function SuggestingSearchField({
       <label className="search">
         <Icon name="search" className="h-4 w-4 shrink-0" />
         <input
+          ref={inputRef}
           type="search"
           name={name}
-          value={query}
+          // Uncontrolled: the attribute follows the text, the text itself is
+          // never written by React (see the component note).
+          defaultValue={query}
           placeholder={placeholder}
           aria-label={label}
           role="combobox"
@@ -232,7 +283,6 @@ export function SuggestingSearchField({
           onChange={(event) => {
             interactedRef.current = true;
             const next = event.target.value;
-            setQuery(next);
             if (next.trim().length < minQuery) {
               setGroups([]);
               setOpen(false);

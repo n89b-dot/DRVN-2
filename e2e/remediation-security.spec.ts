@@ -311,6 +311,66 @@ test("login keeps early input safe while its client code is loading", async ({ p
   }
 });
 
+// The search box is the opposite case to the forms above: it is never
+// disabled, because the plain GET search has to work while JavaScript is slow
+// or missing. So what is typed early must survive hydration instead.
+test("the bar's search keeps text typed while its client code is loading", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await ready;
+    await route.continue();
+  });
+  try {
+    await page.goto("/explore", { waitUntil: "commit" });
+    const search = page.getByPlaceholder("Search DRVN");
+    await expect(search).toBeEnabled();
+    await search.click();
+    await search.pressSequentially("early search");
+    await expect(search).toHaveValue("early search");
+
+    // Suggestions are fetched only by the hydrated field, so this request is
+    // the proof that React took over — and that it took the typed text with it.
+    const suggested = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/explore/suggest" && url.searchParams.get("q") === "early search";
+    });
+    release();
+    expect((await suggested).ok()).toBe(true);
+    await expect(search).toHaveValue("early search");
+
+    // Still an ordinary field afterwards: more typing appends, Enter searches.
+    await search.pressSequentially(" text");
+    await expect(search).toHaveValue("early search text");
+    await search.press("Enter");
+    await page.waitForURL((url) => url.pathname === "/explore" && url.searchParams.get("q") === "early search text");
+  } finally {
+    release();
+  }
+});
+
+test("the bar's search submits as a plain GET form before its client code loads", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/_next/static/**/*.js", async (route) => {
+    await ready;
+    await route.continue();
+  });
+  try {
+    await page.goto("/explore", { waitUntil: "commit" });
+    const search = page.getByPlaceholder("Search DRVN");
+    await search.click();
+    await search.pressSequentially("no script yet");
+    await search.press("Enter");
+    await page.waitForURL(
+      (url) => url.pathname === "/explore" && url.searchParams.get("q") === "no script yet",
+      { waitUntil: "commit" },
+    );
+  } finally {
+    release();
+  }
+});
+
 test("account settings keep early input safe while their client code is loading", async ({ page }) => {
   const user = await fixture();
   let release!: () => void;
