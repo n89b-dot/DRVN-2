@@ -24,8 +24,13 @@ the vehicle filter and "fits my garage" read it instead of running
 blocks writes to parts, fitments and cars while it runs: well under a second
 at today's size, ~8 minutes at 2M parts on a laptop.
 `110000` adds `marketplace_page` and `marketplace_count` (PL/pgSQL, SECURITY
-INVOKER: pages read by position, counts capped at 10,001) and three partial
-indexes on `listings` (price, brand newest, brand price). Guard:
+INVOKER: pages read by position, counts capped at 10,001), a generated column
+`listings.brand_key` (brand lower-cased, so a brand filter can use an index
+under row security), three partial indexes on `listings` (price, brand
+newest, brand price) and `fillfactor = 90` on `listings` (room for a counted
+view to be an in-place update). Adding the column rewrites `listings` and
+holds every read and write of it while it runs: seconds today, ~1.5 minutes
+at 600,000 parts, ~8 minutes at 2M on a laptop. Guard:
 `marketplace_pages_guard.sql`.
 `120000` adds `marketplace_facet_counts`, `explore_trending_models` and
 `explore_builder_rankings` with their refresh functions and pg_cron jobs
