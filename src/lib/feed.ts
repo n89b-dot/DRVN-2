@@ -743,7 +743,7 @@ export async function fetchFeed(
 
   const from = (page - 1) * pageSize;
   // One extra row past the window answers `hasMore` without a count query.
-  // feed_event_page (migration 20261008100000) returns the same rows as the
+  // feed_event_page (migration 20261010100000) returns the same rows as the
   // view, read off indexes: the view sorts every event to find a page. Before
   // that migration is applied the view still answers.
   const paged = await supabase.rpc("feed_event_page", {

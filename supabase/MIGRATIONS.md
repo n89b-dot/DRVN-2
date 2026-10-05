@@ -1,5 +1,27 @@
 # Applying migrations
 
+## October 10 — search and the Explore wall at volume (not yet applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261010100000_search_and_feed_at_scale.sql` | not yet |
+
+Additive and safe in either order with the code: the app falls back to the
+old functions (PGRST202) until it is applied. It adds trigram indexes over a
+"search document" per part, car, mod and update; restates `search_car_ids`,
+`search_update_ids` and `search_listing_ids` to read through them (now
+SECURITY DEFINER, applying the signed-out read rule themselves and returning
+ids only — added to `definer_exposure_guard.sql`); adds
+`marketplace_search_ids`, `marketplace_search_browse_rows`,
+`explore_update_search_rows` and `feed_event_page`; and restates
+`marketplace_browse_rows`, `marketplace_search_rows`, `explore_build_rows`
+and `explore_update_rows` without their `SET search_path` clause so the
+planner can read a page off an index (they are SECURITY INVOKER with every
+name schema-qualified). Results are unchanged. The index builds take locks
+for as long as they run: seconds on today's tables.
+Guard: `supabase/tests/search_at_volume_guard.sql`. Measurements and what is
+still slow: `docs/performance/query-plans.md`.
+
 ## October 9 — payout release and risk controls (not yet applied anywhere)
 
 | File | Applied to |
@@ -21,28 +43,6 @@ app with it: the old app keeps working (it calls with four arguments) but
 can't register a tracker first, so $1,000+ orders need a DRVN label until the
 new app is live. Guard: `payout_release_guard.sql`; three existing guards
 updated for the new deployed values.
-
-## October 8 — search and the Explore wall at volume (not yet applied anywhere)
-
-| File | Applied to |
-|---|---|
-| `20261008100000_search_and_feed_at_scale.sql` | not yet |
-
-Additive and safe in either order with the code: the app falls back to the
-old functions (PGRST202) until it is applied. It adds trigram indexes over a
-"search document" per part, car, mod and update; restates `search_car_ids`,
-`search_update_ids` and `search_listing_ids` to read through them (now
-SECURITY DEFINER, applying the signed-out read rule themselves and returning
-ids only — added to `definer_exposure_guard.sql`); adds
-`marketplace_search_ids`, `marketplace_search_browse_rows`,
-`explore_update_search_rows` and `feed_event_page`; and restates
-`marketplace_browse_rows`, `marketplace_search_rows`, `explore_build_rows`
-and `explore_update_rows` without their `SET search_path` clause so the
-planner can read a page off an index (they are SECURITY INVOKER with every
-name schema-qualified). Results are unchanged. The index builds take locks
-for as long as they run: seconds on today's tables.
-Guard: `supabase/tests/search_at_volume_guard.sql`. Measurements and what is
-still slow: `docs/performance/query-plans.md`.
 
 ## October 7 — review fixes (not yet applied anywhere)
 

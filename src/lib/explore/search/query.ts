@@ -135,7 +135,7 @@ export async function searchUpdates(
   const selection = params.vehicle ? await resolveVehicleFilter(params.vehicle) : null;
   const from = (page - 1) * pageSize;
   // A search starts from the updates the words matched
-  // (explore_update_search_rows, migration 20261008100000); with no words,
+  // (explore_update_search_rows, migration 20261010100000); with no words,
   // or before that migration is applied, explore_update_rows answers.
   const rowsFrom = (rows: "explore_update_search_rows" | "explore_update_rows") => {
     let query = supabase.rpc(rows, {

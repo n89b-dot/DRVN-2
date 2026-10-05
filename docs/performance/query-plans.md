@@ -77,7 +77,7 @@ cached; the listing's second is a private source car that answers "none".)
 5. **`auth.uid()` compared directly to a column stops the index being
    used** under row security; `(select auth.uid())` does not.
 
-Migration `20261008100000_search_and_feed_at_scale.sql` fixes 1–3 and 5 in
+Migration `20261010100000_search_and_feed_at_scale.sql` fixes 1–3 and 5 in
 the functions these pages use, and adds separate search entry points for 4.
 Search returns exactly what it did before, in the same order: 20 searches
 (292,725 rows) and 17 marketplace searches and filters (41,066 rows) were

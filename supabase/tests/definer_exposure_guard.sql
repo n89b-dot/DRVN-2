@@ -19,7 +19,7 @@ declare
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
     'profile_sales_count(uuid)',          -- public sales count for visible profiles
-    'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261008100000)
+    'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100000)
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
     'search_update_ids(text)'             -- ids of published updates on visible public builds; same reason
   ];

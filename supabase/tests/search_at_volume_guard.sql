@@ -1,4 +1,4 @@
--- Search, browse and the Explore wall at volume (migration 20261008100000).
+-- Search, browse and the Explore wall at volume (migration 20261010100000).
 -- Transactional; disposable local database only.
 --
 -- That migration rewrote how search finds rows, not which rows it finds. The

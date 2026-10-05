@@ -7,7 +7,7 @@ set -uo pipefail
 API="${API:?Set API to the throwaway PostgREST, e.g. http://127.0.0.1:55442}"
 case "$API" in http://127.0.0.1:5544[0-9]|http://localhost:5544[0-9]) ;; *) echo "Throwaway PostgREST only" >&2; exit 1 ;; esac
 VEHICLE="${VEHICLE:-}"
-# LEGACY=1 sends searches the way the app did before migration 20261008100000,
+# LEGACY=1 sends searches the way the app did before migration 20261010100000,
 # for a before/after on a database that does not have it.
 if [ "${LEGACY:-}" = "1" ]; then MSEARCH=marketplace_browse_rows; USEARCH=explore_update_rows; else MSEARCH=marketplace_search_browse_rows; USEARCH=explore_update_search_rows; fi
 BROWSE='"p_vehicle":"","p_vyear":0,"p_ymin":0,"p_ymax":9999,"p_fit":false'
