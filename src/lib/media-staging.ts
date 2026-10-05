@@ -79,5 +79,5 @@ export async function deleteStagedIfUnconsumed(url: string): Promise<void> {
   // The reference check inside guards the row-exists-but-URL-persisted edge
   // (e.g. a finalize that never ran) — never delete storage that might be
   // referenced.
-  await deleteMediaIfUnreferenced(url);
+  await deleteMediaIfUnreferenced(url, false, user.id);
 }

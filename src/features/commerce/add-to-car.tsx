@@ -39,10 +39,19 @@ export function AddToCar({
   // The answer first: the action revalidates the order, and the refreshed
   // row (now naming the car) can arrive before or with this state — checked
   // the other way round, the confirmation was replaced before it was seen.
+  // Once the row does name the car, the way to it sits beside the answer.
   if (done) {
     return (
       <p role="status" className="field__ok !block">
         {done}
+        {addedTo && (
+          <>
+            {" "}
+            <Link href={`/cars/${addedTo.slug}`} className="jumplink">
+              On {addedTo.name} →
+            </Link>
+          </>
+        )}
       </p>
     );
   }

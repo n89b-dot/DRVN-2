@@ -51,6 +51,16 @@ export async function offerRefund(
   if (order.seller_id !== user.id) return { error: "That isn't your sale." };
   if (order.status !== "disputed") return { error: "This order isn't in dispute." };
   if (!order.buyer_id) return { error: "The buyer's account is no longer active." };
+  // An offer the buyer already accepted may still be with the card provider.
+  // A new offer now would be a second refund, not a replacement.
+  const unsettled = await unsettledRefundKeys(admin, orderId);
+  if (unsettled === null) return { error: "Couldn't check this order's refunds. Nothing changed — try again." };
+  if (unsettled.length) {
+    return {
+      error:
+        "A refund on this order is still being confirmed with the card provider. You can make another offer once it has gone through.",
+    };
+  }
 
   // §25: the offer can be partial (buyer keeps the item) or full. The amount
   // field is optional — empty means everything still refundable. The 0026
@@ -119,6 +129,38 @@ export async function offerRefund(
   };
 }
 
+/** Refund operations whose money has not yet landed on the order. */
+const UNSETTLED_REFUND_STATUSES = [
+  "requested",
+  "provider_pending",
+  "provider_succeeded",
+  "effects_pending",
+  "recovery_required",
+] as const;
+
+/**
+ * The request keys of this order's refunds that are still on their way
+ * (null when the read fails). An accepted offer whose refund the card
+ * provider has not confirmed leaves the order in dispute with that refund
+ * unsettled; a second, different offer accepted meanwhile would start a
+ * second refund on top of it, and the buyer would be paid both.
+ */
+async function unsettledRefundKeys(
+  admin: ReturnType<typeof createAdminClient>,
+  orderId: string
+): Promise<(string | null)[] | null> {
+  const { data, error } = await admin
+    .from("refund_operations")
+    .select("request_key")
+    .eq("order_id", orderId)
+    .in("status", [...UNSETTLED_REFUND_STATUSES]);
+  if (error || !data) {
+    reportError("[disputes] unsettled refund lookup failed", { orderId, error });
+    return null;
+  }
+  return data.map((row) => row.request_key);
+}
+
 export async function acceptRefund(
   _prev: CommerceState,
   formData: FormData
@@ -153,6 +195,17 @@ export async function acceptRefund(
   }
   if (payment.refunded_cents >= payment.amount_cents) {
     return { error: "This order has already been fully refunded." };
+  }
+
+  // Accepting the same offer again adopts its refund (the key below). Any
+  // other refund still on its way must settle first, or this would add to it.
+  const unsettled = await unsettledRefundKeys(admin, orderId);
+  if (unsettled === null) return { error: "Couldn't check this order's refunds. Nothing changed — try again." };
+  if (unsettled.some((key) => key !== `offer:${orderId}:${offeredAt}`)) {
+    return {
+      error:
+        "An earlier refund on this order is still being confirmed with the card provider. This offer can be accepted once it has gone through.",
+    };
   }
 
   // Atomic claim: only one request can null the still-set refund_offered_at.

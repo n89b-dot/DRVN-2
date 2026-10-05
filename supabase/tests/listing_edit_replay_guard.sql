@@ -131,10 +131,24 @@ begin
   begin
     perform public.record_listing_edit(gen_random_uuid(), hash_a, listing, opened_at,
       jsonb_build_object('updated_at', opened_at));
-  exception when invalid_parameter_value then
+  -- Refused as a direct call since 20261007100300, before the version check.
+  exception when invalid_parameter_value or insufficient_privilege then
     rejected := true;
   end;
   if not rejected then raise exception 'An outcome was recorded outside its edit'; end if;
+  rejected := false;
+
+  -- 7b. Nor for the version it IS at (20261007100300): a seller calling the
+  --     record function directly, with the listing at rest, could store any
+  --     outcome — a forged "saved" answer and a list of images to delete.
+  begin
+    perform public.record_listing_edit(gen_random_uuid(), hash_a, listing, opened_at,
+      jsonb_build_object('updated_at', (select updated_at from public.listings where id = listing),
+                         'removed_image_urls', jsonb_build_array('https://example.test/not-yours.webp')));
+  exception when insufficient_privilege then
+    rejected := true;
+  end;
+  if not rejected then raise exception 'An outcome was recorded by a direct call, outside any edit'; end if;
   rejected := false;
 
   -- 8. Another account sees none of it and can't replay into the listing.

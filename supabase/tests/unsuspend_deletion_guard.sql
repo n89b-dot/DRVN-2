@@ -28,6 +28,22 @@ begin
   if exists(select 1 from public.admin_audit_log where subject_id=doomed and action='user.unsuspend') then raise exception 'Refused unsuspend was audited as completed'; end if;
  end loop;
 
+ -- 20261007100100: a finished deletion that kept the profile (a member with
+ -- orders: scrubbed, job completed, request left for an operator) is not
+ -- reactivated either.
+ update public.remediation_jobs set status='completed' where dedup_key='delete:'||doomed;
+ insert into public.account_deletion_requests(user_id,outcome,next_action,responsible_owner)
+ values(doomed,'operator_attention','guard','guard');
+ perform set_config('role','authenticated',true);
+ begin
+  perform public.execute_admin_command('user.unsuspend',doomed,'guard: attempt after a retained-identity deletion');
+  raise exception 'Unsuspend reactivated an account whose deletion finished with the profile retained';
+ exception when raise_exception then
+  if sqlerrm <> 'This member asked for their account to be deleted; it cannot be reactivated' then raise; end if;
+ end;
+ perform set_config('role','none',true);
+ if not exists(select 1 from public.profiles where id=doomed and suspended_at is not null) then raise exception 'A deleted, retained account left suspended state'; end if;
+
  -- Without a deletion in flight, unsuspend still works.
  perform set_config('role','authenticated',true);
  perform public.execute_admin_command('user.unsuspend',ordinary,'guard: ordinary unsuspend');
