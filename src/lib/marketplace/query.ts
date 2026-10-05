@@ -9,6 +9,7 @@ import {
   type GarageCar,
 } from "@/lib/marketplace/fitment";
 import { reportError } from "@/lib/monitoring";
+import { searchListingPage } from "@/lib/marketplace/search/typesense";
 import { resolveVehicleFilter, type VehicleFilterSelection } from "@/lib/vehicles/catalog";
 import { vehicleLabel } from "@/lib/vehicles/label";
 import { normalizeMarketplaceState, type ListingFilters, type ListingSort } from "./state";
@@ -20,7 +21,16 @@ type ListingPageContext = {
   pageSize: number;
 };
 export type ListingPage = ListingPageContext & (
-  | { status: "success"; results: ListingCardData[]; total: number; hasMore: boolean }
+  | {
+      status: "success"; results: ListingCardData[]; total: number; hasMore: boolean;
+      /** The count stopped at a cap: "10,000+" (or `totalCap`+). */
+      totalIsCapped?: boolean;
+      /** The cap it stopped at, when not COUNT_CAP. */
+      totalCap?: number;
+      /** Positions for the next and previous pages' links, when known. */
+      nextCursor?: string | null;
+      prevCursor?: string | null;
+    }
   | { status: "error"; results: []; total: null; hasMore: false; errorReference: string }
 );
 
@@ -254,20 +264,214 @@ export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: Listin
   return query;
 }
 
-/** Fetch a page and hydrate the same evidence shown on listing detail. */
+/** "10,000+ parts": counts stop here (marketplace_count reads at most one more). */
+export const COUNT_CAP = 10_000;
+/** Postgres' own text search stops at the newest 1,001 matches (migration
+ *  20261011130000): past 1,000 the page says "1,000+". The engine counts
+ *  exactly. */
+export const SEARCH_CAP = 1_000;
+
+const CARD_COLUMNS = "id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A page's position — the sort it belongs to, the sort value of a part and
+ * its id — as one URL-safe token. Next links carry the last part shown,
+ * Previous links the first. The date is kept as the database's own string:
+ * a JS Date holds milliseconds, the database microseconds, and a rounded
+ * position would skip or repeat parts.
+ */
+export function encodePosition(sort: ListingSort, row: { id: string; created_at: string; price_cents: number }): string {
+  const key = sort === "newest" ? row.created_at : String(row.price_cents);
+  return btoa(`${sort}|${key}|${row.id}`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** The position in a token, or null when it isn't one for this sort. */
+export function decodePosition(token: string | undefined, sort: ListingSort): { created?: string; price?: number; id: string } | null {
+  if (!token) return null;
+  try {
+    const [tokenSort, key, id, extra] = atob(token.replace(/-/g, "+").replace(/_/g, "/")).split("|");
+    if (extra !== undefined || tokenSort !== sort || !id || !UUID.test(id) || !key) return null;
+    if (sort === "newest") {
+      return /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)$/.test(key) ? { created: key, id } : null;
+    }
+    return /^\d{1,10}$/.test(key) && Number(key) <= 2147483647 ? { price: Number(key), id } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The shopper's choices as marketplace_page / marketplace_count arguments. */
+function marketplaceArgs(filters: ListingFilters) {
+  return {
+    p_query: filters.q ?? "",
+    p_category: filters.category ?? "",
+    p_subcategory: filters.subcategory ?? "",
+    p_condition: filters.condition ?? "",
+    p_brand: filters.brand ?? "",
+    p_location: filters.location ?? "",
+    ...(filters.min ? { p_min_cents: Math.round(Number(filters.min) * 100) } : {}),
+    ...(filters.max ? { p_max_cents: Math.round(Number(filters.max) * 100) } : {}),
+    p_vehicle: filters.vehicle ?? "",
+    p_vyear: Number(filters.vyear ?? 0),
+    p_ymin: Number(filters.ymin ?? 0),
+    p_ymax: Number(filters.ymax ?? 9999),
+    p_fit: filters.fit === "1",
+  };
+}
+
+type PageContext = {
+  garage: Promise<GarageCar[]>;
+  selection: Promise<VehicleFilterSelection | null>;
+  /** How many parts this view holds, when the page already knows (the
+   *  category counts on an unfiltered view). The page of parts is then read
+   *  without asking the database to count them all again. Resolving to
+   *  undefined means "not known" and the query counts as before. */
+  total?: Promise<number | undefined>;
+};
+
+/**
+ * Fetch a page and hydrate the same evidence shown on listing detail.
+ *
+ * Reads through marketplace_page (migration 20261011110000): the page is
+ * read from the previous page's last part rather than by skipping every part
+ * before it, one extra part says whether there is a next page, and a filtered
+ * view is counted only up to COUNT_CAP. Before that migration is applied the
+ * original offset-and-exact-count path answers (`fetchListingsByOffset`).
+ */
 export async function fetchListings(
   supabase: SupabaseClient<Database>,
   filters: ListingFilters,
   viewerId?: string,
-  context?: {
-    garage: Promise<GarageCar[]>;
-    selection: Promise<VehicleFilterSelection | null>;
-    /** How many parts this view holds, when the page already knows (the
-     *  category counts on an unfiltered view). The page of parts is then read
-     *  without asking the database to count them all again. Resolving to
-     *  undefined means "not known" and the query counts as before. */
-    total?: Promise<number | undefined>;
+  context?: PageContext
+): Promise<ListingPage> {
+  const started = performance.now();
+  filters = normalizeMarketplaceState(filters);
+  const sort = parseSort(filters.sort);
+  const page = parsePage(filters.page);
+  const after = decodePosition(filters.after, sort);
+  const before = after ? null : decodePosition(filters.before, sort);
+  const position = after ?? before;
+  const args = marketplaceArgs(filters);
+
+  const garagePromise = context?.garage ?? (viewerId
+    ? Promise.resolve(supabase.from("cars").select("name, make, model, year").eq("owner_id", viewerId)).then(({ data }) => data ?? [])
+    : Promise.resolve([] as GarageCar[]));
+  const selectionPromise = context?.selection ?? (filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null));
+
+  // One part more than a page: whether there is another page that way. A
+  // page without a position (page one, an old ?page=N link) skips instead.
+  let pageQuery = supabase.rpc("marketplace_page", {
+    ...args,
+    p_sort: sort,
+    p_limit: PAGE_SIZE + 1,
+    p_before: Boolean(before),
+    ...(position
+      ? { p_after_id: position.id, ...(position.created ? { p_after_created: position.created } : { p_after_price: position.price }) }
+      : { p_offset: (page - 1) * PAGE_SIZE }),
+  }).select(CARD_COLUMNS);
+  // The function returns its page in order; asking again costs a sort of 25.
+  if (sort === "newest") pageQuery = pageQuery.order("created_at", { ascending: false }).order("id", { ascending: false });
+  else pageQuery = pageQuery.order("price_cents", { ascending: sort === "price_asc" }).order("id", { ascending: sort === "price_asc" });
+
+  // A typed search the engine can answer: its page of ids and exact count,
+  // re-checked here under the shopper's own row security. A garage fit or a
+  // place isn't in the engine's documents; those, and any engine failure,
+  // fall through to Postgres' capped search below.
+  if (filters.q?.trim() && filters.fit !== "1" && !filters.location) {
+    const [garageCars, selection] = await Promise.all([garagePromise, selectionPromise]);
+    const found = filters.vehicle && !selection ? { ids: [], found: 0 } : await searchListingPage({
+      q: filters.q,
+      category: filters.category, subcategory: filters.subcategory, condition: filters.condition, brand: filters.brand,
+      minCents: args.p_min_cents, maxCents: args.p_max_cents,
+      vehicle: selection ? { make: selection.make.toLowerCase(), model: (selection.model ?? "").toLowerCase(), year: Number(filters.vyear ?? 0) } : null,
+      yearMin: filters.ymin ? Number(filters.ymin) : undefined, yearMax: filters.ymax ? Number(filters.ymax) : undefined,
+      sort, page, perPage: PAGE_SIZE,
+    });
+    if (found) {
+      const checked = found.ids.length
+        ? await supabase.rpc("marketplace_page", { ...args, p_ids: found.ids, p_limit: PAGE_SIZE }).select(CARD_COLUMNS)
+        : { data: [], error: null };
+      if (!checked.error) {
+        const listings = checked.data ?? [];
+        console.info("[marketplace:retrieval]", { outcome: found.found ? "success" : "zero", engine: true, duration_ms: Math.round(performance.now() - started), count: found.found, page });
+        const results = listings.length ? await decorateListings(supabase, listings, filters, viewerId, garageCars, selection) : [];
+        return { status: "success", results, total: found.found, page, pageSize: PAGE_SIZE, hasMore: page * PAGE_SIZE < found.found };
+      }
+      // marketplace_page can't re-check (migration unapplied): Postgres answers.
+    }
   }
+
+  // The count, when the page doesn't already know it, is asked alongside the
+  // page, up to the cap: past it, the page says "10,000+".
+  type Counting = { known: number } | { counted: Awaited<ReturnType<typeof countQuery>> };
+  const countQuery = () => supabase.rpc("marketplace_count", { ...args, p_cap: COUNT_CAP + 1 });
+  const countPromise: Promise<Counting> = Promise.resolve(context?.total).then(async (known): Promise<Counting> =>
+    known !== undefined ? { known } : { counted: await countQuery() });
+  const [retrieval, garageCars, selection, counting] = await Promise.all([pageQuery, garagePromise, selectionPromise, countPromise]);
+  const knownTotal = "known" in counting ? counting.known : undefined;
+  if (retrieval.error?.code === "PGRST202") {
+    return fetchListingsByOffset(supabase, filters, viewerId, { garage: Promise.resolve(garageCars), selection: Promise.resolve(selection), total: Promise.resolve(knownTotal) });
+  }
+  let total = knownTotal;
+  let totalIsCapped = false;
+  let totalCap: number | undefined;
+  if (!retrieval.error && "counted" in counting) {
+    const { counted } = counting;
+    if (counted.error) {
+      const errorReference = crypto.randomUUID();
+      reportError("[marketplace] listing count failed", { reference: errorReference, code: counted.error.code, message: counted.error.message });
+      return { status: "error", errorReference, results: [], total: null, page, pageSize: PAGE_SIZE, hasMore: false };
+    }
+    // A typed search is Postgres' capped one here: past SEARCH_CAP, "1,000+".
+    const cap = filters.q?.trim() ? SEARCH_CAP : COUNT_CAP;
+    totalIsCapped = Number(counted.data) > cap;
+    total = Math.min(Number(counted.data), cap);
+    if (cap !== COUNT_CAP) totalCap = cap;
+  }
+  const { error } = retrieval;
+  console.info("[marketplace:retrieval]", { outcome: error ? "error" : total === 0 ? "zero" : "success", duration_ms: Math.round(performance.now() - started), count: error ? null : total, page });
+  if (error) {
+    const errorReference = crypto.randomUUID();
+    reportError("[marketplace] listing query failed", { reference: errorReference, code: error.code, message: error.message });
+    return { status: "error", errorReference, results: [], total: null, page, pageSize: PAGE_SIZE, hasMore: false };
+  }
+
+  // The extra part is the one furthest from the position: the last when
+  // reading forward, the first when reading back.
+  let listings = retrieval.data ?? [];
+  const extra = listings.length > PAGE_SIZE;
+  if (extra) listings = before ? listings.slice(1) : listings.slice(0, PAGE_SIZE);
+  // Reading back, there is always a next page (the one we came from).
+  const hasMore = before ? true : extra;
+  const nextCursor = hasMore && listings.length ? encodePosition(sort, listings[listings.length - 1]) : null;
+  const prevCursor = page > 1 && listings.length ? encodePosition(sort, listings[0]) : null;
+  if (!listings.length) {
+    return { status: "success", results: [], total: total ?? 0, totalIsCapped, totalCap, page, pageSize: PAGE_SIZE, hasMore: false };
+  }
+  const results = await decorateListings(supabase, listings, filters, viewerId, garageCars, selection);
+  console.info("[marketplace:complete]", { duration_ms: Math.round(performance.now() - started), page, count: results.length });
+  return {
+    status: "success",
+    results,
+    total: total ?? listings.length,
+    totalIsCapped,
+    totalCap,
+    page,
+    pageSize: PAGE_SIZE,
+    hasMore,
+    nextCursor,
+    prevCursor,
+  };
+}
+
+/** The original path: skip to the page, count every match. Kept for a
+ *  database without marketplace_page (code deploys before the migration). */
+async function fetchListingsByOffset(
+  supabase: SupabaseClient<Database>,
+  filters: ListingFilters,
+  viewerId?: string,
+  context?: PageContext
 ): Promise<ListingPage> {
   const started = performance.now();
   filters = normalizeMarketplaceState(filters);
@@ -282,7 +486,9 @@ export async function fetchListings(
     ? Promise.resolve(supabase.from("cars").select("name, make, model, year").eq("owner_id", viewerId)).then(({ data }) => data ?? [])
     : Promise.resolve([] as GarageCar[]));
   const selectionPromise = context?.selection ?? (filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null));
-  const counted = !context?.total;
+  const knownTotalPromise = context?.total ?? Promise.resolve(undefined);
+  const knownTotal = await knownTotalPromise;
+  const counted = knownTotal === undefined;
   const pageOf = (searchEntry: boolean) => {
     let query = listingRowsQuery(supabase, filters, undefined, { searchEntry, count: counted });
     if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
@@ -292,7 +498,7 @@ export async function fetchListings(
   };
 
   let searchEntry = true;
-  const [firstRetrieval, garageCars, selection, knownTotal] = await Promise.all([pageOf(searchEntry), garagePromise, selectionPromise, context?.total]);
+  const [firstRetrieval, garageCars, selection] = await Promise.all([pageOf(searchEntry), garagePromise, selectionPromise]);
   let retrieval = firstRetrieval;
   // The search entry point isn't in this database yet (migration unapplied):
   // ask the original function, which answers the same thing more slowly.
@@ -300,13 +506,8 @@ export async function fetchListings(
     searchEntry = false;
     retrieval = await pageOf(searchEntry);
   }
-  const garageByKey = buildGarageFitmentIndex(garageCars);
   let { data: listings, count, error } = retrieval;
-  if (!counted && !error) {
-    // The known total stands in for the count; if it turned out not to be
-    // known after all, count this view on its own.
-    count = knownTotal ?? (await listingRowsQuery(supabase, filters, undefined, { searchEntry }).order("id").range(0, 0)).count;
-  }
+  if (!counted && !error) count = knownTotal ?? null;
   if (error?.code === "PGRST103" && page > 1) {
     const first = await listingRowsQuery(supabase, filters, undefined, { searchEntry }).order("id").range(0, 0);
     if (!first.error) { listings = []; count = first.count; error = null; }
@@ -321,7 +522,33 @@ export async function fetchListings(
   if (!listings?.length) {
     return { status: "success", searchTruncated, results: [], total: count ?? 0, page, pageSize: PAGE_SIZE, hasMore: false };
   }
+  const total = count ?? listings.length;
+  const results = await decorateListings(supabase, listings, filters, viewerId, garageCars, selection);
+  console.info("[marketplace:complete]", { duration_ms: Math.round(performance.now() - started), page, count: results.length });
+  return {
+    status: "success",
+    results,
+    total,
+    searchTruncated,
+    page,
+    pageSize: PAGE_SIZE,
+    hasMore: from + listings.length < total,
+  };
+}
 
+type DecoratableListing = HydratableListingRow & { id: string; source_car_id: string | null };
+
+/** Cards for a page of parts: covers, sellers, the viewer's marks, counts
+ *  and the fitment line for the chosen vehicle or the viewer's garage. */
+async function decorateListings(
+  supabase: SupabaseClient<Database>,
+  listings: DecoratableListing[],
+  filters: ListingFilters,
+  viewerId: string | undefined,
+  garageCars: GarageCar[],
+  selection: VehicleFilterSelection | null
+) {
+  const garageByKey = buildGarageFitmentIndex(garageCars);
   const ids = listings.map((l) => l.id);
   // Covers, watch counts and seller trust hydrate in parallel with the
   // fitment lookups below.
@@ -397,11 +624,9 @@ export async function fetchListings(
     }
   }
 
-  const total = count ?? listings.length;
   const [cards, { data: viewerSaves }, { data: likeRows }, { data: viewerLikes }, { data: questionRows }] =
     await Promise.all([cardsPromise, viewerSavesPromise, likesPromise, viewerLikesPromise, questionsPromise]);
   const savedIds = new Set((viewerSaves ?? []).map((s) => s.target_id));
-  console.info("[marketplace:complete]", { duration_ms: Math.round(performance.now() - started), page, count: cards.length });
   const likedIds = new Set((viewerLikes ?? []).map((l) => l.target_id));
   const likeCounts = new Map<string, number>();
   for (const row of likeRows ?? []) {
@@ -412,21 +637,13 @@ export async function fetchListings(
     questionCounts.set(row.listing_id, (questionCounts.get(row.listing_id) ?? 0) + 1);
   }
 
-  return {
-    status: "success",
-    results: cards.map((card) => ({
-      ...card,
-      fits_car_name: fitByListing.get(card.id) ?? null,
-      match_evidence: evidenceByListing.get(card.id) ?? null,
-      viewer_saved: savedIds.has(card.id),
-      viewer_liked: likedIds.has(card.id),
-      like_count: likeCounts.get(card.id) ?? 0,
-      question_count: questionCounts.get(card.id) ?? 0,
-    })),
-    total,
-    searchTruncated,
-    page,
-    pageSize: PAGE_SIZE,
-    hasMore: from + listings.length < total,
-  };
+  return cards.map((card) => ({
+    ...card,
+    fits_car_name: fitByListing.get(card.id) ?? null,
+    match_evidence: evidenceByListing.get(card.id) ?? null,
+    viewer_saved: savedIds.has(card.id),
+    viewer_liked: likedIds.has(card.id),
+    like_count: likeCounts.get(card.id) ?? 0,
+    question_count: questionCounts.get(card.id) ?? 0,
+  }));
 }

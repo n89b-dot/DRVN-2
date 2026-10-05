@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { MasonryFeed } from "@/components/ui";
 import { transitions } from "@/lib/motion";
-import type { FeedItem, FeedTab } from "@/lib/feed";
+import type { FeedCursor, FeedItem, FeedTab } from "@/lib/feed";
 
 import { loadFeedPage } from "./actions";
 
@@ -20,12 +20,16 @@ export function ExploreWall({
   tab,
   initialItems,
   initialHasMore,
+  initialCursor = null,
   isLoggedIn,
   breakers,
 }: {
   tab: FeedTab;
   initialItems: FeedItem[];
   initialHasMore: boolean;
+  /** Where page two starts (page one's `nextCursor`): each page reads on from
+   *  the last instead of skipping everything before it. */
+  initialCursor?: FeedCursor | null;
   isLoggedIn: boolean;
   /** E-4's full-width rows, keyed by the card index they follow. Rendered
    *  by the server, which can query; each decides for itself whether it has
@@ -35,6 +39,7 @@ export function ExploreWall({
   const [items, setItems] = useState(initialItems);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialHasMore);
+  const [cursor, setCursor] = useState(initialCursor);
   const [pending, startTransition] = useTransition();
   const sentinel = useRef<HTMLDivElement>(null);
   const inFlight = useRef(false);
@@ -45,18 +50,19 @@ export function ExploreWall({
     const next = page + 1;
     startTransition(async () => {
       try {
-        const res = await loadFeedPage(tab, next);
+        const res = await loadFeedPage(tab, next, cursor);
         setItems((prev) => {
           const seen = new Set(prev.map((i) => `${i.kind}-${i.id}`));
           return [...prev, ...res.items.filter((i) => !seen.has(`${i.kind}-${i.id}`))];
         });
         setPage(next);
         setHasMore(res.hasMore);
+        setCursor(res.nextCursor);
       } finally {
         inFlight.current = false;
       }
     });
-  }, [hasMore, page, tab]);
+  }, [cursor, hasMore, page, tab]);
 
   useEffect(() => {
     const el = sentinel.current;

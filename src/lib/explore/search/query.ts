@@ -17,6 +17,7 @@ import { resolveVehicleFilter, type VehicleFilterSelection } from "@/lib/vehicle
 
 import { activeFilterCount, effectiveSort, type ExploreSearchParams } from "./params";
 import { getExploreSearchProvider } from "./provider";
+import { searchExplorePage } from "./typesense";
 
 /**
  * The Explore search coordinator (brief §24) — turns validated URL state
@@ -69,7 +70,16 @@ const orSafe = (value: string) => value.replace(/["\\,()]/g, " ").trim();
 
 /** The cars-table or() clause for a canonical vehicle selection: catalog id
  *  equality where references exist, exact-string ilike for frozen snapshots. */
-function carVehicleClause(selection: VehicleFilterSelection): string {
+function carVehicleClause(selection: VehicleFilterSelection, keys = true): string {
+  // make_key/model_key (migration 20261011120000) are make and model lower-
+  // cased: the same match as ilike without wildcards, but one an index can
+  // answer under row security. `keys = false` is the clause before them.
+  if (keys) {
+    const make = orSafe(selection.make.toLowerCase());
+    return selection.modelId
+      ? `catalog_model_id.eq.${selection.modelId},and(make_key.eq."${make}",model_key.eq."${orSafe((selection.model ?? "").toLowerCase())}")`
+      : `catalog_make_id.eq.${selection.makeId},make_key.eq."${make}"`;
+  }
   return selection.modelId
     ? `catalog_model_id.eq.${selection.modelId},and(make.ilike."${orSafe(selection.make)}",model.ilike."${orSafe(selection.model ?? "")}")`
     : `catalog_make_id.eq.${selection.makeId},make.ilike."${orSafe(selection.make)}"`;
@@ -98,18 +108,41 @@ export async function searchBuilds(
   const page = Math.max(1, opts.page ?? 1);
   const sort = effectiveSort(params, "cars");
 
-  let query = (params.q ? supabase.rpc("explore_build_rows", { p_query: params.q }) : supabase.from("cars"))
-    .select("id, created_at").eq("is_public", true);
-
-  if (params.vehicle) {
-    const selection = await resolveVehicleFilter(params.vehicle);
-    if (selection) query = query.or(carVehicleClause(selection));
-  }
-  query = applyYearBounds(query, params);
-
+  const selection = params.vehicle ? await resolveVehicleFilter(params.vehicle) : null;
   const from = (page - 1) * pageSize;
-  if (sort !== "relevance" || !params.q) query = query.order("created_at", { ascending: false }).order("id");
-  const { data, error } = await query.range(from, from + pageSize);
+
+  // Words: the engine finds the page (filtered by vehicle and year inside
+  // it); Postgres re-reads those builds under the caller's row security.
+  if (params.q?.trim() && !(params.vehicle && !selection)) {
+    const found = await searchExplorePage("car", {
+      q: params.q, vehicle: selection, ymin: params.ymin ? Number(params.ymin) : undefined, ymax: params.ymax ? Number(params.ymax) : undefined,
+      sort: sort === "relevance" ? "relevance" : "newest", page, perPage: pageSize,
+    });
+    if (found) {
+      const { data: rows, error } = found.ids.length
+        ? await supabase.from("cars").select("id, created_at").in("id", found.ids).eq("is_public", true)
+        : { data: [], error: null };
+      if (!error) {
+        const byId = new Map((rows ?? []).map((c) => [c.id, c]));
+        const windowRows: FeedEventRow[] = found.ids.flatMap((id) => {
+          const c = byId.get(id);
+          return c ? [{ kind: "car" as const, id: c.id, happened_at: c.created_at }] : [];
+        });
+        return { items: await hydrateFeedItems(supabase, windowRows, opts.viewerId), hasMore: page * pageSize < found.found };
+      }
+    }
+  }
+  const buildsQuery = (keys: boolean) => {
+    let query = (params.q ? supabase.rpc("explore_build_rows", { p_query: params.q }) : supabase.from("cars"))
+      .select("id, created_at").eq("is_public", true);
+    if (selection) query = query.or(carVehicleClause(selection, keys));
+    query = applyYearBounds(query, params);
+    if (sort !== "relevance" || !params.q) query = query.order("created_at", { ascending: false }).order("id");
+    return query.range(from, from + pageSize);
+  };
+  let { data, error } = await buildsQuery(true);
+  // make_key/model_key not in this database yet (42703: no such column).
+  if (selection && error?.code === "42703") ({ data, error } = await buildsQuery(false));
   if (error) { reportError("[explore-search] builds query failed", error); return NO_PAGE; }
   const hasMore = (data ?? []).length > pageSize;
   const windowRows: FeedEventRow[] = (data ?? []).slice(0, pageSize).map(c => ({ kind: "car", id: c.id, happened_at: c.created_at }));
@@ -134,6 +167,28 @@ export async function searchUpdates(
 
   const selection = params.vehicle ? await resolveVehicleFilter(params.vehicle) : null;
   const from = (page - 1) * pageSize;
+  // Words: the engine finds the page; Postgres re-reads those updates under
+  // the caller's row security (a private or suspended build's update stays
+  // hidden even if the index hasn't caught up).
+  if (params.q?.trim() && !(params.vehicle && !selection)) {
+    const found = await searchExplorePage("update", {
+      q: params.q, vehicle: selection, ymin: params.ymin ? Number(params.ymin) : undefined, ymax: params.ymax ? Number(params.ymax) : undefined,
+      sort: sort === "relevance" ? "relevance" : "newest", page, perPage: pageSize,
+    });
+    if (found) {
+      const { data: rows, error } = found.ids.length
+        ? await supabase.from("activity_posts").select("id, published_at").in("id", found.ids).not("published_at", "is", null)
+        : { data: [], error: null };
+      if (!error) {
+        const byId = new Map((rows ?? []).map((p) => [p.id, p]));
+        const windowRows: FeedEventRow[] = found.ids.flatMap((id) => {
+          const p = byId.get(id);
+          return p?.published_at ? [{ kind: "update" as const, id: p.id, happened_at: p.published_at }] : [];
+        });
+        return { items: await hydrateFeedItems(supabase, windowRows, opts.viewerId), hasMore: page * pageSize < found.found };
+      }
+    }
+  }
   // A search starts from the updates the words matched
   // (explore_update_search_rows, migration 20261010100000); with no words,
   // or before that migration is applied, explore_update_rows answers.
@@ -146,7 +201,16 @@ export async function searchUpdates(
     if (sort !== "relevance" || !params.q) query = query.order("published_at", { ascending: false }).order("id");
     return query.range(from, from + pageSize);
   };
-  let { data, error } = await rowsFrom(params.q?.trim() ? "explore_update_search_rows" : "explore_update_rows");
+  // With no words, a vehicle or year filter is read a page at a time
+  // (explore_update_page, migration 20261011120000): explore_update_rows
+  // joins every matching car to every update to find one page.
+  const pageNoWords = () => supabase.rpc("explore_update_page", {
+    p_make: selection?.make ?? "", p_model: selection?.model ?? "",
+    p_make_id: selection?.makeId ?? 0, p_model_id: selection?.modelId ?? 0,
+    p_ymin: params.ymin ? Number(params.ymin) : 0, p_ymax: params.ymax ? Number(params.ymax) : 9999,
+    p_offset: from, p_limit: pageSize + 1,
+  }).select("id, published_at").order("published_at", { ascending: false }).order("id", { ascending: false });
+  let { data, error } = await (params.q?.trim() ? rowsFrom("explore_update_search_rows") : pageNoWords());
   if (error?.code === "PGRST202") ({ data, error } = await rowsFrom("explore_update_rows"));
   if (error) { reportError("[explore-search] updates query failed", error); return NO_PAGE; }
   const hasMore = (data ?? []).length > pageSize;

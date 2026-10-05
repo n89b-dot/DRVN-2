@@ -777,7 +777,9 @@ export type Database = {
           identity_source: string | null
           is_public: boolean
           make: string | null
+          make_key: string | null
           model: string | null
+          model_key: string | null
           name: string
           owner_id: string
           slug: string
@@ -804,7 +806,9 @@ export type Database = {
           identity_source?: string | null
           is_public?: boolean
           make?: string | null
+          make_key?: string | null
           model?: string | null
+          model_key?: string | null
           name: string
           owner_id: string
           slug: string
@@ -831,7 +835,9 @@ export type Database = {
           identity_source?: string | null
           is_public?: boolean
           make?: string | null
+          make_key?: string | null
           model?: string | null
+          model_key?: string | null
           name?: string
           owner_id?: string
           slug?: string
@@ -1145,6 +1151,57 @@ export type Database = {
           },
         ]
       }
+      explore_builder_rankings: {
+        Row: {
+          car_count: number
+          profile_id: string
+          rank: number
+          update_count: number
+        }
+        Insert: {
+          car_count: number
+          profile_id: string
+          rank: number
+          update_count: number
+        }
+        Update: {
+          car_count?: number
+          profile_id?: string
+          rank?: number
+          update_count?: number
+        }
+        Relationships: []
+      }
+      explore_trending_models: {
+        Row: {
+          builds: number
+          catalog_make_id: number | null
+          catalog_model_id: number | null
+          make: string
+          model: string
+          rank: number
+          updates: number
+        }
+        Insert: {
+          builds: number
+          catalog_make_id?: number | null
+          catalog_model_id?: number | null
+          make: string
+          model: string
+          rank: number
+          updates: number
+        }
+        Update: {
+          builds?: number
+          catalog_make_id?: number | null
+          catalog_model_id?: number | null
+          make?: string
+          model?: string
+          rank?: number
+          updates?: number
+        }
+        Relationships: []
+      }
       follows: {
         Row: {
           created_at: string
@@ -1457,6 +1514,59 @@ export type Database = {
           },
         ]
       }
+      listing_vehicle_fit: {
+        Row: {
+          all_years: boolean
+          car_owner_id: string | null
+          car_public: boolean
+          created_at: string
+          listing_id: string
+          make_key: string
+          model_key: string
+          price_cents: number
+          seller_id: string
+          stated_also: boolean
+          via: string
+          years: unknown
+        }
+        Insert: {
+          all_years?: boolean
+          car_owner_id?: string | null
+          car_public?: boolean
+          created_at: string
+          listing_id: string
+          make_key: string
+          model_key: string
+          price_cents: number
+          seller_id: string
+          stated_also?: boolean
+          via: string
+          years?: unknown
+        }
+        Update: {
+          all_years?: boolean
+          car_owner_id?: string | null
+          car_public?: boolean
+          created_at?: string
+          listing_id?: string
+          make_key?: string
+          model_key?: string
+          price_cents?: number
+          seller_id?: string
+          stated_also?: boolean
+          via?: string
+          years?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_vehicle_fit_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listings: {
         Row: {
           allows_collection: boolean
@@ -1585,6 +1695,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      marketplace_facet_counts: {
+        Row: {
+          facet: string
+          key: string
+          subkey: string
+          total: number
+        }
+        Insert: {
+          facet: string
+          key: string
+          subkey?: string
+          total: number
+        }
+        Update: {
+          facet?: string
+          key?: string
+          subkey?: string
+          total?: number
+        }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -4450,6 +4581,7 @@ export type Database = {
         Args: { p_kind: string; p_limit?: number }
         Returns: Json
       }
+      claim_search_job_batch: { Args: { p_limit: number }; Returns: Json }
       claim_search_jobs: { Args: never; Returns: Json }
       claim_transfer_intents: {
         Args: {
@@ -4612,7 +4744,9 @@ export type Database = {
           identity_source: string | null
           is_public: boolean
           make: string | null
+          make_key: string | null
           model: string | null
+          model_key: string | null
           name: string
           owner_id: string
           slug: string
@@ -4626,6 +4760,43 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "cars"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      explore_update_page: {
+        Args: {
+          p_before_at?: string
+          p_before_id?: string
+          p_by_car_up_to?: number
+          p_limit?: number
+          p_make?: string
+          p_make_id?: number
+          p_model?: string
+          p_model_id?: number
+          p_offset?: number
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          author_id: string
+          body: Json
+          car_id: string | null
+          created_at: string
+          draft_archived_at: string | null
+          draft_key: string | null
+          id: string
+          intro: string | null
+          publish_operation_id: string | null
+          published_at: string | null
+          search_text: string | null
+          title: string | null
+          updated_at: string
+          video_url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "activity_posts"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -4698,6 +4869,8 @@ export type Database = {
       }
       feed_event_page: {
         Args: {
+          p_before_at?: string
+          p_before_id?: string
           p_exclude_owner?: string
           p_kinds: string[]
           p_limit: number
@@ -4941,6 +5114,26 @@ export type Database = {
           total: number
         }[]
       }
+      marketplace_count: {
+        Args: {
+          p_brand?: string
+          p_cap?: number
+          p_category?: string
+          p_condition?: string
+          p_fit?: boolean
+          p_ids?: string[]
+          p_location?: string
+          p_max_cents?: number
+          p_min_cents?: number
+          p_query?: string
+          p_subcategory?: string
+          p_vehicle?: string
+          p_vyear?: number
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: number
+      }
       marketplace_filtered_rows: {
         Args: {
           p_fit?: boolean
@@ -5006,6 +5199,102 @@ export type Database = {
         }
         Returns: string
       }
+      marketplace_page: {
+        Args: {
+          p_after_created?: string
+          p_after_id?: string
+          p_after_price?: number
+          p_before?: boolean
+          p_brand?: string
+          p_category?: string
+          p_condition?: string
+          p_fit?: boolean
+          p_ids?: string[]
+          p_limit?: number
+          p_location?: string
+          p_max_cents?: number
+          p_min_cents?: number
+          p_offset?: number
+          p_query?: string
+          p_sort?: string
+          p_subcategory?: string
+          p_vehicle?: string
+          p_vyear?: number
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          allows_collection: boolean
+          brand: string | null
+          category: string
+          compatibility_notes: string | null
+          condition: string | null
+          condition_checklist: Json | null
+          created_at: string
+          currency: string
+          description: string | null
+          grade: string | null
+          height_in: number | null
+          id: string
+          length_in: number | null
+          location: string | null
+          offer_floor_cents: number | null
+          part_miles: number | null
+          part_miles_unit: string | null
+          part_number: string | null
+          part_number_compact: string | null
+          price_cents: number
+          removed_at: string | null
+          removed_reason: string | null
+          reserved_until: string | null
+          seller_id: string
+          shipping_cents: number
+          shipping_mode: string
+          sold_at: string | null
+          source_car_id: string | null
+          status: string
+          subcategory: string | null
+          title: string
+          updated_at: string
+          view_count: number
+          weight_oz: number | null
+          width_in: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "listings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      marketplace_query_sql: {
+        Args: {
+          p_after_created: string
+          p_after_id: string
+          p_after_price: number
+          p_before: boolean
+          p_brand: string
+          p_cap: number
+          p_category: string
+          p_condition: string
+          p_fit: boolean
+          p_ids?: string[]
+          p_limit: number
+          p_location: string
+          p_max_cents: number
+          p_min_cents: number
+          p_mode: string
+          p_offset: number
+          p_query: string
+          p_sort: string
+          p_subcategory: string
+          p_vehicle: string
+          p_vyear: number
+          p_ymax: number
+          p_ymin: number
+        }
+        Returns: string
+      }
       marketplace_search_browse_rows: {
         Args: {
           p_fit?: boolean
@@ -5059,6 +5348,20 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      marketplace_search_capped_ids: {
+        Args: {
+          p_brand?: string
+          p_cap?: number
+          p_category?: string
+          p_condition?: string
+          p_location?: string
+          p_max_cents?: number
+          p_min_cents?: number
+          p_query: string
+          p_subcategory?: string
+        }
+        Returns: string[]
       }
       marketplace_search_ids: { Args: { p_query: string }; Returns: string[] }
       marketplace_search_rows: {
@@ -5372,6 +5675,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      refresh_explore_builders: { Args: never; Returns: undefined }
+      refresh_explore_rankings: { Args: never; Returns: undefined }
+      refresh_explore_trending: { Args: never; Returns: undefined }
+      refresh_listing_vehicle_fit: {
+        Args: { p_listings: string[]; p_lock?: boolean }
+        Returns: undefined
+      }
+      refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
       release_expired_reservations: { Args: never; Returns: Json }
       release_transfer_intent: {
         Args: {
@@ -5459,6 +5770,13 @@ export type Database = {
         Returns: Json
       }
       search_car_ids: { Args: { p_query: string }; Returns: string[] }
+      search_listing_documents: {
+        Args: { p_ids: string[] }
+        Returns: {
+          doc: Json
+          id: string
+        }[]
+      }
       search_listing_ids: { Args: { p_query: string }; Returns: string[] }
       search_profile_ids: { Args: { p_query: string }; Returns: string[] }
       search_update_ids: { Args: { p_query: string }; Returns: string[] }
@@ -5583,6 +5901,17 @@ export type Database = {
       }
       trending_models: {
         Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          builds: number
+          catalog_make_id: number
+          catalog_model_id: number
+          make: string
+          model: string
+          updates: number
+        }[]
+      }
+      trending_models_live: {
+        Args: { p_days: number; p_limit: number }
         Returns: {
           builds: number
           catalog_make_id: number

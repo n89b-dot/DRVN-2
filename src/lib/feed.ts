@@ -138,7 +138,25 @@ export type FeedPage = {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  /** Where the next page starts: the oldest event on this page, as fetched
+   *  (the "All" wall reorders kinds for display, so it is not the last card).
+   *  Pass it back as `before` to read on from there. */
+  nextCursor?: FeedCursor | null;
 };
+
+/** An event's position on the wall. `at` is the database's own timestamp
+ *  string — microseconds included, never round-tripped through a JS Date. */
+export type FeedCursor = { at: string; id: string };
+
+const FEED_CURSOR_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const FEED_CURSOR_AT = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
+
+/** A client-supplied position, or null when it isn't one. */
+export function parseFeedCursor(value: unknown): FeedCursor | null {
+  if (!value || typeof value !== "object") return null;
+  const { at, id } = value as Record<string, unknown>;
+  return typeof at === "string" && typeof id === "string" && FEED_CURSOR_AT.test(at) && FEED_CURSOR_ID.test(id) ? { at, id } : null;
+}
 
 const DEFAULT_PAGE_SIZE = 20;
 // Legacy-fallback guard only (see _legacyFetchFeed): deep-paging a feed
@@ -734,6 +752,10 @@ export async function fetchFeed(
     /** Leave this member's own cars, posts and parts out — a discovery feed
      *  that shows you your own car reads as padded (H-1 "For you"). */
     excludeOwnerId?: string | null;
+    /** Read on from here (a previous page's `nextCursor`) rather than by
+     *  skipping `page - 1` pages: the same rows, without reading the ones
+     *  before. */
+    before?: FeedCursor | null;
   } = {}
 ): Promise<FeedPage> {
   const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
@@ -745,13 +767,17 @@ export async function fetchFeed(
   // One extra row past the window answers `hasMore` without a count query.
   // feed_event_page (migration 20261010100000) returns the same rows as the
   // view, read off indexes: the view sorts every event to find a page. Before
-  // that migration is applied the view still answers.
-  const paged = await supabase.rpc("feed_event_page", {
+  // that migration is applied the view still answers. A position needs
+  // 20261011120000; before it, the same page is read by skipping.
+  const pageArgs = {
     p_kinds: kinds,
     p_limit: pageSize + 1,
-    p_offset: from,
     ...(opts.excludeOwnerId ? { p_exclude_owner: opts.excludeOwnerId } : {}),
-  });
+  };
+  let paged = await (opts.before
+    ? supabase.rpc("feed_event_page", { ...pageArgs, p_offset: 0, p_before_at: opts.before.at, p_before_id: opts.before.id })
+    : supabase.rpc("feed_event_page", { ...pageArgs, p_offset: from }));
+  if (opts.before && paged.error?.code === "PGRST202") paged = await supabase.rpc("feed_event_page", { ...pageArgs, p_offset: from });
   let data: { kind: string | null; id: string | null; happened_at: string | null }[] | null = paged.data;
   let error = paged.error;
   if (error?.code === "PGRST202") {
@@ -776,7 +802,14 @@ export async function fetchFeed(
   const hasMore = data.length > pageSize;
   const windowRows = data.slice(0, pageSize) as FeedEventRow[];
   const items = await hydrateFeedItems(supabase, windowRows, opts.viewerId);
-  return { items: tab === "all" ? interleaveKinds(items) : items, page, pageSize, hasMore };
+  const last = windowRows[windowRows.length - 1];
+  return {
+    items: tab === "all" ? interleaveKinds(items) : items,
+    page,
+    pageSize,
+    hasMore,
+    nextCursor: hasMore && last ? { at: last.happened_at, id: last.id } : null,
+  };
 }
 
 /**

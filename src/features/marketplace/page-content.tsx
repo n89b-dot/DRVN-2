@@ -85,9 +85,16 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
     ...(hasMarketplaceSearch(filters) ? {} : { total: categoryPromise.then((counts) => (counts ? counts[totalKey] ?? 0 : undefined)) }),
   });
   // The condition choices offered are the ones with parts in them: a filter
-  // whose options always return nothing is worse than no option.
-  const conditionPromise = Promise.resolve(countsClient.rpc("marketplace_browse_rows", {}).select("condition").limit(1000))
-    .then(({ data, error }) => (error ? undefined : [...new Set((data ?? []).flatMap(row => row.condition ? [row.condition] : []))]));
+  // whose options always return nothing is worse than no option. Read from
+  // the totals table (migration 20261011120000) — every condition in use,
+  // where sampling the first 1,000 parts could miss a rare one; before that
+  // migration, the sample.
+  const conditionPromise = Promise.resolve(countsClient.from("marketplace_facet_counts").select("key").eq("facet", "condition"))
+    .then(async ({ data, error }) => {
+      if (!error) return (data ?? []).map(row => row.key);
+      const sample = await countsClient.rpc("marketplace_browse_rows", {}).select("condition").limit(1000);
+      return sample.error ? undefined : [...new Set((sample.data ?? []).flatMap(row => row.condition ? [row.condition] : []))];
+    });
   // The sidebar's category list is handed to a client component as a prop,
   // where a Suspense boundary left BOTH its placeholder and its resolved
   // list in the document. The counts are one small grouped query already in

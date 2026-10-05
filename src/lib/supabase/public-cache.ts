@@ -94,6 +94,8 @@ export const PUBLIC_READ_FUNCTIONS: ReadonlySet<string> = new Set([
   "marketplace_brand_counts",
   "marketplace_browse_rows",
   "marketplace_category_counts",
+  "marketplace_count",
+  "marketplace_page",
   "marketplace_search_browse_rows",
   "mod_purchase_sources",
   "profile_follow_counts",

@@ -73,3 +73,32 @@ export async function typesenseDelete(collection: string, id: string): Promise<v
     throw error;
   }
 }
+
+/**
+ * Upsert many documents in one request (Typesense's JSONL import). Throws if
+ * any document was refused, naming how many: the caller retries the batch.
+ */
+export async function typesenseImport(collection: string, docs: (object & { id: string })[]): Promise<void> {
+  if (!typesenseConfigured() || !docs.length) return;
+  const res = await fetch(`${process.env.TYPESENSE_URL}/collections/${collection}/documents/import?action=upsert`, {
+    method: "POST",
+    headers: { ...typesenseHeaders(), "Content-Type": "text/plain" },
+    body: docs.map((doc) => JSON.stringify(doc)).join("\n"),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) throw new Error(`typesense import ${res.status}`);
+  const refused = (await res.text()).split("\n").filter((line) => line && !line.includes('"success":true')).length;
+  if (refused) {
+    reportError("[search] typesense import refused documents", { collection, refused, of: docs.length });
+    throw new Error(`typesense import refused ${refused} of ${docs.length}`);
+  }
+}
+
+/** Delete many documents by id in one request; ids already gone are fine. */
+export async function typesenseDeleteMany(collection: string, ids: string[]): Promise<void> {
+  if (!typesenseConfigured() || !ids.length) return;
+  for (let i = 0; i < ids.length; i += 200) {
+    const filter = encodeURIComponent(`id:[${ids.slice(i, i + 200).join(",")}]`);
+    await typesenseRequest(`/collections/${collection}/documents?filter_by=${filter}`, { method: "DELETE" });
+  }
+}

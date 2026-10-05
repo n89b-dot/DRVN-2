@@ -1,5 +1,5 @@
 import { ButtonLink, EmptyState, ListingCard, Mosaic, Pagination } from "@/components/ui";
-import type { ListingPage } from "@/lib/marketplace/query";
+import { COUNT_CAP, type ListingPage } from "@/lib/marketplace/query";
 import { withParams } from "@/lib/url-params";
 import { clearRefinements, hasMarketplaceSearch, marketplaceHref, refinementCount } from "@/lib/marketplace/state";
 import { MarketplaceRetrievalError } from "./retrieval-error";
@@ -50,6 +50,9 @@ export function MarketplaceResults({
 }) {
   if (page.status === "error") return <MarketplaceRetrievalError reference={page.errorReference} />;
   const { results, page: current, hasMore, total } = page;
+  // A filtered view is counted up to COUNT_CAP; past it the count reads "10,000+".
+  const capped = page.totalIsCapped === true;
+  const countLabel = capped ? `${(page.totalCap ?? COUNT_CAP).toLocaleString("en-US")}+` : total.toLocaleString("en-US");
   const isMarketplace = shopping ?? basePath.startsWith("/marketplace");
   const hasFilters = hasMarketplaceSearch(params);
   const resetHref = isMarketplace
@@ -60,7 +63,7 @@ export function MarketplaceResults({
   const viewEvent = isMarketplace && !store && current === 1 ? <MarketplaceViewEvent viewKey={marketplaceHref(params)} entry={{ kind: "results", count: total, hasQuery: Boolean(params.q), filters: refinementCount(params), category: Boolean(params.category) }} /> : null;
   const summary = (
     <div className="marketplace-results-head" role="status" aria-live="polite" aria-atomic="true">
-      <h2>{store ? store.heading(total) : `${total.toLocaleString("en-US")} ${total === 1 ? "part" : "parts"}${hasFilters ? " found" : " available"}`}</h2>
+      <h2>{store ? store.heading(total) : `${countLabel} ${total === 1 && !capped ? "part" : "parts"}${hasFilters ? " found" : " available"}`}</h2>
       {/* The range only says something when there is more than one page;
           on one page it repeats the count. */}
       {results.length > 0 && (current > 1 || hasMore) && <span className="microlabel">Showing {(current - 1) * page.pageSize + 1}–{(current - 1) * page.pageSize + results.length}</span>}
@@ -141,6 +144,11 @@ export function MarketplaceResults({
         hrefFor={(p) =>
           withParams(basePath, params, {
             [pageParam]: p === 1 ? undefined : String(p),
+            // The next page starts after this page's last part, the previous
+            // one before its first: read from there, not by skipping. Page
+            // one, and any page without a position, skips as before.
+            after: p === current + 1 && page.nextCursor ? page.nextCursor : undefined,
+            before: p === current - 1 && p > 1 && page.prevCursor ? page.prevCursor : undefined,
             category: isMarketplace ? undefined : params.category,
             subcategory: isMarketplace ? undefined : params.subcategory,
           })

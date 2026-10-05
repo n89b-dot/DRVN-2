@@ -258,6 +258,7 @@ export default async function ExplorePage({
           tab={tab}
           initialItems={feed.items}
           initialHasMore={feed.hasMore}
+          initialCursor={feed.nextCursor ?? null}
           isLoggedIn={isLoggedIn}
           /* E-4: after the sixth card and the fourteenth. Far enough in
              that the wall has established what it is, and far enough apart

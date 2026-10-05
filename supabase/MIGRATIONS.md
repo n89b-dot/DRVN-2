@@ -1,5 +1,58 @@
 # Applying migrations
 
+## October 11 — millions of parts (not yet applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261011100000_listing_vehicle_fit.sql` | not yet |
+| `20261011110000_marketplace_pages_and_counts.sql` | not yet |
+| `20261011120000_precomputed_aggregates.sql` | not yet |
+| `20261011121000_update_read_rule_per_row.sql` | not yet — **changes a read policy; needs the owner's yes** |
+| `20261011130000_search_engine_at_scale.sql` | not yet — **adds a client-callable SECURITY DEFINER function; needs the owner's yes** |
+
+Apply after the October 10 set (`20261010095900`, `20261010100000`), in this
+order. Each is safe before the app that uses it: the app falls back
+(PGRST202 / 42703) to the previous path. Measurements and the reasoning:
+`docs/performance/query-plans.md` ("Two million parts").
+
+`100000` adds `listing_vehicle_fit` (one row per part for sale per make and
+model it fits, kept by triggers on `listings`, `listing_fitments` and `cars`)
+and restates `marketplace_browse_rows` / `marketplace_search_browse_rows` so
+the vehicle filter and "fits my garage" read it instead of running
+`marketplace_match_evidence` per part. Same answers (guard
+`vehicle_fit_guard.sql` holds them to the evidence function). The backfill
+blocks writes to parts, fitments and cars while it runs: well under a second
+at today's size, ~8 minutes at 2M parts on a laptop.
+`110000` adds `marketplace_page` and `marketplace_count` (PL/pgSQL, SECURITY
+INVOKER: pages read by position, counts capped at 10,001) and three partial
+indexes on `listings` (price, brand newest, brand price). Guard:
+`marketplace_pages_guard.sql`.
+`120000` adds `marketplace_facet_counts`, `explore_trending_models` and
+`explore_builder_rankings` with their refresh functions and pg_cron jobs
+(`drvn-marketplace-counts` every minute, `drvn-explore-trending` every ten,
+`drvn-explore-builders` hourly); restates `marketplace_category_counts`,
+`marketplace_brand_counts`, `trending_models`, `suggested_builders`,
+`feed_hydration` (from its latest definition, `20261003150000`) and
+`feed_event_page` (drop and create: two optional position arguments); adds
+`explore_update_page`; adds generated columns `cars.make_key` / `model_key`
+(a table rewrite of `cars`: seconds today, about a minute at 400,000 cars)
+and restates `explore_build_rows` to return them. Guard:
+`precomputed_aggregates_guard.sql`; `car_vin_privacy_guard.sql` updated for
+the two new readable columns.
+`121000` restates the read policy "published activity readable" on
+`activity_posts` (`ALTER POLICY`) to look the car up by key instead of an
+EXISTS the planner answered by hashing every public car. Who may read what
+is unchanged; guard `update_read_rule_guard.sql` passes against the old and
+the new policy.
+`130000` adds `marketplace_search_capped_ids` (SECURITY DEFINER, callable by
+clients, ids only — listed in `definer_exposure_guard.sql`), restates
+`marketplace_query_sql` / `marketplace_page` / `marketplace_count` (drop and
+create: a `p_ids` argument for the search engine's page), adds
+`claim_search_job_batch` and `search_listing_documents` (service role only),
+and narrows the search queue triggers on `listings`, `cars`, `mod_items`,
+`activity_posts` and `profiles` to the fields the documents hold. Guard:
+`search_engine_guard.sql`.
+
 ## October 10 — read rules and search at volume (shared dev only)
 
 | File | Applied to |

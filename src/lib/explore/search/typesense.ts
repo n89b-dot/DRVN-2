@@ -1,7 +1,7 @@
 import "server-only";
 
 import { reportError } from "@/lib/monitoring";
-import { typesenseRequest } from "@/lib/search/typesense";
+import { typesenseConfigured, typesenseRequest } from "@/lib/search/typesense";
 
 import type { ExploreSearchDomain, ExploreSearchProvider } from "./provider";
 
@@ -31,6 +31,17 @@ export type CarSearchDocument = {
   about: string;
   mods: string;
   created_at_unix: number;
+} & VehicleFilterFields;
+
+/** The car's identity, for the vehicle and year filters inside the engine —
+ *  the same match Explore's SQL makes (catalogue ids, or make and model by
+ *  name, case-insensitive). On an update document, its car's. */
+export type VehicleFilterFields = {
+  make_key?: string;
+  model_key?: string;
+  catalog_make_id?: number | null;
+  catalog_model_id?: number | null;
+  year?: number | null;
 };
 
 export type UpdateSearchDocument = {
@@ -40,7 +51,7 @@ export type UpdateSearchDocument = {
   body_text: string;
   vehicle: string;
   published_at_unix: number;
-};
+} & VehicleFilterFields;
 
 export type ProfileSearchDocument = {
   id: string;
@@ -60,6 +71,11 @@ export const EXPLORE_COLLECTION_SCHEMAS = [
       { name: "about", type: "string" },
       { name: "mods", type: "string" },
       { name: "created_at_unix", type: "int64" },
+      { name: "make_key", type: "string", optional: true },
+      { name: "model_key", type: "string", optional: true },
+      { name: "catalog_make_id", type: "int64", optional: true },
+      { name: "catalog_model_id", type: "int64", optional: true },
+      { name: "year", type: "int32", optional: true },
     ],
     default_sorting_field: "created_at_unix",
   },
@@ -71,6 +87,11 @@ export const EXPLORE_COLLECTION_SCHEMAS = [
       { name: "body_text", type: "string" },
       { name: "vehicle", type: "string" },
       { name: "published_at_unix", type: "int64" },
+      { name: "make_key", type: "string", optional: true },
+      { name: "model_key", type: "string", optional: true },
+      { name: "catalog_make_id", type: "int64", optional: true },
+      { name: "catalog_model_id", type: "int64", optional: true },
+      { name: "year", type: "int32", optional: true },
     ],
     default_sorting_field: "published_at_unix",
   },
@@ -115,12 +136,12 @@ export class ExploreTypesenseProvider implements ExploreSearchProvider {
         `/collections/${EXPLORE_COLLECTIONS[domain]}/documents/search?${params}`
       );
       const body = (await res.json()) as { hits?: { document: { id: string } }[] };
-      const ids = (body.hits ?? []).map((hit) => hit.document.id);
-      // Union the canonical answer in behind the engine's ranking, exactly
-      // like the marketplace provider, so index lag never hides an object.
-      const pg = await this.fallback.searchIds(domain, rawQuery, opts);
-      for (const id of pg ?? []) if (!ids.includes(id)) ids.push(id);
-      return ids;
+      // The engine's answer alone. Postgres' answer used to be unioned in
+      // behind it so index lag never hid an object, but that ran the full
+      // Postgres search on every query — the thing the engine is for — and
+      // at millions of rows it timed out. The batched worker indexes within
+      // minutes (migration 20261011130000).
+      return (body.hits ?? []).map((hit) => hit.document.id);
     } catch (error) {
       reportError("[explore-search] typesense query failed — falling back", {
         domain,
@@ -128,5 +149,54 @@ export class ExploreTypesenseProvider implements ExploreSearchProvider {
       });
       return this.fallback.searchIds(domain, rawQuery, opts);
     }
+  }
+}
+
+/** An Explore results page from the engine: ids in order and the total. */
+export type ExploreEnginePage = { ids: string[]; found: number };
+
+/**
+ * One page of a Builds or Updates search, filtered inside the engine by
+ * vehicle and year (the same rules as Explore's SQL), in relevance or
+ * newest order. Null when the engine can't answer; the caller uses Postgres.
+ */
+export async function searchExplorePage(domain: "car" | "update", query: {
+  q: string;
+  vehicle?: { makeId: number; modelId: number | null; make: string; model: string | null } | null;
+  ymin?: number;
+  ymax?: number;
+  sort: "relevance" | "newest";
+  page: number;
+  perPage: number;
+}): Promise<ExploreEnginePage | null> {
+  const term = query.q.replace(/[,()]/g, " ").trim();
+  if (!term || !typesenseConfigured()) return null;
+  const filters: string[] = [];
+  if (query.vehicle) {
+    const make = query.vehicle.make.toLowerCase();
+    const model = (query.vehicle.model ?? "").toLowerCase();
+    if (make.includes("`") || model.includes("`")) return null;
+    filters.push(query.vehicle.modelId
+      ? `(catalog_model_id:=${query.vehicle.modelId} || (make_key:=\`${make}\` && model_key:=\`${model}\`))`
+      : `(catalog_make_id:=${query.vehicle.makeId} || make_key:=\`${make}\`)`);
+  }
+  if (query.ymin || query.ymax) filters.push(`year:[${query.ymin || 0}..${query.ymax || 9999}]`);
+  const at = domain === "car" ? "created_at_unix" : "published_at_unix";
+  try {
+    const params = new URLSearchParams({
+      q: term,
+      ...SEARCH_PARAMS[domain],
+      ...(filters.length ? { filter_by: filters.join(" && ") } : {}),
+      sort_by: query.sort === "newest" ? `${at}:desc` : `_text_match:desc,${at}:desc`,
+      page: String(query.page),
+      per_page: String(query.perPage),
+      include_fields: "id",
+    });
+    const res = await typesenseRequest(`/collections/${EXPLORE_COLLECTIONS[domain]}/documents/search?${params}`);
+    const body = (await res.json()) as { found?: number; hits?: { document: { id: string } }[] };
+    return { ids: (body.hits ?? []).map((hit) => hit.document.id), found: body.found ?? 0 };
+  } catch (error) {
+    reportError("[explore-search] typesense page failed — falling back", { domain, error: String(error) });
+    return null;
   }
 }
