@@ -6,13 +6,17 @@ const state = vi.hoisted(() => ({
   create: vi.fn(),
   retrieve: vi.fn(),
   stampError: null as { message: string } | null,
+  settings: { data: [] as unknown[] | null, error: null as { message: string } | null },
 }));
 
 vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     rpc: state.rpc,
-    from: () => ({ update: () => ({ in: async () => ({ error: state.stampError }) }) }),
+    from: (table: string) =>
+      table === "settlement_settings"
+        ? { select: () => ({ limit: async () => state.settings }) }
+        : { update: () => ({ in: async () => ({ error: state.stampError }) }) },
   }),
 }));
 vi.mock("stripe", async (importOriginal) => {
@@ -58,6 +62,7 @@ beforeEach(() => {
   state.create.mockReset();
   state.retrieve.mockReset();
   state.stampError = null;
+  state.settings = { data: [], error: null };
 });
 
 describe("provablyNotCreated", () => {
@@ -134,5 +139,38 @@ describe("StripePaymentProvider.createPayment", () => {
     const result = await new StripePaymentProvider().createPayment({ ...request, totalCents: 5000 });
     expect(result.status).toBe("failed");
     expect(state.create).not.toHaveBeenCalled();
+  });
+
+  describe("card verification", () => {
+    const settings = {
+      receipt_release_after_days: 3,
+      tracking_required_from_cents: 100000,
+      card_verification_from_cents: 50000,
+    };
+
+    beforeEach(() => {
+      state.rpc.mockImplementation(async (name: string) =>
+        name === "prepare_payment_request" ? prepared() : { data: true, error: null }
+      );
+      state.create.mockResolvedValue({ id: "pi_1", status: "requires_payment_method", client_secret: "secret_1" });
+    });
+
+    it("asks the card's bank to verify a payment at the owner's threshold", async () => {
+      state.settings = { data: [settings], error: null };
+      await new StripePaymentProvider().createPayment({ ...request, totalCents: 50000 });
+      expect(state.create.mock.calls[0][0]).toMatchObject({
+        payment_method_options: { card: { request_three_d_secure: "any" } },
+      });
+    });
+
+    it("leaves it to Stripe below the threshold, when switched off, or when unreadable", async () => {
+      state.settings = { data: [settings], error: null };
+      await new StripePaymentProvider().createPayment({ ...request, totalCents: 49999 });
+      state.settings = { data: [{ ...settings, card_verification_from_cents: null }], error: null };
+      await new StripePaymentProvider().createPayment({ ...request, totalCents: 90000 });
+      state.settings = { data: null, error: { message: "timeout" } };
+      await new StripePaymentProvider().createPayment({ ...request, totalCents: 90000 });
+      for (const [params] of state.create.mock.calls) expect(params).not.toHaveProperty("payment_method_options");
+    });
   });
 });

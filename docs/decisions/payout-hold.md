@@ -1,97 +1,100 @@
-# Decision: how long to hold a seller's payout after delivery
+# Decision: when a seller's payout is released
 
-**Status: decided 4 October 2026 (Neil): `claim_window` with a 7-day floor.** Set by migration `20261006100200_owner_settlement_decisions.sql`, so every environment gets it. Payout dates already set don't move.
-Migration `20261006100000_payout_hold_setting.sql`; guard
-`supabase/tests/payout_hold_setting_guard.sql`.
+**Status: decided 4 October 2026 (Neil), revised the same day.** Sellers are
+paid soon after delivery, not when the claim windows close. Set by migration
+`20261009100000_payout_release_risk_controls.sql`, which replaces the
+`claim_window` decision of `20261006100200` before it was applied anywhere.
+Payout dates already set don't move.
 
-## The problem
+Migrations `20261006100000_payout_hold_setting.sql` (the setting) and
+`20261009100000` (the release rule and risk controls); guards
+`supabase/tests/payout_hold_setting_guard.sql` and
+`supabase/tests/payout_release_guard.sql`.
 
-A seller is paid **7 days after delivery**. The buyer can report a problem for
-**30 days** after delivery (`DISPUTE_WINDOW_DAYS`). Shops that offer returns
-promise **14, 30 or 60 days**. So most problems that can still arrive come in
-*after* the seller has been paid.
+## Why it changed
 
-When that happens, DRVN refunds the buyer and takes the seller's share back.
-It first reverses the Stripe transfer. If the seller's Stripe balance has
-already gone to their bank, the remainder is carried forward against their
-next sale (`20261005110100`). A seller with no next sale leaves DRVN short,
-because on Express/Custom Connect accounts the platform is liable for negative
-balances. Card chargebacks can arrive for months whatever the hold, so the
-hold reduces this risk but can't remove it.
+Holding every payout until the 30-day problem window and the shop's return
+window had closed meant a seller whose buyer never pressed "received" on an
+untracked parcel waited about 51 days after dispatch. No large marketplace
+works like that. eBay pays established sellers when the buyer pays and holds
+new sellers only until 24 hours after a tracked delivery (31 days after
+payment untracked). Vinted completes an order 2 days after delivery when the
+buyer says nothing. Both keep the buyer's protection running after the
+seller is paid and take money back from the seller when a claim succeeds.
 
-## What is built
+## The rule
 
-The hold is now **one value in one row** (`public.settlement_settings`). Every
-path that starts a payout clock reads it: a carrier scan, the buyer's
-"received", a collection handover, and the untracked auto-confirm. The payouts
-tile ("Clears … after delivery") and the terms (§6) read the same row. The
-seller's ledger shows each delivered order's date as the database set it
-(`seller_payout_dates()`, migration `20261006100300`), so an order delivered
-before the setting changed keeps the date it will actually be paid on. There
-are two modes:
+| How the order was delivered | Payout released |
+|---|---|
+| Buyer presses "received", and the parcel plausibly arrived (a carrier delivery scan on a parcel DRVN tracks, or dispatched at least `receipt_release_after_days`, 3, ago) | At once (the transfer job runs every 10 minutes) |
+| Buyer presses "received" sooner than that | 2 days after the receipt |
+| Carrier delivery scan, or a collection handover | 2 days after delivery (`payout_hold_days`) |
+| Untracked parcel auto-confirmed 21 days after dispatch (`docs/decisions/untracked-auto-confirm.md`) | At the auto-confirm |
+| A problem or dispute is open | Waits for the outcome |
 
-- `fixed`: delivery + `payout_hold_days` (0–30).
-- `claim_window`: whichever is latest of the hold, the 30-day problem window,
-  and the order's own shop return window (frozen on the order at purchase).
+The buyer keeps 30 days from delivery to report a problem whatever has been
+paid. A refund after the payout reverses the Stripe transfer; if the
+seller's Stripe balance can't cover it, Stripe tries the seller's payout bank
+account (`debit_negative_balances`); only then does DRVN carry the loss.
 
-The date is fixed when the order is delivered. Changing the setting affects
-orders delivered afterwards, and never moves a payout already scheduled. A
-missing row falls back to 7 days, so a payout is never stranded.
+The receipt check exists because "received" seconds after purchase is the
+shape of stolen-card fraud: someone buys from their own seller account,
+confirms at once and takes the money before the chargeback arrives.
 
-## Options
+`payout_release_at()` computes the release; `claim_window` mode still exists
+and ignores every early release, so switching back is one update.
 
-| Hold | Seller waits after delivery | Clawback exposure | Notes |
-|---|---|---|---|
-| **7 days** (today) | 7 days | Days 8–30 of the problem window, and up to day 60 of shop returns | Fast and competitive. Relies on reversal and carry-forward |
-| **14 days** | 14 days | Days 15–30, and shop returns | Catches the early "wrong part / doesn't fit" reports, which tend to come at first fitting |
-| **30 days** (`fixed`, 30) | 30 days | Shop returns longer than 30 days only | Equal to the problem window |
-| **Window-based** (`claim_window`) | 30 days, or 60 for a 60-day shop | None from DRVN's own windows | Nothing DRVN promises the buyer is still open when the seller is paid |
+## The risk controls that come with it
 
-Card-issuer chargebacks are outside all four. Keep any hold well within
-Stripe's limit on how long a platform may keep a charge's funds before
-transferring them; check the current Connect docs for DRVN's region.
+All in `public.settlement_settings`; null switches a control off.
 
-## Recommendation: window-based at launch, then review
+- **`debit_negative_balances`** on every seller's Stripe account. Set at
+  account creation (`src/lib/payments/connect.ts`). Express accounts already
+  default to it; `scripts/owner/stripe-negative-balances.mjs` finds and fixes
+  any that don't (on 4 October all three test-mode accounts were on).
+- **Receipt plausibility**: `receipt_release_after_days` (3), above.
+- **Card verification** at `card_verification_from_cents` ($500): the
+  PaymentIntent asks the card's bank to verify the buyer (3D Secure,
+  `src/lib/payments/stripe.ts`). A verified payment generally moves a
+  stolen-card chargeback to the issuer. Below it, Stripe asks only when the
+  bank or Radar requires. To also verify payments Radar scores as risky
+  whatever the amount, add a Radar rule in the Stripe Dashboard (Radar →
+  Rules): *Request 3D Secure if `:risk_level: = 'elevated'`*.
+- **Tracking required** at `tracking_required_from_cents` ($1,000): such an
+  order can only be dispatched with tracking DRVN follows — a DRVN label, or
+  a carrier tracking number the app registers with its tracker before
+  dispatch (`mark_order_dispatched`). This depends on DRVN Shipping being on:
+  with it off, the app can't register a tracker and these orders can't be
+  dispatched, so switch the control off (`set tracking_required_from_cents =
+  null`) if DRVN Shipping isn't live.
 
-At launch DRVN has new sellers, no reserve, and carry-forward that only works
-if a seller sells again. Paying out before DRVN's own promises to the buyer
-have expired means DRVN takes on the risk. With the window-based hold, refunds
-for problems and returns come from money DRVN still holds.
-
-The cost is that sellers wait about a month. That is in line with how
-marketplaces treat new sellers (held funds or a reserve until there's a track
-record). The payouts page states it plainly.
-
-**Review after about three months.** If very few problems are reported after
-day 14, switch to `fixed` 14. A later improvement could be a per-seller hold
-(shorter for established sellers), but that is not built.
-
-One edge to know about, whichever option you pick: a shop return opened just
-before its window closes may still be in progress when the payout is released.
-The payout path doesn't check for an open return (this is how it works today).
-The refund then goes through reversal and carry-forward as above.
+Not built, by decision: a trial period for new sellers, and recovering claim
+losses from a seller's future sales beyond what already exists for label
+costs (`20261005110100`). Revisit if losses appear.
 
 ## How to change it
 
-Apply migration `20261006100000` (it changes nothing on its own). Then, in the
-Supabase SQL editor:
+In the Supabase SQL editor:
 
 ```sql
--- Recommended: hold until DRVN's problem and return windows have closed.
-update public.settlement_settings set payout_hold_mode = 'claim_window' where id;
+-- Release days after a scan or handover (0–30):
+update public.settlement_settings set payout_hold_days = 3 where id;
 
--- Or a fixed hold (0–30 days):
+-- Days in transit before "received" releases at once (0–30):
+update public.settlement_settings set receipt_release_after_days = 2 where id;
+
+-- Thresholds in cents, or null to switch a control off:
 update public.settlement_settings
-   set payout_hold_mode = 'fixed', payout_hold_days = 14
+   set tracking_required_from_cents = 100000,
+       card_verification_from_cents = 50000
  where id;
 
--- Check:
+-- Back to holding until the claim windows close:
+update public.settlement_settings set payout_hold_mode = 'claim_window' where id;
+
 select * from public.settlement_settings;
 ```
 
-The terms page picks up the change within 5 minutes, and the payouts tile on
-the next page load. Before switching, have counsel read the resulting sentence
-in terms §6 (`docs/legal-review-checklist.md`, "Holding funds"). For example,
-window-based mode reads: *"A sale is paid out 30 days (or once the shop's
-return window closes, if later) after the order is delivered …"* — delivery
-being the buyer's confirmation, a carrier scan or a pickup handover.
+The terms (§1, §6, §7) and the payouts tile read the same row; the terms
+pick a change up within 5 minutes. Have counsel read the resulting sentences
+(`docs/legal-review-checklist.md`, "Holding funds").

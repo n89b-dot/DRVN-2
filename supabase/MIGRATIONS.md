@@ -1,5 +1,27 @@
 # Applying migrations
 
+## October 9 — payout release and risk controls (not yet applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261009100000_payout_release_risk_controls.sql` | not yet |
+
+Apply after the October 6 set. Replaces the owner's `claim_window` decision
+(`20261006100200`) with a fixed 2-day hold and early releases
+(`docs/decisions/payout-hold.md`): `payout_release_at()` releases at delivery
+for a plausible buyer receipt and for the untracked auto-confirm.
+`settlement_settings` gains `receipt_release_after_days` (3),
+`tracking_required_from_cents` ($1,000) and `card_verification_from_cents`
+($500). Restated, diffed against their latest definitions:
+`start_payout_clock_on_delivery` (the release flag), `mark_order_received`
+(the plausibility check) and `mark_order_dispatched`, which drops the
+4-argument signature for one with two optional tracker arguments and refuses
+an untracked first dispatch at or above the tracking threshold. Deploy the
+app with it: the old app keeps working (it calls with four arguments) but
+can't register a tracker first, so $1,000+ orders need a DRVN label until the
+new app is live. Guard: `payout_release_guard.sql`; three existing guards
+updated for the new deployed values.
+
 ## October 7 — review fixes (not yet applied anywhere)
 
 | File | Applied to |

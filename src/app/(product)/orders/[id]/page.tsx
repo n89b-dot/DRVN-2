@@ -20,6 +20,7 @@ import { orderCarry, readSellerCarry } from "@/lib/payments/carry";
 import { sellerProceeds } from "@/lib/payments/proceeds";
 import { countryLabel } from "@/lib/geo/countries";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readSettlementRisk } from "@/lib/payments/payout-hold";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
@@ -127,6 +128,8 @@ export default async function OrderDetailPage({
     { data: buyerProfile },
     offersCount,
     { data: originOffer },
+    ,
+    dispatchRisk,
   ] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id),
     counterpartyId
@@ -185,7 +188,14 @@ export default async function OrderDetailPage({
       : Promise.resolve({ data: null }),
     // Opening the order deals with what its notifications were about.
     markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]),
+    // Whether this order needs tracking DRVN follows to be dispatched
+    // (20261009100000) — only the seller's dispatch tile asks.
+    isSeller && order.status === "paid" && !order.is_collection
+      ? readSettlementRisk(supabase)
+      : Promise.resolve(null),
   ]);
+  const trackingRequiredFrom = dispatchRisk?.trackingRequiredFromCents ?? null;
+  const needsFollowedTracking = trackingRequiredFrom !== null && order.total_cents >= trackingRequiredFrom;
 
   // "As purchased" reads snapshot data only (0049): covers come from the
   // gallery frozen onto the order, and category/part identity/fitment from
@@ -879,6 +889,12 @@ export default async function OrderDetailPage({
           {isSeller && order.status === "paid" && !order.is_collection && (
             <Rv className="tile" stagger={3}>
               <span className="microlabel microlabel--ink">Dispatch</span>
+              {needsFollowedTracking && (
+                <p className="spec-note">
+                  Orders of {formatPrice(trackingRequiredFrom)} or more need tracking DRVN can
+                  follow: buy a DRVN label, or use a carrier tracking number DRVN can register.
+                </p>
+              )}
               <div className="mt-3 grid gap-4">
                 {pendingLabel && (
                   <BuyLabelPanel
@@ -931,8 +947,8 @@ export default async function OrderDetailPage({
                 Has it arrived?
               </span>
               <p className="spec-note">
-                Confirming receipt starts the seller&apos;s payout clearing
-                window — check the part against its condition disclosure first.
+                Confirming receipt tells DRVN to pay the seller — check the
+                part against its condition disclosure first.
               </p>
               <div className="mt-3">
                 <ReceivedButton orderId={id} />

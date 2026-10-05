@@ -8,7 +8,13 @@ import {
 } from "@/features/commerce/disputes";
 import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
 import { PLATFORM_FEE_BPS } from "@/lib/payments/fee";
-import { payoutHoldPhrase, readAutoConfirmDays, readPayoutHoldPolicy } from "@/lib/payments/payout-hold";
+import {
+  payoutHoldPhrase,
+  readAutoConfirmDays,
+  readPayoutHoldPolicy,
+  readSettlementRisk,
+} from "@/lib/payments/payout-hold";
+import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { paymentsAreLive } from "@/lib/payments/provider";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -42,14 +48,21 @@ export default async function TermsPage() {
   // five minutes. If the setting can't be read the sentence names no number
   // rather than a possibly wrong one.
   const settings = createPublicClient({ revalidate: 300, tags: ["settlement-settings"] });
-  const [hold, autoConfirmDays] = await Promise.all([
+  const [hold, autoConfirmDays, risk] = await Promise.all([
     readPayoutHoldPolicy(settings),
     readAutoConfirmDays(settings),
+    readSettlementRisk(settings),
   ]);
   const holdText = hold ? payoutHoldPhrase(hold) : "a clearing period";
   // Off (null) says nothing; unreadable still states the rule, without a number.
   const autoConfirmText =
     autoConfirmDays === null ? null : autoConfirmDays === undefined ? "a set period" : `${autoConfirmDays} days`;
+  // Early release on the buyer's confirmation exists only in fixed mode
+  // (payout_release_at, 20261009100000).
+  const releasesOnReceipt = hold?.mode === "fixed";
+  const receiptDays = risk ? `${risk.receiptReleaseAfterDays} days` : "a few days";
+  const trackingFrom = risk?.trackingRequiredFromCents ?? null;
+  const verifyFrom = risk?.cardVerificationFromCents ?? null;
 
   return (
     <>
@@ -73,6 +86,13 @@ export default async function TermsPage() {
           Payments go through DRVN&apos;s payment processor, Stripe: the buyer pays at checkout,
           and the seller&apos;s share is paid out to the seller&apos;s own Stripe account, as
           described in section 6.
+          {verifyFrom !== null && (
+            <>
+              {" "}
+              A card payment of {formatPrice(verifyFrom)} or more asks the buyer to verify it with
+              their card&apos;s bank.
+            </>
+          )}
         </p>
 
         <h2>2. Your account</h2>
@@ -171,19 +191,30 @@ export default async function TermsPage() {
           delivered, or when it is handed over in person — unless a problem has been reported on
           it; then it waits for the outcome. Stripe then pays the seller&apos;s bank on its own
           schedule.
+          {releasesOnReceipt && (
+            <>
+              {" "}
+              When the buyer confirms a posted order arrived, it is paid out straight away instead,
+              as long as the carrier has reported it delivered or it was dispatched at least{" "}
+              {receiptDays} earlier.
+            </>
+          )}
         </p>
         {autoConfirmText && (
           <p>
             A parcel sent without carrier tracking can&apos;t be reported delivered by a carrier.
             If the buyer has neither confirmed it arrived nor reported a problem, it is treated as
-            delivered {autoConfirmText} after dispatch. DRVN tells the buyer before that happens,
+            delivered {autoConfirmText} after dispatch
+            {releasesOnReceipt && " and paid out then"}. DRVN tells the buyer before that happens,
             and the buyer can still report a problem afterwards in the usual window.
           </p>
         )}
         <p>
           When an order is refunded, in whole or part, DRVN&apos;s fee on it is refunded in the
           same proportion, and so is the seller&apos;s share. If the seller has already been
-          paid, their share of the refund is taken back from their Stripe account.
+          paid, their share of the refund is taken back from their Stripe account. If that
+          account&apos;s balance can&apos;t cover it, Stripe may take the shortfall from the bank
+          account the seller set up for payouts.
         </p>
         {!paymentsAreLive() && (
           <p>
@@ -198,6 +229,13 @@ export default async function TermsPage() {
           Sellers should dispatch within a reasonable time of an order and must add tracking for
           posted items. Where DRVN Shipping is available, sellers can buy a tracked label through
           DRVN. Buyers confirm the order arrived in the app.
+          {trackingFrom !== null && (
+            <>
+              {" "}
+              An order of {formatPrice(trackingFrom)} or more can only be dispatched with tracking
+              DRVN can follow: a DRVN label, or a carrier tracking number DRVN can register.
+            </>
+          )}
         </p>
         <p>
           For collection, the buyer shows a single-use Pickup Pass at handover and the seller

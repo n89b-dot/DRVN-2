@@ -40,11 +40,22 @@ payments or public launch; none of them has been decided in code.
       payment processor". Counsel to confirm how DRVN's role is described
       (commercial agent? payment collection on the seller's behalf?) and any
       regulatory consequence.
-- [ ] **Holding funds.** Sellers are paid 7 days after delivery by default
-      (the owner's `settlement_settings` hold, `docs/decisions/payout-hold.md`;
-      the terms quote the live value). The old draft said DRVN "is not an
-      escrow service"; that sentence was removed because funds are in fact
-      held. Confirm wording.
+- [ ] **Holding funds.** Sellers are paid 2 days after delivery, or at once
+      when the buyer confirms a parcel that plausibly arrived, or at the
+      untracked auto-confirm (the owner's `settlement_settings`,
+      `docs/decisions/payout-hold.md`; the terms quote the live values). The
+      buyer's 30-day problem window runs on after the payout. The old draft
+      said DRVN "is not an escrow service"; that sentence was removed because
+      funds are in fact held. Confirm wording.
+- [ ] **Taking money back from a paid seller.** Terms §6 now says that if a
+      seller's Stripe balance can't cover a refund, Stripe may take the
+      shortfall from their payout bank account (`debit_negative_balances`).
+      Confirm this is adequately disclosed alongside Stripe's Connected
+      Account Agreement.
+- [ ] **Card verification and tracking thresholds.** Terms §1 says card
+      payments of $500 or more ask the buyer to verify with their bank; §7
+      says orders of $1,000 or more need tracking DRVN can follow. Both read
+      the live settings. Confirm wording.
 - [ ] **Tax.** No sales tax / VAT is calculated or collected anywhere
       (no Stripe Tax). Listing copy says tax is "confirmed at checkout".
       Decide the tax position and who is responsible.

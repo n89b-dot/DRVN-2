@@ -62,6 +62,16 @@ export function returnWindowDays(policy: Json | null | undefined): number | null
   return null;
 }
 
+/**
+ * The payouts tile's sentence: "Clears ___." Fixed mode also releases a
+ * payout as soon as the buyer confirms a parcel that could plausibly have
+ * arrived (mark_order_received, 20261009100000); claim_window never does.
+ */
+export function payoutClearsPhrase(policy: PayoutHoldPolicy): string {
+  const base = `${payoutHoldPhrase(policy)} after delivery`;
+  return policy.mode === "fixed" ? `${base}, or as soon as the buyer confirms it arrived` : base;
+}
+
 /** The rule in words, for "A sale is paid out ___ after delivery". */
 export function payoutHoldPhrase(policy: PayoutHoldPolicy): string {
   const days = payoutHoldDaysFor(policy, null);
@@ -111,4 +121,42 @@ export async function readPayoutHoldPolicy(
     .limit(1);
   if (error || !data) return null;
   return readPolicy(data[0]);
+}
+
+/**
+ * The owner's risk settings beside the hold (20261009100000). Amounts are
+ * cents; null means that control is off.
+ */
+export type SettlementRiskSettings = {
+  /** A buyer's "received" releases the payout at once only after this many
+   *  days in transit (or a carrier delivery scan). */
+  receiptReleaseAfterDays: number;
+  /** Orders at or above this need tracking DRVN follows to be dispatched. */
+  trackingRequiredFromCents: number | null;
+  /** Payments at or above this ask the card's bank to verify the buyer. */
+  cardVerificationFromCents: number | null;
+};
+
+function positiveCents(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+/** The risk settings, or null when they can't be read. */
+export async function readSettlementRisk(
+  supabase: SupabaseClient<Database>
+): Promise<SettlementRiskSettings | null> {
+  const { data, error } = await supabase
+    .from("settlement_settings")
+    .select("receipt_release_after_days, tracking_required_from_cents, card_verification_from_cents")
+    .limit(1);
+  if (error || !data) return null;
+  const row = data[0];
+  // A missing row: the SQL's own fallbacks (3 days, both controls off).
+  if (!row) return { receiptReleaseAfterDays: 3, trackingRequiredFromCents: null, cardVerificationFromCents: null };
+  const tracking = positiveCents(row.tracking_required_from_cents);
+  const card = positiveCents(row.card_verification_from_cents);
+  const days = row.receipt_release_after_days;
+  if (tracking === undefined || card === undefined || !Number.isInteger(days) || days < 0) return null;
+  return { receiptReleaseAfterDays: days, trackingRequiredFromCents: tracking, cardVerificationFromCents: card };
 }
