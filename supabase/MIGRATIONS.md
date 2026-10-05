@@ -1,10 +1,12 @@
 # Applying migrations
 
-## October 9 — payout release and risk controls (not yet applied anywhere)
+## October 9 — payout release and risk controls (shared dev project)
+
+**Shared dev, 2026-10-05.** The October 6 set and `20261009100000` were applied in that order by the "Seller payment hold policy" session (round five's `20261008100200` went on between them). The six functions they replace were diffed against their latest repo definitions first (no drift) and backed up to `~/drvn-db-backups/pre-payout-release-functions-20261005.sql`. Live `settlement_settings`: fixed hold, 2 days, receipt release 3 days, tracking from $1,000, card verification from $500, auto-confirm after 21 days with 3 days' notice; `drvn-delivery-auto-confirm` cron active (`23 * * * *`). The October 7 set was found already live: every replaced function's body matches the repo, so it was applied earlier without being recorded here. `supabase_migrations.schema_migrations` records none of these; this file is the record. **Never re-run `20261006100200`** on an environment that has `20261009100000`: it would restore the claim-window hold.
 
 | File | Applied to |
 |---|---|
-| `20261009100000_payout_release_risk_controls.sql` | not yet |
+| `20261009100000_payout_release_risk_controls.sql` | shared dev project (2026-10-05) |
 
 Apply after the October 6 set. Replaces the owner's `claim_window` decision
 (`20261006100200`) with a fixed 2-day hold and early releases
@@ -22,16 +24,16 @@ can't register a tracker first, so $1,000+ orders need a DRVN label until the
 new app is live. Guard: `payout_release_guard.sql`; three existing guards
 updated for the new deployed values.
 
-## October 7 — review fixes (not yet applied anywhere)
+## October 7 — review fixes (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261007100000_refund_reversal_remaining_cap.sql` | not yet |
-| `20261007100100_unsuspend_refuses_requested_deletion.sql` | not yet |
-| `20261007100200_refund_inflight_excludes_settled.sql` | not yet |
-| `20261007100300_listing_edit_record_only_by_edit.sql` | not yet |
-| `20261007100400_carry_after_cancelled_payout.sql` | not yet |
-| `20261004155900_my_car_vin_first.sql` | not yet (no-op where `20261004160000` has run) |
+| `20261007100000_refund_reversal_remaining_cap.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100100_unsuspend_refuses_requested_deletion.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100200_refund_inflight_excludes_settled.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100300_listing_edit_record_only_by_edit.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100400_carry_after_cancelled_payout.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261004155900_my_car_vin_first.sql` | shared dev project: no-op (`20261004160000` had already run; `my_car_vin` present) |
 
 `20261007100000` restates `settle_refund_operation` with one change: a refund
 after the payout is capped at what the transfer can still give back (sent,
@@ -59,10 +61,10 @@ dispatch no longer reserves the debt. Guard:
 
 | File | Applied to |
 |---|---|
-| `20261006100000_payout_hold_setting.sql` | not yet |
-| `20261006100100_untracked_delivery_auto_confirm.sql` | not yet |
-| `20261006100200_owner_settlement_decisions.sql` | not yet |
-| `20261006100300_seller_payout_dates.sql` | not yet |
+| `20261006100000_payout_hold_setting.sql` | shared dev project (2026-10-05) |
+| `20261006100100_untracked_delivery_auto_confirm.sql` | shared dev project (2026-10-05) |
+| `20261006100200_owner_settlement_decisions.sql` | shared dev project (2026-10-05) |
+| `20261006100300_seller_payout_dates.sql` | shared dev project (2026-10-05) |
 
 The first two add `public.settlement_settings` (one row) with neutral defaults:
 `payout_hold_days` stays 7 in `fixed` mode, and `auto_confirm_after_days` is
