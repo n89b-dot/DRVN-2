@@ -1,11 +1,11 @@
 # Applying migrations
 
-## October 8 — round five: export contract v5, carry-forward credit payouts (not yet applied anywhere)
+## October 8 — round five: export contract v5, carry-forward credit payouts
 
 | File | Applied to |
 |---|---|
 | `20261008100000_account_export_contract_v5.sql` | not yet |
-| `20261008100100_seller_carry_payouts.sql` | not yet |
+| `20261008100100_seller_carry_payouts.sql` | shared dev, 2026-10-05 (applied twice) |
 
 `20261008100000` moves the account export to contract `2026-10-08.v5`
 (message photos, `seller_carry_entries`, `seller_carry_payouts`): it widens
