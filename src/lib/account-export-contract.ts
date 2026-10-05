@@ -1,4 +1,4 @@
-export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-09-19.v4";
+export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-08.v5";
 export const ACCOUNT_EXPORT_PAGE_SIZE = 250;
 
 export type ExportAccess =
@@ -19,7 +19,19 @@ export type ExportSection = {
   cursor?: string;
   cutoffColumn?: string;
   counterpartyRule?: string;
+  /** Rows per page when smaller than ACCOUNT_EXPORT_PAGE_SIZE — for sections
+   *  whose rows each cost storage copies, so one page fits a worker run. */
+  pageSize?: number;
 };
+
+export function exportPageSize(section: ExportSection) {
+  return section.pageSize ?? ACCOUNT_EXPORT_PAGE_SIZE;
+}
+
+/** Messages per page of a photo section: at most 4 photos each, every photo
+ *  a download and an upload. */
+export const MESSAGE_PHOTO_PAGE_SIZE = 10;
+export const MESSAGE_PHOTO_SECTIONS = ["message_photos_sent", "message_photos_received"] as const;
 
 /**
  * This is the column-level portability contract. Every field is deliberate:
@@ -58,8 +70,13 @@ export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
   { key: "order_snapshot_images", table: "order_item_snapshot_images", projection: "id,order_item_id,url,alt,position,created_at,order_items!inner(order_id,orders!inner(buyer_id,seller_id))", access: "transaction_participant", filter: "order_items.orders.buyer_id|order_items.orders.seller_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "offers_made", table: "offers", projection: "id,listing_id,buyer_id,amount_cents,counter_amount_cents,status,countered_at,expires_at,responded_at,created_at,updated_at", access: "transaction_participant", filter: "buyer_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "offers_received", table: "offers", projection: "id,listing_id,buyer_id,amount_cents,counter_amount_cents,status,countered_at,expires_at,responded_at,created_at,updated_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Includes the buyer id and offer terms disclosed to the seller; no buyer profile is joined." },
-  { key: "messages_sent", table: "messages", projection: "id,listing_id,offer_id,order_id,conversation_id,sender_id,recipient_id,body,read_at,created_at", access: "conversation_participant", filter: "sender_id", cursor: "id", cutoffColumn: "created_at" },
-  { key: "messages_received", table: "messages", projection: "id,listing_id,offer_id,order_id,conversation_id,sender_id,recipient_id,body,read_at,created_at", access: "conversation_participant", filter: "recipient_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Includes only messages addressed to the requester and the sender id needed to preserve conversation context." },
+  { key: "messages_sent", table: "messages", projection: "id,listing_id,offer_id,order_id,conversation_id,sender_id,recipient_id,kind,body,attachments,read_at,created_at", access: "conversation_participant", filter: "sender_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "messages_received", table: "messages", projection: "id,listing_id,offer_id,order_id,conversation_id,sender_id,recipient_id,kind,body,attachments,read_at,created_at", access: "conversation_participant", filter: "recipient_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Includes only messages addressed to the requester and the sender id needed to preserve conversation context." },
+  // The photos themselves. `attachments` above is only their private storage
+  // paths; these two sections list each message that has photos and the
+  // worker copies every photo into the package beside the listing.
+  { key: "message_photos_sent", table: "messages", projection: "id,conversation_id,sender_id,recipient_id,attachments,created_at", access: "conversation_participant", filter: "sender_id", cursor: "id", cutoffColumn: "created_at", pageSize: MESSAGE_PHOTO_PAGE_SIZE, counterpartyRule: "Photos the requester sent, copied into the private export package." },
+  { key: "message_photos_received", table: "messages", projection: "id,conversation_id,sender_id,recipient_id,attachments,created_at", access: "conversation_participant", filter: "recipient_id", cursor: "id", cutoffColumn: "created_at", pageSize: MESSAGE_PHOTO_PAGE_SIZE, counterpartyRule: "Photos sent to the requester in their own conversations, copied into the private export package; no sender profile is joined." },
   { key: "reviews_written", table: "reviews", projection: "id,order_id,reviewer_id,reviewee_id,rating,body,created_at", access: "author", filter: "reviewer_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "reviews_received", table: "reviews", projection: "id,order_id,reviewer_id,reviewee_id,rating,body,created_at", access: "owner", filter: "reviewee_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "payments", table: "payments", projection: "id,order_id,provider,status,amount_cents,refunded_cents,currency,failure_reason,created_at,updated_at,orders!inner(buyer_id,seller_id)", access: "transaction_participant", filter: "orders.buyer_id|orders.seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Provider reference, idempotency key and raw provider payload are excluded." },
@@ -73,11 +90,23 @@ export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
   { key: "shipment_items", table: "shipment_items", projection: "shipment_id,order_item_id,shipments!inner(order_id,orders!inner(buyer_id,seller_id))", access: "transaction_participant", filter: "shipments.orders.buyer_id|shipments.orders.seller_id", cursor: "shipment_id,order_item_id" },
   { key: "shipment_events", table: "shipment_events", projection: "id,shipment_id,status,description,occurred_at,city,state,country,created_at,shipments!inner(order_id,orders!inner(buyer_id,seller_id))", access: "transaction_participant", filter: "shipments.orders.buyer_id|shipments.orders.seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Provider event reference is excluded." },
   { key: "seller_adjustments", table: "seller_adjustments", projection: "id,seller_id,order_id,shipment_id,return_id,kind,amount_cents,currency,description,created_at,voided_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "External adjustment reference is excluded." },
+  // Label costs (and their refunds) an order's own payout didn't settle, and
+  // what later payouts kept back for them. The write-once entry key and the
+  // internal adjustment id stay out.
+  { key: "seller_carry_entries", table: "seller_carry_entries", projection: "id,seller_id,kind,amount_cents,currency,order_id,created_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "shipping_quotes", table: "shipping_rate_quotes", projection: "id,buyer_id,listing_id,provider,carrier,service,service_label,amount_cents,currency,est_delivery_days,parcel,consumed_order_id,expires_at,created_at", access: "owner", filter: "buyer_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Destination hash and provider rate/shipment references are excluded." },
   { key: "pickup_confirmations", table: "pickup_confirmations", projection: "order_id,attempts,expires_at,redeemed_at,redeemed_by,created_at,orders!inner(buyer_id,seller_id)", access: "transaction_participant", filter: "orders.buyer_id|orders.seller_id", cursor: "order_id", cutoffColumn: "created_at", counterpartyRule: "Pickup token and code hashes are excluded." },
   { key: "reports_filed", table: "reports", projection: "id,reporter_id,subject_type,subject_id,reason,detail,status,resolved_at,created_at", access: "author", filter: "reporter_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "refund_recredit_proofs", table: "refund_recredit_proofs", projection: "amount_cents,currency,verified_at", sourceProjection: "adjustment_id,amount_cents,currency,verified_at", excludedSourceFields: ["adjustment_id"], access: "transaction_participant", filter: "authorized refund adjustment", cursor: "adjustment_id", counterpartyRule: "Includes the amount, currency and verification time needed to explain the requester's refund; internal adjustment/recovery ids, provider balance/transfer references and operator identity are excluded." },
 ] as const;
+
+/** True when a storage download failed because the object isn't there. */
+export function storageObjectMissing(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const { status, statusCode, message, originalError } = error as { status?: unknown; statusCode?: unknown; message?: unknown; originalError?: { status?: unknown } };
+  return [status, statusCode, originalError?.status].some((code) => String(code) === "404")
+    || (typeof message === "string" && /not[ _]found/i.test(message));
+}
 
 export const ACCOUNT_EXPORT_EXCLUSIONS = [
   "authentication credentials, factor secrets and session tokens",
@@ -92,7 +121,7 @@ export function nextExportCheckpoint(
   current: { section: number; offset: number; cursor: string | null },
   rows: Array<Record<string, unknown>>,
 ) {
-  if (rows.length < ACCOUNT_EXPORT_PAGE_SIZE) return { section: current.section + 1, offset: 0, cursor: null };
+  if (rows.length < exportPageSize(section)) return { section: current.section + 1, offset: 0, cursor: null };
   return {
     section: current.section,
     offset: current.offset + rows.length,

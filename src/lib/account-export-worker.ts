@@ -7,9 +7,11 @@ import "server-only";
 import {
   ACCOUNT_EXPORT_CONTRACT_VERSION,
   ACCOUNT_EXPORT_EXCLUSIONS,
-  ACCOUNT_EXPORT_PAGE_SIZE,
   ACCOUNT_EXPORT_SECTIONS,
+  MESSAGE_PHOTO_SECTIONS,
   exportCursorFilter,
+  exportPageSize,
+  storageObjectMissing,
   nextExportCheckpoint,
   type ExportSection,
 } from "./account-export-contract";
@@ -107,15 +109,17 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
   } else {
     query = query.eq(section.filter, request.user_id);
   }
+  if (isMessagePhotoSection(section)) query = query.neq("attachments", "{}");
   if (section.cutoffColumn) query = query.lte(section.cutoffColumn, request.cutoff_at);
+  const pageSize = exportPageSize(section);
   if (section.cursor) {
     const cursorFields = section.cursor.split(",");
     for (const field of cursorFields) query = query.order(field);
     if (request.current_cursor) query = query.or(exportCursorFilter(cursorFields, request.current_cursor));
-    query = query.limit(ACCOUNT_EXPORT_PAGE_SIZE);
+    query = query.limit(pageSize);
   } else {
     query = query.order(section.cutoffColumn ?? section.filter.split("|")[0]);
-    query = query.range(request.current_offset, request.current_offset + ACCOUNT_EXPORT_PAGE_SIZE - 1);
+    query = query.range(request.current_offset, request.current_offset + pageSize - 1);
   }
   const result = await query;
   if (result.error) throw new Error(`Export section ${section.key} failed: ${result.error.message}`);
@@ -158,6 +162,43 @@ async function copyEvidenceAssets(admin: UntypedAdmin, request: ExportRequest, r
     const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
     await persistPart(admin, request, `dispute_evidence_asset_${evidenceId}`, 0, bytes, 1, downloaded.data.type || "application/octet-stream");
   }
+}
+
+function isMessagePhotoSection(section: ExportSection) {
+  return (MESSAGE_PHOTO_SECTIONS as readonly string[]).includes(section.key);
+}
+
+/**
+ * Copies a page of messages' photos into the package and returns the rows
+ * with, for each, where every photo went: `photos[i]` is the package part
+ * (`asset`) holding `attachments[i]`, or `missing` when the object no longer
+ * exists in storage. A missing photo is reported in the export, not treated
+ * as a failure: the message row outlives its photo when storage has been
+ * cleaned up, and failing would stop that member's export for good. Any other
+ * storage error fails the page, which is retried.
+ */
+async function copyMessagePhotos(admin: UntypedAdmin, request: ExportRequest, rows: Record<string, unknown>[], heartbeat: () => Promise<void>) {
+  const listed: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    const messageId = typeof row.id === "string" ? row.id : null;
+    const paths = Array.isArray(row.attachments) ? row.attachments.filter((path): path is string => typeof path === "string") : [];
+    if (!messageId) throw new Error("Export message is missing its id");
+    const photos: Array<{ path: string; asset?: string; missing?: true }> = [];
+    for (const [index, path] of paths.entries()) {
+      await heartbeat();
+      const downloaded = await admin.storage.from("message-photos").download(path);
+      if (downloaded.error || !downloaded.data) {
+        if (storageObjectMissing(downloaded.error)) { photos.push({ path, missing: true }); continue; }
+        throw new Error(`Could not copy message photo ${messageId}/${index}`);
+      }
+      const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+      const asset = `message_photo_asset_${messageId}_${index}`;
+      await persistPart(admin, request, asset, 0, bytes, 1, downloaded.data.type || "application/octet-stream");
+      photos.push({ path, asset });
+    }
+    listed.push({ ...row, photos });
+  }
+  return listed;
 }
 
 async function completeExport(admin: UntypedAdmin, request: ExportRequest) {
@@ -302,8 +343,11 @@ export async function processAccountExports() {
         await heartbeat();
         const section = ACCOUNT_EXPORT_SECTIONS[request.current_section];
         const rows = await readPage(admin, request, section);
-        const page = Math.floor(request.current_offset / ACCOUNT_EXPORT_PAGE_SIZE);
-        const exportedRows = rows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__cursor_"))));
+        const page = Math.floor(request.current_offset / exportPageSize(section));
+        // Photos are copied before their listing is written, so a published
+        // listing never names a part that isn't in the package.
+        const listedRows = isMessagePhotoSection(section) ? await copyMessagePhotos(admin, request, rows, heartbeat) : rows;
+        const exportedRows = listedRows.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith("__cursor_"))));
         const bytes = new TextEncoder().encode(JSON.stringify({ section: section.key, page, rows: exportedRows }));
         await persistPart(admin, request, section.key, page, bytes, rows.length);
         if (section.key === "dispute_evidence") await copyEvidenceAssets(admin, request, rows);
