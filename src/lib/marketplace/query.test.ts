@@ -11,14 +11,14 @@ vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/vehicles/catalog", () => ({ resolveVehicleFilter: vi.fn() }));
 
 const MISSING = { data: null, count: null, error: { code: "PGRST202", message: "Could not find the function" } };
-const NEW_FUNCTIONS = ["marketplace_page", "marketplace_count", "listing_watch_counts", "seller_active_counts"];
+const NEW_FUNCTIONS = ["marketplace_page", "marketplace_count", "listing_watch_counts", "seller_active_counts", "search_word_corrections"];
 
 /** A Supabase client whose RPCs answer per function. `response` is the
  *  original path's answer (marketplace_browse_rows / _search_browse_rows,
  *  read with .range()); `page` and `count` are marketplace_page's and
  *  marketplace_count's, awaited directly. Both are "not deployed" (PGRST202)
  *  unless given, so tests of the original path run through its fallback. */
-function client(response: object, fresh: { page?: object; count?: object } = {}) {
+function client(response: object, fresh: { page?: object; count?: object; corrections?: object } = {}) {
   const legacy = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), range: vi.fn().mockResolvedValue(response) };
   legacy.select.mockReturnValue(legacy);
   legacy.eq.mockReturnValue(legacy);
@@ -38,6 +38,7 @@ function client(response: object, fresh: { page?: object; count?: object } = {})
   return {
     rpc: vi.fn((name: string) => name === "marketplace_page" ? awaited(fresh.page ?? MISSING)
       : name === "marketplace_count" ? awaited(fresh.count ?? MISSING)
+      : name === "search_word_corrections" ? awaited(fresh.corrections ?? MISSING)
       : name === "listing_watch_counts" || name === "seller_active_counts" ? awaited({ data: [], error: null }) : legacy),
     from: vi.fn(table),
   } as unknown as SupabaseClient<Database>;
@@ -168,6 +169,21 @@ it("a typed search answered by Postgres is capped at 1,000 matches", async () =>
   const supabase = client(MISSING, { page: { data: [row(1)], error: null }, count: { data: SEARCH_CAP + 1, error: null } });
   const page = await fetchListings(supabase, { q: "kit" });
   expect(page).toMatchObject({ status: "success", total: SEARCH_CAP, totalIsCapped: true, totalCap: SEARCH_CAP });
+});
+
+it("says which words Postgres' search also searched for a misspelt one", async () => {
+  const corrections = [{ word: "brmbo", correction: "brembo" }];
+  const supabase = client(MISSING, { page: { data: [row(1)], error: null }, count: { data: 1, error: null }, corrections: { data: corrections, error: null } });
+  const page = await fetchListings(supabase, { q: "brmbo" });
+  expect(supabase.rpc).toHaveBeenCalledWith("search_word_corrections", { p_query: "brmbo" });
+  expect(page).toMatchObject({ status: "success", total: 1, corrections });
+  // Without the word list (migration unapplied), the page says nothing.
+  const older = await fetchListings(client(MISSING, { page: { data: [row(1)], error: null }, count: { data: 1, error: null } }), { q: "brmbo" });
+  expect(older).not.toHaveProperty("corrections");
+  // A browse without words doesn't ask.
+  const browse = client(MISSING, { page: { data: [row(1)], error: null }, count: { data: 1, error: null } });
+  await fetchListings(browse, {});
+  expect(browse.rpc).not.toHaveBeenCalledWith("search_word_corrections", expect.anything());
 });
 
 it("reads the next page from a position, and the previous page back from one", async () => {

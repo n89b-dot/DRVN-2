@@ -13,9 +13,17 @@
 --    search matching more says "1,000+" and stops there. Sorting such a
 --    search by price sorts those 1,000.
 --
---    The capped search matches words exactly (anywhere in the part's
---    search document), without the old "close to a title word" typo test:
---    typos are the engine's job, and that test was the slow part.
+--    The capped search matches words as typed (anywhere in the part's
+--    search document), without the old "close to a title word" typo test,
+--    which was the slow part. Typos are forgiven another way: search_words
+--    lists every word of four letters or more in the titles and brands of
+--    parts for sale (refreshed hourly by pg_cron), and a query word that
+--    isn't on it is searched alongside the closest word that is
+--    ("brmbo" also searches "brembo"). The word as typed is still searched,
+--    so a word too new for the list loses nothing. search_word_corrections
+--    returns those pairs so the page can say "Including results for …".
+--    THE EXPOSURE: words that appear in titles and brands of parts for sale,
+--    which anyone can already read.
 --
 --    marketplace_search_capped_ids is SECURITY DEFINER for the same reason
 --    as search_listing_ids (20261010100100): under row security a text
@@ -43,6 +51,69 @@
 do $$ begin perform show_trgm('drvn'); end $$; -- see 20261010100100
 
 -- ── 1. Capped Postgres search ────────────────────────────────────────────
+
+-- The words a query may be corrected to: four to thirty letters, from the
+-- titles and brands of parts for sale (no digits: part numbers have their
+-- own lookup). 27,000 words at 2M parts; a refresh reads every part for sale
+-- once (about 16 s at 2M on a laptop), so it runs hourly.
+create table if not exists public.search_words (
+  word text primary key,
+  uses integer not null
+);
+alter table public.search_words enable row level security; -- no policies: read through search_word_corrections only
+revoke all on public.search_words from anon, authenticated;
+create index if not exists search_words_trgm_idx on public.search_words using gist (word gist_trgm_ops);
+
+create or replace function public.refresh_search_words()
+returns void
+language sql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $function$
+  with fresh as (
+    select w.word, count(*)::integer as uses
+    from public.listings l
+    cross join lateral regexp_split_to_table(lower(coalesce(l.title, '') || ' ' || coalesce(l.brand, '')), '[^[:alpha:]]+') w(word)
+    where l.status = 'active' and l.seller_id not in (select public.suspended_profile_ids())
+      and length(w.word) between 4 and 30
+    group by w.word
+  ),
+  gone as (
+    delete from public.search_words t where t.word not in (select f.word from fresh f)
+  )
+  insert into public.search_words (word, uses)
+  select word, uses from fresh
+  on conflict (word) do update set uses = excluded.uses
+  where public.search_words.uses is distinct from excluded.uses;
+$function$;
+revoke all on function public.refresh_search_words() from public, anon, authenticated;
+
+-- Each word of the query (four letters or more, no digits) that isn't on the
+-- list, with the closest word that is, when they share enough letter
+-- triples (similarity 0.35: "bilstien" -> "bilstein" is 0.38, "brmbo" ->
+-- "brembo" 0.44). A nearest-word lookup on the trigram index: ~5 ms.
+create or replace function public.search_word_corrections(p_query text)
+returns table(word text, correction text)
+language sql
+stable
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $function$
+  select q.word, c.word
+  from (select distinct t as word
+        from regexp_split_to_table(lower(left(coalesce(p_query, ''), 200)), '\s+') t
+        where t ~ '^[[:alpha:]]{4,30}$'
+        limit 8) q
+  cross join lateral (
+    select s.word from public.search_words s
+    order by s.word <-> q.word, s.uses desc
+    limit 1) c
+  where not exists (select 1 from public.search_words s where s.word = q.word)
+    and similarity(c.word, q.word) >= 0.35;
+$function$;
+revoke all on function public.search_word_corrections(text) from public;
+grant execute on function public.search_word_corrections(text) to anon, authenticated, service_role;
+
 
 create or replace function public.marketplace_search_capped_ids(
   p_query text, p_category text default '', p_subcategory text default '', p_condition text default '',
@@ -72,6 +143,8 @@ begin
   -- and digits, two of them digits, is a part number and nothing else.
   identifier := term !~ '\s' and length(compact) >= 5 and length(regexp_replace(compact, '[^0-9]', '', 'g')) >= 2;
   terms := array(select distinct t from regexp_split_to_table(lower(term), '\s+') t where length(t) >= 1);
+  -- A word not on search_words is searched alongside its closest word.
+  terms := terms || array(select c.correction from public.search_word_corrections(term) c where c.correction <> all(terms));
   -- The part numbers (and their interchange numbers) the query could be.
   if length(compact) >= 4 and compact ~ '[0-9]' then
     numbered := array(
@@ -102,12 +175,12 @@ begin
   if p_min_cents is not null then filters := filters || format(' and l.price_cents >= %s', p_min_cents); end if;
   if p_max_cents is not null then filters := filters || format(' and l.price_cents <= %s', p_max_cents); end if;
 
-  -- What the words match: any word, in the part's search document
-  -- (search_listing_ids' first rule), or one of the numbers. A part number is
-  -- matched by its numbers alone. Unlike search_listing_ids, a word is not
-  -- also matched "close to" a word of the title: the engine is where typos
-  -- are forgiven, and here that test read thousands of near-miss titles from
-  -- disk for one ordinary word (it timed out at 2M parts).
+  -- What the words match: any word (or its correction, above), in the
+  -- part's search document (search_listing_ids' first rule), or one of the
+  -- numbers. A part number is matched by its numbers alone. Unlike
+  -- search_listing_ids, a word is not also matched "close to" a word of the
+  -- title: that test read thousands of near-miss titles from disk for one
+  -- ordinary word (it timed out at 2M parts).
   matches := case when cardinality(numbered) > 0 then format('l.id = any(%L::uuid[])', numbered) else 'false' end;
   if not identifier then
     matches := matches || ' or ' || (
@@ -659,3 +732,16 @@ as $function$
 $function$;
 revoke all on function public.search_listing_documents(uuid[]) from public, anon, authenticated;
 grant execute on function public.search_listing_documents(uuid[]) to service_role;
+
+-- ── 5. The word list, filled now and hourly ──────────────────────────────
+
+select public.refresh_search_words();
+do $$
+declare
+  j record;
+begin
+  for j in select jobid from cron.job where jobname = 'drvn-search-words' loop
+    perform cron.unschedule(j.jobid);
+  end loop;
+end $$;
+select cron.schedule('drvn-search-words', '23 * * * *', $job$select public.refresh_search_words();$job$);

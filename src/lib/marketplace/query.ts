@@ -27,6 +27,9 @@ export type ListingPage = ListingPageContext & (
       totalIsCapped?: boolean;
       /** The cap it stopped at, when not COUNT_CAP. */
       totalCap?: number;
+      /** Postgres' search (engine away) also searched these words in place
+       *  of what was typed: "Including results for brembo". */
+      corrections?: { word: string; correction: string }[];
       /** Positions for the next and previous pages' links, when known. */
       nextCursor?: string | null;
       prevCursor?: string | null;
@@ -408,7 +411,13 @@ export async function fetchListings(
   const countQuery = () => supabase.rpc("marketplace_count", { ...args, p_cap: COUNT_CAP + 1 });
   const countPromise: Promise<Counting> = Promise.resolve(context?.total).then(async (known): Promise<Counting> =>
     known !== undefined ? { known } : { counted: await countQuery() });
-  const [retrieval, garageCars, selection, counting] = await Promise.all([pageQuery, garagePromise, selectionPromise, countPromise]);
+  // Postgres' search corrects a word it has never seen to the closest word
+  // it has, searching both; the page says which (a database without the
+  // word list answers with an error, and the page says nothing).
+  const correctionsPromise: Promise<{ word: string; correction: string }[]> = filters.q?.trim()
+    ? Promise.resolve(supabase.rpc("search_word_corrections", { p_query: filters.q })).then(({ data, error }) => (error ? [] : data ?? []), () => [])
+    : Promise.resolve([]);
+  const [retrieval, garageCars, selection, counting, corrections] = await Promise.all([pageQuery, garagePromise, selectionPromise, countPromise, correctionsPromise]);
   const knownTotal = "known" in counting ? counting.known : undefined;
   if (retrieval.error?.code === "PGRST202") {
     return fetchListingsByOffset(supabase, filters, viewerId, { garage: Promise.resolve(garageCars), selection: Promise.resolve(selection), total: Promise.resolve(knownTotal) });
@@ -457,6 +466,7 @@ export async function fetchListings(
     total: total ?? listings.length,
     totalIsCapped,
     totalCap,
+    ...(corrections.length ? { corrections } : {}),
     page,
     pageSize: PAGE_SIZE,
     hasMore,

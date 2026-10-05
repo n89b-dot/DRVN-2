@@ -3630,6 +3630,21 @@ export type Database = {
         }
         Relationships: []
       }
+      search_words: {
+        Row: {
+          uses: number
+          word: string
+        }
+        Insert: {
+          uses: number
+          word: string
+        }
+        Update: {
+          uses?: number
+          word?: string
+        }
+        Relationships: []
+      }
       seller_adjustments: {
         Row: {
           amount_cents: number
@@ -5809,6 +5824,7 @@ export type Database = {
         Returns: undefined
       }
       refresh_marketplace_facet_counts: { Args: never; Returns: undefined }
+      refresh_search_words: { Args: never; Returns: undefined }
       release_expired_reservations: { Args: never; Returns: Json }
       release_seller_carry_payout: {
         Args: {
@@ -5918,6 +5934,13 @@ export type Database = {
       search_profile_ids: { Args: { p_query: string }; Returns: string[] }
       search_update_ids: { Args: { p_query: string }; Returns: string[] }
       search_user_messages: { Args: { p_query: string }; Returns: string[] }
+      search_word_corrections: {
+        Args: { p_query: string }
+        Returns: {
+          correction: string
+          word: string
+        }[]
+      }
       seller_active_counts: {
         Args: { p_sellers: string[] }
         Returns: {

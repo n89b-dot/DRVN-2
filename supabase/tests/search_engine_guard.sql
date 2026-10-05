@@ -4,7 +4,8 @@
 -- Holds: the capped Postgres search to "the newest 1,001 parts the old
 -- search finds, within the filters", and to the visitor's read rule (it is
 -- SECURITY DEFINER); the engine's page re-check to its order and the rules;
--- the document builder to what may be searchable; and the search queue to
+-- typo correction to the word list of parts for sale; the document builder
+-- to what may be searchable; and the search queue to
 -- fields the documents hold — a counted view queues nothing, an edit to a
 -- part, a suspension and a car's visibility do.
 begin;
@@ -41,8 +42,8 @@ begin
          case when n % 5 = 0 then 'Zzebrand' else 'Other' end, 'ZE-' || (77000 + n), stamp + n * interval '1 minute'
   from generate_series(1, 30) n;
   insert into public.listings(id, seller_id, title, category, price_cents, currency, status, created_at) values
-    (v_draft, v_seller, 'Zzengine draft', 'engine', 1000, 'USD', 'draft', stamp + interval '1 hour'),
-    (v_hidden, v_suspended, 'Zzengine suspended', 'engine', 1000, 'USD', 'active', stamp + interval '1 hour');
+    (v_draft, v_seller, 'Zzengine zzdraftword', 'engine', 1000, 'USD', 'draft', stamp + interval '1 hour'),
+    (v_hidden, v_suspended, 'Zzengine zzhiddenword', 'engine', 1000, 'USD', 'active', stamp + interval '1 hour');
   insert into public.listing_fitments(listing_id, make, model, year_start, year_end) values (parts[2], 'Zzemake', 'Zzemodel', 2010, 2011);
   update public.profiles set suspended_at = now(), suspended_reason = 'guard' where id = v_suspended;
 
@@ -76,6 +77,37 @@ begin
   if exists (select 1 from public.marketplace_search_capped_ids('zzengine', p_brand => $q$x' or 'a'='a$q$)) then
     raise exception 'A quote in a filter changed the capped search';
   end if;
+
+  -- 1b. Typos: a word not on the list is searched with its closest word.
+  perform set_config('role', 'supabase_admin', true);
+  perform public.refresh_search_words();
+  if not exists (select 1 from public.search_words where word = 'zzengine') then
+    raise exception 'The word list is missing a word of a part for sale';
+  end if;
+  if exists (select 1 from public.search_words where word in ('zzdraftword', 'zzhiddenword')) then
+    raise exception 'The word list holds a word only a draft or a suspended seller''s part has';
+  end if;
+  perform set_config('role', 'anon', true);
+  if array(select correction from public.search_word_corrections('Zzengnie kit')) <> array['zzengine'] then
+    raise exception 'A misspelt word should be corrected to the closest listed word: %', array(select correction from public.search_word_corrections('Zzengnie kit'));
+  end if;
+  if exists (select 1 from public.search_word_corrections('zzengine ZE-77004 kit')) then
+    raise exception 'A listed word, a part number or a short word should not be corrected';
+  end if;
+  if exists (select 1 from public.search_word_corrections('zzhiddenwrd zzdraftwrd') where correction in ('zzhiddenword', 'zzdraftword')) then
+    raise exception 'A correction revealed a word only a draft or a suspended seller''s part has';
+  end if;
+  if (select count(*) from public.marketplace_search_capped_ids('zzengnie', p_cap => 100)) <> 30 then
+    raise exception 'A misspelt search should find what the corrected word finds';
+  end if;
+  v_denied := false;
+  begin perform 1 from public.search_words limit 1;
+  exception when insufficient_privilege then v_denied := true; end;
+  if not v_denied then raise exception 'A visitor could read the word list directly'; end if;
+  v_denied := false;
+  begin perform public.refresh_search_words();
+  exception when insufficient_privilege then v_denied := true; end;
+  if not v_denied then raise exception 'A visitor could refresh the word list'; end if;
 
   -- 2. The engine's page, re-checked: its order kept, ineligible ids dropped.
   v_ids := array(select id from public.marketplace_page(p_ids => array[parts[3], v_draft, parts[9], v_hidden, parts[1]]));

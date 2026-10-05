@@ -34,8 +34,8 @@ at 600,000 parts, ~8 minutes at 2M on a laptop. Guard:
 `marketplace_pages_guard.sql`.
 `120000` adds `marketplace_facet_counts`, `explore_trending_models` and
 `explore_builder_rankings` with their refresh functions and pg_cron jobs
-(`drvn-marketplace-counts` every minute, `drvn-explore-trending` every ten,
-`drvn-explore-builders` hourly); restates `marketplace_category_counts`,
+(`drvn-marketplace-counts` every 30 seconds, `drvn-explore-trending` every
+two minutes, `drvn-explore-builders` every ten); restates `marketplace_category_counts`,
 `marketplace_brand_counts`, `trending_models`, `suggested_builders`,
 `feed_hydration` (from its latest definition, `20261003150000`) and
 `feed_event_page` (drop and create: two optional position arguments); adds
@@ -50,7 +50,12 @@ EXISTS the planner answered by hashing every public car. Who may read what
 is unchanged; guard `update_read_rule_guard.sql` passes against the old and
 the new policy.
 `130000` adds `marketplace_search_capped_ids` (SECURITY DEFINER, callable by
-clients, ids only — listed in `definer_exposure_guard.sql`), restates
+clients, ids only — listed in `definer_exposure_guard.sql`); the typo word
+list `search_words` (no client access), `refresh_search_words` (pg_cron job
+`drvn-search-words`, hourly; filled once by the migration: ~10–16 s at 2M
+parts) and `search_word_corrections` (SECURITY DEFINER, callable by clients,
+returns only words already in titles and brands of parts for sale — listed in
+`definer_exposure_guard.sql`); restates
 `marketplace_query_sql` / `marketplace_page` / `marketplace_count` (drop and
 create: a `p_ids` argument for the search engine's page), adds
 `claim_search_job_batch` and `search_listing_documents` (service role only),

@@ -99,6 +99,7 @@ export function MarketplaceResults({
       {viewEvent}
       {summary}
       {page.searchTruncated && <p role="status" className="order__meta mb-4">More matches may be available. Add a make, model or part number to narrow your search.</p>}
+      {page.corrections?.length ? <p className="order__meta mb-4">Including results for {page.corrections.map(c => `“${c.correction}”`).join(", ")}.</p> : null}
       <div className={isMarketplace ? "marketplace-grid" : undefined}>
       <Mosaic commerce label="Parts for sale">
         {results.map((listing, index) => {

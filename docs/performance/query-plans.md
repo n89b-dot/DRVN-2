@@ -131,7 +131,11 @@ page and its count as two requests side by side, "after" shows both.
    (`20261011130000_search_engine_at_scale.sql`). The engine returns a page
    of ids and an exact count; Postgres re-reads those ids under the caller's
    row security. Postgres' own search stays as the fallback, capped at the
-   newest 1,001 matches the filters allow.
+   newest 1,001 matches the filters allow. It forgives typos from a word
+   list (`search_words`: every word of four letters or more in the titles
+   and brands of parts for sale, 27,000 words at 2M, refreshed hourly in
+   ~10–16 s): a word not on it is searched alongside its closest listed word
+   ("brmbo" also searches "brembo"), a ~5 ms lookup on a trigram index.
 
 ### Sameness
 
@@ -160,7 +164,7 @@ What changes on purpose, and nothing else:
 |---|---|
 | Filtered views count to 10,000 | "10,000+ parts found" instead of the exact number past 10,000 |
 | Tie-break follows the sort | Parts with exactly the same price (or listing time) can swap places among themselves |
-| Postgres search capped (engine down only) | The newest 1,000 matches the filters allow; "1,000+ parts found"; sorting such a search by price sorts those 1,000; words match exactly (no typo matching) |
+| Postgres search capped (engine down only) | The newest 1,000 matches the filters allow; "1,000+ parts found"; sorting such a search by price sorts those 1,000; a misspelt word is also searched as the closest word in part titles and brands, and the page says "Including results for …" |
 | Old `?page=N` links past page 417 | An empty page with "Back to page one" (pages reached by Next/Previous have no limit) |
 | Totals and rankings precomputed | Category/brand counts up to 30 seconds behind, trending two minutes, suggested builders ten minutes (plus the app's existing caches: counts one minute, trending five) |
 | Engine search (when hosted) | Engine matching and typo tolerance; exact counts; results in the marketplace's usual order |
