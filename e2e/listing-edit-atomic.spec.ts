@@ -188,6 +188,62 @@ test("a listing save whose answer is lost is recovered, not reported as unchange
   }
 });
 
+// The edit commits, its answer and the status check are both lost, and the
+// seller then changes the draft before saving again. That is a new request
+// from a version their own first save has already replaced: it must go
+// through against the version that save produced, not be reported to them
+// as a change made in another tab.
+test("a changed draft saved after an unconfirmed save isn't refused as someone else's change", async ({ page }) => {
+  test.skip(
+    process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation",
+    "Listing edit fixtures are restricted to the isolated local stack"
+  );
+  test.setTimeout(120_000);
+
+  const { userId, title, listingId, listingRow } = await sellerWithListing(page);
+  try {
+    await page.goto(`/listings/${listingId}/edit`);
+    await page.getByLabel("Asking price").fill("97.00");
+
+    let actionPosts = 0;
+    await page.route(`**/listings/${listingId}/edit`, async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST" || !request.headers()["next-action"] || actionPosts >= 2) {
+        return route.continue();
+      }
+      actionPosts += 1;
+      // The save reaches the server and commits; the status check doesn't.
+      if (actionPosts === 1) await route.fetch();
+      await route.abort("failed");
+    });
+    await save(page).click();
+
+    await expect(page.getByText(/still can.t confirm whether that saved/i)).toBeVisible({ timeout: 20_000 });
+    await expect.poll(async () => (await listingRow()).price_cents).toBe(9700);
+    const committed = (await listingRow()).updated_at;
+
+    // A different draft: a new request, sent once the first is known saved.
+    await page.unroute(`**/listings/${listingId}/edit`);
+    await page.getByLabel("Asking price").fill("96.00");
+    await save(page).click();
+    await expect(page.getByText("Listing updated.")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/changed since you opened it/i)).toHaveCount(0);
+    await expect(page.getByText(/earlier save/i)).toHaveCount(0);
+    const after = await listingRow();
+    expect(after.price_cents).toBe(9600);
+    expect(after.title).toBe(title);
+    expect(Date.parse(after.updated_at)).toBeGreaterThan(Date.parse(committed));
+
+    // The form holds the newest version, so the next edit saves normally.
+    await page.getByLabel("Asking price").fill("95.00");
+    await save(page).click();
+    await expect.poll(async () => (await listingRow()).price_cents).toBe(9500);
+    await expect(page.getByText(/changed since you opened it/i)).toHaveCount(0);
+  } finally {
+    await cleanupFixtureUser(userId);
+  }
+});
+
 test("an edit can't be typed before the form is live, so hydration never resets it", async ({ page }) => {
   test.skip(
     process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation",

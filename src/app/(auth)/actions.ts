@@ -79,24 +79,41 @@ function authErrorCopy(error: { code?: string; message: string }): string {
  * from every visitor counted against one bucket — or, for a targeted attack,
  * against nothing.
  *
- * Two keys, each counted on every attempt: the normalized email (hashed, so
- * the limiter never stores addresses), which stops one account being
- * hammered from many places; and the visitor's network, which stops one place
- * spraying many accounts. The network key applies only when the address can
- * be attributed — on the shared "unattributed" bucket it would let one
- * attacker lock every signed-out visitor out of their own account.
+ * Three keys, each counted on every attempt. The email is normalized and
+ * hashed, so the limiter never stores addresses.
+ *  - The tight limit is on the email *from this visitor's network*. Keyed on
+ *    the email alone it was a lockout tool: ten junk attempts from anywhere
+ *    kept the owner out of their own sign-in form, and five reset requests
+ *    silently swallowed the owner's own reset email.
+ *  - A looser ceiling on the email alone still stops one account being
+ *    guessed at (or mailed) from many places without end.
+ *  - The visitor's network, which stops one place spraying many accounts.
+ * The network keys apply only when the address can be attributed — on the
+ * shared "unattributed" bucket one attacker could lock every signed-out
+ * visitor out. Without an attributable address there is no telling visitors
+ * apart, so the tight limit falls back to the email alone.
  *
- * Neither key looks at whether the account exists, so a throttled answer says
+ * No key looks at whether the account exists, so a throttled answer says
  * nothing about registration.
  */
-async function throttled(byEmail: RateLimitRule, byNetwork: RateLimitRule, email: string): Promise<boolean> {
+async function throttled(
+  byEmail: RateLimitRule,
+  byEmailCeiling: RateLimitRule,
+  byNetwork: RateLimitRule,
+  email: string
+): Promise<boolean> {
   const subject = `email:${createHash("sha256").update(email.trim().toLowerCase()).digest("hex")}`;
   const network = attributedNetworkIdentity(await headers());
-  const [emailAllowed, networkAllowed] = await Promise.all([
-    allowAction(byEmail, subject),
-    network ? allowAction(byNetwork, network) : Promise.resolve(true),
-  ]);
-  return !(emailAllowed && networkAllowed);
+  const allowed = await Promise.all(
+    network
+      ? [
+          allowAction(byEmail, `${subject}:${network}`),
+          allowAction(byEmailCeiling, subject),
+          allowAction(byNetwork, network),
+        ]
+      : [allowAction(byEmail, subject)]
+  );
+  return !allowed.every(Boolean);
 }
 
 export async function login(_prev: AuthState, formData: FormData): Promise<AuthState> {
@@ -107,7 +124,7 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
   if (!email || !password) {
     return { error: "Email and password are required." };
   }
-  if (await throttled(RATE_LIMITS.signIn, RATE_LIMITS.signInNetwork, email)) {
+  if (await throttled(RATE_LIMITS.signIn, RATE_LIMITS.signInEmailCeiling, RATE_LIMITS.signInNetwork, email)) {
     return { error: "Too many sign-in attempts. Wait a few minutes and try again." };
   }
 
@@ -280,7 +297,7 @@ export async function requestPasswordReset(
   const sent: AuthState = { ok: "If that address has an account, a reset link is on its way." };
   // A throttled request gets the same answer as any other, so neither the
   // limit nor the account's existence can be probed through this form.
-  if (await throttled(RATE_LIMITS.passwordReset, RATE_LIMITS.passwordResetNetwork, email)) return sent;
+  if (await throttled(RATE_LIMITS.passwordReset, RATE_LIMITS.passwordResetEmailCeiling, RATE_LIMITS.passwordResetNetwork, email)) return sent;
 
   const supabase = await createClient();
   const origin = (await headers()).get("origin") ?? "";

@@ -67,6 +67,11 @@ export function ActionDialog({
   // included — until the operator has reloaded and looked.
   const [uncertain, setUncertain] = useState(false);
   const inFlight = useRef(false);
+  // One id per command the operator means to issue: a second press after
+  // "pending" or a refusal re-sends the same id, so a money action can adopt
+  // the request it already started instead of starting another. A new id is
+  // taken only once the command is confirmed done.
+  const requestId = useRef<string | null>(null);
   const idBase = useId();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -91,11 +96,14 @@ export function ActionDialog({
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setState(null);
     setPending(true);
+    requestId.current ??= crypto.randomUUID();
+    formData.set("request_id", requestId.current);
     startTransition(async () => {
       try {
         const result = await action(state, formData);
         setState(result);
         if (result?.ok) {
+          requestId.current = null;
           announceAdminAction(result.ok);
           router.refresh();
         }

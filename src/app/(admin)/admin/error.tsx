@@ -12,10 +12,12 @@ import { Alert, Button, ButtonLink } from "@/components/ui";
  */
 export default function AdminError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  /** Re-fetches and re-renders the segment (Next 16.3) — `reset` only
+   *  re-renders, which would show the same failed read again. */
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[admin-route-error]", error);
@@ -45,7 +47,7 @@ export default function AdminError({
         )}
       </Alert>
       <div className="mt-5 flex flex-wrap gap-3">
-        <Button variant="live" onClick={reset}>
+        <Button variant="live" onClick={() => retry()}>
           Try again
         </Button>
         <ButtonLink variant="ghost" href="/admin">

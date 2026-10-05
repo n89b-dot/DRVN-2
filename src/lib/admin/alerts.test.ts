@@ -17,6 +17,8 @@ const table: Row[] = [];
 let nextId = 1;
 /** How many "delivered" writes fail before one succeeds. */
 let failMarkDelivered = 0;
+/** How far the database's clock runs ahead of this server's. */
+let databaseAheadMs = 0;
 
 function chain(rowsAfterOp: () => Row[]) {
   // Minimal PostgREST-builder double: supports the exact chains alerts.ts uses.
@@ -33,7 +35,7 @@ function chain(rowsAfterOp: () => Row[]) {
         id: `alert-${nextId++}`,
         status: "pending",
         attempts: 0,
-        next_attempt_at: new Date().toISOString(),
+        next_attempt_at: new Date(Date.now() + databaseAheadMs).toISOString(),
         created_at: new Date().toISOString(),
         last_error: null,
         delivered_at: null,
@@ -72,10 +74,15 @@ function chain(rowsAfterOp: () => Row[]) {
       return builder;
     },
     select() {
-      const rows = rowsAfterOp();
+      let rows = rowsAfterOp();
       const builder = {
         eq: () => builder,
-        lte: () => builder,
+        // The sweep reads only rows that are due; a row under a delivery
+        // lease is not, and the claim no longer re-checks the clock.
+        lte(col: string, value: string) {
+          rows = rows.filter((row) => String(row[col] ?? "") <= value);
+          return builder;
+        },
         order: () => builder,
         limit: async () => ({ data: rows.map((r) => ({ ...r })), error: null }),
       };
@@ -97,6 +104,7 @@ describe("sendAdminAlert", () => {
     table.length = 0;
     nextId = 1;
     failMarkDelivered = 0;
+    databaseAheadMs = 0;
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -107,6 +115,18 @@ describe("sendAdminAlert", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("ok", { status: 200 })));
     await sendAdminAlert({ kind: "test", title: "hello" });
     expect(table).toHaveLength(1);
+    expect(table[0].status).toBe("delivered");
+  });
+
+  it("sends straight away even when the database's clock is ahead of this server's", async () => {
+    // The new row's time is the database's now(); to a server running two
+    // seconds behind it looked not yet due, and the alert waited for a sweep.
+    databaseAheadMs = 2000;
+    vi.stubEnv("ADMIN_ALERT_WEBHOOK_URL", WEBHOOK);
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await sendAdminAlert({ kind: "test", title: "skewed" });
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(table[0].status).toBe("delivered");
   });
 

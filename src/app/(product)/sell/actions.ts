@@ -497,7 +497,9 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   // table before touching storage, and never fails the save. Both are safe
   // to repeat when a replay recovers an earlier commit.
   if (images?.length) await finalizeMediaUrls(supabase, images.map((img) => img.url));
-  for (const url of result.removed_image_urls ?? []) await deleteMediaIfUnreferenced(url);
+  // Only the seller's own objects: the list comes back from a record the
+  // seller's session can write, so it is not proof of whose photos they are.
+  for (const url of result.removed_image_urls ?? []) await deleteMediaIfUnreferenced(url, false, user.id);
 
   revalidateListingEdit(id, parsed.fields.source_car_id);
   return { ok: "Listing updated.", version: result.updated_at, outcome: "saved" };
