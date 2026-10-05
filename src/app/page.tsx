@@ -17,6 +17,7 @@ import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { hydrateListingCards } from "@/lib/marketplace/query";
 import { createPublicClient } from "@/lib/supabase/public";
 import { vehicleSubline } from "@/lib/vehicles/label";
+import { DISPUTE_WINDOW_DAYS } from "@/features/commerce/disputes";
 
 /** The front door's two actions. The add-car intent survives signup and
  *  onboarding: a new account's garage opens on the add-car form. */
@@ -308,7 +309,7 @@ export default async function LandingPage() {
             <TileHead label="Payment held safe" />
             <p className="text-body leading-relaxed">
               Your payment is processed by Stripe and the seller isn&apos;t paid out until
-              after delivery plus a clearing window — the money waits until the part arrives.
+              the part is delivered — and you can still report a problem for {DISPUTE_WINDOW_DAYS} days after.
             </p>
           </Rv>
           <Rv className="tile" stagger={1}>

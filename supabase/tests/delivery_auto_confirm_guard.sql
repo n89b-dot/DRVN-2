@@ -122,7 +122,8 @@ begin
   if (select status from public.orders where id = eligible) <> 'delivered'
      or (select delivered_at from public.orders where id = eligible) <> now()
      or (select status from public.shipments where id = shipment) <> 'delivered'
-     or (select available_at from public.transfer_intents where order_id = eligible) <> now() + interval '7 days'
+     -- Fixed mode releases the payout at the auto-confirm (20261009100000).
+     or (select available_at from public.transfer_intents where order_id = eligible) <> now()
      or (select confirmed_at from public.delivery_auto_confirmations where order_id = eligible) <> now() then
     raise exception 'FAIL 4: the eligible order was not confirmed: %', summary;
   end if;

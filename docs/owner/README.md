@@ -24,16 +24,16 @@ Times are hands-on time, not waiting time.
 | 7 | **Monitor secrets.** Repo variables `DRVN_MONITOR_ENABLED`, `DRVN_MONITOR_ORIGIN`, secret `DRVN_MONITOR_SECRET`; run the monitor once; prove a failure and a recovery alert arrive | Owner | 20 min + a day's wait for the daily jobs | `docs/staging-setup.md` §10 |
 | 8 | **Branch protection.** Add repo secret `STRIPE_TEST_SECRET_KEY`, then apply the `protect-main` ruleset and verify it | Owner | 20 min | [branch-protection.md](branch-protection.md), `scripts/owner/branch-protection.sh` |
 | 9 | **Rotate the seed password.** The old one is in git history. Do it before the repo is shared or made public | Owner or Engineer | 5 min | [seed-password.md](seed-password.md), `scripts/owner/rotate-seed-password.mjs` |
-| 10 | **Two product decisions.** Both are built as settings in `public.settlement_settings`; you pick the values with one SQL statement each, after migrations `20261006100000` and `20261006100100` are applied. (a) How long to hold a seller's payout after delivery: default 7 days, recommended "window-based". (b) Auto-confirm untracked shipments after N days: off by default, recommended 21 days, but note the warning is in-app only. Ask counsel to read the resulting terms sentence before switching | Owner | 30 min | `docs/decisions/payout-hold.md`, `docs/decisions/untracked-auto-confirm.md` |
+| 10 | **Payout and risk settings — decided 4 Oct, set by migration.** Paid 2 days after delivery, at once on a plausible "received", at the 21-day untracked auto-confirm; card verification from $500; tracking DRVN follows from $1,000 (switch that one off if DRVN Shipping isn't live). Left for you: add the Radar rule *Request 3D Secure if `:risk_level: = 'elevated'`* (Stripe Dashboard → Radar → Rules), and run the negative-balance script (below) in test and live mode. Ask counsel to read the resulting terms sentences | Owner | 20 min | `docs/decisions/payout-hold.md`, `docs/decisions/untracked-auto-confirm.md` |
 | 11 | **Wallet device check.** Register the staging domain for Apple Pay / Google Pay in Stripe, then buy on a real iPhone (Safari) and Android phone (Chrome) | Owner | 45 min | [wallet-device-check.md](wallet-device-check.md) |
 | 12 | **Email test run** on staging: signup, reset, guest order link, email change, headers pass | Owner | 45 min | [email-provider.md §6](email-provider.md#6-test-checklist-staging-then-production) |
 | 13 | **Release-candidate packet: the 15 gates.** Write the candidate config, build from a clean checkout, produce one report per gate (purchase, refund, dispute and payout on staging; invitation boundaries; export and deletion; accessibility; operations; hosted restore and rollback; soak), run `verify`, and read every evidence file | Engineer builds; Owner reviews and signs | Engineer 1–2 days; Owner 2 h; soak as agreed | `docs/staging-setup.md` §13, `scripts/release-candidate.mjs` |
 | 14 | **Counsel sign-off and retention approval.** Answer the questions in the packet; approve the retention schedule; the engineer then updates `/terms` and `/privacy` (entity, law, processors named, retention periods, backup period, `UPDATED` date) | Owner + Counsel; Engineer edits | depends on counsel | [counsel-packet.md §12](counsel-packet.md#12-questions-for-counsel), [retention-proposal.md §7](retention-proposal.md#7-sign-off) |
 | 15 | **Production.** New Supabase project, schema, Auth, email (same provider, production domain), hosting env with **live** Stripe keys, both webhooks with `--live`, Connect live settings, wallet domain registered in live mode, EasyPost marketplace question settled, monitor pointed at production. Then exercise one live purchase, refund, dispute and payout with a real card before inviting anyone | Owner + Engineer | half a day | `docs/production-runbook.md` §1–10, §7 checklist |
 
-## The two scripts that touch outside services
+## The scripts that touch outside services
 
-Both are dry runs unless you pass `--apply`. Neither prints a key. Run them
+All are dry runs unless you pass `--apply`. None prints a key. Run them
 yourself from the repo root; nobody else needs the keys in chat.
 
 **Stripe webhooks** (step 5, and again in step 15):
@@ -52,6 +52,17 @@ signing secrets for `STRIPE_WEBHOOK_SECRET` and
 `STRIPE_CONNECT_WEBHOOK_SECRET`. Re-running updates them in place. If you made
 endpoints by hand in the Dashboard first, it stops and tells you how to adopt
 them. It refuses a live key without `--live`.
+
+**Sellers' negative balances** (step 10, and again in step 15):
+
+```bash
+node scripts/owner/stripe-negative-balances.mjs           # dry run: lists any account with it off
+node scripts/owner/stripe-negative-balances.mjs --apply   # turns it on
+```
+
+With `debit_negative_balances` on, a refund that takes a paid seller's Stripe
+balance below zero is collected from their payout bank account before DRVN
+carries it. New accounts get it at creation; Express accounts default to it.
 
 **Seed password** (step 9): see [seed-password.md](seed-password.md).
 

@@ -47,6 +47,11 @@ export async function getOrCreateConnectAccount(userId: string, email?: string |
       metadata: { user_id: userId },
       capabilities: { transfers: { requested: true } },
       business_profile: { product_description: "Selling car parts on DRVN" },
+      // A refund after the seller was paid is taken back from their Stripe
+      // balance; if that runs negative, Stripe tries their bank before DRVN
+      // carries the loss (Express defaults to this; it is stated so it can't
+      // silently change). Existing accounts: scripts/owner/stripe-negative-balances.mjs.
+      settings: { payouts: { debit_negative_balances: true } },
     },
     // One connected account per seller even under a double-submit.
     { idempotencyKey: `account:${userId}` }

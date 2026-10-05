@@ -117,16 +117,21 @@ confirming arrival, by a carrier "delivered" scan, or by the seller scanning
 the buyer's Pickup Pass at collection. If a problem is open on the order, the
 payout waits for the outcome.
 
-The hold is an owner setting, **7 days by default**. It can be a fixed number
-of days (0–30), or "window-based": paid only once the 30-day problem window
-and the shop's own return window have both closed. The owner has not chosen
-yet; the engineer's recommendation is window-based at launch. The terms read
-the live value, so the sentence in terms §6 changes with it.
+The owner decided (4 October 2026) to pay sellers soon after delivery: **2
+days** after a carrier scan or a collection, **at once** when the buyer
+confirms a parcel that plausibly arrived (a carrier delivery scan, or
+dispatched at least 3 days earlier), and at the 21-day auto-confirm for an
+untracked parcel the buyer never confirms. These are owner settings; the
+terms read the live values, so the sentences in terms §6 change with them.
 
-Note the timing with the default: a buyer can report a problem for **30
-days** after delivery, and a shop may offer change-of-mind returns for 14, 30
-or 60 days, but the seller is paid on **day 7**. A later refund is then
-recovered from the seller's Stripe account (§3.6).
+A buyer can still report a problem for **30 days** after delivery, and a shop
+may offer change-of-mind returns for 14, 30 or 60 days, so most refunds after
+delivery come after the seller is paid. They are recovered from the seller's
+Stripe account (§3.6), and if that balance can't cover it, Stripe may take
+the shortfall from the seller's payout bank account. Terms §6 says so. Two
+related controls are also in the terms: card payments of $500 or more ask
+the buyer to verify with their bank (§1), and orders of $1,000 or more need
+tracking DRVN can follow (§7).
 
 A posted parcel with no DRVN-tracked number never gets a carrier scan. If the
 buyer never confirms, it is never delivered and the seller never paid. A rule
@@ -338,7 +343,7 @@ Each points to where it lives. Q1–Q11 come from
 | Q2 | Age: is a declaration at signup needed for 18+? | §2; signup `src/app/(auth)/signup/` |
 | Q3 | Beta-specific terms (no guarantees, changes, beta data)? | §8 |
 | Q4 | How to describe DRVN's payment role under separate charges and transfers (agent collecting for sellers? other?), and any regulatory consequence (payment services, safeguarding of held funds) | §3.1, §3.5 |
-| Q5 | Holding funds after delivery (7 days by default, possibly 30–60 under the window-based option): wording, and whether the old "not an escrow service" line should come back in another form. Check the terms §6 sentence for whichever hold the owner picks | §3.5 |
+| Q5 | Holding funds after delivery (2 days, or at once on a plausible buyer confirmation) and recovering refunds from a paid seller, including from their bank: wording, and whether the old "not an escrow service" line should come back in another form. Check terms §1, §6 and §7 | §3.5 |
 | Q6 | Losses: do sellers owe DRVN unrecovered refund reversals and label costs, and how is that stated? Should Stripe or chargeback fees be passed on? | §3.3, §3.4, §3.6 |
 | Q7 | Tax: who accounts for sales tax / VAT? None is collected today | §3.2 |
 | Q8 | Business sellers: must shops identify as traders and give consumer-law information (cancellation rights for distance sales)? | §2; terms §7 |

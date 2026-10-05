@@ -40,7 +40,7 @@ Reference clocks, to check against D1, not to rely on:
 - **DRVN's own clocks** (from the code): a problem can be reported up to 30
   days after delivery, sellers have 3 days to respond, auto-refund on day 10,
   returns posted within 7 days, change-of-mind windows up to 60 days, payout
-  7 days after delivery by default (an owner setting,
+  2 days after delivery, or sooner on the buyer's confirmation (an owner setting,
   `docs/decisions/payout-hold.md`).
 
 This proposal uses **"6 years after the end of the financial year"** (written
