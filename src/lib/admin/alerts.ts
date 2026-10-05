@@ -51,6 +51,8 @@ type OutboxRow = {
   order_id: string | null;
   amount_cents: number | null;
   attempts: number;
+  /** As read; the claim swaps on it (see claimForDelivery). */
+  next_attempt_at: string;
 };
 
 /** POST one alert to the webhook. Throws on failure. */
@@ -86,15 +88,21 @@ const DELIVERY_LEASE_MS = 10 * 60_000;
  * out first. The inline send and the sweep can then never both deliver the
  * same row, and if the "delivered" write below fails the row isn't re-sent
  * until the lease runs out.
+ *
+ * The claim swaps on the `next_attempt_at` the caller read, not on "due by
+ * this server's clock". A new row's time is the database's `now()`; compared
+ * with a server clock running even slightly behind it, the row looked not yet
+ * due, the inline send skipped it, and the alert waited for the next sweep.
+ * Whoever changes the value first wins; everyone else sees it has moved.
  */
-async function claimForDelivery(admin: Admin, id: string): Promise<boolean> {
-  const now = Date.now();
+async function claimForDelivery(admin: Admin, row: OutboxRow): Promise<boolean> {
+  const id = row.id;
   const { data, error } = await admin
     .from("admin_alert_outbox")
-    .update({ next_attempt_at: new Date(now + DELIVERY_LEASE_MS).toISOString() })
+    .update({ next_attempt_at: new Date(Date.now() + DELIVERY_LEASE_MS).toISOString() })
     .eq("id", id)
     .eq("status", "pending")
-    .lte("next_attempt_at", new Date(now).toISOString())
+    .eq("next_attempt_at", row.next_attempt_at)
     .select("id");
   if (error) {
     reportError("[alerts] outbox claim failed", { alertId: id, error });
@@ -163,7 +171,7 @@ export async function sendAdminAlert(alert: AdminAlert): Promise<void> {
         dedup_key: alert.dedupKey ?? null,
         status: url ? "pending" : "disabled",
       })
-      .select("id, kind, title, detail, order_id, amount_cents, attempts")
+      .select("id, kind, title, detail, order_id, amount_cents, attempts, next_attempt_at")
       .maybeSingle();
     if (error) {
       // 23505 = dedup key already enqueued — exactly what we want.
@@ -175,7 +183,7 @@ export async function sendAdminAlert(alert: AdminAlert): Promise<void> {
     if (!inserted || !url) return;
 
     // Immediate best-effort delivery; the outbox owns any retry.
-    if (!(await claimForDelivery(admin, inserted.id))) return;
+    if (!(await claimForDelivery(admin, inserted))) return;
     try {
       await deliver(inserted, url);
       await markDelivered(admin, inserted.id);
@@ -199,7 +207,7 @@ export async function processAlertOutbox(
 
   const { data: pending, error: pendingError } = await admin
     .from("admin_alert_outbox")
-    .select("id, kind, title, detail, order_id, amount_cents, attempts")
+    .select("id, kind, title, detail, order_id, amount_cents, attempts, next_attempt_at")
     .eq("status", "pending")
     .lte("next_attempt_at", new Date().toISOString())
     .order("created_at", { ascending: true })
@@ -208,7 +216,7 @@ export async function processAlertOutbox(
 
   for (const row of pending ?? []) {
     // Another sweep or the inline send has it; leave it to them.
-    if (!(await claimForDelivery(admin, row.id))) {
+    if (!(await claimForDelivery(admin, row))) {
       summary.skipped += 1;
       continue;
     }

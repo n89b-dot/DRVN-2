@@ -61,7 +61,10 @@ begin
     perform public.edit_car_gallery(car, 'reorder', jsonb_build_object('ids', '[]'::jsonb));
   exception
     when insufficient_privilege then raise exception 'FAIL 7: edit_car_gallery lost access to cars: %', sqlerrm;
-    when others then null; -- an empty reorder may be refused for its own reasons
+    -- An empty reorder is refused by the function's own check (a plain
+    -- raise). Anything else — a column it can no longer read, say — is a
+    -- break in the rewritten read and fails the guard.
+    when raise_exception then null;
   end;
   update public.cars set vin = '2HGCM82633A004353' where id = car;
   if public.my_car_vin(car) is distinct from '2HGCM82633A004353' then

@@ -476,7 +476,7 @@ async function galleryChange(carId: string, operation: string, payload: Record<s
   revalidatePath("/garage");
   const { data: car } = await supabase.from("cars").select("slug").eq("id", carId).maybeSingle();
   if (car) revalidatePath(`/cars/${car.slug}`);
-  return { result: data as { ok: boolean; image?: CarImage; deleted_url?: string | null } };
+  return { result: data as { ok: boolean; image?: CarImage; deleted_url?: string | null }, userId: user.id };
 }
 
 export async function addCarImage(carId: string, url: string): Promise<ActionState & { image?: CarImage }> {
@@ -494,7 +494,7 @@ export async function deleteCarImage(formData: FormData): Promise<ActionState> {
   if (!carId || !id) return { error: "Missing image." };
   const changed = await galleryChange(carId, "delete", { id });
   if (changed.error) return { error: changed.error };
-  if (changed.result?.deleted_url) await deleteMediaIfUnreferenced(changed.result.deleted_url);
+  if (changed.result?.deleted_url) await deleteMediaIfUnreferenced(changed.result.deleted_url, false, changed.userId);
   return { ok: "Photo deleted" };
 }
 
@@ -874,7 +874,7 @@ export async function discardActivityDraft(carId: string): Promise<ActionState> 
   }
 
   for (const draft of drafts ?? []) {
-    for (const url of blockMediaUrls(normalizeBlocks(draft.body))) await deleteMediaIfUnreferenced(url);
+    for (const url of blockMediaUrls(normalizeBlocks(draft.body))) await deleteMediaIfUnreferenced(url, false, user.id);
   }
 
   revalidatePath("/home");
@@ -1016,7 +1016,7 @@ export async function updateActivityPost(
 
     const kept = new Set([...imageUrls, ...bodyMediaUrls]);
     for (const prev of previousImages) {
-      if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url);
+      if (!kept.has(prev.url)) await deleteMediaIfUnreferenced(prev.url, false, user.id);
     }
   }
 
@@ -1210,7 +1210,7 @@ export async function updateProfile(_prev: ActionState, formData: FormData): Pro
   if (avatarUrl) {
     await finalizeMediaUrls(supabase, [avatarUrl]);
     if (previousAvatarUrl && previousAvatarUrl !== avatarUrl) {
-      await deleteMediaIfUnreferenced(previousAvatarUrl);
+      await deleteMediaIfUnreferenced(previousAvatarUrl, false, user.id);
     }
   }
 

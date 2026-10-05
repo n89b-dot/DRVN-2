@@ -30,6 +30,7 @@ import { deleteStagedIfUnconsumed } from "@/lib/media-staging";
 import { isLowConfidence } from "@/lib/mods/parse";
 
 import { checkListingEdit, createListing, updateListing, type SellState } from "./actions";
+import { editFingerprint, settleEarlierEdits, type EditCheck } from "./edit-recovery";
 import { FitmentPicker, type FitmentRow } from "./fitment-picker";
 
 /** A gallery photo, in save order — index 0 is always the cover. */
@@ -180,8 +181,14 @@ export function SellForm({
   // R2-01: an edit keeps its request id until its outcome is known. The same
   // draft resubmitted reuses it, so a retry after a lost answer replays the
   // committed save instead of tripping the version check; a changed draft is
-  // a new edit and gets a new id.
-  const editRequest = useRef<{ id: string; fingerprint: string } | null>(null);
+  // a new edit and gets a new id. `unconfirmed`: it was sent and its outcome
+  // is still unknown.
+  const editRequest = useRef<{ id: string; fingerprint: string; unconfirmed: boolean } | null>(null);
+  // Requests that were still unconfirmed when a changed draft replaced them.
+  // One of them may have committed and moved the listing's version on, so
+  // they are asked about before the next save is called a conflict — the
+  // seller's own save is never reported to them as somebody else's.
+  const earlierEdits = useRef<string[]>([]);
 
   const subcategories = CATEGORIES.find((c) => c.slug === category)?.subcategories ?? [];
   const money = (cents: number | null | undefined) =>
@@ -378,20 +385,29 @@ export function SellForm({
     </Button>
   );
 
+  /** Read-only: did this request commit? */
+  async function checkEdit(requestId: string): Promise<EditCheck> {
+    if (!listing) return { outcome: "unavailable" };
+    try {
+      return await checkListingEdit(listing.id, requestId);
+    } catch (error) {
+      unstable_rethrow(error);
+      return { outcome: "unavailable" };
+    }
+  }
+
   /** An edit whose answer was lost: ask, read-only, whether it committed.
    *  The draft stays in the form whatever the answer. */
   async function reconcileEdit() {
     const request = editRequest.current;
     if (!listing || !request) return;
-    let check: Awaited<ReturnType<typeof checkListingEdit>>;
-    try {
-      check = await checkListingEdit(listing.id, request.id);
-    } catch (error) {
-      unstable_rethrow(error);
-      check = { outcome: "unavailable" };
-    }
+    request.unconfirmed = true;
+    const check = await checkEdit(request.id);
     if (check.outcome === "saved") {
+      // It started from the same version as any earlier request, so none of
+      // those can commit now.
       editRequest.current = null;
+      earlierEdits.current = [];
       setState({ ok: "Listing updated.", version: check.version, outcome: "saved" });
     } else {
       setState((previous) => ({
@@ -403,6 +419,45 @@ export function SellForm({
             : "We still can’t confirm whether that saved. Your changes are still here — save again to retry safely; it won’t be applied twice.",
       }));
     }
+  }
+
+  /** An earlier save turned out to have committed: this edit starts from the
+   *  version it produced. A request the server already refused isn't reused. */
+  function expectVersion(formData: FormData, version: string, refused: boolean) {
+    earlierEdits.current = [];
+    formData.set("expected_updated_at", version);
+    editRequest.current = {
+      id: refused || !editRequest.current ? crypto.randomUUID() : editRequest.current.id,
+      fingerprint: editFingerprint(formData),
+      unconfirmed: false,
+    };
+    formData.set("request_id", editRequest.current.id);
+    setState((previous) => ({ ...previous, version }));
+  }
+
+  /** Sends an edit. While earlier saves from this form are unconfirmed, a
+   *  stale version may be the seller's own doing: if one of them committed,
+   *  the edit goes against the version it produced. Anyone else's change
+   *  since then is still a conflict — the server's check is the same. */
+  async function saveEdit(formData: FormData): Promise<SellState> {
+    if (earlierEdits.current.length) {
+      const earlier = await settleEarlierEdits(earlierEdits.current, checkEdit);
+      if (earlier.outcome === "unknown") return EARLIER_EDIT_UNCONFIRMED;
+      if (earlier.outcome === "saved") expectVersion(formData, earlier.version, false);
+    }
+    const next = await updateListing({}, formData);
+    if (next.outcome !== "conflict" || !earlierEdits.current.length) return next;
+    // No record of an earlier save a moment ago isn't proof it couldn't still
+    // land. Refused as stale, ask again before blaming another tab.
+    const earlier = await settleEarlierEdits(earlierEdits.current, checkEdit);
+    if (earlier.outcome === "unknown") return EARLIER_EDIT_UNCONFIRMED;
+    if (earlier.outcome === "none") {
+      // The listing moved on and it wasn't one of ours; now none of them can.
+      earlierEdits.current = [];
+      return next;
+    }
+    expectVersion(formData, earlier.version, true);
+    return updateListing({}, formData);
   }
 
   return (
@@ -432,9 +487,10 @@ export function SellForm({
           creationRequestId.current ??= crypto.randomUUID();
           formData.set("request_id", creationRequestId.current);
         } else {
-          const fingerprint = JSON.stringify([...formData.entries()].map(([key, value]) => [key, String(value)]));
+          const fingerprint = editFingerprint(formData);
           if (editRequest.current?.fingerprint !== fingerprint) {
-            editRequest.current = { id: crypto.randomUUID(), fingerprint };
+            if (editRequest.current?.unconfirmed) earlierEdits.current.push(editRequest.current.id);
+            editRequest.current = { id: crypto.randomUUID(), fingerprint, unconfirmed: false };
           }
           formData.set("request_id", editRequest.current.id);
         }
@@ -444,8 +500,13 @@ export function SellForm({
         setState((previous) => ({ version: previous.version }));
         startSubmit(async () => {
           try {
-            const next = await (isEdit ? updateListing : createListing)({}, formData);
-            if (isEdit && next.outcome === "saved") editRequest.current = null;
+            const next = await (isEdit ? saveEdit(formData) : createListing({}, formData));
+            if (isEdit && next.outcome === "saved") {
+              editRequest.current = null;
+              earlierEdits.current = [];
+            }
+            // Refused as stale: this request didn't commit and never can.
+            if (isEdit && next.outcome === "conflict") editRequest.current = null;
             setState((previous) => ({ ...next, version: next.version ?? previous.version }));
             if (isEdit && next.outcome === "unknown") await reconcileEdit();
           } catch (error) {
@@ -1248,6 +1309,14 @@ export function SellForm({
 const UNCONFIRMED_EDIT: SellState = {
   error: "We couldn’t confirm the save. Checking its status…",
   outcome: "unknown",
+};
+
+/** Nothing was applied by this save: an earlier one may have been, and the
+ *  listing can't be called changed by someone else until that is known. */
+const EARLIER_EDIT_UNCONFIRMED: SellState = {
+  error:
+    "We can’t yet confirm whether your earlier save went through, so this one wasn’t applied. Your changes are still here — save again in a moment.",
+  outcome: "rejected",
 };
 
 /** The newer of the version the page rendered with and the one the last save

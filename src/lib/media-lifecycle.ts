@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { createClient } from "@/lib/supabase/server";
-import { isOwnStorageUrl, parseStorageObject } from "@/lib/media-url";
+import { isOwnedStorageUrl, isOwnStorageUrl, parseStorageObject } from "@/lib/media-url";
 import { reportError } from "@/lib/monitoring";
 
 /**
@@ -97,13 +97,26 @@ export async function finalizeMediaUrls(supabase: ServerClient, urls: string[]):
  * swap) and by the GC job. Log-and-continue throughout: a failed GC must
  * never fail the user action that triggered it.
  *
- * Returns "removed" | "referenced" | "skipped" (not ours / unparseable).
+ * This deletes with the service role, so the URL must be one the caller may
+ * delete. Every call made on a member's behalf passes `ownerId`: the URLs
+ * there come from rows and results a member can write (a gallery row, a
+ * recorded edit), and without the check any signed-in user could aim this at
+ * someone else's object. Only the server's own jobs, which read URLs the
+ * server recorded, omit it. A URL with a query or fragment is refused
+ * outright: it names the same object as the plain URL but matches no stored
+ * reference, which would walk straight past the reference check.
+ *
+ * Returns "removed" | "referenced" | "skipped" (not ours / not the owner's /
+ * unparseable).
  */
 export async function deleteMediaIfUnreferenced(
   url: string,
-  strict = false
+  strict = false,
+  ownerId?: string
 ): Promise<"removed" | "referenced" | "skipped"> {
   if (!isOwnStorageUrl(url)) return "skipped";
+  if (/[?#]/.test(url)) return "skipped";
+  if (ownerId !== undefined && !isOwnedStorageUrl(url, ownerId)) return "skipped";
   const object = parseStorageObject(url);
   if (!object) return "skipped";
 

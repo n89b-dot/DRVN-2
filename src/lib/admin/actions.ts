@@ -175,6 +175,14 @@ export async function adminForceRefund(
     if (!Number.isFinite(parsed) || parsed <= 0) return { error: "Enter a valid amount." };
     amountCents = parsed;
   }
+  // The dialog's id for this command, with the amount it was issued for. A
+  // second press — after "pending provider confirmation", say — adopts the
+  // refund already started rather than issuing the same partial refund
+  // again; a changed amount is a different request.
+  const requestId = field(formData, "request_id");
+  const requestKey = /^[0-9a-f-]{36}$/i.test(requestId)
+    ? `admin:${orderId}:${requestId}:${amountCents ?? "full"}`
+    : undefined;
 
   try {
     const outcome = await auditedAction(
@@ -195,6 +203,7 @@ export async function adminForceRefund(
           reason: `Admin refund: ${reason}`,
           initiator: { kind: "admin", adminId: ctx.userId },
           resolveDispute: true,
+          requestKey,
         });
         if (!result.ok) throw new Error(result.error);
         return result;
