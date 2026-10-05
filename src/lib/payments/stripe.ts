@@ -6,6 +6,7 @@ import Stripe from "stripe";
 import type { PaymentProvider, PaymentRequest, PaymentResult, RefundOptions, RefundResult } from "./provider";
 import { reportError } from "@/lib/monitoring";
 import { chargeWithinBounds } from "./charge-bounds";
+import { readSettlementRisk } from "./payout-hold";
 
 /**
  * Stripe, via PaymentIntents.
@@ -132,10 +133,18 @@ export class StripePaymentProvider implements PaymentProvider {
         intent = await stripe().paymentIntents.retrieve(saved.reference);
       } else {
         try {
+          // At or above the owner's threshold (20261009100000) the card's bank
+          // is asked to verify the buyer (3D Secure), which generally moves a
+          // stolen-card chargeback to the issuer. Below it, or if the setting
+          // can't be read, Stripe asks only when the bank or Radar requires.
+          const risk = await readSettlementRisk(admin);
+          const verifyFrom = risk?.cardVerificationFromCents ?? null;
+          const verifyCard = verifyFrom !== null && request.totalCents >= verifyFrom;
           intent = await stripe().paymentIntents.create({
             amount: request.totalCents,
             currency: immutable.currency,
             payment_method_types: ["card"],
+            ...(verifyCard ? { payment_method_options: { card: { request_three_d_secure: "any" as const } } } : {}),
             ...(request.customerId ? { customer: request.customerId } : {}),
             metadata: { order_id: orderIds.join(","), buyer_id: request.buyerId, seller_id: request.sellerId, correlation_id: saved.correlation_id },
           }, { idempotencyKey: operationKey });

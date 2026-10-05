@@ -65,7 +65,7 @@ export function ReceivedButton({ orderId }: { orderId: string }) {
         title="Mark this order as received?"
         consequences={[
           "Confirms the item arrived as purchased",
-          "Starts the seller's payout clearing window",
+          "Tells DRVN to pay the seller",
           "Limits later dispute options — report problems first if something's wrong",
         ]}
         confirmLabel={pending ? "Confirming…" : "Mark as received"}

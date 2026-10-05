@@ -3764,25 +3764,34 @@ export type Database = {
         Row: {
           auto_confirm_after_days: number | null
           auto_confirm_notice_days: number
+          card_verification_from_cents: number | null
           id: boolean
           payout_hold_days: number
           payout_hold_mode: string
+          receipt_release_after_days: number
+          tracking_required_from_cents: number | null
           updated_at: string
         }
         Insert: {
           auto_confirm_after_days?: number | null
           auto_confirm_notice_days?: number
+          card_verification_from_cents?: number | null
           id?: boolean
           payout_hold_days?: number
           payout_hold_mode?: string
+          receipt_release_after_days?: number
+          tracking_required_from_cents?: number | null
           updated_at?: string
         }
         Update: {
           auto_confirm_after_days?: number | null
           auto_confirm_notice_days?: number
+          card_verification_from_cents?: number | null
           id?: boolean
           payout_hold_days?: number
           payout_hold_mode?: string
+          receipt_release_after_days?: number
+          tracking_required_from_cents?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -4878,6 +4887,8 @@ export type Database = {
           p_actor: string
           p_carrier: string
           p_order: string
+          p_tracker_provider?: string
+          p_tracker_ref?: string
           p_tracking: string
         }
         Returns: Json
@@ -5115,6 +5126,10 @@ export type Database = {
       }
       payout_available_at: {
         Args: { p_delivered_at: string; p_order: string }
+        Returns: string
+      }
+      payout_release_at: {
+        Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
       }
       pickup_redeem: {
