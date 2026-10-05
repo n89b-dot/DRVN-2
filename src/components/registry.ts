@@ -952,6 +952,17 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     use: "Video links in updates.",
   },
   {
+    name: "ConsentVideo",
+    importPath: UI,
+    file: "src/components/ui/consent-video.tsx",
+    layer: "primitive",
+    category: "media",
+    status: "active",
+    description: "YouTube video behind a play plate: nothing loads from YouTube until the visitor presses play.",
+    use: "Every embedded YouTube video (post bodies, the composer preview). Never render a YouTube iframe directly.",
+    a11y: "The plate is a button named after the video; the player replaces it in place and autoplays on that press.",
+  },
+  {
     name: "DropZone",
     importPath: UI,
     file: "src/components/ui/drop-zone.tsx",

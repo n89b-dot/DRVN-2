@@ -89,6 +89,9 @@ export type SellerLedger = {
   /** Label costs earlier payouts couldn't cover, still to come off the next
    *  transfer (20261005110100). Not in the totals above: those are per order. */
   owedCents: number;
+  /** A label-refund credit beyond what's owed, waiting to be paid to the
+   *  seller's Stripe balance (20261008100100). Zero once its payout opens. */
+  creditCents: number;
   /** The clearing rule the dates above were worked out with (the owner's
    *  settlement_settings, 20261006100000) — the tile states it. */
   hold: PayoutHoldPolicy;
@@ -311,6 +314,7 @@ export async function getSellerLedger(
       availableCents,
       paidOutCents,
       owedCents: carry.owedCents,
+      creditCents: carry.creditCents,
       hold,
       truncated: captured.length === FETCH_CAP,
     },

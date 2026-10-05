@@ -1,10 +1,29 @@
 # Applying migrations
 
-## October 9 — payout release and risk controls (not yet applied anywhere)
+## October 10 — refund events for unknown orders (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261009100000_payout_release_risk_controls.sql` | not yet |
+| `20261010100000_refund_event_unknown_order.sql` | shared dev project (2026-10-05) |
+
+Restates `record_refund_provider_event` (live body diffed against
+`20261007100200` first, no drift; backed up to
+`~/drvn-db-backups/pre-refund-unknown-order-function-20261005.sql`). A refund
+whose metadata names an order this database does not hold used to fail on the
+`orders` foreign key, so the webhook answered 500 and Stripe redelivered it.
+The order is now looked up once: an unknown one is kept only as
+`reported_order_id` and the refund goes to the `refund_lifecycle_unresolved`
+recovery. Seen on shared dev since 2026-10-01 because `stripe listen` forwards
+every event on the test account, including refunds made by `npm run
+test:stripe` against its own database. Guard: `refund_unknown_order_guard.sql`.
+
+## October 9 — payout release and risk controls (shared dev project)
+
+**Shared dev, 2026-10-05.** The October 6 set and `20261009100000` were applied in that order by the "Seller payment hold policy" session (round five's `20261008100200` went on between them). The six functions they replace were diffed against their latest repo definitions first (no drift) and backed up to `~/drvn-db-backups/pre-payout-release-functions-20261005.sql`. Live `settlement_settings`: fixed hold, 2 days, receipt release 3 days, tracking from $1,000, card verification from $500, auto-confirm after 21 days with 3 days' notice; `drvn-delivery-auto-confirm` cron active (`23 * * * *`). The October 7 set was found already live: every replaced function's body matches the repo, so it was applied earlier without being recorded here. `supabase_migrations.schema_migrations` records none of these; this file is the record. **Never re-run `20261006100200`** on an environment that has `20261009100000`: it would restore the claim-window hold.
+
+| File | Applied to |
+|---|---|
+| `20261009100000_payout_release_risk_controls.sql` | shared dev project (2026-10-05) |
 
 Apply after the October 6 set. Replaces the owner's `claim_window` decision
 (`20261006100200`) with a fixed 2-day hold and early releases
@@ -32,16 +51,37 @@ Adds `emailed_at`, `email_attempts` and `email_last_error` to
 receipts pass emails a guest buyer the auto-confirm warning and records it
 there. Needs the templates in `supabase/templates/` on the project.
 
-## October 7 — review fixes (not yet applied anywhere)
+## October 8 — round five: export contract v5, carry-forward credit payouts
 
 | File | Applied to |
 |---|---|
-| `20261007100000_refund_reversal_remaining_cap.sql` | not yet |
-| `20261007100100_unsuspend_refuses_requested_deletion.sql` | not yet |
-| `20261007100200_refund_inflight_excludes_settled.sql` | not yet |
-| `20261007100300_listing_edit_record_only_by_edit.sql` | not yet |
-| `20261007100400_carry_after_cancelled_payout.sql` | not yet |
-| `20261004155900_my_car_vin_first.sql` | not yet (no-op where `20261004160000` has run) |
+| `20261008100000_account_export_contract_v5.sql` | shared dev, 2026-10-05 (applied twice, with PR #15 merged) |
+| `20261008100100_seller_carry_payouts.sql` | shared dev, 2026-10-05 (applied twice) |
+
+`20261008100000` moves the account export to contract `2026-10-08.v5`
+(message photos, `seller_carry_entries`, `seller_carry_payouts`): it widens
+the version check, expires unfinished requests and restates
+`request_account_export` with only the version literal changed. Apply it with
+the app that carries the v5 contract — an app on v4 purges every request the
+database stamps v5, and the reverse (see `20260919205000`).
+`20261008100100` adds `seller_carry_payouts`, two `seller_carry_entries`
+kinds (`paid_out`, `paid_out_reversed`) and five service-role functions
+(`open_`, `claim_`, `prepare_`, `complete_`, `release_seller_carry_payout(s)`).
+A seller's credit balance is paid to their Stripe balance by the transfers
+job once its newest entry is a day old. It restates no existing function.
+Apply after `20261005110100` and `20261007100400`. Guard:
+`supabase/tests/seller_carry_payout_guard.sql`.
+
+## October 7 — review fixes (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261007100000_refund_reversal_remaining_cap.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100100_unsuspend_refuses_requested_deletion.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100200_refund_inflight_excludes_settled.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100300_listing_edit_record_only_by_edit.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261007100400_carry_after_cancelled_payout.sql` | shared dev project (live before 2026-10-05; verified by body comparison) |
+| `20261004155900_my_car_vin_first.sql` | shared dev project: no-op (`20261004160000` had already run; `my_car_vin` present) |
 
 `20261007100000` restates `settle_refund_operation` with one change: a refund
 after the payout is capped at what the transfer can still give back (sent,
@@ -69,10 +109,10 @@ dispatch no longer reserves the debt. Guard:
 
 | File | Applied to |
 |---|---|
-| `20261006100000_payout_hold_setting.sql` | not yet |
-| `20261006100100_untracked_delivery_auto_confirm.sql` | not yet |
-| `20261006100200_owner_settlement_decisions.sql` | not yet |
-| `20261006100300_seller_payout_dates.sql` | not yet |
+| `20261006100000_payout_hold_setting.sql` | shared dev project (2026-10-05) |
+| `20261006100100_untracked_delivery_auto_confirm.sql` | shared dev project (2026-10-05) |
+| `20261006100200_owner_settlement_decisions.sql` | shared dev project (2026-10-05) |
+| `20261006100300_seller_payout_dates.sql` | shared dev project (2026-10-05) |
 
 The first two add `public.settlement_settings` (one row) with neutral defaults:
 `payout_hold_days` stays 7 in `fixed` mode, and `auto_confirm_after_days` is

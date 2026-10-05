@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (86)
+### Primitives (87)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -147,6 +147,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Checkbox` | Primitive | `@/components/ui` | Live-accent square checkbox with its label as one touch target. — `.sq` | Boolean options. |
 | `ComboField` | Primitive | `@/components/ui` | Searchable single-select (ARIA combobox) in the field contract: ranked options, keyword matching (aliases), optional footer escape hatch. — `.field / .ctl / .combo` | Choosing one option from a ranked list too long for Select — vehicle makes/models. *Not for:* Short fixed lists (Select) and free-text with suggestions (TextField + datalist). |
 | `ConfirmDialog` | Primitive | `@/components/ui` | Destructive confirmation with optional type-to-confirm gate. | Deletes and irreversible actions. |
+| `ConsentVideo` | Primitive | `@/components/ui` | YouTube video behind a play plate: nothing loads from YouTube until the visitor presses play. | Every embedded YouTube video (post bodies, the composer preview). Never render a YouTube iframe directly. |
 | `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
 | `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |
 | `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row, with an optional trailing action (`end`). — `.bline` | Settings-style label/value and label/control lines, and build-sheet lines whose trailing slot carries a state chip or a 'Sell it' action. *Not for:* Full form fields with hints/errors — that's the `.field` family. |

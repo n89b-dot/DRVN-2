@@ -2,11 +2,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPORT_SECTIONS, exportCursorFilter, exportDownloadDecision, nextExportCheckpoint } from "./account-export-contract";
+import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPORT_SECTIONS, MESSAGE_PHOTO_PAGE_SIZE, exportCursorFilter, exportDownloadDecision, exportPageSize, nextExportCheckpoint, storageObjectMissing } from "./account-export-contract";
 
 describe("account export contract", () => {
   it("uses explicit projections and covers both sides of shared records", () => {
-    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-09-19.v4");
+    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-08.v5");
     expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
     const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
     expect(keys).toEqual(expect.arrayContaining([
@@ -34,6 +34,48 @@ describe("account export contract", () => {
     ]) {
       expect(fields, `mod_items export is missing ${field}`).toContain(field);
     }
+  });
+
+  /**
+   * Two things the contract predated: photos sent in messages (the message
+   * row only names their private paths) and the carry-forward ledger of label
+   * costs. Both are the member's data and were silently absent.
+   */
+  it("exports message photos and the label-cost ledger", () => {
+    const byKey = new Map(ACCOUNT_EXPORT_SECTIONS.map((section) => [section.key, section]));
+    for (const key of ["messages_sent", "messages_received"]) {
+      const fields = byKey.get(key)!.projection.split(",");
+      expect(fields, `${key} is missing the photo paths`).toContain("attachments");
+      expect(fields).toContain("kind");
+    }
+    expect(byKey.get("message_photos_sent")).toMatchObject({ table: "messages", filter: "sender_id", pageSize: MESSAGE_PHOTO_PAGE_SIZE });
+    expect(byKey.get("message_photos_received")).toMatchObject({ table: "messages", filter: "recipient_id", pageSize: MESSAGE_PHOTO_PAGE_SIZE });
+    const carry = byKey.get("seller_carry_entries")!;
+    expect(carry).toMatchObject({ table: "seller_carry_entries", access: "seller", filter: "seller_id" });
+    expect(carry.projection.split(",")).toEqual(expect.arrayContaining(["kind", "amount_cents", "order_id", "created_at"]));
+    expect(carry.projection.split(",")).not.toContain("entry_key");
+    const payouts = byKey.get("seller_carry_payouts")!;
+    expect(payouts).toMatchObject({ table: "seller_carry_payouts", access: "seller", filter: "seller_id" });
+    for (const field of ["destination", "transfer_reference", "locked_by", "last_error"]) {
+      expect(payouts.projection.split(","), `seller_carry_payouts leaked ${field}`).not.toContain(field);
+    }
+  });
+
+  it("pages a photo section by its own smaller size", () => {
+    const section = ACCOUNT_EXPORT_SECTIONS.find((item) => item.key === "message_photos_sent")!;
+    expect(exportPageSize(section)).toBe(MESSAGE_PHOTO_PAGE_SIZE);
+    const full = Array.from({ length: MESSAGE_PHOTO_PAGE_SIZE }, (_, index) => ({ id: `m${index}` }));
+    // A full small page continues the section; it must not be read as the last.
+    expect(nextExportCheckpoint(section, { section: 3, offset: 0, cursor: null }, full)).toEqual({ section: 3, offset: MESSAGE_PHOTO_PAGE_SIZE, cursor: '["m9"]' });
+    expect(nextExportCheckpoint(section, { section: 3, offset: 10, cursor: '["m9"]' }, full.slice(0, 4))).toEqual({ section: 4, offset: 0, cursor: null });
+  });
+
+  it("tells a missing photo from a storage failure", () => {
+    expect(storageObjectMissing({ status: 404, message: "Object not found" })).toBe(true);
+    expect(storageObjectMissing({ statusCode: "404" })).toBe(true);
+    expect(storageObjectMissing({ status: 400, message: "Object not found" })).toBe(true);
+    expect(storageObjectMissing({ status: 500, message: "upstream timeout" })).toBe(false);
+    expect(storageObjectMissing(null)).toBe(false);
   });
 
   it("keeps provider secrets and unrelated counterparty profiles out", () => {
