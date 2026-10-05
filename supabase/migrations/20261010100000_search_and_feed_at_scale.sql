@@ -33,6 +33,12 @@
 --    "empty query OR id in (search)" clause is re-run per row; searching
 --    gets its own entry points that start from the matched ids instead.
 
+-- The search functions below pin pg_trgm.word_similarity_threshold. A
+-- non-superuser (the hosted `postgres` role) may only attach that setting to
+-- a function once pg_trgm is loaded in the session; on a first run the index
+-- builds load it, on a re-run they are skipped and nothing does. Load it.
+do $$ begin perform show_trgm('drvn'); end $$;
+
 -- ── Search documents and their indexes ───────────────────────────────────
 
 create or replace function public.listing_search_doc(p_title text, p_description text, p_compatibility_notes text, p_category text, p_brand text)
