@@ -45,8 +45,12 @@ create table if not exists public.listing_vehicle_fit (
 );
 
 -- Newest first, cheapest first, dearest first — each a range read for one car.
+-- The newest index carries every column the match rule reads, so a page or
+-- a count for one car is read from the index alone (at 2M parts, a count
+-- for the commonest car read the table from disk: half a second).
 create index if not exists listing_vehicle_fit_newest_idx
-  on public.listing_vehicle_fit (make_key, model_key, created_at desc, listing_id desc);
+  on public.listing_vehicle_fit (make_key, model_key, created_at desc, listing_id desc)
+  include (via, years, all_years, stated_also, car_public, car_owner_id, seller_id);
 create index if not exists listing_vehicle_fit_price_idx
   on public.listing_vehicle_fit (make_key, model_key, price_cents, listing_id);
 

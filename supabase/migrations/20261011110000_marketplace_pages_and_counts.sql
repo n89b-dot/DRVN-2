@@ -46,11 +46,18 @@ alter table public.listings set (fillfactor = 90);
 -- Cheapest and dearest first among parts for sale, read in order.
 create index if not exists listings_active_price_idx
   on public.listings (price_cents, id) where status = 'active';
--- A brand, newest or by price first.
+-- A brand, newest or by price first, through a lower-cased copy of the
+-- brand. The filter has to be plain equality: lower() and ILIKE are not
+-- "leakproof", so under row security they can't use an index, and a rare
+-- brand's page walked the whole catalogue. Adding the column rewrites the
+-- table once (seconds today; it also applies the fillfactor above to every
+-- page). The indexes carry what the read rule tests, so a brand's count is
+-- read from the index alone.
+alter table public.listings add column if not exists brand_key text generated always as (lower(brand)) stored;
 create index if not exists listings_active_brand_idx
-  on public.listings (lower(brand), created_at desc, id desc) where status = 'active';
+  on public.listings (brand_key, created_at desc, id desc) include (seller_id, status) where status = 'active';
 create index if not exists listings_active_brand_price_idx
-  on public.listings (lower(brand), price_cents, id) where status = 'active';
+  on public.listings (brand_key, price_cents, id) include (seller_id, status) where status = 'active';
 
 -- ── The query, written once for both functions ──────────────────────────
 -- Returns the FROM/WHERE of a marketplace query over the parts a caller may
@@ -106,11 +113,11 @@ begin
   if coalesce(p_condition, '') <> '' then filters := filters || format(' and l.condition = %L', p_condition); end if;
   -- The whole brand, whatever its case. The app's rule was ILIKE with the
   -- wildcards escaped; on a UTF-8 database ILIKE lower-cases both sides and
-  -- compares, so this is the same test — one the planner can estimate (an
-  -- ILIKE it guesses as rare, and at 2M parts it sorted every part for sale
-  -- to find "Brembo", 22% of them) and listings_active_brand_idx answers.
+  -- compares, so brand_key = lower(the brand) is the same test — one the
+  -- planner can estimate and, under row security, answer from
+  -- listings_active_brand_idx (ILIKE and lower() can't use an index there).
   if coalesce(p_brand, '') <> '' then
-    filters := filters || format(' and lower(l.brand) = lower(%L)', p_brand);
+    filters := filters || format(' and l.brand_key = %L', lower(p_brand));
   end if;
   if coalesce(p_location, '') <> '' then
     filters := filters || format(' and l.location ilike %L', '%' || regexp_replace(p_location, '([\\%_])', '\\\1', 'g') || '%');

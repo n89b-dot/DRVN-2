@@ -94,7 +94,7 @@ begin
   if coalesce(p_condition, '') <> '' then filters := filters || format(' and l.condition = %L', p_condition); end if;
   -- The whole brand, whatever its case (see marketplace_query_sql).
   if coalesce(p_brand, '') <> '' then
-    filters := filters || format(' and lower(l.brand) = lower(%L)', p_brand);
+    filters := filters || format(' and l.brand_key = %L', lower(p_brand));
   end if;
   if coalesce(p_location, '') <> '' then
     filters := filters || format(' and l.location ilike %L', '%' || regexp_replace(p_location, '([\\%_])', '\\\1', 'g') || '%');
@@ -211,11 +211,11 @@ begin
   if coalesce(p_condition, '') <> '' then filters := filters || format(' and l.condition = %L', p_condition); end if;
   -- The whole brand, whatever its case. The app's rule was ILIKE with the
   -- wildcards escaped; on a UTF-8 database ILIKE lower-cases both sides and
-  -- compares, so this is the same test — one the planner can estimate (an
-  -- ILIKE it guesses as rare, and at 2M parts it sorted every part for sale
-  -- to find "Brembo", 22% of them) and listings_active_brand_idx answers.
+  -- compares, so brand_key = lower(the brand) is the same test — one the
+  -- planner can estimate and, under row security, answer from
+  -- listings_active_brand_idx (ILIKE and lower() can't use an index there).
   if coalesce(p_brand, '') <> '' then
-    filters := filters || format(' and lower(l.brand) = lower(%L)', p_brand);
+    filters := filters || format(' and l.brand_key = %L', lower(p_brand));
   end if;
   if coalesce(p_location, '') <> '' then
     filters := filters || format(' and l.location ilike %L', '%' || regexp_replace(p_location, '([\\%_])', '\\\1', 'g') || '%');

@@ -1571,6 +1571,7 @@ export type Database = {
         Row: {
           allows_collection: boolean
           brand: string | null
+          brand_key: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -1608,6 +1609,7 @@ export type Database = {
         Insert: {
           allows_collection?: boolean
           brand?: string | null
+          brand_key?: string | null
           category: string
           compatibility_notes?: string | null
           condition?: string | null
@@ -1645,6 +1647,7 @@ export type Database = {
         Update: {
           allows_collection?: boolean
           brand?: string | null
+          brand_key?: string | null
           category?: string
           compatibility_notes?: string | null
           condition?: string | null
@@ -5065,6 +5068,7 @@ export type Database = {
         Returns: {
           allows_collection: boolean
           brand: string | null
+          brand_key: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -5148,6 +5152,7 @@ export type Database = {
         Returns: {
           allows_collection: boolean
           brand: string | null
+          brand_key: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -5226,6 +5231,7 @@ export type Database = {
         Returns: {
           allows_collection: boolean
           brand: string | null
+          brand_key: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -5308,6 +5314,7 @@ export type Database = {
         Returns: {
           allows_collection: boolean
           brand: string | null
+          brand_key: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null
@@ -5369,6 +5376,7 @@ export type Database = {
         Returns: {
           allows_collection: boolean
           brand: string | null
+          brand_key: string | null
           category: string
           compatibility_notes: string | null
           condition: string | null

@@ -31,6 +31,7 @@ word() { q "select s[1 + $1 % 30] || s[1 + ($1 / 30) % 30] || s[1 + ($1 / 900) %
 MID_WORD=$(word 40)        # Zipf rank 40: about one title in 300
 RARE_WORD=$(word 20000)    # Zipf rank 20,000: a handful of titles
 NUM=$(q "select (count(*) * 0.37)::bigint from public.listings")
+RARE_BRAND=$(q "select brand from public.listings where status = 'active' and brand is not null group by brand order by count(*), brand limit 1")
 BIG_VEHICLE="900001-900101"   # the most common make and model
 SMALL_VEHICLE="900012-901203" # a mid-table make, an uncommon model
 PAGE_IDS=$(q "select string_agg('\"' || id || '\"', ',') from (select id from public.listings where status = 'active' order by created_at desc limit 24) s")
@@ -124,6 +125,8 @@ marketplace_after() {
   t "marketplace: category, cheapest, page 1"    POST "$PAGE" '{"p_category":"wheels-tires","p_subcategory":"wheels","p_sort":"price_asc","p_limit":25}'
   t "marketplace: brand filter (Brembo)"         POST "$PAGE" '{"p_brand":"Brembo","p_limit":25}'
   t "  its count (capped)"                       POST "/rpc/marketplace_count" '{"p_brand":"Brembo"}'
+  t "marketplace: rare brand ($RARE_BRAND)"       POST "$PAGE" "{\"p_brand\":\"$RARE_BRAND\",\"p_limit\":25}"
+  t "  its count (capped)"                       POST "/rpc/marketplace_count" "{\"p_brand\":\"$RARE_BRAND\"}"
   t "marketplace: price range"                   POST "$PAGE" '{"p_min_cents":10000,"p_max_cents":50000,"p_limit":25}'
   t "  its count (capped)"                       POST "/rpc/marketplace_count" '{"p_min_cents":10000,"p_max_cents":50000}'
   t "marketplace: condition"                     POST "$PAGE" '{"p_condition":"used","p_limit":25}'

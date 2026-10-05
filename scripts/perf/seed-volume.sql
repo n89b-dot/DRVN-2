@@ -244,6 +244,12 @@ select to_regprocedure('public.refresh_listing_vehicle_fit(uuid[],boolean)') is 
 \if :has_fit
   select public.refresh_listing_vehicle_fit(array(select id from public.listings where status = 'active'), false);
 \endif
+-- And the totals and rankings the pg_cron jobs keep (20261011120000).
+select to_regprocedure('public.refresh_explore_rankings()') is not null as has_rankings \gset
+\if :has_rankings
+  select public.refresh_marketplace_facet_counts();
+  select public.refresh_explore_rankings();
+\endif
 
 vacuum analyze;
 select 'members' t, count(*) from public.profiles union all
