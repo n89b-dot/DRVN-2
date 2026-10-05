@@ -5576,6 +5576,7 @@ export type Database = {
           username: string
         }[]
       }
+      suspended_profile_ids: { Args: never; Returns: string[] }
       sync_activity_post_listings: {
         Args: { p_listing_ids: string[]; p_post_id: string }
         Returns: undefined

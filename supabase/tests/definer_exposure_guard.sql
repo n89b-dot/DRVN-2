@@ -21,7 +21,8 @@ declare
     'profile_sales_count(uuid)',          -- public sales count for visible profiles
     'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100000)
     'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
-    'search_update_ids(text)'             -- ids of published updates on visible public builds; same reason
+    'search_update_ids(text)',            -- ids of published updates on visible public builds; same reason
+    'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
   ];
   exposed text[];
   internal text;

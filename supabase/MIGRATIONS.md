@@ -1,12 +1,22 @@
 # Applying migrations
 
-## October 10 — search and the Explore wall at volume (not yet applied anywhere)
+## October 10 — read rules and search at volume (shared dev only)
 
 | File | Applied to |
 |---|---|
-| `20261010100000_search_and_feed_at_scale.sql` | not yet |
+| `20261010095900_read_rules_without_per_row_calls.sql` | shared dev, 2026-10-05 (twice) |
+| `20261010100000_search_and_feed_at_scale.sql` | shared dev, 2026-10-05 (twice) |
 
-Additive and safe in either order with the code: the app falls back to the
+Apply `095900` first: `100000` uses its helper. `095900` restates the five
+read policies on `listings`, `cars` and `listing_images` with `ALTER POLICY`
+so that "is this member suspended?" is asked once per query through the new
+`suspended_profile_ids()` (SECURITY DEFINER, callable by clients, ids only —
+on the reviewed list in `definer_exposure_guard.sql`) instead of
+`is_suspended()` / `profile_is_visible()` once per row. Who may read what is
+unchanged; guard: `supabase/tests/read_rules_guard.sql`. The old helper
+functions stay (other functions still call them).
+
+`100000` is additive and safe in either order with the code: the app falls back to the
 old functions (PGRST202) until it is applied. It adds trigram indexes over a
 "search document" per part, car, mod and update; restates `search_car_ids`,
 `search_update_ids` and `search_listing_ids` to read through them (now

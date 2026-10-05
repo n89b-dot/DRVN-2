@@ -89,26 +89,42 @@ The app sends searches to the new entry points and pages the Explore wall
 through `feed_event_page`. Each falls back to the old path if the function
 is missing, so the code is safe to deploy before the migration.
 
+## The read rules (migration 20261010095900)
+
+The read policies on parts, cars and part photos called
+`is_suspended()` / `profile_is_visible()` once per row — two
+security-definer calls the planner cannot fold into the query. They now
+test the seller against the set of suspended members, fetched once per
+query (`suspended_profile_ids()`). Who may see what is unchanged
+(`supabase/tests/read_rules_guard.sql` states it for a visitor, another
+member, the seller and the suspended member, and passes against the old
+policies too).
+
+| Request | Search migration only | With the read rules |
+|---|---|---|
+| Marketplace newest page, with its exact count | 653 ms | 77 ms |
+| Marketplace category, with its exact count | 592 ms | 47 ms |
+| Category counts | 675 ms | 32 ms |
+| Brand counts | 401 ms | 72 ms |
+| Explore wall, page one | 101 ms | 11 ms |
+| Explore: suggested builders | 903 ms | 177 ms |
+| Explore: trending models | 207 ms | 23 ms |
+
+The one new exposure: `suspended_profile_ids()` must be callable by clients
+(a policy runs as the caller) and returns every suspended member's id in one
+call. `is_suspended(id)` was already callable one id at a time and member
+ids are public, so the same answer was already obtainable; it is now one
+request instead of one per member. Ids only.
+
 ## What is still slow, and why
 
 | Request | Now | Cause |
 |---|---|---|
-| Any marketplace view with filters, exact count | 600–1,000 ms | Counting means checking visibility on every matching part, and each check is two function calls. Unfiltered views no longer count (they use the category counts already on the page). |
-| Vehicle filter with exact count | timeout | Same, plus a fitment lookup per part. The page of parts itself takes 86 ms; it is the "N parts found" that cannot be answered in time. |
-| Category and brand counts | 400–700 ms | Same per-row visibility cost. Read through the 60-second shared cache, so paid at most once a minute. |
-| Explore: suggested builders | 900 ms | Aggregates every public car and update for every member on each call. |
-| Broad searches | 0.7–1.2 s | A search matching a third of the catalogue has to rank a third of the catalogue. |
+| Vehicle filter with exact count | 2–3 s, sometimes timeout | A fitment lookup per part to count them all. The page of parts itself takes 83 ms; it is the "N parts found" that is slow. |
+| "Fits my garage" | about 3 s | The same lookups, for each car in the garage. |
+| Broad searches (a third of the catalogue matches) | 0.7–1.2 s | Ranking a third of the catalogue. |
 
 Divide by about 100 for the invited beta: none of these is noticeable there.
-They become noticeable somewhere around 10,000–20,000 parts for sale.
-
-The common cause of the first three is that the read policies on `listings`
-and `cars` call `is_suspended()` / `profile_is_visible()` once per row. Those
-are security-definer functions the planner cannot fold into the query, at
-about 6 µs a call. Replacing them with something the planner can hash (a
-small table of suspended member ids the policies join to) would cut every
-count and every full scan by roughly three-quarters. That is a change to the
-security policies themselves and was deliberately left out of this pass.
 
 At the scale where broad search cost matters, search belongs on the search
 engine: the Typesense provider is already wired (`src/lib/search/`), and

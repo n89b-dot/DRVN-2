@@ -263,11 +263,16 @@ $function$;
 create or replace function public.explore_update_search_rows(p_query text, p_make text default ''::text, p_model text default ''::text, p_make_id integer default 0, p_model_id integer default 0, p_ymin integer default 0, p_ymax integer default 9999)
 returns setof public.activity_posts language sql stable
 as $function$
+ -- The car is a lookup per matched update, not a third table in the join:
+ -- with it in the join the planner, guessing at filters it cannot see the
+ -- values of, sometimes starts from every car instead of from the matches.
  select p.* from public.search_update_ids(p_query) with ordinality r(id,rank)
- join public.activity_posts p on p.id=r.id join public.cars c on c.id=p.car_id
- where c.is_public and p.published_at is not null
- and (p_make='' or (p_model_id<>0 and c.catalog_model_id=p_model_id) or (p_model_id=0 and c.catalog_make_id=p_make_id) or (lower(c.make)=lower(p_make) and (p_model='' or lower(c.model)=lower(p_model))))
- and ((p_ymin=0 and p_ymax=9999) or c.year between p_ymin and p_ymax)
+ join public.activity_posts p on p.id=r.id
+ where p.published_at is not null
+ and (select c.is_public
+   and (p_make='' or (p_model_id<>0 and c.catalog_model_id=p_model_id) or (p_model_id=0 and c.catalog_make_id=p_make_id) or (lower(c.make)=lower(p_make) and (p_model='' or lower(c.model)=lower(p_model))))
+   and ((p_ymin=0 and p_ymax=9999) or c.year between p_ymin and p_ymax)
+   from public.cars c where c.id=p.car_id)
  order by r.rank,p.published_at desc,p.id;
 $function$;
 revoke all on function public.explore_update_search_rows(text,text,text,integer,integer,integer,integer) from public;
@@ -294,7 +299,7 @@ stable
 as $function$
  select l.* from public.listings l where l.status='active'
  and (p_viewer is not distinct from auth.uid() or current_user='service_role')
- and (public.profile_is_visible(l.seller_id) or l.seller_id=p_viewer)
+ and (l.seller_id not in (select public.suspended_profile_ids()) or l.seller_id=p_viewer)
  and (p_vehicle='' or exists(
    select 1 from public.catalog_makes m
    left join public.catalog_models mo on mo.make_id=m.id and mo.id=case when p_vehicle ~ '^[1-9][0-9]{0,9}-[1-9][0-9]{0,9}$' then split_part(p_vehicle,'-',2)::bigint else 0 end
@@ -327,7 +332,7 @@ as $function$
  select l.* from public.marketplace_search_ids(p_query) s(id) join public.listings l on l.id=s.id
  where trim(p_query)<>'' and l.status='active'
  and (p_viewer is not distinct from auth.uid() or current_user='service_role')
- and (public.profile_is_visible(l.seller_id) or l.seller_id=p_viewer)
+ and (l.seller_id not in (select public.suspended_profile_ids()) or l.seller_id=p_viewer)
  and (p_vehicle='' or exists(
    select 1 from public.catalog_makes m
    left join public.catalog_models mo on mo.make_id=m.id and mo.id=case when p_vehicle ~ '^[1-9][0-9]{0,9}-[1-9][0-9]{0,9}$' then split_part(p_vehicle,'-',2)::bigint else 0 end
