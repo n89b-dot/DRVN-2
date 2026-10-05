@@ -160,11 +160,20 @@ test("delivered password reset succeeds once while reused and expired links fail
     }).toBe(true);
     seenMessages.add(messageId!);
     const message = await (await request.get(`http://127.0.0.1:54324/api/v1/message/${messageId}`)).json();
+    // The reset email links to /confirm with a token hash, not to Supabase's
+    // verify endpoint: that link's PKCE code only worked in the browser that
+    // asked for the reset.
     const link = String(message.HTML)
-      .match(/href="([^"]*\/auth\/v1\/verify[^"]*)"/)?.[1]
+      .match(/href="([^"]*\/confirm\?token_hash=[^"]*)"/)?.[1]
       .replaceAll("&amp;", "&");
     expect(link).toContain("type=recovery");
     return link!;
+  }
+
+  /** Opens an emailed reset link and presses its one button. */
+  async function openResetLink(target: typeof page, link: string) {
+    await target.goto(link);
+    await target.getByRole("button", { name: "Choose a new password" }).click();
   }
 
   async function requestReset() {
@@ -177,7 +186,11 @@ test("delivered password reset succeeds once while reused and expired links fail
 
   try {
     const firstLink = await requestReset();
-    await page.goto(firstLink);
+    // Opened where the reset was NOT asked for: a fresh browser, as when the
+    // email is read on another device. A mail scanner's fetch uses nothing up.
+    expect((await request.get(firstLink)).status()).toBe(200);
+    await page.context().clearCookies();
+    await openResetLink(page, firstLink);
     await expect(page).toHaveURL(/\/login\/reset$/);
     const newPassword = `Changed-${randomUUID()}!`;
     await page.getByLabel("New password").fill(newPassword);
@@ -200,7 +213,7 @@ test("delivered password reset succeeds once while reused and expired links fail
     const reusedContext = await browser.newContext({ baseURL: process.env.E2E_BASE_URL });
     try {
       const reused = await reusedContext.newPage();
-      await reused.goto(firstLink);
+      await openResetLink(reused, firstLink);
       await expect(reused).toHaveURL(/\/login\?message=auth-error/);
       await expect(
         reused.getByRole("alert").filter({ hasText: /invalid, expired, or already used/i })
@@ -225,7 +238,7 @@ test("delivered password reset succeeds once while reused and expired links fail
       ],
       { env: { ...process.env, PGPASSWORD: "postgres" } }
     );
-    await page.goto(expiredLink);
+    await openResetLink(page, expiredLink);
     await expect(page).toHaveURL(/\/login\?message=auth-error/);
     await expect(
       page.getByRole("alert").filter({ hasText: /invalid, expired, or already used/i })
