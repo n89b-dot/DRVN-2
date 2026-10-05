@@ -743,12 +743,25 @@ export async function fetchFeed(
 
   const from = (page - 1) * pageSize;
   // One extra row past the window answers `hasMore` without a count query.
-  let events = supabase.from("feed_events").select("kind, id, happened_at").in("kind", kinds);
-  if (opts.excludeOwnerId) events = events.neq("owner_id", opts.excludeOwnerId);
-  const { data, error } = await events
-    .order("happened_at", { ascending: false })
-    .order("id", { ascending: false }) // stable tiebreak for equal timestamps
-    .range(from, from + pageSize);
+  // feed_event_page (migration 20261008100000) returns the same rows as the
+  // view, read off indexes: the view sorts every event to find a page. Before
+  // that migration is applied the view still answers.
+  const paged = await supabase.rpc("feed_event_page", {
+    p_kinds: kinds,
+    p_limit: pageSize + 1,
+    p_offset: from,
+    ...(opts.excludeOwnerId ? { p_exclude_owner: opts.excludeOwnerId } : {}),
+  });
+  let data: { kind: string | null; id: string | null; happened_at: string | null }[] | null = paged.data;
+  let error = paged.error;
+  if (error?.code === "PGRST202") {
+    let events = supabase.from("feed_events").select("kind, id, happened_at").in("kind", kinds);
+    if (opts.excludeOwnerId) events = events.neq("owner_id", opts.excludeOwnerId);
+    ({ data, error } = await events
+      .order("happened_at", { ascending: false })
+      .order("id", { ascending: false }) // stable tiebreak for equal timestamps
+      .range(from, from + pageSize));
+  }
 
   if (error || !data) {
     reportError("[feed] feed_events view unavailable, falling back to legacy merge", error);

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-04 — Performance: a shared cache for signed-out visitors, and search that works at volume
+
+Two pieces of the performance work that needed no hosting: caching public data, and checking query plans against realistic volume.
+
+- **Signed-out visitors read a shared copy.** The marketplace, Explore, and listing, car, post and profile pages read through one shared copy of public data for anyone not signed in (`getPublicPageClient`, `src/lib/supabase/public-cache.ts`). A copy is never shown past 60 seconds — Next's own cache serves an expired copy once more while it refreshes, which on a quiet page can be hours old, so an expired copy is discarded and the database asked. Only reads go in: a table read, or a function on a named read-only list, so the listing view counter still counts every look. Members always read live. Typed searches and price ranges stay live. Off in development, on the e2e stack and with `DRVN_PUBLIC_CACHE=off`.
+- **Writes clear it.** Every action imports `revalidatePath` from `src/lib/revalidate.ts`, which also clears the copy for the kind of thing the page shows; a test fails the build on a direct import from `next/cache`. The Stripe webhook, the reservation-expiry worker and the account-deletion job clear it too.
+- **Search at volume.** Seeded to about 100× the beta, every text search on Explore and the marketplace hit the 3-second limit and failed, and "search updates" took two minutes when allowed to finish. Migration `20261008100000` makes search read through trigram indexes and lets the planner read a page off an index; the app sends searches to new entry points and pages the Explore wall through `feed_event_page`, falling back to the old functions until the migration is applied. Results are unchanged, row for row. Before/after and what is still slow: `docs/performance/query-plans.md`. Reproduce with `scripts/perf/`.
+- **Marketplace count.** An unfiltered marketplace view takes its total from the category counts already on the page instead of counting every part again.
+
 ## 2026-09-29 — Review fixes: what the 28 September feature review found
 
 The 28 September functional review ("DRVN Feature Review" artifact) walked every flow as buyer, seller, guest and admin and found things that looked fine and didn't work. This entry is the fix pass. Six migrations went to the shared dev project, each logged in `supabase/MIGRATIONS.md`.

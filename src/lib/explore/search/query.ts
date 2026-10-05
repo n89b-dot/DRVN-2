@@ -133,14 +133,21 @@ export async function searchUpdates(
   const sort = effectiveSort(params, "updates");
 
   const selection = params.vehicle ? await resolveVehicleFilter(params.vehicle) : null;
-  let query = supabase.rpc("explore_update_rows", {
-    p_query: params.q ?? "", p_make: selection?.make ?? "", p_model: selection?.model ?? "",
-    p_make_id: selection?.makeId ?? 0, p_model_id: selection?.modelId ?? 0,
-    p_ymin: params.ymin ? Number(params.ymin) : 0, p_ymax: params.ymax ? Number(params.ymax) : 9999,
-  }).select("id, published_at");
-  if (sort !== "relevance" || !params.q) query = query.order("published_at", { ascending: false }).order("id");
   const from = (page - 1) * pageSize;
-  const { data, error } = await query.range(from, from + pageSize);
+  // A search starts from the updates the words matched
+  // (explore_update_search_rows, migration 20261008100000); with no words,
+  // or before that migration is applied, explore_update_rows answers.
+  const rowsFrom = (rows: "explore_update_search_rows" | "explore_update_rows") => {
+    let query = supabase.rpc(rows, {
+      p_query: params.q ?? "", p_make: selection?.make ?? "", p_model: selection?.model ?? "",
+      p_make_id: selection?.makeId ?? 0, p_model_id: selection?.modelId ?? 0,
+      p_ymin: params.ymin ? Number(params.ymin) : 0, p_ymax: params.ymax ? Number(params.ymax) : 9999,
+    }).select("id, published_at");
+    if (sort !== "relevance" || !params.q) query = query.order("published_at", { ascending: false }).order("id");
+    return query.range(from, from + pageSize);
+  };
+  let { data, error } = await rowsFrom(params.q?.trim() ? "explore_update_search_rows" : "explore_update_rows");
+  if (error?.code === "PGRST202") ({ data, error } = await rowsFrom("explore_update_rows"));
   if (error) { reportError("[explore-search] updates query failed", error); return NO_PAGE; }
   const hasMore = (data ?? []).length > pageSize;
   const windowRows: FeedEventRow[] = (data ?? []).slice(0, pageSize).map(p => ({ kind: "update", id: p.id, happened_at: p.published_at! }));

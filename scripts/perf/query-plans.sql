@@ -1,7 +1,7 @@
 -- The queries the public pages run, as the visitor's own database role
--- (row security on), with EXPLAIN ANALYZE. Run by scripts/perf/query-plans.sh
--- against the volume seed. Each query is named by a \echo line; the runner
--- prints its execution time beside the budget in docs/performance/query-plans.md.
+-- (row security on), with EXPLAIN ANALYZE, against the volume seed. See
+-- scripts/perf/README.md. psql passes arguments as literals; the API does
+-- not — api-timings.sh is the measurement, this is for reading plans.
 \set ON_ERROR_STOP 1
 \pset pager off
 select id as listing_id, seller_id from public.listings where status = 'active' order by created_at desc limit 1 \gset
@@ -26,6 +26,10 @@ explain (analyze, buffers) select id from public.marketplace_browse_rows() order
 explain (analyze, buffers) select id from public.marketplace_browse_rows(p_query => 'brembo brake kit') order by created_at desc, id limit 24;
 \echo == marketplace: part number search
 explain (analyze, buffers) select id from public.marketplace_browse_rows(p_query => 'PN-4242') order by created_at desc, id limit 24;
+\echo == marketplace: text search, search entry point
+explain (analyze, buffers) select id from public.marketplace_search_browse_rows('brembo brake kit') order by created_at desc, id limit 24;
+\echo == marketplace: part number, search entry point
+explain (analyze, buffers) select id from public.marketplace_search_browse_rows('PN-4242') order by created_at desc, id limit 24;
 \echo == marketplace: vehicle filter
 explain (analyze, buffers) select id from public.marketplace_browse_rows(p_vehicle => '900005-900503') order by created_at desc, id limit 24;
 \echo == marketplace: vehicle filter count
@@ -53,6 +57,8 @@ explain (analyze, buffers) select listing_id from public.listing_questions where
 explain (analyze, buffers) select kind, id, happened_at from public.feed_events where kind in ('car','update','part') order by happened_at desc, id desc limit 25;
 \echo == explore: mixed wall, page ten
 explain (analyze, buffers) select kind, id, happened_at from public.feed_events where kind in ('car','update','part') order by happened_at desc, id desc limit 25 offset 225;
+\echo == explore: mixed wall, page one, paged function
+explain (analyze, buffers) select * from public.feed_event_page(array['car','update','part'], 25, 0);
 \echo == explore: updates only
 explain (analyze, buffers) select kind, id, happened_at from public.feed_events where kind in ('update') order by happened_at desc, id desc limit 25;
 \echo == explore: card hydration
@@ -65,11 +71,13 @@ explain (analyze, buffers) select * from public.suggested_builders(null, 8);
 explain (analyze, buffers) select id from public.explore_build_rows('make7 coilovers') limit 24;
 \echo == explore: search updates
 explain (analyze, buffers) select id from public.explore_update_rows('dyno day') limit 24;
+\echo == explore: search updates, search entry point
+explain (analyze, buffers) select id from public.explore_update_search_rows('dyno day') limit 24;
 \echo == explore: updates for a model
 explain (analyze, buffers) select id from public.explore_update_rows(p_make => 'Make5', p_model => 'Model3', p_make_id => 900005, p_model_id => 900503) limit 24;
 
 \echo == car page: car by slug
-explain (analyze, buffers) select * from public.cars where slug = :'car_slug';
+explain (analyze, buffers) select id, owner_id, slug, name, make, model, year, about, cover_image_url, is_public from public.cars where slug = :'car_slug';
 \echo == car page: mods
 explain (analyze, buffers) select * from public.mod_items where car_id = :'car_id' order by position;
 \echo == car page: updates

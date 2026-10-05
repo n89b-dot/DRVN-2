@@ -4334,6 +4334,17 @@ export type Database = {
       }
       bump_listing_view: { Args: { p_listing: string }; Returns: undefined }
       capture_reconciliation_candidates: { Args: never; Returns: Json }
+      car_search_doc: {
+        Args: {
+          p_about: string
+          p_make: string
+          p_model: string
+          p_name: string
+          p_tags: string[]
+          p_year: number
+        }
+        Returns: string
+      }
       charge_cents_in_bounds: { Args: { p_cents: number }; Returns: boolean }
       claim_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
@@ -4572,6 +4583,52 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      explore_update_search_rows: {
+        Args: {
+          p_make?: string
+          p_make_id?: number
+          p_model?: string
+          p_model_id?: number
+          p_query: string
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          author_id: string
+          body: Json
+          car_id: string | null
+          created_at: string
+          draft_archived_at: string | null
+          draft_key: string | null
+          id: string
+          intro: string | null
+          publish_operation_id: string | null
+          published_at: string | null
+          search_text: string | null
+          title: string | null
+          updated_at: string
+          video_url: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "activity_posts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      feed_event_page: {
+        Args: {
+          p_exclude_owner?: string
+          p_kinds: string[]
+          p_limit: number
+          p_offset?: number
+        }
+        Returns: {
+          happened_at: string
+          id: string
+          kind: string
+        }[]
+      }
       feed_hydration: {
         Args: {
           p_car_ids: string[]
@@ -4684,6 +4741,16 @@ export type Database = {
       listing_question_parent_matches: {
         Args: { p_listing_id: string; p_parent_id: string }
         Returns: boolean
+      }
+      listing_search_doc: {
+        Args: {
+          p_brand: string
+          p_category: string
+          p_compatibility_notes: string
+          p_description: string
+          p_title: string
+        }
+        Returns: string
       }
       listing_watch_counts: {
         Args: { p_listings: string[] }
@@ -4857,6 +4924,61 @@ export type Database = {
         }
         Returns: string
       }
+      marketplace_search_browse_rows: {
+        Args: {
+          p_fit?: boolean
+          p_query: string
+          p_vehicle?: string
+          p_viewer?: string
+          p_vyear?: number
+          p_ymax?: number
+          p_ymin?: number
+        }
+        Returns: {
+          allows_collection: boolean
+          brand: string | null
+          category: string
+          compatibility_notes: string | null
+          condition: string | null
+          condition_checklist: Json | null
+          created_at: string
+          currency: string
+          description: string | null
+          grade: string | null
+          height_in: number | null
+          id: string
+          length_in: number | null
+          location: string | null
+          offer_floor_cents: number | null
+          part_miles: number | null
+          part_miles_unit: string | null
+          part_number: string | null
+          part_number_compact: string | null
+          price_cents: number
+          removed_at: string | null
+          removed_reason: string | null
+          reserved_until: string | null
+          seller_id: string
+          shipping_cents: number
+          shipping_mode: string
+          sold_at: string | null
+          source_car_id: string | null
+          status: string
+          subcategory: string | null
+          title: string
+          updated_at: string
+          view_count: number
+          weight_oz: number | null
+          width_in: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "listings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      marketplace_search_ids: { Args: { p_query: string }; Returns: string[] }
       marketplace_search_rows: {
         Args: { p_query: string }
         Returns: {
@@ -4910,6 +5032,10 @@ export type Database = {
           source_car_id: string
         }[]
       }
+      mod_search_doc: {
+        Args: { p_brand: string; p_part_number: string; p_product: string }
+        Returns: string
+      }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
       notify: {
@@ -4942,6 +5068,10 @@ export type Database = {
         Returns: Json
       }
       post_href: { Args: { p_post_id: string }; Returns: string }
+      post_search_doc: {
+        Args: { p_intro: string; p_search_text: string; p_title: string }
+        Returns: string
+      }
       prepare_beta_signup: {
         Args: { p_email: string; p_token_hash: string }
         Returns: string

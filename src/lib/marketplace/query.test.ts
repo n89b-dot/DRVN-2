@@ -75,3 +75,33 @@ it("starts social lookups while fitment is still loading", async () => {
   releaseFitment();
   expect(await pending).toMatchObject({ status: "success", total: 1 });
 });
+
+it("sends a text search to the search entry point, and to the browse function if that isn't deployed yet", async () => {
+  const supabase = client({ data: [], count: 0, error: null });
+  await fetchListings(supabase, { q: "coilovers" });
+  expect(supabase.rpc).toHaveBeenCalledTimes(1);
+  expect(supabase.rpc).toHaveBeenCalledWith("marketplace_search_browse_rows", expect.objectContaining({ p_query: "coilovers" }), { count: "exact" });
+
+  const older = client({ data: [], count: 0, error: null });
+  const range = (older.rpc("x") as unknown as { range: ReturnType<typeof vi.fn> }).range;
+  range.mockResolvedValueOnce({ data: null, count: null, error: { code: "PGRST202", message: "Could not find the function" } });
+  vi.mocked(older.rpc).mockClear();
+  const page = await fetchListings(older, { q: "coilovers" });
+  expect(vi.mocked(older.rpc).mock.calls.map((call) => call[0])).toEqual(["marketplace_search_browse_rows", "marketplace_browse_rows"]);
+  expect(page).toMatchObject({ status: "success", total: 0 });
+});
+
+it("does not ask the database to count a view whose total the page already knows", async () => {
+  const supabase = client({ data: [], count: null, error: null });
+  const page = await fetchListings(supabase, { page: "2" }, undefined, { garage: Promise.resolve([]), selection: Promise.resolve(null), total: Promise.resolve(40) });
+  expect(supabase.rpc).toHaveBeenCalledTimes(1);
+  expect(supabase.rpc).toHaveBeenCalledWith("marketplace_browse_rows", expect.anything(), {});
+  expect(page).toMatchObject({ status: "success", total: 40, page: 2 });
+});
+
+it("counts the view itself when the page's total turned out not to be known", async () => {
+  const supabase = client({ data: [], count: 7, error: null });
+  const page = await fetchListings(supabase, {}, undefined, { garage: Promise.resolve([]), selection: Promise.resolve(null), total: Promise.resolve(undefined) });
+  expect(vi.mocked(supabase.rpc).mock.calls.map((call) => call[2])).toEqual([{}, { count: "exact" }]);
+  expect(page).toMatchObject({ status: "success", total: 7 });
+});

@@ -61,7 +61,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         orderCars(data ?? [], profile?.main_car_id).map(car => ({ ...car, isMain: car.id === profile?.main_car_id }))
       )
     : Promise.resolve([]);
-  const pagePromise = fetchListings(supabase, filters, user?.id, { garage: garagePromise, selection: vehiclePromise });
+
   // M-6's facet: the brands that actually have parts live, so the field
   // suggests what exists rather than a hardcoded list that goes stale.
   // Both counts are the same for every shopper, so they come through a
@@ -75,6 +75,15 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
     counts.all = (counts.all ?? 0) + Number(row.total);
     return counts;
   }, {}));
+  // An unfiltered view's total is one of the category counts already being
+  // read, so the page of parts is fetched without counting them a second
+  // time — at volume the count costs far more than the page.
+  const totalKey = filters.subcategory && filters.category ? `${filters.category}/${filters.subcategory}` : filters.category ?? "all";
+  const pagePromise = fetchListings(supabase, filters, user?.id, {
+    garage: garagePromise,
+    selection: vehiclePromise,
+    ...(hasMarketplaceSearch(filters) ? {} : { total: categoryPromise.then((counts) => (counts ? counts[totalKey] ?? 0 : undefined)) }),
+  });
   // The condition choices offered are the ones with parts in them: a filter
   // whose options always return nothing is worse than no option.
   const conditionPromise = Promise.resolve(countsClient.rpc("marketplace_browse_rows", {}).select("condition").limit(1000))

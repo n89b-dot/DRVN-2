@@ -222,14 +222,23 @@ function parsePage(value: string | undefined): number {
 }
 
 /** Canonical filtered relation for browsing and saved-search workers. Workers
- * pass their explicit owner; the database enforces shopper-visible evidence. */
-export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: ListingFilters, workerViewer?: string) {
+ * pass their explicit owner; the database enforces shopper-visible evidence.
+ *
+ * `searchEntry`: a text search asked through `marketplace_browse_rows` is
+ * answered by checking every active part against the words. The search entry
+ * point (migration 20261008100000) starts from the parts the words matched
+ * and applies the same rules — same rows, a fraction of the work. Pages use
+ * it; anything else keeps the original function. */
+export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: ListingFilters, workerViewer?: string, options: { searchEntry?: boolean; count?: boolean } = {}) {
   const filters = normalizeMarketplaceState(raw);
-  let query = supabase.rpc("marketplace_browse_rows", {
+  const rows = options.searchEntry && filters.q?.trim() ? "marketplace_search_browse_rows" : "marketplace_browse_rows";
+  let query = supabase.rpc(rows, {
     p_query: filters.q ?? "", p_vehicle: filters.vehicle ?? "", p_vyear: Number(filters.vyear ?? 0),
     p_ymin: Number(filters.ymin ?? 0), p_ymax: Number(filters.ymax ?? 9999), p_fit: filters.fit === "1",
     ...(workerViewer ? { p_viewer: workerViewer } : {}),
-  }, { count: "exact" }).select("id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
+    // An exact count makes the database produce every matching part before
+    // it returns the first page; callers that already know the total skip it.
+  }, options.count === false ? {} : { count: "exact" }).select("id, title, description, created_at, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, source_car_id, part_number, brand, part_miles, part_miles_unit, seller_id");
   if (filters.category) query = query.eq("category", filters.category);
   if (filters.subcategory) query = query.eq("subcategory", filters.subcategory);
   if (filters.condition) query = query.eq("condition", filters.condition as "new" | "like_new" | "used" | "for_parts");
@@ -253,6 +262,11 @@ export async function fetchListings(
   context?: {
     garage: Promise<GarageCar[]>;
     selection: Promise<VehicleFilterSelection | null>;
+    /** How many parts this view holds, when the page already knows (the
+     *  category counts on an unfiltered view). The page of parts is then read
+     *  without asking the database to count them all again. Resolving to
+     *  undefined means "not known" and the query counts as before. */
+    total?: Promise<number | undefined>;
   }
 ): Promise<ListingPage> {
   const started = performance.now();
@@ -268,19 +282,33 @@ export async function fetchListings(
     ? Promise.resolve(supabase.from("cars").select("name, make, model, year").eq("owner_id", viewerId)).then(({ data }) => data ?? [])
     : Promise.resolve([] as GarageCar[]));
   const selectionPromise = context?.selection ?? (filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null));
-  let query = listingRowsQuery(supabase, filters);
+  const counted = !context?.total;
+  const pageOf = (searchEntry: boolean) => {
+    let query = listingRowsQuery(supabase, filters, undefined, { searchEntry, count: counted });
+    if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
+    else if (sort === "price_desc") query = query.order("price_cents", { ascending: false });
+    else query = query.order("created_at", { ascending: false });
+    return query.order("id").range(from, from + PAGE_SIZE - 1);
+  };
 
-  if (sort === "price_asc") query = query.order("price_cents", { ascending: true });
-  else if (sort === "price_desc") query = query.order("price_cents", { ascending: false });
-  else query = query.order("created_at", { ascending: false });
-
-  const [retrieval, garageCars, selection] = await Promise.all([
-    query.order("id").range(from, from + PAGE_SIZE - 1), garagePromise, selectionPromise,
-  ]);
+  let searchEntry = true;
+  const [firstRetrieval, garageCars, selection, knownTotal] = await Promise.all([pageOf(searchEntry), garagePromise, selectionPromise, context?.total]);
+  let retrieval = firstRetrieval;
+  // The search entry point isn't in this database yet (migration unapplied):
+  // ask the original function, which answers the same thing more slowly.
+  if (retrieval.error?.code === "PGRST202") {
+    searchEntry = false;
+    retrieval = await pageOf(searchEntry);
+  }
   const garageByKey = buildGarageFitmentIndex(garageCars);
   let { data: listings, count, error } = retrieval;
+  if (!counted && !error) {
+    // The known total stands in for the count; if it turned out not to be
+    // known after all, count this view on its own.
+    count = knownTotal ?? (await listingRowsQuery(supabase, filters, undefined, { searchEntry }).order("id").range(0, 0)).count;
+  }
   if (error?.code === "PGRST103" && page > 1) {
-    const first = await listingRowsQuery(supabase, filters).order("id").range(0, 0);
+    const first = await listingRowsQuery(supabase, filters, undefined, { searchEntry }).order("id").range(0, 0);
     if (!first.error) { listings = []; count = first.count; error = null; }
   }
   console.info("[marketplace:retrieval]", { outcome: error ? "error" : count === 0 ? "zero" : "success", duration_ms: Math.round(performance.now() - started), count: error ? null : count, page });
