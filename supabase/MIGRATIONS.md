@@ -1,14 +1,22 @@
 # Applying migrations
 
-## October 11 — millions of parts (not yet applied anywhere)
+## October 11 — millions of parts (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261011100000_listing_vehicle_fit.sql` | not yet |
-| `20261011110000_marketplace_pages_and_counts.sql` | not yet |
-| `20261011120000_precomputed_aggregates.sql` | not yet |
-| `20261011121000_update_read_rule_per_row.sql` | not yet — **changes a read policy; needs the owner's yes** |
-| `20261011130000_search_engine_at_scale.sql` | not yet — **adds a client-callable SECURITY DEFINER function; needs the owner's yes** |
+| `20261011100000_listing_vehicle_fit.sql` | shared dev project (2026-10-05, twice) |
+| `20261011110000_marketplace_pages_and_counts.sql` | shared dev project (2026-10-05, twice) |
+| `20261011120000_precomputed_aggregates.sql` | shared dev project (2026-10-05, twice) |
+| `20261011121000_update_read_rule_per_row.sql` | shared dev project (2026-10-05, twice) |
+| `20261011130000_search_engine_at_scale.sql` | shared dev project (2026-10-05, twice) |
+
+**Shared dev, 2026-10-05**, with Neil's go-ahead (he approved the read policy
+and the client-callable definer functions), each applied twice with
+`node scripts/apply-migration.mjs`. Before: every function, trigger and policy
+these touch was compared with a fresh database at main's previous state — no
+drift — and saved to `~/drvn-db-backups/pre-20261011-scale-2m.sql`. After:
+the same comparison against a fresh database with all five matches; the four
+pg_cron jobs ran and succeeded.
 
 Apply after the October 10 set (`20261010095900`, `20261010100100`), in this
 order. Each is safe before the app that uses it: the app falls back
