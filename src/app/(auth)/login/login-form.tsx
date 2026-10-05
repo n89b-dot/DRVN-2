@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useSyncExternalStore } from "react";
+import { useActionState, useState } from "react";
 
 import { Alert, Button, PasswordField, TextField } from "@/components/ui";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { login, type AuthState } from "../actions";
 import { OAuthButton } from "../oauth-button";
-
-const subscribeNever = () => () => {};
 
 export function LoginForm({
   next,
@@ -22,7 +21,7 @@ export function LoginForm({
 }) {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, {});
   // Controlled values must not replace input entered before hydration.
-  const ready = useSyncExternalStore(subscribeNever, () => true, () => false);
+  const ready = useHydrated();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   // Every route out of this page keeps the destination: the signup swap and

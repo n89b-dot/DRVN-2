@@ -42,6 +42,7 @@ const JOB_LABEL: Record<string, string> = {
   deletions: "Account deletions and exports",
   savedSearches: "Saved-search alerts",
   media: "Clean up unused uploads",
+  deliveryAutoConfirm: "Auto-confirm untracked deliveries",
 };
 
 function ago(iso: string): string {

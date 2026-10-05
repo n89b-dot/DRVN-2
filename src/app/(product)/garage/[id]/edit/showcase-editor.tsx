@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import type { CarHotspot, CarImage, ModItem } from "@/lib/database.types";
 import { Button, TileHead } from "@/components/ui";
 import { cx } from "@/lib/format";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { saveShowcase, type ShowcasePinInput } from "../../actions";
 
@@ -28,6 +29,9 @@ export function ShowcaseEditor({
   mods: ModItem[];
   initial: CarHotspot[];
 }) {
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [imageUrl, setImageUrl] = useState(initial[0]?.image_url ?? images[0]?.url ?? "");
   const [pins, setPins] = useState<Draft[]>(
     initial.map((pin) => ({
@@ -61,6 +65,7 @@ export function ShowcaseEditor({
 
   return (
     <section className="tile">
+      <fieldset disabled={!ready} className="contents">
       <TileHead
         label="Showcase — optional"
         end={<span className="kv">{pins.length}/8 pins</span>}
@@ -194,6 +199,7 @@ export function ShowcaseEditor({
           </span>
         )}
       </div>
+      </fieldset>
     </section>
   );
 }

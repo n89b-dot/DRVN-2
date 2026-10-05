@@ -5,6 +5,7 @@ import { useOptimistic, useState, useTransition } from "react";
 
 import { EmptyState, Message, MessageComposer, MessageThread, TileHead } from "@/components/ui";
 import { askQuestion, type CommerceState } from "@/features/commerce/actions";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 export type QAItem = {
   id: string;
@@ -148,6 +149,9 @@ export function QASection({
 }) {
   const [state, setState] = useState<CommerceState>({});
   const [pending, startTransition] = useTransition();
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [draft, setDraft] = useState("");
   const [operationId, setOperationId] = useState("");
 
@@ -236,6 +240,7 @@ export function QASection({
       </MessageThread>
 
       {isLoggedIn && !isSeller && (
+        <fieldset disabled={!ready} className="contents">
         <MessageComposer
           block
           action={(formData) => submit(formData, () => {
@@ -255,6 +260,7 @@ export function QASection({
           pendingLabel="Ask"
           ghost={false}
         />
+        </fieldset>
       )}
       {state.error && (
         <p role="alert" aria-live="polite" className="field__err mt-2">

@@ -6,6 +6,7 @@ import { useRef, useState, useTransition } from "react";
 
 import { Button, ButtonLink } from "@/components/ui";
 import { createQuickPost } from "@/app/(product)/garage/actions";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { uploadImages } from "@/lib/media-upload";
 
 import { PartPicker, type TaggablePart } from "./part-picker";
@@ -45,6 +46,9 @@ export function QuickPost({
 }) {
   const router = useRouter();
   const [carId, setCarId] = useState(cars[0]?.id ?? "");
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [caption, setCaption] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [tagged, setTagged] = useState<string[]>([]);
@@ -129,6 +133,7 @@ export function QuickPost({
 
   return (
     <div className="composerlite">
+      <fieldset disabled={!ready} className="contents">
       <div className="composerlite__ask flex w-full items-start gap-3">
         <span className="monogram monogram--sm" aria-hidden="true">
           {initials}
@@ -237,6 +242,7 @@ export function QuickPost({
           </Link>
         )}
       </p>
+      </fieldset>
     </div>
   );
 }

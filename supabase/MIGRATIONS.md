@@ -54,17 +54,50 @@ the seller owes, and a carry amount left on a transfer that never reached
 dispatch no longer reserves the debt. Guard:
 `carry_after_cancelled_payout_guard.sql`.
 
-## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (isolated local stack only)
+## October 6 — owner decisions: payout hold until claim windows close, auto-confirm untracked shipments after 21 days
 
 | File | Applied to |
 |---|---|
-| `20261005100000_message_photos_server_normalized.sql` | isolated local stack, 2026-10-04 |
-| `20261005101000_guest_orders_unproven_buyers.sql` | isolated local stack, 2026-10-04 |
-| `20261005102000_unsuspend_refuses_pending_deletion.sql` | isolated local stack, 2026-10-04 |
-| `20261005110000_accepted_offer_collection.sql` | isolated local stack, 2026-10-04 |
-| `20261005110100_seller_carry_forward.sql` | isolated local stack, 2026-10-04 |
+| `20261006100000_payout_hold_setting.sql` | not yet |
+| `20261006100100_untracked_delivery_auto_confirm.sql` | not yet |
+| `20261006100200_owner_settlement_decisions.sql` | not yet |
+| `20261006100300_seller_payout_dates.sql` | not yet |
+
+The first two add `public.settlement_settings` (one row) with neutral defaults:
+`payout_hold_days` stays 7 in `fixed` mode, and `auto_confirm_after_days` is
+NULL (off). `payout_available_at()` becomes the one rule for a payout date
+(delivery trigger, `pickup_redeem`, `mark_order_received`, auto-confirm);
+`mark_order_received`'s hold argument now defaults to NULL = "use the setting".
+The auto-confirm job (`drvn-delivery-auto-confirm`, hourly) runs and records
+health even while off. Decision notes: `docs/decisions/`. Replaced functions
+were diffed against a fresh database: only the intended lines changed.
+`20261006100200` then sets the owner's decisions (Neil, 4 Oct): hold mode
+`claim_window` (7-day floor) and auto-confirm after 21 days. Guards that test
+the fixed 7-day mechanism pin it inside their own rolled-back transaction.
+`20261006100300` adds `seller_payout_dates()`: a seller reads the payout date
+already set on their own orders, so the ledger shows the date the database
+pays on rather than re-dating delivered orders with whatever the setting is
+now. Apply it before deploying the app that calls it — without the function
+the ledger says "unavailable".
+
+## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261005100000_message_photos_server_normalized.sql` | shared dev project (2026-10-04, after PR #10 merged) + isolated local stack |
+| `20261005101000_guest_orders_unproven_buyers.sql` | shared dev project (2026-10-04, after PR #10 merged) + isolated local stack |
+| `20261005102000_unsuspend_refuses_pending_deletion.sql` | shared dev project (2026-10-04, after PR #10 merged) + isolated local stack |
+| `20261005110000_accepted_offer_collection.sql` | shared dev project (2026-10-04, after PR #10 merged) + isolated local stack |
+| `20261005110100_seller_carry_forward.sql` | shared dev project (2026-10-04, after PR #10 merged) + isolated local stack |
 
 Release readiness round four (`docs/plans/2026-10-release-r4-record.md`).
+Shared dev: applied twice each after main reached 57995c1 and the dev server
+was running it. The five replaced functions were backed up to
+`~/drvn-db-backups/pre-20261005-r4-functions.sql`; their live bodies matched
+the pre-round-four repository definitions apart from the lines these
+migrations replace. Afterwards: carry-forward objects are service-role only,
+8 existing orders were recorded as having unproven buyers, and browser
+uploads into `message-photos` are refused.
 
 - `20261005100000`: client uploads into the `message-photos` bucket are
   refused; message photos go through the server re-encode. Apply with the
@@ -92,7 +125,7 @@ Release readiness round four (`docs/plans/2026-10-release-r4-record.md`).
 | `20261004131000_admin_money_window.sql` | shared dev project + isolated local stack, 2026-10-04 |
 | `20261004140000_delivery_starts_payout_clock.sql` | shared dev project + isolated local stack, 2026-10-04 |
 | `20261004150000_listing_import_sweep_schedule.sql` | shared dev project + isolated local stack, 2026-10-04 |
-| `20261004160000_car_vin_private.sql` | isolated local stack; shared dev **after** the app that reads cars by named columns is merged |
+| `20261004160000_car_vin_private.sql` | shared dev project (2026-10-04, after PR #8 merged) + isolated local stack |
 
 Release readiness round three (`docs/plans/2026-10-release-r3-record.md`).
 
