@@ -2,7 +2,7 @@
 # A disposable Postgres with every migration applied and the volume seed
 # loaded. THROWAWAY ONLY: it deletes and recreates its own container.
 #   PARTS=2000000 bash scripts/perf/fresh-db.sh
-#   UPTO=20261010100000 ...   stop after that migration (a "before" database)
+#   UPTO=20261010100100 ...   stop after that migration (a "before" database)
 # Postgres 17 (supabase/config.toml's major_version) on 127.0.0.1:55441, with
 # settings sized for a 4 GB database server: production-shaped plans, not
 # laptop defaults.

@@ -54,9 +54,31 @@ describe("summariseCarry", () => {
     expect(orderCarry(carry, "b").carriedCents).toBe(0);
   });
 
-  it("keeps a credit beyond what's owed as a credit, not a payout", () => {
+  it("shows a credit beyond what's owed until its payout opens", () => {
     const carry = summariseCarry([entry("late_adjustment", 250, "a", 1)]);
     expect(carry).toMatchObject({ owedCents: 0, creditCents: 250 });
+  });
+
+  it("takes a paid-out credit off the balance, and puts a cancelled payout back", () => {
+    const paid = summariseCarry([
+      entry("late_adjustment", 250, "a", 1),
+      entry("paid_out", -250, null, 2),
+    ]);
+    expect(paid).toMatchObject({ owedCents: 0, creditCents: 0 });
+    // The credit was paid to the seller, not used up: a later charge is owed.
+    const thenCharged = summariseCarry([
+      entry("late_adjustment", 250, "a", 1),
+      entry("paid_out", -250, null, 2),
+      entry("late_adjustment", -100, "b", 4),
+    ]);
+    expect(thenCharged).toMatchObject({ owedCents: 100, creditCents: 0 });
+    expect(orderCarry(thenCharged, "b").settled).toBe(false);
+    const cancelled = summariseCarry([
+      entry("late_adjustment", 250, "a", 1),
+      entry("paid_out", -250, null, 2),
+      entry("paid_out_reversed", 250, null, 3),
+    ]);
+    expect(cancelled).toMatchObject({ owedCents: 0, creditCents: 250 });
   });
 
   it("answers an order with no entries as settled and empty", () => {

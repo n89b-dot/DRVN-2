@@ -236,7 +236,7 @@ function parsePage(value: string | undefined): number {
  *
  * `searchEntry`: a text search asked through `marketplace_browse_rows` is
  * answered by checking every active part against the words. The search entry
- * point (migration 20261010100000) starts from the parts the words matched
+ * point (migration 20261010100100) starts from the parts the words matched
  * and applies the same rules — same rows, a fraction of the work. Pages use
  * it; anything else keeps the original function. */
 export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: ListingFilters, workerViewer?: string, options: { searchEntry?: boolean; count?: boolean } = {}) {

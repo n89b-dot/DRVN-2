@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { BeforeAfter, Media } from "@/components/ui";
+import { BeforeAfter, ConsentVideo, Media } from "@/components/ui";
 import {
   MOD_ACTIONS,
   PERFORMANCE_KINDS,
@@ -10,7 +10,8 @@ import {
 /**
  * ActivityBlocksView — the one renderer for DRVN's activity document model
  * (all versions; feed it normalizeBlocks output). Server-renderable; the only
- * client island inside is the BeforeAfter slider. Used by the public post
+ * client islands inside are the BeforeAfter slider and the click-to-load
+ * video (ConsentVideo). Used by the public post
  * page and anywhere else a post body renders — the composer previews through
  * the same idioms, so published output never surprises the author.
  */
@@ -64,14 +65,9 @@ export function ActivityBlocksView({
             );
           case "embed":
             return (
-              <iframe
-                key={index}
-                src={`https://www.youtube-nocookie.com/embed/${block.videoId}`}
-                title="Embedded video"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="aspect-video w-full rounded-r"
-              />
+              // Click to load: an iframe would contact YouTube on view,
+              // before the visitor has chosen to (ConsentVideo).
+              <ConsentVideo key={index} videoId={block.videoId} title={title} />
             );
           case "divider":
             return (

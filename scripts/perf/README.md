@@ -10,7 +10,7 @@ engine but localhost.
 #    updates follow from it — see the top of seed-volume.sql); UPTO stops the
 #    migrations early for a "before" database.
 PARTS=2000000 bash scripts/perf/fresh-db.sh                        # :55441, PostgREST :55442
-UPTO=20261010100000 PARTS=200000 NAME=drvn-scale-200k PORT=55443 bash scripts/perf/fresh-db.sh
+UPTO=20261010100100 PARTS=200000 NAME=drvn-scale-200k PORT=55443 bash scripts/perf/fresh-db.sh
 
 # 2. Timings through PostgREST, as a signed-out visitor and as a member with a
 #    garage — the number that matters. MODE=after sends the requests the app

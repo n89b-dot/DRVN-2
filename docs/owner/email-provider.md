@@ -116,16 +116,24 @@ In the staging (then production) project:
 
 ## 5. How each link works
 
-Checked against the code on 4 October 2026. "PKCE" means the link only signs
-you in in the browser that started the flow, because the SSR client keeps a
-verifier cookie there (`@supabase/ssr`, `flowType: "pkce"`).
+Checked against the code on 4 October 2026; signup and reset moved to token
+links on 8 October. Every link except the email change lands on `/confirm`
+with a token hash. `/confirm` shows a button, and pressing it verifies the
+token (`src/app/(auth)/confirm/route.ts`), so the email can be opened in any
+browser or on any device, and a mail scanner that only fetches the link does
+not use it up.
 
 | Email | Sent by | Link | Lands on |
 |---|---|---|---|
-| Confirm signup (member) | `signUp` in `src/app/(auth)/actions.ts` | `{{ .ConfirmationURL }}` → Supabase verify → `/callback?code=…` | `/callback` exchanges the code (PKCE). In another browser the address is still confirmed, and the member lands on `/login` |
-| Reset password | `resetPasswordForEmail`, same file | `{{ .ConfirmationURL }}` → `/callback?next=/login/reset&code=…` | PKCE: must be opened in the browser that asked. The email says so |
+| Confirm signup (member) | `signUp` in `src/app/(auth)/actions.ts` | `{{ .SiteURL }}/confirm?token_hash=…&type=email&flow=signup&redirect_to={{ .RedirectTo }}` | `/confirm` → signed in → onboarding for a new account, then the page they were on (taken from `redirect_to`'s `next`, same-origin paths only) |
+| Reset password | `resetPasswordForEmail`, same file | `{{ .SiteURL }}/confirm?token_hash=…&type=recovery` | `/confirm` → `/login/reset` with a recovery session |
 | Change email | `updateUser({ email })` in `src/app/(product)/settings/account-actions.ts` | `{{ .ConfirmationURL }}`, sent to both old and new address | No redirect is passed, so it lands on the Site URL. The change applies once both links are opened |
-| Guest order access | `signInWithOtp` in `deliverOrderAccessLink` | `{{ .SiteURL }}/confirm?token_hash=…&type=…&next=%2Forders` | `/confirm` shows a button; the POST verifies the token (`src/app/(auth)/confirm/route.ts`) |
+| Guest order access | `signInWithOtp` in `deliverOrderAccessLink` | `{{ .SiteURL }}/confirm?token_hash=…&type=…&next=%2Forders` | `/confirm` → `/orders` |
+| Guest auto-confirm warning | the transfers job (`src/lib/auto-confirm-email.ts`) | the guest order access email, with a paragraph giving the date | `/confirm` → `/orders` |
+
+The templates must be the ones in `supabase/templates/`. With Supabase's
+default templates (`{{ .ConfirmationURL }}`) signup and reset links go back to
+working only in the browser that asked.
 
 ### Known gap: guest order links with Confirm email on
 
@@ -140,13 +148,9 @@ inferred from Supabase Auth's (GoTrue) magic-link handler, not observed on a
 hosted project. Confirm it with the staging test in §6.
 
 So `confirm-signup.html` has a branch for `{{ if .Data.drvn_guest }}` that
-writes the order-access link. That link has to use `type=email`: a signup
-token is not a magic-link token, and verifying it as `magiclink` fails.
-`/confirm` currently accepts only `type=magiclink`, so **this link fails
-until `/confirm` also accepts `type=email`**. The change is small: allow
-`email` in the GET check and pass the type through to `verifyOtp` in the POST.
-It belongs to the engineer who owns `src/`. Until then a guest on staging
-gets an email whose link lands on `/login?message=auth-error`.
+writes the order-access link. That link uses `type=email`: a signup token is
+not a magic-link token, and verifying it as `magiclink` fails. `/confirm`
+accepts both.
 
 Side effect to know about: someone who signs up normally with an address
 that already has an unconfirmed guest account also gets the guest branch.
@@ -161,18 +165,18 @@ subject, that the link's host is the site origin, and that it works once.
 - [ ] **[OWNER]** Domain shows verified at the provider; DKIM, return-path and
       DMARC records resolve (`dig TXT _dmarc.<domain>`, `dig TXT <selector>._domainkey.<domain>`).
 - [ ] **[OWNER]** Signup confirm: sign up with an invitation link. Email
-      arrives within a minute. Open it in the **same** browser → lands
-      signed in (onboarding for a new account). Then repeat with a second
-      address and open the link on your phone → address confirmed, lands on
-      `/login`, signing in works.
-- [ ] **[OWNER]** Password reset: `/login` → forgot password. Open in the
-      same browser → `/login/reset` → set a new password → signed in. Open
-      the same link again → error, as expected.
+      arrives within a minute. Open it in the **same** browser → "Confirm
+      and continue" → signed in (onboarding for a new account). Then repeat
+      with a second address and open the link on your phone → the same:
+      signed in on the phone.
+- [ ] **[OWNER]** Password reset: `/login` → forgot password. Open the
+      email on a different device from the one you asked on → "Choose a new
+      password" → `/login/reset` → set a new password → signed in. Open the
+      same link again → error, as expected.
 - [ ] **[OWNER]** Guest order link: in a private window, buy something as a
       guest with a fresh address. Within ten minutes (the receipt worker runs
       in the transfers pass) an email arrives. Open it → "Continue to orders"
-      → `/orders` shows the order. **Expected to fail until `/confirm`
-      accepts `type=email`** (§5). Record which template arrived (subject
+      → `/orders` shows the order. Record which template arrived (subject
       "Confirm your email for DRVN" or "Your DRVN order access link").
 - [ ] **[OWNER]** Magic link proper: buy as a guest again with the address
       from the previous test, after it is confirmed. Note: a confirmed

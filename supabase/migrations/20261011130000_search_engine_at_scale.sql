@@ -18,7 +18,7 @@
 --    typos are the engine's job, and that test was the slow part.
 --
 --    marketplace_search_capped_ids is SECURITY DEFINER for the same reason
---    as search_listing_ids (20261010100000): under row security a text
+--    as search_listing_ids (20261010100100): under row security a text
 --    match cannot use the word index. It applies the signed-out read rule
 --    itself (for sale, seller not suspended) and returns ids only; the page
 --    re-reads them under the caller's row security. THE EXPOSURE: ids of
@@ -40,7 +40,7 @@
 --
 -- Guard: supabase/tests/search_engine_guard.sql.
 
-do $$ begin perform show_trgm('drvn'); end $$; -- see 20261010100000
+do $$ begin perform show_trgm('drvn'); end $$; -- see 20261010100100
 
 -- ── 1. Capped Postgres search ────────────────────────────────────────────
 

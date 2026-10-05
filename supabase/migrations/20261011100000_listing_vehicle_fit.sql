@@ -225,7 +225,7 @@ create trigger listing_vehicle_fit_car
 
 -- ── Browse and search read the rows ─────────────────────────────────────
 --
--- Restated from 20261010100000 with two clauses changed: the vehicle filter
+-- Restated from 20261010100100 with two clauses changed: the vehicle filter
 -- and "fits my garage" ask listing_vehicle_fit instead of running
 -- marketplace_match_evidence per part. The rule is the same, written over
 -- the rows:
