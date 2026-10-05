@@ -14,6 +14,7 @@ declare
     'is_admin()',                         -- the caller's own admin state
     'is_suspended(uuid)',                 -- used by public read policies
     'listing_watch_counts(uuid[])',       -- counts only, for listings the caller can see (R2-09)
+    'marketplace_search_capped_ids(text,text,text,text,text,text,integer,integer,integer)', -- the newest 1,001 ids marketplace_search_ids would give, within filters a visitor can apply; callers re-read under RLS (20261011130000)
     'marketplace_search_ids(text)',       -- ids of active parts of visible sellers matching a search; callers re-read under RLS
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
