@@ -1065,6 +1065,41 @@ export type Database = {
           },
         ]
       }
+      delivery_auto_confirmations: {
+        Row: {
+          after_days: number
+          confirm_at: string
+          confirmed_at: string | null
+          last_error: string | null
+          order_id: string
+          reminded_at: string
+        }
+        Insert: {
+          after_days: number
+          confirm_at: string
+          confirmed_at?: string | null
+          last_error?: string | null
+          order_id: string
+          reminded_at?: string
+        }
+        Update: {
+          after_days?: number
+          confirm_at?: string
+          confirmed_at?: string | null
+          last_error?: string | null
+          order_id?: string
+          reminded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_auto_confirmations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispute_evidence: {
         Row: {
           created_at: string
@@ -3660,6 +3695,33 @@ export type Database = {
           },
         ]
       }
+      settlement_settings: {
+        Row: {
+          auto_confirm_after_days: number | null
+          auto_confirm_notice_days: number
+          id: boolean
+          payout_hold_days: number
+          payout_hold_mode: string
+          updated_at: string
+        }
+        Insert: {
+          auto_confirm_after_days?: number | null
+          auto_confirm_notice_days?: number
+          id?: boolean
+          payout_hold_days?: number
+          payout_hold_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_confirm_after_days?: number | null
+          auto_confirm_notice_days?: number
+          id?: boolean
+          payout_hold_days?: number
+          payout_hold_mode?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shipment_events: {
         Row: {
           city: string | null
@@ -4264,6 +4326,11 @@ export type Database = {
       }
       assert_admin_actor: { Args: { p_actor: string }; Returns: undefined }
       assert_deletion_ready: { Args: { p_user: string }; Returns: undefined }
+      auto_confirm_delivery: { Args: { p_order: string }; Returns: boolean }
+      auto_confirm_untracked_deliveries: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       become_shop: { Args: never; Returns: Json }
       begin_admin_external_operation: {
         Args: {
@@ -4476,6 +4543,10 @@ export type Database = {
       create_shop_policy_return: {
         Args: { p_buyer: string; p_order: string; p_reason?: string }
         Returns: Json
+      }
+      delivery_auto_confirm_eligible: {
+        Args: { p_order: string }
+        Returns: boolean
       }
       discard_listing_creation: {
         Args: { p_payload_hash: string; p_request: string }
@@ -4937,6 +5008,10 @@ export type Database = {
         Args: { p_job: string; p_lease: string; p_user: string }
         Returns: undefined
       }
+      payout_available_at: {
+        Args: { p_delivered_at: string; p_order: string }
+        Returns: string
+      }
       pickup_redeem: {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }
         Returns: Json
@@ -5290,6 +5365,13 @@ export type Database = {
         }[]
       }
       seller_open_questions: { Args: { p_seller: string }; Returns: number }
+      seller_payout_dates: {
+        Args: { p_orders: string[] }
+        Returns: {
+          available_at: string
+          order_id: string
+        }[]
+      }
       seller_register_tally: {
         Args: { p_seller: string }
         Returns: {

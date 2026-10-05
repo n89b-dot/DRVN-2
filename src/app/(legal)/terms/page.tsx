@@ -8,8 +8,9 @@ import {
 } from "@/features/commerce/disputes";
 import { RETURN_SHIP_DAYS, SELLER_INSPECT_HOURS } from "@/lib/domain/return-policy";
 import { PLATFORM_FEE_BPS } from "@/lib/payments/fee";
-import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
+import { payoutHoldPhrase, readAutoConfirmDays, readPayoutHoldPolicy } from "@/lib/payments/payout-hold";
 import { paymentsAreLive } from "@/lib/payments/provider";
+import { createPublicClient } from "@/lib/supabase/public";
 
 export const metadata = {
   title: "Terms of Service - DRVN",
@@ -17,7 +18,7 @@ export const metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "3 October 2026";
+const UPDATED = "4 October 2026";
 
 /**
  * Plain-language terms covering what DRVN actually does today.
@@ -29,13 +30,26 @@ const UPDATED = "3 October 2026";
  * docs/legal-review-checklist.md.
  *
  * Every number below is imported from the constant the code enforces — fee
- * (src/lib/payments/fee.ts), payout hold (src/lib/payments/ledger.ts), dispute
- * clocks (src/features/commerce/disputes.ts), return clocks
- * (src/lib/domain/return-policy.ts) — so the terms cannot drift from what
+ * (src/lib/payments/fee.ts), dispute clocks (src/features/commerce/disputes.ts),
+ * return clocks (src/lib/domain/return-policy.ts) — or read from the setting
+ * the database applies: the payout hold (settlement_settings, see
+ * src/lib/payments/payout-hold.ts) — so the terms cannot drift from what
  * actually happens. Durations that live only in SQL are noted where used.
  */
-export default function TermsPage() {
+export default async function TermsPage() {
   const feePercent = PLATFORM_FEE_BPS / 100;
+  // Cached like the landing page's reads; an owner's change shows within
+  // five minutes. If the setting can't be read the sentence names no number
+  // rather than a possibly wrong one.
+  const settings = createPublicClient({ revalidate: 300, tags: ["settlement-settings"] });
+  const [hold, autoConfirmDays] = await Promise.all([
+    readPayoutHoldPolicy(settings),
+    readAutoConfirmDays(settings),
+  ]);
+  const holdText = hold ? payoutHoldPhrase(hold) : "a clearing period";
+  // Off (null) says nothing; unreadable still states the rule, without a number.
+  const autoConfirmText =
+    autoConfirmDays === null ? null : autoConfirmDays === undefined ? "a set period" : `${autoConfirmDays} days`;
 
   return (
     <>
@@ -152,10 +166,20 @@ export default function TermsPage() {
         </p>
         <p>
           Sellers are paid through Stripe Connect, into a Stripe account the seller sets up and
-          verifies with Stripe. A sale is paid out {CLEARING_HOLD_DAYS} days after the buyer
-          confirms the order arrived, unless a problem has been reported on it — then it waits for
-          the outcome. Stripe then pays the seller&apos;s bank on its own schedule.
+          verifies with Stripe. A sale is paid out {holdText} after the order
+          is delivered — when the buyer confirms it arrived, when the carrier reports it
+          delivered, or when it is handed over in person — unless a problem has been reported on
+          it; then it waits for the outcome. Stripe then pays the seller&apos;s bank on its own
+          schedule.
         </p>
+        {autoConfirmText && (
+          <p>
+            A parcel sent without carrier tracking can&apos;t be reported delivered by a carrier.
+            If the buyer has neither confirmed it arrived nor reported a problem, it is treated as
+            delivered {autoConfirmText} after dispatch. DRVN tells the buyer before that happens,
+            and the buyer can still report a problem afterwards in the usual window.
+          </p>
+        )}
         <p>
           When an order is refunded, in whole or part, DRVN&apos;s fee on it is refunded in the
           same proportion, and so is the seller&apos;s share. If the seller has already been

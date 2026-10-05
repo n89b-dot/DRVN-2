@@ -85,6 +85,9 @@ begin
   raise notice 'PASS: a new RMA is allowed once the first is terminal';
 
   -- ---------- 3. pickup redemption (0054) ----------
+  -- The clock mechanism under test is the fixed 7-day hold; pin it so the
+  -- deployed settlement decision (20261006100200) doesn't change this check.
+  update public.settlement_settings set payout_hold_mode = 'fixed', payout_hold_days = 7 where id;
   update public.orders set is_collection = true where id = v_order;
   update public.orders set status = 'paid' where id = v_order;
   insert into public.pickup_confirmations (order_id, token_hash, code_hash, expires_at)

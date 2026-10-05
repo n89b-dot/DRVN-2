@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
-import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -93,10 +92,11 @@ export async function markReceived(
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };
 
+  // The clearing hold is the owner's setting, applied by the database
+  // (settlement_settings, 20261006100000) — so no hold is passed from here.
   const { data, error } = await admin.rpc("mark_order_received", {
     p_order: orderId,
     p_actor: user.id,
-    p_hold_days: CLEARING_HOLD_DAYS,
   });
   if (error || !data) {
     reportError("[receipt] atomic transition failed", { orderId, error });

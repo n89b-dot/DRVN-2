@@ -40,10 +40,11 @@ payments or public launch; none of them has been decided in code.
       payment processor". Counsel to confirm how DRVN's role is described
       (commercial agent? payment collection on the seller's behalf?) and any
       regulatory consequence.
-- [ ] **Holding funds.** Sellers are paid 7 days (`CLEARING_HOLD_DAYS`) after
-      the buyer confirms receipt. The old draft said DRVN "is not an escrow
-      service"; that sentence was removed because funds are in fact held.
-      Confirm wording.
+- [ ] **Holding funds.** Sellers are paid 7 days after delivery by default
+      (the owner's `settlement_settings` hold, `docs/decisions/payout-hold.md`;
+      the terms quote the live value). The old draft said DRVN "is not an
+      escrow service"; that sentence was removed because funds are in fact
+      held. Confirm wording.
 - [ ] **Tax.** No sales tax / VAT is calculated or collected anywhere
       (no Stripe Tax). Listing copy says tax is "confirmed at checkout".
       Decide the tax position and who is responsible.
@@ -111,23 +112,26 @@ payments or public launch; none of them has been decided in code.
 These are code issues found while writing the drafts. The pages are worded
 to stay true today; fixing them may let the wording get simpler.
 
-- [ ] **VIN readable through the API.** The privacy page says a VIN "is not
-      shown on its public pages". The `cars` read policy and column grants let
-      anyone read `vin` on a public car through the Supabase API. Fix
-      (column-level revoke or a view) before launch, or change the wording.
-- [ ] **Message photo metadata.** Message photos under 1.5 MB that don't need
-      resizing keep their EXIF (possibly GPS). The page discloses it; a
-      server-side re-encode (as public photos get) would remove the caveat.
-- [ ] **Pickup orders are never paid out.** Payout clearing starts only when
-      the buyer marks an order received, which collection orders can't do;
-      Pickup Pass redemption sets the order delivered without starting the
-      7-day clock. The terms say "after the buyer confirms the order arrived".
-- [ ] **No auto-complete.** A shipped order the buyer never confirms is never
-      paid out. Decide the rule (e.g. auto-confirm N days after tracked
-      delivery) and state it.
-- [ ] **Connect `account.updated`.** Seller payout status changes made at
-      Stripe after onboarding aren't picked up (single webhook secret; see
-      `docs/production-runbook.md` §4).
+- [x] **VIN readable through the API.** Fixed in round three
+      (`20261004160000_car_vin_private.sql`): the VIN column is no longer
+      readable by clients; only the owner reads it, through `my_car_vin()`.
+- [x] **Message photo metadata.** Fixed in round four
+      (`20261005100000_message_photos_server_normalized.sql`): new message
+      photos are re-encoded on the server. Photos sent before that keep
+      whatever metadata they had — none exist in production; confirm before
+      relying on the privacy page's wording for an environment with history.
+- [x] **Pickup orders are never paid out.** Fixed in round three
+      (`20261004120000`, `20261004140000`): a pickup handover and a carrier
+      delivery scan both start the payout clock. The terms now say "after the
+      order is delivered" and name the three ways that happens.
+- [x] **No auto-complete.** Decided 4 October 2026
+      (`docs/decisions/untracked-auto-confirm.md`): an untracked shipment the
+      buyer never confirms is treated as delivered after 21 days, with a
+      warning first. Terms §6 states it from the live setting. **For counsel:
+      confirm the wording and that an in-app warning is sufficient notice.**
+- [x] **Connect `account.updated`.** Fixed in round three: the Connect
+      webhook has its own secret and updates payout status
+      (`docs/production-runbook.md` §4).
 
 ## Before publishing
 
