@@ -1,10 +1,9 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
-
-import { unstable_rethrow } from "next/navigation";
+import { useId, useState } from "react";
 
 import { submitReview, type CommerceState } from "@/features/commerce/actions";
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 const MAX_LEN = 1000;
 const MIN_LEN = 5;
@@ -17,28 +16,13 @@ export function ReviewForm({
   orderId: string;
   revieweeName: string;
 }) {
-  const [state, setState] = useState<CommerceState>({});
-  const [pending, setPending] = useState(false);
-  const inFlight = useRef(false);
+  const [state, post, pending] = useRecoverableAction<CommerceState>(
+    submitReview,
+    "Couldn't confirm your review was posted. Your rating and text are still here; retry with the same review.",
+  );
   const [rating, setRating] = useState<number | null>(null);
   const [body, setBody] = useState("");
   const legendId = useId();
-
-  async function post(data: FormData) {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setPending(true);
-    setState({});
-    try {
-      setState(await submitReview({}, data));
-    } catch (error) {
-      unstable_rethrow(error);
-      setState({ error: "Couldn't confirm your review was posted. Your rating and text are still here; retry with the same review." });
-    } finally {
-      inFlight.current = false;
-      setPending(false);
-    }
-  }
 
   if (state.ok) {
     return <span role="status" className="chip chip--ok">Review posted — thanks</span>;

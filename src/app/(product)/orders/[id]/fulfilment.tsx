@@ -1,7 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { unstable_rethrow } from "next/navigation";
+import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui";
 import {
@@ -10,33 +9,12 @@ import {
   requestCancellation,
   type CommerceState,
 } from "@/features/commerce/actions";
-
-function useRecoverableOrderAction(action: (previous: CommerceState, data: FormData) => Promise<CommerceState>) {
-  const [state, setState] = useState<CommerceState>({});
-  const [pending, setPending] = useState(false);
-  const submitting = useRef(false);
-  async function submit(data: FormData) {
-    if (submitting.current) return;
-    submitting.current = true;
-    setPending(true);
-    setState({});
-    try {
-      setState(await action({}, data));
-    } catch (error) {
-      unstable_rethrow(error);
-      setState({ error: "Couldn't confirm the update. Your details are still here; retry to check the saved result." });
-    } finally {
-      submitting.current = false;
-      setPending(false);
-    }
-  }
-  return [state, submit, pending] as const;
-}
+import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
 
 /** Seller dispatch. Tracking is required for posted goods — without it the
  *  buyer has no visibility, which is the entire point of the step. */
 export function DispatchForm({ orderId, isCollection }: { orderId: string; isCollection: boolean }) {
-  const [state, action, pending] = useRecoverableOrderAction(markShipped);
+  const [state, action, pending] = useRecoverableAction<CommerceState>(markShipped);
   const [carrier, setCarrier] = useState("");
   const [tracking, setTracking] = useState("");
   const label = isCollection ? "Mark ready for collection" : "Mark dispatched";
@@ -79,7 +57,7 @@ export function DispatchForm({ orderId, isCollection }: { orderId: string; isCol
 }
 
 export function ReceivedButton({ orderId }: { orderId: string }) {
-  const [state, action, pending] = useRecoverableOrderAction(markReceived);
+  const [state, action, pending] = useRecoverableAction<CommerceState>(markReceived);
 
   return (
     <div className="grid gap-2">
@@ -105,7 +83,7 @@ export function ReceivedButton({ orderId }: { orderId: string }) {
 
 export function CancelOrder({ orderId }: { orderId: string }) {
   const [reason, setReason] = useState("");
-  const [state, action, pending] = useRecoverableOrderAction(requestCancellation);
+  const [state, action, pending] = useRecoverableAction<CommerceState>(requestCancellation);
 
   return (
     <div className="grid gap-2">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { unstable_rethrow, useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 
 import { Button, Dialog, TextField } from "@/components/ui";
 import type { AdminActionState } from "@/lib/admin/actions";
@@ -81,30 +81,36 @@ export function ActionDialog({
     };
   }, [state]);
 
-  async function submit(formData: FormData) {
+  // A transition, so a redirect the action already followed (MFA step-up)
+  // lands in Next's redirect boundary instead of a second navigation.
+  const [, startTransition] = useTransition();
+
+  function submit(formData: FormData) {
     if (inFlight.current) return;
     inFlight.current = true;
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setState(null);
     setPending(true);
-    try {
-      const result = await action(state, formData);
-      setState(result);
-      if (result?.ok) {
-        announceAdminAction(result.ok);
-        router.refresh();
+    startTransition(async () => {
+      try {
+        const result = await action(state, formData);
+        setState(result);
+        if (result?.ok) {
+          announceAdminAction(result.ok);
+          router.refresh();
+        }
+      } catch (error) {
+        unstable_rethrow(error);
+        setUncertain(true);
+        setState({
+          error:
+            "We couldn't confirm whether this ran, so it isn't offered again here: reload the console before trying again. A provider action (refund, transfer) whose outcome stays unknown is listed under Audit log → Needs reconciliation.",
+        });
+      } finally {
+        inFlight.current = false;
+        setPending(false);
       }
-    } catch (error) {
-      unstable_rethrow(error);
-      setUncertain(true);
-      setState({
-        error:
-          "We couldn't confirm whether this ran, so it isn't offered again here: reload the console before trying again. A provider action (refund, transfer) whose outcome stays unknown is listed under Audit log → Needs reconciliation.",
-      });
-    } finally {
-      inFlight.current = false;
-      setPending(false);
-    }
+    });
   }
 
   return (
