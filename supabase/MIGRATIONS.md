@@ -8,6 +8,7 @@
 | `20261007100100_unsuspend_refuses_requested_deletion.sql` | not yet |
 | `20261007100200_refund_inflight_excludes_settled.sql` | not yet |
 | `20261007100300_listing_edit_record_only_by_edit.sql` | not yet |
+| `20261007100400_carry_after_cancelled_payout.sql` | not yet |
 | `20261004155900_my_car_vin_first.sql` | not yet (no-op where `20261004160000` has run) |
 
 `20261007100000` restates `settle_refund_operation` with one change: a refund
@@ -25,6 +26,12 @@ suspended profile after the job completes).
 flight. Guard: `refund_inflight_guard.sql`.
 `20261007100300` restates `record_listing_edit` and `save_listing_edit`: the
 record function refuses unless called by the edit, in its transaction.
+`20261007100400` restates `settle_refund_operation`,
+`carry_on_transfer_intent_status` and `seller_carry_available_cents`: a refund
+after a payout was cancelled for label costs adds what it uncovers to what
+the seller owes, and a carry amount left on a transfer that never reached
+dispatch no longer reserves the debt. Guard:
+`carry_after_cancelled_payout_guard.sql`.
 
 ## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (isolated local stack only)
 
