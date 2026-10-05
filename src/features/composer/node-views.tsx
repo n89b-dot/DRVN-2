@@ -4,7 +4,7 @@ import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-import { BeforeAfter, Media } from "@/components/ui";
+import { BeforeAfter, ConsentVideo, Media } from "@/components/ui";
 import { MOD_ACTIONS, PERFORMANCE_KINDS, youtubeId } from "@/lib/activity-blocks";
 import { useUploadQueue } from "@/lib/use-upload-queue";
 import { cx } from "@/lib/format";
@@ -203,14 +203,7 @@ export function YoutubeView(props: NodeViewProps) {
       {url && !videoId && (
         <p className="field__err !flex mt-2">That doesn&rsquo;t look like a YouTube link.</p>
       )}
-      {videoId && (
-        <iframe
-          src={`https://www.youtube-nocookie.com/embed/${videoId}`}
-          title="Video preview"
-          className="mt-3 aspect-video w-full rounded-ctl"
-          allowFullScreen
-        />
-      )}
+      {videoId && <ConsentVideo videoId={videoId} title="Video preview" className="mt-3" />}
     </BlockShell>
   );
 }

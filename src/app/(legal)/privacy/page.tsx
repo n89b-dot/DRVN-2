@@ -181,6 +181,12 @@ export default function PrivacyPage() {
             <strong>Google</strong> — only if you choose to sign in with Google.
           </li>
           <li>
+            <strong>YouTube</strong> — a video in a post plays from YouTube (a Google service).
+            Nothing loads from YouTube until you press play on that video; when you do, YouTube
+            receives your network address and may set its own cookies, under Google&apos;s privacy
+            policy.
+          </li>
+          <li>
             <strong>Other members</strong> — what&apos;s public, plus what a transaction needs: a
             seller sees the delivery details of an order they sold, and both sides see the
             order, its messages and any dispute evidence.
