@@ -40,11 +40,22 @@ app with it: the old app keeps working (it calls with four arguments) but
 can't register a tracker first, so $1,000+ orders need a DRVN label until the
 new app is live. Guard: `payout_release_guard.sql`; three existing guards
 updated for the new deployed values.
+## October 8 — round five: guest auto-confirm warning email
+
+| File | Applied to |
+|---|---|
+| `20261008100200_auto_confirm_guest_email.sql` | shared dev, 2026-10-05 (applied twice) |
+
+Adds `emailed_at`, `email_attempts` and `email_last_error` to
+`delivery_auto_confirmations` (after `20261006100100`). The money worker's
+receipts pass emails a guest buyer the auto-confirm warning and records it
+there. Needs the templates in `supabase/templates/` on the project.
+
 ## October 8 — round five: export contract v5, carry-forward credit payouts
 
 | File | Applied to |
 |---|---|
-| `20261008100000_account_export_contract_v5.sql` | not yet |
+| `20261008100000_account_export_contract_v5.sql` | shared dev, 2026-10-05 (applied twice, with PR #15 merged) |
 | `20261008100100_seller_carry_payouts.sql` | shared dev, 2026-10-05 (applied twice) |
 
 `20261008100000` moves the account export to contract `2026-10-08.v5`

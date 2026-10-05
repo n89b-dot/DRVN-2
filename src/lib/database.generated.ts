@@ -1070,6 +1070,9 @@ export type Database = {
           after_days: number
           confirm_at: string
           confirmed_at: string | null
+          email_attempts: number
+          email_last_error: string | null
+          emailed_at: string | null
           last_error: string | null
           order_id: string
           reminded_at: string
@@ -1078,6 +1081,9 @@ export type Database = {
           after_days: number
           confirm_at: string
           confirmed_at?: string | null
+          email_attempts?: number
+          email_last_error?: string | null
+          emailed_at?: string | null
           last_error?: string | null
           order_id: string
           reminded_at?: string
@@ -1086,6 +1092,9 @@ export type Database = {
           after_days?: number
           confirm_at?: string
           confirmed_at?: string | null
+          email_attempts?: number
+          email_last_error?: string | null
+          emailed_at?: string | null
           last_error?: string | null
           order_id?: string
           reminded_at?: string
