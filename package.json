@@ -22,7 +22,7 @@
     "db:types": "node scripts/generate-database-types.mjs",
     "db:types:check": "node scripts/generate-database-types.mjs --check",
     "test:operations": "vitest run --config vitest.operations.config.ts",
-    "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs",
+    "test:monitor": "node --test scripts/check-worker-health.test.mjs scripts/release-candidate.test.mjs scripts/owner/stripe-webhooks.test.mjs scripts/owner/rotate-seed-password.test.mjs scripts/owner/stripe-negative-balances.test.mjs",
     "preview:build": "node scripts/build-interface-preview.mjs"
   },
   "dependencies": {

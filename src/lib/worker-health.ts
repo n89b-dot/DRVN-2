@@ -1,4 +1,4 @@
-export const WORKER_FAMILIES = ['expiries','captures','transfers','transferReconciliation','refunds','labelVoids','returns','disputes','alerts','receipts','analytics','search','deletions','savedSearches','media','listingImports'];
+export const WORKER_FAMILIES = ['expiries','captures','transfers','transferReconciliation','refunds','labelVoids','returns','disputes','alerts','receipts','analytics','search','deletions','savedSearches','media','listingImports','deliveryAutoConfirm'];
 type Family={family:string;stale:boolean;disabled?:boolean};
 type Queue={kind:string;status:string;overdue?:boolean;disabled?:boolean};
 export function evaluateWorkerHealth(value:unknown,config:{searchEnabled:boolean;analyticsEnabled:boolean}) {

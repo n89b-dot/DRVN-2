@@ -22,7 +22,8 @@ inferences* (potential fitment matches — never presented as verified).
   are conveniences, the database enforces), Auth, Storage. Generated/hand-kept
   types in `src/lib/database.types.ts`.
 - **Stripe** — PaymentIntents (one per basket), Connect transfers to sellers
-  on delivery + 7-day hold, refunds via a durable state machine. Separate
+  soon after delivery (`settlement_settings`; `docs/decisions/payout-hold.md`),
+  refunds via a durable state machine. Separate
   charges and transfers; the platform account is merchant of record.
 - **Design system** — "Livesheet" (`docs/livesheet-inventory.md`; the
   stylesheet is split by recipe family in `src/app/styles/`, tokens in
@@ -36,8 +37,8 @@ inferences* (potential fitment matches — never presented as verified).
   the browser confirms the PaymentIntent; the webhook settles
   (`purchase_finalize`) and records a `transfer_intents` row per order.
   No money moves to sellers at payment time.
-- Transfers: pg_cron marks intents ready after delivery + clearing window
-  (0020); the transfer worker claims bounded, **leased** batches
+- Transfers: pg_cron marks intents ready once their release time
+  (`payout_release_at`, 20261009100000) has passed (0020); the transfer worker claims bounded, **leased** batches
   (`claim_transfer_intents`, FOR UPDATE SKIP LOCKED, stale-claim recovery)
   and creates Stripe transfers with reconcile-before-create (0026).
 - Refunds: every refund is a `refund_operations` state machine row

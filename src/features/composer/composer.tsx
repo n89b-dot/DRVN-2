@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { Button } from "@/components/ui";
 import { cx } from "@/lib/format";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { ACTIVITY_TITLE_MAX } from "@/lib/limits";
 import { blockMediaUrls, normalizeBlocks, type ActivityBlock } from "@/lib/activity-blocks";
 
@@ -129,6 +130,9 @@ export function BuildStoryComposer({
 }) {
   const isEdit = Boolean(postId);
   const router = useRouter();
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [title, setTitle] = useState(initialTitle);
   const [tagged, setTagged] = useState<string[]>(initialTagged);
   // Tags are sent only once they've been touched, so an edit that doesn't
@@ -487,6 +491,7 @@ export function BuildStoryComposer({
         className="bsc__title"
         placeholder="Title your update"
         maxLength={ACTIVITY_TITLE_MAX}
+        disabled={!ready}
         value={title}
         onChange={(event) => {
           const nextTitle = event.target.value;

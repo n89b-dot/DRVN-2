@@ -88,6 +88,8 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `order_shipped` | marketplace | `order_updates` | DB trigger | Your order shipped. |
 | `order_delivered` | marketplace | `order_updates` | DB trigger | Delivery confirmed. |
 | `order_disputed` | marketplace | `order_updates` | DB trigger | A dispute opened on an order. |
+| `receipt_due` | marketplace | always shown | DB trigger | Your untracked order will be marked delivered in a few days unless you confirm receipt or report a problem (database job, 20261006100100; only when the owner turns auto-confirm on). Never muted: it is the buyer's notice. |
+| `receipt_auto_confirmed` | marketplace | always shown | DB trigger | No problem was reported in time, so your order was marked delivered (database job, 20261006100100). |
 | `dispute_resolved` | marketplace | `order_updates` | DB trigger | A dispute was resolved. |
 | `dispute_escalated` | marketplace | `order_updates` | DB trigger | A dispute was escalated to support. |
 | `report_reviewed` | engagement | always shown | app (deliver.ts) | A report you filed was reviewed (marketplace section for listing/user reports). |

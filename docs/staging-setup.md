@@ -15,7 +15,8 @@ Who does each step:
   email or the repo.
 
 Details live in `docs/production-runbook.md` (the same steps for
-production); this file is the order to do them in for staging. Record every
+production); this file is the order to do them in for staging. The owner's
+whole pre-beta list, in order, is `docs/owner/README.md`. Record every
 value you create in the password manager entry "DRVN staging".
 
 ---
@@ -126,13 +127,11 @@ Emails:
    rate-limited and not for real recipients. Enter host, port, user,
    password and sender under Authentication → SMTP. Record the provider's
    name — the privacy policy must name it (`docs/legal-review-checklist.md`).
-7. Templates. The repo's only custom template is the magic link
-   (`supabase/templates/magic-link.html`, subject "Your DRVN order access
-   link"; `supabase/config.toml` wires it locally). Paste it into
-   **Magic Link** — it links to `{{ .SiteURL }}/confirm?token_hash=…` and is
-   used only for guest order access. Confirm signup, Reset password and
-   Change email can keep the default `{{ .ConfirmationURL }}` body (the app
-   passes `/callback` as the redirect); restyle them if wanted.
+7. Templates. Paste the four files in `supabase/templates/` (Confirm signup,
+   Magic Link, Change Email Address, Reset Password) with their subjects;
+   `supabase/config.toml` wires the same files locally. The table, provider
+   setup, and a known gap in guest order links with Confirm email on are in
+   `docs/owner/email-provider.md`.
 
 ## 4. Hosting project [OWNER creates, ENGINEER configures]
 
@@ -174,6 +173,9 @@ declares `paymentMode: "stripe-test"`. Deploy; the build must start without a
 invalid variable at once.
 
 ## 5. Stripe, test mode [OWNER account, ENGINEER configures]
+
+`scripts/owner/stripe-webhooks.mjs` creates or updates both endpoints below
+(dry run by default; usage in `docs/owner/README.md`). By hand:
 
 1. Developers → Webhooks → add endpoint, **events on your account**:
    `https://<staging-origin>/api/stripe/webhook`, events exactly:
@@ -265,6 +267,8 @@ on a separate host (`docs/remediation-release-and-monitoring.md`).
    `release-gate` can never pass.
 3. Apply the `protect-main` ruleset from runbook §8: pull requests required,
    **`release-gate` the only required status check**, force pushes blocked.
+   `scripts/owner/branch-protection.sh` does it and verifies it
+   (`docs/owner/branch-protection.md`).
 4. If the host deploys straight from `main`, also require that check before
    promotion (a protected branch doesn't stop a deploy of an unchecked
    commit).

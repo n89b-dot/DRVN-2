@@ -3,7 +3,7 @@
 import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
-import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";
+import { readSettlementRisk } from "@/lib/payments/payout-hold";
 import { refundOrder } from "@/lib/payments/refunds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
@@ -36,11 +36,35 @@ export async function markShipped(
     return { error: "Add the carrier and tracking number." };
   }
 
+  // An order at or above the owner's threshold can only be dispatched with
+  // tracking DRVN follows (20261009100000). Register the carrier tracker
+  // first so the dispatch can carry it; the database decides, and a DRVN
+  // label with this tracking number counts too. Unreadable settings are
+  // treated as "required" — a tracker is cheap, a refused dispatch is not.
+  let tracker: { provider: string; ref: string } | null = null;
+  if (integratedShippingEnabled()) {
+    const [{ data: order }, risk] = await Promise.all([
+      admin.from("orders").select("status, total_cents").eq("id", orderId).maybeSingle(),
+      readSettlementRisk(admin),
+    ]);
+    const requiredFrom = risk ? risk.trackingRequiredFromCents : 0;
+    if (order?.status === "paid" && requiredFrom !== null && order.total_cents >= requiredFrom) {
+      try {
+        const provider = getShippingProvider();
+        const summary = await provider.createTracker({ trackingCode: tracking, carrier });
+        if (summary.trackerRef) tracker = { provider: provider.name, ref: summary.trackerRef };
+      } catch (trackerError) {
+        reportError("[dispatch] tracker registration before dispatch failed", { orderId, trackerError });
+      }
+    }
+  }
+
   const { data, error } = await admin.rpc("mark_order_dispatched", {
     p_order: orderId,
     p_actor: user.id,
     p_carrier: carrier,
     p_tracking: tracking,
+    ...(tracker ? { p_tracker_provider: tracker.provider, p_tracker_ref: tracker.ref } : {}),
   });
   if (error || !data) {
     reportError("[dispatch] atomic transition failed", { orderId, error });
@@ -93,10 +117,11 @@ export async function markReceived(
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };
 
+  // The clearing hold is the owner's setting, applied by the database
+  // (settlement_settings, 20261006100000) — so no hold is passed from here.
   const { data, error } = await admin.rpc("mark_order_received", {
     p_order: orderId,
     p_actor: user.id,
-    p_hold_days: CLEARING_HOLD_DAYS,
   });
   if (error || !data) {
     reportError("[receipt] atomic transition failed", { orderId, error });

@@ -15,6 +15,9 @@ declare
  result jsonb;
  rejected boolean;
 begin
+ -- The fixed 7-day clearing rule is what this guard checks; pin it so the
+ -- deployed settlement decision (20261006100200) doesn't change the check.
+ update public.settlement_settings set payout_hold_mode='fixed',payout_hold_days=7 where id;
  insert into auth.users(id,email) values
   (seller,'fulfillment-seller@drvn.test'),
   (buyer,'fulfillment-buyer@drvn.test'),
@@ -224,7 +227,7 @@ end $$;
 
 do $$
 begin
- if has_function_privilege('authenticated','public.mark_order_dispatched(uuid,uuid,text,text)','execute')
+ if has_function_privilege('authenticated','public.mark_order_dispatched(uuid,uuid,text,text,text,text)','execute')
     or has_function_privilege('authenticated','public.mark_order_received(uuid,uuid,integer)','execute') then
   raise exception 'Client role can execute privileged fulfillment transitions';
  end if;

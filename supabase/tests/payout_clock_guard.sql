@@ -11,6 +11,9 @@ declare
   stamp timestamptz := now() - interval '2 days';
 begin
   insert into auth.users(id, email) values (seller, 'clock-seller@example.test'), (buyer, 'clock-buyer@example.test');
+  -- The clock mechanism under test is the fixed 7-day hold; pin it so the
+  -- deployed settlement decision (20261006100200) doesn't change this check.
+  update public.settlement_settings set payout_hold_mode = 'fixed', payout_hold_days = 7 where id;
   insert into public.orders(buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, total_cents, currency)
   values (buyer, seller, 'shipped', 5000, 500, 5000, 'USD') returning id into tracked;
   insert into public.orders(buyer_id, seller_id, status, subtotal_cents, platform_fee_cents, total_cents, currency)

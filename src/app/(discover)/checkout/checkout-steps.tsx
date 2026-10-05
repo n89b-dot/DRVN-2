@@ -7,6 +7,7 @@ import { useActionState, useId, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { Button, Select, Stepper, TextField } from "@/components/ui";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { springs, transitions } from "@/lib/motion";
 import { checkoutCart, type CommerceState } from "@/features/commerce/actions";
 import { checkoutTotals } from "@/features/commerce/checkout-totals";
@@ -107,6 +108,9 @@ export function CheckoutSteps({
       return { error: "We couldn't confirm checkout. Your details are still here. Retry with the same details so we can check the existing payment request." };
     }
   }, {});
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [collection, setCollection] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
   // Kept in state (not just read at submit time) so "Change" re-renders the
@@ -354,6 +358,7 @@ export function CheckoutSteps({
           }}
           className="tile grid gap-4"
         >
+          <fieldset disabled={!ready} className="contents">
           <input type="hidden" name="idempotency_key" value={idempotencyKey} />
           {orderId && <input type="hidden" name="order_id" value={orderId} />}
 
@@ -592,6 +597,7 @@ export function CheckoutSteps({
           >
             {state.error ?? rates.error ?? ""}
           </p>
+          </fieldset>
         </motion.form>
       )}
       </AnimatePresence>

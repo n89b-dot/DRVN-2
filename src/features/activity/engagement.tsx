@@ -5,6 +5,7 @@ import { useOptimistic, useState, useTransition } from "react";
 
 import { AuthIntentDialog, Button, Message } from "@/components/ui";
 import { ReportButton } from "@/features/moderation/report-button";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { addComment, deleteComment, toggleReaction } from "./actions";
 import { ACTIVITY_EMOJIS } from "./constants";
@@ -106,6 +107,9 @@ export function ActivityEngagement({
   const [, startTransition] = useTransition();
   // The reply box is controlled and only empties once the reply is saved: a
   // failed send keeps what was typed, with the reason under it.
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [reply, setReply] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [pending, startReply] = useTransition();
@@ -228,6 +232,7 @@ export function ActivityEngagement({
               name="body"
               required
               placeholder="Reply directly…"
+              disabled={!ready}
               value={reply}
               onChange={(event) => setReply(event.target.value)}
             />

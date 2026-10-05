@@ -40,6 +40,8 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "order_shipped", section: "marketplace", pref: "order_updates", source: "trigger", description: "Your order shipped." },
   { kind: "order_delivered", section: "marketplace", pref: "order_updates", source: "trigger", description: "Delivery confirmed." },
   { kind: "order_disputed", section: "marketplace", pref: "order_updates", source: "trigger", description: "A dispute opened on an order." },
+  { kind: "receipt_due", section: "marketplace", pref: null, source: "trigger", description: "Your untracked order will be marked delivered in a few days unless you confirm receipt or report a problem (database job, 20261006100100; only when the owner turns auto-confirm on). Never muted: it is the buyer's notice." },
+  { kind: "receipt_auto_confirmed", section: "marketplace", pref: null, source: "trigger", description: "No problem was reported in time, so your order was marked delivered (database job, 20261006100100)." },
   { kind: "dispute_resolved", section: "marketplace", pref: "order_updates", source: "trigger", description: "A dispute was resolved." },
   { kind: "dispute_escalated", section: "marketplace", pref: "order_updates", source: "trigger", description: "A dispute was escalated to support." },
   { kind: "report_reviewed", section: "engagement", pref: null, source: "app", description: "A report you filed was reviewed (marketplace section for listing/user reports)." },

@@ -4,11 +4,11 @@ import { TileHead } from "@/components/ui";
 
 import { formatPrice } from "@/lib/payments/fee";
 import {
-  CLEARING_HOLD_DAYS,
   LEDGER_FETCH_CAP,
   type SellerLedger,
   type LedgerState,
 } from "@/lib/payments/ledger";
+import { payoutClearsPhrase } from "@/lib/payments/payout-hold";
 
 const STATE_LABEL: Record<LedgerState, string> = {
   held: "On hold",
@@ -84,7 +84,7 @@ export function PayoutsSection({
       />
       {/* The page head already says what this is; the tile states the rule. */}
       <p className="field__hint max-w-[62ch]">
-        Clears {CLEARING_HOLD_DAYS} days after delivery.
+        Clears {payoutClearsPhrase(ledger.hold)}.
         {!paymentsLive && " Test mode — no real money has moved."}
       </p>
 
