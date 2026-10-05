@@ -118,8 +118,8 @@ page and its count as two requests side by side, "after" shows both.
    lower-cased make and model.
 3. **Totals and rankings are read from small tables**
    (`20261011120000_precomputed_aggregates.sql`): category, brand and
-   condition counts refreshed every minute, trending every ten minutes,
-   suggested builders hourly, by pg_cron — each refresh reads a compact
+   condition counts refreshed every 30 seconds, trending every two minutes,
+   suggested builders every ten minutes, by pg_cron — each refresh reads a compact
    covering index (0.6–2 s, 1.6 s and 3.6 s at 2M). The Explore cards look
    their rows up by key; the Explore wall and the Updates vehicle filter read
    one page at a time.
@@ -162,7 +162,7 @@ What changes on purpose, and nothing else:
 | Tie-break follows the sort | Parts with exactly the same price (or listing time) can swap places among themselves |
 | Postgres search capped (engine down only) | The newest 1,000 matches the filters allow; "1,000+ parts found"; sorting such a search by price sorts those 1,000; words match exactly (no typo matching) |
 | Old `?page=N` links past page 417 | An empty page with "Back to page one" (pages reached by Next/Previous have no limit) |
-| Totals and rankings precomputed | Category/brand counts up to a minute behind, trending ten minutes, suggested builders an hour |
+| Totals and rankings precomputed | Category/brand counts up to 30 seconds behind, trending two minutes, suggested builders ten minutes (plus the app's existing caches: counts one minute, trending five) |
 | Engine search (when hosted) | Engine matching and typo tolerance; exact counts; results in the marketplace's usual order |
 
 ### Writes

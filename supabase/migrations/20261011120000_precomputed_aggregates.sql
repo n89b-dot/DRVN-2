@@ -2,23 +2,24 @@
 -- Explore cards and wall at volume.
 --
 -- WHAT PAGES SHOW DOES NOT CHANGE, except that the totals and rankings below
--- can be up to a minute (counts) or ten minutes (rankings) behind — the app
--- already caches the counts for a minute and trending for five.
+-- can be up to 30 seconds (counts), two minutes (trending) or ten minutes
+-- (builders) behind — the app already caches the counts for a minute and
+-- trending for five.
 -- supabase/tests/precomputed_aggregates_guard.sql holds each table to the
 -- function it replaces, and the cards to their old answer.
 --
 -- 1. Marketplace totals. Category, brand and condition counts grouped every
 --    part for sale on each view: at 600,000 parts, 190-220 ms each, growing
 --    with the catalogue. marketplace_facet_counts holds them, refreshed every
---    minute by pg_cron in one pass (grouping sets) over the parts for sale.
+--    30 seconds by pg_cron in one pass (grouping sets) over the parts for sale.
 --    The counts are what a signed-out visitor sees, as they always were (the
 --    app asks them signed out): parts for sale whose seller isn't suspended.
 --
 -- 2. Explore rankings. trending_models and suggested_builders grouped every
 --    recent update (and, for builders, every public car) on each view: 1.2 s
 --    and a timeout at 600,000 parts. explore_trending_models and
---    explore_builder_rankings hold them, refreshed every ten minutes and
---    every hour. The
+--    explore_builder_rankings hold them, refreshed every two minutes and
+--    every ten. The
 --    functions keep their arguments and answers; a request the table can't
 --    answer (another trending window; no refresh yet) is computed live.
 --
@@ -573,8 +574,11 @@ begin
     perform cron.unschedule(j.jobid);
   end loop;
 end $$;
--- Totals every minute; trending every ten (the app caches it for five);
--- builders, which change slowly and cost a pass over every update, hourly.
-select cron.schedule('drvn-marketplace-counts', '* * * * *', $job$select public.refresh_marketplace_facet_counts();$job$);
-select cron.schedule('drvn-explore-trending', '*/10 * * * *', $job$select public.refresh_explore_trending();$job$);
-select cron.schedule('drvn-explore-builders', '7 * * * *', $job$select public.refresh_explore_builders();$job$);
+-- Totals every 30 seconds (pg_cron 1.5+); trending every two minutes (the
+-- app caches it for five); builders, which change slowly and cost a pass over
+-- every update, every ten. At 2M parts that is 0.6-2 s of every 30, 1.6 s of
+-- every 120 and 3.6 s of every 600 — widen these before the catalogue makes
+-- a refresh take a large share of its interval.
+select cron.schedule('drvn-marketplace-counts', '30 seconds', $job$select public.refresh_marketplace_facet_counts();$job$);
+select cron.schedule('drvn-explore-trending', '*/2 * * * *', $job$select public.refresh_explore_trending();$job$);
+select cron.schedule('drvn-explore-builders', '*/10 * * * *', $job$select public.refresh_explore_builders();$job$);
