@@ -9,7 +9,7 @@ import { ReportButton } from "@/features/moderation/report-button";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement } from "@/features/activity/engagement";
 import { loadPostEngagement } from "@/features/activity/load-engagement";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { ActivityGallery } from "@/features/activity/activity-gallery";
 import { MarkRemovedOffer } from "./mark-removed-offer";

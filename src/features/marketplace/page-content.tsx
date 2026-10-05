@@ -5,7 +5,7 @@ import { Alert, FilterGroup, FilterLink, Foot, PageHead } from "@/components/ui"
 import { fetchListings } from "@/lib/marketplace/query";
 import { CATEGORY_REDIRECTS, categoryHref, hasMarketplaceSearch, marketplaceHref, marketplacePath, normalizeMarketplaceState, type RawMarketplaceParams } from "@/lib/marketplace/state";
 import { getCategory } from "@/lib/marketplace/taxonomy";
-import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { getPageClient, getPublicPageClient, getViewer } from "@/lib/supabase/page-context";
 import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { ActiveFilters } from "@/app/(discover)/marketplace/active-filters";
 import { CategoryNav, CategorySheet, CategorySidebarList } from "@/app/(discover)/marketplace/category-nav";
@@ -44,7 +44,11 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   const requestedPath = `/marketplace${categorySlug ? `/${categorySlug}` : ""}${subcategorySlug ? `/${subcategorySlug}` : ""}`;
   if (!missing && basePath !== requestedPath) redirect(marketplaceHref(filters));
 
-  const [supabase, user, betaEnforced] = await Promise.all([getPageClient(), getViewer(), betaAccessIsEnforced()]);
+  // Typed searches and price ranges are different for nearly every shopper,
+  // so they read live; the shared copy is for the category pages, sorts and
+  // vehicle filters every signed-out visitor sees the same.
+  const freeForm = [filters.q, filters.brand, filters.location, filters.min, filters.max, filters.ymin, filters.ymax].some(Boolean);
+  const [supabase, user, betaEnforced] = await Promise.all([freeForm ? getPageClient() : getPublicPageClient(), getViewer(), betaAccessIsEnforced()]);
   const vehiclePromise = filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null);
   // P-5: the shopper's own car order, so the picker leads with the car they
   // mean. The main car is OFFERED as a one-tap choice, never applied — see
@@ -62,7 +66,7 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   // suggests what exists rather than a hardcoded list that goes stale.
   // Both counts are the same for every shopper, so they come through a
   // one-minute cache instead of being grouped on every view.
-  const countsClient = createPublicClient({ revalidate: 60, tags: ["marketplace-counts"] });
+  const countsClient = createPublicClient({ maxAge: 60, kinds: ["listings"] });
   const brandPromise = Promise.resolve(countsClient.rpc("marketplace_brand_counts"))
     .then(({ data, error }) => (error ? [] : ((data ?? []) as { brand: string; total: number }[])));
   const categoryPromise = Promise.resolve(countsClient.rpc("marketplace_category_counts")).then(categoryResult => categoryResult.error ? undefined : (categoryResult.data ?? []).reduce<Record<string, number>>((counts, row) => {

@@ -27,7 +27,7 @@ import { checklistRows, gradeLabel, gradeMeaning } from "@/lib/marketplace/gradi
 import { fetchWatchCounts, hydrateListingCards } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { paymentsAreLive } from "@/lib/payments/provider";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";

@@ -69,7 +69,7 @@ export default async function LandingPage() {
   // /home), and what it shows is the same for all of them — newest public
   // cars and live parts, and two totals. A one-minute cache serves it
   // without asking the database on every visit.
-  const supabase = createPublicClient({ revalidate: 60, tags: ["landing"] });
+  const supabase = createPublicClient({ maxAge: 60, kinds: ["listings", "cars", "profiles", "engagement"] });
   const jar = await cookies();
   const night = jar.get("ls-theme")?.value === "night";
 

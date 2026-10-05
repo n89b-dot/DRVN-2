@@ -14,7 +14,7 @@ import { ListingCartButton } from "@/features/commerce/quick-commerce";
 import { normalizeBlocks, postLead } from "@/lib/activity-blocks";
 import { pageHeadline, postHeadline } from "@/lib/activity/headline";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 export async function generateMetadata({
   params,

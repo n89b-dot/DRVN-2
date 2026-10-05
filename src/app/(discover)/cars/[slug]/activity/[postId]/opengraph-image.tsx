@@ -14,7 +14,7 @@ export default async function UpdateCard({
   params: Promise<{ slug: string; postId: string }>;
 }) {
   const { slug, postId } = await params;
-  const supabase = createPublicClient();
+  const supabase = createPublicClient({ maxAge: 300, kinds: ["cars", "posts", "profiles"] });
   const { data: car } = await supabase
     .from("cars")
     .select("id, name, make, model, year, is_public")

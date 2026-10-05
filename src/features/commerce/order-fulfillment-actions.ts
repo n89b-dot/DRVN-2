@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { getShippingProvider, integratedShippingEnabled } from "@/lib/shipping/provider";
 import { CLEARING_HOLD_DAYS } from "@/lib/payments/ledger";

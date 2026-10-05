@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 import { getCartIds, MAX_CART_ITEMS, removeCartIds, setCartIds } from "@/lib/cart";
 import { createClient } from "@/lib/supabase/server";

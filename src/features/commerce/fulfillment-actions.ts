@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 
 import { reportError } from "@/lib/monitoring";
 import { integratedShippingEnabled, getShippingProvider } from "@/lib/shipping/provider";
