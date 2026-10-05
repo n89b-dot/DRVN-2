@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import { readSavedSearch } from "@/lib/marketplace/saved-search";
 import { marketplaceHref } from "@/lib/marketplace/state";
 import type { SavedSearch } from "@/lib/database.types";
@@ -29,6 +30,9 @@ function describe(params: Record<string, string>): string {
 
 export function SavedSearchList({ searches }: { searches: SavedSearch[] }) {
   const [pending, startTransition] = useTransition();
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [local, setLocal] = useState(searches);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +58,7 @@ export function SavedSearchList({ searches }: { searches: SavedSearch[] }) {
             <input
               type="checkbox"
               checked={search.alert}
-              disabled={pending || !readSavedSearch(search.params)}
+              disabled={pending || !ready || !readSavedSearch(search.params)}
               onChange={(event) => {
                 const alert = event.target.checked;
                 setError(null);

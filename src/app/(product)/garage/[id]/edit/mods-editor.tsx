@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import { ActionFooter, Button, TextField, TileHead } from "@/components/ui";
 import type { ModItem, ModStatus } from "@/lib/database.types";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 import {
   isLowConfidence,
   MOD_CATEGORIES,
@@ -203,6 +204,9 @@ export function ModsEditor({
       ref_price_currency: m.ref_price_currency,
     }))
   );
+  // Controlled fields must not replace what was typed before hydration
+  // (see useHydrated): they stay disabled until the page is live.
+  const ready = useHydrated();
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   // L-1: "Add mod" opens on a link. Typing stays first-class — the manual
@@ -496,6 +500,7 @@ export function ModsEditor({
 
   return (
     <section className="tile">
+      <fieldset disabled={!ready} className="contents">
       <div className="tile__head">
         <span className="microlabel microlabel--ink">The build — seed the lines</span>
         <Button variant="ghost" onClick={() => setShowPaste((s) => !s)}>
@@ -979,6 +984,7 @@ export function ModsEditor({
           </button>
         </p>
       )}
+      </fieldset>
     </section>
   );
 }
