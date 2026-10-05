@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -183,6 +184,25 @@ describe("SuggestingSearchField", () => {
     await settle();
     expect(input().value).toBe("golf");
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("suggests when the browser lets React render between the input's own listener and React's handler", async () => {
+    // A real keystroke or paste is dispatched by the browser with nothing on
+    // the stack, so microtasks — React's re-render and its effects — run
+    // after the listener on the input itself and BEFORE the event reaches
+    // React's onChange at the root. A script-dispatched event (most test
+    // helpers) never shows this. flushSync in a listener registered after the
+    // field's own stands in for that checkpoint.
+    await act(async () => {
+      root = createRoot(container);
+      root.render(field());
+    });
+    input().addEventListener("input", () => flushSync(() => {}));
+    input().focus();
+    await act(async () => type("apr intake"));
+    await settle();
+    expect(fetcher).toHaveBeenCalledWith("apr intake", expect.anything());
+    expect(input().getAttribute("aria-expanded")).toBe("true");
   });
 
   it("suggests, walks the options with the keyboard, and navigates on Enter", async () => {

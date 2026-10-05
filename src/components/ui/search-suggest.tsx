@@ -102,13 +102,24 @@ export function SuggestingSearchField({
   const listboxId = useId();
   const initialQuery = defaultValue ?? "";
   const inputRef = useRef<HTMLInputElement>(null);
+  // The first render's query is the URL's — don't immediately reopen a
+  // popover over results the server already delivered.
+  const interactedRef = useRef(false);
   // The input is the store. Subscribed natively on the element so the text
-  // is re-read on every edit, whoever made it.
+  // is re-read on every edit, whoever made it. An edit is also what counts
+  // as interaction, and it is marked here rather than in onChange below: for
+  // a real keystroke or paste the browser runs React's re-render (and the
+  // fetch effect) after this listener and before the event reaches React's
+  // handler, so a flag set there was still false when the effect looked.
   const subscribeQuery = useCallback((onChange: () => void) => {
     const input = inputRef.current;
     if (!input) return () => {};
-    input.addEventListener("input", onChange);
-    return () => input.removeEventListener("input", onChange);
+    const onInput = () => {
+      interactedRef.current = true;
+      onChange();
+    };
+    input.addEventListener("input", onInput);
+    return () => input.removeEventListener("input", onInput);
   }, []);
   // Server and hydration render with the server's text; straight after
   // hydration React compares it with the box and re-renders if a visitor has
@@ -124,9 +135,6 @@ export function SuggestingSearchField({
   const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // The first render's query is the URL's — don't immediately reopen a
-  // popover over results the server already delivered.
-  const interactedRef = useRef(false);
 
   const phone = useSyncExternalStore(
     subscribePhone,
@@ -281,7 +289,6 @@ export function SuggestingSearchField({
           }
           autoComplete="off"
           onChange={(event) => {
-            interactedRef.current = true;
             const next = event.target.value;
             if (next.trim().length < minQuery) {
               setGroups([]);
