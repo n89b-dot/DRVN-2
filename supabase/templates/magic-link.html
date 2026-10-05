@@ -1,4 +1,7 @@
 <h2>Open your DRVN orders</h2>
 <p><a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=magiclink&amp;next=%2Forders">Securely access your orders</a></p>
+{{ if .Data.drvn_auto_confirm_date }}
+<p><strong>Has your order arrived?</strong> If it has, there is nothing you need to do. If it hasn't, or something is wrong with it, open your orders and report a problem before {{ .Data.drvn_auto_confirm_date }}. On that date we'll mark the order delivered and the seller will be paid. You can still report a problem for 30 days after that.</p>
+{{ end }}
 <p>Use it to see your order, track delivery, message the seller or report a problem.</p>
 <p>This single-use link expires in one hour. If you did not request it, ignore this email.</p>

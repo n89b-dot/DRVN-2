@@ -160,10 +160,10 @@ export async function signup(_prev: AuthState, formData: FormData): Promise<Auth
   if (prepared.error) return fail(prepared.error);
 
   // RR-07: the confirmation email opens in a new tab, often on another
-  // device, so the destination has to travel inside its link. /callback
-  // finishes the sign-in and re-validates `next` as an internal path; if the
-  // link is opened where the signup didn't start, it lands on /login with the
-  // same destination and the account already confirmed.
+  // device, so the destination has to travel inside its link. The email
+  // template hands this address to /confirm as `redirect_to`; /confirm
+  // verifies the token there (any browser), reads `next` out of it and
+  // re-validates it as an internal path.
   const confirmed = new URL("/callback", siteUrl());
   if (next) confirmed.searchParams.set("next", next);
 
@@ -303,9 +303,10 @@ export async function requestPasswordReset(
   const origin = (await headers()).get("origin") ?? "";
 
   await supabase.auth.resetPasswordForEmail(email, {
-    // The SSR client uses PKCE. Recovery must return through the callback so
-    // the one-time code is exchanged into HttpOnly session cookies before the
-    // password form renders.
+    // The recovery email (supabase/templates/recovery.html) links to /confirm
+    // with a token hash, which works on any device and lands on /login/reset.
+    // This address is only used if a project still has Supabase's default
+    // template, whose link returns here through the callback.
     redirectTo: `${origin}/callback?next=${encodeURIComponent("/login/reset")}`,
   });
 

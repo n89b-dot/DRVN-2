@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Json } from "@/lib/database.types";
 import { processAlertOutbox } from "@/lib/admin/alerts";
+import { processAutoConfirmEmails } from "@/lib/auto-confirm-email";
 import { processReturnTimers } from "@/features/commerce/returns";
 import { mapBounded } from "@/lib/map-bounded";
 import { reportError } from "@/lib/monitoring";
@@ -48,7 +49,13 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
     disputes: () => processDisputeSla(admin),
     alerts: () => processAlertOutbox(admin, { batch: 5 }),
     analytics: () => processPurchaseAnalytics(),
-    receipts: () => processReceiptJobs(),
+    // Order-access emails, then the auto-confirm warning for guest buyers —
+    // both go out through the same Supabase Auth email, so one family.
+    receipts: async () => {
+      const receipts = await processReceiptJobs();
+      const autoConfirmWarnings = await processAutoConfirmEmails(admin);
+      return { ...receipts, failed: receipts.failed + autoConfirmWarnings.failed, autoConfirmWarnings };
+    },
   };
   const results: Record<string, unknown> = {};
   let failed = false;

@@ -1,5 +1,16 @@
 # Applying migrations
 
+## October 8 — round five (stacked on the owner kit): guest auto-confirm warning email (not yet applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261008100200_auto_confirm_guest_email.sql` | not yet |
+
+Adds `emailed_at`, `email_attempts` and `email_last_error` to
+`delivery_auto_confirmations` (after `20261006100100`). The money worker's
+receipts pass emails a guest buyer the auto-confirm warning and records it
+there. Needs the templates in `supabase/templates/` on the project.
+
 ## October 7 — review fixes (not yet applied anywhere)
 
 | File | Applied to |
