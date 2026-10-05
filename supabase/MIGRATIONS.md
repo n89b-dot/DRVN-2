@@ -33,8 +33,6 @@ the seller owes, and a carry amount left on a transfer that never reached
 dispatch no longer reserves the debt. Guard:
 `carry_after_cancelled_payout_guard.sql`.
 
-## October 5 — round four: message-photo normalization, guest buyer reviews, unsuspend vs deletion, accepted-offer collection, seller carry-forward (isolated local stack only)
-
 ## October 6 — owner decisions: payout hold until claim windows close, auto-confirm untracked shipments after 21 days
 
 | File | Applied to |
