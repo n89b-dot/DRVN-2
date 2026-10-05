@@ -3577,6 +3577,71 @@ export type Database = {
           },
         ]
       }
+      seller_carry_payouts: {
+        Row: {
+          amount_cents: number
+          attempts: number
+          created_at: string
+          currency: string
+          destination: string | null
+          id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_by: string | null
+          next_attempt_at: string | null
+          paid_at: string | null
+          provider_call_may_have_occurred: boolean
+          seller_id: string | null
+          status: string
+          transfer_reference: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          attempts?: number
+          created_at?: string
+          currency?: string
+          destination?: string | null
+          id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          locked_by?: string | null
+          next_attempt_at?: string | null
+          paid_at?: string | null
+          provider_call_may_have_occurred?: boolean
+          seller_id?: string | null
+          status?: string
+          transfer_reference?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          attempts?: number
+          created_at?: string
+          currency?: string
+          destination?: string | null
+          id?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          locked_by?: string | null
+          next_attempt_at?: string | null
+          paid_at?: string | null
+          provider_call_may_have_occurred?: boolean
+          seller_id?: string | null
+          status?: string
+          transfer_reference?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seller_carry_payouts_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seller_fulfillment_profiles: {
         Row: {
           address_verified_at: string | null
@@ -4364,6 +4429,38 @@ export type Database = {
         Returns: Json
       }
       claim_search_jobs: { Args: never; Returns: Json }
+      claim_seller_carry_payouts: {
+        Args: {
+          p_batch: number
+          p_lease_seconds: number
+          p_max_attempts: number
+          p_worker: string
+        }
+        Returns: {
+          amount_cents: number
+          attempts: number
+          created_at: string
+          currency: string
+          destination: string | null
+          id: string
+          last_error: string | null
+          lease_expires_at: string | null
+          locked_by: string | null
+          next_attempt_at: string | null
+          paid_at: string | null
+          provider_call_may_have_occurred: boolean
+          seller_id: string | null
+          status: string
+          transfer_reference: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "seller_carry_payouts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_transfer_intents: {
         Args: {
           p_batch?: number
@@ -4429,6 +4526,10 @@ export type Database = {
       complete_return_label: {
         Args: { p_label: Json; p_return: string }
         Returns: Json
+      }
+      complete_seller_carry_payout: {
+        Args: { p_id: string; p_transfer_reference: string; p_worker: string }
+        Returns: string
       }
       complete_stripe_dispute_loss: {
         Args: { p_dispute: string; p_event: string; p_lease: string }
@@ -4932,6 +5033,10 @@ export type Database = {
         }
         Returns: string
       }
+      open_seller_carry_payouts: {
+        Args: { p_limit?: number; p_quiet_hours?: number }
+        Returns: number
+      }
       order_buyer_reviewable: { Args: { p_order: string }; Returns: boolean }
       pause_account_deletion_hold: {
         Args: { p_job: string; p_lease: string; p_user: string }
@@ -4971,6 +5076,10 @@ export type Database = {
           p_return: string
         }
         Returns: Json
+      }
+      prepare_seller_carry_payout: {
+        Args: { p_destination: string; p_id: string; p_worker: string }
+        Returns: string
       }
       prepare_transfer_dispatch: {
         Args: {
@@ -5153,6 +5262,17 @@ export type Database = {
         Returns: undefined
       }
       release_expired_reservations: { Args: never; Returns: Json }
+      release_seller_carry_payout: {
+        Args: {
+          p_attempts: number
+          p_id: string
+          p_last_error: string
+          p_next_attempt_at: string
+          p_status: string
+          p_worker: string
+        }
+        Returns: boolean
+      }
       release_transfer_intent: {
         Args: {
           p_attempts?: number

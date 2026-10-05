@@ -8,7 +8,8 @@
 --     payout, and what later payouts kept back for it.
 -- v5 is the projection in src/lib/account-export-contract.ts today: messages
 -- gain kind and attachments, two sections copy the photos into the package,
--- and seller_carry_entries is a section.
+-- and seller_carry_entries and seller_carry_payouts (20261008100100) are
+-- sections.
 --
 -- The version lives here as well as in that file (see 20260919205000): widen
 -- the check, expire what can't finish under the new contract, re-stamp the

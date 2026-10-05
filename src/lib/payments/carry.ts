@@ -26,7 +26,11 @@ export type CarryEntry = {
     | "adjustment_void"
     | "uncollected_reversed"
     | "collected"
-    | "reversal_shortfall";
+    | "reversal_shortfall"
+    // 20261008100100: a credit balance paid to the seller's Stripe balance
+    // (negative, no order), and that payment cancelled before it was sent.
+    | "paid_out"
+    | "paid_out_reversed";
   amount_cents: number;
   order_id: string | null;
   created_at: string;
@@ -47,8 +51,9 @@ export type SellerCarry = {
   byOrder: Map<string, OrderCarry>;
   /** What the seller still owes; comes off their next transfer. */
   owedCents: number;
-  /** Credits beyond what's owed. Not paid out automatically; they offset
-   *  future charges. */
+  /** Credits beyond what's owed, not yet picked up for payment. The money
+   *  worker pays a credit to the seller's Stripe balance once its newest
+   *  entry is a day old (open_seller_carry_payouts). */
   creditCents: number;
 };
 

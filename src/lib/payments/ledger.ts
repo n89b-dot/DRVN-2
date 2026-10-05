@@ -93,6 +93,9 @@ export type SellerLedger = {
   /** Label costs earlier payouts couldn't cover, still to come off the next
    *  transfer (20261005110100). Not in the totals above: those are per order. */
   owedCents: number;
+  /** A label-refund credit beyond what's owed, waiting to be paid to the
+   *  seller's Stripe balance (20261008100100). Zero once its payout opens. */
+  creditCents: number;
   /** True if the fetch hit its cap: the totals cover only the latest
    *  FETCH_CAP sales and must be labelled that way, not as a lifetime. */
   truncated: boolean;
@@ -271,6 +274,7 @@ export async function getSellerLedger(
       availableCents,
       paidOutCents,
       owedCents: carry.owedCents,
+      creditCents: carry.creditCents,
       truncated: captured.length === FETCH_CAP,
     },
   };

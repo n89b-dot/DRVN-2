@@ -54,6 +54,11 @@ describe("account export contract", () => {
     expect(carry).toMatchObject({ table: "seller_carry_entries", access: "seller", filter: "seller_id" });
     expect(carry.projection.split(",")).toEqual(expect.arrayContaining(["kind", "amount_cents", "order_id", "created_at"]));
     expect(carry.projection.split(",")).not.toContain("entry_key");
+    const payouts = byKey.get("seller_carry_payouts")!;
+    expect(payouts).toMatchObject({ table: "seller_carry_payouts", access: "seller", filter: "seller_id" });
+    for (const field of ["destination", "transfer_reference", "locked_by", "last_error"]) {
+      expect(payouts.projection.split(","), `seller_carry_payouts leaked ${field}`).not.toContain(field);
+    }
   });
 
   it("pages a photo section by its own smaller size", () => {
