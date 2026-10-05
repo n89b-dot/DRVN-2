@@ -5,7 +5,7 @@ import { Alert, FilterGroup, FilterLink, Foot, PageHead } from "@/components/ui"
 import { fetchListings } from "@/lib/marketplace/query";
 import { CATEGORY_REDIRECTS, categoryHref, hasMarketplaceSearch, marketplaceHref, marketplacePath, normalizeMarketplaceState, type RawMarketplaceParams } from "@/lib/marketplace/state";
 import { getCategory } from "@/lib/marketplace/taxonomy";
-import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { getPageClient, getPublicPageClient, getViewer } from "@/lib/supabase/page-context";
 import { betaAccessIsEnforced } from "@/lib/beta-access";
 import { ActiveFilters } from "@/app/(discover)/marketplace/active-filters";
 import { CategoryNav, CategorySheet, CategorySidebarList } from "@/app/(discover)/marketplace/category-nav";
@@ -44,7 +44,11 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   const requestedPath = `/marketplace${categorySlug ? `/${categorySlug}` : ""}${subcategorySlug ? `/${subcategorySlug}` : ""}`;
   if (!missing && basePath !== requestedPath) redirect(marketplaceHref(filters));
 
-  const [supabase, user, betaEnforced] = await Promise.all([getPageClient(), getViewer(), betaAccessIsEnforced()]);
+  // Typed searches and price ranges are different for nearly every shopper,
+  // so they read live; the shared copy is for the category pages, sorts and
+  // vehicle filters every signed-out visitor sees the same.
+  const freeForm = [filters.q, filters.brand, filters.location, filters.min, filters.max, filters.ymin, filters.ymax].some(Boolean);
+  const [supabase, user, betaEnforced] = await Promise.all([freeForm ? getPageClient() : getPublicPageClient(), getViewer(), betaAccessIsEnforced()]);
   const vehiclePromise = filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null);
   // P-5: the shopper's own car order, so the picker leads with the car they
   // mean. The main car is OFFERED as a one-tap choice, never applied — see
@@ -57,12 +61,12 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         orderCars(data ?? [], profile?.main_car_id).map(car => ({ ...car, isMain: car.id === profile?.main_car_id }))
       )
     : Promise.resolve([]);
-  const pagePromise = fetchListings(supabase, filters, user?.id, { garage: garagePromise, selection: vehiclePromise });
+
   // M-6's facet: the brands that actually have parts live, so the field
   // suggests what exists rather than a hardcoded list that goes stale.
   // Both counts are the same for every shopper, so they come through a
   // one-minute cache instead of being grouped on every view.
-  const countsClient = createPublicClient({ revalidate: 60, tags: ["marketplace-counts"] });
+  const countsClient = createPublicClient({ maxAge: 60, kinds: ["listings"] });
   const brandPromise = Promise.resolve(countsClient.rpc("marketplace_brand_counts"))
     .then(({ data, error }) => (error ? [] : ((data ?? []) as { brand: string; total: number }[])));
   const categoryPromise = Promise.resolve(countsClient.rpc("marketplace_category_counts")).then(categoryResult => categoryResult.error ? undefined : (categoryResult.data ?? []).reduce<Record<string, number>>((counts, row) => {
@@ -71,10 +75,26 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
     counts.all = (counts.all ?? 0) + Number(row.total);
     return counts;
   }, {}));
+  // An unfiltered view's total is one of the category counts already being
+  // read, so the page of parts is fetched without counting them a second
+  // time — at volume the count costs far more than the page.
+  const totalKey = filters.subcategory && filters.category ? `${filters.category}/${filters.subcategory}` : filters.category ?? "all";
+  const pagePromise = fetchListings(supabase, filters, user?.id, {
+    garage: garagePromise,
+    selection: vehiclePromise,
+    ...(hasMarketplaceSearch(filters) ? {} : { total: categoryPromise.then((counts) => (counts ? counts[totalKey] ?? 0 : undefined)) }),
+  });
   // The condition choices offered are the ones with parts in them: a filter
-  // whose options always return nothing is worse than no option.
-  const conditionPromise = Promise.resolve(countsClient.rpc("marketplace_browse_rows", {}).select("condition").limit(1000))
-    .then(({ data, error }) => (error ? undefined : [...new Set((data ?? []).flatMap(row => row.condition ? [row.condition] : []))]));
+  // whose options always return nothing is worse than no option. Read from
+  // the totals table (migration 20261011120000) — every condition in use,
+  // where sampling the first 1,000 parts could miss a rare one; before that
+  // migration, the sample.
+  const conditionPromise = Promise.resolve(countsClient.from("marketplace_facet_counts").select("key").eq("facet", "condition"))
+    .then(async ({ data, error }) => {
+      if (!error) return (data ?? []).map(row => row.key);
+      const sample = await countsClient.rpc("marketplace_browse_rows", {}).select("condition").limit(1000);
+      return sample.error ? undefined : [...new Set((sample.data ?? []).flatMap(row => row.condition ? [row.condition] : []))];
+    });
   // The sidebar's category list is handed to a client component as a prop,
   // where a Suspense boundary left BOTH its placeholder and its resolved
   // list in the document. The counts are one small grouped query already in

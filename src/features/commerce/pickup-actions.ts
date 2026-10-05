@@ -3,7 +3,7 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 
 import QRCode from "qrcode";
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 import { redirect } from "next/navigation";
 
 import { capture } from "@/lib/analytics";

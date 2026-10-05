@@ -13,7 +13,7 @@ export const contentType = "image/png";
  */
 export default async function BuildCard({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const supabase = createPublicClient();
+  const supabase = createPublicClient({ maxAge: 300, kinds: ["cars", "posts", "profiles"] });
   const { data: car } = await supabase
     .from("cars")
     .select("id, name, make, model, year, cover_image_url, is_public")

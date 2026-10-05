@@ -13,6 +13,7 @@ import {
   type CarSearchDocument,
   type ProfileSearchDocument,
   type UpdateSearchDocument,
+  type VehicleFilterFields,
 } from "./typesense";
 
 /**
@@ -35,7 +36,7 @@ export async function indexCarNow(carId: string, assertLease: () => Promise<void
   const admin = createAdminClient();
   const { data: car } = await admin
     .from("cars")
-    .select("id, owner_id, name, make, model, year, tags, about, is_public, created_at")
+    .select("id, owner_id, name, make, model, year, tags, about, is_public, created_at, catalog_make_id, catalog_model_id")
     .eq("id", carId)
     .maybeSingle().throwOnError();
   if (!car) {
@@ -84,6 +85,7 @@ export async function indexCarNow(carId: string, assertLease: () => Promise<void
       .filter(Boolean)
       .join(" "),
     created_at_unix: Math.floor(new Date(car.created_at).getTime() / 1000),
+    ...vehicleFilterFields(car),
   };
   await assertLease();
   await typesenseUpsert(EXPLORE_COLLECTIONS.car, doc);
@@ -107,7 +109,7 @@ export async function indexUpdateNow(postId: string, assertLease: () => Promise<
   }
   const { data: car } = await admin
     .from("cars")
-    .select("name, make, model, year, is_public, owner_id")
+    .select("name, make, model, year, is_public, owner_id, catalog_make_id, catalog_model_id")
     .eq("id", post.car_id ?? "")
     .maybeSingle().throwOnError();
   const owner = car ? await admin.from("profiles").select("suspended_at").eq("id", car.owner_id).maybeSingle().throwOnError() : null;
@@ -133,6 +135,7 @@ export async function indexUpdateNow(postId: string, assertLease: () => Promise<
       .filter(Boolean)
       .join(" "),
     published_at_unix: Math.floor(new Date(post.published_at).getTime() / 1000),
+    ...vehicleFilterFields(car),
   };
   await assertLease();
   await typesenseUpsert(EXPLORE_COLLECTIONS.update, doc);
@@ -160,6 +163,17 @@ export async function indexProfileNow(profileId: string, assertLease: () => Prom
   };
   await assertLease();
   await typesenseUpsert(EXPLORE_COLLECTIONS.profile, doc);
+}
+
+/** The fields the engine filters a vehicle and year by (searchExplorePage). */
+function vehicleFilterFields(car: { make: string | null; model: string | null; year: number | null; catalog_make_id: number | null; catalog_model_id: number | null }): VehicleFilterFields {
+  return {
+    make_key: (car.make ?? "").toLowerCase(),
+    model_key: (car.model ?? "").toLowerCase(),
+    catalog_make_id: car.catalog_make_id,
+    catalog_model_id: car.catalog_model_id,
+    year: car.year,
+  };
 }
 
 export function syncCarToSearch(id: string) { return enqueueSearch("car", id); }

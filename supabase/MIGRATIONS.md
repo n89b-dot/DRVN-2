@@ -1,5 +1,104 @@
 # Applying migrations
 
+## October 11 — millions of parts (not yet applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261011100000_listing_vehicle_fit.sql` | not yet |
+| `20261011110000_marketplace_pages_and_counts.sql` | not yet |
+| `20261011120000_precomputed_aggregates.sql` | not yet |
+| `20261011121000_update_read_rule_per_row.sql` | not yet — **changes a read policy; needs the owner's yes** |
+| `20261011130000_search_engine_at_scale.sql` | not yet — **adds a client-callable SECURITY DEFINER function; needs the owner's yes** |
+
+Apply after the October 10 set (`20261010095900`, `20261010100100`), in this
+order. Each is safe before the app that uses it: the app falls back
+(PGRST202 / 42703) to the previous path. Measurements and the reasoning:
+`docs/performance/query-plans.md` ("Two million parts").
+
+`100000` adds `listing_vehicle_fit` (one row per part for sale per make and
+model it fits, kept by triggers on `listings`, `listing_fitments` and `cars`)
+and restates `marketplace_browse_rows` / `marketplace_search_browse_rows` so
+the vehicle filter and "fits my garage" read it instead of running
+`marketplace_match_evidence` per part. Same answers (guard
+`vehicle_fit_guard.sql` holds them to the evidence function). The backfill
+blocks writes to parts, fitments and cars while it runs: well under a second
+at today's size, ~8 minutes at 2M parts on a laptop.
+`110000` adds `marketplace_page` and `marketplace_count` (PL/pgSQL, SECURITY
+INVOKER: pages read by position, counts capped at 10,001), a generated column
+`listings.brand_key` (brand lower-cased, so a brand filter can use an index
+under row security), three partial indexes on `listings` (price, brand
+newest, brand price) and `fillfactor = 90` on `listings` (room for a counted
+view to be an in-place update). Adding the column rewrites `listings` and
+holds every read and write of it while it runs: seconds today, ~1.5 minutes
+at 600,000 parts, ~8 minutes at 2M on a laptop. Guard:
+`marketplace_pages_guard.sql`.
+`120000` adds `marketplace_facet_counts`, `explore_trending_models` and
+`explore_builder_rankings` with their refresh functions and pg_cron jobs
+(`drvn-marketplace-counts` every 30 seconds, `drvn-explore-trending` every
+two minutes, `drvn-explore-builders` every ten); restates `marketplace_category_counts`,
+`marketplace_brand_counts`, `trending_models`, `suggested_builders`,
+`feed_hydration` (from its latest definition, `20261003150000`) and
+`feed_event_page` (drop and create: two optional position arguments); adds
+`explore_update_page`; adds generated columns `cars.make_key` / `model_key`
+(a table rewrite of `cars`: seconds today, about a minute at 400,000 cars)
+and restates `explore_build_rows` to return them. Guard:
+`precomputed_aggregates_guard.sql`; `car_vin_privacy_guard.sql` updated for
+the two new readable columns.
+`121000` restates the read policy "published activity readable" on
+`activity_posts` (`ALTER POLICY`) to look the car up by key instead of an
+EXISTS the planner answered by hashing every public car. Who may read what
+is unchanged; guard `update_read_rule_guard.sql` passes against the old and
+the new policy.
+`130000` adds `marketplace_search_capped_ids` (SECURITY DEFINER, callable by
+clients, ids only — listed in `definer_exposure_guard.sql`); the typo word
+list `search_words` (no client access), `refresh_search_words` (pg_cron job
+`drvn-search-words`, hourly; filled once by the migration: ~10–16 s at 2M
+parts) and `search_word_corrections` (SECURITY DEFINER, callable by clients,
+returns only words already in titles and brands of parts for sale — listed in
+`definer_exposure_guard.sql`); restates
+`marketplace_query_sql` / `marketplace_page` / `marketplace_count` (drop and
+create: a `p_ids` argument for the search engine's page), adds
+`claim_search_job_batch` and `search_listing_documents` (service role only),
+and narrows the search queue triggers on `listings`, `cars`, `mod_items`,
+`activity_posts` and `profiles` to the fields the documents hold. Guard:
+`search_engine_guard.sql`.
+
+## October 10 — read rules and search at volume (shared dev only)
+
+| File | Applied to |
+|---|---|
+| `20261010095900_read_rules_without_per_row_calls.sql` | shared dev, 2026-10-05 (twice) |
+| `20261010100100_search_and_feed_at_scale.sql` | shared dev, 2026-10-05 (twice) |
+
+Renamed from `20261010100000_…` on 2026-10-05: main took that version for the
+refund fix below. Same contents; shared dev records neither version, so
+nothing there changes.
+
+Apply `095900` first: `100100` uses its helper. `095900` restates the five
+read policies on `listings`, `cars` and `listing_images` with `ALTER POLICY`
+so that "is this member suspended?" is asked once per query through the new
+`suspended_profile_ids()` (SECURITY DEFINER, callable by clients, ids only —
+on the reviewed list in `definer_exposure_guard.sql`) instead of
+`is_suspended()` / `profile_is_visible()` once per row. Who may read what is
+unchanged; guard: `supabase/tests/read_rules_guard.sql`. The old helper
+functions stay (other functions still call them).
+
+`100100` is additive and safe in either order with the code: the app falls back to the
+old functions (PGRST202) until it is applied. It adds trigram indexes over a
+"search document" per part, car, mod and update; restates `search_car_ids`,
+`search_update_ids` and `search_listing_ids` to read through them (now
+SECURITY DEFINER, applying the signed-out read rule themselves and returning
+ids only — added to `definer_exposure_guard.sql`); adds
+`marketplace_search_ids`, `marketplace_search_browse_rows`,
+`explore_update_search_rows` and `feed_event_page`; and restates
+`marketplace_browse_rows`, `marketplace_search_rows`, `explore_build_rows`
+and `explore_update_rows` without their `SET search_path` clause so the
+planner can read a page off an index (they are SECURITY INVOKER with every
+name schema-qualified). Results are unchanged. The index builds take locks
+for as long as they run: seconds on today's tables.
+Guard: `supabase/tests/search_at_volume_guard.sql`. Measurements and what is
+still slow: `docs/performance/query-plans.md`.
+
 ## October 10 — refund events for unknown orders (shared dev project)
 
 | File | Applied to |

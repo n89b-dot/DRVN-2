@@ -17,7 +17,7 @@ export const contentType = "image/png";
  */
 export default async function PostCard({ params }: { params: Promise<{ postId: string }> }) {
   const { postId } = await params;
-  const supabase = createPublicClient();
+  const supabase = createPublicClient({ maxAge: 300, kinds: ["cars", "posts", "profiles"] });
 
   const { data: post } = await supabase
     .from("activity_posts")

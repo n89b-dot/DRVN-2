@@ -6,7 +6,7 @@ import { Rv } from "@/components/livesheet";
 import { Avatar, ButtonLink, Foot, Media, MetadataTags, TileHead } from "@/components/ui";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
 import { formatPrice } from "@/lib/payments/fee";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { CarTabs, type ForSaleItem, type ModLine } from "./car-tabs";
 import { reportError } from "@/lib/monitoring";

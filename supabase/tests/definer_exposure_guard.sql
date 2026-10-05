@@ -14,10 +14,17 @@ declare
     'is_admin()',                         -- the caller's own admin state
     'is_suspended(uuid)',                 -- used by public read policies
     'listing_watch_counts(uuid[])',       -- counts only, for listings the caller can see (R2-09)
+    'marketplace_search_capped_ids(text,text,text,text,text,text,integer,integer,integer)', -- the newest 1,001 ids marketplace_search_ids would give, within filters a visitor can apply; callers re-read under RLS (20261011130000)
+    'marketplace_search_ids(text)',       -- ids of active parts of visible sellers matching a search; callers re-read under RLS
     'mod_purchase_sources(uuid[])',       -- source car of purchased build lines, by unguessable item id
     'profile_follow_counts(uuid)',        -- public follower counts
     'profile_is_visible(uuid)',           -- used by public read policies
-    'profile_sales_count(uuid)'           -- public sales count for visible profiles
+    'profile_sales_count(uuid)',          -- public sales count for visible profiles
+    'search_car_ids(text)',               -- ids of public builds of visible owners; definer so text indexes apply (20261010100100)
+    'search_listing_ids(text)',           -- ids of parts a signed-out visitor may see; same reason
+    'search_update_ids(text)',            -- ids of published updates on visible public builds; same reason
+    'search_word_corrections(text)',      -- the words of a query absent from the titles/brands of parts for sale, each with its closest word there; words anyone can read (20261011130000)
+    'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
   ];
   exposed text[];
   internal text;

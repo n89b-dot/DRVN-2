@@ -1,6 +1,6 @@
 "use server";
 
-import { fetchFeed, type FeedItem, type FeedTab } from "@/lib/feed";
+import { fetchFeed, parseFeedCursor, type FeedCursor, type FeedItem, type FeedTab } from "@/lib/feed";
 import { parseExploreSearch } from "@/lib/explore/search/params";
 import { searchBuilds, searchUpdates } from "@/lib/explore/search/query";
 import { createClient } from "@/lib/supabase/server";
@@ -8,8 +8,10 @@ import { createClient } from "@/lib/supabase/server";
 /** Next page of the Explore wall, for the continuous-scroll client. */
 export async function loadFeedPage(
   tab: FeedTab,
-  page: number
-): Promise<{ items: FeedItem[]; hasMore: boolean }> {
+  page: number,
+  /** The previous page's position; read on from it. Untrusted, so parsed. */
+  cursor?: FeedCursor | null
+): Promise<{ items: FeedItem[]; hasMore: boolean; nextCursor: FeedCursor | null }> {
   const supabase = await createClient();
   // Verified locally against the project's signing keys (getClaims), not a
   // round trip to the auth server on every scroll. Row-level security still
@@ -22,8 +24,9 @@ export async function loadFeedPage(
     // The mixed wall is for finding other people's things; your own car in
     // it reads as padding. The single-kind segments keep everything.
     excludeOwnerId: tab === "all" ? (user?.id ?? null) : null,
+    before: parseFeedCursor(cursor),
   });
-  return { items: feed.items, hasMore: feed.hasMore };
+  return { items: feed.items, hasMore: feed.hasMore, nextCursor: feed.nextCursor ?? null };
 }
 
 /**

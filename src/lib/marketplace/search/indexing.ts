@@ -4,7 +4,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { vehicleLabel } from "@/lib/vehicles/label";
 
-import { deleteSearchDocument, upsertSearchDocument, typesenseConfigured, type ListingSearchDocument } from "./typesense";
+import { deleteSearchDocument, deleteSearchDocuments, importSearchDocuments, upsertSearchDocument, typesenseConfigured, type ListingSearchDocument } from "./typesense";
 
 /**
  * The synchronization path (brief §B1): after a listing is created, edited or
@@ -14,6 +14,9 @@ import { deleteSearchDocument, upsertSearchDocument, typesenseConfigured, type L
  */
 export async function indexListingNow(listingId: string, assertLease: () => Promise<void> = async () => {}): Promise<void> {
   if (!typesenseConfigured()) return;
+  // The same document the batches build; the code below is for a database
+  // without search_listing_documents (before migration 20261011130000).
+  if (await indexListingsNow([listingId], assertLease)) return;
   const admin = createAdminClient();
   const { data: listing } = await admin
     .from("listings")
@@ -44,7 +47,7 @@ export async function indexListingNow(listingId: string, assertLease: () => Prom
       : Promise.resolve({ data: null }),
   ]);
 
-  const doc: ListingSearchDocument = {
+  const doc: LegacyListingSearchDocument = {
     id: listing.id,
     title: listing.title,
     description: listing.description ?? "",
@@ -73,5 +76,29 @@ export async function indexListingNow(listingId: string, assertLease: () => Prom
   await assertLease();
   await upsertSearchDocument(doc);
 }
+
+/**
+ * Many parts at once: one database call builds every document
+ * (search_listing_documents, migration 20261011130000), one request imports
+ * them, one deletes the parts that should no longer be found. Returns false
+ * when the database doesn't have the batch builder yet — the caller then
+ * indexes one at a time.
+ */
+export async function indexListingsNow(listingIds: string[], assertLease: () => Promise<void> = async () => {}): Promise<boolean> {
+  if (!typesenseConfigured() || !listingIds.length) return true;
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("search_listing_documents", { p_ids: listingIds });
+  if (error?.code === "PGRST202") return false;
+  if (error) throw new Error("Search documents could not be built");
+  const docs = (data ?? []).map((row) => row.doc as unknown as ListingSearchDocument);
+  const kept = new Set(docs.map((doc) => doc.id));
+  await assertLease();
+  await importSearchDocuments(docs);
+  await deleteSearchDocuments(listingIds.filter((id) => !kept.has(id)));
+  return true;
+}
+
+type LegacyListingSearchDocument = Pick<ListingSearchDocument,
+  "id" | "title" | "description" | "compatibility_notes" | "part_numbers" | "category" | "subcategory" | "fitment" | "source_car" | "status" | "price_cents" | "created_at_unix">;
 
 export function syncListingToSearch(id: string) { return enqueueSearch("listing", id); }

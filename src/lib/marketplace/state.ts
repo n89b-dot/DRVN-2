@@ -3,7 +3,11 @@ import { CONDITIONS, getCategory } from "./taxonomy";
 export type ListingSort = "newest" | "price_asc" | "price_desc";
 export type ListingFilters = Partial<Record<
   "q" | "category" | "subcategory" | "condition" | "min" | "max" | "fit" |
-  "brand" | "location" | "vehicle" | "vyear" | "ymin" | "ymax" | "sort" | "page", string
+  "brand" | "location" | "vehicle" | "vyear" | "ymin" | "ymax" | "sort" | "page" |
+  /** Where a page starts: the last part of the page before ("after") or the
+   *  first part of the page after ("before"), as an opaque position token
+   *  (query.ts). Only meaningful beside `page`, so dropped without it. */
+  "after" | "before", string
 >>;
 export type RawMarketplaceParams = Record<string, string | string[] | undefined>;
 
@@ -66,6 +70,10 @@ export function normalizeMarketplaceState(raw: RawMarketplaceParams): ListingFil
   if (["newest", "price_asc", "price_desc"].includes(value("sort"))) state.sort = value("sort");
   const page = Number(value("page"));
   if (Number.isSafeInteger(page) && page > 1 && page <= 1_000_000) state.page = String(page);
+  if (state.page) {
+    if (/^[A-Za-z0-9_-]{8,200}$/.test(value("after"))) state.after = value("after");
+    else if (/^[A-Za-z0-9_-]{8,200}$/.test(value("before"))) state.before = value("before");
+  }
   return state;
 }
 

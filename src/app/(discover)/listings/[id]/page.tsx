@@ -27,7 +27,7 @@ import { checklistRows, gradeLabel, gradeMeaning } from "@/lib/marketplace/gradi
 import { fetchWatchCounts, hydrateListingCards } from "@/lib/marketplace/query";
 import { conditionLabel, formatPrice, getCategory } from "@/lib/marketplace/taxonomy";
 import { paymentsAreLive } from "@/lib/payments/provider";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { deliveryLabel } from "@/lib/marketplace/delivery";
 import { listingHref, normalizeMarketplaceState, shoppingReturn } from "@/lib/marketplace/state";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
@@ -140,16 +140,28 @@ export default async function ListingPage({
       // inner join dropped exactly those — the posts for which the part is
       // the whole subject. Which posts may be seen is the post policy's
       // business (a private build's posts never arrive here).
+      //
+      // Read from the tag rows (indexed by part), not from posts: asked the
+      // other way round, the database gathered every post's photos before
+      // it looked for this part's tags, and timed out at volume.
       supabase
-        .from("activity_posts")
+        .from("activity_post_listings")
         .select(
-          "id, title, intro, body, car_id, published_at, cars(slug, name, is_public), activity_post_listings!inner(listing_id), activity_images(url, position)"
+          "activity_posts!inner(id, title, intro, body, car_id, published_at, cars(slug, name, is_public), activity_images(url, position))"
         )
-        .eq("activity_post_listings.listing_id", id)
-        .not("published_at", "is", null)
-        .order("published_at", { ascending: false })
-        .order("position", { referencedTable: "activity_images" })
-        .limit(6),
+        .eq("listing_id", id)
+        .not("activity_posts.published_at", "is", null)
+        .order("position", { referencedTable: "activity_posts.activity_images" })
+        .limit(50)
+        .then(({ data, error }) => ({
+          error,
+          data: data
+            ? data
+                .map((row) => row.activity_posts)
+                .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""))
+                .slice(0, 6)
+            : null,
+        })),
     ]);
   if (!listing) notFound();
   const isOwn = user?.id === listing.seller_id;
@@ -279,8 +291,12 @@ export default async function ListingPage({
   // Count the look, but never the seller's own — a seller refreshing their
   // listing must not inflate the number they price against. Fire-and-forget:
   // a failed counter bump must never break the page.
-  if (user?.id !== listing.seller_id) {
-    void supabase.rpc("bump_listing_view", { p_listing: id });
+  // Members only: the function counts one look per member per hour and is
+  // closed to signed-out callers, so asking for a visitor is a wasted request.
+  if (user && user.id !== listing.seller_id) {
+    // `.then` is what sends it: a Supabase query does nothing until it is
+    // awaited, so the bare `void supabase.rpc(…)` here never counted a look.
+    void supabase.rpc("bump_listing_view", { p_listing: id }).then(() => undefined, () => undefined);
   }
 
   const isSaved = Boolean(save);

@@ -47,7 +47,7 @@ export default async function TermsPage() {
   // Cached like the landing page's reads; an owner's change shows within
   // five minutes. If the setting can't be read the sentence names no number
   // rather than a possibly wrong one.
-  const settings = createPublicClient({ revalidate: 300, tags: ["settlement-settings"] });
+  const settings = createPublicClient({ maxAge: 300, tags: ["settlement-settings"] });
   const [hold, autoConfirmDays, risk] = await Promise.all([
     readPayoutHoldPolicy(settings),
     readAutoConfirmDays(settings),

@@ -19,7 +19,7 @@ import {
   searchUpdates,
 } from "@/lib/explore/search/query";
 import { FEED_TABS, fetchFeed, resolveFeedTab, type FeedTab } from "@/lib/feed";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPageClient, getPublicPageClient, getViewer } from "@/lib/supabase/page-context";
 import { createPublicClient } from "@/lib/supabase/public";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 
@@ -52,7 +52,10 @@ export default async function ExplorePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const raw = await searchParams;
-  const supabase = await createClient();
+  // Typed searches and number ranges are different for nearly every visitor,
+  // so they read live; the shared copy is for the browse views everyone sees.
+  const freeForm = [raw.q, raw.min, raw.max, raw.ymin, raw.ymax].some((value) => value?.trim());
+  const supabase = freeForm ? await getPageClient() : await getPublicPageClient();
   const user = await getViewer();
   const isLoggedIn = Boolean(user);
   const viewerId = user?.id ?? null;
@@ -90,7 +93,7 @@ export default async function ExplorePage({
     : await Promise.all([
         // The same for every visitor, so it is cached for five minutes
         // rather than aggregated on each view.
-        createPublicClient({ revalidate: 300, tags: ["explore-trending"] }).rpc("trending_models", {
+        createPublicClient({ maxAge: 300, tags: ["explore-trending"] }).rpc("trending_models", {
           p_days: 45,
           p_limit: 10,
         }),
@@ -255,6 +258,7 @@ export default async function ExplorePage({
           tab={tab}
           initialItems={feed.items}
           initialHasMore={feed.hasMore}
+          initialCursor={feed.nextCursor ?? null}
           isLoggedIn={isLoggedIn}
           /* E-4: after the sixth card and the fourteenth. Far enough in
              that the wall has established what it is, and far enough apart

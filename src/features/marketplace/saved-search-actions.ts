@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 
 import { createClient } from "@/lib/supabase/server";
 import { capture } from "@/lib/analytics";

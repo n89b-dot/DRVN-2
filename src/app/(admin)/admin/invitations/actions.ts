@@ -1,7 +1,7 @@
 "use server";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { revalidatePath } from "@/lib/revalidate";
 
 import { auditedAction } from "@/lib/admin/audit";
 import { getAdminContext } from "@/lib/admin/guard";

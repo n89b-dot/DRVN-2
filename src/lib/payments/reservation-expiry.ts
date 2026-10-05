@@ -5,6 +5,7 @@ import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stripeClient } from "./stripe";
 import { settleIntent } from "./settlement";
+import { clearPublicData } from "@/lib/supabase/clear-public-data";
 
 /** A failed cancellation is never evidence that a charge did not happen. */
 export async function resolveExpiryIntent(
@@ -62,5 +63,7 @@ export async function processReservationExpiries() {
     const finished = await admin.rpc("finish_remediation_job", { p_id: job.id, p_lease: job.lease_id, p_error: failure });
     if (finished.error) throw new Error("Expiry acknowledgement failed");
   });
+  // A released reservation puts the part back on sale for everyone.
+  if (completed) clearPublicData("listings");
   return { completed, failed };
 }

@@ -14,7 +14,7 @@ import { initialsFrom, splitLinks } from "@/components/profile/helpers";
 import { FollowButton } from "@/features/social/buttons";
 import { ReportButton } from "@/features/moderation/report-button";
 import { loadProfileView } from "@/lib/profile-data";
-import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
+import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 import { reportError } from "@/lib/monitoring";
 import { StorePanel, forSaleCount } from "@/features/store/store-panel";
 import { profileBannerUrl } from "@/lib/cars/banner";

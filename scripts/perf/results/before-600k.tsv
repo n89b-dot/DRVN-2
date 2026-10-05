@@ -1,0 +1,40 @@
+marketplace: newest, page 1	200	11
+marketplace: newest, page 101	200	59
+marketplace: newest, page 1001	200	84
+marketplace: category, cheapest, page 1	200	71
+marketplace: brand filter (Brembo) + count	206	1989
+marketplace: price range + count	206	1059
+marketplace: condition + count	206	1015
+marketplace: vehicle, common + count	500	3025
+marketplace: vehicle, common, 2015 + count	500	3018
+marketplace: vehicle, uncommon + count	500	3024
+search: broad (brembo brake kit) + count	500	3071
+search: one common word (kit) + count	500	3101
+search: mid word (nirika) + count	206	1859
+search: rare word (nalusel) + count	206	903
+search: narrow (akrapovic #222000) + count	206	1631
+search: part number (PN-222000) + count	200	6
+marketplace: category counts	200	219
+marketplace: brand counts	200	187
+marketplace: conditions in use	200	6
+cards: cover photos	200	6
+cards: watch counts	200	3
+cards: biggest sellers' ratings	200	8
+cards: biggest sellers' active counts	200	4
+explore: wall, page 1	200	35
+explore: wall, page 10	200	57
+explore: wall, page 100	200	48
+explore: card hydration	500	3033
+explore: search builds (make7 coilovers)	200	2049
+explore: search builds, rare word	200	38
+explore: search updates (dyno day)	500	3066
+explore: search updates, rare word	200	1366
+explore: updates for the commonest model	200	1916
+explore: trending models	200	1212
+explore: suggested builders	500	3037
+member: marketplace newest, page 1	200	29
+member: fits my garage + count	500	8032
+member: vehicle, common + count	500	8036
+member: search broad + count	500	8115
+member: suggested builders	200	6576
+member: explore wall, page 1	200	38

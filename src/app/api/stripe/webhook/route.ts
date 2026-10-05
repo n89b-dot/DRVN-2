@@ -7,6 +7,7 @@ import {
 } from "@/lib/payments/settlement";
 import { stripeClient } from "@/lib/payments/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clearPublicData } from "@/lib/supabase/clear-public-data";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 
 /**
@@ -62,6 +63,9 @@ export async function POST(request: Request) {
     // committed effects, checked recovery, and intentionally irrelevant event
     // types can proceed to the durable completion marker.
     const outcome = await dispatchStripeEvent(admin, event);
+    // A payment, refund or dispute moves a part between for sale, reserved
+    // and sold; signed-out visitors' shared copy must not keep the old state.
+    clearPublicData("listings");
     if (outcome === "retry") return new Response(outcome, { status: 500 });
 
     // The 2xx is withheld until the processed marker itself is confirmed to
