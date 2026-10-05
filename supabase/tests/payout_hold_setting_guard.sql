@@ -20,13 +20,13 @@ declare
   hash text := encode(sha256('guard-pass'::bytea), 'hex');
   result jsonb;
 begin
-  -- 1. The deployed decision (20261006100200: hold until the claim windows
-  --    close, 7-day floor), readable by anyone, writable by no client. The
+  -- 1. The deployed decision (20261009100000: a fixed 2-day hold),
+  --    readable by anyone, writable by no client. The
   --    checks below pin the rule they test inside this rolled-back
   --    transaction, so they test the mechanism whatever is deployed.
   if (select (payout_hold_days, payout_hold_mode) from public.settlement_settings where id)
-     is distinct from (7, 'claim_window'::text) then
-    raise exception 'FAIL 1: the deployed hold is not claim_window with a 7-day floor';
+     is distinct from (2, 'fixed'::text) then
+    raise exception 'FAIL 1: the deployed hold is not a fixed 2 days';
   end if;
   if not has_table_privilege('anon', 'public.settlement_settings', 'select')
      or has_table_privilege('authenticated', 'public.settlement_settings', 'update')

@@ -38,7 +38,8 @@ returned is treated as a problem, not a delivery. If any of these stops being
 true between the warning and the date, the order is left alone.
 
 After an auto-confirm, the buyer keeps the normal 30 days from delivery to
-report a problem. The seller's payout then follows the clearing hold
+report a problem. Since `20261009100000` the seller's payout is released at
+the auto-confirm itself (21 days after dispatch), not after a further hold
 (`payout-hold.md`).
 
 Each run is recorded as the **Auto-confirm untracked deliveries** job in
@@ -49,7 +50,7 @@ order's row. That order is retried every hour.
 
 ## Options
 
-| N (days after dispatch) | Seller paid after (with the 7-day hold) | For | Against |
+| N (days after dispatch) | Seller paid after (with the 7-day hold this table was written for; now released at N) | For | Against |
 |---|---|---|---|
 | **Off** (today) | Never, unless the buyer confirms | No risk of confirming a parcel that never came | Sellers of untracked parcels can go unpaid indefinitely; support has to chase buyers by hand |
 | **14** | ~21 days | Fast for sellers | Too short for slow or international post. The buyer gets a warning while the parcel may still be in transit |

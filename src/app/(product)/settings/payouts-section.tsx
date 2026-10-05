@@ -8,7 +8,7 @@ import {
   type SellerLedger,
   type LedgerState,
 } from "@/lib/payments/ledger";
-import { payoutHoldPhrase } from "@/lib/payments/payout-hold";
+import { payoutClearsPhrase } from "@/lib/payments/payout-hold";
 
 const STATE_LABEL: Record<LedgerState, string> = {
   held: "On hold",
@@ -84,7 +84,7 @@ export function PayoutsSection({
       />
       {/* The page head already says what this is; the tile states the rule. */}
       <p className="field__hint max-w-[62ch]">
-        Clears {payoutHoldPhrase(ledger.hold)} after delivery.
+        Clears {payoutClearsPhrase(ledger.hold)}.
         {!paymentsLive && " Test mode — no real money has moved."}
       </p>
 

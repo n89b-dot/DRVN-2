@@ -7,10 +7,12 @@ import { DISPUTE_WINDOW_DAYS } from "@/features/commerce/disputes";
 import {
   DEFAULT_PAYOUT_HOLD,
   payoutAvailableAt,
+  payoutClearsPhrase,
   payoutHoldDaysFor,
   payoutHoldPhrase,
   readAutoConfirmDays,
   readPayoutHoldPolicy,
+  readSettlementRisk,
   returnWindowDays,
 } from "./payout-hold";
 
@@ -63,6 +65,37 @@ describe("payout hold", () => {
     expect(payoutHoldPhrase({ mode: "fixed", holdDays: 1 })).toBe("1 day");
     expect(payoutHoldPhrase({ mode: "claim_window", holdDays: 7 })).toBe(
       `${DISPUTE_WINDOW_DAYS} days (or once the shop's return window closes, if later)`
+    );
+  });
+
+  it("says when the payouts tile's money clears", () => {
+    expect(payoutClearsPhrase({ mode: "fixed", holdDays: 2 })).toBe(
+      "2 days after delivery, or as soon as the buyer confirms it arrived"
+    );
+    expect(payoutClearsPhrase({ mode: "claim_window", holdDays: 7 })).toBe(
+      `${DISPUTE_WINDOW_DAYS} days (or once the shop's return window closes, if later) after delivery`
+    );
+  });
+
+  it("reads the risk settings, with the SQL's fallbacks for a missing row and null when unreadable", async () => {
+    const row = { receipt_release_after_days: 3, tracking_required_from_cents: 100000, card_verification_from_cents: null };
+    await expect(readSettlementRisk(fakeClient({ data: [row], error: null }))).resolves.toEqual({
+      receiptReleaseAfterDays: 3,
+      trackingRequiredFromCents: 100000,
+      cardVerificationFromCents: null,
+    });
+    await expect(readSettlementRisk(fakeClient({ data: [], error: null }))).resolves.toEqual({
+      receiptReleaseAfterDays: 3,
+      trackingRequiredFromCents: null,
+      cardVerificationFromCents: null,
+    });
+    await expect(readSettlementRisk(fakeClient({ data: null, error: { message: "timeout" } }))).resolves.toBeNull();
+    await expect(
+      readSettlementRisk(fakeClient({ data: [{ ...row, tracking_required_from_cents: -5 }], error: null }))
+    ).resolves.toBeNull();
+    // The SQL falls back to the same 3 days when the row is missing.
+    expect(readFileSync("supabase/migrations/20261009100000_payout_release_risk_controls.sql", "utf8")).toContain(
+      "(select s.receipt_release_after_days from public.settlement_settings s where s.id),3)"
     );
   });
 
