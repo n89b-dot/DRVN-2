@@ -29,8 +29,35 @@ hundred rows in the tables. At volume, search did not work at all.
 | Explore, search updates (broad: matches 30% of updates) | timeout (123 s in psql) | 743 ms |
 | Explore, search updates (narrow) | timeout | 60 ms |
 
-Car, listing and profile pages were already fine: every read on them is an
-indexed lookup taking under 5 ms at this volume.
+Car and profile pages were already fine: every read on them is an indexed
+lookup taking under 5 ms at this volume. The listing page had one read that
+was not — "updates that tagged this part" timed out and held the page for
+3 s on every view; read from the tag rows instead it takes 30 ms.
+
+## The shared cache, checked in a production build
+
+A production build was run against the seeded database with a tracer under
+Next's fetch cache counting requests that really reach the database, signed
+out:
+
+| Page | First view | Second view |
+|---|---|---|
+| Marketplace | 19 requests, 1.5 s | 1 request, 0.10 s |
+| Explore | 6 requests, 2.6 s | 0 requests, 0.03 s |
+| Car | 9 requests, 0.14 s | 0 requests, 0.02 s |
+| Listing | 31 requests, 0.28 s | 2 requests, 0.05 s |
+| Profile | 22 requests, 0.14 s | 0 requests, 0.03 s |
+
+(The one request left is the beta-access switch, which is deliberately not
+cached; the listing's second is a private source car that answers "none".)
+
+- **Age limit.** A car renamed directly in the database kept its old name
+  inside the 60 seconds and showed the new one on the first view after 68.
+- **Cleared by writes.** A signed Stripe event sent to the webhook made the
+  next marketplace view read everything again.
+- Not exercised end to end: a server action's clear (it is the same call,
+  covered by the unit tests and the import guard), and a signed-in member's
+  pages, which do not use the cache at all.
 
 ## Why
 

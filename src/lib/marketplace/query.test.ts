@@ -83,7 +83,7 @@ it("sends a text search to the search entry point, and to the browse function if
   expect(supabase.rpc).toHaveBeenCalledWith("marketplace_search_browse_rows", expect.objectContaining({ p_query: "coilovers" }), { count: "exact" });
 
   const older = client({ data: [], count: 0, error: null });
-  const range = (older.rpc("x") as unknown as { range: ReturnType<typeof vi.fn> }).range;
+  const range = (older.rpc("marketplace_browse_rows") as unknown as { range: ReturnType<typeof vi.fn> }).range;
   range.mockResolvedValueOnce({ data: null, count: null, error: { code: "PGRST202", message: "Could not find the function" } });
   vi.mocked(older.rpc).mockClear();
   const page = await fetchListings(older, { q: "coilovers" });
