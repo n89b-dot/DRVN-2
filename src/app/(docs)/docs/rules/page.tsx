@@ -49,7 +49,7 @@ export default function RulesPage() {
           </Specimen>
           <Specimen name="Don't">
             <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed text-dim">
-              <li>No pills. No shadows. No gradients. No glass.</li>
+              <li>No pills. No shadows. No gradients. No glass — the only box-shadows are scrim lifts on things that float, the frosted bar, and the two rings (.btn--destructive inset, .search:focus-within).</li>
               <li>
                 No borders as edges — the mail frame is the sole exception (it depicts an
                 external artifact); dimline is for dimension/leader lines only.
@@ -84,8 +84,8 @@ export default function RulesPage() {
           <Specimen name="Behavior">
             <ul className="list-disc space-y-1.5 pl-5 text-micro leading-relaxed">
               <li>
-                prefers-reduced-motion: draws render settled, pulses stop, count-ups print final
-                values — countdowns keep running (information, not decoration).
+                prefers-reduced-motion: draws render settled, pulses stop, ticks never start —
+                countdowns keep running (information, not decoration).
               </li>
               <li>Toasts are role=status; icon-only controls carry aria-label.</li>
               <li>Pressed states use aria-pressed; current nav uses aria-current.</li>
@@ -128,7 +128,8 @@ export default function RulesPage() {
               </li>
               <li>
                 Night is a token remap — never write a dark-specific component rule beyond the
-                photo filter.
+                four that exist (photo filter, theme-pip fill, select chevron, selected
+                category-row / filter-chip plate).
               </li>
               <li>
                 Theme is the ls-theme cookie stamped pre-paint by the root layout script; don&rsquo;t
@@ -146,7 +147,7 @@ export default function RulesPage() {
                 Server actions re-verify auth themselves; layouts are convenience gates. Admin and
                 this microsite 404 — never 403 — to non-members.
               </li>
-              <li>Keep the layout primitives (NarrowColumn 720px, .wrap 1200px (semantic: wrap--narrow 720 / wrap--medium 900 / wrap--wide 1060)) — no magic numbers.</li>
+              <li>Keep the layout primitives — .wrap 1200px and its steps wrap--narrow 720 / wrap--medium 900 / wrap--wide 1060 (NarrowColumn width=…) — no magic numbers.</li>
             </ul>
           </Specimen>
           <Specimen name="Build gotchas">
@@ -163,10 +164,10 @@ export default function RulesPage() {
           </Specimen>
           <Specimen name="Adding a component">
             <ol className="list-decimal space-y-1.5 pl-5 text-micro leading-relaxed">
-              <li>Class in globals.css (tokens only).</li>
-              <li>React wrapper in src/components/ui if it carries behavior.</li>
-              <li>Document it in docs/site/components.md.</li>
-              <li>Render a specimen on /docs/components.</li>
+              <li>Look it up first — src/components/registry.ts and the §12 taxonomy; compose from @/components/ui and @/components/commerce.</li>
+              <li>Only if nothing covers it: build from existing primitives and recipes (new CSS as a named recipe in its family file under src/app/styles/, tokens only).</li>
+              <li>Export it from the barrel and add a registry.ts entry; npm run docs:components regenerates components.md §10.</li>
+              <li>Render a specimen on /docs/components if it is visual.</li>
             </ol>
           </Specimen>
         </div>

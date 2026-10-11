@@ -53,6 +53,33 @@ fresh number:
 | `collapsed-shell` | ≤1080px | No register rail; the Index owns navigation; the bar collapses progressively (text links go at 1080, labels at 640). |
 | `split-capable` | ≥981px (route-decided) | A route may return its secondary pane when both panes meet minimum widths — the route, not the viewport alone, decides. |
 
+Two further widths recur in `src/app/styles/11-responsive.css` and behave as
+roles of their own rather than route exceptions: **720px**, where the car hero
+recomposes (callouts drop their leaders and go static, media takes a 16:10
+frame), `.bline` rows stack label-over-value, and `.savebar` becomes a fixed
+bottom bar with the `.has-savebar` clearance; and **980px**, where
+`.deck--two` / `.deck--three` fall to one column, `.deck--kpi` to two, and the
+`.mkt` grid steps to two columns (so the market grid runs 3 → 2 → 1 rather
+than dropping straight to one). **1024px** (Tailwind `lg`) is the third:
+the profile's `.deck--aside` rail returns there and the cart/checkout
+summary rail returns there too.
+
+The marketplace grid does not read the viewport at all. `.marketplace-grid`
+is a `container: mktgrid / inline-size`, and its `.mosaic` counts columns from
+the room it has — four, then three at a container width ≤819px, two ≤559px,
+one ≤307px (`src/app/styles/12-overrides.css`) — because the same grid sits
+full-width on the marketplace, beside the filter sidebar, and inside a
+member's profile column as their store. Two more container rules
+(`@container (max-width: 900px)` in `06-cards-feeds.css` and
+`12-overrides.css`) set `--mcols: 3` and the taller commerce card ratio. Only
+the loading skeleton, which has no container, keeps viewport rules.
+
+A known inconsistency: the compact edge is written several ways across the
+family files — `max-width: 640px`, `639px`, `639.98px`, and the inverse
+`min-width: 641px` / `640px` — so a 640px-wide window can match both sides of
+a rule pair. Treat 640 as the intended boundary; new work should use
+`max-width: 640px` / `min-width: 641px`.
+
 **Documented route exceptions** (legitimate, component-owned):
 
 - **PDP split + buybar** — the listing page splits media/rail at **981px**,
@@ -77,12 +104,12 @@ or the thread composer — never two).
 
 | Material concept | Behavioral contract | Livesheet implementation | Borrowed |
 | --- | --- | --- | --- |
-| Filled button | Primary contained action | `[ BUY NOW ]` — Button variant="live": mono brackets (the only variant that wears them), live fill, one per surface. Secondary actions are `ghost` (a recessed fill) or `quiet` (text), in Plex Sans | Action hierarchy; disabled/loading states; 40px floor; aria-busy narration |
+| Filled button | Primary contained action | `[ BUY NOW ]` — Button variant="live": mono brackets (the only variant that wears them), live fill, one per surface. The other variants are `default` (the ink-contained workhorse), `ghost` (a recessed fill), `destructive` (outlined red — never `live` styling) and `quiet` (the bracketed mono row action), in Plex Sans | Action hierarchy; disabled/loading states; 40px floor; aria-busy narration |
 | Text field | Label, supporting text, error, prefix | TextField — microlabel + 16px Plex Sans .ctl on paper-deep (outlined on tile-2 when it sits on a raised surface), ▸ error line, live `status` line | Anatomy; aria-describedby/aria-invalid wiring; error paints the control |
 | Filter chip / segmented | Selectable chips in a labelled set | FilterGroup + FilterLink/FilterButton — .fbtn mono micro-labels in a hairline outline, ink-ground selection; `fit` sets a short fixed set in one phone row | Single vs multi-select semantics (aria-current vs aria-pressed); axis grouping |
 | Tabs | Tablist, roving tabindex, arrows | SheetTabs — .tabstrip: Sans labels on a ruled baseline, accent underline on the current tab, URL-backed; all tabs visible on a phone | Keyboard contract (arrows, Home/End); scroll selected into view |
-| Dialog | Modal: scrim, trap, restore | Dialog — the .sheet plate over the scrim | Trap/Esc/restore/body-lock; @starting-style mount |
-| Bottom sheet | Compact surface for dense controls | BottomSheet — the sheet plate flush to the bottom edge, safe-area padded | When to sheet; kept-mounted children; inline dissolution ≥640px |
+| Dialog | Modal: scrim, trap, restore | Dialog — a native `<dialog>` on the modal stack, the .sheet plate over the scrim, animated in on mount with Motion (`springs.spatial`) | Trap/Esc/restore/body-lock via `showModal()` and the modal stack |
+| Bottom sheet | Compact surface for dense controls | BottomSheet — the sheet plate flush to the bottom edge, safe-area padded; `inlineFrom="sm"` dissolves it ≥640px, `inlineFrom="lg"` ≥1024px, `align="center"` floats it as a centered dialog above compact | When to sheet; kept-mounted children; inline dissolution |
 | Bottom bar / FAB region | Persistent primary action on compact | MobileActionBar — the .buybar: total block + one live action, no FAB | Persistence; safe-area; body clearance; retirement at real breakpoints |
 | Search bar | Query field + refinements | Finder + SearchField — the .finder tile plate, GET form, ⌕ | Query/refinement separation; searches are shareable URLs |
 

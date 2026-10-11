@@ -55,6 +55,12 @@ const SECTION_CARDS = [
     title: "Material reference",
     note: "What the components borrow from Material 3 — behavior only — and the adaptive model.",
   },
+  {
+    href: "/docs/implementation",
+    n: "09",
+    title: "Implementation",
+    note: "Living record of the platform-evolution workstream — every initiative and its validation state.",
+  },
 ];
 
 export default function DocsHome() {

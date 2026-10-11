@@ -265,8 +265,7 @@
 }
 /* A wall whose cells carry an action row grows its unit so the photo keeps
    its share of the card. `.mcell` clips its overflow, so this has to cover
-   the *tallest* action block — now two stacked 38–40px controls rather than
-   one 34px row (see `.qcom`). */
+   the tallest action block a cell can carry. */
 .mosaic--commerce {
   --mratio: 1.76;
 }
@@ -285,91 +284,6 @@
   .mosaic--commerce .mcell--wide {
     grid-column: span 1;
   }
-}
-
-/* ---------- quick commerce — Buy now · Add to cart on a marketplace card ----------
-   Drawn the way the marketplaces that own this pattern draw it (Amazon's
-   card pill, eBay's fill-then-outline pair, Depop's stacked item actions):
-   two full-width controls, one under the other, primary filled and
-   secondary outlined in the *same* neutral — not a loud fill beside a
-   mystery icon square.
-
-   Three things the old pair got wrong, and why this is built the way it is:
-
-   · Filled red on every card. `--live` is the system's one-accent-per-surface
-     colour (see `.btn--destructive`); fifteen red Buy nows on one wall spent
-     it, and left the page's real accents — the headline's live word, List a
-     part — competing with the inventory. Ink fill is the neutral primary;
-     red stays owned by the listing sheet, where Buy now *is* the page.
-   · The cart label was behind `@container (min-width: 300px)`, and a card on
-     the marketplace wall is ~245px — so the label never rendered at any
-     width and the control shipped as an unlabelled square. Both buttons now
-     carry their words at every width.
-   · Two half-width controls can't hold `ADD TO CART` in 10.5px mono at a
-     two-column phone width. Stacked, each one gets the whole card and a
-     40px thumb target. No bracket decoration — the card is too small for
-     the btn's stage directions. */
-.qcom {
-  display: grid;
-  gap: 8px;
-}
-.qcom__row {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-.qcom .btn {
-  width: 100%;
-  min-height: var(--touch);
-  padding: 0 12px;
-  font-size: 10.5px;
-  /* 500 is Plex Mono's heaviest loaded cut — 600+ would faux-bold. */
-  font-weight: 500;
-  letter-spacing: 0.09em;
-  border-radius: var(--r-ctl);
-}
-.qcom .btn::before,
-.qcom .btn::after {
-  display: none;
-}
-.qcom__buy {
-  min-width: 0;
-  white-space: nowrap;
-}
-/* The references rank their two actions as fill-then-outline (eBay's blue
-   pair, Depop's black-then-bordered). DRVN ranks them the same way but in
-   its own grammar: the system separates *tonally* — "no borders, no shadows"
-   (design-system §4) — so the secondary is a tonal step down onto
-   `--paper-deep` rather than a ruled outline. Same hierarchy, no new
-   material. */
-.qcom__cart {
-  gap: 8px;
-}
-.qcom__ico {
-  width: 15px;
-  height: 15px; /* size */
-  flex: none;
-}
-.qcom__label {
-  display: inline;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@media (hover: none), (pointer: coarse) {
-  .qcom .btn {
-    min-height: 40px;
-  }
-}
-@media (max-width: 640px) {
-  .qcom .btn {
-    min-height: 40px;
-  }
-}
-.qcom__err {
-  display: block;
-  margin: 0;
 }
 
 /* ---------- category navigation — destinations, not refinements ----------

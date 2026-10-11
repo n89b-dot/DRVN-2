@@ -8,8 +8,7 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ConsoleEmpty } from "../_components/console-empty";
-import { Pager } from "../_components/pager";
-import { SearchField } from "@/components/ui";
+import { SearchField, Pagination } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -246,7 +245,7 @@ export default async function AdminOrdersPage({
             ))}
           </tbody>
         </table>
-        <Pager page={page} hasMore={hasMore} href={pageLink} />
+        <Pagination page={page + 1} hasMore={hasMore} hrefFor={(target) => pageLink(target - 1)} prevLabel="← Newer" nextLabel="Older →" />
         </>
       ) : (
         <ConsoleEmpty

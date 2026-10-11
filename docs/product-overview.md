@@ -151,11 +151,14 @@ lean-back inspiration, **Home** = a light dashboard that flows into the feed.
 ### Home — two experiences by auth state
 Logged-out is **imagery-forward marketing** at `/`: an editorial hero leading with the car
 ("The home for your car and its build"), two equal actions — Add your car · Shop parts — a
-short "what DRVN is" loop that runs garage → community → market, then builds before parts. Logged-in is
-a **light dashboard header** (garage strip, quick actions like Sell / Add car, saved +
-notification highlights) that flows into the Explore feed — Marketplace always one tap away.
-Home is an aggregator, so its exact composition is finalized *last*, after the object pages
-are settled.
+short "what DRVN is" loop that runs garage → community → market, then builds before parts.
+Logged-in `/home` (WS11, September 2026; `src/app/(product)/home/page.tsx`) is a feed with
+three tabs — **Following · For you · Local** (Local appears once the member has said where
+they are, and someone who follows nobody opens on For you) — with the **QuickPost** box
+("post about a car or a part, with a photo") at the top of the feed, and a rail of tiles:
+**Your garage**, **Parts for your cars** (or "Parts people are watching" when nothing
+fits), and **Builders to follow** (`suggested_builders`). The old "Needs you" attention
+stack is gone; what needs you surfaces through the Messages badge and `/selling`.
 
 ### Explore — one wall, everything public
 A single **mixed feed** of cars, builds, build updates and parts, with segments (All ·
@@ -168,8 +171,10 @@ Strong content-type labels keep cars/builds/parts/updates from blurring together
 ### Marketplace — focused, intent-driven
 The goal is "I have a Golf R, find an exhaust" made effortless: a prominent search + filter
 bar on top (keyword, car, category, condition, price, location), then **browse-by-category**
-using a **condensed ~6-category taxonomy** (Performance; Engine; Exterior & Body; Interior &
-Lighting; Brakes & Suspension; Wheels & Tires). Categories use **custom icons, not photos** —
+using a **condensed six-category taxonomy** — Performance · Engine · Exterior & Body ·
+Interior & Lighting · Brakes & Suspension · Wheels & Tires, each with four to six
+subcategories (`CATEGORIES` in `src/lib/marketplace/taxonomy.ts`) — shown as a persistent
+left category panel from 1024px and a sheet below it. Categories use **custom icons, not photos** —
 cleaner and faster to scan. A **garage-fitment toggle** ("show parts that fit my car") adds a
 "fits your [car]" indicator — driven by *platform* fitment, never seller claims.
 
@@ -187,23 +192,33 @@ labeled non-authoritative and never drives the platform's "fits your car" signal
 
 ### Garage — a private back-office
 The garage is your **private dashboard** for managing cars and their content — not the public
-"here are my cars" view (that lives on your profile). Cars are listed first; "Add a car" is a
-compact, elegant action (the old giant top-of-page form was wrong). Each car has an action
-menu: edit, list a part from it, edit mods, view public page, add activity updates.
+"here are my cars" view (that lives on your profile). Since the September 2026 rebuild
+(`src/app/(product)/garage/page.tsx`) it opens on a **car switcher plus one focused car**
+with four panels — **Overview** (the sheet and its stats), **Mods** (the structured mod
+editor), **Parts** (what's listed, drafted, reserved or sold off this car) and **Media**
+(the gallery and cover) — so the week-to-week work happens in one place; details, the
+showcase and deleting the car stay on the car's full edit page. The older list of per-car
+sheets is only the fallback when no car is focused. "Add a car" is a compact action, not a
+giant top-of-page form.
 
 ### User Profile — a lightweight identity hub
 "Link-in-bio for your car life": points to your cars and listings and links out (YouTube,
-Instagram, website). Deliberately **minimal** — followers are MVP, but full activity feeds and
-reputation are post-MVP (except seller ratings, which are MVP because checkout needs trust).
-No cover image at MVP; a large avatar is enough. One flexible profile for now, with the data
-model architected for a shop/business profile type later.
+Instagram, website). The September 2026 rebuild (`src/components/profile/profile-body.tsx`)
+gave it a **banner that borrows the lead car's cover** (no separate cover upload), and five
+tabs — **Overview · Garage · Updates · Parts · Reviews**. A member's store is simply the
+**Parts** tab: the "Parts for sale" tile's **Store →** link goes to `?view=parts`, and on
+phones the parts come straight after the featured build so a buyer never scrolls past every
+update first. Seller ratings and reviews are MVP because checkout needs trust. One flexible
+profile, with shop profiles layered on it (migration 0056) rather than a second type.
 
 ### Car Profile — the centerpiece
 This is where people land and linger, so it **earns image-forward treatment** — but it's kept
 from being bogged down by photos: the gallery **expands into a modal** to keep the page clean.
 The module hierarchy: identity block → meta chips (year, color, location, tags like "Bagged"
-/ "FBO") → About/Activity tabs → about text → gallery → **structured Modifications** → Wheels
-& Tires, plus an **"active listings from this car"** module. Modifications are discrete,
+/ "FBO") → four `SheetTabs` panels — **The build · For sale · Activity · Gallery**
+(`src/app/(discover)/cars/[slug]/car-tabs.tsx` ~438; For sale carries the live count) →
+with the build panel holding the **structured Modifications** and Wheels & Tires, and the
+For sale panel being the "active listings from this car" module. Modifications are discrete,
 linkable items (some link straight to a listing for sale) entered via **paste → AI parse →
 confirm** — the connective tissue between a build and the marketplace. Notably, **there is no
 standalone Build page**: the build lives as the car's Activity tab, plus a deferred build-goal
@@ -217,17 +232,20 @@ badge/highlight** ("came off this car"), not a giant section. "More from seller"
 (hidden if none); "similar items" comes later.
 
 ### Saved & Notifications — engagement, kept meaningful
-**Saved** is a simple bookmarks page grouped by type (parts, cars, sellers) — and an important
-input to the recommendation engine. **Notifications** are split into **two never-combined
+**Saved** (`/saved`) has two tabs, **Saved · Following** (`?tab=following`), plus the
+member's saved searches — bookmarks grouped by what they are, and an important input to the
+recommendation engine. **Notifications** are split into **two never-combined
 sections**: Profile/engagement first (follows, saves, comments on your stuff), Marketplace
 second (sold, new offer, offer accepted, questions, price drops) — so the product never feels
 like it's only about offloading parts.
 
 ### Settings — config + the content-management layer
-Account/profile config, notification prefs, privacy (analytics consent), fees and saved
-cards, plus purchase/sales history now that checkout is live. Payouts moved out in
-September 2026: Stripe Connect onboarding and the payout ledger both live on `/payouts` in
-the Selling family, and Settings → Payments links there. It's also the practical home for some of
+Seven sections plus a danger zone (`src/app/(product)/settings/settings-panel.tsx`):
+**Account · Profile · Notifications · Privacy · Payments · Shipping · Shop** — privacy holds
+analytics consent and the account export, Shipping the fulfilment profile (0051), Shop the
+shop profile (0056). Purchase history lives at `/orders`, sales at `/selling`. Payouts moved
+out in September 2026: Stripe Connect onboarding and the payout ledger both live on
+`/payouts` in the Selling family, and Settings → Payments links there. It's also the practical home for some of
 the **read.cv-style editor modals** — the content-management layer the prototype was missing,
 which is a first-class part of the build, not an afterthought. The design reference now
 lives in the in-app docs microsite (`/docs/design-system`).
@@ -254,17 +272,26 @@ lives in the in-app docs microsite (`/docs/design-system`).
 
 ## Where we are
 
-*(updated 2026-08-09)* All milestones are shipped and the money is real. **Stripe is fully
+*(updated 2026-10-11)* All milestones are shipped and the money is real. **Stripe is fully
 integrated**: Connect onboarding for sellers, PaymentIntents checkout with saved payment
-methods, transfers that move only on buyer-confirmed delivery plus a 7-day clearing hold,
-a durable refund state machine that reverses the seller's transfer on every refund path,
-a dispute SLA with escalation and auto-refund, and a webhook that is the settlement
-authority. Messaging exists (`/messages`, order-scoped threads) alongside a dedicated
-offers surface (`/offers` with negotiation threads). There is a full **admin console** at
-`/admin` (role-based membership, append-only audit log, disputes/orders/listings/users/
-reports/payments-ops/settings surfaces). The schema stands at **28 applied migrations**,
-and CI runs typecheck/lint/unit tests, the SQL guard suites (`purchase_guard`,
-`admin_guard`) against a real Postgres, and the E2E specs. For history see
+methods, a durable refund state machine that reverses the seller's transfer on every refund
+path, a dispute SLA with escalation and auto-refund, and a webhook that is the settlement
+authority. **Sellers are paid soon after delivery** — the payout is released two days after
+delivery is confirmed, with risk controls — negative-balance debit on seller accounts, a
+receipt-plausibility window, 3D Secure from $500, tracking required from $1,000 — instead
+of a long clearing hold; decided 4 October 2026, `docs/decisions/payout-hold.md`,
+migration `20261009100000`. **Messages are person-first**: one conversation per pair of
+people, with the orders and offers between them as deal cards inside it (2026-09-28); offers
+also have their own surface at `/offers`. There is a full **admin console** at `/admin`
+(role-based membership, MFA, append-only audit log; 13 pages across disputes, cases, orders,
+listings, users, reports, payments ops, invitations, export, audit and settings). The schema
+is `supabase/migrations/` **0001–0057 plus timestamped migrations** (187 files; 130
+timestamped from `20260905011618` to `20261011130000`, the October 11 scale set). CI runs
+typecheck/lint/unit tests, applies every migration to a real Postgres and runs the **85 SQL
+guard files in `supabase/tests/`** (money, purchase, refund, payout, admin, privacy,
+marketplace, search-at-volume and precomputed-aggregate guards among them), then the E2E
+specs. The October 2026 performance work (`#18`/`#20`) made Explore and the marketplace
+read precomputed aggregates and indexed search at two million parts. For history see
 [CHANGELOG.md](../CHANGELOG.md); for the original as-built requirements see
 [DRVN-PRD-v3.1.md](DRVN-PRD-v3.1.md) (retained as design rationale).
 

@@ -25,10 +25,13 @@ inferences* (potential fitment matches — never presented as verified).
   soon after delivery (`settlement_settings`; `docs/decisions/payout-hold.md`),
   refunds via a durable state machine. Separate
   charges and transfers; the platform account is merchant of record.
-- **Design system** — "Livesheet" (`docs/livesheet-inventory.md`; the
-  stylesheet is split by recipe family in `src/app/styles/`, tokens in
-  `00-tokens-base.css`, imported in order by `src/app/globals.css`;
-  primitives in `src/components/ui/`). Internal design microsite at `/docs`
+- **Design system** — "Livesheet". The rules are `docs/site/design-system.md`,
+  the token contract is `design-mockups/livesheet/design.md` (source of truth
+  `src/app/styles/`: tokens in `00-tokens-base.css`, recipe families imported
+  in order by `src/app/globals.css`), and every component is listed in
+  `src/components/registry.ts` (primitives in `src/components/ui/`, domain
+  patterns in `src/components/commerce/`). `docs/livesheet-inventory.md` is the
+  historical July 2026 porting contract, not current. Internal design microsite at `/docs`
   (admin-gated, same MFA as `/admin`).
 
 ### Money model (the part worth understanding first)
@@ -37,8 +40,10 @@ inferences* (potential fitment matches — never presented as verified).
   the browser confirms the PaymentIntent; the webhook settles
   (`purchase_finalize`) and records a `transfer_intents` row per order.
   No money moves to sellers at payment time.
-- Transfers: pg_cron marks intents ready once their release time
-  (`payout_release_at`, 20261009100000) has passed (0020); the transfer worker claims bounded, **leased** batches
+- Transfers: each order's `transfer_intents` row carries a `payout_release_at`
+  (two days after confirmed delivery, migration 20261009100000); the pg_cron
+  job scheduled by 0020 marks intents ready once that time has passed, and
+  the transfer worker claims bounded, **leased** batches
   (`claim_transfer_intents`, FOR UPDATE SKIP LOCKED, stale-claim recovery)
   and creates Stripe transfers with reconcile-before-create (0026).
 - Refunds: every refund is a `refund_operations` state machine row
@@ -118,7 +123,7 @@ idempotent with self-checks that raise on failure.
 2. Connect (Express) for sellers — onboarding from Selling → Payouts
    (`/payouts`; Settings → Payments links there); `payouts_enabled` syncs via
    `account.updated`.
-3. Point the scheduler at the app: the migrations create nine pg_cron jobs;
+3. Point the scheduler at the app: the migrations create 14 pg_cron jobs;
    the HTTP ones reach `/api/jobs/*` once `job_config` holds the worker URL
    and `CRON_SECRET` (`docs/production-runbook.md` §4). Admin → Payments →
    "Run worker now" runs the money pass by hand.

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { SearchField, SheetTabs } from "@/components/ui";
+import { SearchField, SheetTabs, Pagination } from "@/components/ui";
 import { getDisputeQueue, DISPUTE_SLA_DAYS, DISPUTES_PAGE_SIZE, type DisputeQueueRow } from "@/lib/admin/queries";
 import type { DisputeCategory } from "@/lib/database.types";
 import { gradeLabel } from "@/lib/marketplace/grading";
@@ -9,7 +9,6 @@ import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ConsoleEmpty } from "../_components/console-empty";
-import { Pager } from "../_components/pager";
 
 export const dynamic = "force-dynamic";
 
@@ -157,7 +156,7 @@ function DisputeTable({
         ))}
       </tbody>
     </table>
-    <Pager page={page} hasMore={hasMore} href={pagerHref} prevLabel="← Back" nextLabel="More →" />
+    <Pagination page={page + 1} hasMore={hasMore} hrefFor={(target) => pagerHref(target - 1)} prevLabel="← Back" nextLabel="More →" />
     </>
   );
 }

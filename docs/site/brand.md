@@ -6,13 +6,20 @@
   brand full stop: the wordmark is `DRVN.` where the terminal dot is set in the
   live signal color. The dot is the brand's one flourish — it reads as the
   "recording" light on the sheet.
-- The wordmark is set in IBM Plex Sans at weight 600 with tight tracking; it is
-  typography, not a drawn logo. There is no separate icon mark — in tight
-  spaces (favicons, monograms) use a `D` on an ink plate with radius 10px.
+- The wordmark is set in IBM Plex Sans at weight 700, 16px, with a touch of
+  open tracking (`letter-spacing: 0.02em` — `.bar__logo` and `.rail__logo` in
+  `src/app/styles/02-shell.css`); it is typography, not a drawn logo. There is
+  no separate drawn icon mark — in tight spaces (favicons, monograms) use a
+  `D` on an ink plate with radius 10px. That mark ships as the app icon
+  (`src/app/icon.tsx`, `src/app/apple-icon.tsx`) and the collapsed register
+  rail shows the wordmark's own short form, a text `D.` with the live dot
+  (`.rail__logo-mark` in `src/components/ui/app-shell.tsx`).
 - Beside the wordmark, chrome may carry the microlabel `BUILDS AND PARTS`
-  (mono, 12px, uppercase, 0.14em tracking, dim). It names both front doors in
-  three words; it read `PARTS MARKETPLACE` until September 2026, when the
-  lockup stopped describing DRVN as only a marketplace (F-2).
+  (source text "Builds and parts" in `src/components/ui/livesheet-bar.tsx`,
+  uppercased by the `.microlabel` recipe — mono, 12px, 0.14em tracking, dim).
+  It names both front doors in three words; it read `PARTS MARKETPLACE` until
+  September 2026, when the lockup stopped describing DRVN as only a
+  marketplace (F-2).
 
 ## Positioning
 
@@ -52,24 +59,29 @@ different values — never a second stylesheet.
 | `tile` | `#F8F6F0` | raised widget plate |
 | `tile-2` | `#F1EFE8` | secondary / deeper plate |
 | `ink` | `#20232A` | text; ink-inverted surfaces |
-| `dim` | `#565963` (`:root`) / `#63666F` (`@theme`) | secondary text, microlabels |
-| `live` | `#C02C14` (`:root`) / `#F03A20` (`@theme`) | THE signal — live states only |
-| `ok` | `#256B42` (`:root`) / `#2E7D4F` (`@theme`) | settled / done / verified |
+| `dim` | `#565963` | secondary text, microlabels |
+| `live` | `#C02C14` | THE signal — live states only |
+| `ok` | `#256B42` | settled / done / verified |
 | `warn` | `#8A5A00` | held money, due work |
 | `info` | `#1D5C8A` (+ `--info-tint`) | neutral explainer status tone — never a CTA |
+| `live-text` / `ok-text` / `warn-text` / `info-text` | `#A82410` / `#145C35` / `#6F4A00` / `#14527F` | chip text — one step deeper than the status hues so type clears 4.5:1 on its tint |
 | `destructive` | aliases `live` | destructive actions; same hue, distinct semantic name |
 | `on-ink` | `#F8F6F0` | text on ink surfaces |
+| `ink-hover` | `#33363E` | hover of ink-filled controls |
+| `live-hover` | `#A52410` | hover of the live fill |
 | `img-fallback` | `#E2DFD5` | media box before an image |
 | `ghost-fill` | `var(--paper-deep)` | secondary (ghost) button fill — recessed by day |
+| `ghost-hover` | `#DBD8CD` | hover of the ghost fill |
+| `scrim` | `rgba(32, 35, 42, 0.45)` | behind dialogs and sheets |
+| `lightbox` | `#0A0B0E` | the lightbox stage — near-opaque, so the page behind a photo is gone |
 | `photo-scrim` / `on-photo` / `on-photo-dim` | `rgba(10, 11, 14, 0.74)` / `#FFFFFF` / `rgba(255, 255, 255, 0.78)` | text over a photograph (garage hero, featured build) — same in both lightings |
 
 > **One source per hue.** The R3 contrast pass darkened `--dim`, `--live` and
 > `--ok` on `:root` so text clears WCAG 4.5:1 on paper. The `@theme` scale
 > tokens (`--color-dim`, `--color-live`, `--color-ok` → `text-dim`,
-> `text-live`, `text-ok` utilities) are now `var()` references to those same
+> `text-live`, `text-ok` utilities) are `var()` references to those same
 > `:root` values (`src/app/styles/00-tokens-base.css`), so utilities and
-> component CSS can no longer diverge. The older `@theme` hexes shown in some
-> tables above are history.
+> component CSS cannot diverge.
 
 The "one accent" rule applies to the *signal* accent (`live`); `info` is a
 status tone alongside `ok`/`warn`, never a call to action.
@@ -97,9 +109,11 @@ the whole day palette are unchanged.
 | `warn-tint` | `rgba(217, 161, 60, 0.18)` |
 | `info` | `#6CB2DF` |
 | `info-tint` | `rgba(108, 178, 223, 0.2)` |
+| `live-text` / `ok-text` / `warn-text` / `info-text` | `#FF7A66` / `#6CC794` / `#E6B45E` / `#8EC4EA` — brightened a step over the night status hues |
 | `on-ink` | `#14161A` |
 | `img-fallback` | `#22262D` |
 | `ink-hover` | `#D7D8DC` |
+| `live-hover` | `#FF6047` |
 | `ghost-fill` | `#242830` — raised above the graphite, so a ghost button never reads as a black slab |
 | `ghost-hover` | `#2E333B` |
 | `scrim` | `rgba(5, 6, 7, 0.62)` |
@@ -136,7 +150,13 @@ gained a little room.
 - The body carries a faint 40px **graticule** (grid of `grid-line`) — the
   drafting sheet itself.
 - Plates (`tile`) separate by **tone, not borders or shadows**. Nothing casts
-  a shadow; nothing is glass; no gradients.
+  a drop shadow; nothing is glass; no gradients. The two `box-shadow` rings
+  in the stylesheet are focus/state outlines, not elevation: the destructive
+  button's inset 1.5px live ring (`.btn--destructive`,
+  `src/app/styles/04-actions-rows.css`) and the search pill's 2px ink ring on
+  `:focus-within` (`.search`, `src/app/styles/07-navigation.css`). The
+  floating exceptions (popovers, dragged items, chips on photos) are listed in
+  `/docs/rules`.
 - In NIGHT, photographs get `brightness(0.86) contrast(1.05)` so imagery sits
   into the sheet rather than glowing on it.
 
@@ -149,3 +169,13 @@ gained a little room.
 - A listing without a photo is not an error: it renders as an **undrawn
   plate** — dashed construction rule and cross-hair mark — "a plate nobody has
   drawn yet."
+
+## Share cards
+
+Routes that get shared carry a designed Open Graph image (`opengraph-image.tsx`
+beside the page, 1200×630): cars, posts, activity posts, listings, profiles and
+the root. Each is the brand's own plate — an ink ground with on-ink text, the
+`DRVN.` wordmark with its live dot, and the object's photo filling one side
+when it has one. Type in these cards is the system sans, not Plex:
+`ImageResponse` renders outside the app's `next/font` pipeline, so the cards
+set `fontFamily: "sans-serif"` rather than loading the typeface.

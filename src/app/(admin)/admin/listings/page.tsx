@@ -9,8 +9,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
-import { Pager } from "../_components/pager";
-import { SearchField } from "@/components/ui";
+import { SearchField, Pagination } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -210,7 +209,7 @@ export default async function AdminListingsPage({
             ))}
           </tbody>
         </table>
-        <Pager page={page} hasMore={hasMore} href={pagerHref} />
+        <Pagination page={page + 1} hasMore={hasMore} hrefFor={(target) => pagerHref(target - 1)} prevLabel="← Newer" nextLabel="Older →" />
         </>
       ) : (
         <ConsoleEmpty

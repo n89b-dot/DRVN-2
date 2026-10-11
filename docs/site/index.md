@@ -4,7 +4,8 @@ DRVN is the home for your car and its build — follow what others are building,
 and buy or sell the parts that come off. One product, two front doors (Explore
 and the Marketplace), with the car in the middle: a profile has a garage, each
 car has its updates and its parts, and the parts a member sells are their store.
-The marketplace is fully public, including for signed-out visitors.
+Browsing the marketplace is fully public, including for signed-out visitors;
+while beta access is enforced, checkout is gated behind sign-in.
 
 This microsite is the single front door to everything you need to know about
 the product's design and documentation. It is served in two forms:
@@ -26,7 +27,9 @@ This index page renders at `/docs` itself — there is no `/docs/index` route.
 | Components | `/docs/components` | `/docs/md/components` | The complete categorized component catalog |
 | Patterns | `/docs/patterns` | `/docs/md/patterns` | Route map, commerce flows, empty and form states |
 | Rules | `/docs/rules` | `/docs/md/rules` | The do/don't contract, accessibility, engineering conventions |
+| Motion | `/docs/motion` | `/docs/md/motion` | The DRVN motion language: philosophy, Motion for React vs CSS boundary, timing, springs, recipes, reduced motion |
 | Material reference | `/docs/material` | `/docs/md/material` | What the component library borrows from Material 3 (behavior only) and the Compact / Medium / Expanded adaptive model |
+| Implementation | `/docs/implementation` | `/docs/md/implementation` | Living record of the platform-evolution workstream: every initiative, its benefit, approach and honest validation state |
 
 ## Reference library (raw markdown)
 
@@ -34,9 +37,15 @@ Deeper source documents, served verbatim:
 
 | Document | Markdown |
 | --- | --- |
+| DRVN search (lanes, filters, providers, indexing, privacy) | `/docs/md/search` |
+| Vehicle identity & fitment | `/docs/md/vehicles` |
+| Activity document schema | `/docs/md/activity-schema` |
+| Notifications (every kind, preference, delivery seam) | `/docs/md/notifications` |
+| Domain states & transitions (orders, listings, offers, transfers, refunds) | `/docs/md/domain-states` |
+| Operations — jobs, admin, selling IA | `/docs/md/operations` |
 | Livesheet `design.md` (source contract) | `/docs/md/livesheet-design-md` |
-| Livesheet component & page inventory | `/docs/md/livesheet-inventory` |
-| Component design doc | `/docs/md/component-design-doc` |
+| Livesheet component & page inventory (historical) | `/docs/md/livesheet-inventory` |
+| Component design doc (deprecated — pre-Livesheet) | `/docs/md/component-design-doc` |
 | Product overview | `/docs/md/product-overview` |
 | PRD — September 2026 direction (current) | `/docs/md/prd` |
 | Build plan — September 2026 direction | `/docs/md/build-plan-2026-09` |

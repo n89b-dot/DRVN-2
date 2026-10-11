@@ -27,7 +27,10 @@ The contract. When a change violates one of these, the change is wrong.
 - No pills. No shadows. No gradients. No glass — except where a thing
   genuinely floats or sits on a photo: soft `--scrim` shadows on popovers
   and dragged items, the frosted top bar, the dark caption fade and small
-  chips on photos, and the round count badge (`.barbadge`).
+  chips on photos, and the round count badge (`.barbadge`). `box-shadow`
+  is also how two *rings* are drawn without layout shift — the 1.5px live
+  inset on `.btn--destructive` and the 2px ink focus ring on
+  `.search:focus-within` — those are outlines, not shadows.
 - No borders as edges. Exceptions: the `.mail` frame (it depicts an external
   artifact), the marketplace card's 1px `rule-mid` edge, and hairline
   outlines on controls and chips that sit on a raised surface. `dimline` is
@@ -49,8 +52,8 @@ The contract. When a change violates one of these, the change is wrong.
 - `:focus-visible`: 2px live outline, offset 3px, border-radius 4px — never
   removed. The one exception is the search pill (`.search`), which draws a
   2px ink ring on the whole pill (`:focus-within`) instead of a box inside it.
-- `prefers-reduced-motion`: draws render settled, pulses stop, count-ups
-  print final values; countdowns keep running (information, not decoration).
+- `prefers-reduced-motion`: draws render settled, pulses stop, ticks never
+  start; countdowns keep running (information, not decoration).
 - Dialogs and sheets trap focus, close on Escape, and lock body scroll.
 - Toasts render as `<output>`, which carries an implicit `status` role;
   icon-only controls carry `aria-label`;
@@ -75,13 +78,18 @@ The contract. When a change violates one of these, the change is wrong.
   New values require a new token in `src/app/styles/00-tokens-base.css` *and* an update to
   the Livesheet contract (`design-mockups/livesheet/design.md`).
 - NIGHT is a token remap — never write a dark-specific component rule beyond
-  the photo filter.
+  the four that exist (photo filter, theme-pip fill, `select.ctl` chevron,
+  selected category-row / filter-chip plate — see
+  [design-system §3](design-system.md#3-theming-day-and-night)).
 - Theme is the `ls-theme` cookie stamped pre-paint by the root layout script;
   don't read cookies in layouts that could otherwise stay static.
 - Reusable UI goes in `src/components/ui` and is exported from its
   `index.ts`; product pages and this microsite import the same source.
-  (Current exceptions: `feed-list.tsx` and `skeleton.tsx` live in `ui/` but
-  are not in the barrel — import them from their files directly.)
+  (Current exceptions: `feed-list.tsx`, `intent-link.tsx` and
+  `streamed-shell-counts.tsx` live in `ui/` but are not in the barrel —
+  import them from their files directly. `patterns.tsx` and `primitives.tsx`
+  are re-exported name by name, so a new export there also needs a line in
+  `index.ts`.)
 - Server actions re-verify auth/membership themselves; layouts are
   convenience gates only. Admin (and this microsite) 404 — never 403 — to
   non-members.
@@ -97,8 +105,15 @@ The contract. When a change violates one of these, the change is wrong.
   way).
 - If Turbopack dev serves stale CSS after a stylesheet edit: `rm -rf
   .next/dev/cache` and restart.
-- Keep the 540px/1200px layout primitives (`NarrowColumn`, `.wrap`) — no
-  magic numbers per page.
-- New components: add the recipe to its family file in `src/app/styles/`,
-  document it in `docs/site/components.md`, and render a specimen on
-  `/docs/components`.
+- Keep the layout primitives — `.wrap` (1200px) and its width steps
+  `.wrap--narrow` 720 / `.wrap--medium` 900 / `.wrap--wide` 1060, which
+  `NarrowColumn width="narrow|medium|wide"` renders — no magic numbers per
+  page.
+- New components: look it up first (`src/components/registry.ts`,
+  [components §12](components.md)); compose from `@/components/ui` and
+  `@/components/commerce`. Only if nothing covers it: build it from existing
+  primitives and recipes (new CSS as a named recipe in its family file under
+  `src/app/styles/`), export it from the barrel, add a `registry.ts` entry,
+  run `npm run docs:components` (components.md §10 is generated from the
+  registry — never hand-edit it), and add a specimen to
+  `src/app/(docs)/docs/components/page.tsx` if it is visual.

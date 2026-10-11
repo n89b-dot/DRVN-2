@@ -81,10 +81,10 @@ export default function BrandPage() {
         <Specimen
           name="The wordmark"
           klass=".bar__logo idiom"
-          note="Always uppercase, IBM Plex Sans 600, tight tracking. The terminal dot is set in the live color — the recording light on the sheet. Beside it, chrome may carry a mono microlabel."
+          note="Always uppercase, IBM Plex Sans 700, 16px in the chrome, +0.02em tracking (.bar__logo / .rail__logo). The terminal dot is set in the live color — the recording light on the sheet. Beside it, chrome may carry a mono microlabel."
         >
           <div className="flex items-end gap-6">
-            <span className="text-display font-semibold leading-none tracking-tight">
+            <span className="text-display font-bold leading-none tracking-[0.02em]">
               DRVN<em className="not-italic" style={{ color: "var(--live)" }}>.</em>
             </span>
             <span className="microlabel !mb-1">Builds and parts</span>
@@ -93,7 +93,7 @@ export default function BrandPage() {
         <Specimen
           name="Compact mark"
           klass=".monogram"
-          note="No separate icon mark exists. In tight spaces (favicon, avatar fallback) use a D on an ink plate, radius 10px."
+          note="No separate drawn icon mark exists. In tight spaces (favicon, avatar fallback) use a D on an ink plate, radius 10px — shipped as src/app/icon.tsx and apple-icon.tsx; the collapsed rail shows a text D. with the live dot."
         >
           <div className="flex items-center gap-4">
             <span className="monogram">D</span>

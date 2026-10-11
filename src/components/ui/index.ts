@@ -82,6 +82,7 @@ export { SheetTabs, resolveTab, type SheetTab } from "./sheet-tabs";
 export { Toast } from "./toast";
 export { PaymentModeNotice } from "./payment-mode-notice";
 export { ScrollActiveIntoView } from "./scroll-active";
+export { SlashFocus } from "./slash-focus";
 export { PageHead } from "./page-head";
 export { TileHead } from "./tile-head";
 export { EmptyState } from "./empty-state";

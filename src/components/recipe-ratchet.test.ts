@@ -23,7 +23,9 @@ import { describe, expect, it } from "vitest";
 
 const RECIPE_COMPONENT: Record<string, string> = {
   btn: "Button / ButtonLink",
+  field: "TextField / TextArea / Select / FormField",
   field__label: "TextField / TextArea / Select / FormField",
+  ctl: "TextField / TextArea / Select (the control itself)",
   pagehead: "PageHead",
   tile__head: "TileHead",
   undrawn: "EmptyState",

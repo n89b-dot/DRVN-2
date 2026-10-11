@@ -433,7 +433,7 @@ The four execution decisions are resolved for this implementation: Open + Save o
 [comments]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/marketplace-plan-comment-review-2026-09-12.md>
 [implementation]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/remediation-evidence/marketplace-2026-09-12/README.md>
 [review]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/marketplace-review-2026-09-08.md>
-[design]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/DESIGN.md>
+[design]: marketplace-reference-evidence-2026-09.md
 [query]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/src/lib/marketplace/query.ts>
 [results]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/src/features/marketplace/results.tsx>
 [rpc]: </Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/supabase/migrations/20260905133456_uncapped_marketplace_filters.sql>

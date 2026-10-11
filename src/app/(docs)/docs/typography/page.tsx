@@ -106,7 +106,7 @@ export default function TypographyPage() {
           <TypeRow tier="Microlabel" spec="mono 500 · 12px · 0.14em · uppercase · .microlabel">
             <span className="microlabel !mb-0">On this sheet</span>
           </TypeRow>
-          <TypeRow tier="Label-nav" spec="mono 400 · 12px · uppercase · .bar__link / .jumplink">
+          <TypeRow tier="Label-nav" spec="mono 400 · 12px · 0.08–0.12em · uppercase · .bar__link / .jumplink / .fbtn">
             <span className="font-mono text-micro uppercase tracking-[0.12em]">
               Marketplace
             </span>
@@ -126,7 +126,7 @@ export default function TypographyPage() {
           <TypeRow tier="Price" spec="sans 600 · 18–20px · tabular · ink — never green">
             <span className="text-[20px] font-semibold tabular-nums">$5,200</span>
           </TypeRow>
-          <TypeRow tier="Mono-data" spec="mono 500 · 12px · tabular · .livedim .val / .spec">
+          <TypeRow tier="Mono-data" spec="mono 500 · 12px · tabular · .livedim .val (16 in .gsheet__dims) / .spec labels — .spec values are sans 16">
             <span className="font-mono text-micro font-medium tabular-nums">
               214 watching · $1,240.00 · 0:41:09
             </span>

@@ -1,5 +1,19 @@
 # LIVESHEET — Concept 16
 
+> **Historical brief (July 2026).** Livesheet became DRVN's production design system in the
+> August 2026 port (`docs/plans/livesheet-component-system.md`); the living contract is
+> `design.md` alongside this file, whose `source_of_truth` is `src/app/styles/`. Mockup-era
+> facts below are superseded by `design.md` where they differ:
+>
+> - theme persistence is an `ls-theme` **cookie**, not localStorage (`THEME_INIT_SCRIPT` in
+>   `src/app/layout.tsx`), so the server can render the right theme without a pre-paint flash;
+> - the signal red is **`#C02C14`** (`--live` in `src/app/styles/00-tokens-base.css`), not
+>   `#F03A20`; the night remap is `#FF4530`;
+> - tiles and plates are **r16** (`--radius-r: 16px`), not 20px; controls r10, chips r6;
+> - the Pass 7 "no tabs" ruling was reversed (see the corrected 16 Livesheet entry in
+>   `../LEDGER.md`): panels switch with the URL-backed **`SheetTabs`** component
+>   (`src/components/ui/sheet-tabs.tsx`), while "ON THIS SHEET" remains for in-page references.
+
 **Thesis:** "A drawing that knows what's happening." · **Family:** hybrid (era-media × artifact — a deliberate cross of Concepts 15 Glance and 04 Werkbank, commissioned by the client)
 
 Werkbank contributed the drawing-office half: warm paper, mono annotations, dimension lines,

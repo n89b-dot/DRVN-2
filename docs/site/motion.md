@@ -95,6 +95,15 @@ Shared variants in `src/lib/motion` — spread these, never re-type numbers:
 - `stagger(step)` — orchestration helper; default 70ms per index, capped in
   long lists.
 
+Duration-based presets live beside the recipes as `transitions.*` — `fast`,
+`standard`, `move`, `draw` — each `{ duration, ease }` on the matching
+`durations.*` value, for opacity and other non-spatial properties. `Dialog`
+and `BottomSheet` do not spread `surface`: each writes its own
+`initial`/`animate` inline with `springs.spatial` on the transform and
+`transitions.standard` on opacity (16px and 24px rises respectively), because
+their presence is tied to a native `<dialog>` / an always-mounted panel rather
+than to a Motion variant set.
+
 One-off transition values in feature code are animation debt. If a value
 recurs, promote it here.
 
@@ -130,8 +139,11 @@ page — nothing "changes" on screen); normal scrolling and reading.
 
 - `Rv` (every pagehead/tile reveal) — Motion-driven, `is-in` cascade kept
   for the CSS draw effects.
-- `Dialog` — real enter *and exit* via `AnimatePresence` (offer dialog,
-  confirm dialogs, lightbox, auth intent).
+- `Dialog` — enter only: the panel is a native `<dialog>` on the modal
+  stack, and its `motion.div` animates in on mount (`springs.spatial` +
+  `transitions.standard` opacity). There is no `AnimatePresence` and no exit
+  — the native close is immediate (offer dialog, confirm dialogs, lightbox,
+  auth intent).
 - `BottomSheet` — spring rise/settle on the always-mounted panel (its
   children must stay in the parent form, so no `AnimatePresence`).
 - `Toast`, `ResultNote` — feedback presence.
@@ -142,3 +154,12 @@ page — nothing "changes" on screen); normal scrolling and reading.
 - `BuildEvolution` — the provenance strip draws its rule (`draw` timing)
   and settles milestones oldest → newest.
 - Pickup Pass / shipping-label success — action payoffs settle in.
+- Explore wall and Explore search wall (`explore-wall.tsx`,
+  `search-wall.tsx` under `src/app/(discover)/explore/`) — the wall itself is
+  unanimated (pages preload below the fold); `AnimatePresence mode="wait"`
+  crossfades only the footer between "More" and "You're all caught up".
+- `SearchSuggest` (`src/components/ui/search-suggest.tsx`) — the suggestion
+  popover spreads `surface` inside `AnimatePresence`, so it rises in and
+  fades out on close.
+- `OfferDecision` (`src/features/commerce/offer-decision.tsx`) — the counter
+  form is an `expand` disclosure in `AnimatePresence`, collapsing on exit.

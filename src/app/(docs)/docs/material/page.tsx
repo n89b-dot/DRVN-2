@@ -18,7 +18,7 @@ const COMPARISONS: {
   {
     concept: "Filled button",
     material: "Primary contained action",
-    livesheet: "[ BUY NOW ] — Button variant=\"live\": mono brackets (the only variant that wears them), live fill, one per surface; ghost/quiet actions are Plex Sans",
+    livesheet: "[ BUY NOW ] — Button variant=\"live\": mono brackets (the only variant that wears them), live fill, one per surface; default (ink), ghost, destructive (outlined red) and quiet actions are Plex Sans",
     borrowed: "Action hierarchy, disabled/loading states, 40px floor, aria-busy narration",
   },
   {
@@ -42,13 +42,13 @@ const COMPARISONS: {
   {
     concept: "Dialog",
     material: "Modal with scrim, focus trap, restore",
-    livesheet: "Dialog — the .sheet plate risen over the scrim",
-    borrowed: "Trap/Esc/restore/body-lock; @starting-style mount",
+    livesheet: "Dialog — a native <dialog> on the modal stack, the .sheet plate risen over the scrim, animated in on mount with Motion (springs.spatial)",
+    borrowed: "Trap/Esc/restore/body-lock via showModal() and the modal stack",
   },
   {
     concept: "Bottom sheet",
     material: "Compact-screen surface for dense controls",
-    livesheet: "BottomSheet — the same sheet plate, flush to the bottom edge, safe-area padded",
+    livesheet: "BottomSheet — the same sheet plate, flush to the bottom edge, safe-area padded; inlineFrom=\"sm\" dissolves it ≥640px, inlineFrom=\"lg\" ≥1024px, align=\"center\" floats it as a centered dialog above compact",
     borrowed: "When to sheet (compact density), kept-mounted children, inline dissolution",
   },
   {

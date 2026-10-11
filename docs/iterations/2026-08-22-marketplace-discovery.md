@@ -1,5 +1,15 @@
 # Marketplace + Discovery UX remediation — 22 Aug 2026
 
+> **Superseded (2026-09-19) by WS9 (Marketplace and card) and WS11 (Home) of
+> `docs/plans/2026-09-direction-build-plan.md`.** Two of this pass's rulings
+> were reversed: there is **no Buy now on cards** (PRD `DRVN-PRD-2026-09.md`
+> M-5: add-to-cart only), so marketplace cards now render `ListingCartButton`
+> from `src/features/commerce/quick-commerce` (`src/features/marketplace/results.tsx`
+> ~117–133); and Home no longer reads a `?discover=` segment — `/home` is
+> Following · For you · Local tabs over `?tab=` (`src/app/(product)/home/page.tsx`
+> ~222). The one-card-system and category-navigation-separate-from-filtering
+> decisions stand. Kept as the record of the 22 Aug pass.
+
 Baseline: `main` @ `c93c434` ("feat(ui): apply garage and card patterns across
 product surfaces"). Brief: clearer product hierarchy across Home / Explore /
 Marketplace, Home Discovery segmentation, one listing-card system, quick

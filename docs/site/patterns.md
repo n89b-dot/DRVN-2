@@ -14,22 +14,29 @@ Page-level patterns: how components compose into the product's surfaces.
 | Car sheet | `/cars/[slug]` (+ `/activity/[postId]`) | hero callouts, jumprow, KPI tiles, for-sale rowlist, build blines (fitted, then "Came off this car"), activity feed |
 | Post without a car | `/posts/[postId]` | W-5. Its own route, not a second rendering of the car-sheet post page: no build to sit inside, no breadcrumb, and the tagged parts ARE the subject. A post that HAS a car redirects to its car URL — one canonical address per post. Both post pages show Save and Share under the header, and a quiet Report on the post and on each reply (not on your own); a reply can be deleted by its writer or the post's author |
 | Garage | `/garage?car=` (+ add car, `[id]/edit`; updates at `[id]/update/new` and `[id]/update/[postId]/edit`) | car switcher → focused view: stat strip and tabs (Overview · Mods · Parts · Media) mounting the existing editors. Main car leads. A part line shows its listing's real state (Draft · For sale · Reserved · Sold); drafts get their own group in Parts with Finish listing |
+| Selling | `/selling` | the seller's workspace head ("Run the stall"), the Selling family subnav, what needs you first, stock and money at a glance; the `SellerAccessNotice` when publishing is blocked |
 | Sell | `/sell` | draft autosave; Photos is step 01 (large cover slot, drop area) → part → provenance → condition → price → review; publishing needs a photo (drafts don't); on phones the price and Publish stay pinned. Invite-only accounts get the shared `SellerAccessNotice` (Request seller access · Manage your listings) on `/sell` and `/sell/import` |
-| Seller listings | `/listings` (seller register) + `/listings/[id]/edit` | ledger of the seller's listings — below 860px one compact card per listing (photo, title, car, status, then Views · Watch · Asking · Top offer); Pause/Archive/Delete live in the opened row; stacked, a title wraps to two lines. Edit names the listing (title, photo, price) and reuses the sell form; a draft, paused or archived listing gets Publish / Relist there, and a sold or reserved one offers no Delete |
+| Import a listing | `/sell/import` | 720px task page: paste a link or the post itself, review every field before anything publishes; the AI drafts, the seller decides |
+| Seller listings | `/listings` (seller register, nav label **My Listings** in `nav-routes.ts`) + `/listings/[id]/edit` | ledger of the seller's listings — below 860px one compact card per listing (photo, title, car, status, then Views · Watch · Asking · Top offer); Pause/Archive/Delete live in the opened row; stacked, a title wraps to two lines. Edit names the listing (title, photo, price) and reuses the sell form; a draft, paused or archived listing gets Publish / Relist there, and a sold or reserved one offers no Delete |
 | Messages | `/messages` + `/messages/[id]` | one conversation per person (not per deal). ≥981px the people list sits beside the open conversation; on phones it's list → thread. Rows lead with the person, deals as chips (red = your move); filters All · Unread · Buying · Selling; sellers see unanswered listing questions on top. The thread: deal cards, then messages and events (offers, shipping, dispute notes) in order, live offers decided in place, a pinned composer with an About picker and photos. `[id]` also accepts an order or offer id and redirects to the person. Updates live (realtime) |
 | Offers | `/offers` + `/offers/[id]` | open work orders, Received · Made (someone who has never listed a part opens on Made); accept/counter/pass. Once the seller counters it's the buyer's turn: the seller can only pass. One live offer per buyer per part — a second attempt is pointed at the first |
 | Payouts | `/payouts` | whether a payout account is connected (and the button to set it up), payout history, clearing → available |
 | Orders (seller) | `/orders` job detail | opens on Sales for anyone who has listed a part; Sales leaves out checkouts that were never paid (`?status=` still shows everything) and a cancelled sale says "No payout"; rows lead with the part's photo; pipe + dispatch form + payout math + past jobs |
 | Orders (buyer) | `/orders` | KPI, transit pipe + countdown, tracking spec, inspection alert, past purchases. An unpaid order says "To pay" and carries Finish checkout (→ `/orders/[id]/checkout`); back from Stripe before the webhook it says "Confirming your payment"; a cancelled unpaid order says "Cancelled — nothing charged". After the 30-day window the report form is gone and the order says when it closed |
+| Order detail | `/orders/[id]` | one order, buyer or seller reading ("inbound." / "outbound."): items, pipeline, shipping / pickup / return controls, disputes |
+| Pickup confirmation | `/orders/[id]/pickup` | 480px task page under the order's eyebrow — the buyer confirms a local pickup |
+| Order placed | `/order-placed` | the post-checkout landing: "That's yours." (or "Payment confirming." before the webhook), one or several orders |
 | Cart | `/cart` | review surface only — see P20 |
+| Cart complete | `/cart/complete` (route handler) | Stripe's `return_url`: verifies the intent server-side, clears the bought items, lands on the order; works for guests via the signed guest-checkout cookie |
 | Checkout | `/checkout` (+ `/orders/[id]/checkout`) | 2-step stepper — see P21 |
 | Watchlist | `/saved` | watched part tiles + saved searches + followed sheets |
 | Notifications | `/notifications` | actionable rows, policy blines, mail previews |
 | Profile | `/u/[username]` + `/profile` | full-width page: banner band with the avatar overlapping its foot, identity and followers · following · cars below it, actions on the right (Follow · Store · share; the owner gets Edit · Saved · share), trust strip (rating · sold · member since); tabs beside a rail of the garage and parts for sale (`.deck--aside`), rail following the panel below 1024px. Overview = featured build + latest updates as cards; Garage and Updates are card grids. **Parts is the member's store**, rendered exactly like the marketplace, with the statuses decided server-side by who is looking |
+| Payout onboarding return | `/settings/payouts/return` (route handler) | where Stripe Connect sends the seller back; fetches live account state before `/payouts` renders, `?refresh=1` re-issues an expired link |
 | Settings | `/settings` | rail + one section at a time (a section picker on phones), Account · Profile · Notifications · Privacy (analytics consent) · Payments · Shipping · Shop · Danger zone, signals matrix, per-section Save; payouts live on `/payouts` |
-| Auth | `/login`, `/signup`, `/login/forgot`, `/login/reset`, `/onboarding`, `/logout` | 420px authwrap, field states (there is no verify route). Members-only pages (including `/messages`, `/selling`, `/offers`, `/payouts`, `/listings` and `/listings/[id]/edit`) send a guest to `/login?next=` with the query kept, so signing in returns to the same view; a member already signed in who opens a `/login?next=` link goes straight to that page. Continue with Google shows only while Google is enabled in Supabase (`lib/auth-providers.ts`). Sign-up errors sit under the field they're about and keep the typed email. `/onboarding` (choosing a username) has no Close and can't be skipped — an account without one is sent back to it. `/login/reset` without a live link says it expired and offers Send a new link. `/logout` is POST only |
+| Auth | `/login`, `/signup`, `/login/forgot`, `/login/reset`, `/onboarding`, `/logout`, `/confirm`, `/callback`, `/admin-verify` | 420px authwrap, field states. `/confirm` (a route handler) is the landing for every emailed link — magic link, signup confirmation, recovery — exchanging a token hash so the link works in whichever browser opens it; `/callback` is the OAuth return, re-validating `next` as a same-origin path; `/admin-verify` is the second factor an admin passes before `/admin` or `/docs`. Members-only pages (including `/messages`, `/selling`, `/offers`, `/payouts`, `/listings` and `/listings/[id]/edit`) send a guest to `/login?next=` with the query kept, so signing in returns to the same view; a member already signed in who opens a `/login?next=` link goes straight to that page. Continue with Google shows only while Google is enabled in Supabase (`lib/auth-providers.ts`). Sign-up errors sit under the field they're about and keep the typed email. `/onboarding` (choosing a username) has no Close and can't be skipped — an account without one is sent back to it. `/login/reset` without a live link says it expired and offers Send a new link. `/logout` is POST only |
 | Legal | `/terms`, `/privacy`, `/fees`, `/protection` | `.prose` + `.toc` |
-| Admin console | `/admin/*` — 11 routes: admin, audit, disputes, listings, orders, orders/[id], payments, reports, settings, users, users/[id] | gated (404 to non-admins); own nav; same tokens |
+| Admin console | `/admin/*` — 13 pages: admin, audit, cases, disputes, invitations, listings, orders, orders/[id], payments, reports, settings, users, users/[id], plus the `admin/export` route handler | gated (404 to non-admins); own nav; same tokens |
 | This microsite | `/docs/*` | gated like the console; markdown twins at `/docs/md/*` |
 
 ### Navigation order
@@ -42,7 +49,9 @@ the product, while Selling is a workspace entered on purpose; the family's five
 children stay expanded beneath their group heading so none costs a second
 click on selling pages — elsewhere the group stays folded to one row with a count. Signed out, the register advertises only Explore and Marketplace —
 management surfaces have no signed-out reading. The cart icon (with its
-count) shows to guests too, because guests can check out; notifications and
+count) shows to guests too, because guests can check out — except while beta
+access is enforced, when a signed-out cart's CTA reads "Sign in to check out"
+and points at `/login?next=/checkout` (`cart/page.tsx`); notifications and
 saved stay member-only. Signed in, the menu (desktop and phone) ends with
 Log out.
 
@@ -52,7 +61,8 @@ Log out.
 
 Cart is a **review surface only** — no address form, no payment fields.
 
-- Two-column grid `2fr / 1fr`, gap 24px, stacks < 900px.
+- Two-column grid `2fr / 1fr`, gap 24px, stacks below Tailwind `lg`
+  (1024px — `lg:grid-cols-[2fr_1fr]`).
 - Item rows grouped per seller under a microlabel header.
 - Item row: thumbnail, title, price, Remove — nothing else.
 - Summary card: items total, shipping, order total, ONE primary CTA
@@ -83,7 +93,8 @@ Cart is a **review surface only** — no address form, no payment fields.
 ### P23 — Payment-mode notice
 
 - Commerce surfaces render `PaymentModeNotice` (a `.spec-note` line): while
-  Stripe runs on test rails it states "Test mode — no real money moves";
+  Stripe runs on test rails it states "Test mode — payments run on Stripe's
+  test rails; no real money moves.";
   once payments are live it renders nothing. One shared component, so the
   copy can never claim test mode after money is real.
 
