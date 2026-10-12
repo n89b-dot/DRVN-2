@@ -11,7 +11,7 @@ export function LinkedTitle({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="group inline-flex items-center gap-1.5 text-left text-body font-semibold text-ink transition-colors hover:text-live"
+      className="group inline-flex items-center gap-2 text-left text-body font-semibold text-ink transition-colors hover:text-live"
     >
       <span>{label}</span>
       <span className="font-mono text-xs text-dim transition group-hover:text-live">→</span>
@@ -102,7 +102,7 @@ export function ProfileHeader({
           {handle && <p className="kv mt-1 text-dim">{handle}</p>}
           {tagline && <p className="mt-2 max-w-[56ch] text-body text-dim">{tagline}</p>}
           {(location || website) && (
-            <p className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
               {location && <span className="kv text-dim">{location}</span>}
               {website && <WebsitePill label={website.label} href={website.href} />}
             </p>
@@ -165,7 +165,7 @@ export function VehicleGallery({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_0.7fr]">
         {tile(hero, 0, "h-56 rounded-r")}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {rest.slice(0, 2).map((image, i) => tile(image, i + 1, "h-[106px] rounded-ctl"))}
+          {rest.slice(0, 2).map((image, i) => tile(image, i + 1, "h-[104px] rounded-ctl"))}
         </div>
       </div>
       {rest.length > 2 && (

@@ -192,7 +192,7 @@ export default async function ActivityDetailPage({
     <NarrowColumn>
       <Link
         href={`/cars/${slug}`}
-        className="jumplink inline-flex items-center gap-1.5"
+        className="jumplink inline-flex items-center gap-2"
       >
         <Icon name="back" className="h-4 w-4" /> {car.name}
       </Link>

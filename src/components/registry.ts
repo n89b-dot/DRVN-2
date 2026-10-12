@@ -261,7 +261,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     status: "active",
     description: "Monogram identity plate (soft square, never a circle).",
     use: "People without photos; photo avatars go through Media.",
-    variants: ["sm 44", "md 48", "lg 64", "xl 88"],
+    variants: ["sm 40", "md 48", "lg 64", "xl 88"],
     cssRecipe: ".monogram",
   },
   {
@@ -443,7 +443,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     status: "active",
     description:
       "The single card primitive — kind badge (`KindBadge`) + time, a photo plate, then a caption head (title, lede, value, price row) and a foot anchored to the caption's floor (byline with a real avatar when `byline.avatarUrl` is set, then the car or the activity line); engagement strip pinned below. On uniform walls every plate is one 4:3 frame and cells size to content (rows stretch to align); `chip` renders a state `Badge`. The price never truncates — the detail wraps under it.",
-    use: "Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Head order: title → `lede` (an update's two-line excerpt) → `value` (a build's vehicle under its name, mono ink) → `price` (ink, Sans 600, tabular — never green) with `detail` (condition chip + grade) beside it when `detailBesidePrice` is set, else under it. Foot: `byline` (monogram + name, ink) → `sub` (the car: a part's source car, an update's vehicle) → `meta` (a build's activity line). Two spacing steps: tight binds a line to the one above, group opens a new one (4/6px on phone cells, 6/16px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale).",
+    use: "Underlying anatomy for every card; compose, don't fork. `compareSrc` draws a before/after pair as a static split plate (no slider) for comparison updates. Head order: title → `lede` (an update's two-line excerpt) → `value` (a build's vehicle under its name, mono ink) → `price` (ink, Sans 600, tabular — never green) with `detail` (condition chip + grade) beside it when `detailBesidePrice` is set, else under it. Foot: `byline` (monogram + name, ink) → `sub` (the car: a part's source car, an update's vehicle) → `meta` (a build's activity line). Two spacing steps: tight binds a line to the one above, group opens a new one (4/8px on phone cells, 8/16px from a 232px content box; the phone wall's 2×1 wide cell keeps the phone scale).",
     states: ["photo", "bare (no image — forced square)", "engagement strip"],
     cssRecipe: ".mcell",
   },

@@ -23,7 +23,7 @@ export function NarrowColumn({
 }
 
 /** Identity mark — a Livesheet monogram plate (soft square, never a circle). */
-/** Named avatar scale — sm 44 · md 48 · lg 64 · xl 88. Sizes live in CSS
+/** Named avatar scale — sm 40 · md 48 · lg 64 · xl 88. Sizes live in CSS
  *  (`.monogram--*`) so call sites can't invent off-system dimensions. */
 const AVATAR_SIZES = {
   sm: "monogram--sm",
@@ -103,7 +103,7 @@ export function Media({
   const leading = eager || role === "hero";
   if (!src) {
     // The plate variants carry a drawn mark; the plain fallback stays empty so
-    // thumbnails and inline media don't sprout a badge at 44px.
+    // thumbnails and inline media don't sprout a badge at 40px.
     const marked = fallbackClassName.includes("plate-undrawn");
     return (
       <span
@@ -148,7 +148,7 @@ export function Media({
 
 export function MetadataTags({ tags }: { tags: string[] }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {tags.map((tag) => (
         <span key={tag} className="chip">
           {tag}
@@ -208,7 +208,7 @@ export function HorizontalGallery({
             key={`${image}-${index}`}
             src={image}
             alt={`${alt} image ${index + 1}`}
-            className={`${large ? "h-[90px] w-40" : "h-[90px] w-[89px]"} shrink-0 rounded-ctl`}
+            className={`${large ? "h-[88px] w-40" : "h-[88px] w-[88px]"} shrink-0 rounded-ctl`}
             sizes={MEDIA_SIZES.thumb}
           />
         ))}

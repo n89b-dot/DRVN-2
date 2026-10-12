@@ -651,7 +651,7 @@ export default async function ListingPage({
                   (✓ / — / ?) instead of a stack of tinted chips; the grade
                   chip above is the block's single color. */}
               {checklist.length > 0 && (
-                <ul className="mt-3 flex flex-col gap-1.5">
+                <ul className="mt-3 flex flex-col gap-2">
                   {checklist.map((row) => (
                     <li key={row.key} className="flex items-baseline justify-between gap-3 text-micro">
                       <span>{row.label}</span>
@@ -685,7 +685,7 @@ export default async function ListingPage({
               </span>
               <h4>Fitment — seller-stated</h4>
               {fitmentClaims.length > 0 && (
-                <ul className="flex flex-wrap gap-1.5">
+                <ul className="flex flex-wrap gap-2">
                   {fitmentClaims.map((f, i) => (
                     <li key={i} className="chip">
                       {f.make} {f.model}

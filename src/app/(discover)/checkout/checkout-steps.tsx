@@ -393,7 +393,7 @@ export function CheckoutSteps({
           )}
 
           {/* Kept manual: the shared Checkbox renders its label at text-body
-              inside a min-h-11 block target — this one is deliberately a
+              inside a min-h-10 block target — this one is deliberately a
               compact text-micro inline row, so converting would change the
               rendered label size and hit-target. */}
           {allowsCollection && (
