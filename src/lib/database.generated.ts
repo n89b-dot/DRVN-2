@@ -1474,6 +1474,42 @@ export type Database = {
           },
         ]
       }
+      listing_private_terms: {
+        Row: {
+          listing_id: string
+          offer_floor_cents: number | null
+          seller_id: string
+          updated_at: string
+        }
+        Insert: {
+          listing_id: string
+          offer_floor_cents?: number | null
+          seller_id: string
+          updated_at?: string
+        }
+        Update: {
+          listing_id?: string
+          offer_floor_cents?: number | null
+          seller_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_private_terms_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: true
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_private_terms_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       listing_questions: {
         Row: {
           author_id: string
@@ -5556,6 +5592,7 @@ export type Database = {
       }
       my_car_vin: { Args: { p_car: string }; Returns: string }
       my_default_offer_floor: { Args: never; Returns: number }
+      my_listing_offer_floor: { Args: { p_listing: string }; Returns: number }
       notify: {
         Args: {
           p_actor_id?: string

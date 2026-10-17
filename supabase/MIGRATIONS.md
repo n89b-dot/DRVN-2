@@ -1,5 +1,30 @@
 # Applying migrations
 
+## October 17 — the offer minimum goes private, step one (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261017120000_listing_private_terms.sql` | throwaway database only (2026-10-17); not yet on shared dev |
+
+A0's first rollout, the **expand** step of three (plan: "DRVN AI-native:
+review and implementation plan", A0). It adds `listing_private_terms` (one
+row per listing; no client grants, row security on with no policies), a
+trigger on `listings` that keeps its `offer_floor_cents` equal to
+`listings.offer_floor_cents` on every insert and edit, a backfill, and
+`my_listing_offer_floor(listing)`, which answers only the listing's seller.
+Nothing reads the new table yet, so it is safe before any app change and
+changes no behaviour. The backfill takes a lock on `listing_private_terms`
+only; `listings` is read, not rewritten.
+
+Checked on a fresh database with every migration: `offer_floor_privacy_guard.sql`
+fails before this file and passes after; every other guard still passes; the
+file applies twice cleanly; generated types match.
+
+Next: **switch** (offer checks, sell form, edit page and export read the new
+table) and, once that app is live everywhere, **contract** (drop
+`listings.offer_floor_cents` and the mirror trigger). Until the contract step,
+the old column is still readable through the API, as it is today.
+
 ## October 11 — millions of parts (shared dev project)
 
 | File | Applied to |
