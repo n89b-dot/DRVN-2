@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-17 — The offer minimum is private
+
+A seller's lowest acceptable offer was stored on the listing, which anyone could read through the database API. It now lives in `listing_private_terms`, which no member or visitor can read; the seller reads their own through `my_listing_offer_floor`. This is A0's first rollout in the agent plan, in three steps.
+
+- **Step one, expand** (`20261017120000`, on shared dev): the private table, a copy of every minimum, and a trigger that kept the copy in step. Nothing read it yet.
+- **Step two, switch** (`20261017130000`, `20261017130100`):
+    - The old column is emptied and must stay empty. Any write that still sets it (the sell and edit functions, an older app build, a script) is moved into the private table by a trigger.
+    - "Minimum no higher than the price" is checked from both sides: a minimum set above the price is refused, and so is a price cut below the minimum.
+    - Offers below the minimum are refused by a trigger that reads the private table. The message no longer names the amount: "That's lower than the seller will accept."
+    - The edit page reads the minimum through the seller's own function and refuses to open if that read fails, so a save can't silently clear it.
+    - The export contract is now `2026-10-17.v6`, with a `listing_private_terms` section. Deleting an account clears the member's minimums.
+- **Visible change:** buyers no longer see "Offers accepted from $X" on a listing or in the offer box. The PRD (O-3) makes showing it the seller's choice, off by default; that toggle comes with negotiation v2.
+- **Step three, contract** (later, once the switched app is live everywhere): drop `listings.offer_floor_cents` and the step-two trigger, and have the sell and edit functions write the private table directly.
+- Guard `offer_floor_privacy_guard.sql` (28 checks); `security_guard.sql` 4b now expects the new refusal.
+
 ## 2026-10-17 — PRD: the DRVN agent
 
 The September PRD is amended for the agent direction agreed on 14–17 October. No code changed. The implementation plan (with the reasoning and three outside reviews) is the "DRVN AI-native: review and implementation plan" Claude Doc linked at the top of the PRD.

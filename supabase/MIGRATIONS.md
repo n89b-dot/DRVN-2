@@ -1,5 +1,31 @@
 # Applying migrations
 
+## October 17 — the offer minimum goes private, step two (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261017130000_listing_private_terms_switch.sql` | throwaway database only (2026-10-17) |
+| `20261017130100_account_export_contract_v6.sql` | throwaway database only (2026-10-17) |
+
+The **switch** step. Apply both together, in this order, **after** `20261017120000`.
+The app change that goes with them can ship before or after: an older app build
+keeps working, because every function it calls still accepts the minimum under
+its old name and the trigger stores it privately.
+
+`130000`:
+- Drops the expand step's mirror trigger, catches up and then empties `listings.offer_floor_cents`, and adds `listings_offer_floor_private` (the column must stay null).
+- Adds a BEFORE trigger (`listings_zz1_absorb_offer_floor`) that moves any write to that column into `listing_private_terms`. It fires only when the column is named in the write, so it never clears a minimum on a status or price change.
+- Adds bound checks from both sides: a price cut below the minimum is refused, and so is a service-role write above the price.
+- Adds `offers_guard_private_floor`, a SECURITY DEFINER trigger that refuses below-minimum offers (23514) without naming the amount.
+- Restates `guard_offer_insert` and `create_offer_with_message` without their floor reads, and restates `save_listing_creation` so its replay check reads the minimum through `my_listing_offer_floor`.
+- Makes the FK from the private table to `listings` deferred, so the trigger can write ahead of a new listing row.
+
+Emptying the column touches `updated_at` on listings that had a minimum (none on shared dev today). A seller with that listing's edit form already open gets the usual "changed since you opened it" and reloads.
+
+`130100` bumps the export contract to `2026-10-17.v6`. Pending, processing and failed exports under v5 are expired; the member asks again.
+
+Checked on a fresh database with every migration: all guards pass, both files apply twice cleanly, generated types match, and `npm test`, typecheck, lint and `next build` pass.
+
 ## October 17 — the offer minimum goes private, step one (shared dev project)
 
 | File | Applied to |

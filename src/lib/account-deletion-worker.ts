@@ -78,6 +78,9 @@ export async function processAccountDeletions() {
         if (scrub.error) throw new Error("Profile cleanup failed");
         for (const operation of [
           admin.from("activity_posts").delete().eq("author_id", uid),
+          // Listings kept for completed orders keep their private terms row;
+          // the member's minimums go either way.
+          admin.from("listing_private_terms").update({ offer_floor_cents: null }).eq("seller_id", uid),
           admin.from("listings").delete().eq("seller_id", uid),
           admin.from("cars").delete().eq("owner_id", uid),
         ]) { const result = await operation; if (result.error) throw new Error("Owned content cleanup failed"); }

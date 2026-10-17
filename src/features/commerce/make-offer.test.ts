@@ -66,7 +66,6 @@ beforeEach(() => {
   mocks.listing.mockResolvedValue({ data: {
     seller_id: "seller-1",
     status: "active",
-    offer_floor_cents: 8000,
     price_cents: 10000,
     shipping_mode: "seller",
   }, error: null });
@@ -114,4 +113,11 @@ it("says so plainly when the buyer already has a live offer on the part", async 
   const result = await makeOffer({}, form());
   expect(result.error).toBe("You already have an open offer on this part — find it in Offers.");
   expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
+it("refuses a below-minimum offer without naming the minimum", async () => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { code: "23514", message: "That offer is lower than the seller will accept" } });
+  const result = await makeOffer({}, form());
+  expect(result.error).toBe("That's lower than the seller will accept. Try a higher offer.");
+  expect(result.error).not.toMatch(/\$|\d/);
 });
