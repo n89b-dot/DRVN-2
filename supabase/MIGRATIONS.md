@@ -1,10 +1,10 @@
 # Applying migrations
 
-## October 17 — the offer minimum goes private, step one (not applied yet)
+## October 17 — the offer minimum goes private, step one (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261017120000_listing_private_terms.sql` | throwaway database only (2026-10-17); not yet on shared dev |
+| `20261017120000_listing_private_terms.sql` | shared dev project (2026-10-17, twice) |
 
 A0's first rollout, the **expand** step of three (plan: "DRVN AI-native:
 review and implementation plan", A0). It adds `listing_private_terms` (one
@@ -19,6 +19,14 @@ only; `listings` is read, not rewritten.
 Checked on a fresh database with every migration: `offer_floor_privacy_guard.sql`
 fails before this file and passes after; every other guard still passes; the
 file applies twice cleanly; generated types match.
+
+**Shared dev, 2026-10-17**, with Neil's go-ahead, applied twice with
+`node scripts/apply-migration.mjs`. Before: public schema saved to
+`~/drvn-db-backups/pre-20261017-listing-private-terms.sql`. After: 24 listings,
+24 private rows, none out of step; row security on, no anon/authenticated
+table privilege, the owner function executable by authenticated only, the
+mirror trigger present; the REST API refuses a signed-out read of the table
+and the function (42501).
 
 Next: **switch** (offer checks, sell form, edit page and export read the new
 table) and, once that app is live everywhere, **contract** (drop
