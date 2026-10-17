@@ -1,11 +1,11 @@
 # Applying migrations
 
-## October 17 — the offer minimum goes private, step two (not applied yet)
+## October 17 — the offer minimum goes private, step two (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261017130000_listing_private_terms_switch.sql` | throwaway database only (2026-10-17) |
-| `20261017130100_account_export_contract_v6.sql` | throwaway database only (2026-10-17) |
+| `20261017130000_listing_private_terms_switch.sql` | shared dev project (2026-10-17, twice) |
+| `20261017130100_account_export_contract_v6.sql` | shared dev project (2026-10-17, twice) |
 
 The **switch** step. Apply both together, in this order, **after** `20261017120000`.
 The app change that goes with them can ship before or after: an older app build
@@ -25,6 +25,15 @@ Emptying the column touches `updated_at` on listings that had a minimum (none on
 `130100` bumps the export contract to `2026-10-17.v6`. Pending, processing and failed exports under v5 are expired; the member asks again.
 
 Checked on a fresh database with every migration: all guards pass, both files apply twice cleanly, generated types match, and `npm test`, typecheck, lint and `next build` pass.
+
+**Shared dev, 2026-10-17**, with Neil's go-ahead, each file applied twice with
+`node scripts/apply-migration.mjs`.
+- Before: the public schema was saved to `~/drvn-db-backups/pre-20261017-listing-private-terms-switch.sql`, with the private-terms and export-request rows in `pre-20261017-switch-data.sql`. The four restated functions matched their expected prior definitions (no drift).
+- After: 24 listings and 24 private rows, none out of step, and no public minimum.
+  - The four triggers are present; the expand step's mirror is gone. The FK is deferred and `listings_offer_floor_private` is in place. The four functions carry their new bodies, and exports stamp v6.
+  - In a rolled-back transaction, a write to the old column landed privately and left the column null, and a price cut below the minimum was refused (23514).
+  - A signed-out API read of `listing_private_terms` gets 42501; `listings` returns `offer_floor_cents` as null.
+- Until the app change merges, main's offer form shows its generic "couldn't confirm" error for an offer below a minimum, because the database now refuses it with 23514. Nothing leaks, and no listing on shared dev has a minimum.
 
 ## October 17 — the offer minimum goes private, step one (shared dev project)
 
