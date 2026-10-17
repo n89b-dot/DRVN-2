@@ -31,6 +31,7 @@ The September PRD is amended for the agent direction agreed on 14–17 October. 
 - **M-8 narrowed.** Offers are no longer "unchanged".
 - **New parked rows:** auto-accept, watches, Build Mine, the full agent dashboard, MCP, and admin/analytics agents.
 - **Data changes and measures** gain the agent tables and the headline agent measure (completed sales, not offers).
+- **In the repo:** the plan is copied to `docs/plans/2026-10-agent-and-graph-plan.md` (rev 88, diagrams redrawn as Mermaid). `docs/decisions/agent-foundations.md` fixes the shapes every phase builds to: principal, scope and permissions; capabilities; the lock order (with today's order audited); the floor and snapshot rules; and the constraints the private-minimum rollout leaves. `CLAUDE.md` points to both.
 
 ## 2026-10-04 — Performance: a shared cache for signed-out visitors, and search that works at volume
 

@@ -4,6 +4,8 @@
 
 The current product definition is `docs/DRVN-PRD-2026-09.md`; the work that delivers it is `docs/plans/2026-09-direction-build-plan.md`. One product, two front doors (Explore, Marketplace), the car in the middle; a member's store is the Parts tab on their profile; every post is about a car or a part and has a photo. `docs/DRVN-PRD-v3.1.md` is superseded. The PRD's non-goals are rulings — do not re-propose them. Typeface (IBM Plex), accent and light theme do not change.
 
+The agent and the car-and-parts graph (PRD §4.9 Intelligence, added 2026-10-17) are delivered by `docs/plans/2026-10-agent-and-graph-plan.md`, a repo copy of the living Claude Doc where Neil rules. The shapes every phase builds to (who the agent acts for, capabilities, lock order, the floor and snapshot rules) are fixed in `docs/decisions/agent-foundations.md`. One agent per member; rules set prices, never the model; every task works without it. The mobile bottom bar is back (N-4 reversed): Explore · Marketplace · Home · Garage · Agent.
+
 ## Component system — non-negotiable workflow for any UI work
 
 DRVN's UI is a governed component platform (Livesheet). Before writing **any** JSX:
