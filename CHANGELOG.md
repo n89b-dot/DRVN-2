@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-17 — PRD: the DRVN agent
+
+The September PRD is amended for the agent direction agreed on 14–17 October. No code changed. The implementation plan (with the reasoning and three outside reviews) is the "DRVN AI-native: review and implementation plan" Claude Doc linked at the top of the PRD.
+
+- **New §4.9 Intelligence.** One agent per member. Its first job is negotiating offers inside the member's limits: seller minimum, target and style; buyer ceiling. Prices come from rules, never the AI model. Agents never message other people. No auto-accept or automatic payment at launch. Chat comes next, then Garage jobs, one at a time.
+- **Negotiation v2 for everyone.**
+    - Buyers can counter back: 3 offers per listing, eBay's model.
+    - A below-minimum offer uses one of the 3, so the minimum can't be found by trial and error.
+    - The minimum becomes private.
+    - Every move is one atomic step, and each round keeps a snapshot of its terms.
+    - A seller can cancel only before checkout begins.
+- **Principle 5:** software acts only inside limits you set. **Vocabulary** gains "Agent".
+- **Mobile bottom bar** (N-4 reversed): Explore · Marketplace · Home · Garage · Agent. It's removed from the non-goals and the parked table.
+- **M-8 narrowed.** Offers are no longer "unchanged".
+- **New parked rows:** auto-accept, watches, Build Mine, the full agent dashboard, MCP, and admin/analytics agents.
+- **Data changes and measures** gain the agent tables and the headline agent measure (completed sales, not offers).
+
 ## 2026-10-04 — Performance: a shared cache for signed-out visitors, and search that works at volume
 
 Two pieces of the performance work that needed no hosting: caching public data, and checking query plans against realistic volume.
