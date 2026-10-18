@@ -351,6 +351,16 @@ Ships behind `AGENTS_BETA`. Each step opens only when the previous gate passes.
 
 There's no invited cohort (decided 17 Oct). Each step turns on for everyone behind the `AGENTS_BETA` flag once the previous gate passes.
 
+### Alongside A3 — admin controls for the agent (added 18 Oct)
+
+A2 built the kill switches (everyone, one side, one member, mandate, listing or account; MFA step-up, audited), health counts and the reconciliation runbook. Running the agent for real needs more than an off switch. Build these after A3b and before A3c, since chat brings model spend and chat access:
+
+1. **Beta steps in admin, not an env var.** `AGENTS_BETA` stays as the master; each step (A3a seller, A3b buyer, A3c chat, A3d jobs) opens from `/admin/agent`, audited, so a gate passing doesn't need a deploy.
+2. **Gate metrics.** The numbers the gates and A5 depend on: agent-made sales and their cancellation rate, counters per negotiation, approvals answered and ignored, time to answer, members returning to the Agent tab, and any floor-leak or permission-denial count.
+3. **A member's agent, for support and disputes.** Mandates with their versions, tasks, events and approvals for one member, read-only. Chat stays closed unless the case is abuse or a dispute (agent-data-rules.md): opening it needs a reason and a case, and is audited.
+4. **Agent provenance where admins already work.** The admin order and dispute pages mark the agent's rounds and the mandate version in force, so "the seller didn't mean it" can be checked against what they set.
+5. **Model spend.** The per-member and global caps from risk 8, enforced in `src/lib/ai/run.ts`, with current spend and model errors on `/admin/agent`. Required before A3c.
+
 ### Alongside A3c–A3d — two seller helpers (no AI)
 
 Added 17 Oct. Both features work without the agent, neither depends on A0 or A1, and the agent reuses both in AG-9. The wording of both lists is drafted as a document for Neil to sign off before any code.
@@ -743,7 +753,7 @@ When the agent is doing several things at once, the chat isn't the right place t
 | 5 | Offers below the minimum | Keep refusing them, as today. Add "counter lowballs instead" as a later option |
 | 6 | The seller's default target | The asking price |
 | 7 | PRD | Done 17 Oct: §4.9 added, M-8 narrowed, N-4 reversed, CHANGELOG entry written |
-| 8 | Model spend, privacy and terms | A per-member and global spend cap; update both pages before the A3 beta, since chat and photos go to the model from launch |
+| 8 | Model spend, privacy and terms | A per-member and global spend cap (built with the admin controls, before A3c); update both pages before the A3 beta, since chat and photos go to the model from launch |
 
 **Risks**
 
