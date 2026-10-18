@@ -44,8 +44,8 @@ The contract. When a change violates one of these, the change is wrong.
 
 - Every text/ground pair clears WCAG AA 4.5:1 in **both** lightings; re-check
   contrast whenever a token moves.
-- Touch targets ≥ 44px for primary controls — filter chips, card Save/cart
-  squares, dialog Close and bar icons included.
+- Touch targets ≥ 40px (`--touch`) for primary controls — filter chips, card
+  Save/cart squares, dialog Close and bar icons included.
 - `:focus-visible`: 2px live outline, offset 3px, border-radius 4px — never
   removed. The one exception is the search pill (`.search`), which draws a
   2px ink ring on the whole pill (`:focus-within`) instead of a box inside it.

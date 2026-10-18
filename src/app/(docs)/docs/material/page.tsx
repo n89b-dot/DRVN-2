@@ -19,7 +19,7 @@ const COMPARISONS: {
     concept: "Filled button",
     material: "Primary contained action",
     livesheet: "[ BUY NOW ] — Button variant=\"live\": mono brackets (the only variant that wears them), live fill, one per surface; ghost/quiet actions are Plex Sans",
-    borrowed: "Action hierarchy, disabled/loading states, 44px floor, aria-busy narration",
+    borrowed: "Action hierarchy, disabled/loading states, 40px floor, aria-busy narration",
   },
   {
     concept: "Text field",
@@ -139,7 +139,7 @@ export default function MaterialPage() {
               <tr>
                 <td>Compact — ≤640px</td>
                 <td>
-                  Phones. Full-width controls and commits (44px floor), filter rails scroll in
+                  Phones. Full-width controls and commits (40px floor), filter rails scroll in
                   the gutter, saverows stack deliberately, the buybar exists, modrows recompose
                   into labelled records, dense refinements sheet (BottomSheet).
                 </td>

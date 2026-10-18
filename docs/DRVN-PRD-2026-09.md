@@ -86,8 +86,8 @@ Priority: **P0** the direction doesn't hold without it · **P1** needed for the 
 | N-3 | A **Post** button in the top bar. "List a part" stays where it is in the rail | P1 | Change |
 | N-4 | (2026-10-17, reverses the September ruling) Below 1081px a bottom bar: **Explore · Marketplace · Home · Garage · Agent** — Home in the centre, Agent last. Profile (avatar), Messages, Notifications and Cart sit in the top bar; the full-screen Index menu stays for everything else. Signed out: Explore · Marketplace · Join. The bar hides on checkout, the sell form and composers. Prototyped at 360–390px before it ships | P1 | Change |
 | N-5 | Messages shows an unread count | P1 | New |
-| F-1 | Landing leads with the car; two equal actions — Add your car · Shop parts; builds before parts | P0 | Change |
-| F-2 | Lockup and root metadata stop saying "Parts marketplace"; marketplace routes keep marketplace wording | P0 | Change |
+| F-1 | (Revised 2026-10-17.) Landing says plainly what DRVN is — **the parts marketplace for modified cars** — and ties it to the visitor's own car: two actions, Shop parts for my car · Sell my parts; a "What do you drive?" picker; parts shown with the car they came off; the community as the reason to trust a part. "Add your car" lives in the selling story. Written for someone who has never seen DRVN — no in-app vocabulary (build page, provenance, feed) on the front door. Was: "leads with the car; Add your car · Shop parts; builds before parts" | P0 | Change |
+| F-2 | Lockup stays "Builds and parts". The landing page's title and description say "parts marketplace for modified cars" (revised 2026-10-17, with F-1); marketplace routes keep marketplace wording | P0 | Change |
 | F-3 | Sign-up, onboarding and return-to-where-you-were unchanged — except (2026-09-24) that "Add your car" now carries `next=/garage` through sign-up, and an account with nowhere to return to finishes onboarding on add-car, with "Skip — just browsing" going to Home | P0 | Change |
 
 ### 4.2 Home

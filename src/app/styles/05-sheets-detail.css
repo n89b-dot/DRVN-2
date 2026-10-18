@@ -23,7 +23,7 @@
     width: min(480px, calc(100vw - 40px));
     background: var(--tile);
     border-radius: var(--r);
-    padding: 22px;
+    padding: 24px;
     /* Entry/exit rise is Motion-driven on the Dialog panel
        (src/components/ui/dialog.tsx); the sheet itself is static. */
   }
@@ -35,8 +35,8 @@
     position: absolute;
     top: 8px;
     right: 10px;
-    min-height: 44px;
-    padding: 0 6px;
+    min-height: var(--touch);
+    padding: 0 8px;
     font-size: 13px;
     font-weight: 500;
     color: var(--dim);
@@ -52,7 +52,7 @@
   .sheet__row {
     display: flex;
     justify-content: space-between;
-    padding: 9px 0;
+    padding: 8px 0;
     font-size: 16px;
   }
   .sheet__row + .sheet__row {
@@ -82,7 +82,7 @@
   }
   .sheet__actions {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     margin-top: 16px;
   }
   /* Phones: two full-width buttons stacked beat two squeezed side by side. */
@@ -117,7 +117,7 @@
     overflow-y: auto;
     background: var(--tile);
     border-radius: var(--r) var(--r) 0 0;
-    padding: 22px 22px calc(22px + env(safe-area-inset-bottom, 0px));
+    padding: 24px 24px calc(24px + env(safe-area-inset-bottom, 0px));
     display: grid;
     gap: 12px;
     /* Rise/settle is Motion-driven (src/components/ui/bottom-sheet.tsx) —
@@ -172,7 +172,7 @@
 
   /* Why an account is needed — ruled reasons, the drawing's list voice. */
   .authintent__why {
-    margin-top: 14px;
+    margin-top: 16px;
     display: grid;
     gap: 0;
   }
@@ -181,7 +181,7 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--dim);
-    padding: 9px 0 9px 18px;
+    padding: 8px 0 8px 20px;
     border-top: 1px solid var(--rule-soft);
     position: relative;
   }
@@ -201,10 +201,10 @@
     color: var(--live);
     border: 2px solid var(--live);
     border-radius: var(--r-chip);
-    padding: 8px 14px;
+    padding: 8px 16px;
     display: inline-block;
     transform: rotate(-3deg);
-    margin: 6px 0 4px;
+    margin: 8px 0 4px;
   }
   .stamp--spent {
     color: var(--dim);
@@ -273,7 +273,7 @@
   /* The car it came off — the thing only DRVN has — right under the seller. */
   .pdp__source {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     margin-top: 16px;
     padding-top: 16px;
     border-top: 1px solid var(--rule-soft);
@@ -327,8 +327,8 @@
     bottom: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px clamp(16px, 4vw, 24px) calc(10px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+    padding: 12px clamp(16px, 4vw, 24px) calc(12px + env(safe-area-inset-bottom, 0px));
     background: var(--tile);
     border-top: 1px solid var(--rule-mid);
     transition: transform var(--t-move) var(--spring), visibility var(--t-move);
@@ -356,7 +356,7 @@
     white-space: nowrap;
   }
   .buybar .btn {
-    min-height: 44px;
+    min-height: var(--touch);
     white-space: nowrap;
   }
   /* The bar retires wherever its page's real controls come back into view.

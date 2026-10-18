@@ -46,7 +46,7 @@
 @container (max-width: 231px) {
   .mcell__byline .monogram--xs {
     width: 18px;
-    height: 18px;
+    height: 18px; /* size */
     font-size: 8.5px;
   }
 }
@@ -82,7 +82,7 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   white-space: nowrap;
-  padding: 6px 8px;
+  padding: 8px 8px;
   border-radius: var(--r-chip);
   background: var(--ink);
   color: var(--on-ink);
@@ -210,7 +210,7 @@
      given width, not a desktop card, so it keeps the square's padding,
      steps and sizes (a half step up on the title, which has the room). */
   .mcell.mcell--wide {
-    padding: 8px 10px 6px;
+    padding: 8px 12px 8px;
   }
   .mcell--wide .mcell__head + .mcell__img {
     margin-top: 8px;
@@ -218,7 +218,7 @@
   .mcell.mcell--wide .mcell__cap {
     padding-top: 8px;
     --cap-tight: 4px;
-    --cap-group: 6px;
+    --cap-group: 8px;
   }
   .mcell--wide .mcell__title,
   .mcell--wide.mcell--story .mcell__title {
@@ -237,11 +237,11 @@
   }
   .mcell--wide .mcell__byline .monogram--xs {
     width: 22px;
-    height: 22px;
+    height: 22px; /* size */
   }
   .mcell.mcell--wide .cardeng {
-    margin-top: 10px;
-    padding-top: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
   }
 }
 /* Seller trust — wide cells only, like the meta line. */
@@ -250,7 +250,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  margin-top: 6px;
+  margin-top: 4px;
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--dim);
@@ -261,7 +261,7 @@
   }
 }
 .mcell__actions {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 /* A wall whose cells carry an action row grows its unit so the photo keeps
    its share of the card. `.mcell` clips its overflow, so this has to cover
@@ -311,16 +311,16 @@
      the btn's stage directions. */
 .qcom {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 .qcom__row {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .qcom .btn {
   width: 100%;
-  min-height: 38px;
+  min-height: var(--touch);
   padding: 0 12px;
   font-size: 10.5px;
   /* 500 is Plex Mono's heaviest loaded cut — 600+ would faux-bold. */
@@ -343,11 +343,11 @@
    `--paper-deep` rather than a ruled outline. Same hierarchy, no new
    material. */
 .qcom__cart {
-  gap: 7px;
+  gap: 8px;
 }
 .qcom__ico {
   width: 15px;
-  height: 15px;
+  height: 15px; /* size */
   flex: none;
 }
 .qcom__label {
@@ -377,7 +377,7 @@
    set as a browse sheet's ruled rows. Both are links to the real
    /marketplace/[category] routes; the current one is inked. */
 .catnav {
-  margin: clamp(22px, 2.6vw, 34px) 0 clamp(26px, 3vw, 38px);
+  margin: clamp(24px, 2.6vw, 32px) 0 clamp(24px, 3vw, 40px);
 }
 .catnav__head {
   display: flex;
@@ -397,7 +397,7 @@
   gap: 12px;
   align-items: center;
   min-height: 64px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-radius: var(--r-ctl);
   background: var(--tile);
   color: var(--ink);
@@ -410,7 +410,7 @@
 }
 .cattile__ico {
   width: 36px;
-  height: 36px;
+  height: 36px; /* size */
   border-radius: var(--r-chip);
   background: var(--paper-deep);
   color: var(--ink);
@@ -462,8 +462,8 @@
   grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  min-height: 52px;
-  padding: 6px 8px;
+  min-height: 48px;
+  padding: 4px 8px;
   border-radius: var(--r-ctl);
   color: var(--ink);
   transition: background var(--t-fast) ease;
@@ -495,13 +495,13 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 /* Subcategory tiles and rows carry no icon — the category above them
    already said what kind of part this is. */
 .cattile--sub {
   grid-template-columns: minmax(0, 1fr);
-  min-height: 52px;
+  min-height: 48px;
 }
 .cattile--sub > * {
   grid-column: 1 / -1;
@@ -513,7 +513,7 @@
 }
 .catrow--sub {
   grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 44px;
+  min-height: var(--touch);
 }
 .catrow--sub .cattile__label {
   font-weight: 500;
@@ -528,16 +528,16 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   padding: 16px 2px;
 }
 .feedrows .feedrow:first-child {
-  padding-top: 6px;
+  padding-top: 8px;
 }
 .feedrow__img {
   flex: none;
   width: 112px;
-  height: 84px;
+  height: 84px; /* size */
   border-radius: var(--r-ctl);
 }
 .feedrow__body {
@@ -601,7 +601,7 @@
 .feedrow__kind {
   font-size: 10px;
   letter-spacing: 0.1em;
-  padding: 3px 8px;
+  padding: 4px 8px;
 }
 
 /* ---------- home feed cards ----------
@@ -612,7 +612,7 @@
    — the column reads as cars, not as an inbox. */
 .feedcards {
   display: grid;
-  gap: clamp(14px, 2vw, 20px);
+  gap: clamp(16px, 2vw, 20px);
 }
 .feedcard {
   display: flex;
@@ -650,8 +650,8 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
-  padding: 14px clamp(14px, 2vw, 20px) 18px;
+  gap: 8px;
+  padding: 16px clamp(16px, 2vw, 20px) 20px;
   min-width: 0;
 }
 .feedcard__body > * {
@@ -660,12 +660,12 @@
 .feedcard__top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .feedcard__kind {
   font-size: 10px;
   letter-spacing: 0.1em;
-  padding: 3px 8px;
+  padding: 4px 8px;
 }
 .feedcard__title {
   font-size: 18px;
@@ -686,7 +686,7 @@ a.feedcard:hover .feedcard__title,
 /* The like · comment · share · save strip (CardEngagement) under the
    card's link — a sibling, never inside it, at the body's text edge. */
 .feedcard__eng {
-  padding: 0 clamp(14px, 2vw, 20px) 8px;
+  padding: 0 clamp(16px, 2vw, 20px) 8px;
 }
 .feedcard__eng .cardeng {
   margin-top: 0;
@@ -710,15 +710,15 @@ a.feedcard:hover .feedcard__title,
    the action under the text. (Child selectors: they have to outrank it.) */
 .peoplerows .rowlist > .order {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  column-gap: 14px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  column-gap: 16px;
   align-items: center;
-  padding: 10px 0;
+  padding: 12px 0;
   background: transparent;
 }
 .peoplerows .rowlist > .order > .order__img {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
 }
 .peoplerows .order__name {
   font-size: 15px;
@@ -739,7 +739,7 @@ a.feedcard:hover .feedcard__title,
 }
 .peoplerows .order__actions .btn {
   min-height: 40px;
-  padding: 8px 14px;
+  padding: 8px 16px;
 }
 @media (max-width: 640px) {
   .feedrows .feedrow {
@@ -770,7 +770,7 @@ a.feedcard:hover .feedcard__title,
   top: 8px;
   left: 8px;
   z-index: 100;
-  padding: 8px 14px;
+  padding: 8px 16px;
   background: var(--ink);
   color: var(--on-ink);
   border-radius: var(--r-ctl);
@@ -801,15 +801,15 @@ a.feedcard:hover .feedcard__title,
 .marketplace-page .finder { margin-bottom: 16px; }
 .marketplace-page .catnav { margin: 16px 0 24px; }
 .marketplace-breadcrumb { padding-top: 16px; font-size: var(--text-micro); line-height: var(--text-micro--line-height); color: var(--dim); }
-.marketplace-breadcrumb ol { display: flex; flex-wrap: wrap; gap: 6px 10px; }
-.marketplace-breadcrumb li + li::before { content: '/'; margin-right: 10px; }
+.marketplace-breadcrumb ol { display: flex; flex-wrap: wrap; gap: 8px 8px; }
+.marketplace-breadcrumb li + li::before { content: '/'; margin-right: 8px; }
 .marketplace-breadcrumb a:hover { color: var(--ink); text-decoration: underline; }
 .marketplace-categories { margin: 16px 0 24px; border-block: 1px solid var(--rule-mid); }
 .marketplace-categories summary { cursor: pointer; padding: 12px 0; font-size: var(--text-body); }
 .marketplace-categories summary span { margin-left: 12px; color: var(--dim); }
 .marketplace-category-tree { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; padding: 8px 0 20px; }
 .marketplace-category-tree > a { grid-column: 1 / -1; }
-.marketplace-category-tree a { display: inline-flex; align-items: center; min-height: 36px; font-size: var(--text-body); }
+.marketplace-category-tree a { display: inline-flex; align-items: center; min-height: var(--touch); font-size: var(--text-body); }
 .marketplace-category-tree ul { padding-left: 12px; border-left: 1px solid var(--rule-mid); color: var(--dim); }
 .marketplace-category-tree a:hover, .marketplace-category-tree a[aria-current='page'] { color: var(--ink); text-decoration: underline; }
 .marketplace-results-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
@@ -817,7 +817,7 @@ a.feedcard:hover .feedcard__title,
 @media (max-width: 639px) {
   .marketplace-page .marketplace-head { padding-bottom: 16px; }
   .marketplace-page .finder .search { flex-basis: 100%; }
-  .marketplace-page .finder__main > .fbtn { min-height: 44px; }
+  .marketplace-page .finder__main > .fbtn { min-height: var(--touch); }
   .marketplace-page .finder__main > .fbtn > span.hidden { display: inline; }
   .marketplace-page .finder { margin-bottom: 16px; }
   .marketplace-page .deck { padding-bottom: 32px; }
@@ -849,11 +849,11 @@ a.feedcard:hover .feedcard__title,
 /* The garage head is a task head: the switcher is the page's first control,
    so the runway above it is short (it was ~80px of empty grid). */
 .pagehead.garagehead {
-  padding-bottom: clamp(12px, 1.6vw, 18px);
+  padding-bottom: clamp(12px, 1.6vw, 20px);
 }
 .garageswitch__thumb {
   width: 22px;
-  height: 22px;
+  height: 22px; /* size */
   border-radius: 6px;
   object-fit: cover;
   background: var(--img-fallback);
@@ -869,7 +869,7 @@ a.feedcard:hover .feedcard__title,
   border-radius: var(--r);
   overflow: hidden;
   background: var(--tile);
-  min-height: clamp(220px, 34vw, 340px);
+  min-height: clamp(224px, 34vw, 336px);
   display: flex;
   align-items: flex-end;
 }
@@ -892,7 +892,7 @@ a.feedcard:hover .feedcard__title,
 }
 .carfocus__body {
   position: relative;
-  padding: clamp(16px, 3vw, 28px);
+  padding: clamp(16px, 3vw, 24px);
   width: 100%;
 }
 .carfocus__name {
@@ -905,20 +905,20 @@ a.feedcard:hover .feedcard__title,
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 16px;
 }
 /* Phones: the two buttons share one row at equal width and the build-page
    link sits under them, and the hero is tall enough that the car shows
    above the controls instead of behind them. */
 @media (max-width: 640px) {
-  .carfocus { min-height: 340px; }
+  .carfocus { min-height: 336px; }
   .carfocus__actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
-  .carfocus__actions .btn { padding-inline: 10px; }
+  .carfocus__actions .btn { padding-inline: 12px; }
   .carfocus__actions .jumplink { grid-column: 1 / -1; justify-self: start; margin-top: 4px; }
 }
 
@@ -945,14 +945,14 @@ a.feedcard:hover .feedcard__title,
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 20px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 /* The person as a byline: a small photo plate and the name, not a 12px
    mono link. */
 .byline {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   font-size: var(--text-body);
   font-weight: 500;
@@ -985,8 +985,8 @@ a.byline:hover {
 }
 .reactchip {
   justify-content: center;
-  min-height: 44px;
-  padding: 0 10px;
+  min-height: var(--touch);
+  padding: 0 12px;
   font-size: 16px;
   letter-spacing: 0;
 }
@@ -1013,7 +1013,7 @@ a.byline:hover {
 }
 @media (min-width: 641px) {
   .carhead.pagehead {
-    padding-bottom: clamp(20px, 2.4vw, 28px);
+    padding-bottom: clamp(20px, 2.4vw, 32px);
   }
 }
 
@@ -1050,7 +1050,7 @@ a.byline:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
 }
 .quickpost__thumb {
   width: 64px;
@@ -1074,7 +1074,7 @@ a.byline:hover {
      the widest min-content child (the composer's nowrap button row), and
      Home ran 445px wide on a 390px phone. */
   grid-template-columns: minmax(0, 1fr);
-  gap: clamp(20px, 3vw, 28px);
+  gap: clamp(20px, 3vw, 24px);
 }
 /* Two wrappers — the feed column and the rail — that only exist as boxes
    from 1024px. Below it they dissolve and their children become cells of
@@ -1137,7 +1137,7 @@ a.byline:hover {
 }
 .bar__post {
   flex: none;
-  padding: 9px 16px;
+  padding: 8px 16px;
 }
 /* The menu's own search and Post button — only where the bar's are hidden. */
 .index__search { display: none; margin: 12px 0 0; }
@@ -1158,7 +1158,7 @@ a.byline:hover {
    enforceable. */
 .storenote {
   margin-bottom: 16px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   background: var(--tile-2);
   border-radius: var(--r-ctl);
   font-size: var(--text-body);
@@ -1219,12 +1219,12 @@ a.byline:hover {
 /* The sidebar's category list. Rows, not tiles: a list is scanned down. */
 .catside { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--rule-soft); }
 .catside__list, .catside__sub { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.catside__sub { margin: 2px 0 6px 30px; }
+.catside__sub { margin: 2px 0 8px 32px; }
 .catside__row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 36px;
+  gap: 8px;
+  min-height: var(--touch);
   padding: 4px 8px;
   border-radius: var(--r-ctl);
   font-size: var(--text-micro);
@@ -1240,10 +1240,10 @@ a.byline:hover {
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--rule-mid), inset 3px 0 0 var(--live);
 }
-.catside__row--sub { min-height: 30px; color: var(--dim); }
+.catside__row--sub { min-height: 32px; color: var(--dim); }
 .catside__row.is-empty:not([aria-current]) { opacity: 0.55; }
 .catside__ico { display: grid; place-items: center; width: 20px; height: 20px; flex: none; }
-.catside__ico svg { width: 18px; height: 18px; }
+.catside__ico svg { width: 18px; height: 18px; /* size */ }
 .catside__label { flex: 1; min-width: 0; }
 .catside__n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; opacity: 0.7; }
 
@@ -1255,9 +1255,9 @@ a.byline:hover {
 }
 .marketplace-card__source a { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
 .marketplace-card__source a:hover { color: var(--live); }
-@container mktgrid (max-width: 559px) { .marketplace-card__source { padding: 0 12px 10px; } }
+@container mktgrid (max-width: 559px) { .marketplace-card__source { padding: 0 12px 12px; } }
 .marketplace-card__save { padding: 0 16px 16px; }
-.marketplace-card__save > button { min-height: 44px; width: 100%; }
+.marketplace-card__save > button { min-height: var(--touch); width: 100%; }
 /* M-5 card additions. The title clamp is the design proof's finding, not a
    preference: at the two-across phone width the column is 163.5px and real
    titles ran to six lines, which pushed the price off the fold and left
@@ -1311,7 +1311,7 @@ a.byline:hover {
 @container mktgrid (max-width: 559px) {
   .marketplace-card__summary,
   .marketplace-card__meta--ship { display: none; }
-  .marketplace-card__body { gap: 6px; padding: 12px; }
+  .marketplace-card__body { gap: 8px; padding: 12px; }
   .marketplace-card__foot { padding: 0 12px 12px; }
 }
 /* The grid counts its columns from the room IT has, not the window's: the
@@ -1336,13 +1336,13 @@ a.byline:hover {
    the cart square start fighting for the same row. */
 @media (max-width: 479px) {
   .marketplace-grid .mosaic, .marketplace-loading .mkt { gap: 12px; }
-  .marketplace-grid .marketplace-card__body { padding: 12px; gap: 6px; }
+  .marketplace-grid .marketplace-card__body { padding: 12px; gap: 8px; }
   .marketplace-grid .marketplace-card__foot { padding: 0 12px 12px; }
 }
 @media (max-width: 339px) { .marketplace-loading .mkt { grid-template-columns: minmax(0, 1fr); } }
 
 .marketplace-vehicle { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 0 16px; font-size: var(--text-micro); }
-.marketplace-vehicle button { min-height: 44px; }
+.marketplace-vehicle button { min-height: var(--touch); }
 /* On the count's row the vehicle picker is the row's end, not a band of its
    own: it sits right, and on a phone it keeps only its button (the prompt
    "Shopping for a vehicle?" is the button's job there). */
@@ -1363,20 +1363,20 @@ a.byline:hover {
   max-width: 100%;
   field-sizing: content;
   min-height: 40px;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   font-size: 14px;
 }
 
 .marketplace-card__link:focus-visible { outline: 2px solid var(--live); outline-offset: -3px; }
 
 .marketplace-loading .gbox { aspect-ratio: 4 / 3; }
-.marketplace-loading .tile { min-height: 340px; }
+.marketplace-loading .tile { min-height: 336px; }
 .marketplace-page:has([data-marketplace-pending="true"]) .marketplace-results-head > :not(.marketplace-results-head__end) { visibility: hidden; }
 .marketplace-page:has([data-marketplace-pending="true"]) .marketplace-grid { opacity: 0.6; }
 
 /* Long applied values must still expose their remove control at 200% text. */
-.marketplace-page .filterchips .chip--x { min-width: 0; max-width: 100%; min-height: 44px; }
+.marketplace-page .filterchips .chip--x { min-width: 0; max-width: 100%; min-height: var(--touch); }
 .marketplace-filter-label { min-width: 0; overflow-wrap: anywhere; }
 .marketplace-page .chip--x > [aria-hidden] { flex-shrink: 0; }
 .marketplace-page .marketplace-head h1 { overflow-wrap: anywhere; }

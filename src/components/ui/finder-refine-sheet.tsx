@@ -59,7 +59,7 @@ export function FinderRefineSheet({
           query field ~70px beside it. The accessible name never drops. */}
       <button
         type="button"
-        className={`${activeCount > 0 ? "fbtn is-on" : "fbtn"} gap-1.5${inline === "lg" ? " lg:hidden" : ""}`}
+        className={`${activeCount > 0 ? "fbtn is-on" : "fbtn"} gap-2${inline === "lg" ? " lg:hidden" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={activeCount > 0 ? `${label}, ${activeCount} active` : label}

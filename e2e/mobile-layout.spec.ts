@@ -77,7 +77,7 @@ test.describe.serial("mobile layout @ 375x812", () => {
     const buyNow = buybar.getByRole("button", { name: /buy now/i });
     await expect(buyNow).toBeVisible();
     const buyBox = await buyNow.boundingBox();
-    expect(buyBox!.height).toBeGreaterThanOrEqual(44);
+    expect(buyBox!.height).toBeGreaterThanOrEqual(40);
 
     // The bar must not obscure the page's last content: with the page fully
     // scrolled, the Foot clears the buybar (body padding accounts for it).
@@ -122,7 +122,7 @@ test.describe.serial("mobile layout @ 375x812", () => {
     for (const tool of await rail.all()) {
       await expect(tool).toBeVisible();
       const box = await tool.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(40);
     }
     // Unfold: up to four dimensions (Earned retired 22 Aug 2026), each label
     // on one line. Zero-valued ones are left off (3daf293); this seller has a

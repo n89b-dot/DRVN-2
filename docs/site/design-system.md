@@ -85,6 +85,33 @@ Radius descends with the size of the thing. **Nothing is a pill.**
 Layout: max width 1200px (`--maxw`, `.wrap`); the one grid gap is 16px
 (`.deck`); tile padding 20px; section bottom padding `clamp(48px, 7vw, 80px)`.
 
+## Spacing
+
+An 8px grid with 4px half-steps where a whole step is too coarse. Every
+padding, margin and gap in the product is one of these values; nothing else
+(no 6, 10, 14, 18, 22 or 28). Tokens live in `00-tokens-base.css` as
+`--space-N`, where N is the value in 4px units — the same number Tailwind's
+`gap-N` / `p-N` / `mt-N` utilities use, so `gap: var(--space-3)` and
+`className="gap-3"` are both 12px.
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `--space-1` | 4px | tight — binds a line to the one above (a caption under a title) |
+| `--space-2` | 8px | group — opens a new line; chip and control inner air |
+| `--space-3` | 12px | control padding, row gaps |
+| `--space-4` | 16px | the grid gap (`.deck`); plate padding on phones |
+| `--space-5` | 20px | tile padding |
+| `--space-6` | 24px | section gaps |
+| `--space-8` … `--space-20` | 32 · 40 · 48 · 64 · 80px | bands and page rhythm; multiples of 8 only above 24 |
+| `--touch` | 40px | the touch floor — primary controls, chips, bar icons |
+
+0, 1 and 2px are hairlines (rules, outline offsets, optical nudges), not
+spacing. Element sizes that are not spacing — icon boxes, pips, meters,
+column widths — may sit off the grid; mark such a declaration with a
+trailing `/* size */` comment. `spacing-ratchet.test.ts` counts off-scale
+values in the stylesheets and in Tailwind utilities (`gap-1.5`, `mt-0.5`,
+`min-h-11` are all off) and only lets the count fall.
+
 Separation is **tonal** — plates are lighter than the paper, not boxed.
 Hairlines (`rule-soft` / `rule-mid`) rule rows inside plates and outline
 controls that sit on a raised surface; `dimline` alpha is reserved for

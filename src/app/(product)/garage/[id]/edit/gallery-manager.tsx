@@ -186,7 +186,7 @@ export function GalleryManager({
         <div role="alert" aria-live="polite" className="field__err mt-3 flex items-center gap-3">
           <span>{error}</span>
           {(failedFiles.length > 0 || pendingUploads.length > 0) && (
-            <button type="button" onClick={retryFailed} className="jumplink pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
+            <button type="button" onClick={retryFailed} className="jumplink pointer-coarse:inline-flex pointer-coarse:min-h-10 pointer-coarse:items-center">
               Retry
             </button>
           )}
@@ -455,7 +455,7 @@ function AltEditor({ image, carId, onSaved }: { image: CarImage; carId: string; 
   }} className="absolute inset-x-0 bottom-0 z-20 grid gap-1 bg-paper-deep p-1">
     <label htmlFor={`alt-${image.id}`} className="sr-only">Photo description</label>
     <input id={`alt-${image.id}`} name="alt" value={alt} onChange={event => setAlt(event.target.value)} maxLength={200} readOnly={pending}
-      placeholder="Describe this photo" className="ctl max-w-none text-xs pointer-coarse:min-h-11 pointer-coarse:text-base" autoFocus />
+      placeholder="Describe this photo" className="ctl max-w-none text-xs pointer-coarse:min-h-10 pointer-coarse:text-base" autoFocus />
     <Button type="submit" variant="quiet" loading={pending} pendingLabel="Saving…">Save</Button>
     {error && <p role="alert" className="field__err">{error}</p>}
   </form>;

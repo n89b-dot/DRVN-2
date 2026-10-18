@@ -207,7 +207,7 @@ export default async function ExplorePage({
               key={t.key}
               href={exploreSearchHref(t.key, params)}
               selected={!showBuilders && tab === t.key}
-              className="gap-1.5"
+              className="gap-2"
             >
               {/* E-3: an icon per segment — the row is scanned, not read. */}
               <Icon name={SEGMENT_ICONS[t.key]} className="h-4 w-4" />
@@ -218,7 +218,7 @@ export default async function ExplorePage({
               feed tab: it has no search scope and nothing to page. Hidden
               while searching — search has its own people results. */}
           {!searching && (
-            <FilterLink href="/explore?show=builders" selected={showBuilders} className="gap-1.5">
+            <FilterLink href="/explore?show=builders" selected={showBuilders} className="gap-2">
               <Icon name="user" className="h-4 w-4" />
               Builders
             </FilterLink>

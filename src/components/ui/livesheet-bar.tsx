@@ -44,7 +44,7 @@ function ThemeToggle({ night, toggle }: { night: boolean; toggle: () => void }) 
       aria-label={night ? "Switch to light theme" : "Switch to dark theme"}
       title={night ? "Dark theme" : "Light theme"}
     >
-      <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
+      <Icon name={night ? "moon" : "sun"} className="h-4 w-4" />
     </button>
   );
 }
@@ -250,7 +250,7 @@ export function LivesheetBar({
                     aria-label={badge > 0 ? `${route.label} (${badge})` : route.label}
                     title={route.label}
                   >
-                    <Icon name={route.icon} className="h-[17px] w-[17px]" />
+                    <Icon name={route.icon} className="h-4 w-4" />
                     {badge > 0 && (
                       <span className="barbadge" aria-hidden="true">
                         {badge > 9 ? "9+" : badge}
@@ -286,7 +286,7 @@ export function LivesheetBar({
             aria-controls="sheet-index"
             aria-haspopup="dialog"
             aria-label={open ? "Close the index" : "Open the index"}
-            style={{ minHeight: 44, minWidth: 44 }}
+            style={{ minHeight: 40, minWidth: 40 }}
           >
             <span className="indexbtn__rules" aria-hidden="true">
               <i />
@@ -382,7 +382,7 @@ export function LivesheetBar({
                     prefetch={open ? null : false}
                   >
                     <span className="indexrow__ico" aria-hidden="true">
-                      <Icon name={entry.icon} className="h-[18px] w-[18px]" />
+                      <Icon name={entry.icon} className="h-4 w-4" />
                     </span>
                     <span className="indexrow__label">{entry.label}</span>
                     <span className="indexrow__note">{entry.note}</span>
@@ -411,7 +411,7 @@ export function LivesheetBar({
                 aria-pressed={night}
                 tabIndex={open ? undefined : -1}
               >
-                <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
+                <Icon name={night ? "moon" : "sun"} className="h-4 w-4" />
                 Theme <b>{night ? "Dark" : "Light"}</b>
               </button>
               {/* Signing out used to live only at the bottom of Settings. */}

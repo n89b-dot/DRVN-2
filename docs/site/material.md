@@ -33,7 +33,7 @@ uses (Material's window-size classes informed the model, not the numbers):
 
 | Mode | Range | Behavior |
 | --- | --- | --- |
-| Compact | ≤640px | Full-width controls and commits (44px floor); filter rails scroll in the gutter; saverows stack deliberately; buybar exists; modrows recompose into labelled records; dense refinements sheet (BottomSheet). |
+| Compact | ≤640px | Full-width controls and commits (40px floor); filter rails scroll in the gutter; saverows stack deliberately; buybar exists; modrows recompose into labelled records; dense refinements sheet (BottomSheet). |
 | Medium | 641–1080px | Top bar without the rail; tabstrips/filter rails scroll to 760px; ledgers linearize at 860px; the wide buybar carries cart/checkout to 1023px. |
 | Expanded | ≥1081px | Register rail exists; list-detail and supporting-pane compositions run (checkout summary rail, PDP purchase rail); finders render refinements inline. |
 
@@ -77,7 +77,7 @@ or the thread composer — never two).
 
 | Material concept | Behavioral contract | Livesheet implementation | Borrowed |
 | --- | --- | --- | --- |
-| Filled button | Primary contained action | `[ BUY NOW ]` — Button variant="live": mono brackets (the only variant that wears them), live fill, one per surface. Secondary actions are `ghost` (a recessed fill) or `quiet` (text), in Plex Sans | Action hierarchy; disabled/loading states; 44px floor; aria-busy narration |
+| Filled button | Primary contained action | `[ BUY NOW ]` — Button variant="live": mono brackets (the only variant that wears them), live fill, one per surface. Secondary actions are `ghost` (a recessed fill) or `quiet` (text), in Plex Sans | Action hierarchy; disabled/loading states; 40px floor; aria-busy narration |
 | Text field | Label, supporting text, error, prefix | TextField — microlabel + 16px Plex Sans .ctl on paper-deep (outlined on tile-2 when it sits on a raised surface), ▸ error line, live `status` line | Anatomy; aria-describedby/aria-invalid wiring; error paints the control |
 | Filter chip / segmented | Selectable chips in a labelled set | FilterGroup + FilterLink/FilterButton — .fbtn mono micro-labels in a hairline outline, ink-ground selection; `fit` sets a short fixed set in one phone row | Single vs multi-select semantics (aria-current vs aria-pressed); axis grouping |
 | Tabs | Tablist, roving tabindex, arrows | SheetTabs — .tabstrip: Sans labels on a ruled baseline, accent underline on the current tab, URL-backed; all tabs visible on a phone | Keyboard contract (arrows, Home/End); scroll selected into view |

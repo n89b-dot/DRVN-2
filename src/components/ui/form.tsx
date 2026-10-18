@@ -281,7 +281,7 @@ export function Checkbox({
   className?: string;
 } & ComponentPropsWithoutRef<"input">) {
   return (
-    <label className={cx("flex min-h-11 cursor-pointer items-start gap-2.5 py-1", className)}>
+    <label className={cx("flex min-h-10 cursor-pointer items-start gap-2 py-1", className)}>
       <input type="checkbox" className="sq mt-0.5" {...rest} />
       <span className="min-w-0">
         <span className="block text-body">{label}</span>
@@ -301,7 +301,7 @@ export function Radio({
   className?: string;
 } & ComponentPropsWithoutRef<"input">) {
   return (
-    <label className={cx("flex min-h-11 cursor-pointer items-center gap-2.5 py-1", className)}>
+    <label className={cx("flex min-h-10 cursor-pointer items-center gap-2 py-1", className)}>
       <input type="radio" className="sq" {...rest} />
       <span className="text-body">{label}</span>
     </label>
