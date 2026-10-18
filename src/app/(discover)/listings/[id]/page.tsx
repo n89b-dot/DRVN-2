@@ -35,6 +35,7 @@ import { getBetaAccess } from "@/lib/beta-access";
 
 import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
+import { agentsBetaOn } from "@/lib/agent/beta";
 import { QASection, type QAItem } from "./qa-section";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
@@ -509,6 +510,7 @@ export default async function ListingPage({
                 }
                 resumeAction={resumeAction}
                 returnPath={detailPath}
+                agentOffers={Boolean(user) && agentsBetaOn() && listing.shipping_mode !== "drvn"}
               />
             )}
 

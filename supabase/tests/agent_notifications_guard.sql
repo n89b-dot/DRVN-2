@@ -74,9 +74,40 @@ begin
     raise exception 'FAIL 3b: the seller was told twice';
   end if;
 
+  -- 5. The buyer's agent (20261022110000): out of rounds with the gap,
+  --    and "Deal reached" from its own accept, sent with no actor.
+  declare
+    b_mandate uuid := gen_random_uuid();
+    b_task uuid := gen_random_uuid();
+    o3 uuid := gen_random_uuid();
+    part3 uuid := gen_random_uuid();
+  begin
+    insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)
+    values (part3, seller, 'Notify guard brakes', 'brakes-suspension', 150000, 0, 'active');
+    insert into public.agent_mandates(id, owner_id, scope, listing_id, ceiling_cents, ceiling_basis, style)
+    values (b_mandate, buyer, 'buyer', part3, 130000, 'item', 'balanced');
+    insert into public.offers(id, listing_id, buyer_id, amount_cents) values (o3, part3, buyer, 120000);
+    update public.offers set status = 'countered', counter_amount_cents = 146000, countered_at = now() where id = o3;
+    insert into public.agent_tasks(id, owner_id, mandate_id, scope, objective, status, listing_id, offer_id)
+    values (b_task, buyer, b_mandate, 'buyer', 'Buy Notify guard brakes', 'needs_approval', part3, o3);
+    insert into public.agent_approvals(owner_id, task_id, kind, offer_id, round_no, amount_cents, reason)
+    values (buyer, b_task, 'accept_offer', o3, 6, 146000, 'over_ceiling_no_offers_left');
+    if (select count(*) from public.notifications where user_id = buyer and kind = 'offer_agent_out_of_rounds'
+          and title = 'Out of rounds: the seller''s counter is $1,460.00' and body = 'Notify guard brakes · $160.00 over your max') <> 1 then
+      raise exception 'FAIL 5: the buyer''s out-of-rounds notice is wrong';
+    end if;
+    insert into public.offer_rounds(offer_id, round_no, listing_id, buyer_id, actor_role, kind, actor_task_id, mandate_version)
+    values (o3, 99, part3, buyer, 'buyer', 'accept', b_task, 1);
+    if (select count(*) from public.notifications where user_id = buyer and kind = 'offer_agent_deal_reached'
+          and title = 'Deal reached: your agent accepted $1,460.00 — pay within 24 hours') <> 1 then
+      raise exception 'FAIL 5b: the buyer was not told their agent made the deal';
+    end if;
+  end;
+
   -- 4. Trigger functions stay out of members' reach.
   if has_function_privilege('authenticated', 'public.notify_on_agent_approval()', 'execute')
-     or has_function_privilege('authenticated', 'public.notify_on_agent_out_of_rounds()', 'execute') then
+     or has_function_privilege('authenticated', 'public.notify_on_agent_out_of_rounds()', 'execute')
+     or has_function_privilege('authenticated', 'public.notify_on_buyer_agent_accept()', 'execute') then
     raise exception 'FAIL 4: a member can call an agent notification trigger';
   end if;
 

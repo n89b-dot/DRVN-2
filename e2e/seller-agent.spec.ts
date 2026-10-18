@@ -54,28 +54,28 @@ test.describe("seller agent (A3a)", () => {
 
     db = new Client({ host: "127.0.0.1", port: 54322, user: "postgres", password: "postgres", database: "postgres" });
     await db.connect();
-    // The agent ships paused for everyone (A2's seeded "all" switch); lift it
-    // for this run only, and put it back after.
-    await db.query("update public.agent_controls set cleared_at = now() where scope = 'all' and cleared_at is null");
   });
 
   test.afterAll(async () => {
-    if (db) {
-      await db.query(
-        "insert into public.agent_controls(scope, subject_id, reason) select 'all', null, 'Agents are off until the A3a beta turns them on (20261021100000).' where not exists (select 1 from public.agent_controls where scope = 'all' and cleared_at is null)"
-      );
-      await db.end();
-    }
+    if (db) await db.end();
     for (const id of users.reverse()) await cleanupFixtureUser(id);
   });
 
-  /** One worker pass as agent_worker, in its own transaction. */
+  /**
+   * One worker pass as agent_worker, in its own transaction. The agent ships
+   * paused for everyone (A2's seeded "all" switch): it is lifted inside this
+   * transaction and put back before it commits, so no other test — or a
+   * parallel run — ever sees it off.
+   */
   async function agentPass() {
     await db.query("begin");
     try {
+      const live = await db.query<{ id: string }>("update public.agent_controls set cleared_at = now() where scope = 'all' and cleared_at is null returning id");
       await db.query("set local role agent_worker");
       const worker: AgentDb = { query: (text, values) => db.query(text, values as unknown[]) as never };
       const result = await runAgentPass(worker, { limit: 10 });
+      await db.query("reset role");
+      if (live.rows.length) await db.query("update public.agent_controls set cleared_at = null where id = any($1)", [live.rows.map((row) => row.id)]);
       await db.query("commit");
       return result;
     } catch (error) {

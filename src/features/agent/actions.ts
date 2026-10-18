@@ -121,3 +121,54 @@ export async function saveListingAgent(input: {
   revalidatePath("/agent");
   return { ok: "Your agent is handling offers on this listing." };
 }
+
+/**
+ * "Negotiate for me" (A3b): the buyer's agent on one listing, with a private
+ * ceiling on the item or on item + shipping. It opens, counters and accepts
+ * within that ceiling; an accepted counter is a purchase the buyer pays for
+ * by hand within 24 hours, so the acknowledgement is required. Not offered
+ * where the total isn't knowable before checkout (DRVN Shipping).
+ */
+export async function startBuyerAgent(input: {
+  listingId: string;
+  ceilingCents: number;
+  ceilingBasis: "item" | "total";
+  style: "firm" | "balanced" | "flexible";
+  acknowledgeBinding: boolean;
+}): Promise<AgentState> {
+  const { supabase, user } = await requireUser();
+  if (!agentsBetaOn()) return { error: "The agent isn't available yet." };
+  if (!input.acknowledgeBinding) return { error: "Confirm that an accepted counter is a purchase you'll pay for." };
+  if (!Number.isInteger(input.ceilingCents) || input.ceilingCents <= 0) return { error: "Enter the most you'll pay." };
+
+  const { data: listing } = await supabase
+    .from("listings")
+    .select("id, seller_id, status, shipping_mode, price_cents")
+    .eq("id", input.listingId)
+    .maybeSingle();
+  if (!listing || listing.status !== "active") return { error: "This part isn't for sale right now." };
+  if (listing.seller_id === user.id) return { error: "This is your own listing." };
+  if (listing.shipping_mode === "drvn") return { error: "Shipping is priced at checkout, so DRVN can't negotiate a total here." };
+
+  let result: { ok: boolean; code: string | null };
+  try {
+    result = await invokeCapability(setAgentLimits, { context: memberContext(user.id, "buyer"), supabase }, {
+      scope: "buyer",
+      listingId: input.listingId,
+      ceilingCents: input.ceilingCents,
+      ceilingBasis: input.ceilingBasis,
+      style: input.style,
+      acknowledgeBinding: true,
+    });
+  } catch (error) {
+    if (error instanceof CapabilityError) return { error: "Enter your max as a whole dollar amount above zero." };
+    throw error;
+  }
+  if (!result.ok) {
+    reportError("[agent] buyer mandate failed", { listingId: input.listingId, code: result.code });
+    return { error: agentError(result.code ?? undefined, "Couldn't start your agent. Check your max and try again.") };
+  }
+  revalidatePath("/agent");
+  revalidatePath(`/listings/${input.listingId}`);
+  return { ok: "Your agent is negotiating. It tells you when there's a deal, and you pay within 24 hours." };
+}

@@ -40,6 +40,11 @@ function approvalLine(reason: string | null, amountCents: number | null): string
       return `Buyer's offer ${amount} reaches your target · your agent recommends accepting`;
     case "final_offer_clears_minimum":
       return `Buyer's final offer ${amount} · your agent recommends accepting`;
+    // The buyer's side (A3b): the seller's counter is over the max.
+    case "over_ceiling":
+      return `Seller's counter ${amount} is over your max · accept it, or let your agent stop`;
+    case "over_ceiling_no_offers_left":
+      return `Out of rounds · the seller's counter is ${amount}, over your max`;
     default:
       return `${amount} · your agent needs your answer`;
   }
@@ -95,7 +100,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
       .eq("owner_id", user.id)
       .eq("status", "pending")
       .order("created_at", { ascending: false }),
-    supabase.from("agent_mandates").select("id, listing_id, status").eq("owner_id", user.id).in("status", ["active", "paused"]),
+    supabase.from("agent_mandates").select("id, listing_id, status, scope").eq("owner_id", user.id).in("status", ["active", "paused"]),
     supabase
       .from("agent_events")
       .select("id, task_id, kind, inputs, result, initiated_by, created_at")
@@ -133,11 +138,16 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const needsTasks = new Set(pending.map((a) => a.task_id));
   const working = allTasks.filter((t) => !t.finished_at && !needsTasks.has(t.id));
   const done = allTasks.filter((t) => t.finished_at);
-  const handling = new Set((mandates ?? []).filter((m) => m.status === "active").map((m) => m.listing_id)).size;
+  const handling = new Set((mandates ?? []).filter((m) => m.status === "active" && m.scope === "seller").map((m) => m.listing_id)).size;
+  const buying = (mandates ?? []).filter((m) => m.status === "active" && m.scope === "buyer").length;
 
   const status =
-    handling || pending.length
-      ? [handling ? `Handling offers on ${handling} listing${handling === 1 ? "" : "s"}` : null, pending.length ? `${pending.length} need${pending.length === 1 ? "s" : ""} you` : null]
+    handling || buying || pending.length
+      ? [
+          handling ? `Handling offers on ${handling} listing${handling === 1 ? "" : "s"}` : null,
+          buying ? `Negotiating ${buying} part${buying === 1 ? "" : "s"} for you` : null,
+          pending.length ? `${pending.length} need${pending.length === 1 ? "s" : ""} you` : null,
+        ]
           .filter(Boolean)
           .join(" · ")
       : "Nothing running yet";
@@ -148,8 +158,10 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
     const meta = task.finished_at
       ? task.outcome ?? STATUS_LINE[task.status] ?? task.status
       : offer
-        ? `Round ${offer.round_count} · ${STATUS_LINE[task.status] ?? task.status}`
-        : "Waiting for offers";
+        ? `Round ${offer.round_count} · ${task.scope === "buyer" && task.status === "waiting_for_event" ? "Waiting for the seller" : STATUS_LINE[task.status] ?? task.status}`
+        : task.scope === "buyer"
+          ? "Opening an offer"
+          : "Waiting for offers";
     return (
       <ObjectRow key={task.id} as="li" href={href} media={mediaOf(task.listing_id)} title={titleOf(task.listing_id)} meta={meta} state={task.finished_at ? "done" : undefined} />
     );
@@ -219,7 +231,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
     { key: "working", label: "Working", count: working.length, panel: listPanel(working, "Nothing in progress.") },
     { key: "done", label: "Done", count: done.length, panel: listPanel(done, "Nothing finished yet.") },
   ];
-  const nothingYet = !allTasks.length && !pending.length && !handling;
+  const nothingYet = !allTasks.length && !pending.length && !handling && !buying;
 
   return (
     <div className="wrap">
