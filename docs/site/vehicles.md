@@ -1,7 +1,7 @@
 # Vehicle identity & fitment
 
 > The vehicle catalog, the Add Car flows, and how fitment stays lightweight.
-> Code: `src/lib/vehicles/`, `supabase/migrations/0041`, `0025`, `20261020100000` (generations).
+> Code: `src/lib/vehicles/`, `supabase/migrations/0041`, `0025`, `20261020100000` (generations), `20261020110000`–`120000` (part keys, products).
 
 ## The canonical model
 
@@ -54,6 +54,66 @@ product fitment instead.
   joined to the catalog by make and model name. A model the catalog doesn't
   hold is skipped; re-running the migration after a catalog import fills it
   in. Corrections are data changes, not code.
+
+## Products and part identity (B1)
+
+A product is **one maker's one part**. Its identity is explicit membership,
+`product_part_numbers` (`20261020120000`): the (brand, part number) pairs
+that *are* the product. Only three things put a pair in a product:
+
+| Basis | Means |
+| --- | --- |
+| `brand_and_number` | The same brand and the same number — identical by definition, across spellings (`0280-158-117` = `0280158117`, `BOSCH` = `-Bosch`). |
+| `same_product_link` | A `part_number_links` row of kind `same_product` whose two sides each name their brand. |
+| `verified` | An admin decided, from the review list at `/admin/products`. |
+
+**Everything else is an edge, never identity.** `alternate`, `supersedes`,
+`superseded_by`, `interchange` and `aftermarket_equivalent` links name a
+*different* part and stay in `part_number_links` (which also feeds the
+search identifier lane, unchanged). Links now carry brand scope on each side,
+`confidence`, provenance (`source_ref`, `created_by`) and verification;
+confidence never merges anything.
+
+**Keys.** Listings already had `part_number_compact` (0033). Build lines now
+have the same generated column plus `brand_key` (`20261020110000`): the brand
+lower-cased with everything but letters and digits removed, so the paste
+parser's `-Bosch` and a typed `BOSCH` agree, and `Öhlins` keeps its letters.
+Records reach their product through the membership on (brand key, number),
+never a stored id — a seller who edits either field moves the listing, and a
+merge moves every record at once.
+
+**Growth.** `grow_products()` runs once as the backfill and then hourly
+(pg_cron `drvn-grow-products`). It makes a product for every brand + number
+on a listing (not draft or removed) or build line that no product holds,
+applies brand-scoped same-product links, and files what it can't decide in
+`product_identity_reviews`:
+
+- **one number, several brands** — different parts sharing a number, or one
+  brand spelled two ways;
+- **no brand** — a known number written without a brand (dismiss only; it
+  can't join a product until it has one);
+- **link without brands** — a `same_product` link that would join two
+  products without saying whose numbers they are;
+- **also-known-as clash** — a listing's own alternate number belongs to
+  another product of the same brand.
+
+Only a number with a digit, 3–64 characters compacted, starts a product
+("kit" in the number box doesn't). Reviews close themselves (`obsolete`) when
+the ambiguity goes away. Decisions go through
+`resolve_product_identity_review` — a full admin with a fresh TOTP step-up,
+audited as `product.merge` / `product.keep_separate` / `product.dismiss`.
+Each run's result and coverage are kept in `product_grow_runs`; the admin
+page shows the latest.
+
+**Internal.** Products, membership, reviews and runs have no client access,
+like `part_number_links`: a product named from a private car's build line
+must not be readable as a catalog. Member-facing reads arrive as agent
+capabilities.
+
+**The purchase keeps the brand.** The commercial snapshot gains
+`part.brand`; `addPurchaseToCar` copies it to the build line. Snapshots from
+before the change have no brand and the line gets none, never today's
+listing's.
 
 ## Data sources
 

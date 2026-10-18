@@ -60,7 +60,8 @@ describe("getNavCounts", () => {
     state.tables.reports = { count: null, error: { message: "timeout" } };
     state.tables.payment_recoveries = { count: 1, error: null };
     state.tables.transfer_intents = { count: null, error: { message: "timeout" } };
-    await expect(getNavCounts()).resolves.toEqual({ disputes: 3, reports: null, money: null });
+    state.tables.product_identity_reviews = { count: 4, error: null };
+    await expect(getNavCounts()).resolves.toEqual({ disputes: 3, reports: null, money: null, products: 4 });
   });
 });
 

@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 70 initiatives — 2 planned · 1 in progress · 24 implemented · 36 validated · 6 deferred · 1 blocked externally
+**Progress:** 71 initiatives — 2 planned · 2 in progress · 24 implemented · 36 validated · 6 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -190,6 +190,20 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Validation:** Verified in the running app: the country and region rows in settings, the dependent region select appearing on choosing a country, and Local on Home. Covered by the geo unit tests and carless_post_reach_guard's region assertions.
 
 ### 03 · Vehicle identity & fitment
+
+#### Car generations, products and price comparables (graph foundation) — In progress
+
+- **Brief:** Agent and graph plan B1 · PRD §4.9
+- **Exists today:** Cars know make and model, not generation. Part numbers link listings to each other (part_number_links) but nothing says which records are the same product, build lines can't be joined to listings, and no price comparable exists.
+- **Changing:** vehicle_generations with cars resolved from model and year; products grown from the brand + part number members write, with explicit brand-aware membership and an admin review list for the ambiguous; part keys on build lines; the brand kept through a purchase.
+- **Surfaces:** `supabase/migrations/20261020100000_vehicle_generations.sql`, `supabase/migrations/20261020110000_part_keys.sql`, `supabase/migrations/20261020120000_products.sql`, `src/app/(admin)/admin/products/`, `src/features/commerce/add-to-car-actions.ts`
+- **User benefit:** The agent and the marketplace can say "this is the same part" and "this fits a Mk8" without guessing, and a part's real selling price can be shown once enough have sold.
+- **Approach:** Deterministic resolution only. Products merge on the same brand and number, a brand-scoped same_product link, or an admin's decision; interchange, supersedes and aftermarket links stay edges. Records reach their product through the membership, never a stored id. An hourly job grows products and files ambiguity.
+- **Depends on:** part-aliases, canonical-add-car
+- **UX rules:** A changeover year is asked, never guessed. An interchangeable or aftermarket part is never called the same part.
+- **Decisions:** Generation year ranges are the union of production and main-market model years, so overlaps resolve to nothing rather than to the wrong generation. Products and their membership are internal (service role only): a product named from a private car's build line must not be readable as a catalog. Only numbers with a digit, 3–64 characters compacted, start a product; draft and removed listings don't.
+- **Validation:** vehicle_generations_guard.sql and products_guard.sql on CI's database image; a rehearsal on a copy of shared dev's catalog; full unit suite and typecheck.
+- **Docs:** docs/site/vehicles.md, docs/plans/2026-10-agent-and-graph-plan.md, supabase/MIGRATIONS.md
 
 #### Canonical Add Car flow — Validated
 

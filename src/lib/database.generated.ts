@@ -1872,6 +1872,7 @@ export type Database = {
       mod_items: {
         Row: {
           brand: string | null
+          brand_key: string | null
           car_id: string
           category: string | null
           confidence: number | null
@@ -1881,6 +1882,7 @@ export type Database = {
           image_url: string | null
           linked_listing_id: string | null
           part_number: string | null
+          part_number_compact: string | null
           position: number
           product: string | null
           product_url: string | null
@@ -1895,6 +1897,7 @@ export type Database = {
         }
         Insert: {
           brand?: string | null
+          brand_key?: string | null
           car_id: string
           category?: string | null
           confidence?: number | null
@@ -1904,6 +1907,7 @@ export type Database = {
           image_url?: string | null
           linked_listing_id?: string | null
           part_number?: string | null
+          part_number_compact?: string | null
           position?: number
           product?: string | null
           product_url?: string | null
@@ -1918,6 +1922,7 @@ export type Database = {
         }
         Update: {
           brand?: string | null
+          brand_key?: string | null
           car_id?: string
           category?: string | null
           confidence?: number | null
@@ -1927,6 +1932,7 @@ export type Database = {
           image_url?: string | null
           linked_listing_id?: string | null
           part_number?: string | null
+          part_number_compact?: string | null
           position?: number
           product?: string | null
           product_url?: string | null
@@ -2665,30 +2671,66 @@ export type Database = {
       }
       part_number_links: {
         Row: {
+          confidence: number | null
           created_at: string
+          created_by: string | null
+          from_brand_key: string | null
           from_compact: string
           id: string
           kind: string
           source: string
+          source_ref: string | null
+          to_brand_key: string | null
           to_compact: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
+          confidence?: number | null
           created_at?: string
+          created_by?: string | null
+          from_brand_key?: string | null
           from_compact: string
           id?: string
           kind: string
           source?: string
+          source_ref?: string | null
+          to_brand_key?: string | null
           to_compact: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
+          confidence?: number | null
           created_at?: string
+          created_by?: string | null
+          from_brand_key?: string | null
           from_compact?: string
           id?: string
           kind?: string
           source?: string
+          source_ref?: string | null
+          to_brand_key?: string | null
           to_compact?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "part_number_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "part_number_links_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payment_recoveries: {
         Row: {
@@ -2883,6 +2925,209 @@ export type Database = {
             columns: ["redeemed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_grow_runs: {
+        Row: {
+          id: number
+          ran_at: string
+          result: Json
+        }
+        Insert: {
+          id?: never
+          ran_at?: string
+          result: Json
+        }
+        Update: {
+          id?: never
+          ran_at?: string
+          result?: Json
+        }
+        Relationships: []
+      }
+      product_identity_reviews: {
+        Row: {
+          brand_keys: string[]
+          created_at: string
+          dedup_key: string
+          detail: Json
+          id: string
+          kind: string
+          link_id: string | null
+          listing_id: string | null
+          mod_item_id: string | null
+          number_compact: string | null
+          product_ids: string[]
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          brand_keys?: string[]
+          created_at?: string
+          dedup_key: string
+          detail?: Json
+          id?: string
+          kind: string
+          link_id?: string | null
+          listing_id?: string | null
+          mod_item_id?: string | null
+          number_compact?: string | null
+          product_ids?: string[]
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          brand_keys?: string[]
+          created_at?: string
+          dedup_key?: string
+          detail?: Json
+          id?: string
+          kind?: string
+          link_id?: string | null
+          listing_id?: string | null
+          mod_item_id?: string | null
+          number_compact?: string | null
+          product_ids?: string[]
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_identity_reviews_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "part_number_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_identity_reviews_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_identity_reviews_mod_item_id_fkey"
+            columns: ["mod_item_id"]
+            isOneToOne: false
+            referencedRelation: "mod_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_identity_reviews_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_part_numbers: {
+        Row: {
+          basis: string
+          brand_key: string
+          created_at: string
+          link_id: string | null
+          number: string | null
+          number_compact: string
+          product_id: string
+          verified_by: string | null
+        }
+        Insert: {
+          basis: string
+          brand_key: string
+          created_at?: string
+          link_id?: string | null
+          number?: string | null
+          number_compact: string
+          product_id: string
+          verified_by?: string | null
+        }
+        Update: {
+          basis?: string
+          brand_key?: string
+          created_at?: string
+          link_id?: string | null
+          number?: string | null
+          number_compact?: string
+          product_id?: string
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_part_numbers_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "part_number_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_part_numbers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_part_numbers_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          brand: string
+          brand_key: string
+          category: string | null
+          created_at: string
+          created_from: string
+          id: string
+          merged_into: string | null
+          name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          brand_key: string
+          category?: string | null
+          created_at?: string
+          created_from: string
+          id?: string
+          merged_into?: string | null
+          name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          brand_key?: string
+          category?: string | null
+          created_at?: string
+          created_from?: string
+          id?: string
+          merged_into?: string | null
+          name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -5274,6 +5519,7 @@ export type Database = {
           updates: number
         }[]
       }
+      grow_products: { Args: never; Returns: Json }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
@@ -5766,6 +6012,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      merge_products: {
+        Args: { p_actor?: string; p_basis?: string; p_products: string[] }
+        Returns: string
+      }
       mod_purchase_sources: {
         Args: { p_order_item_ids: string[] }
         Returns: {
@@ -5893,6 +6143,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      product_coverage: { Args: never; Returns: Json }
       profile_follow_counts: {
         Args: { p_profile: string }
         Returns: {
@@ -6124,6 +6375,10 @@ export type Database = {
       }
       request_account_deletion: { Args: never; Returns: Json }
       request_account_export: { Args: never; Returns: string }
+      resolve_product_identity_review: {
+        Args: { p_decision: string; p_reason: string; p_review: string }
+        Returns: Json
+      }
       resolve_vehicle_generation: {
         Args: { p_model_id: number; p_year: number }
         Returns: number

@@ -1,5 +1,20 @@
 # Applying migrations
 
+## October 20 — part keys and products, B1 step two
+
+| File | Applied to |
+|---|---|
+| `20261020110000_part_keys.sql` | not yet |
+| `20261020120000_products.sql` | not yet |
+
+Apply in order, after `20261020100000`.
+- `110000` adds generated `mod_items.part_number_compact` (the listings expression from 0033) and `mod_items.brand_key` (brand compacted to letters and digits), with an index on both. It restates `listing_commercial_snapshot` from 0056 with one added line: `part.brand`.
+- `120000` extends `part_number_links` (brand scope per side, `confidence`, `source_ref`, `created_by`, `verified_at/by`; the unique key now includes brand scope). It adds the internal tables `products`, `product_part_numbers` (membership; primary key brand key + number), `product_identity_reviews` and `product_grow_runs`; the functions `merge_products`, `product_coverage`, `grow_products` (service role) and `resolve_product_identity_review` (admins with step-up); `product_review` in `admin_audit_log.subject_type` (built from the live constraint, so other values survive); and the hourly pg_cron job `drvn-grow-products`. It runs `grow_products()` once as the backfill.
+
+Adding generated columns rewrites `mod_items` under an exclusive lock; at today's size that is instant (measured at 2M parts in the B1 query-plan notes).
+
+Checked on a fresh database (CI's PG15 image): both files apply twice cleanly; every SQL guard passes, including the new `products_guard.sql`.
+
 ## October 20 — car generations, B1 step one
 
 | File | Applied to |
