@@ -21,7 +21,7 @@ import { unlinkModListing } from "@/app/(product)/sell/actions";
 
 import { readPartLink, saveModItems, type ModItemInput } from "../../actions";
 import { useUnsavedGuard } from "./use-unsaved";
-import { draftRow, type BuildDraft } from "@/features/agent/build-change";
+import { draftRow, listRow, type BuildDraft, type BuildList } from "@/features/agent/build-change";
 
 export { MOD_GROUPS };
 
@@ -114,7 +114,26 @@ function blankRow(group_label = "Other"): Row {
  * just above the part it replaces, which is marked removed. A draft already
  * saved, or one whose old part is gone, leaves the sheet as loaded.
  */
-function withDraft(rows: Row[], draft: BuildDraft): Row[] {
+function withDraft(rows: Row[], draft: BuildDraft | BuildList): Row[] {
+  if (draft.kind === "build_list") {
+    const have = new Set(rows.map((row) => row.id ?? row.key));
+    const fresh = draft.lines
+      .filter((line) => !have.has(line.id))
+      .map((line): Row => {
+        const sheet = listRow(line);
+        return {
+          ...blankRow(sheet.group_label),
+          key: line.id,
+          brand: sheet.brand ?? "",
+          product: sheet.product ?? "",
+          part_number: sheet.part_number ?? "",
+          category: (sheet.category as ModCategory | null) ?? null,
+          confidence: sheet.confidence,
+          raw_text: sheet.raw_text ?? "",
+        };
+      });
+    return fresh.length ? [...rows, ...fresh] : rows;
+  }
   if (rows.some((row) => (row.id ?? row.key) === draft.id)) return rows;
   const index = draft.replaces ? rows.findIndex((row) => row.id === draft.replaces) : -1;
   if (draft.replaces && (index < 0 || rows[index].status !== "installed")) return rows;
@@ -218,8 +237,8 @@ export function ModsEditor({
   carMake: string | null;
   /** `linked_listing` is the linked listing's status, embedded by the caller. */
   initialMods: (ModItem & { linked_listing?: { status: string } | null })[];
-  /** An agent's "Update my build" draft (A3c Edit): filled in, unsaved. */
-  draft?: BuildDraft | null;
+  /** An agent's draft (A3c "Update my build", A3d "Paste your build"), from Edit: filled in, unsaved. */
+  draft?: BuildDraft | BuildList | null;
 }) {
   const [loaded] = useState<Row[]>(() =>
     initialMods.map((m) => ({
@@ -286,7 +305,7 @@ export function ModsEditor({
   // Phones fold every saved line to a one-row summary (five labelled fields
   // per line made a five-part build 2,400px long); tapping one opens it.
   // New, parsed and flagged lines always open unfolded.
-  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set(draft ? [draft.id] : []));
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set(draft ? (draft.kind === "build_list" ? draft.lines.map((line) => line.id) : [draft.id]) : []));
   const openRow = (key: string) => setOpenKeys((k) => new Set(k).add(key));
   // Replace moves the old part to "Came off this car" and leaves a blank line
   // where it was. Said out loud, with an undo, so it doesn't read as the
@@ -591,7 +610,9 @@ export function ModsEditor({
 
       {draft && dirty && (
         <p className="field__hint mt-3" role="status">
-          From your agent: check the new line{draft.replaces ? " and the part it replaces" : ""}, then Save.
+          {draft.kind === "build_list"
+            ? "From your agent: check the new lines (flagged ones especially), then Save."
+            : `From your agent: check the new line${draft.replaces ? " and the part it replaces" : ""}, then Save.`}
         </p>
       )}
 

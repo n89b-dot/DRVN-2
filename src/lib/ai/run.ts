@@ -6,8 +6,8 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { riskAtMost, type AgentContext, type AgentScope } from "@/lib/agent/context";
 import type { z } from "zod";
 
-import type { proposeBuildChange } from "@/lib/capabilities/build";
-import { modelToolsFor } from "@/lib/capabilities/registry";
+import type { draftBuildList, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
+import { JOB_TOOLS, modelToolsFor } from "@/lib/capabilities/registry";
 import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capabilities/types";
 import { reportError } from "@/lib/monitoring";
 
@@ -55,6 +55,19 @@ export type TurnCard =
       category: string | null;
       product_url: string | null;
       image_url: string | null;
+    }
+  | {
+      /** "Paste your build" (A3d): parsed lines, each with the id it saves under. */
+      kind: "build_list";
+      id: string;
+      car: string;
+      lines: { id: string; group_label: string; brand: string | null; product: string | null; part_number: string | null; category: string | null; confidence: number }[];
+    }
+  | {
+      /** "List the parts that came off" (A3d): a removed, unlisted mod line by id. */
+      kind: "list_part";
+      id: string;
+      car: string;
     };
 const MAX_CARDS = 5;
 
@@ -90,13 +103,16 @@ const SCOPE_JOB: Record<AgentScope, string> = {
   garage: "You help the member keep their Garage up to date on DRVN: their cars and the parts on them.",
 };
 
-export function agentSystemPrompt(scope: AgentScope): string {
+export function agentSystemPrompt(scope: AgentScope, jobs = false): string {
   return [
     "You are the member's DRVN agent. You speak only to the member who owns you; you never write to anyone else.",
     SCOPE_JOB[scope],
     "You never choose a price, a counter or a limit, and you never accept, pay or move money: DRVN's rules do that, and you may explain an outcome the rules already decided.",
     "Use the tools to look things up. When a tool says there isn't enough evidence, say so plainly; don't guess fitment or prices.",
     "When the member says a part went on or came off one of their cars, or pastes a product link for one, draft it with propose_build_change (read_part_link first for a link, list_my_cars and read_my_car to find the car and the part it replaces). It isn't saved until they tap Confirm on the card, so say that rather than that it's done.",
+    ...(jobs
+      ? ["When they paste a whole build list, use draft_build_list with their text as it is; when they want to sell what came off, use find_parts_to_list. Each ends in a card they act on; you never list, price or describe a part's condition for them."]
+      : []),
     UNTRUSTED_RULE,
     "Keep replies short and concrete.",
   ].join("\n\n");
@@ -112,6 +128,8 @@ export async function runAgentTurn(options: {
   config?: AiConfig;
   /** The spend caps and usage store; the database's by default. */
   spend?: SpendLedger;
+  /** The jobs step is open (A3d): its tools join the model's. */
+  jobs?: boolean;
 }): Promise<AgentTurnResult> {
   const config = options.config ?? resolveAiConfig();
   const toolCalls: ToolCall[] = [];
@@ -129,7 +147,9 @@ export async function runAgentTurn(options: {
   const ownerId = options.context.principal.memberId;
   if (!(await ledger.allowed(ownerId))) return { ok: false, code: "spend_cap", toolCalls };
 
-  const tools = modelToolsFor(options.context.scope).map((capability) =>
+  const tools = modelToolsFor(options.context.scope)
+    .filter((capability) => options.jobs || !JOB_TOOLS.has(capability.name))
+    .map((capability) =>
     betaZodTool({
       name: capability.name,
       description: capability.description,
@@ -166,6 +186,13 @@ export async function runAgentTurn(options: {
               image_url: draft.imageUrl,
             });
           }
+          if (capability.name === "draft_build_list") {
+            const draft = result as z.infer<typeof draftBuildList.output>;
+            addCard({ kind: "build_list", id: draft.proposalId, car: draft.carId, lines: draft.lines });
+          }
+          if (capability.name === "find_parts_to_list") {
+            for (const part of (result as z.infer<typeof findPartsToList.output>).slice(0, MAX_CARDS)) addCard({ kind: "list_part", id: part.modId, car: part.carId });
+          }
           return wrapToolResult(capability.name, result);
         } catch (error) {
           const code = error instanceof CapabilityError ? error.code : "failed";
@@ -182,7 +209,7 @@ export async function runAgentTurn(options: {
       model: config.model,
       max_tokens: 16000,
       max_iterations: config.maxIterations,
-      system: agentSystemPrompt(options.context.scope),
+      system: agentSystemPrompt(options.context.scope, Boolean(options.jobs)),
       tools,
       messages: [...(options.history ?? []), { role: "user", content: redactForModel(options.message) }],
       output_config: { effort: "medium" },

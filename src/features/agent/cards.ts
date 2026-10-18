@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
 import type { TurnCard } from "@/lib/ai/run";
+import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/mods/parse";
 
 /** A result card ready to draw: what the agent pointed at, read as the member. */
 export type ResolvedCard =
@@ -24,9 +25,34 @@ export type ResolvedCard =
       editHref: string;
       /** "List the old one", once saved and only when something came off. */
       sellHref: string | null;
+    }
+  | {
+      kind: "build_list";
+      id: string;
+      carName: string;
+      lines: number;
+      /** Lines the parser wasn't sure of: flagged in the editor. */
+      toCheck: number;
+      applied: boolean;
+      href: string;
+      editHref: string;
+    }
+  | {
+      kind: "list_part";
+      id: string;
+      carName: string;
+      part: string;
+      /** The sell form prefilled from the line, or the listing once it's up. */
+      href: string;
+      listed: boolean;
     };
 
 type BuildCard = Extract<TurnCard, { kind: "build_change" }>;
+type ListCard = Extract<TurnCard, { kind: "build_list" }>;
+type PartCard = Extract<TurnCard, { kind: "list_part" }>;
+
+/** Below this the parser's line is flagged for a look, as in the editor. */
+const CHECK_BELOW = LOW_CONFIDENCE_THRESHOLD;
 
 /**
  * Turns stored card ids (agent_messages.cards) into what the thread shows,
@@ -35,8 +61,8 @@ type BuildCard = Extract<TurnCard, { kind: "build_change" }>;
  */
 export async function resolveCards(supabase: SupabaseClient<Database>, cards: TurnCard[]): Promise<Map<string, ResolvedCard>> {
   const resolved = new Map<string, ResolvedCard>();
-  const [, builds] = await Promise.all([resolveListings(supabase, cards, resolved), resolveBuildChanges(supabase, cards)]);
-  for (const card of builds) resolved.set(card.id, card);
+  const [, builds, jobs] = await Promise.all([resolveListings(supabase, cards, resolved), resolveBuildChanges(supabase, cards), resolveJobCards(supabase, cards)]);
+  for (const card of [...builds, ...jobs]) resolved.set(card.id, card);
   return resolved;
 }
 
@@ -102,4 +128,56 @@ async function resolveBuildChanges(supabase: SupabaseClient<Database>, cards: Tu
       },
     ];
   });
+}
+
+/**
+ * A3d's cards, on the member's own cars: a parsed build list (saved once
+ * every line is on the car) and a part that came off (the sell form, or its
+ * listing once it's up; dropped if it went back on the car).
+ */
+async function resolveJobCards(supabase: SupabaseClient<Database>, cards: TurnCard[]): Promise<ResolvedCard[]> {
+  const lists = cards.filter((card): card is ListCard => card.kind === "build_list");
+  const parts = cards.filter((card): card is PartCard => card.kind === "list_part");
+  if (!lists.length && !parts.length) return [];
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const carIds = [...new Set([...lists, ...parts].map((card) => card.car))];
+  const modIds = [...new Set([...lists.flatMap((list) => list.lines.map((line) => line.id)), ...parts.map((part) => part.id)])];
+  const [{ data: cars }, { data: mods }] = await Promise.all([
+    supabase.from("cars").select("id, name, slug").in("id", carIds).eq("owner_id", user.id),
+    supabase.from("mod_items").select("id, car_id, brand, product, status, linked_listing_id").in("id", modIds),
+  ]);
+  const carOf = new Map((cars ?? []).map((car) => [car.id, car]));
+  const modOf = new Map((mods ?? []).map((mod) => [mod.id, mod]));
+  const out: ResolvedCard[] = [];
+  for (const list of lists) {
+    const car = carOf.get(list.car);
+    if (!car) continue;
+    out.push({
+      kind: "build_list",
+      id: list.id,
+      carName: car.name,
+      lines: list.lines.length,
+      toCheck: list.lines.filter((line) => line.confidence < CHECK_BELOW).length,
+      applied: list.lines.every((line) => modOf.get(line.id)?.car_id === car.id),
+      href: `/cars/${car.slug}`,
+      editHref: `/garage/${car.id}/edit?change=${list.id}#mods`,
+    });
+  }
+  for (const part of parts) {
+    const car = carOf.get(part.car);
+    const mod = modOf.get(part.id);
+    if (!car || !mod || mod.car_id !== car.id || mod.status !== "removed") continue;
+    out.push({
+      kind: "list_part",
+      id: part.id,
+      carName: car.name,
+      part: [mod.brand, mod.product].filter(Boolean).join(" ") || "A part",
+      href: mod.linked_listing_id ? `/listings/${mod.linked_listing_id}` : `/sell?car=${car.id}&mod=${mod.id}`,
+      listed: Boolean(mod.linked_listing_id),
+    });
+  }
+  return out;
 }

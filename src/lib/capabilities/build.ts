@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { isOwnedStorageUrl } from "@/lib/media-url";
-import { MOD_CATEGORIES } from "@/lib/mods/parse";
+import { LOW_CONFIDENCE_THRESHOLD, MOD_CATEGORIES, parsePasteText } from "@/lib/mods/parse";
 import { RATE_LIMITS, allowAction } from "@/lib/rate-limit";
 
 import { CapabilityError, defineCapability } from "./types";
@@ -134,5 +134,103 @@ export const proposeBuildChange = defineCapability({
       imageUrl,
       replaces,
     };
+  },
+});
+
+/** The most lines one pasted list drafts at once (the editor takes the rest). */
+export const MAX_DRAFT_LINES = 40;
+
+/**
+ * "Paste your build" (A3d): a pasted build list becomes mod lines, split by
+ * the mods editor's own parser (parsePasteText), so the agent and the
+ * editor's Paste a list agree on every line and its confidence. A draft:
+ * nothing is saved until the member confirms the card.
+ */
+export const draftBuildList = defineCapability({
+  name: "draft_build_list",
+  description:
+    "Turn a build list the member pasted (forum post, notes) into mod lines on one of their cars, using DRVN's own parser. Pass the member's text unchanged. Nothing is saved: the member sees a card and confirms or edits it.",
+  risk: "R1",
+  scopes: ["buyer", "garage"],
+  input: z.object({ carId: id, text: z.string().trim().min(3).max(8000) }),
+  output: z.object({
+    proposalId: id,
+    carId: id,
+    carName: z.string(),
+    lines: z.array(
+      z.object({
+        id,
+        group_label: z.string(),
+        brand: z.string().nullable(),
+        product: z.string().nullable(),
+        part_number: z.string().nullable(),
+        category: z.string().nullable(),
+        confidence: z.number().min(0).max(1),
+      }),
+    ),
+    truncated: z.boolean(),
+    toCheck: z.number().int().nonnegative(),
+  }),
+  async run({ supabase, context }, input) {
+    const owner = context.principal.memberId;
+    const car = await supabase.from("cars").select("id,name").eq("id", input.carId).eq("owner_id", owner).maybeSingle();
+    if (car.error) throw new CapabilityError("failed", "Car is unavailable", car.error);
+    if (!car.data) throw new CapabilityError("not_allowed", "Not one of the owner's cars");
+    const parsed = parsePasteText(input.text).filter((row) => row.brand || row.product);
+    if (!parsed.length) throw new CapabilityError("invalid_input", "No parts found in that text");
+    const lines = parsed.slice(0, MAX_DRAFT_LINES).map((row) => ({
+      id: randomUUID(),
+      group_label: row.group_label,
+      brand: row.brand.slice(0, 120) || null,
+      product: row.product.slice(0, 200) || null,
+      part_number: row.part_number.slice(0, 80) || null,
+      category: row.category,
+      confidence: Math.round(row.confidence * 100) / 100,
+    }));
+    return {
+      proposalId: randomUUID(),
+      carId: car.data.id,
+      carName: car.data.name,
+      lines,
+      truncated: parsed.length > MAX_DRAFT_LINES,
+      toCheck: lines.filter((line) => line.confidence < LOW_CONFIDENCE_THRESHOLD).length,
+    };
+  },
+});
+
+/**
+ * "List the parts that came off" (A3d): parts marked removed on the member's
+ * own cars that aren't listed yet. Each becomes a card that opens the sell
+ * form prefilled from that line (fitment from the car); the member adds
+ * condition and photos and publishes. Nothing is drafted here.
+ */
+export const findPartsToList = defineCapability({
+  name: "find_parts_to_list",
+  description: "Parts that came off the owner's cars and aren't listed for sale yet: each with its car. The member lists one from its card.",
+  risk: "R0",
+  scopes: ["buyer", "garage", "seller"],
+  input: z.object({}),
+  output: z.array(z.object({ modId: id, carId: id, carName: z.string(), label: z.string() })),
+  async run({ supabase, context }) {
+    const owner = context.principal.memberId;
+    const cars = await supabase.from("cars").select("id,name").eq("owner_id", owner).limit(20);
+    if (cars.error) throw new CapabilityError("failed", "Cars are unavailable", cars.error);
+    const names = new Map((cars.data ?? []).map((car) => [car.id, car.name]));
+    if (!names.size) return [];
+    const mods = await supabase
+      .from("mod_items")
+      .select("id,car_id,brand,product,removed_at")
+      .in("car_id", [...names.keys()])
+      .eq("status", "removed")
+      .is("linked_listing_id", null)
+      .order("removed_at", { ascending: false })
+      .limit(10);
+    if (mods.error) throw new CapabilityError("failed", "Builds are unavailable", mods.error);
+    return (mods.data ?? []).map((mod) => ({
+      modId: mod.id,
+      carId: mod.car_id,
+      carName: names.get(mod.car_id) ?? "",
+      label: [mod.brand, mod.product].filter(Boolean).join(" ") || "A part",
+    }));
   },
 });

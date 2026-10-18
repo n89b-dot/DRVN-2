@@ -7,6 +7,8 @@
 --      than five, or cards on a member's own message are refused.
 --   4. A drafted build change (20261025110000) keeps to its fields: no price
 --      or other key, a known category, http(s) links only.
+--   5. A3d's cards (20261025120000): a parsed build list keeps to its lines'
+--      fields and 40 lines at most; a part to list is ids only.
 begin;
 
 create function pg_temp.act(p_member uuid) returns void language sql as $$
@@ -85,6 +87,31 @@ begin
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
     'kind', 'build_change', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'product', ''))));
   if c <> '22023' then raise exception 'FAIL 4f: a build change without a product was stored (%)', c; end if;
+
+  -- 5. Job cards.
+  perform public.agent_chat_append(member, 'agent', 'Here are the lines.', jsonb_build_array(
+    jsonb_build_object('kind', 'build_list', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'lines', jsonb_build_array(
+      jsonb_build_object('id', gen_random_uuid(), 'group_label', 'Suspension', 'brand', 'KW', 'product', 'V3', 'part_number', null, 'category', 'suspension', 'confidence', 0.9),
+      jsonb_build_object('id', gen_random_uuid(), 'group_label', 'Other', 'brand', null, 'product', 'Some mount', 'part_number', null, 'category', null, 'confidence', 0.3))),
+    jsonb_build_object('kind', 'list_part', 'id', gen_random_uuid(), 'car', gen_random_uuid())));
+  if (select count(*) from public.agent_messages where owner_id = member and cards->0->>'kind' = 'build_list' and cards->1->>'kind' = 'list_part') <> 1 then
+    raise exception 'FAIL 5: job cards were not stored';
+  end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_list', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'lines', jsonb_build_array(
+      jsonb_build_object('id', gen_random_uuid(), 'group_label', 'Other', 'product', 'V3', 'confidence', 0.9, 'price_cents', 100))))));
+  if c <> '22023' then raise exception 'FAIL 5b: a build line carried a price (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_list', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'lines',
+    (select jsonb_agg(jsonb_build_object('id', gen_random_uuid(), 'group_label', 'Other', 'product', 'x', 'confidence', 0.5)) from generate_series(1, 41))))));
+  if c <> '22023' then raise exception 'FAIL 5c: 41 lines were stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_list', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'lines', jsonb_build_array(
+      jsonb_build_object('id', gen_random_uuid(), 'group_label', 'Other', 'confidence', 0.9))))));
+  if c <> '22023' then raise exception 'FAIL 5d: a line with no brand or product was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'list_part', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'price_cents', 5000))));
+  if c <> '22023' then raise exception 'FAIL 5e: a part to list carried a price (%)', c; end if;
 
   raise notice 'all agent chat checks passed';
 end $$;

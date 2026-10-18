@@ -114,3 +114,42 @@ export function buildChangeItems(rows: SheetRow[], draft: BuildDraft): BuildChan
   }
   return { kind: "save", items: sheet.map((row, position) => toItem(row, position)), sellHref };
 }
+
+export type BuildList = Extract<TurnCard, { kind: "build_list" }>;
+
+/**
+ * "Paste your build" confirmed: the parsed lines join the end of the sheet
+ * under their own ids, with their confidence (the editor flags low ones as it
+ * does for its own Paste a list). Lines already saved are skipped, so a
+ * second Confirm adds nothing.
+ */
+export function buildListItems(rows: SheetRow[], list: BuildList): BuildChangePlan {
+  const have = new Set(rows.map((row) => row.id));
+  const fresh = list.lines.filter((line) => !have.has(line.id));
+  if (!fresh.length) return { kind: "saved", sellHref: null };
+  const sheet = [...rows].sort((a, b) => a.position - b.position);
+  for (const line of fresh) sheet.push(listRow(line));
+  return { kind: "save", items: sheet.map((row, position) => toItem(row, position)), sellHref: null };
+}
+
+/** One parsed line as a sheet row. */
+export function listRow(line: BuildList["lines"][number]): SheetRow {
+  return {
+    id: line.id,
+    group_label: line.group_label,
+    brand: line.brand,
+    product: line.product,
+    part_number: line.part_number,
+    category: line.category,
+    confidence: line.confidence,
+    raw_text: [line.brand, line.product].filter(Boolean).join(" "),
+    position: 0,
+    status: "installed",
+    product_url: null,
+    image_url: null,
+    source_domain: null,
+    ref_price_cents: null,
+    ref_price_currency: null,
+    origin: "aftermarket",
+  };
+}

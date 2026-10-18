@@ -15,8 +15,10 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour
 
 /** Starters above the composer (design 02): each fills the box, never sends. They follow what you opened it from. */
 const STARTERS = ["Will this fit my car?", "What do parts like this sell for?", "Update my build", "Find parts for my car", "What's my agent doing?"];
-function startersFor(about: ChatAbout | null): string[] {
-  if (!about) return STARTERS;
+/** A3d's jobs, once their step is open. */
+const JOB_STARTERS = ["Paste my build", "List the parts that came off"];
+function startersFor(about: ChatAbout | null, jobs: boolean): string[] {
+  if (!about) return jobs ? [...STARTERS.slice(0, 3), ...JOB_STARTERS, ...STARTERS.slice(3)] : STARTERS;
   if (about.kind === "car") return ["Update my build", "Find parts for my car", "What's on this car?"];
   return about.mine ? ["What do parts like this sell for?", "How is this listing doing?"] : ["Will this fit my car?", "What do parts like this sell for?"];
 }
@@ -29,7 +31,7 @@ function startersFor(about: ChatAbout | null): string[] {
  * never sets a price or a limit from here — those stay on the listing and
  * offer pages.
  */
-export function AgentChat({ initial, about = null }: { initial: ChatMessage[]; about?: ChatAbout | null }) {
+export function AgentChat({ initial, about = null, jobs = false }: { initial: ChatMessage[]; about?: ChatAbout | null; jobs?: boolean }) {
   const [messages, setMessages] = useState(initial);
   // What the next message is about: the opener's listing or car, until the
   // member clears it. A new opener (the panel reopened from elsewhere) resets it.
@@ -95,6 +97,14 @@ export function AgentChat({ initial, about = null }: { initial: ChatMessage[]; a
                     image={{ src: card.image ?? undefined, alt: card.title }}
                     href={card.href}
                   />
+                ) : card.kind === "list_part" ? (
+                  <AgentResultCard
+                    key={card.id}
+                    eyebrow={card.listed ? "Listed" : "Came off your " + card.carName}
+                    title={card.part}
+                    meta={card.listed ? "Open the listing" : "List it: fitment from your car; you add condition and photos"}
+                    href={card.href}
+                  />
                 ) : (
                   <BuildChangeCard key={card.id} card={card} />
                 ),
@@ -105,7 +115,7 @@ export function AgentChat({ initial, about = null }: { initial: ChatMessage[]; a
       )}
 
       <div className="agentchat__starters mt-4 flex flex-wrap gap-2" role="group" aria-label="Starters">
-        {startersFor(context).map((starter) => (
+        {startersFor(context, jobs).map((starter) => (
           <FilterButton key={starter} onClick={() => setDraft(starter)}>
             {starter}
           </FilterButton>
@@ -140,14 +150,15 @@ export function AgentChat({ initial, about = null }: { initial: ChatMessage[]; a
 }
 
 /**
- * "Update my build" as a confirm card (design 05): the exact change, then
+ * A build draft as a confirm card (design 05): the exact change, then
  * Confirm or Edit. Confirm saves it through the mods editor's own save; Edit
- * opens the editor with the line filled in. Once saved it offers to list the
- * part that came off.
+ * opens the editor with it filled in. "Update my build" offers to list the
+ * part that came off once saved; "Paste your build" says how many lines the
+ * parser wasn't sure of, which the editor flags.
  */
-function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_change" }> }) {
+function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_change" | "build_list" }> }) {
   const [applied, setApplied] = useState(card.applied);
-  const [sellHref, setSellHref] = useState(card.sellHref);
+  const [sellHref, setSellHref] = useState(card.kind === "build_change" ? card.sellHref : null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -169,14 +180,29 @@ function BuildChangeCard({ card }: { card: Extract<ResolvedCard, { kind: "build_
     });
   }
 
-  const change = card.replaces ? `Add to your ${card.carName}; mark ${card.replaces} removed` : `Add to your ${card.carName}`;
+  const list = card.kind === "build_list";
+  const title = list ? `${card.lines} ${card.lines === 1 ? "line" : "lines"} for your ${card.carName}` : card.part;
+  const meta = list
+    ? applied
+      ? "On your build"
+      : card.toCheck
+        ? `${card.toCheck} to check: Edit flags them in the editor`
+        : "Ready to add to your build"
+    : applied
+      ? card.replaces
+        ? `On your ${card.carName}; ${card.replaces} came off`
+        : `On your ${card.carName}`
+      : card.replaces
+        ? `Add to your ${card.carName}; mark ${card.replaces} removed`
+        : `Add to your ${card.carName}`;
+  const image = !list && card.image ? { src: card.image, alt: card.part } : undefined;
   return (
     <div className="grid gap-2">
       <AgentResultCard
-        eyebrow={applied ? "Build updated" : "Update your build"}
-        title={card.part}
-        meta={applied ? (card.replaces ? `On your ${card.carName}; ${card.replaces} came off` : `On your ${card.carName}`) : change}
-        image={card.image ? { src: card.image, alt: card.part } : undefined}
+        eyebrow={applied ? "Build updated" : list ? "Paste your build" : "Update your build"}
+        title={title}
+        meta={meta}
+        image={image}
         href={applied ? card.href : card.editHref}
         action={
           applied ? (
