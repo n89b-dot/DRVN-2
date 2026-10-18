@@ -222,12 +222,13 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ValidationSummary` | Primitive | `@/components/ui` | Assertive submit-blocking error list with per-field jump links. | Above long forms on failed submit; fields keep their inline errors. |
 | `WebsitePill` | Primitive | `@/components/ui` | Quiet mono external-link pill. | Profile websites. |
 
-### Product patterns (26)
+### Product patterns (27)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
 | `AccountRowList` | Product pattern | `@/components/commerce` | People as compact identity rows — avatar, name, one line of who they are, optional trailing action. — `.rowlist / .order` | Anywhere a list of members is shown: Explore's account results, Explore's 'Builders to follow' breaker, Home's rail suggestions. *Not for:* A single member's header — that's ProfileHeader. |
 | `AgentHeader` | Product pattern | `@/components/commerce` | The agent's header: "Agent" with a Beta label and one status line ("Handling offers on 3 listings · 2 need you"). Composes PageHead and Badge. — `.pagehead` | /agent, and the desktop side panel when chat arrives (A3c). *Not for:* Any other page head — use PageHead. |
+| `AgentResultCard` | Product pattern | `@/components/commerce` | A result card in the agent's thread: an eyebrow (what it is), the object as an ObjectRow, and the real page it opens. Never holds a form. — `.tile / .order` | Agent replies on /agent (and the desktop side panel): listings the agent looked up; negotiation, offer set-up and confirm cards as they arrive. *Not for:* Listing grids (ListingCard) and offers in a conversation (OfferCard). |
 | `AuthIntentDialog` | Product pattern | `@/components/ui` | Signed-out interception — explains the action in its own words (`subject`: save, like, reply, react, offer…) and routes to sign in or join with the intent carried through. | Any engagement control a guest can press. |
 | `CategoryIcon` | Product pattern | `@/components/ui` | Marketplace taxonomy category mark. | Category navigation and headers. |
 | `ConditionSummary` | Product pattern | `@/components/commerce` | Structured part-condition grid (grade + checklist). | PDP and sell preview condition blocks. |

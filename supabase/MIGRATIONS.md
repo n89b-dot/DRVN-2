@@ -1,5 +1,17 @@
 # Applying migrations
 
+## October 25 — the agent chat's result cards, A3c (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261025100000_agent_chat.sql` | not yet |
+
+Apply after `20261024100000`. It adds `agent_messages.cards` (a JSON array of at most five `{kind, id}` pointers to the listings an agent reply pointed at; the page resolves them through the member's own read, so a card never shows a listing the member couldn't open) adds `agent_chat_append`, the one way the server stores a chat message (the service role still reads the agent tables but writes them only through functions; it keeps one conversation per member and checks the cards), and moves the account export to `2026-10-25.v11`, which carries the column.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including the new `agent_chat_guard.sql`; generated types match.
+
+**After applying on dev,** the chat stays closed: open the `chat` step from `/admin/agent` to show it on `/agent`. With no model key the reply says chat isn't switched on.
+
 ## October 24 — the agent's admin controls and measures (shared dev project)
 
 | File | Applied to |

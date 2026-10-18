@@ -1,4 +1,4 @@
-export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-21.v10";
+export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-25.v11";
 export const ACCOUNT_EXPORT_PAGE_SIZE = 250;
 
 export type ExportAccess =
@@ -112,7 +112,7 @@ export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
   { key: "agent_events", table: "agent_events", projection: "id,task_id,mandate_id,mandate_version,kind,initiated_by,inputs,result,created_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "agent_approvals", table: "agent_approvals", projection: "id,task_id,kind,offer_id,round_no,amount_cents,reason,status,created_at,decided_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "agent_conversations", table: "agent_conversations", projection: "id,created_at,last_message_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
-  { key: "agent_messages", table: "agent_messages", projection: "id,conversation_id,role,body,task_id,created_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "agent_messages", table: "agent_messages", projection: "id,conversation_id,role,body,task_id,cards,created_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "reports_filed", table: "reports", projection: "id,reporter_id,subject_type,subject_id,reason,detail,status,resolved_at,created_at", access: "author", filter: "reporter_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "refund_recredit_proofs", table: "refund_recredit_proofs", projection: "amount_cents,currency,verified_at", sourceProjection: "adjustment_id,amount_cents,currency,verified_at", excludedSourceFields: ["adjustment_id"], access: "transaction_participant", filter: "authorized refund adjustment", cursor: "adjustment_id", counterpartyRule: "Includes the amount, currency and verification time needed to explain the requester's refund; internal adjustment/recovery ids, provider balance/transfer references and operator identity are excluded." },
 ] as const;

@@ -131,6 +131,8 @@ describe("eval fixtures: the model's boundary", () => {
     expect(seen.toolResults).toHaveLength(1);
     expect(seen.toolResults[0].match(/<\/untrusted_data>/g)).toHaveLength(1);
     expect(result.toolCalls).toEqual([{ name: "read_listing", ok: true }]);
+    // The listing it read becomes the reply's card (agent_messages.cards): ids only.
+    expect(result.ok && result.cards).toEqual([{ kind: "listing", id: INJECTED_LISTING.id }]);
   });
 
   it("sends the member's text redacted and no limit anywhere in the request", async () => {

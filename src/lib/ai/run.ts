@@ -33,8 +33,12 @@ import { logUsage, usageRecord } from "./usage";
 
 export type ToolCall = { name: string; ok: boolean; code?: string };
 
+/** What a reply points at, for result cards (agent_messages.cards): ids only. */
+export type TurnCard = { kind: "listing"; id: string };
+const MAX_CARDS = 5;
+
 export type AgentTurnResult =
-  | { ok: true; text: string; toolCalls: ToolCall[]; stopReason: string | null }
+  | { ok: true; text: string; toolCalls: ToolCall[]; cards: TurnCard[]; stopReason: string | null }
   | { ok: false; code: "ai_disabled" | "model_error" | "refused" | "incomplete" | "not_allowed" | "spend_cap"; toolCalls: ToolCall[] };
 
 type RunnerClient = Pick<Anthropic, "beta">;
@@ -69,11 +73,15 @@ export async function runAgentTurn(options: {
 }): Promise<AgentTurnResult> {
   const config = options.config ?? resolveAiConfig();
   const toolCalls: ToolCall[] = [];
+  const cards: TurnCard[] = [];
+  const addCard = (card: TurnCard) => {
+    if (cards.length < MAX_CARDS && !cards.some((c) => c.kind === card.kind && c.id === card.id)) cards.push(card);
+  };
   // The model works at R1 at most, whatever the caller's context allows.
   if (!riskAtMost(options.context.permissions.maxRisk, "R1")) return { ok: false, code: "not_allowed", toolCalls };
   if (config.mode === "disabled") return { ok: false, code: "ai_disabled", toolCalls };
   if (config.mode === "stub" && !options.client) {
-    return { ok: true, text: "I can't reach the model in this environment, so nothing was looked up.", toolCalls, stopReason: "stub" };
+    return { ok: true, text: "I can't reach the model in this environment, so nothing was looked up.", toolCalls, cards, stopReason: "stub" };
   }
   const ledger = options.spend ?? databaseLedger();
   const ownerId = options.context.principal.memberId;
@@ -88,6 +96,13 @@ export async function runAgentTurn(options: {
         try {
           const result = await invokeCapability(capability, { context: options.context, supabase: options.supabase }, args);
           toolCalls.push({ name: capability.name, ok: true });
+          // The listings a reply leans on become its cards: the one read, or the top of a search.
+          if (capability.name === "read_listing" && typeof (args as { listingId?: unknown }).listingId === "string") {
+            addCard({ kind: "listing", id: (args as { listingId: string }).listingId });
+          }
+          if (capability.name === "search_parts" && Array.isArray(result)) {
+            for (const row of (result as { id?: unknown }[]).slice(0, 3)) if (typeof row.id === "string") addCard({ kind: "listing", id: row.id });
+          }
           return wrapToolResult(capability.name, result);
         } catch (error) {
           const code = error instanceof CapabilityError ? error.code : "failed";
@@ -132,7 +147,7 @@ export async function runAgentTurn(options: {
       return { ok: false, code: "incomplete", toolCalls };
     }
     const text = last.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n").trim();
-    return { ok: true, text, toolCalls, stopReason: last.stop_reason };
+    return { ok: true, text, toolCalls, cards, stopReason: last.stop_reason };
   } catch (error) {
     // Ids and the error's kind only: never the conversation.
     reportError("[agent] model error", { taskId: options.taskId ?? null, kind: error instanceof Error ? error.name : "unknown" });

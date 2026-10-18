@@ -2,9 +2,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AgentHeader } from "@/components/commerce";
-import { ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent } from "@/components/ui";
+import { ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
 import { ApprovalActions } from "@/features/agent/approval-actions";
-import { agentTabOpen } from "@/lib/agent/beta";
+import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
+import { resolveCards } from "@/features/agent/cards";
+import type { ChatMessage } from "@/features/agent/chat";
+import type { TurnCard } from "@/lib/ai/run";
+
+import { AgentChat } from "./agent-chat";
 import { capture } from "@/lib/analytics";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
@@ -110,6 +115,21 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
       .order("created_at", { ascending: false })
       .limit(40),
   ]);
+
+  // The chat (A3c), once its step is open: the last 50 messages, read as the
+  // member (owner-only), with their cards resolved the same way.
+  const chatOpen = await agentStepOpen("chat");
+  const { data: chatRows } = chatOpen
+    ? await supabase.from("agent_messages").select("id, role, body, cards, created_at").eq("owner_id", user.id).order("created_at", { ascending: false }).limit(50)
+    : { data: [] as { id: string; role: string; body: string; cards: unknown; created_at: string }[] };
+  const chatCards = await resolveCards(supabase, (chatRows ?? []).flatMap((row) => (row.cards ?? []) as TurnCard[]));
+  const chat: ChatMessage[] = [...(chatRows ?? [])].reverse().map((row) => ({
+    id: row.id,
+    role: row.role as ChatMessage["role"],
+    body: row.body,
+    cards: ((row.cards ?? []) as TurnCard[]).flatMap((card) => (chatCards.has(card.id) ? [chatCards.get(card.id)!] : [])),
+    created_at: row.created_at,
+  }));
 
   const allTasks = (tasks ?? []) as Task[];
   const pending = approvals ?? [];
@@ -232,14 +252,25 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
     { key: "working", label: "Working", count: working.length, panel: listPanel(working, "Nothing in progress.") },
     { key: "done", label: "Done", count: done.length, panel: listPanel(done, "Nothing finished yet.") },
   ];
-  const nothingYet = !allTasks.length && !pending.length && !handling && !buying;
+  const nothingYet = !allTasks.length && !pending.length && !handling && !buying && !chat.length;
   capture(user.id, { event: "agent_tab_viewed", props: { needs: pending.length === 0 ? "0" : pending.length === 1 ? "1" : pending.length <= 5 ? "2-5" : "6+" } });
 
   return (
     <div className="wrap">
       <AgentHeader status={status} />
 
-      {nothingYet ? (
+      {nothingYet && chatOpen ? (
+        // First visit (design 08): what it does, in three groups, then the chat.
+        <section className="tile" aria-label="What your agent does">
+          <TileHead label="Your agent works for you, inside limits you set." />
+          <div className="rowlist">
+            <ObjectRow title="Selling" meta="Handles offers on your listings within your minimum and target. Turn it on from a listing." href="/listings" />
+            <ObjectRow title="Buying" meta="Negotiates a part for you up to your private max. Start it from a listing's Make an offer." href="/marketplace" />
+            <ObjectRow title="Garage" meta="Answers what fits your car and what parts sell for. Ask below." />
+          </div>
+          <p className="field__hint mt-3">Nothing to set up first. It never accepts for you, and it never messages anyone else.</p>
+        </section>
+      ) : nothingYet ? (
         <EmptyState
           title="Your agent works for you, inside limits you set."
           action={
@@ -279,6 +310,8 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
           )}
         </>
       )}
+
+      {chatOpen && <AgentChat initial={chat} />}
 
       <Foot left="DRVN — your agent never accepts for you and never messages the other side" right={<Link href="/offers">All offers →</Link>} />
     </div>

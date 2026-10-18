@@ -1,4 +1,4 @@
-import { AgentHeader, ConversationRow, DealCard, DealChip, OfferCard, OfferRound, OrderPipeline, StatusChip } from "@/components/commerce";
+import { AgentHeader, AgentResultCard, ConversationRow, DealCard, DealChip, OfferCard, OfferRound, OrderPipeline, StatusChip } from "@/components/commerce";
 import { LiveDim } from "@/components/livesheet";
 import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
 import { DialogDemo } from "./dialog-demo";
@@ -1246,6 +1246,15 @@ export default function ComponentsPage() {
           note="The agent's own head: 'Agent' with a Beta label until auto-accept graduates, and one status line. The /agent tab today; the desktop side panel reuses it when chat arrives (A3c)."
         >
           <AgentHeader status="Handling offers on 3 listings · 2 need you" />
+        </Specimen>
+        <Specimen
+          name="Agent result card"
+          klass="AgentResultCard / .tile + .order"
+          note="What an agent reply points at, as the real object: an eyebrow, the object as a row, and the page it opens. A card never holds a form; Confirm and Edit arrive with 'Update my build'."
+        >
+          <div style={{ maxWidth: 460 }}>
+            <AgentResultCard eyebrow="Listing" title="APR intake — Mk8 Golf R" meta="$250" image={{ alt: "APR intake" }} href="#annotation" />
+          </div>
         </Specimen>
         <Specimen
           name="Mail preview"
