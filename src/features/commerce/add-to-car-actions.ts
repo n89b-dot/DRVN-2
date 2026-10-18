@@ -10,7 +10,7 @@ export type AddToCarState = { error?: string; ok?: string };
 
 type CommercialSnapshot = {
   listing?: { id?: string; title?: string; category?: string; subcategory?: string };
-  part?: { part_number?: string };
+  part?: { part_number?: string; brand?: string };
   seller?: { username?: string; display_name?: string };
 };
 
@@ -80,6 +80,11 @@ export async function addPurchaseToCar(
     car_id: carId,
     group_label: "Other",
     category: mapListingCategoryToMod(snapshot.listing?.category, snapshot.listing?.subcategory),
+    // The brand is part of what was bought: with the part number it is the
+    // part's identity (B1 products), so the build line keeps both. Snapshots
+    // from before 20261020110000 have no brand, and get none rather than
+    // today's listing's.
+    brand: snapshot.part?.brand?.trim().slice(0, 80) || null,
     product: title.slice(0, 200),
     part_number: snapshot.part?.part_number?.slice(0, 80) ?? null,
     raw_text: title.slice(0, 200),

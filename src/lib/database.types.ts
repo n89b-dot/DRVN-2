@@ -895,7 +895,7 @@ export type AdminUser = {
   created_at: string;
 };
 
-export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment";
+export type AdminAuditSubjectType = "order" | "listing" | "user" | "report" | "dispute" | "payment" | "product_review";
 
 export type AdminAuditLogEntry = {
   id: number;

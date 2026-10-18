@@ -16,6 +16,7 @@ import type {
 } from "@/lib/database.types";
 
 import { buildOrderTimeline, type TimelineEvent } from "./diagnostics";
+import { countOpenIdentityReviews } from "./product-identity";
 import { signEvidenceUrls } from "@/lib/evidence-urls";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportError } from "@/lib/monitoring";
@@ -1425,14 +1426,14 @@ export async function getAuditLog(
 
 /** null = the count couldn't be read. The nav shows that, rather than a
  *  missing badge that would read as "nothing waiting". */
-export type NavCounts = { disputes: number | null; reports: number | null; money: number | null };
+export type NavCounts = { disputes: number | null; reports: number | null; money: number | null; products: number | null };
 
 /** Live queue badges for the console nav — the backlog visible from anywhere.
  *  This runs in the console layout, so a failed count degrades its badge
  *  instead of throwing the whole console into the error page. */
 export async function getNavCounts(): Promise<NavCounts> {
   const a = admin();
-  const [disputes, reports, recoveries, stuck] = await Promise.all([
+  const [disputes, reports, recoveries, stuck, products] = await Promise.all([
     a.from("orders").select("id", { count: "exact", head: true }).eq("status", "disputed"),
     a.from("reports").select("id", { count: "exact", head: true }).eq("status", "open"),
     a.from("payment_recoveries").select("id", { count: "exact", head: true }).eq("status", "open"),
@@ -1440,6 +1441,7 @@ export async function getNavCounts(): Promise<NavCounts> {
       .from("transfer_intents")
       .select("order_id", { count: "exact", head: true })
       .in("status", ["blocked_unpayable", "failed"]),
+    countOpenIdentityReviews(),
   ]);
   const read = (label: string, result: { count: number | null; error: { message: string } | null }) => {
     if (!result.error && result.count != null) return result.count;
@@ -1452,6 +1454,7 @@ export async function getNavCounts(): Promise<NavCounts> {
     disputes: read("disputes", disputes),
     reports: read("reports", reports),
     money: recoveryCount == null || stuckCount == null ? null : recoveryCount + stuckCount,
+    products,
   };
 }
 

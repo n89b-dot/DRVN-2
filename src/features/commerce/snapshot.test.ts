@@ -50,6 +50,9 @@ describe("readCommercialSnapshot", () => {
     expect(snap!.listing.category).toBe("engine");
     expect(snap!.part.partNumber).toBe("078145701S");
     expect(snap!.part.altPartNumbers).toEqual(["078145701SX"]);
+    // Snapshots before 20261020110000 carry no brand.
+    expect(snap!.part.brand).toBeNull();
+    expect(readCommercialSnapshot({ ...FULL_V1, part: { ...FULL_V1.part, brand: "Garrett" } })!.part.brand).toBe("Garrett");
     expect(snap!.fitment).toHaveLength(2);
     expect(snap!.sourceCar?.name).toBe("The blue one");
     expect(snap!.commercial.priceCents).toBe(30_000);

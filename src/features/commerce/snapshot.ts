@@ -37,6 +37,8 @@ export type CommercialSnapshot = {
   };
   part: {
     partNumber: string | null;
+    /** The listing's brand at purchase (20261020110000); null on older snapshots. */
+    brand: string | null;
     altPartNumbers: string[];
   };
   condition: {
@@ -132,6 +134,7 @@ export function readCommercialSnapshot(json: Json | null | undefined): Commercia
     },
     part: {
       partNumber: str(part.part_number),
+      brand: str(part.brand),
       altPartNumbers,
     },
     condition: {
