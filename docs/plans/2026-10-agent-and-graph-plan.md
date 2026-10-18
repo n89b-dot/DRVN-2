@@ -360,6 +360,19 @@ A2 built the kill switches (everyone, one side, one member, mandate, listing or 
 3. **A member's agent, for support and disputes.** Mandates with their versions, tasks, events and approvals for one member, read-only. Chat stays closed unless the case is abuse or a dispute (agent-data-rules.md): opening it needs a reason and a case, and is audited.
 4. **Agent provenance where admins already work.** The admin order and dispute pages mark the agent's rounds and the mandate version in force, so "the seller didn't mean it" can be checked against what they set.
 5. **Model spend.** The per-member and global caps from risk 8, enforced in `src/lib/ai/run.ts`, with current spend and model errors on `/admin/agent`. Required before A3c.
+### Alongside A3 — measuring the agent (added 18 Oct)
+
+What exists: consent-based product analytics (`src/lib/analytics.ts`, 27 server-side events, PostHog optional) with one offer event (`offer_submitted`, no properties) and nothing for the agent; and A2's `agent_telemetry` (permission denials, model errors, stuck tasks; ids only, 30 days), which only feeds the health counts. "How we judge it" above lists the measures but nothing defines or computes them.
+
+The consented path can't carry them: agent moves happen in the worker, which has no consent cookie, so `capture()` records nothing there; and an opt-in sample can't support the headline comparison. The measures are already in DRVN's own records (rounds with `actor_task_id`, orders, cancellations, refunds, tasks, approvals), so:
+
+1. **Definitions first.** `docs/site/agent-measures.md` defines each measure from "How we judge it": numerator, denominator, source tables, window, and what counts as a comparable manual listing for the headline (same subcategory and price band, same period, listings that received at least one offer). Each one is either a gate threshold or watched only.
+2. **First-party aggregates, no personal data.** A daily sweep writes `agent_metrics_daily` (date, scope, measure, value, sample size) from the records. It holds no member ids, amounts are only aggregate bands, and any cell under five is suppressed. It outlives the 12-month and 30-day retention of the rows it was computed from.
+3. **Durable model usage.** `agent_usage` (task, model, input and output tokens, cost; no text) replaces the console-only `logUsage`. It gives cost per completed task and is what the spend caps (admin item 5) read.
+4. **"Incorrect action" made measurable.** An agent deal cancelled before checkout, an approval dismissed, a permission denial, a buyer report naming an agent round, or an owner turning the agent off within a day of a move. Each is a counted signal, not a judgement.
+5. **The consented funnel, for the screens only.** New `AnalyticsEvent` entries with coarse properties: `agent_offers_enabled` (style, has_target), `agent_offers_disabled`, `negotiate_for_me_started` (basis, style), `agent_tab_viewed` (needs_count band), and `agent_approval_answered` (choice, reason). In A3c, `agent_chat_turn` (tool calls, model tier) is added. `offer_submitted` gains `round` and `counter_back`.
+6. **Where it shows.** The gate metrics panel on `/admin/agent` (admin item 2) reads `agent_metrics_daily`, with the definition beside each number.
+
 
 ### Alongside A3c–A3d — two seller helpers (no AI)
 
