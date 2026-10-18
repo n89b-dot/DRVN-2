@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-21 — The agent foundation (A2), invisible to members
+
+Everything the agent needs to act, and nothing that acts yet: the agent is paused for everyone by a kill switch until the A3a beta.
+- **Data.** Mandates (every version kept), tasks, an append-only record of decisions and moves, chat, approvals and a job queue, each owner-only, in the member's export (v10), removed on account deletion, and kept for the periods Neil ruled.
+- **Who it acts for.** A separate database role, `agent_worker`, that can't read a table. Every move it makes needs a job it leased; the database then works out the owner and re-checks their side, suspension, limits, the mandate and the kill switches. Its moves go through the same negotiation path people use, and each round records that the agent made it.
+- **The minimum.** An agent's minimum can only make the listing's floor stricter, never lower.
+- **Rules decide money.** `negotiate.ts` picks every amount from the owner's limits and the offer history. The seller's agent never accepts by itself; it asks its owner. Property tests and seeded simulations (seller's agent vs a person, buyer's agent vs a person, agent vs agent) run in the unit suite, and the same three run through the real worker role in `tests/operations/agent-worker.test.ts`.
+- **Admin.** `/admin/agent` pauses all, one side, one member's agent, one mandate, one listing or one account, audited; offers and orders already made are untouched. Health counts go to monitoring.
+- **The model.** `src/lib/ai/` and a tool-runner turn with read-only tools, redaction and untrusted-data wrapping, plus an eval fixture suite. No member reaches the model until A3c.
+
 ## 2026-10-20 — Car generations (graph foundation, B1 step one)
 
 Cars now know their generation. `vehicle_generations` holds each generation of a catalog model — `Mk8`, `E46`, `R34`, `ND` — with its platform code and years, seeded by hand with about 200 enthusiast generations (no open source carries them). A car resolves to one only when exactly one generation of its model covers its year; changeover years, such as a 2020 Golf R that could be a Mk7 or a Mk8, resolve to nothing so the owner can be asked, and an owner's choice is kept while it still fits. Nothing a shopper sees changes: vehicle fit and search don't read generations yet. Explore's build search was restated to carry the two new car columns.

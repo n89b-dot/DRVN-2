@@ -1,5 +1,8 @@
 import "server-only";
 
+import { anthropicClient } from "@/lib/ai/client";
+import { logUsage, usageRecord } from "@/lib/ai/usage";
+
 import type { ImportConfig } from "../config";
 import type { NormalizedImportSource } from "../schema";
 import { CATEGORIES } from "@/lib/marketplace/taxonomy";
@@ -172,8 +175,7 @@ async function extractWithAnthropic(
   config: ImportConfig
 ): Promise<AiExtractionOutcome> {
   try {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = await anthropicClient();
     const response = await client.messages.create({
       model: config.model,
       max_tokens: 3000,
@@ -183,6 +185,7 @@ async function extractWithAnthropic(
       tool_choice: { type: "tool", name: OUTPUT_TOOL.name },
       messages: [{ role: "user", content: buildUserContent(source) }],
     });
+    logUsage(usageRecord({ model: config.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, taskId: null, feature: "listing_import" }));
     const toolUse = response.content.find(
       (block): block is Extract<(typeof response.content)[number], { type: "tool_use" }> =>
         block.type === "tool_use"
