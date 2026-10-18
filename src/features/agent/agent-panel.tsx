@@ -1,6 +1,6 @@
 "use client";
 
-import { unstable_rethrow } from "next/navigation";
+import { unstable_rethrow, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ButtonLink, SidePanel, SkeletonRows, useSidePanel } from "@/components/ui";
@@ -20,6 +20,9 @@ export type AgentAboutRef = { kind: "listing" | "car"; id: string };
  */
 export function AgentPanel() {
   const { payload } = useSidePanel();
+  // /agent is the same thread full width: no second copy beside it.
+  const pathname = usePathname();
+  if (pathname === "/agent" || pathname.startsWith("/agent/")) return null;
   const ref = (payload as AgentAboutRef | null) ?? null;
   const fullHref = ref ? `/agent?about=${ref.kind}:${ref.id}` : "/agent";
   return (
