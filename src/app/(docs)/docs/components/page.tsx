@@ -1,4 +1,4 @@
-import { ConversationRow, DealCard, DealChip, OfferCard, OrderPipeline, StatusChip } from "@/components/commerce";
+import { AgentHeader, ConversationRow, DealCard, DealChip, OfferCard, OfferRound, OrderPipeline, StatusChip } from "@/components/commerce";
 import { LiveDim } from "@/components/livesheet";
 import { COMPONENT_REGISTRY, type RegistryEntry } from "@/components/registry";
 import { DialogDemo } from "./dialog-demo";
@@ -1227,6 +1227,25 @@ export default function ComponentsPage() {
               </div>
             </OfferCard>
           </div>
+        </Specimen>
+        <Specimen
+          name="Offer round"
+          klass="OfferRound / .oround / .viaagent"
+          note="One move in an offer's history. Who acted is a role (You, Your agent, Buyer, Buyer's agent); an agent's turn ends its amount line with a muted '· via agent' — same face and colour, no badge or icon. Only the viewer's own agent's turns carry the one-line reason. Stacked on phones, a row from 640px."
+        >
+          <ol className="rowlist" style={{ maxWidth: 560 }}>
+            <OfferRound who="Buyer's agent made an offer" amount="$232" when="17 Oct, 09:02" viaAgent />
+            <OfferRound who="Your agent countered" amount="$245" when="17 Oct, 09:02" viaAgent reason="Opened at your $245 target. Their $232 is $2 above your minimum." />
+            <OfferRound who="Buyer countered — offer 3 of 3" amount="$239" when="Today, 08:15" />
+            <OfferRound who="You accepted" when="Today, 08:31" />
+          </ol>
+        </Specimen>
+        <Specimen
+          name="Agent header"
+          klass="AgentHeader / .pagehead"
+          note="The agent's own head: 'Agent' with a Beta label until auto-accept graduates, and one status line. The /agent tab today; the desktop side panel reuses it when chat arrives (A3c)."
+        >
+          <AgentHeader status="Handling offers on 3 listings · 2 need you" />
         </Specimen>
         <Specimen
           name="Mail preview"

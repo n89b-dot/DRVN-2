@@ -31,7 +31,8 @@ export type IconName =
   | "filter"
   | "search"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "agent";
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -44,6 +45,14 @@ export function Icon({ name, className = "h-5 w-5" }: { name: IconName; classNam
     ),
     market: <path d="M4 7h16l-1.5 13h-13L4 7ZM7 7a5 5 0 0 1 10 0" />,
     garage: <path d="M3 21V8l9-5 9 5v13M7 21v-7h10v7M7 14h10" />,
+    // A steering wheel: you stay the driver (A3 design, docs/design/agent-a3).
+    agent: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="2.2" />
+        <path d="M3.2 12h6.6M14.2 12h6.6M12 14.2V21" />
+      </>
+    ),
     user: (
       <>
         <circle cx="12" cy="8" r="4" />

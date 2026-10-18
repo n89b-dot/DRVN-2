@@ -28,6 +28,7 @@ import {
   chargeWithinBounds,
 } from "@/lib/payments/charge-bounds";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
+import { saveListingAgent } from "@/features/agent/actions";
 
 export type SellState = {
   error?: string;
@@ -50,6 +51,37 @@ async function requireUser() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   return { supabase, user };
+}
+
+/**
+ * "Let DRVN handle offers" (A3a). Present only when the form drew the block
+ * (the agent beta is on). The agent's minimum is the listing's own minimum —
+ * one number, written to the private floor and the mandate alike.
+ */
+type ListingAgentInput = { on: boolean; targetCents: number | null; style: "firm" | "balanced" | "flexible"; acknowledgeBinding: boolean };
+
+function readListingAgent(formData: FormData, floor: number | null, price: number): ListingAgentInput | { error: string } | null {
+  if (formData.get("agent_present") !== "1") return null;
+  const on = formData.get("agent_on") === "on";
+  const targetRaw = String(formData.get("agent_target") ?? "").trim();
+  const targetCents = targetRaw ? Math.round(Number(targetRaw) * 100) : null;
+  const styleRaw = String(formData.get("agent_style") ?? "balanced");
+  const style = styleRaw === "firm" || styleRaw === "flexible" ? styleRaw : "balanced";
+  const acknowledgeBinding = formData.get("agent_ack") === "on";
+  if (!on) return { on, targetCents: null, style, acknowledgeBinding };
+  if (floor === null) return { error: "Set a minimum: your agent never goes below it." };
+  if (targetCents !== null && (!Number.isFinite(targetCents) || targetCents < floor || targetCents > price)) {
+    return { error: "Set the target between your minimum and your asking price." };
+  }
+  if (!acknowledgeBinding) return { error: "Confirm that your agent's counters are binding offers to sell." };
+  return { on, targetCents, style, acknowledgeBinding };
+}
+
+async function applyListingAgent(listingId: string, agent: ListingAgentInput | null, floor: number | null) {
+  if (!agent) return null;
+  const result = await saveListingAgent({ listingId, on: agent.on, minimumCents: floor, targetCents: agent.targetCents, style: agent.style, acknowledgeBinding: agent.acknowledgeBinding });
+  if (result.error) reportError("[sell] listing agent not saved", { listingId, error: result.error });
+  return result.error ?? null;
 }
 
 /** Shared field parsing for create and update. */
@@ -242,6 +274,8 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
 
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error };
+  const agent = readListingAgent(formData, parsed.fields.offer_floor_cents, parsed.fields.price_cents);
+  if (agent && "error" in agent) return { error: agent.error };
 
   // The page promises "nothing reaches the market until you publish it", so
   // honour it: saving a draft is a real, separate outcome.
@@ -388,6 +422,10 @@ export async function createListing(_prev: SellState, formData: FormData): Promi
   revalidatePath("/sell");
   if (parsed.fields.source_car_id) revalidatePath(`/garage/${parsed.fields.source_car_id}/edit`);
 
+  // The listing is committed; its agent follows. A refusal here doesn't undo
+  // the listing — the edit page says so and keeps the block to retry.
+  const agentError = asDraft ? null : await applyListingAgent(listingId, agent, parsed.fields.offer_floor_cents);
+  if (agentError) redirect(`/listings/${listingId}/edit?agent=failed`);
   if (asDraft) redirect(`/listings/${listingId}/edit?saved=draft`);
   redirect(`/listings/${listingId}`);
 }
@@ -417,6 +455,8 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
 
   const parsed = await readListingFields(formData, user.id);
   if ("error" in parsed) return { error: parsed.error, outcome: "rejected" };
+  const agent = readListingAgent(formData, parsed.fields.offer_floor_cents, parsed.fields.price_cents);
+  if (agent && "error" in agent) return { error: agent.error, outcome: "rejected" };
 
   // The gallery is replaced only when the form submitted one. Array order
   // carries reorder + cover choices (index 0 is the cover) and alt text.
@@ -504,7 +544,12 @@ export async function updateListing(_prev: SellState, formData: FormData): Promi
   for (const url of result.removed_image_urls ?? []) await deleteMediaIfUnreferenced(url, false, user.id);
 
   revalidateListingEdit(id, parsed.fields.source_car_id);
-  return { ok: "Listing updated.", version: result.updated_at, outcome: "saved" };
+  const agentError = await applyListingAgent(id, agent, parsed.fields.offer_floor_cents);
+  return {
+    ok: agentError ? `Listing updated, but your agent's limits weren't saved: ${agentError}` : "Listing updated.",
+    version: result.updated_at,
+    outcome: "saved",
+  };
 }
 
 type EditResult = { updated_at?: string; removed_image_urls?: string[]; replayed?: boolean };

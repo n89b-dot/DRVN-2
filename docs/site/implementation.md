@@ -807,7 +807,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** The tedious work between "I want this" and "done" gets done for you, inside limits you set, and every task still works without the agent.
 - **Approach:** Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.
 - **Depends on:** negotiation-v2
-- **Validation:** supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role. negotiate.ts property tests and seeded simulations (src/lib/agent); the same simulations through agent_worker in tests/operations/agent-worker.test.ts; tests/agent-evals fixtures for redaction, untrusted content and the model's tool boundary.
+- **Validation:** A2: supabase/tests/agent_worker_guard.sql (the security regression set) run as the real worker role. A3a: offer-history.test.ts (roles, via agent, the owner-only reason), agent_notifications_guard.sql, and e2e/seller-agent.spec.ts — a person against the seller agent: counters within limits, no minimum in anything the buyer can load, Needs you accept, Cancel before checkout only before checkout.
 - **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md, docs/decisions/agent-data-rules.md
 
 ### 14 · Deferred / not pursuing

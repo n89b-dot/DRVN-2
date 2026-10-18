@@ -1,5 +1,17 @@
 # Applying migrations
 
+## October 22 — the seller agent's notifications, A3a (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261022100000_agent_seller_notifications.sql` | not yet |
+
+Apply after A2's `20261021100200`.
+- It adds three seller notices, all `offer_`-prefixed so the Offers preference governs them: `offer_agent_recommends_accept` (the agent filed an approval), `offer_agent_deal_reached` (the buyer accepted the agent's counter; replaces `offer_counter_accepted` for that case) and `offer_agent_out_of_rounds` (with the gap to the seller's own minimum, once per offer).
+- `notify_on_offer_response` is the `20261017160000` body with the accepted-counter branch split; two new SECURITY DEFINER trigger functions, revoked from members.
+
+Checked on a fresh database: every migration applies, every SQL guard passes (including the new `agent_notifications_guard.sql`), and the generated types match.
+
 ## October 21 — the agent foundation, A2 (shared dev project)
 
 | File | Applied to |

@@ -34,6 +34,9 @@ process.env.EASYPOST_API_KEY = "";
 process.env.SHIPPING_MODE = "stub";
 process.env.SHIPPING_ALLOW_STUB_IN_PRODUCTION = "true";
 process.env.FLAG_INTEGRATED_SHIPPING_V1 = "true";
+// The agent beta is on in e2e (A3a): the Agent tab and "Let DRVN handle offers"
+// render. The agent itself still acts only once a test lifts the kill switch.
+process.env.AGENTS_BETA = "on";
 process.env.EASYPOST_WEBHOOK_SECRET = "e2e-webhook-secret-isolated-test-only";
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const diagnosticRetries = process.env.E2E_DIAGNOSTIC_RETRIES

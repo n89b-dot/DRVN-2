@@ -37,7 +37,8 @@ import {
   RefundOfferForm,
   ReportProblemForm,
 } from "./disputes";
-import { CancelOrder, DispatchForm, ReceivedButton } from "./fulfilment";
+import { CancelOrder } from "@/features/commerce/cancel-order";
+import { DispatchForm, ReceivedButton } from "./fulfilment";
 import { BuyLabelPanel, LabelReadyPanel } from "./shipping-controls";
 import { AddToCar } from "@/features/commerce/add-to-car";
 import { orderCars } from "@/lib/cars/order";

@@ -8,6 +8,8 @@ export type ShellCounts = {
   offersCount: number;
   /** Conversations with something unread (N-5), not individual messages. */
   messagesCount: number;
+  /** Agent tasks waiting on the member (A3a's Needs you); 0 without the beta. */
+  agentNeedsCount?: number;
 };
 
 /** Only the count-dependent navigation suspends; page content stays visible. */

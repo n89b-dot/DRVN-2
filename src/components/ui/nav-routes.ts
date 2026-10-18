@@ -149,6 +149,12 @@ export const BOTTOM_NAV: NavRoute[] = [
   { href: "/garage", label: "Garage", note: "Your cars and their builds", icon: "garage" },
 ];
 
+/**
+ * The agent's home (A3a). Shown only while the agent beta is on for the
+ * viewer: last in the bottom bar (it's opt-in), after Garage in the rail.
+ */
+export const AGENT_ROUTE: NavRoute = { href: "/agent", label: "Agent", note: "What your agent is doing for you", icon: "agent" };
+
 /** Signed out, the bar keeps the two public doors and an invitation in. */
 export const BOTTOM_NAV_PUBLIC: NavRoute[] = [
   { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },

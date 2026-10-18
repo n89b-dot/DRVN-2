@@ -85,6 +85,9 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `offer_withdrawn` | marketplace | `offers_sales` | DB trigger | An offer was withdrawn. |
 | `offer_countered_back` | marketplace | `offers_sales` | DB trigger | The buyer countered your counter — opens the offer (negotiation v2, 20261017160000). |
 | `offer_expired` | marketplace | `offers_sales` | DB trigger | A turn ran out and the offer expired — sent to both sides (20261017160000). |
+| `offer_agent_recommends_accept` | marketplace | `offers_sales` | DB trigger | Your agent recommends accepting an offer (it reached your target, or the buyer's final offer clears your minimum) — opens the offer (A3a, 20261022100000). |
+| `offer_agent_deal_reached` | marketplace | `offers_sales` | DB trigger | The buyer accepted your agent's counter — opens the offer, where Cancel before checkout lives (A3a, 20261022100000). |
+| `offer_agent_out_of_rounds` | marketplace | `offers_sales` | DB trigger | Your agent stopped: the buyer has no offers left, with the gap to your minimum (A3a, 20261022100000). |
 | `order_sold` | marketplace | `offers_sales` | DB trigger | Your part sold. |
 | `order_paid` | marketplace | `offers_sales` | DB trigger | Payment confirmed on an order. |
 | `order_shipped` | marketplace | `order_updates` | DB trigger | Your order shipped. |

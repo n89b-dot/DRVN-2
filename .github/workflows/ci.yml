@@ -354,6 +354,17 @@ jobs:
           path: test-results/
           retention-days: 3
 
+      # Screens specs save on purpose (test-results/design/), kept on green
+      # runs too, so a build can be compared with its design PNGs.
+      - name: Retain design screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: design-screenshots-${{ github.sha }}
+          path: test-results/design/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Stripe test-mode integration (tests/stripe): intent metadata, confirm,
   # declines, refunds and the per-order idempotency contract against the real
   # Stripe test API. The suite itself refuses non-sk_test_ keys, and a missing

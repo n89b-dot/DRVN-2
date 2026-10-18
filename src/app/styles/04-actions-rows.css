@@ -370,6 +370,47 @@
     display: block;
   }
 
+  /* ---------- offer round — one move in an offer's history (OfferRound) ----------
+     Who acted reads first; the amount line under it carries the time and,
+     on an agent's turn, a muted "via agent" in the same face and colour —
+     no badge, no icon (negotiation-v2 §6.3). The reason line is the viewer's
+     own agent explaining itself. From 640px who-and-why sit left, the
+     amount line right. */
+  .oround {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .oround__who {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .oround__meta {
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .viaagent {
+    color: var(--dim);
+  }
+  .oround__why {
+    color: var(--dim);
+  }
+  @media (min-width: 640px) {
+    .oround {
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 24px;
+    }
+    .oround__meta {
+      grid-column: 2;
+      grid-row: 1;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .oround__why {
+      grid-column: 1;
+    }
+  }
+
   /* ---------- activity feed ---------- */
   .feed {
     list-style: none;
