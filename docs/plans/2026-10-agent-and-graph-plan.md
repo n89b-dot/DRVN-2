@@ -1,7 +1,7 @@
 <!--
 Repo copy of the Claude Doc "DRVN AI-native: review and implementation plan"
 (https://claude.ai/code/artifact/0116734a-9a0d-4148-9efa-ecde4f9a177b), taken at
-revision 89 on 17 Oct 2026. The doc is the living plan where Neil rules; this
+revision 91 on 17 Oct 2026. The doc is the living plan where Neil rules; this
 copy is what build sessions follow, and it is re-taken from the doc whenever a
 phase closes or a ruling changes it. Diagrams are redrawn as Mermaid. Build
 progress: https://claude.ai/artifact/NnnwYYybSxqHypUcqvrpyd
@@ -353,7 +353,7 @@ There's no invited cohort (decided 17 Oct). Each step turns on for everyone behi
 
 ### Alongside A3c–A3d — two seller helpers (no AI)
 
-Added 17 Oct from the review of [Stunspot's Guide to Automotive Systems](https://github.com/Stunspot/stunspots-guide-to-automotive-systems) (CC BY 4.0, credited wherever its material is adapted). The guide is design-time source material only, with no runtime retrieval. Both features work without the agent, neither depends on A0 or A1, and the agent reuses both in AG-9. The wording of both lists is drafted as a document for Neil to sign off before any code.
+Added 17 Oct. Both features work without the agent, neither depends on A0 or A1, and the agent reuses both in AG-9. The wording of both lists is drafted as a document for Neil to sign off before any code.
 
 - **Photo shot lists on the sell form.**
     - 3–5 short suggested shots for each marketplace subcategory (about 30 in `taxonomy.ts`), for example coilovers: full set side by side · threads and collars · top mounts · part number label.
@@ -373,7 +373,7 @@ Added 17 Oct from the review of [Stunspot's Guide to Automotive Systems](https:/
     - a "known issues" section;
     - "also fitted", "often fitted with" and "before you buy" notes;
     - a learned "fitted together" table;
-    - any runtime retrieval over the guide.
+    - any runtime retrieval over outside reference material.
 
 ### B1 — Graph foundation (Track B, ≈ 2–3 weeks, starts with A1)
 
