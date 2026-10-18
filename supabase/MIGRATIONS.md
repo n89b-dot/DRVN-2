@@ -4,7 +4,7 @@
 
 | File | Applied to |
 |---|---|
-| `20261024100000_agent_admin_measure.sql` | not yet |
+| `20261024100000_agent_admin_measure.sql` | shared dev project (2026-10-18) |
 
 Apply after `20261022110000`. It adds:
 - `agent_beta_steps` (seller, buyer, chat, jobs; seeded closed) and `admin_set_agent_beta_step`, so each A3 step opens from `/admin/agent`, audited. `AGENTS_BETA=on` stays the master switch.
@@ -15,6 +15,8 @@ Apply after `20261022110000`. It adds:
 Checked on a fresh database: every migration applies and every SQL guard passes, including the new `agent_admin_measure_guard.sql`; the three admin functions are on `definer_exposure_guard`'s reviewed list; generated types match.
 
 **After applying on dev,** the steps are closed: open `seller` and `buyer` from `/admin/agent` to show the A3a and A3b controls. The global kill switch still decides whether the agent acts.
+
+**Shared dev, 2026-10-18**, after #49 merged (62aa28b), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261024100000-agent-admin-measure.sql`. After: the four steps exist and are closed; caps are $2 per member and $50 for everyone; members can't read `agent_usage`; `agent_compute_metrics(current_date)` wrote 15 rows; the global kill switch is still on.
 
 ## October 22 — the buyer agent's notifications, A3b (shared dev project)
 
@@ -162,11 +164,11 @@ Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; e
 - **Before:** `cars` had exactly main's columns and `explore_build_rows` was byte-identical to 20261011120000's. Saved to `~/drvn-db-backups/pre-20261020100000-generations.sql` (cars, catalog schema and the old function) and `pre-20261020100000-cars-data.sql`.
 - **After:** 194 generations; 11 of 16 catalogued cars resolved (5 are changeover years or unseeded models). `pg_get_functiondef` of `explore_build_rows`, `resolve_vehicle_generation`, `car_generation_before_write` and `vehicle_generations_rescan` matches a fresh database exactly; all four triggers present. Through the API as a visitor: Explore build search returns cars with `generation_id`/`generation_source` and a null VIN; `vehicle_generations` reads; a write is refused (401). Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
 
-## October 19 — negotiation v2 and the private minimum: contract (not applied yet)
+## October 19 — negotiation v2 and the private minimum: contract (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261019120000_negotiation_contract.sql` | not applied to shared dev (see below) |
+| `20261019120000_negotiation_contract.sql` | shared dev project (2026-10-18, twice) |
 
 The contract step of A0 (the private minimum) and A1 (negotiation v2). Apply after every `20261018` file, and only once **every running app copy has the switched code** (main from `8321071` on). An app without it still writes `listings.offer_floor_cents` and calls `create_offer_with_message`, and both are gone.
 
@@ -189,6 +191,10 @@ Checked on a fresh database with every migration:
 - `tests/operations/negotiation-concurrency.test.ts` passes on the local stack with this file applied.
 
 To reverse: restore the column and the absorb trigger from `20261017130000`, the three functions from `20261018100000`, the policies and `create_offer_with_message` from their last definitions, and re-defer the key.
+
+**Shared dev, 2026-10-18**, applied twice with `node scripts/apply-migration.mjs` by the "Main/shared dev branch sync" session. It was held until nothing running against dev read `listings.offer_floor_cents`: Neil's main checkout (the :3005 dev server) moved to `main` (cb3e4e3) and is now fast-forwarded every 10 minutes by the launchd job `cc.drvn2.sync`.
+- **Before:** public schema saved to `~/drvn-db-backups/pre-20261019120000-negotiation-contract.sql`, with listings, listing_private_terms, offers, offer_rounds and offer_round_terms in `pre-20261019120000-negotiation-contract-data.sql`.
+- **After:** the column and its absorb trigger are gone; `create_offer_with_message` is gone; `offers` has no client write policies (authenticated keeps SELECT); `set_listing_offer_floor` exists and authenticated can execute it; 24 private-terms rows for 24 listings; :3005 serves / and /marketplace. Shared dev matches main on every migration.
 
 ## October 19 — stock parts on the build sheet, export v9 (shared dev project)
 
