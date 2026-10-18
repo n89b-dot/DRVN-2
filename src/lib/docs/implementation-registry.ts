@@ -1311,21 +1311,21 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "offer-floor-private",
     name: "A seller's offer minimum is private",
     group: "foundations",
-    status: "in-progress",
+    status: "validated",
     brief: "PRD O-3 · agent plan A0",
     existsToday:
       "The lowest offer a seller will take lived on `listings.offer_floor_cents`, which anon and authenticated could read table-wide through the API, and the listing page showed it as \"Offers accepted from\".",
     changing:
       "The minimum moves to `listing_private_terms`, readable only by the seller (`my_listing_offer_floor`) and the offer checks, in three releases: expand (copy, kept in step), switch (every reader moved, the old column held empty), contract (drop the column once the switched app is live everywhere).",
-    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
+    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "supabase/migrations/20261019120000_negotiation_contract.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
     benefit: "A seller's minimum can't be read by anyone else, so it can't be used against them, by a buyer or by an agent.",
     approach:
-      "Owner-only table, no client grants; a BEFORE trigger moves any write to the old column into it; the price bound is checked from both sides; a SECURITY DEFINER trigger on offers refuses below-minimum offers without naming the amount.",
+      "Owner-only table, no client grants. One writer, `set_listing_offer_floor`, which acts only for the listing's seller and which the sell and edit functions call; the price bound is checked from both sides; offer_open and offer_move check the minimum and never name it. The switch step's absorb trigger and the old column are gone (contract, 20261019120000).",
     decisions: [
       "Showing the minimum on the listing becomes a seller toggle, off by default, with negotiation v2; until then no minimum is shown.",
     ],
     validation:
-      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). offer_floor_privacy_guard.sql (28 checks) fails before the expand migration and passes after; every SQL guard, npm test, typecheck, lint and next build pass. The contract step is not done.",
+      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). Contract (20261019120000): offer_floor_privacy_guard.sql (39 checks) fails on the switch-step schema and passes after; every SQL guard, npm test, typecheck, lint and the negotiation drills pass. The contract's shared-dev apply waits until every running app copy has the switched code (supabase/MIGRATIONS.md).",
     docs: ["docs/decisions/agent-foundations.md", "supabase/MIGRATIONS.md"],
   },
   {
@@ -1343,8 +1343,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach: "Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.",
     dependsOn: ["offer-floor-private"],
     validation:
-      "Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. Retiring the old offer write paths (the contract step) is still to come.",
-    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
+      "Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. The contract step, 20261019120000, retires create_offer_with_message and the client write policies on offers; its shared-dev apply waits until every running app copy has the switched code.",
+    docs: ["docs/decisions/negotiation-v2.md", "docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
   },
   {
     id: "member-agent",

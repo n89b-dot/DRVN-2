@@ -2,6 +2,8 @@
 -- bounds, the 3-offers-per-listing limit across threads, below-minimum
 -- attempts as declined rounds, stale rounds, exact replay, per-move expiry,
 -- the binding snapshot on acceptance, and cancellation only before checkout.
+-- After the contract (20261019120000) they are the only way a member writes
+-- an offer, and the expiry sweep still records its rounds.
 begin;
 
 create function pg_temp.act(p_member uuid) returns void language sql as $$
@@ -28,6 +30,7 @@ declare
   o3 uuid := gen_random_uuid();
   o4 uuid := gen_random_uuid();
   o5 uuid := gen_random_uuid();
+  o6 uuid := gen_random_uuid();
   r jsonb;
   order_id uuid;
   first_expiry timestamptz;
@@ -36,9 +39,11 @@ begin
   update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email) values
     (seller, 'move-seller@drvn.test'), (buyer, 'move-buyer@drvn.test'), (other, 'move-other@drvn.test');
-  insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status, offer_floor_cents)
-  values (part, seller, 'Move guard turbo', 'performance', 100000, 0, 'active', 60000),
-         (part2, seller, 'Move guard intercooler', 'performance', 50000, 0, 'active', null);
+  insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)
+  values (part, seller, 'Move guard turbo', 'performance', 100000, 0, 'active'),
+         (part2, seller, 'Move guard intercooler', 'performance', 50000, 0, 'active');
+  perform pg_temp.act(seller);
+  perform public.set_listing_offer_floor(part, 60000);
 
   -- 1. Opening offer; the seller can't move out of turn twice; stale rounds refused.
   perform pg_temp.act(buyer);
@@ -93,8 +98,8 @@ begin
   --    standing counter at its own terms (the binding snapshot).
   perform pg_temp.act(seller);
   r := public.offer_move(o1, 'counter', 85000, 'seller-counter-002', 3);
-  perform set_config('role', 'none', true);
-  update public.listings set offer_floor_cents = 88000, price_cents = 120000 where id = part;
+  update public.listings set price_cents = 120000 where id = part;
+  perform public.set_listing_offer_floor(part, 88000);
   perform pg_temp.act(buyer);
   r := public.offer_move(o1, 'accept', null, 'buyer-accept-00001', 4);
   order_id := (r->>'order_id')::uuid;
@@ -119,8 +124,7 @@ begin
   r := public.offer_open(o2, part2, 20000, null);
   perform pg_temp.act(seller);
   r := public.offer_move(o2, 'decline', null, 'seller-decline-01', 1);
-  perform set_config('role', 'none', true);
-  update public.listings set offer_floor_cents = 30000 where id = part2;
+  perform public.set_listing_offer_floor(part2, 30000);
   perform pg_temp.act(buyer);
   r := public.offer_open(o3, part2, 25000, 'Is this OK?');
   if r->>'outcome' <> 'below_minimum' then raise exception 'FAIL 15: a below-minimum offer was not recorded as such: %', r; end if;
@@ -164,14 +168,44 @@ begin
     raise exception 'FAIL 21: a lapsed turn was not expired, recorded and announced to both (%)', r;
   end if;
 
-  -- 8. The round counter and the rounds agree for every offer.
+  -- 8. The old ways in are gone: no opening function but offer_open, and no
+  --    member insert, update or delete on offers.
+  if to_regprocedure('public.create_offer_with_message(uuid,uuid,integer,text)') is not null then
+    raise exception 'FAIL 22: create_offer_with_message is still installed';
+  end if;
+  if has_table_privilege('authenticated', 'public.offers', 'insert')
+     or has_table_privilege('authenticated', 'public.offers', 'update')
+     or has_table_privilege('authenticated', 'public.offers', 'delete')
+     or has_table_privilege('anon', 'public.offers', 'insert')
+     or has_table_privilege('anon', 'public.offers', 'update')
+     or has_table_privilege('anon', 'public.offers', 'delete')
+     or exists (select 1 from pg_policy where polrelid = 'public.offers'::regclass and polcmd <> 'r') then
+    raise exception 'FAIL 23: a client role can still write offers';
+  end if;
+  perform pg_temp.act(other);
+  if pg_temp.code(format('insert into public.offers(listing_id, buyer_id, amount_cents, status) values (%L, %L, 41000, ''open'')', part2, other)) <> '42501'
+     or pg_temp.code(format('update public.offers set status = ''withdrawn'' where id = %L', o5)) <> '42501' then
+    raise exception 'FAIL 24: a member wrote an offer around offer_open and offer_move';
+  end if;
+
+  -- 9. The expiry sweep still records the round it makes (record_offer_round).
+  r := public.offer_open(o6, part2, 41000, null);
+  perform set_config('role', 'none', true);
+  update public.offers set expires_at = now() - interval '1 minute' where id = o6;
+  perform public.release_expired_reservations();
+  if (select status || ':' || round_count from public.offers where id = o6) <> 'expired:2'
+     or (select kind || ':' || actor_role from public.offer_rounds where offer_id = o6 and round_no = 2) <> 'expire:system' then
+    raise exception 'FAIL 25: the expiry sweep did not record its round';
+  end if;
+
+  -- 10. The round counter and the rounds agree for every offer.
   if exists (select 1 from public.offers o where o.round_count <> (select coalesce(max(round_no), 0) from public.offer_rounds r where r.offer_id = o.id)) then
-    raise exception 'FAIL 22: an offer''s round_count disagrees with its rounds';
+    raise exception 'FAIL 26: an offer''s round_count disagrees with its rounds';
   end if;
   if has_function_privilege('anon', 'public.offer_move(uuid,text,integer,text,integer)', 'execute')
      or has_function_privilege('anon', 'public.offer_open(uuid,uuid,integer,text)', 'execute')
      or has_function_privilege('authenticated', 'public.offer_effective_floor(uuid)', 'execute') then
-    raise exception 'FAIL 23: a move function is open to the wrong role';
+    raise exception 'FAIL 27: a move function is open to the wrong role';
   end if;
 
   raise notice 'all offer move checks passed';

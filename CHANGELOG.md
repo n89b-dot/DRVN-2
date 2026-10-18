@@ -18,6 +18,12 @@ Parts gain an identity. A product is one maker's one part, and only the same bra
 
 Cars now know their generation. `vehicle_generations` holds each generation of a catalog model — `Mk8`, `E46`, `R34`, `ND` — with its platform code and years, seeded by hand with about 200 enthusiast generations (no open source carries them). A car resolves to one only when exactly one generation of its model covers its year; changeover years, such as a 2020 Golf R that could be a Mk7 or a Mk8, resolve to nothing so the owner can be asked, and an owner's choice is kept while it still fits. Nothing a shopper sees changes: vehicle fit and search don't read generations yet. Explore's build search was restated to carry the two new car columns.
 
+## 2026-10-18 — The old offer paths are gone (negotiation v2 and the private minimum: contract)
+
+- **One way to make an offer.** `create_offer_with_message` is dropped, and members can no longer write the `offers` table directly. Every offer and every move goes through `offer_open` and `offer_move`, which apply the negotiation rules.
+- **One home for the minimum.** `listings.offer_floor_cents` is dropped. The seller's minimum lives only in `listing_private_terms`. It's written through `set_listing_offer_floor`, which the sell and edit forms' database functions call, and it acts only for the listing's seller. The trigger that redirected writes to the old column, and the session setting it relied on, are gone.
+- Nothing changes on screen. The sell and edit forms send the minimum exactly as before.
+
 ## 2026-10-18 — Show my minimum, one lock order, and negotiation drills (negotiation v2, step three)
 
 - **Show my minimum (O-3).** Sellers choose whether buyers see "offers accepted from" their minimum, and it's off by default. The amount stays private; the listing page asks for it only when the seller has turned it on (`listing_public_offer_floor`).
