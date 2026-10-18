@@ -26,6 +26,8 @@ import { SellForm, type SellFormInitialValues } from "./sell-form";
 import { SellerAccessNotice } from "./seller-access-notice";
 import { reportError } from "@/lib/monitoring";
 import { orderCars } from "@/lib/cars/order";
+import type { TurnCard } from "@/lib/ai/run";
+import { isOwnedStorageUrl } from "@/lib/media-url";
 
 export const metadata = { title: "Sell a part - DRVN" };
 
@@ -109,9 +111,10 @@ export default async function SellPage({
 }: {
   // `car` and `mod` arrive from "list a part" on a build page or the garage;
   // `import` is a ready listing import coming in for review.
-  searchParams: Promise<{ car?: string; mod?: string; import?: string }>;
+  // `agent` is a "Listing from photos" draft from the member's agent chat (A3d).
+  searchParams: Promise<{ car?: string; mod?: string; import?: string; agent?: string }>;
 }) {
-  const { car: carParam, mod: modParam, import: importParam } = await searchParams;
+  const { car: carParam, mod: modParam, import: importParam, agent: agentParam } = await searchParams;
 
   const supabase = await getPageClient();
   const user = await getViewer();
@@ -257,6 +260,36 @@ export default async function SellPage({
     }
   }
 
+  // A3d "Listing from photos": the draft is read from the member's own chat
+  // (so only their agent's cards open here), and only what it holds is
+  // filled in: a title, brand, part number, a category and the photos (their
+  // own uploads, checked again). Price and condition stay the member's.
+  let fromAgent = false;
+  if (!initialValues && agentParam && /^[0-9a-f-]{36}$/i.test(agentParam)) {
+    const { data: messages } = await supabase
+      .from("agent_messages")
+      .select("cards")
+      .eq("owner_id", user.id)
+      .contains("cards", JSON.stringify([{ id: agentParam }]))
+      .limit(1);
+    const card = ((messages?.[0]?.cards ?? []) as TurnCard[]).find(
+      (c): c is Extract<TurnCard, { kind: "listing_draft" }> => c.kind === "listing_draft" && c.id === agentParam,
+    );
+    if (card) {
+      const { category, subcategory } = mapModCategoryToListing(card.category);
+      initialValues = {
+        origin: "garage",
+        title: card.title.slice(0, 140),
+        brand: card.brand ?? undefined,
+        partNumber: card.part_number ?? undefined,
+        category,
+        subcategory,
+        images: card.images.filter((url) => isOwnedStorageUrl(url, user.id)).map((url) => ({ url, alt: null })),
+      };
+      fromAgent = true;
+    }
+  }
+
   const isImportReview = initialValues?.origin === "import";
 
   return (
@@ -268,7 +301,9 @@ export default async function SellPage({
             ? `Imported from ${initialValues?.importReview?.sourceLabel} — not public yet`
             : initialValues?.modItemId
               ? `Listing a part off your ${sourceCar?.name}`
-              : "New listing — draft, not public yet"
+              : fromAgent
+                ? "From your photos — add the price and condition; nothing is public until you publish"
+                : "New listing — draft, not public yet"
         }
         title={
           isImportReview ? (

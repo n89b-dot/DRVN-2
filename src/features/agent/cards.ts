@@ -45,11 +45,30 @@ export type ResolvedCard =
       /** The sell form prefilled from the line, or the listing once it's up. */
       href: string;
       listed: boolean;
+    }
+  | {
+      /** "Listing from photos": opens the sell form filled in. */
+      kind: "listing_draft";
+      id: string;
+      title: string;
+      image: string | null;
+      photos: number;
+      href: string;
+    }
+  | {
+      /** "Post an update": opens the update composer filled in. */
+      kind: "update_draft";
+      id: string;
+      carName: string;
+      title: string;
+      image: string | null;
+      href: string;
     };
 
 type BuildCard = Extract<TurnCard, { kind: "build_change" }>;
 type ListCard = Extract<TurnCard, { kind: "build_list" }>;
 type PartCard = Extract<TurnCard, { kind: "list_part" }>;
+type UpdateCard = Extract<TurnCard, { kind: "update_draft" }>;
 
 /** Below this the parser's line is flagged for a look, as in the editor. */
 const CHECK_BELOW = LOW_CONFIDENCE_THRESHOLD;
@@ -61,8 +80,13 @@ const CHECK_BELOW = LOW_CONFIDENCE_THRESHOLD;
  */
 export async function resolveCards(supabase: SupabaseClient<Database>, cards: TurnCard[]): Promise<Map<string, ResolvedCard>> {
   const resolved = new Map<string, ResolvedCard>();
-  const [, builds, jobs] = await Promise.all([resolveListings(supabase, cards, resolved), resolveBuildChanges(supabase, cards), resolveJobCards(supabase, cards)]);
-  for (const card of [...builds, ...jobs]) resolved.set(card.id, card);
+  const [, builds, jobs, photos] = await Promise.all([
+    resolveListings(supabase, cards, resolved),
+    resolveBuildChanges(supabase, cards),
+    resolveJobCards(supabase, cards),
+    resolvePhotoDrafts(supabase, cards),
+  ]);
+  for (const card of [...builds, ...jobs, ...photos]) resolved.set(card.id, card);
   return resolved;
 }
 
@@ -178,6 +202,33 @@ async function resolveJobCards(supabase: SupabaseClient<Database>, cards: TurnCa
       href: mod.linked_listing_id ? `/listings/${mod.linked_listing_id}` : `/sell?car=${car.id}&mod=${mod.id}`,
       listed: Boolean(mod.linked_listing_id),
     });
+  }
+  return out;
+}
+
+/**
+ * The photo drafts (A3d). They only ever come from the member's own chat, so
+ * a listing draft needs no read; an update draft is shown only for a car
+ * that's still theirs.
+ */
+async function resolvePhotoDrafts(supabase: SupabaseClient<Database>, cards: TurnCard[]): Promise<ResolvedCard[]> {
+  const out: ResolvedCard[] = [];
+  for (const card of cards) {
+    if (card.kind !== "listing_draft") continue;
+    out.push({ kind: "listing_draft", id: card.id, title: card.title, image: card.images[0] ?? null, photos: card.images.length, href: `/sell?agent=${card.id}` });
+  }
+  const updates = cards.filter((card): card is UpdateCard => card.kind === "update_draft");
+  if (!updates.length) return out;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return out;
+  const { data: cars } = await supabase.from("cars").select("id, name").in("id", [...new Set(updates.map((card) => card.car))]).eq("owner_id", user.id);
+  const carOf = new Map((cars ?? []).map((car) => [car.id, car]));
+  for (const card of updates) {
+    const car = carOf.get(card.car);
+    if (!car) continue;
+    out.push({ kind: "update_draft", id: card.id, carName: car.name, title: card.title, image: card.images[0] ?? null, href: `/garage/${car.id}/update/new?agent=${card.id}` });
   }
   return out;
 }

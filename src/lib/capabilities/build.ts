@@ -234,3 +234,88 @@ export const findPartsToList = defineCapability({
     }));
   },
 });
+
+/** The photos a draft uses: indexes into the message's own attachments, never addresses. */
+const photoIndexes = z.array(z.number().int().min(0).max(3)).min(1).max(4);
+
+function pickPhotos(attachments: readonly string[] | undefined, indexes: number[]): string[] {
+  const chosen = [...new Set(indexes)].map((index) => attachments?.[index]).filter((url): url is string => typeof url === "string");
+  if (!chosen.length) throw new CapabilityError("invalid_input", "Those photos aren't on this message");
+  return chosen;
+}
+
+/**
+ * "Listing from photos" (A3d): what the member's photos show, as the start of
+ * a listing. Only what can be seen: a title, the brand and part number when
+ * a label shows them, a category. Never a price and never a condition: the
+ * sell form asks the member for those. Nothing is saved: the card opens the
+ * sell form filled in.
+ */
+export const draftListingFromPhotos = defineCapability({
+  name: "draft_listing_from_photos",
+  description:
+    "Start a listing from the member's photos on this message: a title for the part, and the brand and part number only if a label in a photo shows them. Never a price or condition. The member checks and finishes it on the sell form.",
+  risk: "R1",
+  scopes: ["buyer", "garage", "seller"],
+  input: z.object({
+    title: text(140),
+    brand: text(80).optional(),
+    partNumber: text(80).optional(),
+    category: z.enum(MOD_CATEGORIES).optional(),
+    photos: photoIndexes,
+  }),
+  output: z.object({ proposalId: id, title: z.string(), brand: z.string().nullable(), partNumber: z.string().nullable(), category: z.string().nullable(), images: z.array(z.string()) }),
+  async run({ attachments }, input) {
+    return {
+      proposalId: randomUUID(),
+      title: input.title,
+      brand: input.brand ?? null,
+      partNumber: input.partNumber ?? null,
+      category: input.category ?? null,
+      images: pickPhotos(attachments, input.photos),
+    };
+  },
+});
+
+/**
+ * "Post an update" (A3d): today's photos and a sentence become a draft build
+ * update on one of the member's cars, with the parts on that car it's about.
+ * Nothing is saved: the card opens the update composer filled in, and the
+ * member publishes.
+ */
+export const draftCarUpdate = defineCapability({
+  name: "draft_car_update",
+  description:
+    "Draft a build update on one of the member's cars from their photos on this message and what they said: a short title, a sentence or two in their words, and the mod ids on that car it's about (from read_my_car). The member publishes it.",
+  risk: "R1",
+  scopes: ["buyer", "garage"],
+  input: z.object({
+    carId: id,
+    title: text(140),
+    body: z.string().trim().max(2000).default(""),
+    photos: photoIndexes,
+    modIds: z.array(id).max(5).default([]),
+  }),
+  output: z.object({ proposalId: id, carId: id, carName: z.string(), title: z.string(), body: z.string(), images: z.array(z.string()), modIds: z.array(id) }),
+  async run({ supabase, context, attachments }, input) {
+    const owner = context.principal.memberId;
+    const car = await supabase.from("cars").select("id,name").eq("id", input.carId).eq("owner_id", owner).maybeSingle();
+    if (car.error) throw new CapabilityError("failed", "Car is unavailable", car.error);
+    if (!car.data) throw new CapabilityError("not_allowed", "Not one of the owner's cars");
+    let modIds: string[] = [];
+    if (input.modIds.length) {
+      const mods = await supabase.from("mod_items").select("id").eq("car_id", car.data.id).in("id", input.modIds);
+      if (mods.error) throw new CapabilityError("failed", "Build is unavailable", mods.error);
+      modIds = (mods.data ?? []).map((mod) => mod.id);
+    }
+    return {
+      proposalId: randomUUID(),
+      carId: car.data.id,
+      carName: car.data.name,
+      title: input.title,
+      body: input.body,
+      images: pickPhotos(attachments, input.photos),
+      modIds,
+    };
+  },
+});
