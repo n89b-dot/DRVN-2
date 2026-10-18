@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-17 — Row security checks "who is this?" once per query
+
+Postgres ran `auth.uid()` once per row in 88 of the 115 row-security policies, and `is_admin()`, a table read, in 34 of them. Migration `20261017140000` wraps each call in `(select …)`, so it runs once per query. Who can read or write what is unchanged: every policy is its original apart from the wrapping, and all SQL guards pass. The new `rls_initplan_guard.sql` keeps new policies in this form. It clears the advisor's `auth_rls_initplan` warnings and keeps commerce reads cheap as rows grow.
+
 ## 2026-10-17 — The offer minimum is private
 
 A seller's lowest acceptable offer was stored on the listing, which anyone could read through the database API. It now lives in `listing_private_terms`, which no member or visitor can read; the seller reads their own through `my_listing_offer_floor`. This is A0's first rollout in the agent plan, in three steps.

@@ -1,5 +1,28 @@
 # Applying migrations
 
+## October 17 — row security checks once per query (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261017140000_rls_initplan.sql` | throwaway database only (2026-10-17) |
+
+A0's advisor follow-up for `auth_rls_initplan`. 88 of the 115 policies in `public` called
+`auth.uid()` bare, and 34 of them also called `public.is_admin()` bare, so both ran once per row
+checked. Each policy is restated with those calls wrapped in a scalar subquery
+(`(select auth.uid())`), which Postgres evaluates once per query as an InitPlan. The
+statements were generated from the policies' own definitions and checked by reversing the
+wrap. After applying, every policy matches its original except that Postgres flattens
+`(a OR b) OR c` to `a OR b OR c`, which means the same.
+
+Checked on a fresh database with every migration: the file applies twice cleanly; all guards
+pass, including the ones that test who can read and write what; the new
+`rls_initplan_guard.sql` fails on a planted bare policy. The orders read as a signed-in member
+now filters on three InitPlans instead of calling `auth.uid()` and `is_admin()` per row.
+
+**Before applying to shared dev:** compare dev's policy expressions with a fresh database at
+the previous migration. `ALTER POLICY` replaces the expression wholesale, so a policy changed
+on dev by hand would be overwritten. Safe before or after any app change.
+
 ## October 17 — the offer minimum goes private, step two (shared dev project)
 
 | File | Applied to |
