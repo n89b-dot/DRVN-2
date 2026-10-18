@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const UPDATED = "3 October 2026";
+const UPDATED = "18 October 2026";
 
 /**
  * NOT LEGAL ADVICE — an honest working draft describing what the app actually
@@ -74,6 +74,12 @@ export default function PrivacyPage() {
             <strong>Buying without an account</strong> — where it&apos;s available, checkout
             with just an email creates a DRVN account for that address, holding the name, delivery
             address and phone you give for the order.
+          </li>
+          <li>
+            <strong>Your agent</strong> — if you use it: the limits you set for it (your minimum
+            and target on a listing, or your maximum as a buyer), what it did for you and why, and
+            your chat with it. Card numbers are removed from chat messages before they&apos;re
+            stored.
           </li>
           <li>
             <strong>Listing imports</strong> — if you import a listing from another site, the link
@@ -156,7 +162,11 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Anthropic</strong> — when you import a listing, the text of the page you
-            imported is sent to Anthropic&apos;s AI service to draft the listing. Photos and your
+            imported is sent to Anthropic&apos;s AI service to draft the listing. When you chat
+            with your agent, your message and recent chat, and what the agent looks up on DRVN to
+            answer you (listings, and your own cars and build), are sent to the same service.
+            Card numbers, VINs, email addresses and phone numbers are removed from what you type
+            before it&apos;s sent, and your agent&apos;s limits are never sent. Photos and your
             account details are not sent.
           </li>
           <li>
@@ -193,7 +203,9 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>DRVN staff</strong> — can see orders, conversations and dispute evidence when
-            handling a report, an order or a dispute. Messages are not end-to-end encrypted.
+            handling a report, an order or a dispute. Messages are not end-to-end encrypted. Your
+            chat with your agent is opened only for a report about you or a dispute you&apos;re
+            part of, and each opening is recorded.
           </li>
         </ul>
         <p>We do not sell your data and we do not run advertising trackers.</p>
@@ -248,6 +260,7 @@ export default function PrivacyPage() {
           </li>
           <li>Photos uploaded to a form you never saved: deleted after 48 hours.</li>
           <li>Rate-limit counters: deleted after a day.</li>
+          <li>Your chat with your agent: deleted 12 months after its last message.</li>
           <li>
             Everything else: for as long as your account exists. How long order, payment, message,
             dispute and log records are kept after an account is deleted is still being set; this
