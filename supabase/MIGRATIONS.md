@@ -62,9 +62,9 @@ fixed here with guard checks.
 
 | File | Applied to |
 |---|---|
-| `20261020130000_product_fitments.sql` | not yet |
-| `20261020140000_price_comparables.sql` | not yet |
-| `20261020150000_grow_products_queue.sql` | not yet |
+| `20261020130000_product_fitments.sql` | shared dev project (2026-10-18, twice) |
+| `20261020140000_price_comparables.sql` | shared dev project (2026-10-18, twice) |
+| `20261020150000_grow_products_queue.sql` | shared dev project (2026-10-18, twice) |
 
 Apply in order, after `20261020120000` (re-run `120000` first on a database that has it: it is now re-runnable).
 - `130000` adds `product_fitments`: claims about a product (source, relationship, `stated_on`, verification, engine/gearbox/brake constraints) against a catalog model and optionally one of its generations (composite foreign key). Public read of claims not retracted; service-role writes. Empty until B2.
@@ -72,6 +72,11 @@ Apply in order, after `20261020120000` (re-run `120000` first on a database that
 - `150000` makes the hourly products run read what changed: `product_grow_queue` (internal), filled by triggers when a listing or build line gains or changes its brand, part number or status (never on a price or a view) and when a listing gains an alternate; `grow_products` restated to read the queue, join the run's number list in every statement, and count only identifiers a live record, link or admin decision still points at when filing "one number, several brands". Index on `part_number_links.created_at`.
 
 Checked on a fresh database (CI's PG15 image): every B1 file applies twice; all 93 SQL guard files pass, including `products_guard.sql` checks 6d–6h (the queue) and `price_comparables_guard.sql` 1g (no negative ages). The 2M-part gate is in `docs/performance/query-plans.md`: vehicle fit unchanged, existing pages unchanged, the hourly run 59 s → 1.4 s, comparables' worst case 2.7 s → 10 ms warm.
+
+**Shared dev, 2026-10-18**, after #42 merged (d50d9ff), with `node scripts/apply-migration.mjs`, each twice, in order: `20261020120000` (re-run: it is re-runnable now), `130000`, `140000`, `150000`.
+- **Before:** `grow_products` as `120000` first wrote it; 13 products, 0 reviews, 11 runs; the audit subject check had eight values (A2's `agent` included). Saved to `~/drvn-db-backups/pre-20261020130000-comparables.sql` (schemas of the graph, order, listing and build-line tables, the four functions, the cron jobs) and `pre-20261020130000-products-data.sql`.
+- **After:** `pg_get_functiondef` of `grow_products`, `product_coverage`, `price_comparables`, `merge_products`, `resolve_product_identity_review`, the three `queue_product_growth_*` triggers' functions, `listing_commercial_snapshot` and `explore_build_rows` matches a fresh database at main; the audit check still holds all eight values; the five `product_growth_*` triggers exist; `order_items_snapshot_part_recent_idx` replaced `order_items_snapshot_part_number_idx`. Members can't read the queue or write fitment claims; visitors read claims (none yet) and get 401 from `price_comparables` and `products`.
+- **Behaviour, in a rolled-back transaction:** a price edit queued nothing; a brand edit queued its listing; the hourly run read it in 31 ms, made the new product, filed no review and emptied the queue; `product_coverage` and `price_comparables` answered. The rollback left 13 products and an empty queue.
 
 It also fixes `20261020120000` so it can be re-run (see that entry).
 
