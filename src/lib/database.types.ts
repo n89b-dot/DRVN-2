@@ -206,8 +206,6 @@ export type Listing = {
   length_in: number | null;
   width_in: number | null;
   height_in: number | null;
-  /** Offers below this are refused before the seller sees them. */
-  offer_floor_cents: number | null;
   currency: string;
   location: string | null;
   compatibility_notes: string | null;
@@ -269,9 +267,14 @@ export type ModItem = {
   ref_price_cents: number | null;
   /** ISO-4217 for ref_price_cents. No currency means no price. */
   ref_price_currency: string | null;
+  /** aftermarket (fitted by the owner) or stock (a factory part that came
+   *  off when a mod went on — "What came off"). */
+  origin: ModOrigin;
   created_at: string;
   updated_at: string;
 };
+
+export type ModOrigin = "aftermarket" | "stock";
 
 export type ActivityReaction = {
   post_id: string;

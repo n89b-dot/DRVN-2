@@ -113,18 +113,22 @@ Each step ships on its own and leaves the app working.
      offer's columns into its rounds.
    - Add a trigger that records a round for every move today's code still makes.
    - The offer page reads its history from rounds.
-2. **Switch the rules** (`20261017160000`; the lock-order restatement of `freeze_accepted_offer_checkout`, `settle_seller_cancellation` and `purchase_finalize`, and removing the old write paths, follow in a contract step once the switched app runs everywhere).
+2. **Switch the rules** (`20261017160000`; the lock-order restatement of `freeze_accepted_offer_checkout`, `settle_seller_cancellation` and `purchase_finalize` followed in `20261018100200`, and the old write paths were removed by the contract step, `20261019120000`).
    - Add `offer_open` and `offer_move`, and point the app's actions at them.
    - Add buyer counter-backs, the 3-offer limit, the per-turn expiry, below-minimum rounds, the
      listing-first lock order and cancel-before-checkout.
-   - Remove the client write policies on `offers`, and drop the step-1 trigger.
+   - Remove the client write policies on `offers` (done in the contract step). The step-1
+     trigger stays: `offer_open` and `offer_move` write their own rounds and it skips them, but
+     the expiry sweep, `purchase_finalize` (closing the other offers on a sold part) and
+     `offer_accept_begin` on an expired offer still change an offer's status, and it records
+     those rounds.
 3. **The screens** (done 18 Oct, except the "via agent" recipe, which comes with A3a).
    - Round history on `OfferCard` and on the offer page.
    - A counter-back form for buyers, and "Offer 2 of 3" shown to both sides.
    - "Show my minimum" on the sell form (O-3), off by default.
    - A quiet "via agent" recipe in CSS, unused until A3a.
    - Expiry notifications, and the lapsed-reservation wording fix.
-4. **The gate** (the concurrency drills and the three-round e2e were added 18 Oct; still to come is a contract step that retires the old offer paths):
+4. **The gate** (the concurrency drills and the three-round e2e were added 18 Oct; the contract step, `20261019120000`, retired `create_offer_with_message`, the client insert and update policies on `offers` and `guard_offer_private_floor`):
    - SQL guards for turns, the limit across threads, below-minimum attempts using a turn, the
      snapshot honoured after a limit change, replay, stale rounds, and the refused
      cancellation once checkout has started.

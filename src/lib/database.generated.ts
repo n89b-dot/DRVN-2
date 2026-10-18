@@ -2246,7 +2246,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -2285,7 +2284,6 @@ export type Database = {
           id?: string
           length_in?: number | null
           location?: string | null
-          offer_floor_cents?: number | null
           part_miles?: number | null
           part_miles_unit?: string | null
           part_number?: string | null
@@ -2324,7 +2322,6 @@ export type Database = {
           id?: string
           length_in?: number | null
           location?: string | null
-          offer_floor_cents?: number | null
           part_miles?: number | null
           part_miles_unit?: string | null
           part_number?: string | null
@@ -2485,6 +2482,7 @@ export type Database = {
           id: string
           image_url: string | null
           linked_listing_id: string | null
+          origin: string
           part_number: string | null
           part_number_compact: string | null
           position: number
@@ -2510,6 +2508,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           linked_listing_id?: string | null
+          origin?: string
           part_number?: string | null
           part_number_compact?: string | null
           position?: number
@@ -2535,6 +2534,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           linked_listing_id?: string | null
+          origin?: string
           part_number?: string | null
           part_number_compact?: string | null
           position?: number
@@ -6172,15 +6172,6 @@ export type Database = {
         Args: { p_job: string; p_lease: string }
         Returns: undefined
       }
-      create_offer_with_message: {
-        Args: {
-          p_amount: number
-          p_listing: string
-          p_message?: string
-          p_offer: string
-        }
-        Returns: Json
-      }
       create_protection_return: {
         Args: {
           p_item_ids?: string[]
@@ -6583,7 +6574,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6668,7 +6658,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6748,7 +6737,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6832,7 +6820,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6895,7 +6882,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -7458,6 +7444,10 @@ export type Database = {
       }
       set_analytics_consent: {
         Args: { p_allowed: boolean }
+        Returns: undefined
+      }
+      set_listing_offer_floor: {
+        Args: { p_floor: number; p_listing: string }
         Returns: undefined
       }
       set_social_relationship: {

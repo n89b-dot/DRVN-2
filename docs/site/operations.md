@@ -49,6 +49,49 @@ step/compensation ideas informed the worker passes' idempotent, resumable
 shape; the framework itself was never a candidate. Revisit PGMQ if a workload
 appears that needs competing consumers or backpressure across processes.
 
+## The agent (A2 — foundation, invisible to members)
+
+The agent acts for one member at a time and only through the database.
+Decisions of record: [`docs/decisions/agent-foundations.md`](../decisions/agent-foundations.md);
+data rules: [`agent-data-rules.md`](../decisions/agent-data-rules.md);
+runbook: `docs/production-runbook.md` §13.
+
+- **The worker's identity.** `agent_worker` is its own Postgres role, created
+  NOLOGIN by `20261021100100`, with no table grants. It can execute eight
+  functions (`agent_claim_jobs`, `agent_renew_lease`, `agent_job_context`,
+  `agent_offer_move`, `agent_offer_open`, `agent_request_approval`,
+  `agent_record_decision`, `agent_finish_job`). Each write needs a job the
+  worker claimed, with a live lease whose action, offer and round match the
+  call; the function then loads the owner from task → mandate and re-checks
+  role, suspension, mandate state and expiry, limits and the kill switches.
+  Giving the role a login is an operator step (runbook §13a);
+  `src/lib/agent/worker-db.ts` refuses any connection that isn't agent_worker.
+- **The outbox.** A trigger on `offer_rounds` writes `agent_jobs` in the same
+  transaction as every move, whoever made it, for the side whose turn it now
+  is, and settles tasks when an offer ends. `agent_reconcile_outbox` re-queues
+  anything missed and returns lost leases.
+- **The pass.** `src/lib/agent/worker.ts` claims jobs, reads the owner's view
+  (`agent_job_context`: the owner's own limits, the listing's public facts,
+  the moves both sides see), lets `negotiate.ts` decide, and makes the one
+  call. A refusal is handed back with its code (`agent_finish_job`), which
+  becomes telemetry. `/api/jobs/agent` runs reconcile, retention, one pass
+  (only with `AGENT_WORKER_DATABASE_URL`) and the health check; it isn't
+  scheduled until A3a.
+- **Kill switches** (`/admin/agent`, `admin_set_agent_control`): all, buyer
+  side, seller side, one member's agent, one mandate, one listing, one
+  account. Seeded with `all` on. Existing offers and orders are never touched.
+- **Monitoring** (`agent_health`, `src/lib/agent/monitor.ts`): stuck tasks,
+  stale jobs, repeated decisions, permission denials and model errors, to
+  operational telemetry (Sentry), never product analytics; ids, codes and
+  counts only. `agent_telemetry` keeps 30 days.
+- **Capabilities** (`src/lib/capabilities/`): typed reads and moves with zod
+  contracts and risk levels, run with the member's own client. The model is
+  held to the R0–R1 reads allow-listed per scope; the money and limits
+  capabilities never reach it. `src/lib/ai/run.ts` wraps the SDK tool runner
+  (default model `claude-opus-5-5`, `AGENT_MODEL` to change), redacts what the
+  member typed and returns every tool result as untrusted data. No member
+  reaches the model until A3c.
+
 ## Transaction diagnostics (§AF)
 
 `orders.correlation_id` (0039) names a checkout: shared by the basket's

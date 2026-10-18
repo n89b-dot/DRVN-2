@@ -23,6 +23,7 @@ import {
 import { expand } from "@/lib/motion";
 import { checklistFor, GRADES, type ChecklistAnswer } from "@/lib/marketplace/grading";
 import { CATEGORIES, CONDITIONS } from "@/lib/marketplace/taxonomy";
+import { shotListFor } from "@/lib/marketplace/photo-guide";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import { useUploadQueue } from "@/lib/use-upload-queue";
 import { SortableGrid, SortableItem } from "@/components/ui";
@@ -170,6 +171,8 @@ export function SellForm({
     listing?.subcategory ?? prefill?.subcategory ?? ""
   );
   const [condition, setCondition] = useState(listing?.condition ?? prefill?.condition ?? "used");
+  // The title stays uncontrolled; this copy only sharpens the shot list.
+  const [titleText, setTitleText] = useState(listing?.title ?? prefill?.title ?? "");
   const [images, setImages] = useState<GalleryImage[]>(listing?.images ?? prefill?.images ?? []);
   const [shippingMode, setShippingMode] = useState<"flat" | "drvn" | "pickup_only">(
     listing?.shipping_mode ?? "flat"
@@ -742,6 +745,14 @@ export function SellForm({
                 }
               />
             )}
+            {/* Suggested shots: a prompt, never a requirement — one photo
+                still publishes. Generic until the part type is known. */}
+            <p className="field__hint !mt-0" aria-live="polite">
+              <span className="microlabel">
+                {subcategory ? "Shots buyers look for" : "Good first shots"}
+              </span>{" "}
+              {shotListFor(subcategory || null, titleText).join(" · ")}
+            </p>
             {(fieldErrors.photos || uploadError) && (
               <p role="alert" aria-live="polite" className="field__err">
                 {fieldErrors.photos ?? uploadError}
@@ -757,6 +768,7 @@ export function SellForm({
             label="Title"
             maxLength={140}
             defaultValue={listing?.title ?? prefill?.title ?? ""}
+            onChange={(e) => setTitleText(e.target.value)}
             placeholder="e.g. 034 High-Flow Downpipe for B9 S4"
             className="max-w-none"
             error={fieldErrors.title}

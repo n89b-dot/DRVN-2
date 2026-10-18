@@ -1314,28 +1314,28 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "offer-floor-private",
     name: "A seller's offer minimum is private",
     group: "foundations",
-    status: "in-progress",
+    status: "validated",
     brief: "PRD O-3 · agent plan A0",
     existsToday:
       "The lowest offer a seller will take lived on `listings.offer_floor_cents`, which anon and authenticated could read table-wide through the API, and the listing page showed it as \"Offers accepted from\".",
     changing:
       "The minimum moves to `listing_private_terms`, readable only by the seller (`my_listing_offer_floor`) and the offer checks, in three releases: expand (copy, kept in step), switch (every reader moved, the old column held empty), contract (drop the column once the switched app is live everywhere).",
-    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
+    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "supabase/migrations/20261019120000_negotiation_contract.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
     benefit: "A seller's minimum can't be read by anyone else, so it can't be used against them, by a buyer or by an agent.",
     approach:
-      "Owner-only table, no client grants; a BEFORE trigger moves any write to the old column into it; the price bound is checked from both sides; a SECURITY DEFINER trigger on offers refuses below-minimum offers without naming the amount.",
+      "Owner-only table, no client grants. One writer, `set_listing_offer_floor`, which acts only for the listing's seller and which the sell and edit functions call; the price bound is checked from both sides; offer_open and offer_move check the minimum and never name it. The switch step's absorb trigger and the old column are gone (contract, 20261019120000).",
     decisions: [
       "Showing the minimum on the listing becomes a seller toggle, off by default, with negotiation v2; until then no minimum is shown.",
     ],
     validation:
-      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). offer_floor_privacy_guard.sql (28 checks) fails before the expand migration and passes after; every SQL guard, npm test, typecheck, lint and next build pass. The contract step is not done.",
+      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). Contract (20261019120000): offer_floor_privacy_guard.sql (39 checks) fails on the switch-step schema and passes after; every SQL guard, npm test, typecheck, lint and the negotiation drills pass. The contract's shared-dev apply waits until every running app copy has the switched code (supabase/MIGRATIONS.md).",
     docs: ["docs/decisions/agent-foundations.md", "supabase/MIGRATIONS.md"],
   },
   {
     id: "negotiation-v2",
     name: "Negotiation v2: counter-backs for every member",
     group: "selling",
-    status: "planned",
+    status: "validated",
     brief: "PRD O-1, O-2, O-4, O-5 · agent plan A1",
     existsToday:
       "An offer gets one answer: the seller accepts, declines or counters once. A below-minimum offer is refused before anything is recorded, so trying again costs nothing.",
@@ -1345,8 +1345,9 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.",
     approach: "Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.",
     dependsOn: ["offer-floor-private"],
-    validation: "supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role.",
-    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md", "docs/decisions/agent-data-rules.md"],
+    validation:
+      "Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. The contract step, 20261019120000, retires create_offer_with_message and the client write policies on offers; its shared-dev apply waits until every running app copy has the switched code.",
+    docs: ["docs/decisions/negotiation-v2.md", "docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
   },
   {
     id: "member-agent",
@@ -1355,16 +1356,36 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     status: "in-progress",
     brief: "PRD §4.9 (AG-1…AG-12) · agent plan A2–A3",
     existsToday:
-      "A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone), export v10, deletion and retention (20261021100000–100200).",
+      "A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone; console at /admin/agent), export v10, deletion and retention (20261021100000–100200). The worker pass, negotiate.ts, typed capabilities, src/lib/ai with the tool-runner turn, and agent monitoring are built; nothing calls the model yet.",
     changing:
       "One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.",
-    surfaces: ["src/lib/capabilities/", "src/lib/ai/", "/agent", "BottomNav", "SidePanel"],
+    surfaces: ["src/lib/capabilities/", "src/lib/ai/", "src/lib/agent/", "/admin/agent", "/api/jobs/agent", "/agent", "BottomNav", "SidePanel"],
     benefit: "The tedious work between \"I want this\" and \"done\" gets done for you, inside limits you set, and every task still works without the agent.",
     approach:
       "Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.",
     dependsOn: ["negotiation-v2"],
-    validation: "supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role.",
+    validation: "supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role. negotiate.ts property tests and seeded simulations (src/lib/agent); the same simulations through agent_worker in tests/operations/agent-worker.test.ts; tests/agent-evals fixtures for redaction, untrusted content and the model's tool boundary.",
     docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md", "docs/decisions/agent-data-rules.md"],
+  },
+
+  {
+    id: "seller-helpers",
+    name: "Seller helpers: photo shot lists and what came off",
+    group: "selling",
+    status: "implemented",
+    brief: "Agent plan, alongside A3c–A3d (no AI) · AG-9, AG-11",
+    existsToday:
+      "The sell form asks for photos with no guidance on which ones buyers look for. The build sheet lists only aftermarket parts, so fitting first coilovers to a stock car leaves nothing to mark removed, and the stock parts never get listed.",
+    changing:
+      "The photo step suggests 3–5 shots for the part type (a generic list until the type is known; the title sharpens mixed types such as springs vs coilovers). A new mod line asks once, inline, which stock parts came off; ticked ones become removed lines marked stock (`mod_items.origin`), each with List it, so the listing carries the car maker as brand and the source car's fitment.",
+    surfaces: ["src/lib/marketplace/photo-guide.ts", "src/lib/mods/stock-parts.ts", "SellForm", "/garage/[id]/edit", "supabase/migrations/20261019100000_mod_items_stock_origin.sql"],
+    benefit: "Better photos without a checklist to fill in, and parts that came off a stock car become things to sell.",
+    approach:
+      "Static maps, no AI and no new screens. The shot list is a suggestion, never required (one photo still publishes). The stock offer reads the finer mod type from the product name by keyword, with a short pick list as the fallback; save_mod_items keeps a line's origin when an older editor omits it. The agent later calls the same functions (AG-9).",
+    dependsOn: [],
+    validation:
+      "photo-guide.test.ts (every subcategory covered, 3–5 shots) and stock-parts.test.ts pass; mod_stock_origin_guard.sql passes on a fresh database with every other guard; generated types check clean.",
+    docs: ["docs/decisions/seller-helpers.md", "supabase/MIGRATIONS.md"],
   },
 
   // ── 14 · Deferred / not pursuing ────────────────────────────────────────

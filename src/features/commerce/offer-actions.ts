@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
+import { offerMoveCore, type OfferMoveKind } from "@/lib/capabilities/negotiation";
 import type { CommerceState } from "./action-types";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
@@ -139,31 +140,16 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   return { ok: "Offer sent — track it in Offers." };
 }
 
-type OfferMoveKind = "counter" | "accept" | "decline" | "withdraw";
-type OfferMoveResult = { offer_id: string; round_no: number; kind: string; outcome?: string; replayed?: boolean; order_id?: string | null };
-
 /**
- * One negotiation move through offer_move (migration 20261017160000), as the
- * signed-in member: the database checks turn, round, bounds and limits in one
- * transaction. The idempotency key is the offer, the round the move was made
- * at, the move and its amount, so a form resent after a lost response replays
- * the move it already made — and a different amount at a round that has
- * moved on is refused as stale rather than applied twice.
+ * One negotiation move through offer_move, as the signed-in member. The core
+ * is the move_offer capability's (src/lib/capabilities/negotiation.ts), so the
+ * screens and the agent build the same idempotency key on one path.
  */
-async function moveOffer(
+function moveOffer(
   supabase: Awaited<ReturnType<typeof createClient>>,
   move: { offerId: string; kind: OfferMoveKind; round: number; amountCents?: number },
 ) {
-  const { data, error } = await supabase.rpc("offer_move", {
-    p_offer: move.offerId,
-    p_kind: move.kind,
-    // Only a counter carries an amount; the generated type can't say a
-    // plpgsql argument may be null.
-    p_amount: (move.amountCents ?? null) as number,
-    p_idempotency_key: `${move.kind}:${move.offerId}:r${move.round}:${move.amountCents ?? 0}`,
-    p_expected_round: move.round,
-  });
-  return { result: data as OfferMoveResult | null, error };
+  return offerMoveCore(supabase, move);
 }
 
 /** What a member sees for each refusal offer_open / offer_move can give. */

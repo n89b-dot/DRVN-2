@@ -1,12 +1,12 @@
 # Applying migrations
 
-## October 21 — the agent foundation, A2 (not yet on shared dev)
+## October 21 — the agent foundation, A2 (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261021100000_agent_foundation.sql` | not yet applied |
-| `20261021100100_agent_worker.sql` | not yet applied |
-| `20261021100200_account_export_contract_v10.sql` | not yet applied |
+| `20261021100000_agent_foundation.sql` | shared dev project (2026-10-18, twice) |
+| `20261021100100_agent_worker.sql` | shared dev project (2026-10-18, twice) |
+| `20261021100200_account_export_contract_v10.sql` | shared dev project (2026-10-18, twice) |
 
 Apply in order, after B1's `20261020100000`–`120000`, the A1 files and the seller-helpers
 export bump (`2026-10-19.v9`) if it is on the project. Nothing changes for
@@ -41,6 +41,22 @@ An independent review (18 Oct) found the outbox trigger could fail a person's
 move in a revoke race, skipped jobs could block the queue, card redaction
 missed trailing digits, and several lock-order and null-argument gaps; all are
 fixed here with guard checks.
+
+**Shared dev, 2026-10-18**, after #36 merged (efe24ff), applied in order, each twice, with
+`node scripts/apply-migration.mjs`. Dev was on Postgres 17 with B1's products
+(`20261020120000`) applied, and without #39's contract or #34's v9.
+- **Before:** `~/drvn-db-backups/pre-20261021-a2-apply.sql` (public schema) and
+  `pre-20261021-a2-apply-data.sql` (offers, offer_rounds, offer_round_terms,
+  account_export_requests).
+- **After:** `agent_worker` exists, NOLOGIN, with only its creator's admin membership.
+  - There are 10 `agent_*` tables, with the `all` switch on and no mandates or jobs.
+  - Members can't reach the cores or the worker functions, and anon can't reach the member functions.
+  - `offer_move` wraps `offer_move_core`, and exports stamp `2026-10-21.v10`.
+  - The audit subject check keeps `product_review` and adds `agent`.
+- **Probe:** `agent_worker_guard.sql` ran against dev in one rolled-back transaction and passed.
+  - On Postgres 17 the creator's membership has SET off. So the probe first ran `grant agent_worker to postgres with set true, inherit false granted by postgres` in that same transaction.
+  - Afterwards nothing remained: no test users, mandates or extra membership, and the `all` switch was still on.
+- **When #34 is applied:** its `20261019100000`/`100100` go on dev after this, so re-run `20261021100200` afterwards to end on v10.
 
 ## October 20 — fitment evidence and price comparables, B1 step three
 
@@ -98,6 +114,47 @@ Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; e
 **Shared dev, 2026-10-18**, after #35 merged (5ccc623), with `node scripts/apply-migration.mjs`, twice.
 - **Before:** `cars` had exactly main's columns and `explore_build_rows` was byte-identical to 20261011120000's. Saved to `~/drvn-db-backups/pre-20261020100000-generations.sql` (cars, catalog schema and the old function) and `pre-20261020100000-cars-data.sql`.
 - **After:** 194 generations; 11 of 16 catalogued cars resolved (5 are changeover years or unseeded models). `pg_get_functiondef` of `explore_build_rows`, `resolve_vehicle_generation`, `car_generation_before_write` and `vehicle_generations_rescan` matches a fresh database exactly; all four triggers present. Through the API as a visitor: Explore build search returns cars with `generation_id`/`generation_source` and a null VIN; `vehicle_generations` reads; a write is refused (401). Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
+
+## October 19 — negotiation v2 and the private minimum: contract (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261019120000_negotiation_contract.sql` | not applied to shared dev (see below) |
+
+The contract step of A0 (the private minimum) and A1 (negotiation v2). Apply after every `20261018` file, and only once **every running app copy has the switched code** (main from `8321071` on). An app without it still writes `listings.offer_floor_cents` and calls `create_offer_with_message`, and both are gone.
+
+It drops:
+- `create_offer_with_message`;
+- the client write policies on `offers` (`buyers create offers`, `buyers withdraw own offers`, `suspended members don't make offers`) and anon/authenticated INSERT, UPDATE and DELETE on it, so members write offers only through `offer_open` and `offer_move`;
+- `guard_offer_private_floor` and its trigger;
+- `listings.offer_floor_cents`, its two check constraints, and `absorb_listing_offer_floor` with its trigger;
+- the `drvn.floor_checked_listing` skip in `guard_private_floor_within_price`;
+- the deferral on `listing_private_terms`' foreign key to `listings`.
+
+It adds `set_listing_offer_floor(listing, floor)`, SECURITY DEFINER with `search_path = public, pg_temp`, executable by `authenticated`. It acts only for the listing's own seller, refuses a suspended seller and a sold, reserved or removed listing, and checks 0 < minimum ≤ price. `save_listing_creation` calls it after inserting the listing; `update_listing_atomic` calls it before or after the listing update, whichever keeps the minimum within the price. Both read the minimum from the same `offer_floor_cents` JSON key, so the form payload is unchanged. Both bodies were taken from `pg_get_functiondef` and change only those lines.
+
+`record_offer_round` stays, because the expiry sweep, `purchase_finalize` and `offer_accept_begin` on an expired offer still change offers' status without writing a round. The export contract doesn't change.
+
+Checked on a fresh database with every migration:
+- the file applies twice cleanly, and generated types match;
+- every SQL guard passes. `offer_floor_privacy_guard.sql` (39 checks), `offer_move_guard.sql` (27), `definer_exposure_guard.sql` and `function_search_path_guard.sql` now prove the old paths are gone, and each fails on the schema before this file;
+- `npm test`, typecheck and lint pass;
+- `tests/operations/negotiation-concurrency.test.ts` passes on the local stack with this file applied.
+
+To reverse: restore the column and the absorb trigger from `20261017130000`, the three functions from `20261018100000`, the policies and `create_offer_with_message` from their last definitions, and re-defer the key.
+
+## October 19 — stock parts on the build sheet, export v9 (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261019100000_mod_items_stock_origin.sql` | not yet |
+| `20261019100100_account_export_contract_v9.sql` | not yet |
+
+Apply in order, after `20261018100200`.
+- `100000` adds `mod_items.origin` (`aftermarket` by default, or `stock`) for "What came off". `save_mod_items` is the `20260919203000` body with origin added to its checks, insert and update. An editor that omits origin leaves a line's stored value alone.
+- `100100` bumps the export contract to `2026-10-19.v9`, adding origin to the mod_items section.
+
+Checked on a fresh database: every file applies, every SQL guard passes (including the new `mod_stock_origin_guard.sql`), and the generated types match.
 
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 

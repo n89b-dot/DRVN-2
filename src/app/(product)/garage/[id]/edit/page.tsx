@@ -101,7 +101,7 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
           coverImageUrl={car.cover_image_url}
           coverFocal={{ x: car.cover_focal_x, y: car.cover_focal_y }}
         />
-        <ModsEditor carId={car.id} initialMods={mods ?? []} />
+        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} />
         <ShowcaseEditor
           carId={car.id}
           images={images ?? []}

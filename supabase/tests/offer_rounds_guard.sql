@@ -2,6 +2,8 @@
 -- opening offer, counter, accept (by either side), decline, withdraw and
 -- expiry, numbered per offer; the binding minimum is kept privately; only the
 -- buyer and the seller can read an offer's rounds, and nobody can write them.
+-- Since the contract (20261019120000) offer_open writes the opening round
+-- itself and the recorder covers the moves a trusted writer still makes.
 begin;
 
 do $$
@@ -21,14 +23,15 @@ begin
   update public.beta_access_config set enforced = false where singleton = true;
   insert into auth.users(id, email) values
     (seller, 'rounds-seller@drvn.test'), (buyer, 'rounds-buyer@drvn.test'), (stranger, 'rounds-stranger@drvn.test');
-  insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status, offer_floor_cents)
-  values (listing, seller, 'Rounds guard wheels', 'performance', 60000, 0, 'active', 30000),
-         (listing2, seller, 'Rounds guard seats', 'performance', 20000, 0, 'active', null);
+  insert into public.listings(id, seller_id, title, category, price_cents, shipping_cents, status)
+  values (listing, seller, 'Rounds guard wheels', 'performance', 60000, 0, 'active'),
+         (listing2, seller, 'Rounds guard seats', 'performance', 20000, 0, 'active');
+  insert into public.listing_private_terms(listing_id, seller_id, offer_floor_cents) values (listing, seller, 30000);
 
   -- 1. Offer → counter → buyer accepts: three rounds, in order, by the right people.
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', buyer, 'role', 'authenticated')::text, true);
-  perform public.create_offer_with_message(o1, listing, 40000, null);
+  perform public.offer_open(o1, listing, 40000, null);
   perform set_config('role', 'none', true);
   update public.offers set status = 'countered', counter_amount_cents = 52000, countered_at = now() where id = o1;
   perform public.offer_accept_begin(o1, seller);
@@ -52,7 +55,7 @@ begin
   -- 3. Seller accepts an opening offer; a decline; a withdraw; an expiry.
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', buyer, 'role', 'authenticated')::text, true);
-  perform public.create_offer_with_message(o2, listing2, 15000, null);
+  perform public.offer_open(o2, listing2, 15000, null);
   perform set_config('role', 'none', true);
   update public.offers set status = 'declined', responded_at = now() where id = o2;
   if (select string_agg(kind || ':' || actor_role, ' ' order by round_no) from public.offer_rounds where offer_id = o2)
@@ -60,9 +63,9 @@ begin
     raise exception 'FAIL 4: a decline was not recorded as the seller''s round';
   end if;
   perform set_config('role', 'authenticated', true);
-  perform public.create_offer_with_message(o3, listing2, 16000, null);
-  update public.offers set status = 'withdrawn' where id = o3 and buyer_id = buyer;
+  perform public.offer_open(o3, listing2, 16000, null);
   perform set_config('role', 'none', true);
+  update public.offers set status = 'withdrawn' where id = o3 and buyer_id = buyer;
   if (select kind || ':' || actor_role from public.offer_rounds where offer_id = o3 and round_no = 2) is distinct from 'withdraw:buyer' then
     raise exception 'FAIL 5: a withdraw was not recorded as the buyer''s round';
   end if;
