@@ -1,7 +1,8 @@
 -- SECURITY DEFINER functions a signed-out caller can execute are a reviewed
 -- list, not an accident of default privileges. Trigger functions are left
--- out: they can't be called except as triggers. Adding a public definer
--- function means adding it here, with a reason.
+-- out: they can't be called except as triggers. The same goes for those a
+-- signed-in member can execute. Adding a public definer function means
+-- adding it to the right list here, with a reason.
 begin;
 
 do $$
@@ -26,6 +27,31 @@ declare
     'search_word_corrections(text)',      -- the words of a query absent from the titles/brands of parts for sale, each with its closest word there; words anyone can read (20261011130000)
     'suspended_profile_ids()'             -- the set the read policies test against, once per query; ids only (20261010095900)
   ];
+  -- Callable by signed-in members (not visitors): each answers or acts only
+  -- for the caller, or requires an admin. Reviewed 17 Oct 2026 (A0).
+  member_reviewed text[] := array[
+    'become_shop()',                                   -- turns the caller's own profile into a shop
+    'bind_checkout_analytics(uuid[])',                 -- tags the caller's own orders with consented analytics ids
+    'bump_listing_view(uuid)',                         -- counts a view by the caller, rate-limited, never the seller's own
+    'claim_listing_creation(uuid,text)',               -- the caller's own create-listing request
+    'complete_listing_creation(uuid,text,uuid)',       -- same request, finished
+    'discard_listing_creation(uuid,text)',             -- same request, abandoned
+    'execute_admin_command(text,uuid,text,jsonb)',     -- refuses anyone but an admin
+    'listing_edit_status(uuid,uuid)',                  -- the caller's own edit request on their own listing
+    'listing_question_parent_matches(uuid,uuid)',      -- boolean: a reply's parent is on a listing the caller can see
+    'my_car_vin(uuid)',                                -- the caller's own car's VIN (20261004160000)
+    'my_default_offer_floor()',                        -- the caller's own default minimum
+    'my_listing_offer_floor(uuid)',                    -- the caller's own listing's minimum (20261017120000)
+    'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
+    'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
+    'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
+    'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner
+    'request_account_deletion()',                      -- the caller's own account
+    'request_account_export()',                        -- the caller's own export
+    'seller_payout_dates(uuid[])',                     -- payout dates of the caller's own sales only
+    'set_analytics_consent(boolean)',                  -- the caller's own consent
+    'sync_activity_post_listings(uuid,uuid[])'         -- parts tagged on the caller's own post
+  ];
   exposed text[];
   internal text;
 begin
@@ -38,6 +64,18 @@ begin
     and not (p.oid::regprocedure::text = any(reviewed));
   if cardinality(exposed) > 0 then
     raise exception 'Unreviewed SECURITY DEFINER functions executable by anon: %', exposed;
+  end if;
+
+  select coalesce(array_agg(p.oid::regprocedure::text order by 1), '{}') into exposed
+  from pg_proc p
+  where p.pronamespace = 'public'::regnamespace
+    and p.prosecdef
+    and p.prorettype <> 'trigger'::regtype
+    and has_function_privilege('authenticated', p.oid, 'execute')
+    and not has_function_privilege('anon', p.oid, 'execute')
+    and not (p.oid::regprocedure::text = any(member_reviewed));
+  if cardinality(exposed) > 0 then
+    raise exception 'Unreviewed SECURITY DEFINER functions executable by signed-in members: %', exposed;
   end if;
 
   -- The internal ones stay closed to every client role.

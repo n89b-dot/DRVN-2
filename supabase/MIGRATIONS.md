@@ -1,10 +1,104 @@
 # Applying migrations
 
+## October 17 — row security checks once per query (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261017140000_rls_initplan.sql` | shared dev project (2026-10-17, twice) |
+
+A0's advisor follow-up for `auth_rls_initplan`. 88 of the 115 policies in `public` called
+`auth.uid()` bare, and 34 of them also called `public.is_admin()` bare, so both ran once per row
+checked. Each policy is restated with those calls wrapped in a scalar subquery
+(`(select auth.uid())`), which Postgres evaluates once per query as an InitPlan. The
+statements were generated from the policies' own definitions and checked by reversing the
+wrap. After applying, every policy matches its original except that Postgres flattens
+`(a OR b) OR c` to `a OR b OR c`, which means the same.
+
+Checked on a fresh database with every migration: the file applies twice cleanly; all guards
+pass, including the ones that test who can read and write what; the new
+`rls_initplan_guard.sql` fails on a planted bare policy. The orders read as a signed-in member
+now filters on three InitPlans instead of calling `auth.uid()` and `is_admin()` per row.
+
+**Shared dev, 2026-10-17**, with Neil's go-ahead, applied twice with
+`node scripts/apply-migration.mjs`.
+- Before: the public schema was saved to `~/drvn-db-backups/pre-20261017-rls-initplan.sql`. All 115 policy expressions matched a fresh database at the previous migration, so none had been changed by hand. This check matters because `ALTER POLICY` replaces the expression wholesale.
+- After: all 115 match a fresh database with this migration, and `rls_initplan_guard.sql` passes on dev.
+- For 8 real members, in a rolled-back transaction, the orders, messages and offers that row security showed each one matched the rule written out by hand: 19, 34 and 15 rows, none missing and none extra.
+
+Safe before or after any app change.
+
+## October 17 — the offer minimum goes private, step two (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261017130000_listing_private_terms_switch.sql` | shared dev project (2026-10-17, twice) |
+| `20261017130100_account_export_contract_v6.sql` | shared dev project (2026-10-17, twice) |
+
+The **switch** step. Apply both together, in this order, **after** `20261017120000`.
+The app change that goes with them can ship before or after: an older app build
+keeps working, because every function it calls still accepts the minimum under
+its old name and the trigger stores it privately.
+
+`130000`:
+- Drops the expand step's mirror trigger, catches up and then empties `listings.offer_floor_cents`, and adds `listings_offer_floor_private` (the column must stay null).
+- Adds a BEFORE trigger (`listings_zz1_absorb_offer_floor`) that moves any write to that column into `listing_private_terms`. It fires only when the column is named in the write, so it never clears a minimum on a status or price change.
+- Adds bound checks from both sides: a price cut below the minimum is refused, and so is a service-role write above the price.
+- Adds `offers_guard_private_floor`, a SECURITY DEFINER trigger that refuses below-minimum offers (23514) without naming the amount.
+- Restates `guard_offer_insert` and `create_offer_with_message` without their floor reads, and restates `save_listing_creation` so its replay check reads the minimum through `my_listing_offer_floor`.
+- Makes the FK from the private table to `listings` deferred, so the trigger can write ahead of a new listing row.
+
+Emptying the column touches `updated_at` on listings that had a minimum (none on shared dev today). A seller with that listing's edit form already open gets the usual "changed since you opened it" and reloads.
+
+`130100` bumps the export contract to `2026-10-17.v6`. Pending, processing and failed exports under v5 are expired; the member asks again.
+
+Checked on a fresh database with every migration: all guards pass, both files apply twice cleanly, generated types match, and `npm test`, typecheck, lint and `next build` pass.
+
+**Shared dev, 2026-10-17**, with Neil's go-ahead, each file applied twice with
+`node scripts/apply-migration.mjs`.
+- Before: the public schema was saved to `~/drvn-db-backups/pre-20261017-listing-private-terms-switch.sql`, with the private-terms and export-request rows in `pre-20261017-switch-data.sql`. The four restated functions matched their expected prior definitions (no drift).
+- After: 24 listings and 24 private rows, none out of step, and no public minimum.
+  - The four triggers are present; the expand step's mirror is gone. The FK is deferred and `listings_offer_floor_private` is in place. The four functions carry their new bodies, and exports stamp v6.
+  - In a rolled-back transaction, a write to the old column landed privately and left the column null, and a price cut below the minimum was refused (23514).
+  - A signed-out API read of `listing_private_terms` gets 42501; `listings` returns `offer_floor_cents` as null.
+- Until the app change merges, main's offer form shows its generic "couldn't confirm" error for an offer below a minimum, because the database now refuses it with 23514. Nothing leaks, and no listing on shared dev has a minimum.
+
+## October 17 — the offer minimum goes private, step one (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261017120000_listing_private_terms.sql` | shared dev project (2026-10-17, twice) |
+
+A0's first rollout, the **expand** step of three (plan: "DRVN AI-native:
+review and implementation plan", A0). It adds `listing_private_terms` (one
+row per listing; no client grants, row security on with no policies), a
+trigger on `listings` that keeps its `offer_floor_cents` equal to
+`listings.offer_floor_cents` on every insert and edit, a backfill, and
+`my_listing_offer_floor(listing)`, which answers only the listing's seller.
+Nothing reads the new table yet, so it is safe before any app change and
+changes no behaviour. The backfill takes a lock on `listing_private_terms`
+only; `listings` is read, not rewritten.
+
+Checked on a fresh database with every migration: `offer_floor_privacy_guard.sql`
+fails before this file and passes after; every other guard still passes; the
+file applies twice cleanly; generated types match.
+
+**Shared dev, 2026-10-17**, with Neil's go-ahead, applied twice with
+`node scripts/apply-migration.mjs`. Before: public schema saved to
+`~/drvn-db-backups/pre-20261017-listing-private-terms.sql`. After: 24 listings,
+24 private rows, none out of step; row security on, no anon/authenticated
+table privilege, the owner function executable by authenticated only, the
+mirror trigger present; the REST API refuses a signed-out read of the table
+and the function (42501).
+
+Next: **switch** (offer checks, sell form, edit page and export read the new
+table) and, once that app is live everywhere, **contract** (drop
+`listings.offer_floor_cents` and the mirror trigger). Until the contract step,
+the old column is still readable through the API, as it is today.
 ## October 17 — a search through the browse function
 
 | File | Applied to |
 |---|---|
-| `20261017150000_browse_rows_search_once.sql` | not applied to any shared project |
+| `20261017145500_browse_rows_search_once.sql` | not applied to any shared project |
 
 Restates `marketplace_browse_rows` as a UNION ALL of the browse query (no
 words) and `marketplace_search_browse_rows` (words), so a search called

@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 // marketplace_browse_rows searched once per part for sale when PostgREST
 // passed the words (as a column of a joined row, not a literal): at 1,100
 // matching parts the signed-out 3-second limit cancelled it. Migration
-// 20261017150000 answers a search from the ids the words found, once; this
+// 20261017145500 answers a search from the ids the words found, once; this
 // asks the old function through the API the way the app used to
 // (supabase/tests/browse_rows_search_once_guard.sql counts the runs).
 it("searches through marketplace_browse_rows over the API within the signed-out time limit", async () => {

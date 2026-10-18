@@ -1,5 +1,5 @@
 -- marketplace_browse_rows searches once per call through PostgREST
--- (migration 20261017150000). Transactional; disposable local database only.
+-- (migration 20261017145500). Transactional; disposable local database only.
 --
 -- psql passes a function's arguments as literals; PostgREST passes them as
 -- the columns of a joined row (json_to_record(...) as _(p_query text),

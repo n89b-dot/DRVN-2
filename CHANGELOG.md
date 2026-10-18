@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-10-17 — Row security checks "who is this?" once per query
+
+Postgres ran `auth.uid()` once per row in 88 of the 115 row-security policies, and `is_admin()`, a table read, in 34 of them. Migration `20261017140000` wraps each call in `(select …)`, so it runs once per query. Who can read or write what is unchanged: every policy is its original apart from the wrapping, and all SQL guards pass. The new `rls_initplan_guard.sql` keeps new policies in this form. It clears the advisor's `auth_rls_initplan` warnings and keeps commerce reads cheap as rows grow.
+
+## 2026-10-17 — The offer minimum is private
+
+A seller's lowest acceptable offer was stored on the listing, which anyone could read through the database API. It now lives in `listing_private_terms`, which no member or visitor can read; the seller reads their own through `my_listing_offer_floor`. This is A0's first rollout in the agent plan, in three steps.
+
+- **Step one, expand** (`20261017120000`, on shared dev): the private table, a copy of every minimum, and a trigger that kept the copy in step. Nothing read it yet.
+- **Step two, switch** (`20261017130000`, `20261017130100`):
+    - The old column is emptied and must stay empty. Any write that still sets it (the sell and edit functions, an older app build, a script) is moved into the private table by a trigger.
+    - "Minimum no higher than the price" is checked from both sides: a minimum set above the price is refused, and so is a price cut below the minimum.
+    - Offers below the minimum are refused by a trigger that reads the private table. The message no longer names the amount: "That's lower than the seller will accept."
+    - The edit page reads the minimum through the seller's own function and refuses to open if that read fails, so a save can't silently clear it.
+    - The export contract is now `2026-10-17.v6`, with a `listing_private_terms` section. Deleting an account clears the member's minimums.
+- **Visible change:** buyers no longer see "Offers accepted from $X" on a listing or in the offer box. The PRD (O-3) makes showing it the seller's choice, off by default; that toggle comes with negotiation v2.
+- **Step three, contract** (later, once the switched app is live everywhere): drop `listings.offer_floor_cents` and the step-two trigger, and have the sell and edit functions write the private table directly.
+- Guard `offer_floor_privacy_guard.sql` (28 checks); `security_guard.sql` 4b now expects the new refusal.
+- **Search-path guard** (`function_search_path_guard.sql`, the advisor follow-up): every SECURITY DEFINER function must pin its `search_path`, and all 194 already do. The advisor's 10 flagged functions stay unpinned on purpose. They are caller's-rights SQL functions the planner inlines, and a `SET` clause would stop the inlining the 2M-scale search plans rely on. They are now a reviewed list, and any new unpinned function fails the guard.
+- **Signed-in definer functions reviewed.** `definer_exposure_guard.sql` already listed the SECURITY DEFINER functions a visitor can call. It now also lists the 21 that only signed-in members can call, each with the reason it is safe: every one answers or acts only for the caller, or refuses anyone but an admin. A new one fails the guard until it is reviewed.
+
+## 2026-10-17 — PRD: the DRVN agent
+
+The September PRD is amended for the agent direction agreed on 14–17 October. No code changed. The implementation plan (with the reasoning and three outside reviews) is the "DRVN AI-native: review and implementation plan" Claude Doc linked at the top of the PRD.
+
+- **New §4.9 Intelligence.** One agent per member. Its first job is negotiating offers inside the member's limits: seller minimum, target and style; buyer ceiling. Prices come from rules, never the AI model. Agents never message other people. No auto-accept or automatic payment at launch. Chat comes next, then Garage jobs, one at a time.
+- **Negotiation v2 for everyone.**
+    - Buyers can counter back: 3 offers per listing, eBay's model.
+    - A below-minimum offer uses one of the 3, so the minimum can't be found by trial and error.
+    - The minimum becomes private.
+    - Every move is one atomic step, and each round keeps a snapshot of its terms.
+    - A seller can cancel only before checkout begins.
+- **Principle 5:** software acts only inside limits you set. **Vocabulary** gains "Agent".
+- **Mobile bottom bar** (N-4 reversed): Explore · Marketplace · Home · Garage · Agent. It's removed from the non-goals and the parked table.
+- **M-8 narrowed.** Offers are no longer "unchanged".
+- **New parked rows:** auto-accept, watches, Build Mine, the full agent dashboard, MCP, and admin/analytics agents.
+- **Data changes and measures** gain the agent tables and the headline agent measure (completed sales, not offers).
+- **In the repo:** the plan is copied to `docs/plans/2026-10-agent-and-graph-plan.md` (rev 88, diagrams redrawn as Mermaid). `docs/decisions/agent-foundations.md` fixes the shapes every phase builds to: principal, scope and permissions; capabilities; the lock order (with today's order audited); the floor and snapshot rules; and the constraints the private-minimum rollout leaves. `CLAUDE.md` points to both.
+
 ## 2026-10-04 — Performance: a shared cache for signed-out visitors, and search that works at volume
 
 Two pieces of the performance work that needed no hosting: caching public data, and checking query plans against realistic volume.

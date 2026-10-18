@@ -12,7 +12,7 @@ limit on every CI run. The saved-search worker still searched this way.
 Two changes. The app sends every text search to the search entry point:
 `listingRowsQuery` (the pages' offset fallback and the saved-search worker)
 uses `marketplace_search_browse_rows` whenever there are words. And migration
-`20261017150000_browse_rows_search_once.sql` restates the browse function
+`20261017145500_browse_rows_search_once.sql` restates the browse function
 as a UNION ALL of the browse query (no words) and
 `marketplace_search_browse_rows` (words), each branch gated on `p_query`
 alone, so through PostgREST the search runs once and a browse never runs it.

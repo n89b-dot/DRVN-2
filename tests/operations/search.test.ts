@@ -10,6 +10,11 @@ import { indexCarNow } from "@/lib/explore/search/indexing";
 import { indexListingNow } from "@/lib/marketplace/search/indexing";
 import { typesenseRequest, typesenseUpsert } from "@/lib/search/typesense";
 
+// Through the search entry the marketplace's searched pages use
+// (marketplace_search_browse_rows, 20261010100100): same rows as
+// marketplace_browse_rows, which instead checks every active part against the
+// words and, since typo-tolerant search (20261011130000), runs past the
+// signed-out 3-second limit when PostgREST passes the words as a parameter.
 it("finds matching rows beyond the API cap and counts before pagination", async () => {
   const user = await admin.auth.admin.createUser({ email: `ops-${crypto.randomUUID()}@example.test`, email_confirm: true });
   if (user.error) throw user.error;
@@ -18,14 +23,14 @@ it("finds matching rows beyond the API cap and counts before pagination", async 
     for (let offset = 0; offset < 1100; offset += 100) {
       await admin.from("listings").insert(Array.from({ length: 100 }, (_, i) => ({ seller_id: uid, title: `OpsScaleRotor ${offset + i}`, category: "engine", price_cents: offset + i + 100, status: "active", currency: "USD" }))).throwOnError();
     }
-    const first = await anon.rpc("marketplace_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents,created_at").eq("seller_id", uid).gte("price_cents", 1180).order("price_cents").order("id").range(0, 9).throwOnError();
+    const first = await anon.rpc("marketplace_search_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents,created_at").eq("seller_id", uid).gte("price_cents", 1180).order("price_cents").order("id").range(0, 9).throwOnError();
     expect(first.count).toBe(20); expect(first.data).toHaveLength(10); expect(first.data[0].price_cents).toBe(1180);
-    const second = await anon.rpc("marketplace_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents").eq("seller_id", uid).gte("price_cents", 1180).order("price_cents").order("id").range(10, 19).throwOnError();
+    const second = await anon.rpc("marketplace_search_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents").eq("seller_id", uid).gte("price_cents", 1180).order("price_cents").order("id").range(10, 19).throwOnError();
     expect(new Set([...first.data, ...second.data].map(x => x.id)).size).toBe(20);
     const latencies: number[] = [];
     await mapBounded(Array.from({ length: 20 }, (_, i) => i), 4, async () => {
       const started = performance.now();
-      await anon.rpc("marketplace_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents").gte("price_cents", 1180).order("price_cents").range(0, 19).throwOnError();
+      await anon.rpc("marketplace_search_browse_rows", { p_query: "OpsScaleRotor" }, { count: "exact" }).select("id,price_cents").gte("price_cents", 1180).order("price_cents").range(0, 19).throwOnError();
       latencies.push(performance.now() - started);
     });
     latencies.sort((a, b) => a - b);

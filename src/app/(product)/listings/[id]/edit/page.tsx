@@ -48,7 +48,7 @@ export default async function EditListingPage({
   }
   if (!listing || listing.seller_id !== user.id) notFound();
 
-  const [carsResult, imagesResult, fitmentsResult, altNumbersResult, makes] =
+  const [carsResult, imagesResult, fitmentsResult, altNumbersResult, floorResult, makes] =
     await Promise.all([
       supabase
         .from("cars")
@@ -70,6 +70,9 @@ export default async function EditListingPage({
         .select("number")
         .eq("listing_id", id)
         .order("created_at"),
+      // The minimum is private (20261017130000): only the seller's own
+      // function returns it, never the listings row.
+      supabase.rpc("my_listing_offer_floor", { p_listing: id }),
       getVehicleMakes(createAdminClient()),
     ]);
 
@@ -79,6 +82,8 @@ export default async function EditListingPage({
   const images = requiredRead(imagesResult, "this listing's photos");
   const fitments = requiredRead(fitmentsResult, "this listing's fitment");
   const altNumbers = requiredRead(altNumbersResult, "this listing's part numbers");
+  // The form saves the minimum it was given, so an unread one would be cleared.
+  const offerFloorCents = requiredRead(floorResult, "this listing's offer minimum") ?? null;
 
   const locked = ["sold", "reserved"].includes(listing.status);
   const statusLabel: Record<string, string> = {
@@ -180,7 +185,7 @@ export default async function EditListingPage({
             length_in: listing.length_in,
             width_in: listing.width_in,
             height_in: listing.height_in,
-            offer_floor_cents: listing.offer_floor_cents,
+            offer_floor_cents: offerFloorCents,
             allows_collection: listing.allows_collection ?? false,
             location: listing.location,
             compatibility_notes: listing.compatibility_notes,

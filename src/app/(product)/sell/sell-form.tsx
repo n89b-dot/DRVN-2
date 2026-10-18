@@ -1082,8 +1082,8 @@ export function SellForm({
               hint={
                 issueFor("offers") ??
                 (defaultOfferFloorPct && !listing
-                  ? `Offers below this are declined automatically, and buyers see "offers from" this amount. Prefilled at your ${defaultOfferFloorPct}% default.`
-                  : 'Offers below this are declined automatically, and buyers see "offers from" this amount.')
+                  ? `Offers below this are declined automatically, and buyers never see this amount. Prefilled at your ${defaultOfferFloorPct}% default.`
+                  : 'Offers below this are declined automatically, and buyers never see this amount.')
               }
             />
           </div>

@@ -240,7 +240,7 @@ function parsePage(value: string | undefined): number {
  * A text search goes to the search entry point (migration 20261010100100),
  * which starts from the parts the words matched and applies the same rules.
  * Through PostgREST, `marketplace_browse_rows` ran the search once per part
- * for sale until migration 20261017150000 — a timeout at a thousand parts —
+ * for sale until migration 20261017145500 — a timeout at a thousand parts —
  * so nothing may depend on that migration being applied. `searchEntry:
  * false` is only for a database without the entry point (PGRST202). */
 export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: ListingFilters, workerViewer?: string, options: { searchEntry?: boolean; count?: boolean } = {}) {

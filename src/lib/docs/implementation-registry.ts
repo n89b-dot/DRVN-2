@@ -1271,6 +1271,63 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "Decision recorded (docs/site/operations.md): the pg_cron + worker-route + durable-queue-table pattern absorbs the new workloads (search sync fire-and-forget + scripted reindex; saved-search matching as a worker pass). PGMQ not adopted — no workload needs SQS semantics; Redis/Trigger.dev/Inngest not introduced; money workers untouched.",
   },
 
+  {
+    id: "offer-floor-private",
+    name: "A seller's offer minimum is private",
+    group: "foundations",
+    status: "in-progress",
+    brief: "PRD O-3 · agent plan A0",
+    existsToday:
+      "The lowest offer a seller will take lived on `listings.offer_floor_cents`, which anon and authenticated could read table-wide through the API, and the listing page showed it as \"Offers accepted from\".",
+    changing:
+      "The minimum moves to `listing_private_terms`, readable only by the seller (`my_listing_offer_floor`) and the offer checks, in three releases: expand (copy, kept in step), switch (every reader moved, the old column held empty), contract (drop the column once the switched app is live everywhere).",
+    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
+    benefit: "A seller's minimum can't be read by anyone else, so it can't be used against them, by a buyer or by an agent.",
+    approach:
+      "Owner-only table, no client grants; a BEFORE trigger moves any write to the old column into it; the price bound is checked from both sides; a SECURITY DEFINER trigger on offers refuses below-minimum offers without naming the amount.",
+    decisions: [
+      "Showing the minimum on the listing becomes a seller toggle, off by default, with negotiation v2; until then no minimum is shown.",
+    ],
+    validation:
+      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). offer_floor_privacy_guard.sql (28 checks) fails before the expand migration and passes after; every SQL guard, npm test, typecheck, lint and next build pass. The contract step is not done.",
+    docs: ["docs/decisions/agent-foundations.md", "supabase/MIGRATIONS.md"],
+  },
+  {
+    id: "negotiation-v2",
+    name: "Negotiation v2: counter-backs for every member",
+    group: "selling",
+    status: "planned",
+    brief: "PRD O-1, O-2, O-4, O-5 · agent plan A1",
+    existsToday:
+      "An offer gets one answer: the seller accepts, declines or counters once. A below-minimum offer is refused before anything is recorded, so trying again costs nothing.",
+    changing:
+      "Up to 3 buyer offers per listing (counter-backs included), strict turns, a 72-hour turn, a below-minimum offer recorded as a declined turn, each round's terms kept as a snapshot, one atomic `offer_move` for every move, and seller cancellation only before checkout begins.",
+    surfaces: ["src/features/commerce/offer-actions.ts", "OfferCard", "SellForm", "supabase/migrations/"],
+    benefit: "Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.",
+    approach: "Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.",
+    dependsOn: ["offer-floor-private"],
+    validation: "Not started.",
+    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
+  },
+  {
+    id: "member-agent",
+    name: "The DRVN agent",
+    group: "future-architecture",
+    status: "planned",
+    brief: "PRD §4.9 (AG-1…AG-12) · agent plan A2–A3",
+    existsToday:
+      "No agent. AI is used only in the listing importer's last-resort extraction.",
+    changing:
+      "One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.",
+    surfaces: ["src/lib/capabilities/", "src/lib/ai/", "/agent", "BottomNav", "SidePanel"],
+    benefit: "The tedious work between \"I want this\" and \"done\" gets done for you, inside limits you set, and every task still works without the agent.",
+    approach:
+      "Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.",
+    dependsOn: ["negotiation-v2"],
+    validation: "Not started.",
+    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
+  },
+
   // ── 14 · Deferred / not pursuing ────────────────────────────────────────
   {
     id: "deferred-quick-capture",
@@ -1324,20 +1381,6 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "—",
     approach: "—",
     validation: "Intentionally excluded by the brief.",
-  },
-  {
-    id: "deferred-ai",
-    name: "AI authoring/enrichment features",
-    group: "deferred",
-    status: "deferred",
-    brief: "AJ",
-    existsToday: "—",
-    changing:
-      "No automatic mod extraction, AI rewriting, image classification, cover selection or build advice in this workstream; the architecture merely stays compatible.",
-    surfaces: [],
-    benefit: "—",
-    approach: "—",
-    validation: "Intentionally deferred by the brief.",
   },
   {
     id: "deferred-build-completeness",
