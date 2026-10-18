@@ -50,18 +50,23 @@ export async function decideAgentApproval(_prev: AgentState, formData: FormData)
   const choice = String(formData.get("choice") ?? "");
   if (!approvalId || (choice !== "accept" && choice !== "dismiss")) return { error: "Missing choice." };
 
-  const { data, error } = await supabase.rpc("agent_approval_decide", { p_approval: approvalId, p_choice: choice });
+  const { error } = await supabase.rpc("agent_approval_decide", { p_approval: approvalId, p_choice: choice });
   if (error) {
     reportError("[agent] approval decision failed", { approvalId, choice, code: error.code });
     return { error: agentError(error.code, "Couldn't record that. Try again.") };
   }
   revalidatePath("/agent");
-  const result = (data ?? {}) as { order_id?: string | null; offer_id?: string };
-  if (choice === "accept" && result.order_id) {
-    revalidatePath(`/offers/${result.offer_id ?? ""}`);
+  if (choice === "accept") {
+    // The row leaves Needs you once it's decided, so the answer is the offer
+    // itself: accepted, the order, and Cancel before checkout.
+    const { data: approval } = await supabase.from("agent_approvals").select("offer_id").eq("id", approvalId).maybeSingle();
+    if (approval?.offer_id) {
+      revalidatePath(`/offers/${approval.offer_id}`);
+      redirect(`/offers/${approval.offer_id}`);
+    }
     return { ok: "Accepted. The buyer has 24 hours to pay." };
   }
-  return { ok: choice === "accept" ? "Accepted." : "Dismissed. Your agent keeps going within your limits." };
+  return { ok: "Dismissed. Your agent keeps going within your limits." };
 }
 
 /**
