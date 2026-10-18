@@ -51,6 +51,7 @@ declare
     'offer_move(uuid,text,integer,text,integer)',      -- a move on an offer the caller is party to, under the v2 rules (20261017160000)
     'offer_open(uuid,uuid,integer,text)',              -- the caller's own opening offer, under the v2 rules (20261017160000)
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
+    'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner

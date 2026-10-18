@@ -1,0 +1,4 @@
+hourly run: {"ms": 59006, "full": false, "seen": 1000, "merges": 0, "started_at": "2026-10-18T15:41:30.495484+00:00", "numbers_linked": 18708, "reviews_opened": 0, "products_created": 0, "reviews_obsolete": 0}
+full run:   {"ms": 61016, "full": true, "seen": 2176126, "merges": 0, "started_at": "2026-10-18T15:42:30.562864+00:00", "numbers_linked": 0, "reviews_opened": 0, "products_created": 0, "reviews_obsolete": 0}
+coverage:   {"listings": {"eligible": 1900097, "with_number": 1900097, "with_product": 1900097, "with_brand_and_number": 1900097}, "products": {"active": 1880135, "merged": 0}, "mod_items": {"eligible": 276029, "with_number": 276029, "with_product": 276029, "with_brand_and_number": 276029}, "sold_lines": {"with_number": 481030, "with_product": 476025, "with_brand_and_number": 481030}, "open_reviews": {"listing_alternate": 1058, "unscoped_same_product": 1765}, "products_on_listings_and_builds": 256109}
+product_coverage Time: 10.304 ms
