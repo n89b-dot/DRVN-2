@@ -47,7 +47,7 @@ describe("account export contract", () => {
     for (const field of [
       "status", "removed_at", "source_order_item_id",
       "product_url", "image_url", "source_domain",
-      "ref_price_cents", "ref_price_currency",
+      "ref_price_cents", "ref_price_currency", "origin",
     ]) {
       expect(fields, `mod_items export is missing ${field}`).toContain(field);
     }

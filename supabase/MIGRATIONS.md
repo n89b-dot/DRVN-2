@@ -104,6 +104,19 @@ Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; e
 - **Before:** `cars` had exactly main's columns and `explore_build_rows` was byte-identical to 20261011120000's. Saved to `~/drvn-db-backups/pre-20261020100000-generations.sql` (cars, catalog schema and the old function) and `pre-20261020100000-cars-data.sql`.
 - **After:** 194 generations; 11 of 16 catalogued cars resolved (5 are changeover years or unseeded models). `pg_get_functiondef` of `explore_build_rows`, `resolve_vehicle_generation`, `car_generation_before_write` and `vehicle_generations_rescan` matches a fresh database exactly; all four triggers present. Through the API as a visitor: Explore build search returns cars with `generation_id`/`generation_source` and a null VIN; `vehicle_generations` reads; a write is refused (401). Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
 
+## October 19 — stock parts on the build sheet, export v9 (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261019100000_mod_items_stock_origin.sql` | not yet |
+| `20261019100100_account_export_contract_v9.sql` | not yet |
+
+Apply in order, after `20261018100200`.
+- `100000` adds `mod_items.origin` (`aftermarket` by default, or `stock`) for "What came off". `save_mod_items` is the `20260919203000` body with origin added to its checks, insert and update. An editor that omits origin leaves a line's stored value alone.
+- `100100` bumps the export contract to `2026-10-19.v9`, adding origin to the mod_items section.
+
+Checked on a fresh database: every file applies, every SQL guard passes (including the new `mod_stock_origin_guard.sql`), and the generated types match.
+
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 
 | File | Applied to |

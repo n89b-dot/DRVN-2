@@ -149,7 +149,7 @@ export default async function GaragePage({
             overview: <GarageCarOverview sheet={focused} mods={focusedMods ?? []} />,
             mods: (
               <div className="mt-6">
-                <ModsEditor carId={focused.id} initialMods={focusedMods ?? []} />
+                <ModsEditor carId={focused.id} carMake={focused.make} initialMods={focusedMods ?? []} />
               </div>
             ),
             parts: <GarageCarParts sheet={focused} />,

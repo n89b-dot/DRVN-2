@@ -5,8 +5,8 @@ import { unstable_rethrow } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import { ActionFooter, Button, TextField, TileHead } from "@/components/ui";
-import type { ModItem, ModStatus } from "@/lib/database.types";
+import { ActionFooter, Button, Checkbox, TextField, TileHead } from "@/components/ui";
+import type { ModItem, ModOrigin, ModStatus } from "@/lib/database.types";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 import {
   isLowConfidence,
@@ -15,6 +15,7 @@ import {
   parsePasteText,
   type ModCategory,
 } from "@/lib/mods/parse";
+import { modTypeByKey, modTypeFor, PICK_LIST, stockLineLabel, type ModType } from "@/lib/mods/stock-parts";
 
 import { unlinkModListing } from "@/app/(product)/sell/actions";
 
@@ -73,6 +74,8 @@ type Row = {
   /** Came from a DRVN purchase (C-1). Like a listed line, it can be taken
    *  off the car but not deleted — the save keeps it either way. */
   bought: boolean;
+  /** aftermarket, or stock: a factory part that came off when a mod went on. */
+  origin: ModOrigin;
   /** Brand and product as loaded, so typing over a listed part can be told
    *  apart from fixing a typo in it. */
   loadedLabel: string;
@@ -99,6 +102,7 @@ function blankRow(group_label = "Other"): Row {
     ref_price_cents: null,
     ref_price_currency: null,
     bought: false,
+    origin: "aftermarket",
     loadedLabel: "",
   };
 }
@@ -168,15 +172,19 @@ function snapshot(rows: Row[]): string {
       r.category,
       r.status,
       r.product_url,
+      r.origin,
     ])
   );
 }
 
 export function ModsEditor({
   carId,
+  carMake,
   initialMods,
 }: {
   carId: string;
+  /** The brand a stock part is listed under. */
+  carMake: string | null;
   /** `linked_listing` is the linked listing's status, embedded by the caller. */
   initialMods: (ModItem & { linked_listing?: { status: string } | null })[];
 }) {
@@ -196,6 +204,7 @@ export function ModsEditor({
       status: m.status,
       removed_at: m.removed_at,
       bought: Boolean(m.source_order_item_id),
+      origin: m.origin ?? "aftermarket",
       loadedLabel: `${m.brand ?? ""} ${m.product ?? ""}`.trim().toLowerCase(),
       product_url: m.product_url,
       image_url: m.image_url,
@@ -254,6 +263,42 @@ export function ModsEditor({
   useEffect(() => {
     if (replaced) document.getElementById(`${replaced.newKey}-brand`)?.focus();
   }, [replaced]);
+  // "What came off": asked once per new mod, inline under its line. A line
+  // leaves the question behind when it's answered, dismissed or saved (a
+  // saved line has an id, and only unsaved lines ask). Lines made by Replace
+  // never ask — what came off there is the part they replaced.
+  const [stockClosed, setStockClosed] = useState<Set<string>>(() => new Set());
+  const [replacementKeys, setReplacementKeys] = useState<Set<string>>(() => new Set());
+  const [stockPick, setStockPick] = useState<Record<string, string>>({});
+  const closeStock = (key: string) => setStockClosed((k) => new Set(k).add(key));
+  const stockLabels = new Set(
+    rows.filter((r) => r.origin === "stock").map((r) => r.product.trim().toLowerCase())
+  );
+  /** The stock parts a new line might have replaced, minus ones already on the sheet. */
+  function stockOfferFor(row: Row): { type: ModType | null; parts: string[] } | null {
+    if (row.id || row.status !== "installed" || row.origin !== "aftermarket") return null;
+    if (stockClosed.has(row.key) || replacementKeys.has(row.key)) return null;
+    const name = `${row.brand} ${row.product}`.trim() || row.raw_text.trim();
+    if (!name) return null;
+    const type = (stockPick[row.key] ? modTypeByKey(stockPick[row.key]) : null) ?? modTypeFor(name);
+    if (!type) return { type: null, parts: [] };
+    const parts = type.stock.map(stockLineLabel).filter((l) => !stockLabels.has(l.toLowerCase()));
+    return parts.length ? { type, parts } : null;
+  }
+  /** Ticked stock parts become removed lines, each with List it. */
+  function addStockParts(row: Row, type: ModType, labels: string[]) {
+    const lines = labels.map((label) => ({
+      ...blankRow(row.group_label),
+      brand: carMake ?? "",
+      product: label,
+      category: type.category,
+      raw_text: label,
+      status: "removed" as ModStatus,
+      origin: "stock" as ModOrigin,
+    }));
+    setRows((r) => [...r, ...lines]);
+    closeStock(row.key);
+  }
 
   const installed = rows.filter((r) => r.status === "installed");
   const cameOff = rows.filter((r) => r.status === "removed");
@@ -288,6 +333,7 @@ export function ModsEditor({
     next[index] = { ...old, status: "removed" as ModStatus };
     next.splice(index, 0, fresh);
     setRows(next);
+    setReplacementKeys((k) => new Set(k).add(fresh.key));
     setAsking(null);
     setReplaced({ newKey: fresh.key, oldKey: old.key, label: rowLabel(old) });
   }
@@ -421,6 +467,7 @@ export function ModsEditor({
       source_domain: r.source_domain,
       ref_price_cents: r.ref_price_cents,
       ref_price_currency: r.ref_price_currency,
+      origin: r.origin,
     }));
     // Only the call runs in the transition: `saving` and the cleared status
     // above stay urgent, so the button is disabled before a second click.
@@ -855,6 +902,22 @@ export function ModsEditor({
                   </span>
                 </span>
               )}
+              {(() => {
+                const offer = stockOfferFor(row);
+                if (!offer) return null;
+                return (
+                  <StockOffer
+                    key={offer.type?.key ?? "pick"}
+                    rowKey={row.key}
+                    label={rowLabel(row)}
+                    type={offer.type}
+                    parts={offer.parts}
+                    onPick={(key) => setStockPick((p) => ({ ...p, [row.key]: key }))}
+                    onAdd={(labels) => offer.type && addStockParts(row, offer.type, labels)}
+                    onClose={() => closeStock(row.key)}
+                  />
+                );
+              })()}
             </div>
             );
           })}
@@ -884,6 +947,7 @@ export function ModsEditor({
                   <span className="text-body font-medium">{rowLabel(row)}</span>
                 </span>
                 <span className="microlabel shrink-0">
+                  {row.origin === "stock" && "Stock · "}
                   {row.removed_at
                     ? `Off since ${new Date(row.removed_at).toLocaleDateString()}`
                     : "Coming off when you save"}
@@ -986,5 +1050,79 @@ export function ModsEditor({
       )}
       </fieldset>
     </section>
+  );
+}
+
+/**
+ * "What came off", asked under a new line: tick the stock parts it replaced,
+ * or say nothing did. When the name doesn't say what kind of part it is, a
+ * short pick list asks first. Nothing is added until the owner ticks.
+ */
+function StockOffer({
+  rowKey,
+  label,
+  type,
+  parts,
+  onPick,
+  onAdd,
+  onClose,
+}: {
+  rowKey: string;
+  label: string;
+  type: ModType | null;
+  parts: string[];
+  onPick: (typeKey: string) => void;
+  onAdd: (labels: string[]) => void;
+  onClose: () => void;
+}) {
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set());
+  return (
+    <div className="modrow__ask" role="group" aria-label={`Did stock parts come off for ${label}?`}>
+      {type ? (
+        <>
+          <span className="microlabel">Did stock parts come off?</span>
+          {parts.map((part, i) => (
+            <Checkbox
+              key={part}
+              id={`${rowKey}-stock-${i}`}
+              label={part}
+              checked={ticked.has(part)}
+              onChange={(e) =>
+                setTicked((t) => {
+                  const next = new Set(t);
+                  if (e.target.checked) next.add(part);
+                  else next.delete(part);
+                  return next;
+                })
+              }
+            />
+          ))}
+          <Button variant="ghost" onClick={() => onAdd(parts.filter((p) => ticked.has(p)))} disabled={!ticked.size}>
+            Add to Came off
+          </Button>
+        </>
+      ) : (
+        <>
+          <span className="microlabel">Did it replace stock parts? What is it?</span>
+          {PICK_LIST.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onPick(t.key)}
+              className="microlabel shrink-0 py-3 underline decoration-dotted transition hover:text-live"
+            >
+              {t.label}
+            </button>
+          ))}
+        </>
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        className="microlabel shrink-0 py-3 underline decoration-dotted transition hover:text-live"
+      >
+        Nothing came off
+      </button>
+    </div>
   );
 }
