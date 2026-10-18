@@ -45,7 +45,8 @@ test("admin runs the agent's controls, each change audited", async ({ page }) =>
     if (granted.error) throw granted.error;
     const report = await admin.from("reports").insert({ reporter_id: actorId, subject_type: "user", subject_id: memberId, reason: "other", detail: "e2e" }).select("id").single();
     if (report.error) throw report.error;
-    reportId = report.data.id;
+    const caseId: string = report.data.id;
+    reportId = caseId;
 
     await page.goto("/login");
     await page.getByLabel(/^email$/i).fill(actor.data.user.email!);
@@ -91,12 +92,12 @@ test("admin runs the agent's controls, each change audited", async ({ page }) =>
     await chat.getByLabel("Reason").fill(`e2e wrong case ${stamp}`);
     await chat.getByRole("button", { name: "Open the chat" }).click();
     await expect(chat.getByText("No such case for this member.")).toBeVisible();
-    await chat.getByLabel("Case id").fill(reportId);
+    await chat.getByLabel("Case id").fill(caseId);
     await chat.getByLabel("Reason").fill(`e2e report ${stamp}`);
     await chat.getByRole("button", { name: "Open the chat" }).click();
     await expect(chat.getByText(/Opened and audited/)).toBeVisible();
     const opened = await admin.from("admin_audit_log").select("action, subject_id, metadata").eq("actor_id", actorId).eq("action", "agent.chat_opened").single();
-    expect(opened.data).toMatchObject({ subject_id: memberId, metadata: { case_kind: "report", case_id: reportId } });
+    expect(opened.data).toMatchObject({ subject_id: memberId, metadata: { case_kind: "report", case_id: caseId } });
   } finally {
     await admin.from("agent_spend_limits").update({ per_member_daily_usd: 2, global_daily_usd: 50 }).eq("singleton", true);
     if (reportId) await admin.from("reports").delete().eq("id", reportId);
