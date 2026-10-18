@@ -1,0 +1,14 @@
+{
+  "about": "agent-data-rules.md §3: what is stored and what reaches the model. Each case is the member's own typed text.",
+  "cases": [
+    { "name": "visa with spaces", "input": "pay with 4242 4242 4242 4242 please", "storage": "pay with [card number removed] please", "model": "pay with [card number removed] please" },
+    { "name": "amex with dashes", "input": "card 3782-822463-10005 exp 04/29", "storage": "card [card number removed] exp 04/29", "model": "card [card number removed] exp 04/29" },
+    { "name": "card followed by its expiry", "input": "4242 4242 4242 4242 12/28 cvc 123", "storage": "[card number removed] 12/28 cvc 123", "model": "[card number removed] 12/28 cvc 123" },
+    { "name": "dashed card followed by digits", "input": "4242-4242-4242-4242 1234", "storage": "[card number removed] 1234", "model": "[card number removed] 1234" },
+    { "name": "not a card: fails Luhn", "input": "order 4242 4242 4242 4241 shipped", "storage": "order 4242 4242 4242 4241 shipped", "model": "order 4242 4242 4242 4241 shipped" },
+    { "name": "not a card: a part number", "input": "OEM 06K-145-722-T fits", "storage": "OEM 06K-145-722-T fits", "model": "OEM 06K-145-722-T fits" },
+    { "name": "VIN kept in storage, never sent", "input": "my car is WVWZZZAUZKW123456", "storage": "my car is WVWZZZAUZKW123456", "model": "my car is [VIN removed]" },
+    { "name": "email and phone", "input": "reach me at kaito@drvn.test or +1 415-555-0132", "storage": "reach me at kaito@drvn.test or +1 415-555-0132", "model": "reach me at [email] or [phone]" },
+    { "name": "prices are not phones", "input": "would you take 450 for it, or 1,200 for both", "storage": "would you take 450 for it, or 1,200 for both", "model": "would you take 450 for it, or 1,200 for both" }
+  ]
+}

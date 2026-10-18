@@ -137,3 +137,43 @@ the absorb trigger, and adds a definer setter the sell and edit functions call.
   functions and the service role can write `listing_private_terms`. Never
   grant `agent_worker`, or any client role, direct writes on that table.
   Contract replaces the setting with the definer setter.
+
+## 10. A2 as built (21 October 2026)
+
+`20261021100000`–`100200`, `src/lib/agent/`, `src/lib/capabilities/`, `src/lib/ai/`.
+Where the build had to choose, it chose this:
+
+- **The effective floor binds everyone.** While a seller mandate is active,
+  `offer_effective_floor` is `max(listing floor, agent minimum)` for every
+  move on the listing, a person's included: a buyer below the agent's minimum
+  is declined at once, and the seller's own counter can't go under it either.
+  One floor, as §6 says. When the mandate is paused, turned off or ends, the
+  listing's own floor applies again.
+- **Lock order, extended.** The agent's rows come after the negotiation:
+  listing → offer → agent job → mandate → task → approval → order → payment.
+  Every agent function locks the listing and offer before the job.
+- **A sale ends the seller's task only when it completes.** Accepting an
+  offer finishes the buyer's task and mandate; the seller's stay open (and the
+  agent's minimum stays in force) until the listing is sold, so a cancelled
+  checkout brings the listing back with its limits. The sweep completes it.
+- **Kill switches stop writes in flight.** The worker reads the switches under
+  a shared advisory lock that `admin_set_agent_control` takes exclusively, so
+  throwing a switch waits for any agent write already past its check.
+- **The sweep never waits on a member.** `agent_reconcile_outbox` works one
+  listing at a time in id order, locking each first and skipping one that's
+  busy; jobs skipped under a pause step back a minute in the queue.
+- **The seller's agent asks rather than accepts.** When a buyer reaches the
+  target, or makes a final offer (no offers left) that clears the minimum, it
+  creates an approval; the owner accepts as themself (`agent_approval_decide`),
+  so the accepting round is the member's, not the agent's.
+- **The buyer's agent asks before going over its ceiling** when it can't
+  counter (at its max, or out of offers); otherwise it accepts within it.
+- **"Total up to"** needs flat shipping, and the agent counts the listing's
+  shipping against it.
+- **Duplicate delivery.** One job per (offer, round, task); a job writes once
+  (it is marked done in the move's transaction); a later round cancels earlier
+  jobs; and the move key (`kind:offer:rN:amount`) replays an identical move.
+- **The worker role can still run what PUBLIC can** (Postgres grants EXECUTE
+  to PUBLIC by default): `agent_worker_guard.sql` checks that the only definer
+  functions it can run beyond a visitor's are its eight, and that it has no
+  table privilege anywhere.

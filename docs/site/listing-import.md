@@ -85,7 +85,7 @@ sentence from `messageForImportError` — never `error_detail`.
 | Variable | Effect |
 |---|---|
 | `ANTHROPIC_API_KEY` | Enables real extraction. Absent: stub in dev/test, importer disabled in production. |
-| `LISTING_IMPORT_MODEL` | Extraction model (default `claude-sonnet-5`). |
+| `LISTING_IMPORT_MODEL` | Extraction model (default `claude-sonnet-5`). The client comes from the shared `src/lib/ai/client.ts`, and each call writes one usage line (model, tokens, cost, no content) through `src/lib/ai/usage.ts` (A2). |
 | `LISTING_IMPORT_AI_MODE` | Force `anthropic`/`stub`; stub in production needs `LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION=true`. |
 | `LISTING_IMPORT_PUBLIC_BROWSER_ENABLED` | Enables the Playwright public-page render fallback (needs `playwright-core` + Chromium in the deployment). |
 | `LISTING_IMPORT_ALLOW_PRIVATE_HOSTS` | Test-only; lets e2e fixture servers through the SSRF guard. Ignored in production. |

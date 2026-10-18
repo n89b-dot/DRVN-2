@@ -342,8 +342,8 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.
 - **Approach:** Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.
 - **Depends on:** offer-floor-private
-- **Validation:** supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role.
-- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md, docs/decisions/agent-data-rules.md
+- **Validation:** Not started.
+- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md
 
 #### Immutable commercial sale snapshot — Validated
 
@@ -801,13 +801,13 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 #### The DRVN agent — In progress
 
 - **Brief:** PRD §4.9 (AG-1…AG-12) · agent plan A2–A3
-- **Exists today:** A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone), export v10, deletion and retention (20261021100000–100200).
+- **Exists today:** A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone; console at /admin/agent), export v10, deletion and retention (20261021100000–100200). The worker pass, negotiate.ts, typed capabilities, src/lib/ai with the tool-runner turn, and agent monitoring are built; nothing calls the model yet.
 - **Changing:** One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.
-- **Surfaces:** `src/lib/capabilities/`, `src/lib/ai/`, `/agent`, `BottomNav`, `SidePanel`
+- **Surfaces:** `src/lib/capabilities/`, `src/lib/ai/`, `src/lib/agent/`, `/admin/agent`, `/api/jobs/agent`, `/agent`, `BottomNav`, `SidePanel`
 - **User benefit:** The tedious work between "I want this" and "done" gets done for you, inside limits you set, and every task still works without the agent.
 - **Approach:** Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.
 - **Depends on:** negotiation-v2
-- **Validation:** supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role.
+- **Validation:** supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role. negotiate.ts property tests and seeded simulations (src/lib/agent); the same simulations through agent_worker in tests/operations/agent-worker.test.ts; tests/agent-evals fixtures for redaction, untrusted content and the model's tool boundary.
 - **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md, docs/decisions/agent-data-rules.md
 
 ### 14 · Deferred / not pursuing
