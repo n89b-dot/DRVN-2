@@ -741,4 +741,80 @@
     color: var(--ink);
     font-size: 20px;
   }
+
+  /* ---------- bottom bar — phones and tablets (BottomNav) ----------
+     Below 1081px the rail goes away; the few top-level places move to a tab
+     bar on the bottom edge. It follows the bottom-surface contract (tokens):
+     one surface owns the edge, so it stands down wherever a purchase bar, a
+     save bar or a message composer is on the page, and while the keyboard
+     is up (the component sets `hidden`). Content reserves the same 76px
+     clearance as every other bottom surface. */
+  .bnav {
+    display: none;
+  }
+  .bnav__rows {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .bnav__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 56px;
+    color: var(--dim);
+    text-decoration: none;
+    /* The rail's live tick, moved to the top edge of the tab. */
+    box-shadow: inset 0 2px 0 transparent;
+    transition: color var(--t-move) ease, box-shadow var(--t-move) ease;
+  }
+  .bnav__item.is-here {
+    color: var(--ink);
+    box-shadow: inset 0 2px 0 var(--live);
+  }
+  .bnav__item:focus-visible {
+    outline: 2px solid var(--live);
+    outline-offset: -2px;
+  }
+  .bnav__ico {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+  .bnav__label {
+    /* A label at 12px: Plex Sans, as the tabs are, not the mono data face. */
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: nowrap;
+  }
+  @media (max-width: 1080px) {
+    .bnav {
+      position: fixed;
+      z-index: 40;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: block;
+      padding: 0 8px env(safe-area-inset-bottom, 0px);
+      background: var(--tile);
+      border-top: 1px solid var(--rule-mid);
+    }
+    .bnav[hidden],
+    body:has(.buybar, .savebar, .chatbox) .bnav {
+      display: none;
+    }
+    body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body {
+      padding-bottom: calc(var(--bottom-surface-h, 76px) + env(safe-area-inset-bottom, 0px));
+    }
+    body:not(:has(.buybar, .savebar, .chatbox)):has(.bnav:not([hidden])) .toast {
+      bottom: calc(var(--bottom-surface-h, 76px) + 8px + env(safe-area-inset-bottom, 0px));
+    }
+  }
 }
