@@ -1,10 +1,10 @@
 # Applying migrations
 
-## October 17 — row security checks once per query (not applied yet)
+## October 17 — row security checks once per query (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261017140000_rls_initplan.sql` | throwaway database only (2026-10-17) |
+| `20261017140000_rls_initplan.sql` | shared dev project (2026-10-17, twice) |
 
 A0's advisor follow-up for `auth_rls_initplan`. 88 of the 115 policies in `public` called
 `auth.uid()` bare, and 34 of them also called `public.is_admin()` bare, so both ran once per row
@@ -19,9 +19,13 @@ pass, including the ones that test who can read and write what; the new
 `rls_initplan_guard.sql` fails on a planted bare policy. The orders read as a signed-in member
 now filters on three InitPlans instead of calling `auth.uid()` and `is_admin()` per row.
 
-**Before applying to shared dev:** compare dev's policy expressions with a fresh database at
-the previous migration. `ALTER POLICY` replaces the expression wholesale, so a policy changed
-on dev by hand would be overwritten. Safe before or after any app change.
+**Shared dev, 2026-10-17**, with Neil's go-ahead, applied twice with
+`node scripts/apply-migration.mjs`.
+- Before: the public schema was saved to `~/drvn-db-backups/pre-20261017-rls-initplan.sql`. All 115 policy expressions matched a fresh database at the previous migration, so none had been changed by hand. This check matters because `ALTER POLICY` replaces the expression wholesale.
+- After: all 115 match a fresh database with this migration, and `rls_initplan_guard.sql` passes on dev.
+- For 8 real members, in a rolled-back transaction, the orders, messages and offers that row security showed each one matched the rule written out by hand: 19, 34 and 15 rows, none missing and none extra.
+
+Safe before or after any app change.
 
 ## October 17 — the offer minimum goes private, step two (shared dev project)
 
