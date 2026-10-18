@@ -4,23 +4,27 @@
 
 | File | Applied to |
 |---|---|
-| `20261022110000_agent_buyer_notifications.sql` | not yet |
+| `20261022110000_agent_buyer_notifications.sql` | shared dev project (2026-10-18) |
 
 Apply after `20261022100000`. Buyer-side notices, still `offer_`-prefixed: `offer_agent_deal_reached` to the buyer when their agent accepts a counter within the max (sent from the round with no actor, since notify() skips a member's own moves; opens checkout), and `offer_agent_out_of_rounds` when the seller's counter is over the max with no offers left (the gap). `notify_on_agent_approval` is `20261022100000`'s body with the buyer branches added.
 
 Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_notifications_guard.sql` check 5.
 
+**Shared dev, 2026-10-18**, after #45 merged (37d9262), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261022110000-a3b-notifications.sql`. After: `offer_rounds_notify_buyer_agent_accept` exists, `notify_on_agent_approval` carries the buyer branches, members can't execute the trigger function, and the global kill switch is still on.
+
 ## October 22 — the seller agent's notifications, A3a (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261022100000_agent_seller_notifications.sql` | not yet |
+| `20261022100000_agent_seller_notifications.sql` | shared dev project (2026-10-18) |
 
 Apply after A2's `20261021100200`.
 - It adds three seller notices, all `offer_`-prefixed so the Offers preference governs them: `offer_agent_recommends_accept` (the agent filed an approval), `offer_agent_deal_reached` (the buyer accepted the agent's counter; replaces `offer_counter_accepted` for that case) and `offer_agent_out_of_rounds` (with the gap to the seller's own minimum, once per offer).
 - `notify_on_offer_response` is the `20261017160000` body with the accepted-counter branch split; two new SECURITY DEFINER trigger functions, revoked from members.
 
 Checked on a fresh database: every migration applies, every SQL guard passes (including the new `agent_notifications_guard.sql`), and the generated types match.
+
+**Shared dev, 2026-10-18**, after #44 merged (ae06bd6), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261022-a3a-notifications.sql`. After: both triggers exist, `notify_on_offer_response` carries the deal-reached branch, members can't execute either trigger function, and the global `all` kill switch is still on, so no agent acts on dev until the beta is opened.
 
 ## October 21 — the agent foundation, A2 (shared dev project)
 
