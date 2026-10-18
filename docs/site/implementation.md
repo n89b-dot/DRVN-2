@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 71 initiatives — 1 planned · 1 in progress · 24 implemented · 38 validated · 6 deferred · 1 blocked externally
+**Progress:** 71 initiatives — 2 in progress · 24 implemented · 38 validated · 6 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -798,17 +798,17 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Extend the proven worker-route + queue-table pattern first; decision recorded here.
 - **Validation:** Decision recorded (docs/site/operations.md): the pg_cron + worker-route + durable-queue-table pattern absorbs the new workloads (search sync fire-and-forget + scripted reindex; saved-search matching as a worker pass). PGMQ not adopted — no workload needs SQS semantics; Redis/Trigger.dev/Inngest not introduced; money workers untouched.
 
-#### The DRVN agent — Planned
+#### The DRVN agent — In progress
 
 - **Brief:** PRD §4.9 (AG-1…AG-12) · agent plan A2–A3
-- **Exists today:** No agent. AI is used only in the listing importer's last-resort extraction.
+- **Exists today:** A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone), export v10, deletion and retention (20261021100000–100200).
 - **Changing:** One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.
 - **Surfaces:** `src/lib/capabilities/`, `src/lib/ai/`, `/agent`, `BottomNav`, `SidePanel`
 - **User benefit:** The tedious work between "I want this" and "done" gets done for you, inside limits you set, and every task still works without the agent.
 - **Approach:** Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.
 - **Depends on:** negotiation-v2
-- **Validation:** Not started.
-- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md
+- **Validation:** supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role.
+- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md, docs/decisions/agent-data-rules.md
 
 ### 14 · Deferred / not pursuing
 

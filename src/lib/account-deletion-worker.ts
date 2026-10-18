@@ -81,6 +81,9 @@ export async function processAccountDeletions() {
           // Listings kept for completed orders keep their private terms row;
           // the member's minimums go either way.
           admin.from("listing_private_terms").update({ offer_floor_cents: null }).eq("seller_id", uid),
+          // The member's agent: limits, tasks, record, approvals and chat
+          // (agent-data-rules.md §1). Rounds it made stay with their offers.
+          admin.rpc("agent_purge_member", { p_user: uid }),
           admin.from("listings").delete().eq("seller_id", uid),
           admin.from("cars").delete().eq("owner_id", uid),
         ]) { const result = await operation; if (result.error) throw new Error("Owned content cleanup failed"); }

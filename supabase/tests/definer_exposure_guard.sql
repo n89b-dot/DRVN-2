@@ -31,6 +31,11 @@ declare
   -- Callable by signed-in members (not visitors): each answers or acts only
   -- for the caller, or requires an admin. Reviewed 17 Oct 2026 (A0).
   member_reviewed text[] := array[
+    'admin_set_agent_control(text,uuid,boolean,text)', -- refuses anyone but an admin with step-up (20261021100100)
+    'agent_approval_decide(uuid,text)',                -- the caller's own agent's confirm card (20261021100100)
+    'agent_clear_conversation()',                      -- the caller's own agent chat
+    'agent_mandate_set(text,uuid,integer,integer,integer,text,text,timestamp with time zone,boolean)', -- the caller's own agent limits, on their own listing or as a buyer
+    'agent_mandate_set_status(uuid,text)',             -- pause, resume or turn off the caller's own mandate
     'become_shop()',                                   -- turns the caller's own profile into a shop
     'bind_checkout_analytics(uuid[])',                 -- tags the caller's own orders with consented analytics ids
     'bump_listing_view(uuid)',                         -- counts a view by the caller, rate-limited, never the seller's own
@@ -91,7 +96,20 @@ begin
     'public.escalate_stale_disputes()',
     'public.prune_rate_limits()',
     'public.offer_effective_floor(uuid)',
-    'public.offer_accept_begin(uuid,uuid,interval)'
+    'public.offer_accept_begin(uuid,uuid,interval)',
+    -- The agent's internals (20261021100100): the move cores take the actor
+    -- as an argument; the sweeps are the service role's.
+    'public.offer_open_core(uuid,uuid,uuid,integer,text,jsonb)',
+    'public.offer_move_core(uuid,uuid,text,integer,text,integer,jsonb)',
+    'public.agent_enqueue_turns(uuid)',
+    'public.agent_lock_job(uuid,uuid,text)',
+    'public.agent_halt_reason(text,uuid,uuid,uuid,uuid)',
+    'public.agent_reconcile_outbox(integer)',
+    'public.agent_retention_sweep()',
+    'public.agent_purge_member(uuid)',
+    'public.agent_health()',
+    'public.agent_claim_jobs(integer,integer)',
+    'public.agent_offer_move(uuid,uuid,uuid,text,integer,integer)'
   ] loop
     if has_function_privilege('anon', internal, 'execute')
        or has_function_privilege('authenticated', internal, 'execute') then
