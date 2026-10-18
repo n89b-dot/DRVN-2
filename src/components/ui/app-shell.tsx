@@ -257,6 +257,21 @@ function AppRail({
   );
 }
 
+function ShellBottomNav({ signedIn }: { signedIn: boolean }) {
+  const pathname = usePathname();
+  return (
+    <BottomNav
+      items={(signedIn ? BOTTOM_NAV : BOTTOM_NAV_PUBLIC).map((route) => ({
+        href: route.href,
+        label: route.label,
+        icon: route.icon,
+        active: bottomNavActive(pathname, route.href),
+      }))}
+      hidden={bottomNavHiddenOn(pathname)}
+    />
+  );
+}
+
 export function AppShell({
   signedIn,
   initialNight,
@@ -284,7 +299,6 @@ export function AppShell({
   counts?: Promise<ShellCounts>;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
-  const pathname = usePathname();
 
   const toggleRail = () => {
     const next = !railOpen;
@@ -321,15 +335,13 @@ export function AppShell({
         </Suspense> : renderBar(initialCounts)}
         <main id="main" className="min-w-0">{children}</main>
       </div>
-      <BottomNav
-        items={(signedIn ? BOTTOM_NAV : BOTTOM_NAV_PUBLIC).map((route) => ({
-          href: route.href,
-          label: route.label,
-          icon: route.icon,
-          active: bottomNavActive(pathname, route.href),
-        }))}
-        hidden={bottomNavHiddenOn(pathname)}
-      />
+      {/* Its own boundary: reading the pathname here, at the shell's top,
+          made the whole shell render twice while the page streamed (two
+          copies of the bar's search before hydration). The rail reads it
+          inside the counts boundary for the same reason. */}
+      <Suspense fallback={null}>
+        <ShellBottomNav signedIn={signedIn} />
+      </Suspense>
     </div>
   );
 }
