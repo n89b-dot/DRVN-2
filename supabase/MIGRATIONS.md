@@ -8,7 +8,7 @@
 | `20261021100100_agent_worker.sql` | not yet applied |
 | `20261021100200_account_export_contract_v10.sql` | not yet applied |
 
-Apply in order, after B1's `20261020100000`, the A1 files and the seller-helpers
+Apply in order, after B1's `20261020100000`–`120000`, the A1 files and the seller-helpers
 export bump (`2026-10-19.v9`) if it is on the project. Nothing changes for
 members: the seeded `all` kill switch keeps the agent paused for everyone, and
 no screen calls the new functions until A3a.
@@ -42,11 +42,26 @@ move in a revoke race, skipped jobs could block the queue, card redaction
 missed trailing digits, and several lock-order and null-argument gaps; all are
 fixed here with guard checks.
 
+## October 20 — part keys and products, B1 step two
+
+| File | Applied to |
+|---|---|
+| `20261020110000_part_keys.sql` | not yet |
+| `20261020120000_products.sql` | not yet |
+
+Apply in order, after `20261020100000`.
+- `110000` adds generated `mod_items.part_number_compact` (the listings expression from 0033) and `mod_items.brand_key` (brand compacted to letters and digits), with an index on both. It restates `listing_commercial_snapshot` from 0056 with one added line: `part.brand`.
+- `120000` extends `part_number_links` (brand scope per side, `confidence`, `source_ref`, `created_by`, `verified_at/by`; the unique key now includes brand scope). It adds the internal tables `products`, `product_part_numbers` (membership; primary key brand key + number), `product_identity_reviews` and `product_grow_runs`; the functions `merge_products`, `product_coverage`, `grow_products` (service role) and `resolve_product_identity_review` (admins with step-up); `product_review` in `admin_audit_log.subject_type` (built from the live constraint, so other values survive); and two pg_cron jobs: `drvn-grow-products` hourly over what changed since the last run, `drvn-grow-products-full` nightly. It runs `grow_products(true)` once as the backfill.
+
+Adding generated columns rewrites `mod_items` under an exclusive lock; at today's size that is instant (measured at 2M parts in the B1 query-plan notes).
+
+Checked on a fresh database (CI's PG15 image): both files apply twice cleanly; every SQL guard passes, including the new `products_guard.sql`.
+
 ## October 20 — car generations, B1 step one
 
 | File | Applied to |
 |---|---|
-| `20261020100000_vehicle_generations.sql` | not yet |
+| `20261020100000_vehicle_generations.sql` | shared dev project (2026-10-18, twice) |
 
 Apply after `20261018100200`. It adds:
 - `vehicle_generations` (catalog model, name, platform code, years), public read, no client writes, with a curated seed of about 200 generations joined to the catalog by make and model name. Models the catalog lacks are skipped; re-running the file after a catalog import fills them in.
@@ -55,7 +70,11 @@ Apply after `20261018100200`. It adds:
 
 It restates `explore_build_rows` with the two new columns appended (it returns whole `cars` rows; without them Explore's build search fails with "return type mismatch").
 
-Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; every SQL guard passes, including the new `vehicle_generations_guard.sql` and `car_vin_privacy_guard.sql`'s updated column set. Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
+Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; every SQL guard passes, including the new `vehicle_generations_guard.sql` and `car_vin_privacy_guard.sql`'s updated column set.
+
+**Shared dev, 2026-10-18**, after #35 merged (5ccc623), with `node scripts/apply-migration.mjs`, twice.
+- **Before:** `cars` had exactly main's columns and `explore_build_rows` was byte-identical to 20261011120000's. Saved to `~/drvn-db-backups/pre-20261020100000-generations.sql` (cars, catalog schema and the old function) and `pre-20261020100000-cars-data.sql`.
+- **After:** 194 generations; 11 of 16 catalogued cars resolved (5 are changeover years or unseeded models). `pg_get_functiondef` of `explore_build_rows`, `resolve_vehicle_generation`, `car_generation_before_write` and `vehicle_generations_rescan` matches a fresh database exactly; all four triggers present. Through the API as a visitor: Explore build search returns cars with `generation_id`/`generation_source` and a null VIN; `vehicle_generations` reads; a write is refused (401). Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
 
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 

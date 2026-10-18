@@ -24,6 +24,7 @@ const LINKS: ConsoleRoute[] = [
   { href: "/admin/reports", label: "Reports", note: "User-flagged listings & sellers", icon: "flag" },
   { href: "/admin/payments", label: "Payments", note: "Recoveries and stuck transfers", icon: "card" },
   { href: "/admin/agent", label: "Agent", note: "Kill switches and health", icon: "gauge" },
+  { href: "/admin/products", label: "Products", note: "Part identity the graph couldn't decide", icon: "box" },
   { href: "/admin/audit", label: "Audit", note: "The append-only record", icon: "book" },
   { href: "/admin/settings", label: "Settings", note: "Theme, alerts, and who holds a key", icon: "settings" },
 ];
@@ -93,6 +94,7 @@ export function AdminNav({
     "/admin/disputes": counts.disputes,
     "/admin/reports": counts.reports,
     "/admin/payments": counts.money,
+    "/admin/products": counts.products,
   };
 
   // Close the index on navigation — the page you asked for is now underneath

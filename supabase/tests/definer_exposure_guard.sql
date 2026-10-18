@@ -54,6 +54,7 @@ declare
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner
+    'resolve_product_identity_review(uuid,text,text)', -- refuses anyone but an admin with step-up (20261020120000)
     'request_account_deletion()',                      -- the caller's own account
     'request_account_export()',                        -- the caller's own export
     'seller_payout_dates(uuid[])',                     -- payout dates of the caller's own sales only
