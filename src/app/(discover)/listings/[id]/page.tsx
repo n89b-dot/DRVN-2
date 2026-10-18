@@ -465,11 +465,6 @@ export default async function ListingPage({
             <p className="mt-1 text-micro text-dim">Any applicable tax and your selected delivery are confirmed at checkout.</p>
             {/* The condition here; the place is on the seller line below. */}
             {listing.condition && <p className="kv mt-2 text-dim">{conditionLabel(listing.condition)}</p>}
-            {listing.offer_floor_cents !== null && listing.status === "active" && !isOwn && (
-              <p className="spec-note mt-2">
-                Offers accepted from {formatPrice(listing.offer_floor_cents)}.
-              </p>
-            )}
             {isOwn ? (
               /* The owner's panel: what they came to their own listing to do.
                  Status changes (pause, archive) stay in My Listings, which
@@ -497,7 +492,6 @@ export default async function ListingPage({
                 paymentsLive={paymentsAreLive()}
                 priceCents={listing.price_cents}
                 shippingCents={listing.shipping_cents}
-                offerFloorCents={listing.offer_floor_cents}
                 myOffer={
                   myOfferRow
                     ? { id: myOfferRow.id, amountCents: myOfferRow.amount_cents, counterCents: myOfferRow.counter_amount_cents }

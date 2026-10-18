@@ -3,6 +3,8 @@
 > **Status (2026-09-19): current.** This is the product definition DRVN is being built towards. It supersedes `DRVN-PRD-v3.1.md` (retained as design rationale and as-built history). Where the two disagree, this document wins. The work that delivers it is in [`plans/2026-09-direction-build-plan.md`](plans/2026-09-direction-build-plan.md).
 >
 > Living artifacts (private to Neil): Direction — https://claude.ai/artifact/RtxJD7miquRrULqpnkowxw · Build plan — https://claude.ai/artifact/1tSqTJ2YTC5nTDGv1EApqY
+>
+> **Amended 2026-10-17 — the DRVN agent.** New §4.9 (Intelligence), a fifth principle, offers v2 (M-8 narrowed), and the mobile bottom bar (N-4 reversed, non-goal and parked row removed). Implementation plan: "DRVN AI-native: review and implementation plan" — https://claude.ai/code/artifact/0116734a-9a0d-4148-9efa-ecde4f9a177b (a repo copy goes in `docs/plans/` when build starts).
 
 ## 1. The product
 
@@ -28,10 +30,11 @@ v3.1 defined DRVN as a "marketplace-first platform" where cars and social featur
 2. **The community is why people come back; the marketplace is why it pays.** Both are legitimate reasons to arrive and both are marketed.
 3. **Everything is about a car or a part.** Every post is attached to a car, a part, or both, and has a photo. That keeps the feed on topic without making posting feel restricted.
 4. **Same for everyone first.** Fixed layouts; sections hide when empty; no personalisation engine.
+5. **Software acts only inside limits you set.** The agent does the tedious work of buying, selling and keeping a build up to date, but prices come from the member's own limits, it never speaks to other people, and money only moves when the member pays. Every task still works without it.
 
 ### Vocabulary
 
-Home, Explore, Marketplace, Garage, Profile, Store, Selling. Not "Build / Scene / Market", not "automotive graph".
+Home, Explore, Marketplace, Garage, Profile, Store, Selling, Agent. Not "Build / Scene / Market", not "automotive graph", not "assistant" or "bot" for the agent.
 
 ## 2. Goals and non-goals
 
@@ -44,6 +47,7 @@ Home, Explore, Marketplace, Garage, Profile, Store, Selling. Not "Build / Scene 
 - A person's store looks and works like the marketplace.
 - A marketplace-only visitor never has to touch the social side.
 - Every post is about a car or a part and has a photo.
+- A seller can hand lowball offers to an agent that negotiates inside their limits, and a buyer can do the same up to a maximum (2026-10-17).
 
 **Non-goals this cycle** (each is a ruling, not an oversight)
 
@@ -51,9 +55,12 @@ Home, Explore, Marketplace, Garage, Profile, Store, Selling. Not "Build / Scene 
 - Maintenance, notes, records, car facts, "% complete".
 - Polls, video upload, location tags, reposts, communities, free-form "what's on your mind" posts.
 - Direct messages from a profile. Away / holiday mode. Buy now on marketplace cards. Dispatch-time statistics.
-- Bottom tab bar (until there is a native app). Horizontal content shelves. New accent colour. New typeface. Sidebar artwork.
+- Horizontal content shelves. New accent colour. New typeface. Sidebar artwork. (The bottom tab bar left this list on 2026-10-17 — see N-4.)
 - Separate shop entity, catalogue sync, stock, product ratings, brand strips, sale events, bulk edit, stats dashboards.
 - Whole-car sales. Part history across several cars.
+- Agents messaging other people (they may read their owner's messages for context, never reply). Automatic payment. Agent auto-accept of offers at launch. Open-ended chit-chat with the agent. Dynamic bundles. Admin and analytics agents.
+
+A community-built product record (one entry per real part, grown from DRVN's own listings, Garages and sales) is **not** "catalogue sync": nothing is fed in from brands or retailers.
 
 ## 3. Design system rulings
 
@@ -74,7 +81,7 @@ Priority: **P0** the direction doesn't hold without it · **P1** needed for the 
 | N-1 | Rail order: Home, Explore, Marketplace, Garage, Selling, Messages, Profile | P1 | Change |
 | N-2 | Global search in the top bar on every page (existing suggest endpoint) | P1 | New |
 | N-3 | A **Post** button in the top bar. "List a part" stays where it is in the rail | P1 | Change |
-| N-4 | Mobile keeps the full-screen menu; no bottom bar | P0 | Exists |
+| N-4 | (2026-10-17, reverses the September ruling) Below 1081px a bottom bar: **Explore · Marketplace · Home · Garage · Agent** — Home in the centre, Agent last. Profile (avatar), Messages, Notifications and Cart sit in the top bar; the full-screen Index menu stays for everything else. Signed out: Explore · Marketplace · Join. The bar hides on checkout, the sell form and composers. Prototyped at 360–390px before it ships | P1 | Change |
 | N-5 | Messages shows an unread count | P1 | New |
 | F-1 | Landing leads with the car; two equal actions — Add your car · Shop parts; builds before parts | P0 | Change |
 | F-2 | Lockup and root metadata stop saying "Parts marketplace"; marketplace routes keep marketplace wording | P0 | Change |
@@ -114,7 +121,7 @@ Mock 4's layout with mock 3's card.
 | M-5 | Card: photo + bookmark · title · price · condition and grade · fitment · one line of description · seller photo, name, "N for sale" · "Off my {car}" → build · add-to-cart. No rating, no car thumbnail, no Buy now | P0 | Change |
 | M-6 | Brand on listings: prefilled from the mod or importer, matched from titles otherwise, backfilled, editable. Saved searches and their alerts understand it | P1 | New |
 | M-7 | Optional "miles on this part" for used parts | P1 | New |
-| M-8 | Item page, cart, guest checkout, offers, Q&A unchanged — with two named item-page exceptions: brand and miles join the record block (M-6, M-7) and "Posts about this part" (W-4). The item-page redesign is its own session | P0 | Exists |
+| M-8 | Item page, cart, guest checkout, Q&A unchanged — with two named item-page exceptions: brand and miles join the record block (M-6, M-7) and "Posts about this part" (W-4). The item-page redesign is its own session. **Offers are no longer unchanged** (2026-10-17): they move to negotiation v2, §4.9 O-1…O-6 | P0 | Exists |
 
 ### 4.5 Profile and Store
 
@@ -128,7 +135,7 @@ Mock 4's layout with mock 3's card.
 | P-6 | Parts tab = the store: the marketplace grid and card for this seller; All / Active / Sold; owner gets status badges and edit links. Allowed statuses are decided on the server from who is viewing (public: active + sold), never from the URL; seller and status filter before counting and paging | P0 | Change |
 | P-7 | Trust strip: rating · sold · member since | P1 | Change |
 | P-8 | Store note: one short line pinned above the grid | P1 | New |
-| P-9 | Seller default: offer floor as a % of price | P2 | New |
+| P-9 | Seller default: offer floor as a % of price. The floor itself is private (O-3) | P2 | New |
 
 ### 4.6 Garage and parts by link
 
@@ -178,6 +185,40 @@ Mock 4's layout with mock 3's card.
 | W-4 | Tagged parts render as a compact row under the photos with price and add-to-cart; "Sold" when sold; the listing page gains "Posts about this part" | P1 | New |
 | W-5 | Posting with no car: tag a part instead. A post must have a car, a tagged part, or both. Not available before this ships — W-1…W-4 require a car | P2 | New |
 
+### 4.9 Intelligence — the DRVN agent (added 2026-10-17)
+
+Every member can have an agent that does the tedious work around buying, selling and keeping a build up to date, inside limits the member sets. To the member there is **one** agent; "seller" and "buyer" are internal scopes. Its first job is negotiating offers. Underneath, DRVN keeps a growing record of cars, generations, products and fitment so the agent can answer harder questions over time. The rollout order, the safety gates and the reasoning are in the implementation plan linked at the top.
+
+**Negotiation v2 — for everyone, agent or not**
+
+| ID | Requirement | P | State |
+|---|---|---|---|
+| O-1 | Buyers can counter back (eBay's model): up to 3 buyer offers per listing, counter-backs included, counted across every thread a buyer opens on that listing; strict turns; a seller counter never exceeds the asking price; each turn replaces the last; 72-hour expiry per turn | P0 | Change |
+| O-2 | An offer below the seller's minimum is recorded as a declined round and uses one of the buyer's 3 offers; the refusal never reveals the number | P0 | New |
+| O-3 | The seller's minimum is private — unreadable through the database API, not just hidden on the page. Showing it on the listing is an opt-in toggle, off by default; minimums shown today become hidden when the toggle ships | P0 | Change |
+| O-4 | Every move, human or agent, is one atomic, retry-safe database step. Each issued round keeps a snapshot of its terms (amount, expiry, who sent it, the limits in force); accepting an outstanding round honours that snapshot even if limits or price changed later | P0 | New |
+| O-5 | A seller may cancel an accepted offer only before checkout begins; after that, the normal order and refund rules apply | P0 | Change |
+| O-6 | Offers stay unavailable on DRVN Shipping listings, which are priced at checkout | — | Exists |
+
+**The agent**
+
+| ID | Requirement | P | State |
+|---|---|---|---|
+| AG-1 | One agent per member covering selling, buying and the Garage | P0 | New |
+| AG-2 | Seller — "Let DRVN handle offers": a minimum, a target (default: asking price) and a style (Firm · Balanced · Flexible). The listing keeps one minimum (O-3); the agent's can only be stricter, never lower. Turning it on, the seller confirms once per listing that the agent's counters are binding. The agent counters inside the limits and recommends accepting, with a reason; it does not auto-accept at launch | P0 | New |
+| AG-3 | Buyer — "Negotiate for me": a ceiling stated as item price or item + shipping, plus a style. The agent accepts a seller counter within the ceiling on its own. Payment is always made by the member | P0 | New |
+| AG-4 | Agents never message other people. An offer an agent sent carries a quiet "via agent" in the offer history, and the accept screen and checkout summary say when an agent set the price | P0 | New |
+| AG-5 | Prices are set by rules from the owner's limits, never by the AI model; the model understands requests and writes words | P0 | New |
+| AG-6 | Approving the agent's limits authorises its counters within them without asking each time. Every other change the agent makes shows a confirm card first; drafts never publish themselves | P0 | New |
+| AG-7 | Agent home: Needs you · Working · Done, plus settings (Off · Suggest · Act within my limits). Notifications open the specific task | P0 | New |
+| AG-8 | Chat with the agent, for getting things done on DRVN — not open-ended conversation. Mobile: the Agent tab opens `/agent` full screen. Desktop: an Agent item in the rail opens a non-modal side panel that stays open while browsing. One design, two containers | P1 | New |
+| AG-9 | Garage jobs through the agent, one at a time: update my build (from words, a link or a photo; the replaced part is marked removed and listing it is offered) → post an update → list the parts that came off → paste your build → listing from photos | P1 | New |
+| AG-10 | A small "Agent" action on listings, offers, cars and mod rows opens the agent with that object as context | P1 | New |
+| AG-11 | Every task works without the agent. AI-assist features arrive one at a time, each also available as a plain button | P0 | Decision |
+| AG-12 | Admin can pause all agent negotiation, one side, one agent or limit set, or one listing or account, without touching existing offers and orders | P0 | New |
+
+Rollout: seller negotiation → buyer negotiation → chat with one Garage job → more jobs. Each step turns on for everyone behind a beta flag once the previous step's checks pass. No invited cohort.
+
 ## 5. Data changes
 
 | Object | Change |
@@ -189,6 +230,10 @@ Mock 4's layout with mock 3's card.
 | `feed_events` view | Later: append `owner_id` so Local can filter by region |
 | Saved searches | `brand` added to `SAVED_SEARCH_KEYS` |
 | New RPCs | `suggested_builders`, `trending_models`, `seller_active_counts`, `marketplace_brand_counts`, `local_feed_rows` |
+| `listing_private_terms` (2026-10-17) | New, owner-only: the seller's real minimum. Moved out of `listings` in three steps (add and dual-write → switch every reader → drop `listings.offer_floor_cents`); `listings` gains a public opt-in display value |
+| Offers (2026-10-17) | New `offer_rounds` with a snapshot per round; one transition function owns every move, acceptance included, with one lock order (listing → negotiation → order → payment) |
+| Agent (2026-10-17) | New `agent_mandates`, `agent_tasks`, `agent_events`, `agent_conversations`, `agent_approvals`, `agent_jobs`; a dedicated database role for the agent worker. Every agent table is covered by data export, account deletion and a retention rule |
+| Car and part record (2026-10-17) | New `vehicle_generations`, `products` with brand-aware identifier membership, `product_fitments` with source and configuration constraints; `mod_items` part keys |
 
 Not needed: tables for shops, personas, home modules, away mode, car facts, notes, maintenance or part-history chains.
 
@@ -197,6 +242,7 @@ Not needed: tables for shops, personas, home modules, away mode, car facts, note
 - **Is it one product?** Share of listings with a source car · share of removed mods that become listings · share of purchases added to a car · listing views arriving from a car, profile or post.
 - **Do people come back?** Members active in a week without buying · posts per active car per month · share of mods added by link · share of posts that tag a part.
 - **Does the second door work?** Guest checkouts completed · store visits from the profile's Store button.
+- **Does the agent help?** (2026-10-17) Paid, completed sales from agent-handled listings vs comparable manual listings — not offer counts · offers handled with no action from the seller · accepted deals that complete payment · seller cancellation rate · time to first useful agent task · repeat use · incorrect-action rate · cost per completed task.
 
 ## 7. Parked — and what would bring each back
 
@@ -208,7 +254,12 @@ Not needed: tables for shops, personas, home modules, away mode, car facts, note
 | Away mode | Sellers ask, or late-dispatch complaints appear |
 | Dispatch-time statistic | Orders record paid and shipped times reliably |
 | Buy now on cards | Cart-to-checkout drop-off suggests it |
-| Bottom tab bar | There is a native app |
+| Agent auto-accept of offers | The beta shows a low seller cancellation rate |
+| "Find one that fits my car" watches | There's enough inventory for them to find things |
+| Build Mine, goal planning | Product identity and fitment evidence are strong enough to trust |
+| Agent dashboard (full page) | Needs you regularly holds more than three things |
+| Outside agents (MCP / API) | The agent's capabilities are stable and there are users |
+| Admin and analytics agents | The member agent's runtime is proven |
 | Maintenance, notes, records | Members ask unprompted |
 | Shop entity, catalogue sync, stock, product ratings | Real shops ask to list more than one of something |
 | Part history across cars · whole-car sales | Purchases are regularly added to cars · the parts marketplace is healthy |

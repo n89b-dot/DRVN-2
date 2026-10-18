@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 68 initiatives — 24 implemented · 36 validated · 7 deferred · 1 blocked externally
+**Progress:** 70 initiatives — 2 planned · 1 in progress · 24 implemented · 36 validated · 6 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -61,6 +61,18 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Correlation ID persisted on order/payment rows and stamped into Stripe metadata; a composed diagnostics view in admin. No heavy OpenTelemetry now.
 - **Decisions:** 0039 adds orders.correlation_id, stamped by both checkout paths and mirrored into PaymentIntent metadata; deliberately never threaded through money RPCs — an observability identity, not a lock. The admin order sheet gained a Transaction timeline composing order stamps, retained webhook events (matched on the intent reference), transfer-intent lifecycle, refund operations and audit rows — built by a pure, unit-tested builder (lib/admin/diagnostics.ts).
 - **Validation:** Migration 0039 applied twice (self-checks pass); timeline builder covered by 3 unit tests (chronology, refund lifecycle incl. recovery, future clearing-window truthfulness); Stripe integration test asserts correlation_id lands in intent metadata. Admin UI render check pending the Group 10 visual pass.
+
+#### A seller's offer minimum is private — In progress
+
+- **Brief:** PRD O-3 · agent plan A0
+- **Exists today:** The lowest offer a seller will take lived on `listings.offer_floor_cents`, which anon and authenticated could read table-wide through the API, and the listing page showed it as "Offers accepted from".
+- **Changing:** The minimum moves to `listing_private_terms`, readable only by the seller (`my_listing_offer_floor`) and the offer checks, in three releases: expand (copy, kept in step), switch (every reader moved, the old column held empty), contract (drop the column once the switched app is live everywhere).
+- **Surfaces:** `supabase/migrations/20261017120000_listing_private_terms.sql`, `supabase/migrations/20261017130000_listing_private_terms_switch.sql`, `src/features/commerce/offer-actions.ts`, `/listings/[id]/edit`, `/listings/[id]`
+- **User benefit:** A seller's minimum can't be read by anyone else, so it can't be used against them, by a buyer or by an agent.
+- **Approach:** Owner-only table, no client grants; a BEFORE trigger moves any write to the old column into it; the price bound is checked from both sides; a SECURITY DEFINER trigger on offers refuses below-minimum offers without naming the amount.
+- **Decisions:** Showing the minimum on the listing becomes a seller toggle, off by default, with negotiation v2; until then no minimum is shown.
+- **Validation:** Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). offer_floor_privacy_guard.sql (28 checks) fails before the expand migration and passes after; every SQL guard, npm test, typecheck, lint and next build pass. The contract step is not done.
+- **Docs:** docs/decisions/agent-foundations.md, supabase/MIGRATIONS.md
 
 ### 02 · Marketplace discovery
 
@@ -306,6 +318,18 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Decisions:** Crawlee/metascraper not adopted: every import is exactly one user-supplied page fetch, so a hardened undici fetcher + cheerio adapters cover it without a crawler framework's queue machinery (matches the no-Redis/no-PGMQ posture). Facebook is public_url, not paste_only: the attempt is user-directed, single-page, logged-out, with hard no-bypass boundaries; viability is measured by the facebook_outcome analytics aggregate. No screenshot import — text/URL paths only, per product direction. Confidence scores dropped from the old spec in favor of field-specific review issues.
 - **Validation:** 89 unit tests (SSRF matrix, fixture-driven adapters, non-invention validation, heuristic extractor, policy/config); import_guard.sql (8 assertions) green against the dev project; migration applied twice; e2e flow spec covering paste import, review and draft-save.
 - **Docs:** docs/listing-importer-spec.md, docs/site/listing-import.md
+
+#### Negotiation v2: counter-backs for every member — Planned
+
+- **Brief:** PRD O-1, O-2, O-4, O-5 · agent plan A1
+- **Exists today:** An offer gets one answer: the seller accepts, declines or counters once. A below-minimum offer is refused before anything is recorded, so trying again costs nothing.
+- **Changing:** Up to 3 buyer offers per listing (counter-backs included), strict turns, a 72-hour turn, a below-minimum offer recorded as a declined turn, each round's terms kept as a snapshot, one atomic `offer_move` for every move, and seller cancellation only before checkout begins.
+- **Surfaces:** `src/features/commerce/offer-actions.ts`, `OfferCard`, `SellForm`, `supabase/migrations/`
+- **User benefit:** Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.
+- **Approach:** Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.
+- **Depends on:** offer-floor-private
+- **Validation:** Not started.
+- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md
 
 #### Immutable commercial sale snapshot — Validated
 
@@ -760,6 +784,18 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Approach:** Extend the proven worker-route + queue-table pattern first; decision recorded here.
 - **Validation:** Decision recorded (docs/site/operations.md): the pg_cron + worker-route + durable-queue-table pattern absorbs the new workloads (search sync fire-and-forget + scripted reindex; saved-search matching as a worker pass). PGMQ not adopted — no workload needs SQS semantics; Redis/Trigger.dev/Inngest not introduced; money workers untouched.
 
+#### The DRVN agent — Planned
+
+- **Brief:** PRD §4.9 (AG-1…AG-12) · agent plan A2–A3
+- **Exists today:** No agent. AI is used only in the listing importer's last-resort extraction.
+- **Changing:** One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.
+- **Surfaces:** `src/lib/capabilities/`, `src/lib/ai/`, `/agent`, `BottomNav`, `SidePanel`
+- **User benefit:** The tedious work between "I want this" and "done" gets done for you, inside limits you set, and every task still works without the agent.
+- **Approach:** Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.
+- **Depends on:** negotiation-v2
+- **Validation:** Not started.
+- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md
+
 ### 14 · Deferred / not pursuing
 
 #### Mobile Quick Capture — Deferred
@@ -797,15 +833,6 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** —
 - **Approach:** —
 - **Validation:** Intentionally excluded by the brief.
-
-#### AI authoring/enrichment features — Deferred
-
-- **Brief:** AJ
-- **Exists today:** —
-- **Changing:** No automatic mod extraction, AI rewriting, image classification, cover selection or build advice in this workstream; the architecture merely stays compatible.
-- **User benefit:** —
-- **Approach:** —
-- **Validation:** Intentionally deferred by the brief.
 
 #### Build completeness prompts — Deferred
 

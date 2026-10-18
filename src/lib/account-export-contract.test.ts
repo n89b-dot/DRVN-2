@@ -6,7 +6,7 @@ import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPO
 
 describe("account export contract", () => {
   it("uses explicit projections and covers both sides of shared records", () => {
-    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-08.v5");
+    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-17.v6");
     expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
     const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
     expect(keys).toEqual(expect.arrayContaining([
@@ -14,6 +14,13 @@ describe("account export contract", () => {
       "dispute_evidence", "seller_adjustments", "transfers", "refunds", "refund_recredit_proofs", "order_snapshot_images",
       "shipments", "shipment_events",
     ]));
+  });
+
+  it("exports the seller's offer minimums from their private home", () => {
+    const byKey = new Map(ACCOUNT_EXPORT_SECTIONS.map((section) => [section.key, section]));
+    expect(byKey.get("listing_private_terms")).toMatchObject({ table: "listing_private_terms", access: "seller", filter: "seller_id" });
+    expect(byKey.get("listing_private_terms")!.projection.split(",")).toContain("offer_floor_cents");
+    expect(byKey.get("listings")!.projection.split(",")).not.toContain("offer_floor_cents");
   });
 
   /**

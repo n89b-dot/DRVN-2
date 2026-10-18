@@ -8,7 +8,6 @@ import { capture } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 import type { CommerceState } from "./action-types";
-import { formatPrice } from "@/lib/payments/fee";
 import { betaCommerceError, getBetaAccess } from "@/lib/beta-access";
 import { SUSPENDED_MESSAGE, isSuspended } from "@/lib/suspension";
 import {
@@ -17,6 +16,9 @@ import {
   MIN_CHARGE_CENTS,
   OFFER_OUT_OF_BOUNDS_MESSAGE,
 } from "@/lib/payments/charge-bounds";
+
+/** A below-minimum offer is refused without saying what the minimum is. */
+const OFFER_BELOW_MINIMUM_MESSAGE = "That's lower than the seller will accept. Try a higher offer.";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -67,7 +69,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     }
     const { data: listing } = await supabase
       .from("listings")
-      .select("seller_id, status, offer_floor_cents, price_cents, shipping_mode")
+      .select("seller_id, status, price_cents, shipping_mode")
       .eq("id", listingId)
       .maybeSingle();
     if (!listing || listing.status !== "active") return { error: "Listing is not available." };
@@ -84,11 +86,8 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     if (amount > listing.price_cents) {
       return { error: "That's above the asking price — buy it now instead." };
     }
-    if (listing.offer_floor_cents && amount < listing.offer_floor_cents) {
-      return {
-        error: `The seller doesn't consider offers below ${formatPrice(listing.offer_floor_cents)}.`,
-      };
-    }
+    // The seller's minimum is private (20261017130000); the database checks it
+    // on submit and the refusal below never names it.
   }
 
   // One live offer per buyer per part. Say so plainly instead of letting the
@@ -114,6 +113,7 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   });
   if (created.error || !(created.data as { offer_id?: string } | null)?.offer_id) {
     if (created.error && (await isSuspended(supabase, user.id))) return { error: SUSPENDED_MESSAGE };
+    if (created.error?.code === "23514") return { error: OFFER_BELOW_MINIMUM_MESSAGE };
     reportError("[commerce] atomic offer submission failed", { offerId, error: created.error });
     return {
       error: created.error?.code === "23505"

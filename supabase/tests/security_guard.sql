@@ -162,7 +162,7 @@ begin
   end;
 
   -- ================================================================
-  -- 4. Offer above ask / below floor (guard_offer_insert, 0012)
+  -- 4. Offer above ask (guard_offer_insert, 0012) / below floor (guard_offer_private_floor, 20261017130000)
   -- listing: price_cents 50000, offer_floor_cents 20000
   -- ================================================================
   perform pg_temp.impersonate(v_buyer);
@@ -178,7 +178,9 @@ begin
     insert into public.offers (listing_id, buyer_id, amount_cents, status)
     values (v_listing, v_buyer, 19999, 'open');
     raise exception 'FAIL 4b: offer below the seller floor was accepted';
-  exception when insufficient_privilege then
+  -- check_violation since 20261017130000: the minimum is private and checked
+  -- by offers_guard_private_floor (offer_floor_privacy_guard.sql covers it).
+  exception when check_violation then
     raise notice 'PASS 4b: an offer below the seller''s minimum is rejected';
   end;
 

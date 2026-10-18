@@ -31,13 +31,10 @@ export function PurchaseActions({
   paymentsLive,
   priceCents,
   shippingCents,
-  offerFloorCents = null,
   myOffer = null,
   resumeAction = null,
   returnPath,
 }: {
-  /** The seller's lowest acceptable offer, when they set one. */
-  offerFloorCents?: number | null;
   /** The viewer's own live offer on this part, if any. */
   myOffer?: { id: string; amountCents: number; counterCents: number | null } | null;
   listingId: string;
@@ -270,9 +267,7 @@ export function PurchaseActions({
               inputMode="decimal"
               value={offerAmount}
               onChange={(event) => setOfferAmount(event.target.value)}
-              hint={`Asking ${formatPrice(priceCents)}${
-                offerFloorCents !== null ? ` · offers from ${formatPrice(offerFloorCents)}` : ""
-              }. The seller can accept, counter once, or let it lapse. Offers expire after 72 hours.`}
+              hint={`Asking ${formatPrice(priceCents)}. The seller can accept, counter once, or let it lapse. Offers expire after 72 hours.`}
               error={offerState.error}
               ok={offerState.ok}
             />
