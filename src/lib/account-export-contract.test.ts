@@ -6,7 +6,7 @@ import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPO
 
 describe("account export contract", () => {
   it("uses explicit projections and covers both sides of shared records", () => {
-    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-18.v8");
+    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-21.v10");
     expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
     const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
     expect(keys).toEqual(expect.arrayContaining([
@@ -21,6 +21,16 @@ describe("account export contract", () => {
     expect(byKey.get("listing_private_terms")).toMatchObject({ table: "listing_private_terms", access: "seller", filter: "seller_id" });
     expect(byKey.get("listing_private_terms")!.projection.split(",")).toContain("offer_floor_cents");
     expect(byKey.get("listings")!.projection.split(",")).not.toContain("offer_floor_cents");
+  });
+
+  it("exports the member's agent, without the queue or internal ids", () => {
+    const byKey = new Map(ACCOUNT_EXPORT_SECTIONS.map((section) => [section.key, section]));
+    for (const key of ["agent_mandates", "agent_mandate_versions", "agent_tasks", "agent_events", "agent_approvals", "agent_conversations", "agent_messages"]) {
+      expect(byKey.get(key), `${key} is missing`).toMatchObject({ table: key, access: "owner", filter: "owner_id" });
+    }
+    const events = byKey.get("agent_events")!.projection.split(",");
+    for (const field of ["job_id", "idempotency_key"]) expect(events, `agent_events leaked ${field}`).not.toContain(field);
+    expect(ACCOUNT_EXPORT_SECTIONS.some((section) => ["agent_jobs", "agent_telemetry", "agent_controls"].includes(section.table))).toBe(false);
   });
 
   /**
