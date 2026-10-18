@@ -1,8 +1,8 @@
 # Changelog
 
-## 2026-10-17 — The agent's data rules (proposed)
+## 2026-10-17 — The agent's data rules
 
-`docs/decisions/agent-data-rules.md` sets out what the agent will keep and for how long, what a member's export includes, and what account deletion removes, table by table, before A2 creates the tables. It also gives the exact allow-list of what may reach the AI model provider: never addresses, phone numbers, emails, payment details, VINs, or anyone's price limits. It covers redaction of card numbers, VINs and contact details too. Draft privacy and terms wording waits there for the release that turns the agent on. The retention periods are proposals for Neil, and the legal checklist and data inventory gain matching items.
+`docs/decisions/agent-data-rules.md` sets out what the agent will keep and for how long, what a member's export includes, and what account deletion removes, table by table, before A2 creates the tables. It also gives the exact allow-list of what may reach the AI model provider: never addresses, phone numbers, emails, payment details, VINs, or anyone's price limits. It covers redaction of card numbers, VINs and contact details too. Draft privacy and terms wording waits there for the release that turns the agent on. Neil ruled the open points on 17 Oct: 12 months for chat, records, finished tasks and ended limits, 30 days for jobs, admin reads of agent chat only for abuse or dispute cases, and zero data retention requested from the provider. The legal checklist and data inventory gain matching items.
 
 ## 2026-10-17 — The offer minimum is private
 

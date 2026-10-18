@@ -127,12 +127,13 @@ on the live pages yet: the wording goes in with the release that turns the agent
       seller, and a buyer's agent accepts a counter within the buyer's ceiling. Confirm the
       terms clause and the one-time acknowledgement are enough, and that "via agent" on the offer
       is enough notice for the other party.
-- [ ] **Retention periods** for agent chat, records, tasks and limits (proposed: 12 months).
+- [x] **Retention periods** for agent chat, records, tasks and limits: 12 months; jobs 30 days
+      (Neil, 17 Oct).
 - [ ] **Model provider.** The privacy page names Anthropic for agent chat. Confirm the
-      no-training statement against the commercial terms, and whether to ask for zero data
-      retention.
-- [ ] **Operator access** to a member's agent chat (proposed: only for an abuse or dispute
-      case, written to the admin audit log).
+      no-training statement against the commercial terms. Zero data retention is decided
+      (Neil, 17 Oct); arrange it with the provider before the privacy page claims it.
+- [x] **Operator access** to a member's agent chat: only for an abuse or dispute case, written
+      to the admin audit log (Neil, 17 Oct).
 
 ## Product facts the drafts had to work around — fix or accept
 

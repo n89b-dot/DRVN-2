@@ -1,11 +1,11 @@
 # Decision: the agent's data rules
 
-**Status: proposed 17 October 2026, for Neil to rule on.** This is A0's "data rules" item in
+**Status: decided 17 October 2026 (Neil).** The periods, operator access and provider retention below are his rulings. This is A0's "data rules" item in
 the agent plan ([`docs/plans/2026-10-agent-and-graph-plan.md`](../plans/2026-10-agent-and-graph-plan.md)).
 It covers what the agent keeps, for how long, what a member gets in their export, what account
 deletion removes, and what may reach the AI model provider. The tables don't exist yet; A2
 creates them, and each one ships with the export, deletion and retention handling below in the
-same migration. Proposed periods are marked *(proposed)*. Nothing here is a legal opinion;
+same migration. Nothing here is a legal opinion;
 counsel reviews the privacy and terms wording (§4) before the agent launches
 ([`legal-review-checklist.md`](../legal-review-checklist.md), "The agent").
 
@@ -15,13 +15,13 @@ Shapes and names follow [`agent-foundations.md`](agent-foundations.md) and PRD �
 
 | Table | What it holds | In the member's export | On account deletion | Kept while the account exists | Redaction before storing |
 |---|---|---|---|---|---|
-| `agent_mandates` | The limits a member set: minimum or ceiling, target, style, scope, version, status, expiry | Yes, owner access: every version | Deleted | Active ones until revoked or expired; ended ones **12 months** *(proposed)* | None needed; no free text |
-| `agent_tasks` | What the agent is trying to do: objective, scope, status, links to the listing, offer or car | Yes, owner access | Deleted | Open ones until done; finished ones **12 months** *(proposed)*, which is what the Done list and the later agent dashboard show | Objective text: payment-card numbers removed (§3) |
-| `agent_events` | Append-only record of each decision or tool call: the mandate version, the event that triggered it, inputs, result, idempotency key | Yes, owner access, minus internal fields (lease ids, job ids, raw model output) | Deleted, except events tied to an order that is under a financial hold: they wait with the order, as orders already do | **12 months** *(proposed)*, then deleted. The binding facts of a negotiation live on in `offer_rounds`' snapshot, which follows the offer's own rules | Tool inputs and results go through the same sending rules as §3, so nothing in §3's "never" list is stored here either |
-| `agent_conversations` and their messages | The chat thread: what the member typed and what the agent replied | Yes, owner access: every message | Deleted | **12 months from the last message** *(proposed)*. A member can clear their thread at any time | Payment-card numbers removed before storing (§3) |
+| `agent_mandates` | The limits a member set: minimum or ceiling, target, style, scope, version, status, expiry | Yes, owner access: every version | Deleted | Active ones until revoked or expired; ended ones **12 months** | None needed; no free text |
+| `agent_tasks` | What the agent is trying to do: objective, scope, status, links to the listing, offer or car | Yes, owner access | Deleted | Open ones until done; finished ones **12 months**, which is what the Done list and the later agent dashboard show | Objective text: payment-card numbers removed (§3) |
+| `agent_events` | Append-only record of each decision or tool call: the mandate version, the event that triggered it, inputs, result, idempotency key | Yes, owner access, minus internal fields (lease ids, job ids, raw model output) | Deleted, except events tied to an order that is under a financial hold: they wait with the order, as orders already do | **12 months**, then deleted. The binding facts of a negotiation live on in `offer_rounds`' snapshot, which follows the offer's own rules | Tool inputs and results go through the same sending rules as §3, so nothing in §3's "never" list is stored here either |
+| `agent_conversations` and their messages | The chat thread: what the member typed and what the agent replied | Yes, owner access: every message | Deleted | **12 months from the last message**. A member can clear their thread at any time | Payment-card numbers removed before storing (§3) |
 | `agent_approvals` | Confirm cards: what was proposed, what the member chose, when | Yes, owner access | Deleted | With their task | None needed |
-| `agent_jobs` | The work queue the worker leases | No. Operational, holds ids and states only | Deleted | **30 days after it finishes** *(proposed)* | No content: ids, kinds, states, lease times |
-| Agent monitoring | Stuck tasks, stale jobs, permission denials, model errors (ids, counts, error codes) | No. Operational telemetry, separate from product analytics | Ids removed | **30 days** *(proposed)* | Never message text, amounts or limits |
+| `agent_jobs` | The work queue the worker leases | No. Operational, holds ids and states only | Deleted | **30 days after it finishes** | No content: ids, kinds, states, lease times |
+| Agent monitoring | Stuck tasks, stale jobs, permission denials, model errors (ids, counts, error codes) | No. Operational telemetry, separate from product analytics | Ids removed | **30 days** | Never message text, amounts or limits |
 
 What the other side sees: only what the offer history already shows them, plus a quiet
 "via agent" on an offer the agent sent (AG-4). They never see the member's limits, tasks,
@@ -30,7 +30,7 @@ they were party to, as today.
 
 Admins: the kill switches and monitoring show ids, states and counts. Reading a member's chat
 needs an operator action that is written to the admin audit log, the same as other member data
-today. Proposed: only for an abuse or dispute case.
+today, and is allowed only for an abuse or dispute case (decided 17 Oct).
 
 ## 2. What may reach the model provider
 
@@ -60,8 +60,9 @@ allow-list per tool, never by passing records whole.
 - Credentials, tokens, session or lease ids, internal notes, admin data.
 
 **Provider terms.** Data is sent under the provider's commercial API terms, where inputs aren't
-used for training. *Open:* whether to ask for zero data retention, which is what the importer's
-calls should use too. The usage log keeps the model, token counts, cost and task id, never the
+used for training. DRVN asks the provider for zero data retention on agent and importer calls
+(decided 17 Oct). Arranging it is an account step for Neil with the provider; until it's
+confirmed, the privacy page doesn't claim it. The usage log keeps the model, token counts, cost and task id, never the
 content.
 
 **Untrusted content.** Anything not typed by the owner (listing text, other people's messages,
@@ -111,7 +112,7 @@ draft for counsel, not legal advice.
 > When the agent sends an offer for you, the other member sees "via agent" on it. They never
 > see your limits or your chat with the agent.
 
-**Privacy: "How long we keep it", new items** *(periods as ruled)*
+**Privacy: "How long we keep it", new items**
 
 > - Your chat with the agent: 12 months after your last message, or until you clear it.
 > - The agent's record of what it did, and finished tasks: 12 months.
@@ -134,13 +135,18 @@ draft for counsel, not legal advice.
 > listing or account, to keep the marketplace safe; offers and orders already made stay as they
 > are. The agent can make mistakes. Check what it drafts before you confirm it.
 
-## 5. Open decisions for Neil
+## 5. Decisions
 
-1. The proposed periods: 12 months for chat, events, finished tasks and ended limits; 30 days
-   for jobs and monitoring.
-2. Whether admins may read a member's agent chat, and only for abuse or dispute cases.
-3. Asking the model provider for zero data retention on agent and importer calls.
-4. Whether clearing the chat also clears the agent's record of actions (proposed: no, since the
-   record explains offers already made; it ages out after 12 months).
-5. Counsel: whether the binding-counter clause and the "via agent" disclosure are enough
-   notice for the other party.
+Ruled by Neil on 17 October 2026:
+
+1. **Periods.** 12 months for agent chat (from the last message), the agent's record of
+   actions, finished tasks and ended limits; 30 days for jobs and agent monitoring.
+2. **Operator access.** Admins read a member's agent chat only for an abuse or dispute case,
+   and every read is written to the admin audit log.
+3. **Provider retention.** DRVN asks the model provider for zero data retention on agent and
+   importer calls.
+4. **Clearing the chat** removes the conversation only. The agent's record of actions stays,
+   because it explains offers already made, and ages out after 12 months.
+
+Still open, for counsel: whether the binding-counter clause and the "via agent" disclosure are
+enough notice for the other party (`legal-review-checklist.md`, "The agent").
