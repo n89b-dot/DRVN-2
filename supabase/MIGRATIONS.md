@@ -1115,6 +1115,7 @@ The migration adds durable payment requests, atomic capture/payout/compensation,
 
 Follow [the remediation rollout](../docs/remediation-rollout.md) for coordinated application/schema deployment and required Auth, SMTP and scheduler settings. Do not apply the destructive initial schema to an existing project.
 
+
 The entries below are historical application records. Compare the destination's actual schema and migration history before applying any file. Apply only reviewed, unapplied migrations through the established SQL Editor/runner procedure. **0001 is destructive; never replay the tree against an existing project.** Some later files were tested for repeatability, but the whole tree is not a safe re-run operation.
 
 ## Status: 0001–0039 recorded below; 0040–0046 applied but unrecorded here; 0047–0056 applied
