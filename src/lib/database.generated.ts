@@ -2485,6 +2485,7 @@ export type Database = {
           id: string
           image_url: string | null
           linked_listing_id: string | null
+          origin: string
           part_number: string | null
           part_number_compact: string | null
           position: number
@@ -2510,6 +2511,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           linked_listing_id?: string | null
+          origin?: string
           part_number?: string | null
           part_number_compact?: string | null
           position?: number
@@ -2535,6 +2537,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           linked_listing_id?: string | null
+          origin?: string
           part_number?: string | null
           part_number_compact?: string | null
           position?: number
