@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-20 — Car generations (graph foundation, B1 step one)
+
+Cars now know their generation. `vehicle_generations` holds each generation of a catalog model — `Mk8`, `E46`, `R34`, `ND` — with its platform code and years, seeded by hand with about 200 enthusiast generations (no open source carries them). A car resolves to one only when exactly one generation of its model covers its year; changeover years, such as a 2020 Golf R that could be a Mk7 or a Mk8, resolve to nothing so the owner can be asked, and an owner's choice is kept while it still fits. Nothing a shopper sees changes: vehicle fit and search don't read generations yet. Explore's build search was restated to carry the two new car columns.
+
 ## 2026-10-18 — The old offer paths are gone (negotiation v2 and the private minimum: contract)
 
 - **One way to make an offer.** `create_offer_with_message` is dropped, and members can no longer write the `offers` table directly. Every offer and every move goes through `offer_open` and `offer_move`, which apply the negotiation rules.

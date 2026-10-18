@@ -1,5 +1,20 @@
 # Applying migrations
 
+## October 20 — car generations, B1 step one
+
+| File | Applied to |
+|---|---|
+| `20261020100000_vehicle_generations.sql` | not yet |
+
+Apply after `20261018100200`. It adds:
+- `vehicle_generations` (catalog model, name, platform code, years), public read, no client writes, with a curated seed of about 200 generations joined to the catalog by make and model name. Models the catalog lacks are skipped; re-running the file after a catalog import fills them in.
+- `cars.generation_id` and `generation_source` (`resolved` | `owner`), readable like the other car columns, kept by the `car_generation_before_write` trigger, and re-resolved for a model's cars when its generations change.
+- `resolve_vehicle_generation(model, year)`: the one generation covering the year, or null.
+
+It restates `explore_build_rows` with the two new columns appended (it returns whole `cars` rows; without them Explore's build search fails with "return type mismatch").
+
+Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; every SQL guard passes, including the new `vehicle_generations_guard.sql` and `car_vin_privacy_guard.sql`'s updated column set. Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
+
 ## October 19 — negotiation v2 and the private minimum: contract (not applied yet)
 
 | File | Applied to |
@@ -1099,7 +1114,6 @@ The shared ledger previously contained only 0001–0011 despite later schema obj
 The migration adds durable payment requests, atomic capture/payout/compensation, queued receipts/search/deletion, admin MFA/atomic commands, normalized-public-upload enforcement and worker health/schedules. It replaces the payment-reference uniqueness rule to allow a multi-seller basket to share one Stripe intent, while enforcing one payment row per order. Check historical duplicate order payments before applying the index.
 
 Follow [the remediation rollout](../docs/remediation-rollout.md) for coordinated application/schema deployment and required Auth, SMTP and scheduler settings. Do not apply the destructive initial schema to an existing project.
-
 
 The entries below are historical application records. Compare the destination's actual schema and migration history before applying any file. Apply only reviewed, unapplied migrations through the established SQL Editor/runner procedure. **0001 is destructive; never replay the tree against an existing project.** Some later files were tested for repeatability, but the whole tree is not a safe re-run operation.
 
