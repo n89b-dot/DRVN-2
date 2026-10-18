@@ -211,7 +211,13 @@ test.describe("seller agent (A3a)", () => {
     await db.query("update public.orders set accepted_checkout_shipping = '{\"frozen\":true}'::jsonb where id = $1", [orderId]);
     await seller.goto(`/offers/${offerId}`);
     await expect(seller.getByRole("button", { name: "Cancel before checkout" })).toHaveCount(0);
+    // The database refuses to un-freeze a started checkout (rightly); on this
+    // isolated stack the test puts the order back with triggers bypassed for
+    // that one statement, to check the other side of the rule.
+    await db.query("begin");
+    await db.query("set local session_replication_role = replica");
     await db.query("update public.orders set accepted_checkout_shipping = null where id = $1", [orderId]);
+    await db.query("commit");
     await seller.goto(`/offers/${offerId}`);
     await shoot(seller, "04-offer-accepted-cancel");
     await seller.getByRole("button", { name: "Cancel before checkout" }).click();
