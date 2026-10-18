@@ -812,10 +812,10 @@
       display: none;
     }
     body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body {
-      padding-bottom: calc(var(--bottom-surface-h, 76px) + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(var(--bottom-surface-h, 80px) + env(safe-area-inset-bottom, 0px));
     }
     body:not(:has(.buybar, .savebar, .chatbox)):has(.bnav:not([hidden])) .toast {
-      bottom: calc(var(--bottom-surface-h, 76px) + 8px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(var(--bottom-surface-h, 80px) + 8px + env(safe-area-inset-bottom, 0px));
     }
   }
 }
