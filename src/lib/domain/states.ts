@@ -54,10 +54,15 @@ export const LISTING_TRANSITIONS: TransitionMap<ListingStatus> = {
   removed: ["paused"],
 };
 
-/** Offers (0007/0012): status is final once it leaves open/countered. */
+/**
+ * Offers (0007/0012; negotiation v2, 20261017160000): `open` is the seller's
+ * turn, `countered` the buyer's. A buyer's counter-back sends a countered
+ * offer back to open; every move is a round in offer_rounds, made through
+ * offer_move. Status is final once it leaves open/countered.
+ */
 export const OFFER_TRANSITIONS: TransitionMap<OfferStatus> = {
   open: ["countered", "accepted", "declined", "withdrawn", "expired"],
-  countered: ["accepted", "declined", "withdrawn", "expired"],
+  countered: ["open", "accepted", "declined", "withdrawn", "expired"],
   accepted: [],
   declined: [],
   withdrawn: [],

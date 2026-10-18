@@ -35,6 +35,8 @@ export const NOTIFICATION_KINDS: NotificationKind[] = [
   { kind: "offer_accepted", section: "marketplace", pref: "offers_sales", source: "app", description: "The seller accepted your offer — opens checkout (offer-actions.ts; the trigger no longer writes a second one)." },
   { kind: "offer_counter_accepted", section: "marketplace", pref: "offers_sales", source: "trigger", description: "The buyer accepted your counter — opens the order." },
   { kind: "offer_withdrawn", section: "marketplace", pref: "offers_sales", source: "trigger", description: "An offer was withdrawn." },
+  { kind: "offer_countered_back", section: "marketplace", pref: "offers_sales", source: "trigger", description: "The buyer countered your counter — opens the offer (negotiation v2, 20261017160000)." },
+  { kind: "offer_expired", section: "marketplace", pref: "offers_sales", source: "trigger", description: "A turn ran out and the offer expired — sent to both sides (20261017160000)." },
   { kind: "order_sold", section: "marketplace", pref: "offers_sales", source: "trigger", description: "Your part sold." },
   { kind: "order_paid", section: "marketplace", pref: "offers_sales", source: "trigger", description: "Payment confirmed on an order." },
   { kind: "order_shipped", section: "marketplace", pref: "order_updates", source: "trigger", description: "Your order shipped." },

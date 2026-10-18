@@ -19,6 +19,7 @@ export type LiveOffer = {
   incoming: boolean;
   title: string;
   expiresAt: string | null;
+  round: number;
 };
 
 function dayLabel(iso: string, timeZone: string): string {
@@ -250,6 +251,7 @@ export function ThreadView({
               counterpartyName={otherName}
               partTitle={offer.title}
               expiresAt={offer.expiresAt}
+              round={offer.round}
             />
           ))}
       </div>

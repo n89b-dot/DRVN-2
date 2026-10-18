@@ -71,13 +71,13 @@ beforeEach(() => {
   }, error: null });
   mocks.beta.mockResolvedValue({ eligible: true });
   mocks.allow.mockResolvedValue(true);
-  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: false }, error: null });
+  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: false, outcome: "sent" }, error: null });
 });
 
 it("creates the offer and opening message through one atomic RPC", async () => {
   expect(form().get("offer_id")).toBe(offerId);
   await expect(makeOffer({}, form())).resolves.toMatchObject({ ok: expect.stringContaining("Offer sent") });
-  expect(mocks.rpc).toHaveBeenCalledWith("create_offer_with_message", {
+  expect(mocks.rpc).toHaveBeenCalledWith("offer_open", {
     p_offer: offerId,
     p_listing: "listing-1",
     p_amount: 9000,
@@ -87,7 +87,7 @@ it("creates the offer and opening message through one atomic RPC", async () => {
 
 it("replays the same committed identity without consuming admission again", async () => {
   mocks.existing.mockResolvedValue({ data: { id: offerId }, error: null });
-  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: true }, error: null });
+  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: true, outcome: "sent" }, error: null });
   await expect(makeOffer({}, form())).resolves.toHaveProperty("ok");
   expect(mocks.beta).not.toHaveBeenCalled();
   expect(mocks.allow).not.toHaveBeenCalled();
@@ -116,8 +116,15 @@ it("says so plainly when the buyer already has a live offer on the part", async 
 });
 
 it("refuses a below-minimum offer without naming the minimum", async () => {
-  mocks.rpc.mockResolvedValue({ data: null, error: { code: "23514", message: "That offer is lower than the seller will accept" } });
+  // offer_open records the attempt as a declined round (it uses one of the
+  // buyer's 3) and answers normally, so nothing is rolled back.
+  mocks.rpc.mockResolvedValue({ data: { offer_id: offerId, replayed: false, outcome: "below_minimum" }, error: null });
   const result = await makeOffer({}, form());
   expect(result.error).toBe("That's lower than the seller will accept. Try a higher offer.");
   expect(result.error).not.toMatch(/\$|\d/);
+});
+
+it("says so when the buyer has used their 3 offers on the part", async () => {
+  mocks.rpc.mockResolvedValue({ data: null, error: { code: "OF001" } });
+  await expect(makeOffer({}, form())).resolves.toEqual({ error: "You've used your 3 offers on this part." });
 });

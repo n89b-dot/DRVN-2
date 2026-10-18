@@ -81,6 +81,7 @@ export default async function ConversationPage({
       incoming: f.seller_id === user.id,
       title: shortTitle(f.title),
       expiresAt: f.expires_at,
+      round: f.round_count ?? 0,
     }));
   // A live offer is decided right here, so its bell notification is dealt
   // with too (as it is on /offers/[id]).

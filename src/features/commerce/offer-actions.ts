@@ -105,21 +105,31 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
     return { error: "You already have an open offer on this part — find it in Offers." };
   }
 
-  const created = await supabase.rpc("create_offer_with_message", {
+  // Negotiation v2 (migration 20261017160000): one database step opens the
+  // offer, checks the 3-offers-per-part limit and records a below-minimum
+  // attempt as a declined round that uses one of them.
+  const created = await supabase.rpc("offer_open", {
     p_offer: offerId,
     p_listing: listingId,
     p_amount: amount,
     p_message: message || undefined,
   });
-  if (created.error || !(created.data as { offer_id?: string } | null)?.offer_id) {
+  const opened = created.data as { offer_id?: string; outcome?: string } | null;
+  if (created.error || !opened?.offer_id) {
     if (created.error && (await isSuspended(supabase, user.id))) return { error: SUSPENDED_MESSAGE };
-    if (created.error?.code === "23514") return { error: OFFER_BELOW_MINIMUM_MESSAGE };
+    const known = created.error ? moveErrorMessage(created.error.code) : null;
+    if (known) return { error: known };
     reportError("[commerce] atomic offer submission failed", { offerId, error: created.error });
     return {
       error: created.error?.code === "23505"
         ? "You already have an open offer on this part — find it in Offers."
         : "Couldn't confirm your offer was sent. Try again with the same offer.",
     };
+  }
+  if (opened.outcome === "below_minimum") {
+    revalidatePath(`/listings/${listingId}`);
+    revalidatePath("/offers");
+    return { error: OFFER_BELOW_MINIMUM_MESSAGE };
   }
 
   capture(user.id, { event: "offer_submitted" });
@@ -129,167 +139,115 @@ export async function makeOffer(_prev: CommerceState, formData: FormData): Promi
   return { ok: "Offer sent — track it in Offers." };
 }
 
+type OfferMoveKind = "counter" | "accept" | "decline" | "withdraw";
+type OfferMoveResult = { offer_id: string; round_no: number; kind: string; outcome?: string; replayed?: boolean; order_id?: string | null };
+
+/**
+ * One negotiation move through offer_move (migration 20261017160000), as the
+ * signed-in member: the database checks turn, round, bounds and limits in one
+ * transaction. The idempotency key is the offer, the round the move was made
+ * at, the move and its amount, so a form resent after a lost response replays
+ * the move it already made — and a different amount at a round that has
+ * moved on is refused as stale rather than applied twice.
+ */
+async function moveOffer(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  move: { offerId: string; kind: OfferMoveKind; round: number; amountCents?: number },
+) {
+  const { data, error } = await supabase.rpc("offer_move", {
+    p_offer: move.offerId,
+    p_kind: move.kind,
+    // Only a counter carries an amount; the generated type can't say a
+    // plpgsql argument may be null.
+    p_amount: (move.amountCents ?? null) as number,
+    p_idempotency_key: `${move.kind}:${move.offerId}:r${move.round}:${move.amountCents ?? 0}`,
+    p_expected_round: move.round,
+  });
+  return { result: data as OfferMoveResult | null, error };
+}
+
+/** What a member sees for each refusal offer_open / offer_move can give. */
+function moveErrorMessage(code: string | undefined): string | null {
+  switch (code) {
+    case "OF001": return "You've used your 3 offers on this part.";
+    case "OF002": return "It's not your turn — this offer is waiting on the other side.";
+    case "OF003": return "This offer changed since you opened it. Reload to see the latest.";
+    case "OF004": return "That amount isn't allowed here. A counter goes above the last offer and stays within the asking price.";
+    case "OF005": return "That offer has already been settled.";
+    case "OF007": return "That part is no longer available.";
+    case "OF009": return "Too many offer moves in a short time. Try again in a few minutes.";
+    case "P0002": return "That offer no longer exists.";
+    case CHARGE_OUT_OF_BOUNDS_CODE: return OFFER_OUT_OF_BOUNDS_MESSAGE;
+    default: return null;
+  }
+}
+
+function readRound(formData: FormData): number | null {
+  const raw = String(formData.get("round") ?? "").trim();
+  if (!raw) return null;
+  const round = Number(raw);
+  return Number.isInteger(round) && round >= 0 ? round : null;
+}
+
+function readAmount(formData: FormData, field: string): number | null {
+  const cents = Math.round(Number(String(formData.get(field) ?? "")) * 100);
+  return Number.isFinite(cents) && cents > 0 ? cents : null;
+}
+
+function revalidateOffer(offerId: string, listingId?: string) {
+  revalidatePath("/orders");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${offerId}`);
+  if (listingId) revalidatePath(`/listings/${listingId}`);
+}
+
+async function moveFailure(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  offerId: string,
+  error: { code?: string; message?: string } | null,
+): Promise<CommerceState> {
+  if (error?.code === "42501" && (await isSuspended(supabase, userId))) return { error: SUSPENDED_MESSAGE };
+  const known = moveErrorMessage(error?.code);
+  if (known) return { error: known };
+  reportError("[commerce] offer move failed", { offerId, error });
+  return { error: "Couldn't confirm the offer update. Retry to check the saved result." };
+}
+
+/** The seller's move on an offer: accept, counter or pass (decline). */
 export async function respondToOffer(
   _prev: CommerceState,
   formData: FormData
 ): Promise<CommerceState> {
-  const { user } = await requireUser();
-  const admin = createAdminClient();
-
+  const { supabase, user } = await requireUser();
   const offerId = String(formData.get("offer_id") ?? "");
   const decision = String(formData.get("decision") ?? "");
-  if (!offerId || !["accepted", "declined", "countered"].includes(decision)) {
+  const round = readRound(formData);
+  if (!offerId || !["accepted", "declined", "countered"].includes(decision) || round === null) {
     return { error: "Pick accept, counter or decline." };
   }
   if (decision !== "declined") {
     const betaAccess = await getBetaAccess(user.id, "seller");
     if (!betaAccess.eligible) return { error: betaCommerceError("seller") };
   }
+  const counter = decision === "countered" ? readAmount(formData, "counter_amount") : undefined;
+  if (decision === "countered" && !counter) return { error: "Enter the amount you'd accept." };
 
-  const { data: offer } = await admin
-    .from("offers")
-    .select("id, listing_id, buyer_id, amount_cents, counter_amount_cents, status, expires_at")
-    .eq("id", offerId)
-    .maybeSingle();
-  if (!offer) return { error: "That offer no longer exists." };
-  // The sweeper expires lapsed offers on a schedule, not instantly — a seller
-  // can still land here between expiry and the next sweep. Accepting or
-  // countering at that point would honour a price the buyer never agreed to
-  // hold past 72 hours, so it's checked again here rather than trusted.
-  if (["open", "countered"].includes(offer.status) && offer.expires_at && new Date(offer.expires_at) < new Date()) {
-    await admin
-      .from("offers")
-      .update({ status: "expired", responded_at: new Date().toISOString() })
-      .eq("id", offerId)
-      .in("status", ["open", "countered"]);
-    revalidatePath("/orders");
-    revalidatePath("/offers");
-    revalidatePath(`/offers/${offerId}`);
-    return { error: "This offer has expired." };
-  }
+  const kind: OfferMoveKind = decision === "accepted" ? "accept" : decision === "declined" ? "decline" : "counter";
+  const { result, error } = await moveOffer(supabase, { offerId, kind, round, amountCents: counter ?? undefined });
+  if (error || !result) return moveFailure(supabase, user.id, offerId, error);
+  revalidateOffer(offerId);
+  if (result.outcome === "expired") return { error: "This offer has expired." };
+  if (kind === "decline") return { ok: "Offer declined." };
+  if (kind === "counter") return { ok: "Counter sent." };
 
-  const { data: listing } = await admin
-    .from("listings")
-    .select("id, seller_id, status, price_cents")
-    .eq("id", offer.listing_id)
-    .maybeSingle();
-  if (!listing) return { error: "That listing no longer exists." };
-  if (listing.seller_id !== user.id) return { error: "That isn't your listing." };
-
-  // A response can be committed while its Server Action response is lost.
-  // Treat an exact replay as confirmation of the saved decision.
-  if (decision === "declined" && offer.status === "declined") {
-    return { ok: "Offer declined." };
+  // Accepted: the part is reserved and an order opened at the agreed price.
+  // Deliberately no charge here — the buyer completes checkout with a
+  // delivery address within 24 hours.
+  if (!result.order_id) {
+    return { error: "We couldn't confirm the accepted offer's order. Contact support before retrying." };
   }
-  if (decision === "accepted" && offer.status === "accepted") {
-    const { data: existingOrder } = await admin
-      .from("orders")
-      .select("id")
-      .eq("origin_offer_id", offerId)
-      .maybeSingle();
-    return existingOrder
-      ? { ok: "Offer accepted — the buyer has 24 hours to complete checkout." }
-      : { error: "We couldn't confirm the accepted offer's order. Contact support before retrying." };
-  }
-  if (decision === "countered") {
-    const replayedCounter = Math.round(Number(String(formData.get("counter_amount") ?? "")) * 100);
-    if (!Number.isFinite(replayedCounter) || replayedCounter <= 0) {
-      return { error: "Enter the amount you'd accept." };
-    }
-    // Confirm the immutable decision before comparing it with mutable listing
-    // terms. The asking price may have changed after this counter committed.
-    if (offer.status === "countered" && offer.counter_amount_cents === replayedCounter) {
-      return { ok: "Counter sent." };
-    }
-  }
-  if (!["open", "countered"].includes(offer.status)) {
-    return { error: "That offer has already been settled." };
-  }
-  // Once the seller has countered it's the buyer's turn. offer_accept_begin
-  // prices a countered offer at the counter, so a seller "accepting" here
-  // reserved the part at a price the buyer never agreed to. Passing (decline)
-  // stays open so the seller can withdraw their counter.
-  if (decision !== "declined" && offer.status === "countered") {
-    return { error: "You've already countered — it's the buyer's turn now. Pass to withdraw your counter." };
-  }
-
-  if (decision === "declined") {
-    const { data: declined, error } = await admin
-      .from("offers")
-      .update({ status: "declined", responded_at: new Date().toISOString() })
-      .eq("id", offerId)
-      .in("status", ["open", "countered"])
-      .select("id");
-    if (error) return { error: error.message };
-    if (!declined?.length) return { error: "That offer has already been settled." };
-    revalidatePath("/orders");
-    revalidatePath("/offers");
-    revalidatePath(`/offers/${offerId}`);
-    return { ok: "Offer declined." };
-  }
-
-  if (decision === "countered") {
-    const counter = Math.round(Number(String(formData.get("counter_amount") ?? "")) * 100);
-    if (!Number.isFinite(counter) || counter <= 0) {
-      return { error: "Enter the amount you'd accept." };
-    }
-    if (counter > listing.price_cents) {
-      return { error: "A counter can't exceed your asking price." };
-    }
-    if (counter <= offer.amount_cents) {
-      return { error: "A counter should be above the buyer's offer." };
-    }
-    const { data: countered, error } = await admin
-      .from("offers")
-      .update({
-        status: "countered",
-        counter_amount_cents: counter,
-        countered_at: new Date().toISOString(),
-      })
-      .eq("id", offerId)
-      .eq("status", "open")
-      .select("id");
-    if (error) return { error: error.message };
-    if (!countered?.length) return { error: "That offer has already been settled." };
-    revalidatePath("/orders");
-    revalidatePath("/offers");
-    revalidatePath(`/offers/${offerId}`);
-    return { ok: "Counter sent." };
-  }
-
-  // Accept. The listing is claimed atomically at the agreed price; the buyer is
-  // then charged against the order this creates.
-  if (listing.status !== "active") {
-    return { error: "That part is no longer on sale." };
-  }
-
-  const { data: orderId, error: acceptError } = await admin.rpc("offer_accept_begin", {
-    p_offer_id: offerId,
-    p_seller_id: user.id,
-  });
-
-  if (acceptError) {
-    if (acceptError.code === CHARGE_OUT_OF_BOUNDS_CODE) return { error: OFFER_OUT_OF_BOUNDS_MESSAGE };
-    reportError("[commerce] offer_accept_begin failed", { offerId, acceptError });
-    return { error: "We couldn't accept that offer. Nothing was charged." };
-  }
-  if (!orderId) {
-    return { error: "That part was claimed by someone else first." };
-  }
-
-  // Deliberately no charge here. Accepting reserves the part and opens an
-  // order the buyer completes with a delivery address — charging on the
-  // seller's click billed someone who had never seen a checkout, consented to
-  // an amount, or said where to send it. The reservation gives them 24 hours;
-  // the sweeper releases it after that.
-  const notified = await notifyOfferAccepted(admin, orderId);
-
-  revalidatePath("/orders");
-  revalidatePath("/offers");
-  revalidatePath(`/offers/${offerId}`);
-  revalidatePath(`/listings/${listing.id}`);
-  // The acceptance stands whether or not the notice went out. The buyer has
-  // only 24 hours, so the seller hears when they may not know yet.
+  const notified = result.replayed ? true : await notifyOfferAccepted(createAdminClient(), result.order_id);
   return {
     ok: notified
       ? "Offer accepted — the buyer has 24 hours to complete checkout."
@@ -334,89 +292,58 @@ export async function withdrawOffer(
 ): Promise<CommerceState> {
   const { supabase, user } = await requireUser();
   const offerId = String(formData.get("offer_id") ?? "");
-  if (!offerId) return { error: "Missing offer." };
+  const round = readRound(formData);
+  if (!offerId || round === null) return { error: "Missing offer." };
 
-  const { error } = await supabase
-    .from("offers")
-    .update({ status: "withdrawn" })
-    .eq("id", offerId)
-    .eq("buyer_id", user.id)
-    .in("status", ["open", "countered"]);
-
-  if (error) return { error: error.message };
-  revalidatePath("/orders");
-  revalidatePath("/offers");
-  revalidatePath(`/offers/${offerId}`);
+  const { result, error } = await moveOffer(supabase, { offerId, kind: "withdraw", round });
+  if (error || !result) return moveFailure(supabase, user.id, offerId, error);
+  revalidateOffer(offerId);
+  if (result.outcome === "expired") return { error: "This offer has expired." };
   return { ok: "Offer withdrawn." };
 }
 
+/** The buyer counters back: above their last offer, below the seller's counter. */
+export async function counterOffer(
+  _prev: CommerceState,
+  formData: FormData
+): Promise<CommerceState> {
+  const { supabase, user } = await requireUser();
+  const betaAccess = await getBetaAccess(user.id, "buyer");
+  if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
+  const offerId = String(formData.get("offer_id") ?? "");
+  const round = readRound(formData);
+  const amount = readAmount(formData, "counter_amount");
+  if (!offerId || round === null) return { error: "Missing offer." };
+  if (!amount) return { error: "Enter your counter-offer." };
+
+  const { result, error } = await moveOffer(supabase, { offerId, kind: "counter", round, amountCents: amount });
+  if (error || !result) return moveFailure(supabase, user.id, offerId, error);
+  revalidateOffer(offerId);
+  if (result.outcome === "expired") return { error: "This offer has expired." };
+  if (result.outcome === "below_minimum") {
+    return { error: `${OFFER_BELOW_MINIMUM_MESSAGE} This offer has ended; you can make a new one if you have offers left.` };
+  }
+  return { ok: "Counter-offer sent." };
+}
+
+/** The buyer accepts the seller's counter, then goes straight to checkout. */
 export async function acceptCounter(
   _prev: CommerceState,
   formData: FormData
 ): Promise<CommerceState> {
-  const { user } = await requireUser();
+  const { supabase, user } = await requireUser();
   const betaAccess = await getBetaAccess(user.id, "buyer");
   if (!betaAccess.eligible) return { error: betaCommerceError("buyer") };
-  const admin = createAdminClient();
   const offerId = String(formData.get("offer_id") ?? "");
-  if (!offerId) return { error: "Missing offer." };
+  const round = readRound(formData);
+  if (!offerId || round === null) return { error: "Missing offer." };
 
-  const { data: offer } = await admin
-    .from("offers")
-    .select("id, listing_id, buyer_id, counter_amount_cents, status, expires_at")
-    .eq("id", offerId)
-    .maybeSingle();
-
-  if (!offer || offer.buyer_id !== user.id) return { error: "That isn't your offer." };
-  if (offer.status === "accepted") {
-    const { data: existingOrder } = await admin
-      .from("orders")
-      .select("id")
-      .eq("origin_offer_id", offerId)
-      .maybeSingle();
-    if (existingOrder) redirect(`/orders/${existingOrder.id}/checkout`);
-  }
-  if (offer.status !== "countered" || !offer.counter_amount_cents) {
-    return { error: "There's no counter to accept." };
-  }
-  // Same lapsed-before-the-sweep window as respondToOffer: the counter's
-  // clock is still the original offer's expires_at, so a buyer can't accept
-  // a counter that outlived its 72-hour window just because the sweeper
-  // hasn't run yet.
-  if (offer.status === "countered" && offer.expires_at && new Date(offer.expires_at) < new Date()) {
-    await admin
-      .from("offers")
-      .update({ status: "expired", responded_at: new Date().toISOString() })
-      .eq("id", offerId)
-      .in("status", ["open", "countered"]);
-    revalidatePath("/orders");
-    revalidatePath("/offers");
-    revalidatePath(`/offers/${offerId}`);
-    return { error: "This offer has expired." };
-  }
-
-  const { data: listing } = await admin
-    .from("listings")
-    .select("seller_id, status")
-    .eq("id", offer.listing_id)
-    .maybeSingle();
-  if (!listing || listing.status !== "active") {
-    return { error: "That part is no longer on sale." };
-  }
-
-  const { data: orderId, error: acceptError } = await admin.rpc("offer_accept_begin", {
-    p_offer_id: offerId,
-    p_seller_id: listing.seller_id,
-  });
-  if (acceptError?.code === CHARGE_OUT_OF_BOUNDS_CODE) return { error: OFFER_OUT_OF_BOUNDS_MESSAGE };
-  if (acceptError || !orderId) {
-    return { error: "That part was claimed by someone else first." };
-  }
-
+  const { result, error } = await moveOffer(supabase, { offerId, kind: "accept", round });
+  if (error || !result) return moveFailure(supabase, user.id, offerId, error);
+  revalidateOffer(offerId);
+  if (result.outcome === "expired") return { error: "This offer has expired." };
+  if (!result.order_id) return { error: "That part was claimed by someone else first." };
   // As with accepting an offer: reserve now, charge at checkout, where the
   // buyer supplies a delivery address and confirms the amount.
-  revalidatePath("/orders");
-  revalidatePath("/offers");
-  revalidatePath(`/offers/${offerId}`);
-  redirect(`/orders/${orderId}/checkout`);
+  redirect(`/orders/${result.order_id}/checkout`);
 }

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-10-17 — Negotiation v2: counter-backs for everyone (step two)
+
+Buyers can now counter back. Every move goes through one database function, `offer_move` (or `offer_open` for the first offer), under the rules in `docs/decisions/negotiation-v2.md`:
+- turns alternate;
+- a buyer has 3 offers per part, counter-backs included, across every thread; offers already live count as the first;
+- the seller's counter stays above the offer, within the asking price and at or above their minimum;
+- each move gets a fresh 72 hours;
+- an offer below the minimum is recorded as declined and uses one of the 3, so the minimum can't be found by trial and error; the seller sees "declined automatically";
+- retrying a move after a lost response replays it, and a move made against an out-of-date offer is refused.
+
+Sellers can no longer cancel an accepted offer's order once the buyer has started checkout. New notifications: the buyer countered back (to the seller), and an offer expired (to both).
+
+In the app:
+- the offer box and the offer page offer "Counter back" with "N of 3 offers left";
+- the copy says how the rules work;
+- a buyer whose 24-hour checkout ran out is told the offer lapsed, rather than that it was "already settled".
+
+The old offer paths still work until the new app runs everywhere; a later step removes them.
+
 ## 2026-10-17 — Every offer move is recorded (negotiation v2, step one)
 
 Offers gain a history of moves. `offer_rounds` keeps one row per move: the opening offer, a counter, accept, decline, withdraw or expiry. Each proposal's minimum at the time is kept privately in `offer_round_terms`. Today's offer code is unchanged; a trigger records its moves, and a backfill rebuilds the history of every existing offer. The offer page now reads its history from the rounds, falling back to the old reading if they can't be read. Members' exports include their rounds (contract `2026-10-17.v7`). The design for the rest of negotiation v2 is `docs/decisions/negotiation-v2.md`.

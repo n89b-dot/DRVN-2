@@ -1,5 +1,38 @@
 # Applying migrations
 
+## October 17 — negotiation v2 moves, A1 step two (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261017160000_offer_move.sql` | throwaway database only (2026-10-17) |
+
+Apply after `20261017150000` and `20261017150100`. It adds `offer_open` and `offer_move`, two
+SECURITY DEFINER functions that make every negotiation move under the v2 rules
+(`docs/decisions/negotiation-v2.md`):
+- strict turns;
+- seller counters above the offer, within the asking price and at or above the minimum;
+- buyer counter-backs above their last amount and below the counter;
+- 3 buyer offers per part across threads, with live offers counting as the first;
+- a below-minimum attempt recorded as a declined round;
+- a fresh 72 hours each move;
+- refusal of stale rounds, and exact replay by idempotency key;
+- a rate limit inside the transaction.
+
+They lock the listing, then the offer. Acceptance runs `offer_accept_begin` under those locks.
+
+It also restates five functions:
+- `record_offer_round` skips moves these functions write, and keeps the new `offers.round_count` current.
+- `guard_offer_private_floor`: the new functions check the minimum themselves.
+- `notify_on_offer` doesn't announce an attempt that was declined at once.
+- `notify_on_offer_response` adds `offer_countered_back` and `offer_expired`.
+- `settle_seller_cancellation` is refused once checkout has begun.
+
+Today's paths (`create_offer_with_message`, the old app's direct updates) keep working until the
+switched app runs everywhere. A later contract step removes them.
+
+Checked on a fresh database with every migration: the file applies twice cleanly, the new
+`offer_move_guard.sql` (23 checks) and every other guard pass, and generated types match.
+
 ## October 17 — offer rounds, A1 step one (not applied yet)
 
 | File | Applied to |

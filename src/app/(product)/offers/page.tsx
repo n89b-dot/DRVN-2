@@ -481,7 +481,7 @@ export default async function OffersPage({
       {/* The expiry rule belongs here — this is the offers surface. It used
           to be footed on /orders too, where it explained nothing. */}
       <Foot
-        left="DRVN — offers expire 72 hours after they're made"
+        left="DRVN — each turn on an offer lasts 72 hours"
         right={<Link href="/messages">Messages →</Link>}
       />
     </div>
