@@ -1,12 +1,12 @@
 # Applying migrations
 
-## October 21 — the agent foundation, A2 (not yet on shared dev)
+## October 21 — the agent foundation, A2 (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261021100000_agent_foundation.sql` | not yet applied |
-| `20261021100100_agent_worker.sql` | not yet applied |
-| `20261021100200_account_export_contract_v10.sql` | not yet applied |
+| `20261021100000_agent_foundation.sql` | shared dev project (2026-10-18, twice) |
+| `20261021100100_agent_worker.sql` | shared dev project (2026-10-18, twice) |
+| `20261021100200_account_export_contract_v10.sql` | shared dev project (2026-10-18, twice) |
 
 Apply in order, after B1's `20261020100000`–`120000`, the A1 files and the seller-helpers
 export bump (`2026-10-19.v9`) if it is on the project. Nothing changes for
@@ -41,6 +41,22 @@ An independent review (18 Oct) found the outbox trigger could fail a person's
 move in a revoke race, skipped jobs could block the queue, card redaction
 missed trailing digits, and several lock-order and null-argument gaps; all are
 fixed here with guard checks.
+
+**Shared dev, 2026-10-18**, after #36 merged (efe24ff), applied in order, each twice, with
+`node scripts/apply-migration.mjs`. Dev was on Postgres 17 with B1's products
+(`20261020120000`) applied, and without #39's contract or #34's v9.
+- **Before:** `~/drvn-db-backups/pre-20261021-a2-apply.sql` (public schema) and
+  `pre-20261021-a2-apply-data.sql` (offers, offer_rounds, offer_round_terms,
+  account_export_requests).
+- **After:** `agent_worker` exists, NOLOGIN, with only its creator's admin membership.
+  - There are 10 `agent_*` tables, with the `all` switch on and no mandates or jobs.
+  - Members can't reach the cores or the worker functions, and anon can't reach the member functions.
+  - `offer_move` wraps `offer_move_core`, and exports stamp `2026-10-21.v10`.
+  - The audit subject check keeps `product_review` and adds `agent`.
+- **Probe:** `agent_worker_guard.sql` ran against dev in one rolled-back transaction and passed.
+  - On Postgres 17 the creator's membership has SET off. So the probe first ran `grant agent_worker to postgres with set true, inherit false granted by postgres` in that same transaction.
+  - Afterwards nothing remained: no test users, mandates or extra membership, and the `all` switch was still on.
+- **When #34 is applied:** its `20261019100000`/`100100` go on dev after this, so re-run `20261021100200` afterwards to end on v10.
 
 ## October 20 — part keys and products, B1 step two
 

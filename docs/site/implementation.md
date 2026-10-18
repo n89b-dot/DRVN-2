@@ -342,8 +342,8 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.
 - **Approach:** Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.
 - **Depends on:** offer-floor-private
-- **Validation:** supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role. negotiate.ts property tests and seeded simulations (src/lib/agent); the same simulations through agent_worker in tests/operations/agent-worker.test.ts; tests/agent-evals fixtures for redaction, untrusted content and the model's tool boundary.
-- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md, docs/decisions/agent-data-rules.md
+- **Validation:** Not started.
+- **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md
 
 #### Immutable commercial sale snapshot — Validated
 
