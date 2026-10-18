@@ -39,9 +39,9 @@ test("a build change from the agent is saved only when the member confirms it", 
 
     const confirmId = randomUUID();
     const editId = randomUUID();
-    const card = (id: string, product: string, replaces: string | null) => ({ kind: "build_change", id, car: carId, replaces, brand: "KW", product, part_number: null, category: "suspension", product_url: null, image_url: null });
-    await db.query("select public.agent_chat_append($1, 'member', 'Just fitted KW V3s in place of the APR mount')", [memberId]);
-    await db.query("select public.agent_chat_append($1, 'agent', 'Here it is. Tap Confirm to save it.', $2::jsonb)", [memberId, JSON.stringify([card(confirmId, "V3 coilovers", oldMod)])]);
+    const card = (id: string, product: string, replaces: string | null) => ({ kind: "build_change", id, car: carId, replaces, brand: "Bilstein", product, part_number: null, category: "suspension", product_url: null, image_url: null });
+    await db.query("select public.agent_chat_append($1, 'member', 'Just fitted Bilstein B16s in place of the APR mount')", [memberId]);
+    await db.query("select public.agent_chat_append($1, 'agent', 'Here it is. Tap Confirm to save it.', $2::jsonb)", [memberId, JSON.stringify([card(confirmId, "B16 dampers", oldMod)])]);
     await db.query("select public.agent_chat_append($1, 'agent', 'And the springs?', $2::jsonb)", [memberId, JSON.stringify([card(editId, "Clubsport springs", null)])]);
 
     await page.goto("/login");
