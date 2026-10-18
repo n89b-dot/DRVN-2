@@ -69,6 +69,7 @@ export { BeforeAfter } from "./before-after";
 export { SortableGrid, SortableItem } from "./sortable-grid";
 export { ActionFooter } from "./action-footer";
 export { MobileActionBar } from "./mobile-action-bar";
+export { BottomNav, type BottomNavItem } from "./bottom-nav";
 export { BottomSheet } from "./bottom-sheet";
 export { FinderRefineSheet } from "./finder-refine-sheet";
 export { Dialog } from "./dialog";
