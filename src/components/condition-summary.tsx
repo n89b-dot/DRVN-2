@@ -94,7 +94,7 @@ export function ConditionSummary({
         </p>
       )}
       {rows.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1.5">
+        <ul className="mt-3 flex flex-col gap-2">
           {rows.map((row) => (
             <li key={row.key} className="flex items-baseline justify-between gap-3 text-micro">
               <span>{row.label}</span>

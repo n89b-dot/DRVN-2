@@ -36,7 +36,7 @@ export function ThemeSetting({ initialNight }: { initialNight: boolean }) {
   };
   return (
     <button type="button" className="btn" onClick={toggle} aria-pressed={night}>
-      <Icon name={night ? "moon" : "sun"} className="h-[15px] w-[15px]" />
+      <Icon name={night ? "moon" : "sun"} className="h-4 w-4" />
       {night ? "Dark" : "Light"}
     </button>
   );

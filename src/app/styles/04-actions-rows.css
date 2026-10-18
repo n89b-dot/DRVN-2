@@ -17,7 +17,12 @@
     font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 13px 20px;
+    /* Height is the touch floor, not the padding: 12px mono is an 18px line
+       (line-height 1.5), and no on-grid padding pair makes 18 + 2p = 40.
+       min-height holds every variant (mono, ghost 14px sans = 21px line,
+       destructive) at 40; the 8px padding only matters if the label wraps. */
+    min-height: var(--touch);
+    padding: 8px 20px;
     border-radius: var(--r-ctl);
     background: var(--ink);
     color: var(--on-ink);
@@ -71,7 +76,7 @@
     font-weight: 500;
     letter-spacing: 0;
     text-transform: none;
-    padding: 12px 18px;
+    padding: 8px 20px;
   }
   .btn--ghost:hover {
     background: var(--ghost-hover);
@@ -94,11 +99,11 @@
   .order {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px 14px;
+    gap: 8px 16px;
     align-items: center;
     background: var(--tile);
     border-radius: var(--r);
-    padding: 16px 18px;
+    padding: 16px 20px;
     transition:
       transform var(--t-move) var(--spring),
       opacity var(--t-move) ease,
@@ -113,7 +118,7 @@
   .order__img {
     flex: none;
     width: 56px;
-    height: 44px;
+    height: 44px; /* size */
     border-radius: var(--r-ctl);
     overflow: hidden;
     background: var(--img-fallback);
@@ -151,7 +156,7 @@
     flex: 0 0 auto;
   }
   .order__actions .btn {
-    padding: 10px 14px;
+    padding: 8px 16px;
     font-size: 12px;
   }
   .order.is-done {
@@ -214,7 +219,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    column-gap: 7px;
+    column-gap: 8px;
     row-gap: 2px;
     font-family: var(--mono);
     font-size: 11.5px;
@@ -250,11 +255,11 @@
     aspect-ratio: 16 / 10;
   }
   .vehicle__actions {
-    margin-top: 14px;
+    margin-top: 16px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
   }
   /* Management rows (Garage) — the garage's job is choosing a car to work
      on, so on phones the car keeps a real 3:2 thumbnail (112px — bigger than
@@ -321,11 +326,11 @@
     .vehicle--row .vehicle__stats {
       font-size: 10.5px;
       letter-spacing: 0.06em;
-      margin-top: 6px;
+      margin-top: 4px;
     }
     .vehicle--manage {
       grid-template-columns: 112px 1fr;
-      gap: 14px;
+      gap: 16px;
     }
     .vehicle--manage .vehicle__img {
       aspect-ratio: 3 / 2;
@@ -339,7 +344,7 @@
       margin-top: 2px;
     }
     .vehicle--manage .vehicle__actions {
-      margin-top: 10px;
+      margin-top: 8px;
       gap: 8px;
     }
   }
@@ -353,7 +358,7 @@
     background: transparent;
     border-radius: 0;
     border-top: 1px solid var(--rule-soft);
-    padding: 14px 2px;
+    padding: 16px 2px;
   }
   .rowlist .order:first-child,
   .rowlist .jobrow:first-child {
@@ -474,7 +479,7 @@
   }
   .week__day {
     text-align: center;
-    padding: 12px 4px 10px;
+    padding: 12px 4px 12px;
     border-radius: var(--r-ctl);
     background: var(--paper-deep);
   }
@@ -500,7 +505,7 @@
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: 0.14em;
-    margin-top: 3px;
+    margin-top: 4px;
   }
 
   /* ---------- THE LEDGER — a ruled data table ----------
@@ -522,14 +527,14 @@
     /* A wider gutter than the old 10px: adjacent heads used to fuse into one
        phrase ("TOP OFFER STATUS"), and the figures beneath needed the same
        rhythm to read as separate measures. */
-    padding: 0 24px 14px 0;
+    padding: 0 24px 16px 0;
     border-bottom: 1px solid var(--rule-mid);
     white-space: nowrap;
   }
   .ledger td {
     /* Rows carry stacked content — title, sub-line, actions — so they need
        real height to separate from the next row, not just a rule. */
-    padding: 18px 24px 18px 0;
+    padding: 20px 24px 20px 0;
     border-top: 1px solid var(--rule-soft);
     vertical-align: top;
   }
@@ -581,11 +586,11 @@
      be corners. */
   .ledger--expand th:first-child,
   .ledger--expand td:first-child {
-    padding-left: 14px;
+    padding-left: 16px;
   }
   .ledger--expand th:last-child,
   .ledger--expand td:last-child {
-    padding-right: 14px;
+    padding-right: 16px;
   }
   /* The row carries one routine action (Edit) and it is always visible —
      hover-only controls hid the one thing a seller came to the row to do.
@@ -594,8 +599,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px 18px;
-    margin-top: 14px;
+    gap: 8px 16px;
+    margin-top: 16px;
     padding-top: 12px;
     border-top: 1px solid var(--rule-soft);
   }
@@ -641,7 +646,7 @@
      puts every first line on one centre and every second line on one top. */
   .ledger--expand .ledger__figure,
   .ledger--expand tbody td:last-child > .chip {
-    min-height: 26px;
+    min-height: 26px; /* size */
     display: flex;
     align-items: center;
   }
@@ -677,7 +682,7 @@
     .ledger__sortbar {
       display: flex;
       align-items: baseline;
-      gap: 14px;
+      gap: 16px;
       flex-wrap: wrap;
       padding-bottom: 12px;
       margin-bottom: 4px;
@@ -713,7 +718,7 @@
     text-overflow: ellipsis;
   }
   .ledger__part .order__meta {
-    margin-top: 7px;
+    margin-top: 8px;
   }
   /* Between the stacked cards and a wide desktop the eight columns don't fit
      a tile: an under-offer row (offer count + expiry clock) pushed the table
@@ -747,7 +752,7 @@
   .ledger__sort {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     color: inherit;
     transition: color var(--t-fast) ease;
   }
@@ -758,15 +763,15 @@
     color: var(--ink);
   }
   /* The disclosure caret — a drafting tick that turns, not a chevron icon.
-     Sized as a real control (the rail's section disclosure grammar): 28px
+     Sized as a real control (the rail's section disclosure grammar): 32px
      box, centred glyph, its own hover plate. At 12px of dim mono it was a
      signpost nobody saw. */
   .ledger__toggle {
     color: var(--dim);
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--r-ctl);
     /* The chevron points left at rest, so it starts rotated to point right —
        closed — and turns to point down when open. */
@@ -804,7 +809,7 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--dim);
-    padding: 6px 0 2px;
+    padding: 8px 0 2px;
   }
   .ledgeroffers__line b {
     color: var(--ink);
@@ -812,15 +817,15 @@
   }
   .ledgeroffers {
     display: grid;
-    margin-top: 6px;
+    margin-top: 8px;
   }
   .ledgeroffers__row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 2px;
+    gap: 8px;
+    padding: 8px 2px;
     border-top: 1px solid var(--rule-soft);
-    min-height: 44px;
+    min-height: var(--touch);
     transition: background var(--t-fast) ease;
   }
   .ledgeroffers__row:hover {
@@ -899,7 +904,7 @@
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       column-gap: 12px;
-      row-gap: 10px;
+      row-gap: 8px;
       align-items: start;
     }
     .ledger--expand tr.ledger__row > td {
@@ -909,7 +914,7 @@
     }
     .ledger--expand tr.ledger__row > td:nth-child(2) {
       grid-column: 1 / -1;
-      padding-right: 28px;
+      padding-right: 32px;
     }
     .ledger--expand tr.ledger__row > td:nth-child(3) {
       grid-column: 1 / span 3;
@@ -955,7 +960,7 @@
     border-collapse: collapse;
   }
   .spec td {
-    padding: 11px 0;
+    padding: 12px 0;
     font-size: 16px;
     vertical-align: baseline;
   }

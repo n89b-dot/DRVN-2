@@ -6,7 +6,7 @@
     /* The head must hold its content at arm's length from what follows —
        18px below the standfirst read as one dense block with the section
        underneath. */
-    padding: clamp(28px, 5vw, 52px) 0 clamp(28px, 3.5vw, 40px);
+    padding: clamp(32px, 5vw, 48px) 0 clamp(32px, 3.5vw, 40px);
   }
   /* Under the Marketplace family nav the head has already been introduced by
      the register above it, so it doesn't need to open the page from scratch.
@@ -14,8 +14,8 @@
      sort before a single part is on screen. */
   .familynav + .pagehead,
   .pagehead--under-nav {
-    padding-top: clamp(6px, 1.5vw, 14px);
-    padding-bottom: clamp(20px, 2.5vw, 28px);
+    padding-top: clamp(8px, 1.5vw, 16px);
+    padding-bottom: clamp(20px, 2.5vw, 32px);
   }
   /* The family nav now sits under the head (every page's name starts at
      the same height, with or without a family); the head closes up to it
@@ -23,14 +23,14 @@
   /* The family nav is the first thing on the page — the register reads
      before the headline, so the head beneath it opens with less runway. */
   .familynav + .pagehead--task {
-    padding-top: clamp(18px, 2vw, 26px);
+    padding-top: clamp(20px, 2vw, 24px);
   }
   /* Working surfaces — an inbox, a short ledger — are glanced at, not
      introduced. The display head spent ~290px of a 900px viewport before the
      first row, which pushed a list of five conversations under the fold. Same
      voice, less runway. */
   .pagehead--tight {
-    padding: clamp(20px, 2.4vw, 28px) 0 clamp(14px, 1.8vw, 20px);
+    padding: clamp(20px, 2.4vw, 24px) 0 clamp(16px, 1.8vw, 20px);
   }
   .pagehead h1 {
     font-weight: 600; /* was 650, not a loaded Plex Sans cut */
@@ -39,7 +39,7 @@
        visible channel of air between their lines. */
     line-height: 1.14;
     font-size: clamp(32px, 4vw, 48px);
-    margin-top: 14px;
+    margin-top: 16px;
     /* No one-word orphan on the second line ("That's / it."). */
     text-wrap: balance;
   }
@@ -53,7 +53,7 @@
     left: 0;
     right: 0.18em;
     bottom: 0.02em;
-    height: 3px;
+    height: 4px;
     background: var(--live);
     border-radius: 2px;
     transform: scaleX(0);
@@ -67,14 +67,14 @@
   .pagehead .sub {
     color: var(--dim);
     max-width: 52ch;
-    margin-top: 14px;
+    margin-top: 16px;
   }
   /* Variant scales live BELOW the base h1/.sub rules on purpose: the variant
      selectors tie with the base on specificity (one class + element), so
      source order is what lets them win. */
   .pagehead--tight h1 {
     font-size: clamp(26px, 2.6vw, 34px);
-    margin-top: 10px;
+    margin-top: 8px;
   }
   .pagehead--tight .sub {
     font-size: 15px;
@@ -91,12 +91,12 @@
     /* The bottom runway matches the page's own section rhythm — at 20px the
        standfirst sat closer to the first deck than any two sections sit to
        each other, and the head read as part of the first tile row. */
-    padding: clamp(16px, 2.2vw, 26px) 0 clamp(26px, 3.5vw, 44px);
+    padding: clamp(16px, 2.2vw, 24px) 0 clamp(24px, 3.5vw, 40px);
   }
   .pagehead--task h1 {
     font-size: clamp(24px, 2.6vw, 34px);
     line-height: 1.22;
-    margin-top: 10px;
+    margin-top: 8px;
   }
   .pagehead--task .sub {
     font-size: 15px;
@@ -117,9 +117,26 @@
   .pagehead--home .filters {
     margin: 0;
   }
+  /* The landing page (`/`): the one place the display head is bigger than
+     the product's — it has to say what DRVN is to someone who has never
+     seen it, in one line, before the photograph. */
+  .pagehead--landing {
+    padding: clamp(24px, 3vw, 32px) 0;
+  }
+  .pagehead--landing h1 {
+    font-size: clamp(36px, 5.6vw, 64px);
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    max-width: 20ch;
+  }
+  .pagehead--landing .sub {
+    font-size: clamp(16px, 1.6vw, 20px);
+    line-height: 1.5;
+    max-width: 46ch;
+  }
   /* An item page (a listing): the title is a name, not a display head. */
   .pagehead--item {
-    padding-bottom: clamp(20px, 2.4vw, 28px);
+    padding-bottom: clamp(20px, 2.4vw, 32px);
   }
   .pagehead--item h1 {
     font-size: clamp(24px, 2.2vw, 32px);
@@ -133,7 +150,7 @@
     /* With the standfirst retired the headline was 12px off the first
        plate; the head keeps a real margin below it instead. */
     .pagehead--task {
-      padding-bottom: 28px;
+      padding-bottom: 32px;
     }
     .pagehead--task .sub:not(.sub--keep) {
       display: none;
@@ -146,7 +163,7 @@
     flex-wrap: wrap;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 10px 16px;
+    gap: 8px 16px;
   }
   .pagehead__row > div {
     min-width: 0;
@@ -156,7 +173,7 @@
      the console gets a calmer scale: smaller, looser, with real air between
      title and standfirst, and the standfirst set dim so the H1 owns the row. */
   .console-main .pagehead {
-    padding: 26px 0 26px;
+    padding: 24px 0 24px;
   }
   .console-main .pagehead h1 {
     font-size: clamp(24px, 2.6vw, 32px);
@@ -179,7 +196,7 @@
     font-size: clamp(24px, 2.1vw, 32px);
     line-height: 1.1;
     letter-spacing: -0.015em;
-    margin: 6px 0 2px;
+    margin: 8px 0 2px;
   }
   /* Console filter bars hold up to five controls (query, two dates, two
      amounts) — let the bar grow and wrap instead of crushing the query
@@ -209,7 +226,7 @@
   .console-nav .fbtn {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
   }
   /* The console's index button borrows the product bar's `.indexbtn` styling
      wholesale but runs its own promotion schedule: the pill row works down to
@@ -231,10 +248,10 @@
   /* Section icon on an index row, sized to sit inside the 21px label line. */
   .indexrow__ico {
     width: 19px;
-    height: 19px;
+    height: 19px; /* size */
     display: inline-block;
     vertical-align: -2.5px;
-    margin-right: 10px;
+    margin-right: 8px;
     color: var(--dim);
     transition: color var(--t-fast) ease;
   }
@@ -259,7 +276,7 @@
   .console-main .auditrow {
     display: grid;
     grid-template-columns: 17ch minmax(0, 1fr);
-    column-gap: 14px;
+    column-gap: 16px;
   }
   .console-main .auditrow__ts {
     font-family: var(--mono);
@@ -267,7 +284,7 @@
     color: var(--dim);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    padding-top: 3px;
+    padding-top: 4px;
   }
   .console-main .auditrow__actor {
     font-weight: 640;
@@ -280,7 +297,7 @@
   }
   .console-main .auditrow__dot {
     width: 7px;
-    height: 7px;
+    height: 7px; /* size */
     border-radius: 50%;
     flex-shrink: 0;
     align-self: center;
@@ -324,14 +341,14 @@
   .console-main .setrow {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 3px 18px;
+    gap: 4px 16px;
     align-items: center;
-    padding: 14px 0;
+    padding: 16px 0;
     border-top: 1px solid var(--rule-soft);
   }
   .console-main .setrow:first-of-type {
     border-top: 0;
-    padding-top: 10px;
+    padding-top: 12px;
   }
   .console-main .setrow__name {
     font-size: 16px;
@@ -419,8 +436,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 14px;
+    gap: 8px;
+    margin-bottom: 16px;
   }
   .tile__img {
     border-radius: var(--r-ctl);
@@ -438,8 +455,8 @@
   /* ---------- LIVE DIMENSION — the signature device ---------- */
   .livedim {
     position: relative;
-    padding-left: 18px;
-    margin-top: 14px;
+    padding-left: 20px;
+    margin-top: 16px;
   }
   .livedim::before {
     content: "";
@@ -484,10 +501,10 @@
     content: "";
     display: inline-block;
     width: 6px;
-    height: 6px;
+    height: 6px; /* size */
     border-radius: 50%;
     background: var(--live);
-    margin-left: 6px;
+    margin-left: 8px;
     vertical-align: 1px;
     animation: pulse 2.2s ease-in-out infinite;
   }
@@ -503,7 +520,7 @@
     height: 1px;
     background: var(--dimline);
     position: relative;
-    margin: 10px 0;
+    margin: 8px 0;
     transform-origin: left;
     transform: scaleX(0);
     transition: transform var(--t-draw) var(--spring) 120ms;
@@ -514,7 +531,7 @@
     position: absolute;
     top: -3px;
     width: 1px;
-    height: 7px;
+    height: 7px; /* size */
     background: var(--dimline);
   }
   .dimline-h::before {
@@ -533,7 +550,7 @@
     z-index: 3;
     background: var(--tile);
     border-radius: var(--r-ctl);
-    padding: 7px 11px;
+    padding: 8px 12px;
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: 0.08em;
@@ -559,7 +576,7 @@
     right: -2px;
     top: -2.5px;
     width: 6px;
-    height: 6px;
+    height: 6px; /* size */
     border-radius: 50%;
     background: var(--live);
   }
@@ -568,18 +585,18 @@
   .capsule {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     background: var(--ink);
     color: var(--on-ink);
     border-radius: var(--r-ctl);
-    padding: 10px 16px;
+    padding: 8px 16px;
     font-family: var(--mono);
     font-size: 16px;
     letter-spacing: 0.06em;
   }
   .capsule .dot {
     width: 7px;
-    height: 7px;
+    height: 7px; /* size */
     border-radius: 50%;
     background: var(--live);
     animation: pulse 2.2s infinite;
@@ -606,12 +623,12 @@
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    padding: 4px 10px;
+    padding: 4px 12px;
     border-radius: var(--r-chip);
     background: var(--paper-deep);
     color: var(--dim);
@@ -667,5 +684,449 @@
     width: 1.15em;
     height: 1.15em;
     flex: none;
+  }
+  /* ---------- landing (/) ----------
+     A first-time visitor's page: one photograph, then sections that each
+     answer a question — what is this, what's in it for my car, why here. */
+  .landing-sec {
+    gap: var(--space-6);
+  }
+  .landing-sec__head {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .landing-sec__head--row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--space-4);
+  }
+  .landing-sec__title {
+    font-size: clamp(24px, 3vw, var(--text-head));
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .landing-sec__sub {
+    color: var(--dim);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    max-width: 56ch;
+  }
+
+  /* Hero photograph with the live parts strip laid over its floor. */
+  .landing-hero {
+    position: relative;
+    display: grid;
+    margin-bottom: clamp(48px, 7vw, 80px);
+  }
+  .landing-hero__photo {
+    position: relative;
+    aspect-ratio: 11 / 5;
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .landing-floor {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-16) var(--space-5) var(--space-5);
+    border-radius: 0 0 var(--r) var(--r);
+    background: linear-gradient(to bottom, transparent, var(--photo-scrim) 45%);
+    color: var(--on-photo);
+  }
+  .landing-floor__label {
+    font-family: var(--mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--on-photo-dim);
+  }
+  .landing-floor__list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .landing-floor__item {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr); /* size */
+    gap: var(--space-3);
+    align-items: center;
+    padding: var(--space-2);
+    border-radius: var(--r-ctl);
+    background: color-mix(in srgb, var(--on-photo) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--on-photo) 18%, transparent);
+    transition: background var(--t-fast) ease;
+  }
+  .landing-floor__item:hover {
+    background: color-mix(in srgb, var(--on-photo) 18%, transparent);
+  }
+  .landing-floor__thumb {
+    position: relative;
+    width: 56px; /* size */
+    aspect-ratio: 1;
+    border-radius: var(--r-chip);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .landing-floor__text {
+    display: grid;
+    min-width: 0;
+  }
+  .landing-floor__price {
+    font-weight: 600;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .landing-floor__title,
+  .landing-floor__off {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 13px;
+  }
+  .landing-floor__off {
+    color: var(--on-photo-dim);
+  }
+
+  /* What do you drive? — the marketplace's own vehicle picker, then photo
+     tiles of the cars with the most going on. */
+  .landing-picker {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--space-3);
+    max-width: 760px;
+  }
+  /* The fields' own bottom margin would sit the button below the inputs. */
+  .landing-picker .field {
+    margin-bottom: 0;
+  }
+  .landing-platforms {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .landing-platform {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .landing-platform img {
+    transition: transform var(--t-draw) var(--spring);
+  }
+  .landing-platform:hover img {
+    transform: scale(1.03);
+  }
+  .landing-platform__cap {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-10) var(--space-4) var(--space-3);
+    background: linear-gradient(to bottom, transparent, var(--photo-scrim));
+    color: var(--on-photo);
+  }
+  .landing-platform__name {
+    font-weight: 600;
+    font-size: var(--text-section);
+    line-height: 1.2;
+  }
+  .landing-platform__meta {
+    font-family: var(--mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.06em;
+    color: var(--on-photo-dim);
+  }
+
+  /* How it works — the two sides of the market, four plain steps each. */
+  .landing-lanes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+  .landing-lane {
+    display: grid;
+    gap: var(--space-4);
+    align-content: start;
+    justify-items: start;
+    padding: var(--space-6);
+    border-radius: var(--r);
+    background: var(--tile);
+  }
+  .landing-lane .microlabel {
+    color: var(--live-text);
+  }
+  .landing-lane__title {
+    font-size: var(--text-section);
+    line-height: var(--text-section--line-height);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .landing-steps {
+    display: grid;
+    gap: var(--space-3);
+    counter-reset: landing-step;
+  }
+  .landing-steps li {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr); /* size */
+    gap: var(--space-3);
+    counter-increment: landing-step;
+    line-height: 1.5;
+  }
+  .landing-steps li::before {
+    content: counter(landing-step);
+    display: grid;
+    place-items: center;
+    width: 24px; /* size */
+    height: 24px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .landing-inline {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* Every part comes with its car — the part photo with the car it came
+     off set into its corner. */
+  .landing-pairs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+  .landing-pair {
+    display: grid;
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--tile);
+  }
+  .landing-pair__media {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: var(--img-fallback);
+  }
+  .landing-pair__car {
+    position: absolute;
+    right: var(--space-3);
+    bottom: calc(-1 * var(--space-6));
+    width: 44%;
+    aspect-ratio: 3 / 2;
+    border-radius: var(--r-ctl);
+    overflow: hidden;
+    background: var(--img-fallback);
+    box-shadow: 0 0 0 3px var(--tile);
+  }
+  .landing-pair__body {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-4) var(--space-4) var(--space-5);
+  }
+  .landing-pair__price {
+    font-weight: 600;
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .landing-pair__title {
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .landing-pair__off {
+    margin-top: var(--space-1);
+    font-family: var(--mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.04em;
+    color: var(--live-text);
+  }
+
+  /* Why DRVN — four facts, then the trust floor in one line. */
+  .landing-whys {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+  .landing-whys li {
+    display: grid;
+    gap: var(--space-2);
+    align-content: start;
+    padding: var(--space-5);
+    border-radius: var(--r);
+    background: var(--tile);
+  }
+  .landing-whys strong {
+    font-weight: 600;
+    font-size: 17px;
+  }
+  .landing-whys span {
+    color: var(--dim);
+    line-height: 1.5;
+  }
+  .landing-trust {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--r-ctl);
+    box-shadow: inset 0 0 0 1px var(--rule-mid);
+    font-family: var(--mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .landing-trust > span::before {
+    content: "✓ ";
+    color: var(--ok-text);
+  }
+  .landing-trust .jumplink {
+    margin-left: auto;
+  }
+
+  /* The cars behind the parts. */
+  .landing-builds {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+  .landing-build {
+    display: grid;
+    gap: var(--space-1);
+  }
+  .landing-build__media {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    margin-bottom: var(--space-2);
+    border-radius: var(--r);
+    overflow: hidden;
+    background: var(--img-fallback);
+  }
+  .landing-build__name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .landing-build__sub {
+    color: var(--dim);
+    font-size: 14px;
+  }
+  .landing-build__sale {
+    font-family: var(--mono);
+    font-size: var(--text-micro);
+    letter-spacing: 0.04em;
+    color: var(--live-text);
+  }
+
+  /* Close — recent sales as proof, then the two doors again. */
+  .landing-close {
+    display: grid;
+    gap: var(--space-6);
+    justify-items: start;
+    padding: clamp(24px, 4vw, 48px);
+    border-radius: var(--r);
+    background: var(--tile);
+  }
+  .landing-sold {
+    display: grid;
+    width: 100%;
+    max-width: 720px;
+  }
+  .landing-sold__row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--rule-mid);
+  }
+  .landing-sold__flag {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ok-text);
+  }
+  .landing-sold__what {
+    display: grid;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .landing-sold__off {
+    color: var(--dim);
+    font-size: 14px;
+  }
+  .landing-sold__price {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 980px) {
+    .landing-floor__list,
+    .landing-whys {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .landing-builds {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 720px) {
+    /* On a phone the parts sit under the photo, never over it. */
+    .landing-hero__photo {
+      aspect-ratio: 4 / 3;
+    }
+    .landing-hero__photo img {
+      object-position: 62% 50%;
+    }
+    .landing-floor {
+      position: static;
+      padding: var(--space-4) 0 0;
+      border-radius: 0;
+      background: none;
+      color: var(--ink);
+    }
+    .landing-floor__label,
+    .landing-floor__off {
+      color: var(--dim);
+    }
+    .landing-floor__item {
+      background: var(--tile);
+      box-shadow: none;
+    }
+    .landing-floor__item:hover {
+      background: var(--tile-2);
+    }
+    .landing-picker,
+    .landing-lanes,
+    .landing-pairs,
+    .landing-sec__head--row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .landing-platforms {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .landing-platform__name {
+      font-size: var(--text-body);
+    }
+    .landing-lane {
+      padding: var(--space-5);
+    }
+    .landing-trust .jumplink {
+      margin-left: 0;
+    }
+  }
+  @media (max-width: 480px) {
+    .landing-floor__list,
+    .landing-whys {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 }

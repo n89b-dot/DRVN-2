@@ -156,7 +156,7 @@ test.describe.serial("discovery + marketplace remediation", () => {
     }
     const browse = page.getByRole("button", { name: /browse categories/i });
     await expect(browse).toBeVisible();
-    expect((await browse.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await browse.boundingBox())!.height).toBeGreaterThanOrEqual(40);
     await browse.click();
     const sheet = page.getByRole("dialog", { name: /browse by category/i });
     await expect(sheet).toBeVisible();
@@ -189,10 +189,10 @@ test.describe.serial("discovery + marketplace remediation", () => {
       await expect(card.getByRole("button", { name: /^buy now|^like/i })).toHaveCount(0);
       const cart = card.getByRole("button", { name: /add to cart/i });
       await expect(cart).toBeVisible();
-      expect((await cart.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await cart.boundingBox())!.height).toBeGreaterThanOrEqual(40);
       const save = card.getByRole("button", { name: /^save /i });
       await expect(save).toBeVisible();
-      expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(40);
       // The card's own link is a real, large target beneath the photo.
       const link = card.locator("a.marketplace-card__link");
       expect((await link.boundingBox())!.height).toBeGreaterThan(120);

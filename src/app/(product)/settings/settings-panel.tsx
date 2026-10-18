@@ -339,7 +339,7 @@ export function SettingsPanel({
               value={profileDraft.location}
               onChange={(event) => setProfileField("location", event.target.value)}
             />
-            <div className="field--row mb-[18px]">
+            <div className="field--row mb-4">
               <Select
                 id="profile-country"
                 name="country"

@@ -326,7 +326,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Action footer"
           klass="ActionFooter / .saverow"
-          note="The commit row of an editing surface: aux anchored left, status + primary right. ≤520px it stacks deliberately — aux, status as its own line, then a full-width 44px commit. Status is part of the contract: ok renders the chip (role=status), error the live line (role=alert)."
+          note="The commit row of an editing surface: aux anchored left, status + primary right. ≤520px it stacks deliberately — aux, status as its own line, then a full-width 40px commit. Status is part of the contract: ok renders the chip (role=status), error the live line (role=alert)."
         >
           <ActionFooter
             aux={
@@ -379,7 +379,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Filters & search"
           klass="FilterGroup / FilterLink / FilterButton / SearchField"
-          note="Production components. A filter axis is one labelled group: link mode carries aria-current for URL-backed selection (.is-on ink ground), button mode carries aria-pressed (live fill). Chips are mono micro-labels in a hairline outline, ink when on. Axis grammar — stack for the primary axis, sub for the quieter one beneath, scroll to ride the gutter sideways ≤760px, fit for a short fixed set that must share one phone row (never scrolls). Every target keeps the 44px floor."
+          note="Production components. A filter axis is one labelled group: link mode carries aria-current for URL-backed selection (.is-on ink ground), button mode carries aria-pressed (live fill). Chips are mono micro-labels in a hairline outline, ink when on. Axis grammar — stack for the primary axis, sub for the quieter one beneath, scroll to ride the gutter sideways ≤760px, fit for a short fixed set that must share one phone row (never scrolls). Every target keeps the 40px floor."
         >
           <FilterGroup label="Category" className="mb-3">
             <FilterLink href="#suspension" selected>
@@ -1169,7 +1169,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Chat composer"
           klass=".chatbox"
-          note="Auto-growing field, 44px photo button, one Send that turns live when there is something to send. Enter sends on a mouse/keyboard device, Shift+Enter adds a line; on touch Return adds a line. Sticky to the viewport bottom in the product (static here)."
+          note="Auto-growing field, 40px photo button, one Send that turns live when there is something to send. Enter sends on a mouse/keyboard device, Shift+Enter adds a line; on touch Return adds a line. Sticky to the viewport bottom in the product (static here)."
         >
           <div className="[&_.chatbox]:!static">
             <ChatComposerDemo />

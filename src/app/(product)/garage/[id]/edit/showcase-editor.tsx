@@ -125,7 +125,7 @@ export function ShowcaseEditor({
             <span
               key={pin.key}
               aria-hidden="true"
-              className="pointer-events-none absolute grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--scrim)] font-mono text-[11px] text-[var(--on-ink)]"
+              className="pointer-events-none absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--scrim)] font-mono text-[11px] text-[var(--on-ink)]"
               style={{ left: `${pin.x * 100}%`, top: `${pin.y * 100}%` }}
             >
               {index + 1}

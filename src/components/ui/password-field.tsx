@@ -66,7 +66,7 @@ export function PasswordField({
         <input
           id={id}
           type={revealed ? "text" : "password"}
-          className="ctl w-full !max-w-none !pr-11"
+          className="ctl w-full !max-w-none !pr-10"
           aria-invalid={error ? true : undefined}
           aria-describedby={fieldDescribedBy(id, { hint, error, ok })}
           required={required}
@@ -77,7 +77,7 @@ export function PasswordField({
           onClick={() => setRevealed((v) => !v)}
           aria-label={revealed ? "Hide password" : "Show password"}
           title={revealed ? "Hide password" : "Show password"}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-ctl p-1.5 text-dim transition-colors hover:text-ink"
+          className="absolute right-0 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-ctl text-dim transition-colors hover:text-ink"
         >
           <Icon name={revealed ? "eye-off" : "eye"} className="h-5 w-5" />
         </button>

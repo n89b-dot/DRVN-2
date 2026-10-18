@@ -308,7 +308,7 @@ export function ListingsLedger({
                           one disclosure grammar across the app, and an SVG
                           scales to a size you can actually see (the ▸ glyph
                           stayed tiny however much font-size it was given). */}
-                      <Icon name="back" className="h-[14px] w-[14px]" />
+                      <Icon name="back" className="h-4 w-4" />
                     </button>
                   </td>
 
@@ -415,7 +415,7 @@ export function ListingsLedger({
                       initial="collapsed"
                       animate={open ? "expanded" : "collapsed"}
                     >
-                      <div className="pb-2 pl-[18px]">
+                      <div className="pb-2 pl-5">
                         <span className="microlabel">Offers on this listing</span>
                         <OfferSummary row={row} />
                         <ManageRow row={row} />

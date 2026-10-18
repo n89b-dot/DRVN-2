@@ -125,7 +125,7 @@ test.describe.serial("mobile remediation", () => {
         expect(strip_.clipped, `a tab is clipped by a strip that doesn't scroll @ ${width}`).toBe(0);
       }
       expect(strip_.rows, `every tab must share one row @ ${width}`).toBe(1);
-      expect(strip_.minTabHeight, `smallest tab tap height @ ${width}`).toBeGreaterThanOrEqual(44);
+      expect(strip_.minTabHeight, `smallest tab tap height @ ${width}`).toBeGreaterThanOrEqual(40);
     }
   });
 
@@ -153,7 +153,7 @@ test.describe.serial("mobile remediation", () => {
       const checkout = bar.locator('a[href="/checkout"]');
       await expect(checkout, "the bar's checkout link @ 375").toBeVisible();
       const checkoutBox = await checkout.boundingBox();
-      expect(checkoutBox!.height, "buybar checkout tap height @ 375").toBeGreaterThanOrEqual(44);
+      expect(checkoutBox!.height, "buybar checkout tap height @ 375").toBeGreaterThanOrEqual(40);
 
       const bodyPadding = await page.evaluate(() =>
         parseFloat(getComputedStyle(document.body).paddingBottom)
@@ -238,7 +238,7 @@ test.describe.serial("mobile remediation", () => {
       expect(shape.distinctCtlRows, `every field gets its own row @ ${width}`).toBe(
         shape.ctlCount
       );
-      expect(shape.removeHeight, `Remove tap height @ ${width}`).toBeGreaterThanOrEqual(44);
+      expect(shape.removeHeight, `Remove tap height @ ${width}`).toBeGreaterThanOrEqual(40);
     }
   });
 

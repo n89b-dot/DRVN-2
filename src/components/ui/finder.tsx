@@ -106,13 +106,13 @@ export function FinderLabel({ children }: { children: ReactNode }) {
   return <span className="microlabel filters__label w-full sm:w-auto">{children}</span>;
 }
 
-/** "Clear search" — quiet, right-aligned on wide rows, a full-width 44px
+/** "Clear search" — quiet, right-aligned on wide rows, a full-width 40px
  *  target on compact. */
 export function FinderClear({ href, children = "Clear search" }: { href: string; children?: ReactNode }) {
   return (
     <Link
       href={href}
-      className="jumplink inline-flex min-h-11 w-full items-center sm:ml-auto sm:min-h-0 sm:w-auto"
+      className="jumplink inline-flex min-h-10 w-full items-center sm:ml-auto sm:min-h-0 sm:w-auto"
     >
       {children}
     </Link>

@@ -83,7 +83,7 @@ for (const tier of PHONE_TIERS) {
       await expect(search).toBeVisible();
       const refine = page.getByRole("button", { name: /filters/i });
       await expect(refine).toBeVisible();
-      expect((await refine.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await refine.boundingBox())!.height).toBeGreaterThanOrEqual(40);
       await expect(page.locator('select[name="sort"]')).toBeVisible();
 
       // The desktop sort chips stay retired on compact — one sort control.
@@ -155,7 +155,7 @@ for (const tier of PHONE_TIERS) {
       // SYS-09: price → actions → (seller) → record. No secondary metric
       // may sit between the price and the primary action.
       expect(order).not.toBeNull();
-      expect(order!.buyHeight!).toBeGreaterThanOrEqual(44);
+      expect(order!.buyHeight!).toBeGreaterThanOrEqual(40);
       expect(order!.price!).toBeLessThan(order!.buy!);
       // The fixture's one watcher is public (listing_watch_counts, R2-09),
       // so "Watching" is drawn for a guest and sits after the actions. The
@@ -288,7 +288,7 @@ test.describe.serial("authenticated matrix @ 390x844", () => {
     for (const tool of await rail.all()) {
       await expect(tool).toBeVisible();
       const box = await tool.boundingBox();
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(40);
       expect(
         box!.y + box!.height,
         "first sheet's tools must fit the first viewport"

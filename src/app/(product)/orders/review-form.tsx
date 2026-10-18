@@ -84,7 +84,7 @@ export function ReviewForm({
         </span>
       </label>
 
-      <button type="submit" disabled={pending || !canSubmit} className="btn w-fit !py-2.5">
+      <button type="submit" disabled={pending || !canSubmit} className="btn w-fit">
         {pending ? "Posting…" : "Leave review"}
       </button>
 
