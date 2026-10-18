@@ -1,5 +1,25 @@
 # Applying migrations
 
+## October 17 — offer rounds, A1 step one (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261017150000_offer_rounds.sql` | throwaway database only (2026-10-17) |
+| `20261017150100_account_export_contract_v7.sql` | throwaway database only (2026-10-17) |
+
+The expand step of negotiation v2 (`docs/decisions/negotiation-v2.md`). `150000` adds
+`offer_rounds`, one append-only row per move, readable by the offer's buyer and seller, writable
+by no client. It also adds `offer_round_terms`, the minimum in force for each proposal, readable
+by no client, and a trigger on `offers` that records a round for each move today's code makes:
+opening offer, counter, accept by either side, decline, withdraw and expiry. A backfill turns
+each existing offer's columns into its rounds. Behaviour is unchanged. `150100` bumps the export
+contract to `2026-10-17.v7`, adding the rounds of offers a member made and received.
+
+Checked on a fresh database with every migration: both files apply twice cleanly; the new
+`offer_rounds_guard.sql` and every other guard pass; generated types match. The backfill was
+checked against seeded offers in every end state, and a second run adds nothing.
+
+Apply in order, after `20261017130100`. Either file is safe before or after the app change.
 ## October 17 — row security checks once per query (shared dev project)
 
 | File | Applied to |

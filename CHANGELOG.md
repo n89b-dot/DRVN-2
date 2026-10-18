@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-10-17 — Every offer move is recorded (negotiation v2, step one)
+
+Offers gain a history of moves. `offer_rounds` keeps one row per move: the opening offer, a counter, accept, decline, withdraw or expiry. Each proposal's minimum at the time is kept privately in `offer_round_terms`. Today's offer code is unchanged; a trigger records its moves, and a backfill rebuilds the history of every existing offer. The offer page now reads its history from the rounds, falling back to the old reading if they can't be read. Members' exports include their rounds (contract `2026-10-17.v7`). The design for the rest of negotiation v2 is `docs/decisions/negotiation-v2.md`.
 ## 2026-10-17 — The agent's data rules
 
 `docs/decisions/agent-data-rules.md` sets out what the agent will keep and for how long, what a member's export includes, and what account deletion removes, table by table, before A2 creates the tables. It also gives the exact allow-list of what may reach the AI model provider: never addresses, phone numbers, emails, payment details, VINs, or anyone's price limits. It covers redaction of card numbers, VINs and contact details too. Draft privacy and terms wording waits there for the release that turns the agent on. Neil ruled the open points on 17 Oct: 12 months for chat, records, finished tasks and ended limits, 30 days for jobs, admin reads of agent chat only for abuse or dispute cases, and zero data retention requested from the provider. The legal checklist and data inventory gain matching items.

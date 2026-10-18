@@ -1,4 +1,4 @@
-export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-17.v6";
+export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-17.v7";
 export const ACCOUNT_EXPORT_PAGE_SIZE = 250;
 
 export type ExportAccess =
@@ -72,6 +72,9 @@ export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
   { key: "order_snapshot_images", table: "order_item_snapshot_images", projection: "id,order_item_id,url,alt,position,created_at,order_items!inner(order_id,orders!inner(buyer_id,seller_id))", access: "transaction_participant", filter: "order_items.orders.buyer_id|order_items.orders.seller_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "offers_made", table: "offers", projection: "id,listing_id,buyer_id,amount_cents,counter_amount_cents,status,countered_at,expires_at,responded_at,created_at,updated_at", access: "transaction_participant", filter: "buyer_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "offers_received", table: "offers", projection: "id,listing_id,buyer_id,amount_cents,counter_amount_cents,status,countered_at,expires_at,responded_at,created_at,updated_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Includes the buyer id and offer terms disclosed to the seller; no buyer profile is joined." },
+  // Each negotiation move, both sides of the member's offers (20261017150000). The acting member's id is left out; the role says who moved.
+  { key: "offer_rounds_made", table: "offer_rounds", projection: "id,offer_id,round_no,listing_id,buyer_id,actor_role,kind,amount_cents,expires_at,created_at", access: "transaction_participant", filter: "buyer_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "offer_rounds_received", table: "offer_rounds", projection: "id,offer_id,round_no,listing_id,buyer_id,actor_role,kind,amount_cents,expires_at,created_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Includes the buyer id and offer terms already disclosed to the seller; no buyer profile is joined." },
   { key: "messages_sent", table: "messages", projection: "id,listing_id,offer_id,order_id,conversation_id,sender_id,recipient_id,kind,body,attachments,read_at,created_at", access: "conversation_participant", filter: "sender_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "messages_received", table: "messages", projection: "id,listing_id,offer_id,order_id,conversation_id,sender_id,recipient_id,kind,body,attachments,read_at,created_at", access: "conversation_participant", filter: "recipient_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Includes only messages addressed to the requester and the sender id needed to preserve conversation context." },
   // The photos themselves. `attachments` above is only their private storage
