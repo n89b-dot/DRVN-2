@@ -15,7 +15,7 @@
   .bar__inner {
     max-width: var(--maxw);
     margin: 0 auto;
-    padding: 14px clamp(16px, 4vw, 40px);
+    padding: 12px clamp(16px, 4vw, 40px);
     display: flex;
     align-items: center;
     gap: clamp(12px, 3vw, 32px);
@@ -44,7 +44,7 @@
     font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 8px 14px;
+    padding: 8px 16px;
     border-radius: var(--r-ctl);
     color: var(--dim);
     transition:
@@ -56,12 +56,12 @@
     color: var(--ink);
     background: var(--paper-deep);
   }
-  /* Signed-out text links: centred in a 44px box on the same line as the
+  /* Signed-out text links: centred in a 40px box on the same line as the
      Join button, search and logo (display:block left them top-aligned). */
   .bar__link--text {
     display: inline-flex;
     align-items: center;
-    min-height: 44px;
+    min-height: var(--touch);
   }
   .bar__link.is-active {
     color: var(--on-ink);
@@ -71,8 +71,8 @@
   .bar__link--ico {
     display: inline-grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: var(--touch);
+    height: var(--touch);
     padding: 0;
   }
   .bar__cta {
@@ -104,7 +104,7 @@
     top: 6px;
     right: 8px;
     width: 6px;
-    height: 6px;
+    height: 6px; /* size */
     border-radius: 50%;
     background: var(--live);
     animation: pulse 2.2s ease-in-out infinite;
@@ -118,7 +118,7 @@
     font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    padding: 8px 13px;
+    padding: 8px 12px;
     border-radius: var(--r-ctl);
     background: var(--paper-deep);
     color: var(--dim);
@@ -166,7 +166,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 0 14px 0 20px;
+    padding: 0 16px 0 20px;
     flex: none;
   }
   .rail__logo {
@@ -187,7 +187,7 @@
 
   .rail__rows {
     display: block;
-    margin-top: 18px;
+    margin-top: 16px;
     flex: 1 1 auto;
     overflow-y: auto;
   }
@@ -196,7 +196,8 @@
     grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
     gap: 12px;
-    padding: 10px 20px;
+    min-height: var(--touch);
+    padding: 8px 20px;
     position: relative;
     white-space: nowrap;
     transition: background var(--t-fast) ease;
@@ -228,7 +229,7 @@
     top: -2px;
     right: -3px;
     width: 6px;
-    height: 6px;
+    height: 6px; /* size */
     border-radius: 50%;
     background: var(--live);
     /* A paper ring so the dot reads against any icon stroke behind it. */
@@ -253,10 +254,10 @@
      and broke the rail's pitch — in the rail it's a count pill, sized to sit
      inside the label's line box. */
   .railrow .chip {
-    height: 18px;
+    height: 20px;
     min-width: 18px;
     justify-content: center;
-    padding: 0 5px;
+    padding: 0 4px;
     font-size: 10.5px;
     letter-spacing: 0.04em;
   }
@@ -280,8 +281,8 @@
     left: 0;
     top: 50%;
     width: 3px;
-    height: 18px;
-    margin-top: -9px;
+    height: 16px;
+    margin-top: -8px;
     background: var(--live);
   }
 
@@ -291,7 +292,7 @@
      carries the family's active state so the rail says which *section* you're
      in as well as which sheet. */
   /* Parent row + disclosure. The link fills the row at top-level weight;
-     the chevron is its own 28px control so expanding never risks a
+     the chevron is its own 32px control so expanding never risks a
      navigation, and vice versa. */
   /* The family is one block in the rail's rhythm: the same air above the
      parent row as below the last child, folded or open. The old margin sat on
@@ -309,7 +310,7 @@
     position: relative;
   }
   .railfam__link {
-    padding-right: 44px;
+    padding-right: 40px;
   }
   .railfam__toggle {
     position: absolute;
@@ -318,8 +319,8 @@
     transform: translateY(-50%);
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--r-ctl);
     color: var(--dim);
     transition:
@@ -351,8 +352,8 @@
     left: 0;
     top: 50%;
     width: 3px;
-    height: 18px;
-    margin-top: -9px;
+    height: 16px;
+    margin-top: -8px;
     background: var(--live);
     opacity: 0.55;
   }
@@ -383,7 +384,7 @@
   /* Kept for the mobile index, which still uses the caption-style heading. */
   .railgroup {
     display: block;
-    padding: 18px 20px 6px;
+    padding: 20px 20px 8px;
     white-space: nowrap;
   }
   .railgroup__label {
@@ -420,7 +421,7 @@
   }
   .railrow--child .railrow__ico > svg {
     width: 15px;
-    height: 15px;
+    height: 15px; /* size */
   }
   .railrow--child::after {
     content: "";
@@ -469,12 +470,12 @@
   .indexbtn {
     display: none; /* promoted at ≤1080px */
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 8px 14px;
+    padding: 8px 16px;
     border-radius: var(--r-ctl);
     color: var(--ink);
     background: var(--paper-deep);
@@ -542,7 +543,7 @@
     inset: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 78px 0 calc(40px + env(safe-area-inset-bottom, 0px));
+    padding: 80px 0 calc(40px + env(safe-area-inset-bottom, 0px));
     background-color: var(--paper);
     background-image:
       repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 40px),
@@ -569,13 +570,13 @@
   .indexrow {
     display: grid;
     grid-template-columns: 34px minmax(0, 1fr) auto;
-    gap: 2px 14px;
+    gap: 2px 16px;
     align-items: center;
     /* A menu, not a document: one line per destination at a 48px row.
        With a mono description under every label the phone index ran to
        ~2,000px and Settings sat six screens down. */
     min-height: 48px;
-    padding: 6px 2px;
+    padding: 8px 2px;
     border-top: 1px solid var(--rule-soft);
     position: relative;
     /* staggered draw-in, index passed as --i */
@@ -661,8 +662,8 @@
   .indexgroup {
     display: grid;
     grid-template-columns: 34px minmax(0, 1fr);
-    gap: 2px 14px;
-    padding: 14px 2px 4px;
+    gap: 2px 16px;
+    padding: 16px 2px 4px;
     border-top: 1px solid var(--rule-soft);
   }
   .indexgroup__label {
@@ -680,8 +681,8 @@
     color: var(--live);
   }
   .indexrow--child {
-    padding-left: 14px;
-    min-height: 44px;
+    padding-left: 16px;
+    min-height: var(--touch);
   }
   .indexrow--child::after {
     content: "";
@@ -697,7 +698,7 @@
   .indexlight {
     display: inline-flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     font-family: var(--mono);
     font-size: 12px;
     letter-spacing: 0.12em;
@@ -719,7 +720,7 @@
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    margin-top: 22px;
+    margin-top: 24px;
     padding-top: 16px;
     border-top: 1px solid var(--rule-mid);
     opacity: 0;
@@ -820,10 +821,10 @@
     }
     body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body,
     body:has(#main .agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
-      padding-bottom: calc(var(--bottom-surface-h, 76px) + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(var(--bottom-surface-h, 80px) + env(safe-area-inset-bottom, 0px));
     }
     body:not(:has(.buybar, .savebar, .chatbox)):has(.bnav:not([hidden])) .toast {
-      bottom: calc(var(--bottom-surface-h, 76px) + 8px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(var(--bottom-surface-h, 80px) + 8px + env(safe-area-inset-bottom, 0px));
     }
   }
 }

@@ -110,7 +110,7 @@ function AppRail({
           aria-label={open ? "Collapse the rail" : "Expand the rail"}
           title={open ? "Collapse the rail" : "Expand the rail"}
         >
-          <Icon name="rail" className="h-[17px] w-[17px]" />
+          <Icon name="rail" className="h-4 w-4" />
         </button>
       </div>
 
@@ -145,7 +145,7 @@ function AppRail({
                     title={open ? undefined : "Selling"}
                   >
                     <span className="railrow__ico" aria-hidden="true">
-                      <Icon name="sell" className="h-[17px] w-[17px]" />
+                      <Icon name="sell" className="h-4 w-4" />
                       {held > 0 && <span className="railrow__dot" />}
                     </span>
                     <span className="railrow__label flex items-center justify-between gap-2">
@@ -169,7 +169,7 @@ function AppRail({
                         : "Expand the Selling section"
                     }
                   >
-                    <Icon name="back" className="h-[13px] w-[13px]" />
+                    <Icon name="back" className="h-3 w-3" />
                   </button>
                 </div>
 
@@ -199,7 +199,7 @@ function AppRail({
                         tabIndex={mktOpen ? undefined : -1}
                       >
                         <span className="railrow__ico" aria-hidden="true">
-                          <Icon name={kid.icon} className="h-[17px] w-[17px]" />
+                          <Icon name={kid.icon} className="h-4 w-4" />
                           {badge > 0 && <span className="railrow__dot" />}
                         </span>
                         <span className="railrow__label flex items-center justify-between gap-2">
@@ -249,7 +249,7 @@ function AppRail({
               }
             >
               <span className="railrow__ico" aria-hidden="true">
-                <Icon name={entry.icon} className="h-[17px] w-[17px]" />
+                <Icon name={entry.icon} className="h-4 w-4" />
                 {/* The collapsed rail has no room for a count, so it keeps
                     the dot — same information, one bit of it. */}
                 {badge > 0 && <span className="railrow__dot" />}

@@ -10,7 +10,7 @@
   [data-hero] .callout {
     position: static;
     display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     margin: 8px 8px 0 0;
     box-shadow: none;
     background: var(--tile-2);
@@ -85,7 +85,7 @@
   }
   .has-savebar {
     /* …and matching clearance (bar + air + safe area) on the page. */
-    padding-bottom: calc(var(--bottom-surface-h, 76px) + 12px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--bottom-surface-h, 80px) + 12px + env(safe-area-inset-bottom, 0px));
   }
   .band__stats {
     grid-template-columns: 1fr;
@@ -116,7 +116,7 @@
   }
   .callout {
     font-size: 12px;
-    padding: 7px 10px;
+    padding: 8px 12px;
   }
 }
 
@@ -162,7 +162,7 @@
     bottom: 0;
     z-index: 61;
     width: var(--rail-w);
-    padding: 14px 0 16px;
+    padding: 16px 0 16px;
     background: var(--paper);
     border-right: 1px solid var(--rule-mid);
     overflow: hidden;
@@ -225,8 +225,8 @@
     display: inline;
   }
   .shell[data-rail="closed"] .rail__foot {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 12px;
+    padding-right: 12px;
   }
   .shell[data-rail="closed"] .rail__cta {
     padding-left: 0;
@@ -254,20 +254,20 @@
      gutter tightens with the plate so two photos still get real width. */
   .mkt {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
   }
   .feedcols {
-    column-gap: 10px;
+    column-gap: 8px;
   }
   .feedcols > * {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   /* Compact plate: ~170px of column means the desktop padding and scale
      would leave the photo a stamp. Everything steps down one notch; the
      anatomy (eyebrow → media → title → price → meta → engagement) holds. */
   .feedcols .tile,
   .mkt .tile {
-    padding: 10px 10px 8px;
+    padding: 12px 12px 8px;
   }
   .feedcols .tile .microlabel,
   .mkt .tile .microlabel {
@@ -297,12 +297,12 @@
   }
   .mkt .mkt__price {
     font-size: 16px;
-    margin-top: 3px;
+    margin-top: 4px;
   }
   .mkt .mkt__metaline {
     font-size: 10.5px;
     letter-spacing: 0.06em;
-    margin-top: 5px;
+    margin-top: 4px;
   }
   /* Watch count and seller rating don't fit beside a price at this width. */
   .mkt .mkt__price .microlabel {
@@ -315,14 +315,14 @@
   }
   .mkt .mkt__seller {
     margin-top: 8px;
-    padding-top: 6px;
+    padding-top: 8px;
   }
   /* Row and split formats are desktop-width ideas; in a half-width column
      they fold into the plain photo-over-text stack every neighbour uses. */
   .feedcols .tile--row {
     grid-template-columns: minmax(0, 1fr);
     column-gap: 0;
-    padding: 10px 10px 8px;
+    padding: 12px 12px 8px;
   }
   .feedcols .tile__thumb {
     width: 100%;
@@ -342,27 +342,27 @@
   .feedcols .cardeng,
   .mkt .cardeng {
     margin-top: 8px;
-    padding-top: 6px;
+    padding-top: 8px;
     gap: 0;
   }
   .feedcols .cardeng__act,
   .mkt .cardeng__act {
-    min-height: 28px;
-    padding: 0 5px;
-    gap: 3px;
+    min-height: 32px;
+    padding: 0 4px;
+    gap: 4px;
   }
   .feedcols .cardeng__act:first-child,
   .mkt .cardeng__act:first-child {
-    margin-left: -5px;
+    margin-left: -4px;
   }
   .feedcols .cardeng__act--end,
   .mkt .cardeng__act--end {
-    margin-right: -5px;
+    margin-right: -4px;
   }
   .feedcols .cardeng__ico,
   .mkt .cardeng__ico {
     width: 14px;
-    height: 14px;
+    height: 14px; /* size */
   }
   .feedcols .cardeng__count,
   .mkt .cardeng__count {
@@ -386,8 +386,8 @@
     margin-left: auto;
   }
   .bar__link--ico {
-    width: 44px;
-    height: 44px;
+    width: var(--touch);
+    height: var(--touch);
   }
   .bar__link--roomy {
     display: none;
@@ -398,8 +398,8 @@
      index", so nothing is lost to a screen reader. */
   .indexbtn {
     flex: none;
-    width: 44px;
-    height: 44px;
+    width: var(--touch);
+    height: var(--touch);
     padding: 0;
     /* the button is inline-flex, so centring needs both axes named —
        place-items alone leaves justify-content at flex-start */
@@ -419,7 +419,7 @@
   .order {
     display: grid;
     grid-template-columns: 56px minmax(0, 1fr) auto;
-    row-gap: 6px;
+    row-gap: 8px;
     align-items: start;
   }
   .order__img {
@@ -432,7 +432,7 @@
   }
   .order .order__actions .chip {
     font-size: 12px;
-    padding: 3px 8px;
+    padding: 4px 8px;
     letter-spacing: 0.1em;
   }
   .order:has(.order__actions .btn) {
@@ -502,7 +502,7 @@
     gap: 8px;
   }
   .deck--kpi .tile {
-    padding: 14px 14px 12px;
+    padding: 16px 16px 12px;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -517,7 +517,7 @@
   .deck--kpi .num-giant {
     font-size: 26px;
     line-height: 1.1;
-    margin: 6px 0 4px;
+    margin: 8px 0 4px;
   }
   .deck--kpi .livedim {
     margin-top: 8px;
@@ -540,7 +540,7 @@
     padding-top: 8px;
   }
   .deck--kpi .alert {
-    padding: 12px 14px;
+    padding: 12px 16px;
   }
 }
 

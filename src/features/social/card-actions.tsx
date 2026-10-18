@@ -34,7 +34,7 @@ import { toggleLike, toggleSave, type SaveTargetType } from "./actions";
  * The icons are ambiguous cold, so every action names itself on hover and
  * on keyboard focus through the stylesheet's `data-tip` tooltip — above the
  * control, no layout shift, and off on touch, where the accessible name and
- * the 44px target do the job. (Native `title` is gone: it doubled the
+ * the 40px target do the job. (Native `title` is gone: it doubled the
  * tooltip and never showed for keyboard users.)
  */
 

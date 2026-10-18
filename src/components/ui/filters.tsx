@@ -11,7 +11,7 @@ import { cx } from "@/lib/format";
  * Material's chip/segmented model supplies the behavioral contract: an axis
  * of related refinements is one labelled group; single-select uses
  * `aria-current` (link mode) or `aria-pressed` (button mode); every target
- * keeps the 44px floor the stylesheet bakes into `.fbtn` at every width.
+ * keeps the 40px floor the stylesheet bakes into `.fbtn` at every width.
  * The look — mono microcaps, ink-inverted selection, 6px chip geometry,
  * gutter-bleed compact scrolling — is Livesheet's.
  *

@@ -78,7 +78,7 @@ Scope: R09a with the minimum retrieval, classification and navigation repairs. U
 | Header spacing | 16px top; 20px bottom on desktop, 16px on mobile | Reduce the distance to inventory |
 | Breadcrumb | Existing 12px/16px micro type token; wraps; semantic ordered navigation | Retain hierarchy on narrow screens |
 | Refinement position | Existing Finder sheet at every width; Apply commits, Cancel discards | Reuse the established Marketplace/Explore idiom |
-| Mobile toolbar | Below 640px: full-row search, then Filters / Categories / Sort; filter button minimum 44px height | Keep browse access visible without a tile wall |
+| Mobile toolbar | Below 640px: full-row search, then Filters / Categories / Sort; filter button minimum 40px height | Keep browse access visible without a tile wall |
 | Category presentation | Existing tiles for unfiltered entrance/parent; compact native disclosure for filtered/leaf desktop results; sheet on mobile | Preserve browsing without pushing results down |
 | Desktop category tree | Auto-fit columns, 180px minimum; 16px row / 24px column gaps; 36px minimum link height | Expose parent, child and sibling destinations |
 | Category type and borders | Existing 16px body token and theme-aware rule-mid token | Match DRVN's established visual system |
@@ -106,7 +106,7 @@ Source: the recorded P1/P2 Etsy/Faire results references and P3 Depop continuati
 | Grid | 1 column below 480px, 2 below 900px, 3 below 1280px, 4 above; 16px gaps | Minimum readable card width |
 | Card image | 4:3 frame, object-contain, consistent fallback | Show the whole technical part |
 | Card body | 16px padding, 8px gaps; 16px/24px title, 20px/28px price, 12px/16px supporting text | Existing type scale, readable facts |
-| Card actions | Main content opens detail; separate Save button with 44px minimum height | Valid independent targets; social actions retained on detail |
+| Card actions | Main content opens detail; separate Save button with 40px minimum height | Valid independent targets; social actions retained on detail |
 | Vehicle control | Below search: explicit catalog vehicle, optional vehicle year; signed-in garage choices; Change/Clear | No private garage IDs in URLs; source-year refinements remain separate |
 | Filter sheet | Existing Finder; Apply, Cancel and Reset draft; seller-location label; item-price sort label | Shared behavior with Explore; no decorative unsupported controls |
 | Saved searches | Versioned normalized state; save from any category/search; page resets; explicit alert opt-in | Same criteria on reopen and alert destination |

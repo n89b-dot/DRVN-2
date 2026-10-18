@@ -810,7 +810,7 @@ export function ModsEditor({
               )}
               <span className="modrow__foot">
                 {row.linked_listing_id && (
-                  <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="flex shrink-0 items-center gap-2">
                     <Link
                       href={linkedListingChip(row).href}
                       className={linkedListingChip(row).className}
