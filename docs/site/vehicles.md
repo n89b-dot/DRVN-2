@@ -82,8 +82,11 @@ Records reach their product through the membership on (brand key, number),
 never a stored id — a seller who edits either field moves the listing, and a
 merge moves every record at once.
 
-**Growth.** `grow_products()` runs once as the backfill and then hourly
-(pg_cron `drvn-grow-products`). It makes a product for every brand + number
+**Growth.** `grow_products()` runs in full once as the backfill, then hourly
+over what changed since the last run (pg_cron `drvn-grow-products`: listings
+and build lines by `updated_at`, alternates and links added since, links
+touching those numbers) and in full nightly (`drvn-grow-products-full`,
+04:47). It makes a product for every brand + number
 on a listing (not draft or removed) or build line that no product holds,
 applies brand-scoped same-product links, and files what it can't decide in
 `product_identity_reviews`:
@@ -102,8 +105,8 @@ Only a number with a digit, 3–64 characters compacted, starts a product
 the ambiguity goes away. Decisions go through
 `resolve_product_identity_review` — a full admin with a fresh TOTP step-up,
 audited as `product.merge` / `product.keep_separate` / `product.dismiss`.
-Each run's result and coverage are kept in `product_grow_runs`; the admin
-page shows the latest.
+Each run's result is kept in `product_grow_runs`; full runs also record
+coverage, and the admin page shows the latest.
 
 **Internal.** Products, membership, reviews and runs have no client access,
 like `part_number_links`: a product named from a private car's build line
