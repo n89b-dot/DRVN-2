@@ -53,7 +53,7 @@ There is one agent, reached from the Agent tab (or the desktop rail) and worked 
 | Buying | Negotiate for me | Offers up to your maximum within the 3-offer limit; accepts a seller counter within your max; tells you the gap if rounds run out; you always pay | Launch |
 | Buying | Will this fit my car? | Answers from DRVN's fitment evidence and says how it knows (seller-stated, same platform, unknown) | Launch |
 | Buying | Find one that fits my car | Watches for a part that fits, then negotiates within your max | Later, when inventory supports it |
-| Buying | Build Mine, goal planning | AI-chosen equivalents and plans from your Garage | Later (B3) |
+| Buying | Build Mine, goal planning | AI-chosen equivalents and plans from your Garage | Not building (ruled out 18 Oct) |
 | Garage | Update my build | "Just fitted KW V3s", a product link or a photo becomes a mod row; the replaced part is marked removed, and it offers to list the old one | Launch |
 | Garage | Post an update | Photos from today plus a sentence become a draft car update with the parts tagged; you publish | Launch |
 | Garage | Paste your build | A pasted build list becomes structured mod rows | Launch |
@@ -183,7 +183,7 @@ Eleven changes to the report's plan. The first four change the data model, the n
 9. **"Compare with my car" can ship early, without AI.**
    - Lining up two cars' mod lists by category, brand and part number is honest without any fitment claim: "They run KW V3, you run APR Roll-Control."
    - Only the "for sale for your car" line needs evidence, and `listing_vehicle_fit` already provides it.
-   - Build Mine with AI equivalents comes later. The plan holds the whole feature back for product identity; most of it doesn't need it.
+   - Build Mine with AI equivalents isn't being built (ruled out 18 Oct). Comparing two builds is B2's "Compare with my car", with no AI.
 10. **Model choice and cost need numbers.**
     - The importer defaults to `claude-sonnet-5`; review that against the current 5.5 models.
     - Use a cheaper model for classification and the stronger one for planning and extraction.
@@ -233,7 +233,7 @@ flowchart LR
   subgraph L["Driven by usage (dashed)"]
     A4["A4 · Agent v2<br/>context and reach<br/>plain-words setup · sentence to filters"]
     A5["A5 · Agents v2<br/>after beta data<br/>auto-accept in rules · watches, when stocked"]
-    B23["B2–B3 · Fitment<br/>evidence, compare<br/>then Build Mine with AI"]
+    B23["B2 · Fitment<br/>evidence, compare"]
     A6["A6 · MCP adapter<br/>later · same registry · OAuth scopes"]
   end
   B1 -- "fit answers use B1" --> A4
@@ -409,9 +409,9 @@ Added 17 Oct. Both features work without the agent, neither depends on A0 or A1,
 - Draft Q&A replies that the owner sends.
 - Buyer "find one that fits my car" watches, only once inventory makes them useful. The agent dashboard (see UX).
 
-### B3 — Build intelligence
+### B3 — Build intelligence: not being built
 
-Build Mine with AI equivalents, goal planning, and pgvector if similar-build search needs it.
+Ruled out by Neil on 18 Oct 2026: Build Mine with AI equivalents, goal planning and similar-build search are out of scope, so pgvector isn't needed either. Track B ends at B2.
 
 ### A6 — Outside agents
 
@@ -962,7 +962,6 @@ The agent gets more capable over time:
 - reading your messages for context;
 - accepting offers on its own once the beta proves it's trustworthy;
 - watching for parts that fit your car once there's enough inventory;
-- "Build Mine" (make my car like that one) and goal planning ("better handling, keep the ride");
 - a dashboard of everything it's doing;
 - eventually, letting your own outside AI assistant work with DRVN through the same safe actions.
 
