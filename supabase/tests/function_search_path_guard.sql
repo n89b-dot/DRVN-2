@@ -49,6 +49,19 @@ begin
     raise exception 'FAIL 3: a reviewed function is no longer caller''s-rights SQL; pin its search_path: %', bad;
   end if;
 
+  -- 4. The minimum's writer pins public, pg_temp, and nothing steers a check
+  --    through a session setting any role can set (20261019120000 retired
+  --    drvn.floor_checked_listing).
+  if (select proconfig from pg_proc where oid = 'public.set_listing_offer_floor(uuid,integer)'::regprocedure)
+     is distinct from array['search_path=public, pg_temp'] then
+    raise exception 'FAIL 4: set_listing_offer_floor does not pin search_path to public, pg_temp';
+  end if;
+  select string_agg(p.oid::regprocedure::text, ', ') into bad
+  from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosrc like '%floor_checked_listing%';
+  if bad is not null then
+    raise exception 'FAIL 5: functions still use the retired drvn.floor_checked_listing setting: %', bad;
+  end if;
+
   raise notice 'all function search path checks passed';
 end $$;
 

@@ -1,3 +1,5 @@
+-- Opening an offer and its first message commit together, replay exactly and
+-- refuse a changed retry (offer_open since the contract, 20261019120000).
 begin;
 
 update public.beta_access_config set enforced=false where singleton=true;
@@ -26,7 +28,7 @@ declare result jsonb; refused boolean;
 begin
   refused:=false;
   begin
-    perform public.create_offer_with_message(
+    perform public.offer_open(
       '30000000-0000-4000-8000-000000000001',
       '20000000-0000-4000-8000-000000000001',9000,'[force-offer-message-failure]'
     );
@@ -35,7 +37,7 @@ begin
     raise exception 'Opening-message failure left a partially-created offer';
   end if;
 
-  result:=public.create_offer_with_message(
+  result:=public.offer_open(
     '30000000-0000-4000-8000-000000000001',
     '20000000-0000-4000-8000-000000000001',9000,'Can you ship on Friday?'
   );
@@ -53,7 +55,7 @@ begin
        and body='Can you ship on Friday?'
      ) then raise exception 'Offer and opening message did not commit atomically'; end if;
 
-  result:=public.create_offer_with_message(
+  result:=public.offer_open(
     '30000000-0000-4000-8000-000000000001',
     '20000000-0000-4000-8000-000000000001',9000,'Can you ship on Friday?'
   );
@@ -64,20 +66,20 @@ begin
   end if;
 
   refused:=false;
-  begin perform public.create_offer_with_message(
+  begin perform public.offer_open(
     '30000000-0000-4000-8000-000000000001',
     '20000000-0000-4000-8000-000000000001',8999,'Can you ship on Friday?'
   ); exception when others then refused:=true; end;
   if not refused then raise exception 'Offer retry accepted a changed amount'; end if;
   refused:=false;
-  begin perform public.create_offer_with_message(
+  begin perform public.offer_open(
     '30000000-0000-4000-8000-000000000001',
     '20000000-0000-4000-8000-000000000001',9000,'Changed message'
   ); exception when others then refused:=true; end;
   if not refused then raise exception 'Offer retry accepted a changed message'; end if;
 
   refused:=false;
-  begin perform public.create_offer_with_message(
+  begin perform public.offer_open(
     '30000000-0000-4000-8000-000000000002',
     '20000000-0000-4000-8000-000000000001',8500,null
   ); exception when unique_violation then refused:=true; when others then refused:=true; end;
@@ -93,8 +95,12 @@ begin
   if not exists(select 1 from pg_indexes where schemaname='public' and indexname='offers_one_live_buyer_listing') then
     raise exception 'Live offer uniqueness index is missing';
   end if;
-  if has_function_privilege('anon','public.create_offer_with_message(uuid,uuid,integer,text)','execute') then
+  if has_function_privilege('anon','public.offer_open(uuid,uuid,integer,text)','execute') then
     raise exception 'Anonymous role can invoke offer submission';
+  end if;
+  -- offer_open replaced it (20261017160000); the contract dropped it (20261019120000).
+  if to_regprocedure('public.create_offer_with_message(uuid,uuid,integer,text)') is not null then
+    raise exception 'The pre-negotiation-v2 offer submission function is still installed';
   end if;
   raise notice 'all durable offer submission checks passed';
 end $$;

@@ -1,5 +1,33 @@
 # Applying migrations
 
+## October 19 — negotiation v2 and the private minimum: contract (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261019120000_negotiation_contract.sql` | not applied to shared dev (see below) |
+
+The contract step of A0 (the private minimum) and A1 (negotiation v2). Apply after every `20261018` file, and only once **every running app copy has the switched code** (main from `8321071` on). An app without it still writes `listings.offer_floor_cents` and calls `create_offer_with_message`, and both are gone.
+
+It drops:
+- `create_offer_with_message`;
+- the client write policies on `offers` (`buyers create offers`, `buyers withdraw own offers`, `suspended members don't make offers`) and anon/authenticated INSERT, UPDATE and DELETE on it, so members write offers only through `offer_open` and `offer_move`;
+- `guard_offer_private_floor` and its trigger;
+- `listings.offer_floor_cents`, its two check constraints, and `absorb_listing_offer_floor` with its trigger;
+- the `drvn.floor_checked_listing` skip in `guard_private_floor_within_price`;
+- the deferral on `listing_private_terms`' foreign key to `listings`.
+
+It adds `set_listing_offer_floor(listing, floor)`, SECURITY DEFINER with `search_path = public, pg_temp`, executable by `authenticated`. It acts only for the listing's own seller, refuses a suspended seller and a sold, reserved or removed listing, and checks 0 < minimum ≤ price. `save_listing_creation` calls it after inserting the listing; `update_listing_atomic` calls it before or after the listing update, whichever keeps the minimum within the price. Both read the minimum from the same `offer_floor_cents` JSON key, so the form payload is unchanged. Both bodies were taken from `pg_get_functiondef` and change only those lines.
+
+`record_offer_round` stays, because the expiry sweep, `purchase_finalize` and `offer_accept_begin` on an expired offer still change offers' status without writing a round. The export contract doesn't change.
+
+Checked on a fresh database with every migration:
+- the file applies twice cleanly, and generated types match;
+- every SQL guard passes. `offer_floor_privacy_guard.sql` (39 checks), `offer_move_guard.sql` (27), `definer_exposure_guard.sql` and `function_search_path_guard.sql` now prove the old paths are gone, and each fails on the schema before this file;
+- `npm test`, typecheck and lint pass;
+- `tests/operations/negotiation-concurrency.test.ts` passes on the local stack with this file applied.
+
+To reverse: restore the column and the absorb trigger from `20261017130000`, the three functions from `20261018100000`, the policies and `create_offer_with_message` from their last definitions, and re-defer the key.
+
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 
 | File | Applied to |

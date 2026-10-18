@@ -206,8 +206,6 @@ export type Listing = {
   length_in: number | null;
   width_in: number | null;
   height_in: number | null;
-  /** Offers below this are refused before the seller sees them. */
-  offer_floor_cents: number | null;
   currency: string;
   location: string | null;
   compatibility_notes: string | null;

@@ -1275,28 +1275,28 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "offer-floor-private",
     name: "A seller's offer minimum is private",
     group: "foundations",
-    status: "in-progress",
+    status: "validated",
     brief: "PRD O-3 · agent plan A0",
     existsToday:
       "The lowest offer a seller will take lived on `listings.offer_floor_cents`, which anon and authenticated could read table-wide through the API, and the listing page showed it as \"Offers accepted from\".",
     changing:
       "The minimum moves to `listing_private_terms`, readable only by the seller (`my_listing_offer_floor`) and the offer checks, in three releases: expand (copy, kept in step), switch (every reader moved, the old column held empty), contract (drop the column once the switched app is live everywhere).",
-    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
+    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "supabase/migrations/20261019120000_negotiation_contract.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
     benefit: "A seller's minimum can't be read by anyone else, so it can't be used against them, by a buyer or by an agent.",
     approach:
-      "Owner-only table, no client grants; a BEFORE trigger moves any write to the old column into it; the price bound is checked from both sides; a SECURITY DEFINER trigger on offers refuses below-minimum offers without naming the amount.",
+      "Owner-only table, no client grants. One writer, `set_listing_offer_floor`, which acts only for the listing's seller and which the sell and edit functions call; the price bound is checked from both sides; offer_open and offer_move check the minimum and never name it. The switch step's absorb trigger and the old column are gone (contract, 20261019120000).",
     decisions: [
       "Showing the minimum on the listing becomes a seller toggle, off by default, with negotiation v2; until then no minimum is shown.",
     ],
     validation:
-      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). offer_floor_privacy_guard.sql (28 checks) fails before the expand migration and passes after; every SQL guard, npm test, typecheck, lint and next build pass. The contract step is not done.",
+      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). Contract (20261019120000): offer_floor_privacy_guard.sql (39 checks) fails on the switch-step schema and passes after; every SQL guard, npm test, typecheck, lint and the negotiation drills pass. The contract's shared-dev apply waits until every running app copy has the switched code (supabase/MIGRATIONS.md).",
     docs: ["docs/decisions/agent-foundations.md", "supabase/MIGRATIONS.md"],
   },
   {
     id: "negotiation-v2",
     name: "Negotiation v2: counter-backs for every member",
     group: "selling",
-    status: "planned",
+    status: "validated",
     brief: "PRD O-1, O-2, O-4, O-5 · agent plan A1",
     existsToday:
       "An offer gets one answer: the seller accepts, declines or counters once. A below-minimum offer is refused before anything is recorded, so trying again costs nothing.",
@@ -1306,8 +1306,9 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     benefit: "Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.",
     approach: "Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.",
     dependsOn: ["offer-floor-private"],
-    validation: "Not started.",
-    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
+    validation:
+      "Built in steps 20261017150000 (rounds), 20261017160000 (offer_open / offer_move), 20261018100000–100200 (show my minimum, listing-first locks) and 20261019120000 (contract: create_offer_with_message and the client write policies on offers are gone). offer_move_guard.sql, offer_rounds_guard.sql, tests/operations/negotiation-concurrency.test.ts and e2e/negotiation-three-rounds.spec.ts pass.",
+    docs: ["docs/decisions/negotiation-v2.md", "docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
   },
   {
     id: "member-agent",

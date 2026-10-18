@@ -73,10 +73,12 @@ begin
   update public.profiles set display_name = 'Sec Guard Other',  username = 'sec_guard_other'  where id = v_other;
 
   insert into public.listings
-    (seller_id, title, category, price_cents, shipping_cents, status, currency, offer_floor_cents)
+    (seller_id, title, category, price_cents, shipping_cents, status, currency)
   values
-    (v_seller, 'Sec guard turbo manifold', 'engine', 50000, 1500, 'active', 'USD', 20000)
+    (v_seller, 'Sec guard turbo manifold', 'engine', 50000, 1500, 'active', 'USD')
   returning id into v_listing;
+  insert into public.listing_private_terms (listing_id, seller_id, offer_floor_cents)
+  values (v_listing, v_seller, 20000);
 
   insert into public.listings
     (seller_id, title, category, price_cents, shipping_cents, status, currency)
@@ -121,7 +123,10 @@ begin
   end;
 
   -- ================================================================
-  -- 2. Forged counteroffer (guard_offer_insert, 0012)
+  -- 2. Forged counteroffer (guard_offer_insert, 0012). Since the contract
+  -- (20261019120000) no client role can insert offers at all, so 2–4 are
+  -- refused by privilege before guard_offer_insert runs; offer_open makes
+  -- the same checks (offer_move_guard.sql).
   -- ================================================================
   perform pg_temp.impersonate(v_buyer);
 
@@ -178,22 +183,24 @@ begin
     insert into public.offers (listing_id, buyer_id, amount_cents, status)
     values (v_listing, v_buyer, 19999, 'open');
     raise exception 'FAIL 4b: offer below the seller floor was accepted';
-  -- check_violation since 20261017130000: the minimum is private and checked
-  -- by offers_guard_private_floor (offer_floor_privacy_guard.sql covers it).
-  exception when check_violation then
+  -- offer_open declines a below-minimum attempt without naming the number
+  -- (offer_floor_privacy_guard.sql covers it).
+  exception when insufficient_privilege then
     raise notice 'PASS 4b: an offer below the seller''s minimum is rejected';
   end;
 
   -- A legitimate offer, kept live for the retarget check (5) and the
   -- accept-as-wrong-seller check (6).
-  insert into public.offers (listing_id, buyer_id, amount_cents, status)
-  values (v_listing, v_buyer, 30000, 'open')
-  returning id into v_offer;
+  v_offer := gen_random_uuid();
+  if public.offer_open(v_offer, v_listing, 30000, null)->>'outcome' <> 'sent' then
+    raise exception 'FAIL 4c: an in-bounds offer was refused';
+  end if;
   raise notice 'PASS 4c: an in-bounds offer is accepted';
 
   -- ================================================================
   -- 5. Offer retarget — buyer rewrites their own offer's listing/amount
-  -- (offers_guard_columns trigger, 0006/0012)
+  -- (offers_guard_columns trigger, 0006/0012; since 20261019120000 no client
+  -- role can update offers at all)
   -- ================================================================
   perform pg_temp.impersonate(v_buyer);
   begin
