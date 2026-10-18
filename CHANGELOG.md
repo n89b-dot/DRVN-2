@@ -15,6 +15,7 @@ A seller's lowest acceptable offer was stored on the listing, which anyone could
 - **Step three, contract** (later, once the switched app is live everywhere): drop `listings.offer_floor_cents` and the step-two trigger, and have the sell and edit functions write the private table directly.
 - Guard `offer_floor_privacy_guard.sql` (28 checks); `security_guard.sql` 4b now expects the new refusal.
 - **Search-path guard** (`function_search_path_guard.sql`, the advisor follow-up): every SECURITY DEFINER function must pin its `search_path`, and all 194 already do. The advisor's 10 flagged functions stay unpinned on purpose. They are caller's-rights SQL functions the planner inlines, and a `SET` clause would stop the inlining the 2M-scale search plans rely on. They are now a reviewed list, and any new unpinned function fails the guard.
+- **Signed-in definer functions reviewed.** `definer_exposure_guard.sql` already listed the SECURITY DEFINER functions a visitor can call. It now also lists the 21 that only signed-in members can call, each with the reason it is safe: every one answers or acts only for the caller, or refuses anyone but an admin. A new one fails the guard until it is reviewed.
 
 ## 2026-10-17 — PRD: the DRVN agent
 
