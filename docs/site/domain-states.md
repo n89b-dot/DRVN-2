@@ -58,7 +58,7 @@ Enforced by: CHECK + guard_offer_columns trigger (0007/0012)
 | From | May move to |
 | --- | --- |
 | `open` | `countered` · `accepted` · `declined` · `withdrawn` · `expired` |
-| `countered` | `accepted` · `declined` · `withdrawn` · `expired` |
+| `countered` | `open` · `accepted` · `declined` · `withdrawn` · `expired` |
 | `accepted` | **terminal** |
 | `declined` | **terminal** |
 | `withdrawn` | **terminal** |
@@ -145,13 +145,16 @@ Enforced by: CHECK + guard_listing_import_status trigger (0047)
 
 ## What the maps don't show
 
-- **Who may take a transition.** Offers: `open → countered` is the seller's
-  move and `countered → accepted` is the **buyer's**. Once the seller has
-  countered it is the buyer's turn — the seller can only pass (decline, which
-  withdraws the counter), not accept their own counter or counter again
-  (`respondToOffer`; a counter is written only onto an `open` offer). A buyer
-  has at most one live (`open` or `countered`) offer per part; `makeOffer`
-  checks before the RPC and points at the existing offer.
+- **Who may take a transition.** Offers (negotiation v2, `20261017160000`):
+  `open` is the seller's turn and `countered` the buyer's, and turns strictly
+  alternate. The seller accepts, counters (above the buyer's amount, within
+  the asking price, at or above their minimum) or passes; the buyer accepts the
+  counter, counters back (above their last amount, below the counter; this is
+  `countered → open`) or withdraws. A buyer has 3 offers per part, counter-backs
+  and below-minimum attempts included, across every thread, and at most one
+  live offer at a time. Every move goes through `offer_open` / `offer_move`,
+  which check turn, round, bounds and limits in one transaction and record the
+  move in `offer_rounds`; see `docs/decisions/negotiation-v2.md`.
 - **Reserved is visible.** A `reserved` listing — held by a checkout
   (15 min) or an accepted offer (24 h) — is publicly readable with its
   photos, fitment, part numbers and Q&A (`20260928150000`), and the listing

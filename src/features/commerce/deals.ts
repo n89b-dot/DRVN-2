@@ -46,6 +46,8 @@ export type OfferDealRow = {
   responded_at: string | null;
   updated_at: string;
   expires_at: string | null;
+  /** Moves so far (negotiation v2); every move names the round it was made at. */
+  round_count?: number;
   title: string;
   image?: string | null;
 };

@@ -267,7 +267,7 @@ export function PurchaseActions({
               inputMode="decimal"
               value={offerAmount}
               onChange={(event) => setOfferAmount(event.target.value)}
-              hint={`Asking ${formatPrice(priceCents)}. The seller can accept, counter once, or let it lapse. Offers expire after 72 hours.`}
+              hint={`Asking ${formatPrice(priceCents)}. You get 3 offers on this part, counter-offers included. Each turn lasts 72 hours.`}
               error={offerState.error}
               ok={offerState.ok}
             />

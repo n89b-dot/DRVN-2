@@ -797,10 +797,14 @@ export async function completeReservedOrder(
   }
   if (order.status !== "pending") {
     return {
+      // A lapsed 24-hour hold ends as payment_failed (finish_reservation_expiry),
+      // not cancelled; both mean the part went back on sale.
       error:
         order.status === "cancelled"
           ? "This offer lapsed and the part went back on sale."
-          : "This order has already been settled.",
+          : order.status === "payment_failed"
+            ? "This offer's checkout ended without payment, and the part went back on sale."
+            : "This order has already been settled.",
     };
   }
 

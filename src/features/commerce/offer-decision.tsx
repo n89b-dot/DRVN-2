@@ -9,7 +9,7 @@ import { Button, ResultNote, TextField } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { expand } from "@/lib/motion";
 
-import { acceptCounter, respondToOffer, withdrawOffer, type CommerceState } from "./actions";
+import { acceptCounter, counterOffer, respondToOffer, withdrawOffer, type CommerceState } from "./actions";
 import { useRecoverableAction } from "./use-recoverable-action";
 
 /**
@@ -20,10 +20,12 @@ import { useRecoverableAction } from "./use-recoverable-action";
  *   seller, open       → Accept · Counter · Pass
  *   seller, countered  → waiting on the buyer (they hold the counter) · Pass
  *   buyer,  open       → waiting on the seller · Withdraw
- *   buyer,  countered  → Accept counter · Withdraw
+ *   buyer,  countered  → Accept counter · Counter back · Withdraw
  *
  * A countered offer never offers the seller "Accept": accepting there would
- * reserve the part at a price the buyer never agreed to.
+ * reserve the part at a price the buyer never agreed to. Turns alternate and
+ * a buyer has 3 offers per part, counter-backs included (negotiation v2);
+ * the database enforces both, so this only decides what to show.
  */
 export function OfferDecision({
   offerId,
@@ -34,6 +36,8 @@ export function OfferDecision({
   counterpartyName,
   partTitle,
   expiresAt,
+  round,
+  buyerOffersLeft,
   block = false,
 }: {
   offerId: string;
@@ -46,6 +50,10 @@ export function OfferDecision({
   /** Shown in the card eyebrow when the card sits in a conversation. */
   partTitle?: string;
   expiresAt?: string | null;
+  /** The offer's round count: every move says which round it was made at. */
+  round: number;
+  /** Buyer offers left on this part (of 3), when known. */
+  buyerOffersLeft?: number;
   /** Full-width plate (the offer page) rather than a card in a conversation. */
   block?: boolean;
 }) {
@@ -63,6 +71,7 @@ export function OfferDecision({
   const [respondState, respond, responding] = useRecoverableAction<CommerceState>(refreshing(respondToOffer), failure);
   const [withdrawState, withdraw, withdrawing] = useRecoverableAction<CommerceState>(refreshing(withdrawOffer), failure);
   const [counterState, takeCounter, takingCounter] = useRecoverableAction<CommerceState>(refreshing(acceptCounter), failure);
+  const [backState, counterBack, counteringBack] = useRecoverableAction<CommerceState>(refreshing(counterOffer), failure);
   const [showCounter, setShowCounter] = useState(false);
   const counterId = useId();
 
@@ -84,7 +93,9 @@ export function OfferDecision({
     note = `Waiting on ${counterpartyName} to take your ${formatPrice(counterAmountCents!)} counter or walk away.`;
   } else if (countered) {
     eyebrow = `${counterpartyName} countered${what}`;
-    note = `You offered ${formatPrice(amountCents)}.${expires ? ` Decide ${expires}.` : ""}`;
+    note = `You offered ${formatPrice(amountCents)}.${expires ? ` Decide ${expires}.` : ""}${
+      buyerOffersLeft != null ? ` ${buyerOffersLeft === 0 ? "No offers left to counter with" : `${buyerOffersLeft} of 3 offers left`}.` : ""
+    }`;
   } else {
     eyebrow = `Your offer${what}`;
     note = `Waiting on ${counterpartyName}.${expires ? ` It expires ${expires}.` : ""}`;
@@ -93,6 +104,7 @@ export function OfferDecision({
   function post(action: (data: FormData) => void, fields: Record<string, string>) {
     const data = new FormData();
     data.set("offer_id", offerId);
+    data.set("round", String(round));
     for (const [key, value] of Object.entries(fields)) data.set(key, value);
     action(data);
   }
@@ -116,9 +128,16 @@ export function OfferDecision({
           </Button>
         )}
         {!incoming && countered && (
-          <Button variant="live" loading={takingCounter} pendingLabel="Confirming…" onClick={() => post(takeCounter, {})}>
-            Accept {formatPrice(counterAmountCents!)}
-          </Button>
+          <>
+            <Button variant="live" loading={takingCounter} pendingLabel="Confirming…" onClick={() => post(takeCounter, {})}>
+              Accept {formatPrice(counterAmountCents!)}
+            </Button>
+            {buyerOffersLeft !== 0 && (
+              <Button variant="ghost" aria-expanded={showCounter} onClick={() => setShowCounter((v) => !v)}>
+                Counter back
+              </Button>
+            )}
+          </>
         )}
         {!incoming && (
           <Button variant="quiet" loading={withdrawing} pendingLabel="Withdrawing…" onClick={() => post(withdraw, {})}>
@@ -140,6 +159,7 @@ export function OfferDecision({
               event.preventDefault();
               const data = new FormData(event.currentTarget);
               data.set("offer_id", offerId);
+              data.set("round", String(round));
               data.set("decision", "countered");
               respond(data);
             }}
@@ -161,9 +181,44 @@ export function OfferDecision({
             </Button>
           </motion.form>
         )}
+        {!incoming && countered && showCounter && (
+          <motion.form
+            key="counter-back"
+            variants={expand}
+            initial="collapsed"
+            animate="expanded"
+            exit="collapsed"
+            className="flex flex-wrap items-end gap-2 overflow-hidden"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              data.set("offer_id", offerId);
+              data.set("round", String(round));
+              counterBack(data);
+            }}
+          >
+            <TextField
+              id={counterId}
+              label="Your counter-offer"
+              name="counter_amount"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              required
+              prefix="$"
+              hint={`Between ${formatPrice(amountCents)} and ${formatPrice(counterAmountCents!)}.`}
+              className="min-w-0"
+            />
+            <Button type="submit" variant="live" loading={counteringBack} pendingLabel="Sending…">
+              Send counter-offer
+            </Button>
+          </motion.form>
+        )}
       </AnimatePresence>
 
       <ResultNote error={respondState.error} ok={respondState.ok} />
+      <ResultNote error={backState.error} ok={backState.ok} />
       <ResultNote error={withdrawState.error} ok={withdrawState.ok} />
       <ResultNote error={counterState.error} ok={counterState.ok} />
     </OfferCard>

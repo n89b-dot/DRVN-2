@@ -12,6 +12,7 @@ export {
   respondToOffer,
   withdrawOffer,
   acceptCounter,
+  counterOffer,
   sendThreadMessage,
   markThreadMessagesRead,
   type CommerceState,

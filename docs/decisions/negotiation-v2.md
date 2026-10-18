@@ -113,7 +113,7 @@ Each step ships on its own and leaves the app working.
      offer's columns into its rounds.
    - Add a trigger that records a round for every move today's code still makes.
    - The offer page reads its history from rounds.
-2. **Switch the rules.**
+2. **Switch the rules** (`20261017160000`; the lock-order restatement of `freeze_accepted_offer_checkout`, `settle_seller_cancellation` and `purchase_finalize`, and removing the old write paths, follow in a contract step once the switched app runs everywhere).
    - Add `offer_open` and `offer_move`, and point the app's actions at them.
    - Add buyer counter-backs, the 3-offer limit, the per-turn expiry, below-minimum rounds, the
      listing-first lock order and cancel-before-checkout.

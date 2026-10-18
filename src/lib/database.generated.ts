@@ -2110,8 +2110,10 @@ export type Database = {
           created_at: string
           expires_at: string | null
           id: string
+          last_round_id: string | null
           listing_id: string
           responded_at: string | null
+          round_count: number
           status: string
           updated_at: string
         }
@@ -2123,8 +2125,10 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           id?: string
+          last_round_id?: string | null
           listing_id: string
           responded_at?: string | null
+          round_count?: number
           status?: string
           updated_at?: string
         }
@@ -2136,8 +2140,10 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           id?: string
+          last_round_id?: string | null
           listing_id?: string
           responded_at?: string | null
+          round_count?: number
           status?: string
           updated_at?: string
         }
@@ -2147,6 +2153,13 @@ export type Database = {
             columns: ["buyer_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offers_last_round_id_fkey"
+            columns: ["last_round_id"]
+            isOneToOne: false
+            referencedRelation: "offer_rounds"
             referencedColumns: ["id"]
           },
           {
@@ -5712,6 +5725,26 @@ export type Database = {
           p_seller_id: string
         }
         Returns: string
+      }
+      offer_effective_floor: { Args: { p_listing: string }; Returns: number }
+      offer_move: {
+        Args: {
+          p_amount: number
+          p_expected_round: number
+          p_idempotency_key: string
+          p_kind: string
+          p_offer: string
+        }
+        Returns: Json
+      }
+      offer_open: {
+        Args: {
+          p_amount: number
+          p_listing: string
+          p_message?: string
+          p_offer: string
+        }
+        Returns: Json
       }
       open_seller_carry_payouts: {
         Args: { p_limit?: number; p_quiet_hours?: number }

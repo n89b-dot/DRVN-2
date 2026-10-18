@@ -83,6 +83,8 @@ Source of truth: `src/lib/notifications/kinds.ts`.
 | `offer_accepted` | marketplace | `offers_sales` | app (deliver.ts) | The seller accepted your offer — opens checkout (offer-actions.ts; the trigger no longer writes a second one). |
 | `offer_counter_accepted` | marketplace | `offers_sales` | DB trigger | The buyer accepted your counter — opens the order. |
 | `offer_withdrawn` | marketplace | `offers_sales` | DB trigger | An offer was withdrawn. |
+| `offer_countered_back` | marketplace | `offers_sales` | DB trigger | The buyer countered your counter — opens the offer (negotiation v2, 20261017160000). |
+| `offer_expired` | marketplace | `offers_sales` | DB trigger | A turn ran out and the offer expired — sent to both sides (20261017160000). |
 | `order_sold` | marketplace | `offers_sales` | DB trigger | Your part sold. |
 | `order_paid` | marketplace | `offers_sales` | DB trigger | Payment confirmed on an order. |
 | `order_shipped` | marketplace | `order_updates` | DB trigger | Your order shipped. |

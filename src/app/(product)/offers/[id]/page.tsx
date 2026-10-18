@@ -69,7 +69,7 @@ export default async function OfferThreadPage({
 
   const counterpartyId = incoming ? offer.buyer_id : listing.seller_id;
 
-  const [{ data: image }, { data: counterparty }, { data: rawMessages }, { data: rounds }] =
+  const [{ data: image }, { data: counterparty }, { data: rawMessages }, { data: rounds }, { count: buyerOffersUsed }] =
     await Promise.all([
       supabase
         .from("listing_images")
@@ -99,6 +99,15 @@ export default async function OfferThreadPage({
         .select("round_no, actor_role, kind, amount_cents, created_at")
         .eq("offer_id", id)
         .order("round_no"),
+      // The buyer's offers on this part, across every thread: 3 in all,
+      // counter-backs and below-minimum attempts included.
+      supabase
+        .from("offer_rounds")
+        .select("id", { count: "exact", head: true })
+        .eq("listing_id", listing.id)
+        .eq("buyer_id", offer.buyer_id)
+        .eq("actor_role", "buyer")
+        .in("kind", ["offer", "counter", "below_minimum"]),
     ]);
 
   // This viewer's read receipt for the thread — scoped to messages
@@ -318,6 +327,8 @@ export default async function OfferThreadPage({
             incoming={incoming}
             counterpartyName={counterpartyName}
             expiresAt={offer.expires_at}
+            round={offer.round_count}
+            buyerOffersLeft={buyerOffersUsed == null ? undefined : Math.max(0, 3 - buyerOffersUsed)}
             block
           />
         </Rv>
@@ -352,7 +363,7 @@ export default async function OfferThreadPage({
       </Rv>
 
       <Foot
-        left="DRVN — offers expire 72 hours after they're made"
+        left="DRVN — each turn on an offer lasts 72 hours"
         right={<Link href="/offers">All offers →</Link>}
       />
     </div>
