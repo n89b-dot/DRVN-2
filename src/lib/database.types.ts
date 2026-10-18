@@ -267,9 +267,14 @@ export type ModItem = {
   ref_price_cents: number | null;
   /** ISO-4217 for ref_price_cents. No currency means no price. */
   ref_price_currency: string | null;
+  /** aftermarket (fitted by the owner) or stock (a factory part that came
+   *  off when a mod went on — "What came off"). */
+  origin: ModOrigin;
   created_at: string;
   updated_at: string;
 };
+
+export type ModOrigin = "aftermarket" | "stock";
 
 export type ActivityReaction = {
   post_id: string;

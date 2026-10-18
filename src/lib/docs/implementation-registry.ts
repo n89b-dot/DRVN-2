@@ -1343,7 +1343,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach: "Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.",
     dependsOn: ["offer-floor-private"],
     validation:
-      "Built in steps 20261017150000 (rounds), 20261017160000 (offer_open / offer_move), 20261018100000–100200 (show my minimum, listing-first locks) and 20261019120000 (contract: create_offer_with_message and the client write policies on offers are gone). offer_move_guard.sql, offer_rounds_guard.sql, tests/operations/negotiation-concurrency.test.ts and e2e/negotiation-three-rounds.spec.ts pass.",
+      "Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. The contract step, 20261019120000, retires create_offer_with_message and the client write policies on offers; its shared-dev apply waits until every running app copy has the switched code.",
     docs: ["docs/decisions/negotiation-v2.md", "docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
   },
   {
@@ -1363,6 +1363,26 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     dependsOn: ["negotiation-v2"],
     validation: "supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role. negotiate.ts property tests and seeded simulations (src/lib/agent); the same simulations through agent_worker in tests/operations/agent-worker.test.ts; tests/agent-evals fixtures for redaction, untrusted content and the model's tool boundary.",
     docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md", "docs/decisions/agent-data-rules.md"],
+  },
+
+  {
+    id: "seller-helpers",
+    name: "Seller helpers: photo shot lists and what came off",
+    group: "selling",
+    status: "implemented",
+    brief: "Agent plan, alongside A3c–A3d (no AI) · AG-9, AG-11",
+    existsToday:
+      "The sell form asks for photos with no guidance on which ones buyers look for. The build sheet lists only aftermarket parts, so fitting first coilovers to a stock car leaves nothing to mark removed, and the stock parts never get listed.",
+    changing:
+      "The photo step suggests 3–5 shots for the part type (a generic list until the type is known; the title sharpens mixed types such as springs vs coilovers). A new mod line asks once, inline, which stock parts came off; ticked ones become removed lines marked stock (`mod_items.origin`), each with List it, so the listing carries the car maker as brand and the source car's fitment.",
+    surfaces: ["src/lib/marketplace/photo-guide.ts", "src/lib/mods/stock-parts.ts", "SellForm", "/garage/[id]/edit", "supabase/migrations/20261019100000_mod_items_stock_origin.sql"],
+    benefit: "Better photos without a checklist to fill in, and parts that came off a stock car become things to sell.",
+    approach:
+      "Static maps, no AI and no new screens. The shot list is a suggestion, never required (one photo still publishes). The stock offer reads the finer mod type from the product name by keyword, with a short pick list as the fallback; save_mod_items keeps a line's origin when an older editor omits it. The agent later calls the same functions (AG-9).",
+    dependsOn: [],
+    validation:
+      "photo-guide.test.ts (every subcategory covered, 3–5 shots) and stock-parts.test.ts pass; mod_stock_origin_guard.sql passes on a fresh database with every other guard; generated types check clean.",
+    docs: ["docs/decisions/seller-helpers.md", "supabase/MIGRATIONS.md"],
   },
 
   // ── 14 · Deferred / not pursuing ────────────────────────────────────────

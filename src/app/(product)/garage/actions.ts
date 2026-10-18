@@ -318,6 +318,8 @@ export type ModItemInput = {
   ref_price_cents?: number | null;
   /** No currency means no price; the database refuses the half-state. */
   ref_price_currency?: string | null;
+  /** "What came off": a factory part that came off when a mod went on. */
+  origin?: "aftermarket" | "stock";
 };
 
 /**
@@ -385,6 +387,7 @@ export async function saveModItems(carId: string, items: ModItemInput[]): Promis
         ? Math.max(0, Math.round(item.ref_price_cents))
         : null,
     ref_price_currency: item.ref_price_currency ?? null,
+    origin: item.origin === "stock" ? "stock" : "aftermarket",
     };
   });
   const { data, error } = await supabase.rpc("save_mod_items", {
