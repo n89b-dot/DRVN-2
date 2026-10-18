@@ -120,6 +120,10 @@ test.describe("seller agent (A3a)", () => {
     // A live listing needs a real photo of its own (M-5/W-2); the fixture's
     // placeholder URL isn't one, so attach one through the editor's uploader.
     await attachSellPhoto(seller);
+    // attachSellPhoto waits for "Add more photos", which the placeholder
+    // already shows: wait for the upload itself to land as a second tile.
+    await expect(seller.locator("#sell-photos .thumb")).toHaveCount(2, { timeout: 30_000 });
+    await expect(seller.locator("#sell-photos").getByText("Uploading…")).toHaveCount(0, { timeout: 30_000 });
     await seller.getByLabel("Let DRVN handle offers").check();
     await seller.getByLabel(/Minimum — your walk-away price/).fill("230");
     await seller.getByLabel(/^Target$/).fill("245");
