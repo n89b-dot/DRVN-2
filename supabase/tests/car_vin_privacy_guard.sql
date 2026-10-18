@@ -10,10 +10,12 @@ declare
   v text;
   denied boolean := false;
   expected text[] := array['about','body_class','catalog_make_id','catalog_model_id','color','cover_focal_x',
-    'cover_focal_y','cover_image_url','created_at','drivetrain','engine','id','identity_source','is_public',
+    'cover_focal_y','cover_image_url','created_at','drivetrain','engine','generation_id','generation_source','id','identity_source','is_public',
     'make','make_key','model','model_key','name','owner_id','slug','tags','trim','updated_at','vin_decoded_at','year'];
   -- make_key / model_key (20261011120000): make and model lower-cased, for
   -- the vehicle filter's index; no more than make and model say.
+  -- generation_id / generation_source (20261020100000): the generation
+  -- resolved from model and year, or the owner's choice of it.
   readable text[];
 begin
   insert into auth.users(id, email) values (owner_id, 'vin-owner@example.test'), (stranger, 'vin-stranger@example.test');
