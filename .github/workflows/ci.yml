@@ -291,16 +291,11 @@ jobs:
       # RR-16: Realtime runs here, so live message and badge delivery is
       # tested by subscription (e2e/realtime-delivery.spec.ts), not by the
       # fallback refresh.
+      # Each attempt is time-boxed (scripts/ci-supabase-start.sh): a stalled
+      # image pull or health wait is retried instead of running until the
+      # job's timeout-minutes kills it.
       - name: Start isolated Supabase with captured email
-        run: |
-          for attempt in 1 2 3; do
-            if npx --yes supabase@2.116.0 start -x logflare,vector,studio,edge-runtime,imgproxy; then
-              exit 0
-            fi
-            npx --yes supabase@2.116.0 stop --no-backup || true
-            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi
-          done
-          exit 1
+        run: bash scripts/ci-supabase-start.sh logflare,vector,studio,edge-runtime,imgproxy
       - run: node scripts/prepare-ci-supabase.mjs
       - name: Start isolated Typesense
         run: |
@@ -402,17 +397,11 @@ jobs:
       - if: steps.gate.outputs.run == 'true'
         run: npm ci
 
+      # Time-boxed per attempt (see the e2e job) so a stalled start retries
+      # instead of consuming the whole job budget.
       - if: steps.gate.outputs.run == 'true'
         name: Start isolated Stripe test database
-        run: |
-          for attempt in 1 2 3; do
-            if npx --yes supabase@2.116.0 start -x logflare,vector,studio,realtime,edge-runtime,imgproxy; then
-              exit 0
-            fi
-            npx --yes supabase@2.116.0 stop --no-backup || true
-            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi
-          done
-          exit 1
+        run: bash scripts/ci-supabase-start.sh logflare,vector,studio,realtime,edge-runtime,imgproxy
       - if: steps.gate.outputs.run == 'true'
         run: node scripts/prepare-ci-supabase.mjs
 

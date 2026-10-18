@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Start the pinned local Supabase stack for a CI job, with a time limit on
+# every attempt.
+#
+# Why: `supabase start` pulls a dozen images and waits on their health checks.
+# On a shared runner a pull or a health wait can stall indefinitely (ECR rate
+# limits, a wedged container). The retry loop used to let one stalled attempt
+# run until the job's own timeout-minutes killed it — on 2026-10-18 the
+# stripe-integration job sat in this step for 40 minutes and was cancelled
+# (PR #23, run 39091052694), failing release-gate for a merge that was
+# otherwise green. Bounding each attempt turns that stall into a retry.
+#
+# Usage: scripts/ci-supabase-start.sh <comma-separated services to exclude>
+# Env:   SUPABASE_START_TIMEOUT   seconds allowed per attempt (default 480)
+#        SUPABASE_START_ATTEMPTS  number of attempts (default 3)
+#
+# The bound is plain bash (no GNU `timeout`), so the script behaves the same
+# on the Ubuntu runner and on a macOS checkout.
+set -u
+
+exclude="${1:?usage: ci-supabase-start.sh <services-to-exclude>}"
+cli="supabase@2.116.0"
+limit="${SUPABASE_START_TIMEOUT:-480}"
+attempts="${SUPABASE_START_ATTEMPTS:-3}"
+
+# Run a command in its own process group and kill the whole group when the
+# limit passes (npx spawns the CLI as a child; signalling only npx would leave
+# the CLI and its docker calls running). Returns 124 on expiry.
+run_bounded() {
+  local marker
+  marker=$(mktemp)
+  rm -f "$marker"
+  set -m
+  "$@" &
+  local pid=$!
+  (
+    sleep "$limit"
+    touch "$marker"
+    kill -TERM -- "-$pid" 2>/dev/null
+    sleep 30
+    kill -KILL -- "-$pid" 2>/dev/null
+  ) >/dev/null 2>&1 &
+  local watchdog=$!
+  set +m
+  local code
+  wait "$pid"
+  code=$?
+  kill -KILL -- "-$watchdog" 2>/dev/null
+  wait "$watchdog" 2>/dev/null
+  if [ -e "$marker" ]; then
+    rm -f "$marker"
+    return 124
+  fi
+  return "$code"
+}
+
+for attempt in $(seq 1 "$attempts"); do
+  echo "::group::supabase start — attempt $attempt of $attempts (limit ${limit}s)"
+  started=$(date +%s)
+  run_bounded npx --yes "$cli" start -x "$exclude"
+  code=$?
+  echo "attempt $attempt finished in $(( $(date +%s) - started ))s with exit $code"
+  echo "::endgroup::"
+  if [ "$code" -eq 0 ]; then
+    exit 0
+  fi
+
+  if [ "$code" -eq 124 ]; then
+    echo "::warning::supabase start attempt $attempt exceeded ${limit}s and was killed"
+  fi
+  echo "::group::container state after failed attempt $attempt"
+  docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || true
+  echo "::endgroup::"
+
+  npx --yes "$cli" stop --no-backup || true
+  if [ "$attempt" -lt "$attempts" ]; then
+    sleep $((attempt * 10))
+  fi
+done
+
+echo "::error::supabase start failed after $attempts attempts"
+exit 1
