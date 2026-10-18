@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-20 — Products with brand-aware identity (graph foundation, B1 step two)
+
+Parts gain an identity. A product is one maker's one part, and only the same brand and number, a "same product" link that names both brands, or an admin's decision makes two records one product. Interchange, supersedes and aftermarket links stay links: an interchangeable part is not the same part. Products grow hourly from the brand and part number on listings and build lines; anything ambiguous — one number under several brands, a known number with no brand, a "same product" link that doesn't say whose, a listing whose "also known as" number belongs to another product — goes to a new admin list at `/admin/products`, with coverage shown above it. Build lines get the same part-number key as listings plus a brand key, so a mod and a listing of the same part can be matched. A part added to a car from a purchase now keeps its brand.
+
 ## 2026-10-20 — Car generations (graph foundation, B1 step one)
 
 Cars now know their generation. `vehicle_generations` holds each generation of a catalog model — `Mk8`, `E46`, `R34`, `ND` — with its platform code and years, seeded by hand with about 200 enthusiast generations (no open source carries them). A car resolves to one only when exactly one generation of its model covers its year; changeover years, such as a 2020 Golf R that could be a Mk7 or a Mk8, resolve to nothing so the owner can be asked, and an owner's choice is kept while it still fits. Nothing a shopper sees changes: vehicle fit and search don't read generations yet. Explore's build search was restated to carry the two new car columns.
