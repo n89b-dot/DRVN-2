@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (87)
+### Primitives (88)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -140,6 +140,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Avatar` | Primitive | `@/components/ui` | Monogram identity plate (soft square, never a circle). — `.monogram` | People without photos; photo avatars go through Media. |
 | `Badge` | Primitive | `@/components/ui` | The one badge system for cards: `variant="kind"` is a neutral outline (+ icon); `variant="state"` is a tint whose tone is colour only for real state (neutral for plain facts like Used / Grade B). — `.chip.chip--kind / .chip--state / .chip--ok / .chip--live / .chip--spent` | A card's condition or grade, a listing's sold/live state, anything that labels what a thing is or what state it is in. *Not for:* Order/offer lifecycle — StatusChip. Filters — FilterLink/ActiveFilterChip. |
 | `BeforeAfter` | Primitive | `@/components/ui` | Two-image comparison plate: clip-path reveal on pointer drag/touch, keyboard slider divider, corner label tags. — `.ba` | Before/after photography — suspension drops, wheels, wraps, detailing. *Not for:* Plain image pairs with no comparison story (use Media in a grid). |
+| `BottomNav` | Primitive | `@/components/ui` | The phone and tablet tab bar, fixed to the bottom edge below 1081px where the rail goes away. Stands down while the keyboard is up and wherever another bottom surface (buybar, savebar, chatbox) owns the edge; `hidden` takes it off focused screens. — `.bnav` | Via AppShell only, fed from BOTTOM_NAV / BOTTOM_NAV_PUBLIC in nav-routes.ts. *Not for:* Page-level actions (MobileActionBar) and in-page section switching (TabNav). |
 | `BottomSheet` | Primitive | `@/components/ui` | Compact bottom sheet; keeps children mounted; dissolves inline ≥ its breakpoint. On phones it adds a quiet dismiss word (`closeLabel`, default Done) under the content; pass `closeLabel={null}` when the content already ends in its own Done/Cancel so the two never stack. — `.bsheet` | Compact-width pickers and refinements. |
 | `Button` | Primitive | `@/components/ui` | The canonical action — `.btn` variants plus a defined loading state. `live` is THE action on a surface and the only variant that carries the brackets; `default` (ink) keeps the mono caps voice without them; `ghost` and `destructive` read as words (Plex Sans, sentence case as written). — `.btn / .relbtn` | Every button. One `live` action — one red fill — per surface; secondary actions are `ghost`. |
 | `ButtonLink` | Primitive | `@/components/ui` | The action contract as a real link. — `.btn` | CTAs that navigate — keeps middle-click/new-tab semantics. |

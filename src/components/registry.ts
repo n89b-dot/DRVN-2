@@ -897,6 +897,18 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     use: "Primary commerce actions on PDP-like pages. One bottom surface per route.",
     cssRecipe: ".buybar",
   },
+  {
+    name: "BottomNav",
+    importPath: UI,
+    file: "src/components/ui/bottom-nav.tsx",
+    layer: "primitive",
+    category: "navigation",
+    status: "active",
+    description: "The phone and tablet tab bar, fixed to the bottom edge below 1081px where the rail goes away. Stands down while the keyboard is up and wherever another bottom surface (buybar, savebar, chatbox) owns the edge; `hidden` takes it off focused screens.",
+    use: "Via AppShell only, fed from BOTTOM_NAV / BOTTOM_NAV_PUBLIC in nav-routes.ts.",
+    avoid: "Page-level actions (MobileActionBar) and in-page section switching (TabNav).",
+    cssRecipe: ".bnav",
+  },
 
   /* ---------------- media ---------------- */
   {
