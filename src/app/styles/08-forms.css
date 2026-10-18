@@ -1476,29 +1476,6 @@
     margin: 8px 0;
   }
 
-  /* Landing — the hero photo stops short of the fold so "what DRVN is"
-     starts on the first screen, and the page closes on its two front doors. */
-  .landing-hero {
-    max-height: 56vh;
-    width: 100%;
-  }
-  .landing-close {
-    display: grid;
-    gap: 16px;
-    justify-items: start;
-    padding: clamp(24px, 4vw, 40px);
-  }
-  .landing-close__title {
-    font-size: var(--text-section);
-    line-height: var(--text-section--line-height);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-  .landing-close__sub {
-    color: var(--dim);
-    font-size: var(--text-body);
-    max-width: 52ch;
-  }
   /* Signed-out marketplace: one dim line saying shopping needs no account. */
   .marketplace-head__visitor {
     margin-top: 8px;
