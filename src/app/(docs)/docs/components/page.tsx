@@ -1097,6 +1097,24 @@ export default function ComponentsPage() {
           </div>
         </Specimen>
         <Specimen
+          name="Side panel"
+          klass="SidePanel / .sidepanel"
+          note="The sheet plate on its side, beside the page on desktop (≥1081px) and non-modal: no scrim, no focus trap, the page keeps working and gives up the panel's width. One open at a time by key, remembered across pages; Esc closes it from inside and focus returns to the opener. First consumer: the agent, opened from the rail's Agent row or an object's Ask your agent. Drawn static here."
+        >
+          <div className="sidepanel__specimen" style={{ maxWidth: 400 }}>
+            <div className="sidepanel__head">
+              <span className="sidepanel__title">Agent</span>
+              <Button variant="quiet">Full page</Button>
+              <button type="button" className="sidepanel__close">
+                Close
+              </button>
+            </div>
+            <div className="sidepanel__body !py-4">
+              <p className="order__meta">The agent thread, the same as on /agent.</p>
+            </div>
+          </div>
+        </Specimen>
+        <Specimen
           name="Alert"
           klass=".alert / --live / --ok"
           note="A tinted ground with a heading and body — never a side-bar stroke. Live for attention, ok for reassurance."

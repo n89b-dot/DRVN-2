@@ -150,6 +150,8 @@
      is how a drawing indexes itself when there's no room for words. */
   .shell {
     --rail-w: 232px;
+    /* The desktop side panel's width (.sidepanel, 05-sheets-detail.css). */
+    --panel-w: 400px;
     min-height: 100vh;
   }
   .shell[data-rail="closed"] {
@@ -810,14 +812,14 @@
        just above it instead of taking the edge. */
     .bnav[hidden],
     body:has(.buybar, .savebar) .bnav,
-    body:has(.chatbox):not(:has(.agentchat)) .bnav {
+    body:has(.chatbox):not(:has(#main .agentchat)) .bnav {
       display: none;
     }
-    .agentchat .chatbox {
+    #main .agentchat .chatbox {
       bottom: calc(56px + 1px + env(safe-area-inset-bottom, 0px));
     }
     body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body,
-    body:has(.agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
+    body:has(#main .agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
       padding-bottom: calc(var(--bottom-surface-h, 76px) + env(safe-area-inset-bottom, 0px));
     }
     body:not(:has(.buybar, .savebar, .chatbox)):has(.bnav:not([hidden])) .toast {

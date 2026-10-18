@@ -71,6 +71,7 @@ export { ActionFooter } from "./action-footer";
 export { MobileActionBar } from "./mobile-action-bar";
 export { BottomNav, type BottomNavItem } from "./bottom-nav";
 export { BottomSheet } from "./bottom-sheet";
+export { SidePanel, SidePanelProvider, useSidePanel } from "./side-panel";
 export { FinderRefineSheet } from "./finder-refine-sheet";
 export { Dialog } from "./dialog";
 export { CountedField } from "./counted-field";
