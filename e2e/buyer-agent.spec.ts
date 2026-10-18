@@ -124,7 +124,7 @@ test.describe("buyer agent (A3b)", () => {
     await buyer.getByRole("button", { name: "Make an offer" }).first().click();
     await buyer.getByRole("button", { name: "Negotiate for me" }).click();
     await buyer.getByLabel(/Your max — private/).fill("1300");
-    await expect(buyer.getByText("A counter at $1,300.00 or less is accepted.")).toBeVisible();
+    await expect(buyer.getByText("A counter at $1,300 or less is accepted.")).toBeVisible();
     await buyer.getByLabel(/I understand an accepted counter is a purchase/).check();
     await shoot(buyer, "07-negotiate-for-me");
     await buyer.getByRole("button", { name: "Start negotiating" }).click();
