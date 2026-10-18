@@ -11,14 +11,18 @@ import {
 } from "@/features/commerce/actions";
 import {
   AuthIntentDialog,
+  Badge,
   Button,
   ButtonLink,
   Dialog,
+  FilterButton,
   PaymentModeNotice,
   TextField,
 } from "@/components/ui";
 import type { AuthIntent } from "@/lib/auth-intent";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
+
+import { NegotiateForMe } from "./negotiate-for-me";
 
 export function PurchaseActions({
   listingId,
@@ -35,6 +39,7 @@ export function PurchaseActions({
   myOffer = null,
   resumeAction = null,
   returnPath,
+  agentOffers = false,
 }: {
   /** The seller's minimum, only when they chose to show it (O-3). */
   offerFloorCents?: number | null;
@@ -54,6 +59,9 @@ export function PurchaseActions({
   /** `?action=` on the URL — the intent this visitor authenticated to resume. */
   resumeAction?: AuthIntent | null;
   returnPath?: string;
+  /** "Negotiate for me" is offered (A3b): the agent beta is on and the total
+   *  is knowable before checkout (not DRVN Shipping). */
+  agentOffers?: boolean;
 }) {
   const router = useRouter();
   const detailPath = returnPath ?? `/listings/${listingId}`;
@@ -69,6 +77,7 @@ export function PurchaseActions({
   const [offerPending, startOfferTransition] = useTransition();
   const [offerAmount, setOfferAmount] = useState("");
   const [offerMessage, setOfferMessage] = useState("");
+  const [offerMode, setOfferMode] = useState<"offer" | "agent">("offer");
   const offerIdentity = useRef<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Cart gets its own pending so "Buy now" doesn't flash "Processing…" while
@@ -255,7 +264,30 @@ export function PurchaseActions({
           to announce it as "edit text, blank". */}
       <Dialog open={offerOpen} onClose={() => setOfferOpen(false)} label="Make an offer">
         <div className="sheet">
-          <span className="microlabel microlabel--ink">Make an offer</span>
+          <span className="flex items-center gap-3">
+            <span className="microlabel microlabel--ink">Make an offer</span>
+            {agentOffers && <Badge>Beta</Badge>}
+          </span>
+          {agentOffers && (
+            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="How to offer">
+              <FilterButton pressed={offerMode === "offer"} onClick={() => setOfferMode("offer")}>
+                Make an offer
+              </FilterButton>
+              <FilterButton pressed={offerMode === "agent"} onClick={() => setOfferMode("agent")}>
+                Negotiate for me
+              </FilterButton>
+            </div>
+          )}
+          {agentOffers && offerMode === "agent" ? (
+            <div className="mt-4">
+              <NegotiateForMe
+                listingId={listingId}
+                priceCents={priceCents}
+                shippingCents={shippingCents}
+                onCancel={() => setOfferOpen(false)}
+              />
+            </div>
+          ) : (
           <form onSubmit={submitOffer} className="mt-4 flex flex-col gap-3">
             {/* TextField wires the field-state classes so a rejected amount
                 paints the control itself (tinted border), not just the error
@@ -296,6 +328,7 @@ export function PurchaseActions({
               </Button>
             </div>
           </form>
+          )}
         </div>
       </Dialog>
 

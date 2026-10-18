@@ -1,5 +1,15 @@
 # Applying migrations
 
+## October 22 — the buyer agent's notifications, A3b (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261022110000_agent_buyer_notifications.sql` | not yet |
+
+Apply after `20261022100000`. Buyer-side notices, still `offer_`-prefixed: `offer_agent_deal_reached` to the buyer when their agent accepts a counter within the max (sent from the round with no actor, since notify() skips a member's own moves; opens checkout), and `offer_agent_out_of_rounds` when the seller's counter is over the max with no offers left (the gap). `notify_on_agent_approval` is `20261022100000`'s body with the buyer branches added.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_notifications_guard.sql` check 5.
+
 ## October 22 — the seller agent's notifications, A3a (shared dev project)
 
 | File | Applied to |
