@@ -1350,10 +1350,10 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "member-agent",
     name: "The DRVN agent",
     group: "future-architecture",
-    status: "planned",
+    status: "in-progress",
     brief: "PRD §4.9 (AG-1…AG-12) · agent plan A2–A3",
     existsToday:
-      "No agent. AI is used only in the listing importer's last-resort extraction.",
+      "A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone), export v10, deletion and retention (20261021100000–100200).",
     changing:
       "One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.",
     surfaces: ["src/lib/capabilities/", "src/lib/ai/", "/agent", "BottomNav", "SidePanel"],
@@ -1361,8 +1361,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.",
     dependsOn: ["negotiation-v2"],
-    validation: "Not started.",
-    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
+    validation: "supabase/tests/agent_worker_guard.sql: the A2 security regression set (hidden floors, privileged functions called directly, another member's mandate, duplicated delivery, acting after the owner turns it off, every kill switch) run as the real worker role.",
+    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md", "docs/decisions/agent-data-rules.md"],
   },
 
   {

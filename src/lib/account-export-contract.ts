@@ -1,4 +1,4 @@
-export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-19.v9";
+export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-21.v10";
 export const ACCOUNT_EXPORT_PAGE_SIZE = 250;
 
 export type ExportAccess =
@@ -102,6 +102,17 @@ export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
   { key: "seller_carry_payouts", table: "seller_carry_payouts", projection: "id,seller_id,amount_cents,currency,status,paid_at,created_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "The Stripe account, transfer reference and retry diagnostics are excluded." },
   { key: "shipping_quotes", table: "shipping_rate_quotes", projection: "id,buyer_id,listing_id,provider,carrier,service,service_label,amount_cents,currency,est_delivery_days,parcel,consumed_order_id,expires_at,created_at", access: "owner", filter: "buyer_id", cursor: "id", cutoffColumn: "created_at", counterpartyRule: "Destination hash and provider rate/shipment references are excluded." },
   { key: "pickup_confirmations", table: "pickup_confirmations", projection: "order_id,attempts,expires_at,redeemed_at,redeemed_by,created_at,orders!inner(buyer_id,seller_id)", access: "transaction_participant", filter: "orders.buyer_id|orders.seller_id", cursor: "order_id", cutoffColumn: "created_at", counterpartyRule: "Pickup token and code hashes are excluded." },
+  // The member's agent (20261021100000; agent-data-rules.md §1): every
+  // version of their limits, its tasks, its record of what it did, the
+  // confirm cards and the chat. Job ids and idempotency keys are internal;
+  // the job queue and monitoring are operational and stay out.
+  { key: "agent_mandates", table: "agent_mandates", projection: "id,scope,listing_id,status,version,minimum_cents,target_cents,ceiling_cents,ceiling_basis,style,expires_at,binding_acknowledged_at,created_at,updated_at,ended_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "agent_mandate_versions", table: "agent_mandate_versions", projection: "mandate_id,version,status,minimum_cents,target_cents,ceiling_cents,ceiling_basis,style,expires_at,created_at", access: "owner", filter: "owner_id", cursor: "mandate_id,version", cutoffColumn: "created_at" },
+  { key: "agent_tasks", table: "agent_tasks", projection: "id,mandate_id,scope,objective,status,listing_id,offer_id,outcome,created_at,updated_at,finished_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "agent_events", table: "agent_events", projection: "id,task_id,mandate_id,mandate_version,kind,initiated_by,inputs,result,created_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "agent_approvals", table: "agent_approvals", projection: "id,task_id,kind,offer_id,round_no,amount_cents,reason,status,created_at,decided_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "agent_conversations", table: "agent_conversations", projection: "id,created_at,last_message_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "agent_messages", table: "agent_messages", projection: "id,conversation_id,role,body,task_id,created_at", access: "owner", filter: "owner_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "reports_filed", table: "reports", projection: "id,reporter_id,subject_type,subject_id,reason,detail,status,resolved_at,created_at", access: "author", filter: "reporter_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "refund_recredit_proofs", table: "refund_recredit_proofs", projection: "amount_cents,currency,verified_at", sourceProjection: "adjustment_id,amount_cents,currency,verified_at", excludedSourceFields: ["adjustment_id"], access: "transaction_participant", filter: "authorized refund adjustment", cursor: "adjustment_id", counterpartyRule: "Includes the amount, currency and verification time needed to explain the requester's refund; internal adjustment/recovery ids, provider balance/transfer references and operator identity are excluded." },
 ] as const;
