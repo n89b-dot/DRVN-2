@@ -11,7 +11,9 @@ import { attachSellPhoto } from "./helpers";
  * A3a end to end: a person against the seller's agent.
  *
  * The seller turns on "Let DRVN handle offers" on the listing editor
- * ($250 asking, $230 minimum, $245 target). A buyer offers from the listing;
+ * ($250 asking, $230 minimum, $245 target). A buyer offers $232 from the
+ * listing, counters back $236 and then $237 (each below the agent's last
+ * counter, as a counter must be);
  * the agent counters within the limits, every turn marked "via agent"; the
  * buyer's third offer clears the minimum, so the agent asks rather than
  * accepting; the seller accepts from Needs you; and "Cancel before checkout"
@@ -180,11 +182,12 @@ test.describe("seller agent (A3a)", () => {
     // Round 5: the buyer's third and last offer clears the minimum. The agent never accepts; it asks.
     await buyer.goto(`/offers/${offerId}`);
     await buyer.getByRole("button", { name: /^counter back$/i }).click();
-    await buyer.getByLabel("Your counter-offer").fill("239");
+    // Below the agent's last counter (a counter must be), above the minimum.
+    await buyer.getByLabel("Your counter-offer").fill("237");
     await buyer.getByRole("button", { name: /send counter-offer/i }).click();
     await expect(buyer.getByText(/Counter(-offer)? sent\./)).toBeVisible();
     await agentPass();
-    expect((await rounds(offerId)).at(-1)).toMatchObject({ kind: "counter", actor_role: "buyer", amount_cents: 23900 });
+    expect((await rounds(offerId)).at(-1)).toMatchObject({ kind: "counter", actor_role: "buyer", amount_cents: 23700 });
 
     // The seller's offer history explains their own agent; Needs you asks for the tap.
     await seller.goto(`/offers/${offerId}`);
@@ -194,10 +197,10 @@ test.describe("seller agent (A3a)", () => {
     await seller.goto("/agent");
     await expect(seller.getByRole("tab", { name: /Needs you/ })).toBeVisible();
     await shoot(seller, "02-agent-screen");
-    await seller.getByRole("button", { name: "Accept $239" }).click();
+    await seller.getByRole("button", { name: "Accept $237" }).click();
     await expect(seller.getByText(/Accepted/).first()).toBeVisible();
     const order = await db.query<{ id: string; status: string; subtotal_cents: number }>("select id, status, subtotal_cents from public.orders where origin_offer_id = $1", [offerId]);
-    expect(order.rows[0]).toMatchObject({ status: "pending", subtotal_cents: 23900 });
+    expect(order.rows[0]).toMatchObject({ status: "pending", subtotal_cents: 23700 });
     const orderId = order.rows[0].id;
     const notice = await db.query("select kind from public.notifications where user_id = $1 and kind = 'offer_agent_recommends_accept'", [users[0]]);
     expect(notice.rows).toHaveLength(1);
