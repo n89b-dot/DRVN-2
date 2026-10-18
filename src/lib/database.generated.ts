@@ -526,6 +526,610 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_approvals: {
+        Row: {
+          amount_cents: number | null
+          created_at: string
+          decided_at: string | null
+          id: string
+          kind: string
+          offer_id: string | null
+          owner_id: string
+          reason: string | null
+          round_no: number | null
+          status: string
+          task_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          kind: string
+          offer_id?: string | null
+          owner_id: string
+          reason?: string | null
+          round_no?: number | null
+          status?: string
+          task_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          kind?: string
+          offer_id?: string | null
+          owner_id?: string
+          reason?: string | null
+          round_no?: number | null
+          status?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_approvals_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approvals_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approvals_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_controls: {
+        Row: {
+          cleared_at: string | null
+          cleared_by: string | null
+          id: string
+          reason: string
+          scope: string
+          set_at: string
+          set_by: string | null
+          subject_id: string | null
+        }
+        Insert: {
+          cleared_at?: string | null
+          cleared_by?: string | null
+          id?: string
+          reason: string
+          scope: string
+          set_at?: string
+          set_by?: string | null
+          subject_id?: string | null
+        }
+        Update: {
+          cleared_at?: string | null
+          cleared_by?: string | null
+          id?: string
+          reason?: string
+          scope?: string
+          set_at?: string
+          set_by?: string | null
+          subject_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_controls_cleared_by_fkey"
+            columns: ["cleared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_controls_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_conversations_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_events: {
+        Row: {
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          initiated_by: string | null
+          inputs: Json
+          job_id: string | null
+          kind: string
+          mandate_id: string | null
+          mandate_version: number | null
+          owner_id: string
+          result: Json
+          task_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          initiated_by?: string | null
+          inputs?: Json
+          job_id?: string | null
+          kind: string
+          mandate_id?: string | null
+          mandate_version?: number | null
+          owner_id: string
+          result?: Json
+          task_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          initiated_by?: string | null
+          inputs?: Json
+          job_id?: string | null
+          kind?: string
+          mandate_id?: string | null
+          mandate_version?: number | null
+          owner_id?: string
+          result?: Json
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_events_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "agent_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_events_mandate_id_fkey"
+            columns: ["mandate_id"]
+            isOneToOne: false
+            referencedRelation: "agent_mandates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_events_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_jobs: {
+        Row: {
+          attempts: number
+          available_at: string
+          created_at: string
+          dedup_key: string
+          expected_action: string
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_id: string | null
+          listing_id: string
+          max_attempts: number
+          offer_id: string | null
+          round_no: number | null
+          status: string
+          task_id: string
+        }
+        Insert: {
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          dedup_key: string
+          expected_action: string
+          finished_at?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_id?: string | null
+          listing_id: string
+          max_attempts?: number
+          offer_id?: string | null
+          round_no?: number | null
+          status?: string
+          task_id: string
+        }
+        Update: {
+          attempts?: number
+          available_at?: string
+          created_at?: string
+          dedup_key?: string
+          expected_action?: string
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_id?: string | null
+          listing_id?: string
+          max_attempts?: number
+          offer_id?: string | null
+          round_no?: number | null
+          status?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_jobs_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_mandate_versions: {
+        Row: {
+          ceiling_basis: string | null
+          ceiling_cents: number | null
+          created_at: string
+          expires_at: string | null
+          mandate_id: string
+          minimum_cents: number | null
+          owner_id: string
+          status: string
+          style: string
+          target_cents: number | null
+          version: number
+        }
+        Insert: {
+          ceiling_basis?: string | null
+          ceiling_cents?: number | null
+          created_at?: string
+          expires_at?: string | null
+          mandate_id: string
+          minimum_cents?: number | null
+          owner_id: string
+          status: string
+          style: string
+          target_cents?: number | null
+          version: number
+        }
+        Update: {
+          ceiling_basis?: string | null
+          ceiling_cents?: number | null
+          created_at?: string
+          expires_at?: string | null
+          mandate_id?: string
+          minimum_cents?: number | null
+          owner_id?: string
+          status?: string
+          style?: string
+          target_cents?: number | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_mandate_versions_mandate_id_fkey"
+            columns: ["mandate_id"]
+            isOneToOne: false
+            referencedRelation: "agent_mandates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_mandate_versions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_mandates: {
+        Row: {
+          binding_acknowledged_at: string | null
+          ceiling_basis: string | null
+          ceiling_cents: number | null
+          created_at: string
+          ended_at: string | null
+          expires_at: string | null
+          id: string
+          listing_id: string
+          minimum_cents: number | null
+          owner_id: string
+          scope: string
+          status: string
+          style: string
+          target_cents: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          binding_acknowledged_at?: string | null
+          ceiling_basis?: string | null
+          ceiling_cents?: number | null
+          created_at?: string
+          ended_at?: string | null
+          expires_at?: string | null
+          id?: string
+          listing_id: string
+          minimum_cents?: number | null
+          owner_id: string
+          scope: string
+          status?: string
+          style?: string
+          target_cents?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          binding_acknowledged_at?: string | null
+          ceiling_basis?: string | null
+          ceiling_cents?: number | null
+          created_at?: string
+          ended_at?: string | null
+          expires_at?: string | null
+          id?: string
+          listing_id?: string
+          minimum_cents?: number | null
+          owner_id?: string
+          scope?: string
+          status?: string
+          style?: string
+          target_cents?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_mandates_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_mandates_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_messages: {
+        Row: {
+          body: string
+          conversation_id: string
+          created_at: string
+          id: string
+          owner_id: string
+          role: string
+          task_id: string | null
+        }
+        Insert: {
+          body: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          owner_id: string
+          role: string
+          task_id?: string | null
+        }
+        Update: {
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          owner_id?: string
+          role?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_messages_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_messages_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_tasks: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          listing_id: string | null
+          mandate_id: string | null
+          objective: string
+          offer_id: string | null
+          outcome: string | null
+          owner_id: string
+          scope: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          listing_id?: string | null
+          mandate_id?: string | null
+          objective: string
+          offer_id?: string | null
+          outcome?: string | null
+          owner_id: string
+          scope: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          listing_id?: string | null
+          mandate_id?: string | null
+          objective?: string
+          offer_id?: string | null
+          outcome?: string | null
+          owner_id?: string
+          scope?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tasks_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tasks_mandate_id_fkey"
+            columns: ["mandate_id"]
+            isOneToOne: false
+            referencedRelation: "agent_mandates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tasks_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_tasks_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_telemetry: {
+        Row: {
+          code: string | null
+          created_at: string
+          id: number
+          job_id: string | null
+          kind: string
+          owner_id: string | null
+          task_id: string | null
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          id?: never
+          job_id?: string | null
+          kind: string
+          owner_id?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          id?: never
+          job_id?: string | null
+          kind?: string
+          owner_id?: string | null
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_telemetry_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "agent_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_telemetry_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_telemetry_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       analytics_consents: {
         Row: {
           allowed: boolean
@@ -2025,16 +2629,19 @@ export type Database = {
       }
       offer_round_terms: {
         Row: {
+          buyer_ceiling_cents: number | null
           created_at: string
           effective_floor_cents: number | null
           round_id: string
         }
         Insert: {
+          buyer_ceiling_cents?: number | null
           created_at?: string
           effective_floor_cents?: number | null
           round_id: string
         }
         Update: {
+          buyer_ceiling_cents?: number | null
           created_at?: string
           effective_floor_cents?: number | null
           round_id?: string
@@ -2051,8 +2658,10 @@ export type Database = {
       }
       offer_rounds: {
         Row: {
+          actor_job_id: string | null
           actor_member_id: string | null
           actor_role: string
+          actor_task_id: string | null
           amount_cents: number | null
           buyer_id: string
           created_at: string
@@ -2061,12 +2670,15 @@ export type Database = {
           idempotency_key: string | null
           kind: string
           listing_id: string
+          mandate_version: number | null
           offer_id: string
           round_no: number
         }
         Insert: {
+          actor_job_id?: string | null
           actor_member_id?: string | null
           actor_role: string
+          actor_task_id?: string | null
           amount_cents?: number | null
           buyer_id: string
           created_at?: string
@@ -2075,12 +2687,15 @@ export type Database = {
           idempotency_key?: string | null
           kind: string
           listing_id: string
+          mandate_version?: number | null
           offer_id: string
           round_no: number
         }
         Update: {
+          actor_job_id?: string | null
           actor_member_id?: string | null
           actor_role?: string
+          actor_task_id?: string | null
           amount_cents?: number | null
           buyer_id?: string
           created_at?: string
@@ -2089,15 +2704,30 @@ export type Database = {
           idempotency_key?: string | null
           kind?: string
           listing_id?: string
+          mandate_version?: number | null
           offer_id?: string
           round_no?: number
         }
         Relationships: [
           {
+            foreignKeyName: "offer_rounds_actor_job_id_fkey"
+            columns: ["actor_job_id"]
+            isOneToOne: false
+            referencedRelation: "agent_jobs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "offer_rounds_actor_member_id_fkey"
             columns: ["actor_member_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_rounds_actor_task_id_fkey"
+            columns: ["actor_task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
             referencedColumns: ["id"]
           },
           {
@@ -4998,7 +5628,164 @@ export type Database = {
         Returns: Json
       }
       admin_role: { Args: never; Returns: string }
+      admin_set_agent_control: {
+        Args: {
+          p_on: boolean
+          p_reason: string
+          p_scope: string
+          p_subject: string
+        }
+        Returns: string
+      }
       advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
+      agent_approval_decide: {
+        Args: { p_approval: string; p_choice: string }
+        Returns: Json
+      }
+      agent_authority: {
+        Args: {
+          p_job: Database["public"]["Tables"]["agent_jobs"]["Row"]
+          p_listing: Database["public"]["Tables"]["listings"]["Row"]
+          p_offer: Database["public"]["Tables"]["offers"]["Row"]
+        }
+        Returns: Json
+      }
+      agent_claim_jobs: {
+        Args: { p_lease_seconds?: number; p_limit?: number }
+        Returns: {
+          expected_action: string
+          job_id: string
+          kind: string
+          lease_id: string
+          listing_id: string
+          offer_id: string
+          round_no: number
+          task_id: string
+        }[]
+      }
+      agent_clear_conversation: { Args: never; Returns: number }
+      agent_controls_lock_key: { Args: never; Returns: number }
+      agent_enqueue_turns: { Args: { p_task: string }; Returns: number }
+      agent_finish_job: {
+        Args: {
+          p_code?: string
+          p_end_task?: boolean
+          p_job: string
+          p_lease: string
+          p_outcome: string
+        }
+        Returns: boolean
+      }
+      agent_halt_reason: {
+        Args: {
+          p_counterparty: string
+          p_listing: string
+          p_mandate: string
+          p_owner: string
+          p_scope: string
+        }
+        Returns: string
+      }
+      agent_health: { Args: never; Returns: Json }
+      agent_job_context: {
+        Args: { p_job: string; p_lease: string }
+        Returns: Json
+      }
+      agent_lock_job: {
+        Args: { p_action: string; p_job: string; p_lease: string }
+        Returns: {
+          attempts: number
+          available_at: string
+          created_at: string
+          dedup_key: string
+          expected_action: string
+          finished_at: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_id: string | null
+          listing_id: string
+          max_attempts: number
+          offer_id: string | null
+          round_no: number | null
+          status: string
+          task_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      agent_luhn: { Args: { p_digits: string }; Returns: boolean }
+      agent_mandate_set: {
+        Args: {
+          p_acknowledge_binding?: boolean
+          p_ceiling_basis?: string
+          p_ceiling_cents?: number
+          p_expires_at?: string
+          p_listing: string
+          p_minimum_cents?: number
+          p_scope: string
+          p_style?: string
+          p_target_cents?: number
+        }
+        Returns: string
+      }
+      agent_mandate_set_status: {
+        Args: { p_mandate: string; p_status: string }
+        Returns: string
+      }
+      agent_offer_move: {
+        Args: {
+          p_amount: number
+          p_expected_round: number
+          p_job: string
+          p_kind: string
+          p_lease: string
+          p_offer: string
+        }
+        Returns: Json
+      }
+      agent_offer_open: {
+        Args: {
+          p_amount: number
+          p_job: string
+          p_lease: string
+          p_listing: string
+        }
+        Returns: Json
+      }
+      agent_open_task: { Args: { p_mandate: string }; Returns: string }
+      agent_purge_member: { Args: { p_user: string }; Returns: Json }
+      agent_reconcile_outbox: { Args: { p_limit?: number }; Returns: Json }
+      agent_record_decision: {
+        Args: {
+          p_decision: string
+          p_job: string
+          p_lease: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
+      agent_redact_cards: { Args: { p_text: string }; Returns: string }
+      agent_renew_lease: {
+        Args: { p_job: string; p_lease: string; p_lease_seconds?: number }
+        Returns: string
+      }
+      agent_request_approval: {
+        Args: {
+          p_expected_round: number
+          p_job: string
+          p_lease: string
+          p_offer: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      agent_retention_sweep: { Args: never; Returns: Json }
       apply_stripe_dispute_event: {
         Args: {
           p_amount: number
@@ -6061,8 +6848,31 @@ export type Database = {
         }
         Returns: Json
       }
+      offer_move_core: {
+        Args: {
+          p_actor: string
+          p_agent?: Json
+          p_amount: number
+          p_expected_round: number
+          p_idempotency_key: string
+          p_kind: string
+          p_offer: string
+        }
+        Returns: Json
+      }
       offer_open: {
         Args: {
+          p_amount: number
+          p_listing: string
+          p_message?: string
+          p_offer: string
+        }
+        Returns: Json
+      }
+      offer_open_core: {
+        Args: {
+          p_actor: string
+          p_agent?: Json
           p_amount: number
           p_listing: string
           p_message?: string
