@@ -49,7 +49,7 @@ test.describe("buyer agent (A3b)", () => {
     const image = await admin.from("listing_images").insert({ listing_id: listingId, url: "https://example.test/agent-brakes.webp", position: 0 });
     if (image.error) throw image.error;
 
-    db = new Client({ host: "127.0.0.1", port: 54322, user: "postgres", password: "postgres", database: "postgres" });
+    db = new Client({ host: "127.0.0.1", port: 54322, user: "supabase_admin", password: "postgres", database: "postgres" });
     await db.connect();
   });
 
