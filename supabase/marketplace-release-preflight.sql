@@ -4,7 +4,7 @@
 with required(name) as (values
  ('marketplace_browse_rows'), ('marketplace_category_counts'),
  ('marketplace_match_evidence'), ('save_marketplace_search'),
- ('set_social_relationship'), ('create_offer_with_message'),
+ ('set_social_relationship'), ('offer_open'), ('offer_move'),
  ('record_worker_run'), ('set_analytics_consent'),
  ('prepare_payment_request'), ('freeze_cart_checkout_shipping'),
  ('bind_cart_checkout_payment'), ('bind_checkout_analytics')

@@ -1,5 +1,58 @@
 # Query plans at volume
 
+## The car-and-parts graph at two million parts (B1, October 18, 2026)
+
+The B1 gate: product coverage measured, `listing_vehicle_fit` output
+unchanged, plans rechecked at 2M parts. Run on the 2M seed
+(`scripts/perf/fresh-db.sh`, PG17, 4 GB-shaped settings) plus
+`scripts/perf/seed-graph.sql`: 601k orders (481k completed) with purchase
+snapshots, 276k build lines with brand and part number, 20k alternates, 42k
+links, and two skewed products: Brembo `MEGA-1` (≈6,000 sales) and 4,000
+`HOT-k` numbers (≈40 sales each, some for sale). `scripts/perf/b1-gate.sh`
+measured before (main at `20261018100200`), applied B1, and measured again;
+raw results in `scripts/perf/results/b1/`.
+
+**Vehicle fit is unchanged.** `listing_vehicle_fit` before and after all of
+B1: 3,410,501 rows, identical checksum. Re-resolving every catalogued car's
+generation (1,200 generations removed, 366,092 cars re-resolved, 60 s) left
+it identical too, and queued no search work.
+
+**Existing pages are unchanged.** Every request `api-timings.sh` sends
+(`MODE=after`), through PostgREST: within run-to-run noise (single-digit ms
+apart; the two that looked 2–3x slower measured 7 and 9 ms on a five-run
+rerun). Explore's text searches return 500 at the 3 s visitor limit at 2M
+both before and after — the limit listed under "What is still slow" below,
+not something B1 changed. Writes: `write-cost.sql` medians before / after
+(queue triggers on) / queue triggers off: create 6.9 / 5.5 / 5.4 ms, price
+change 0.57 / 0.63 / 0.69 ms, off sale and back 1.50 / 1.61 / 1.52 ms,
+title edit 0.33 / 0.34 / 0.41 ms, counted view 0.19 / 0.19 / 0.19 ms.
+
+**Coverage at 2M.** Every listing (1,900,097) and build line (276,029) with a
+brand and a part number has a product; 476,025 of 481,030 completed sale
+lines do (the rest are numbers that only ever appear in a purchase
+snapshot). 1.88M products, 256,109 both listed and on a build. Open reviews:
+1,068 also-known-as clashes, 1,765 links without brands — the seed's
+deliberate ambiguity.
+
+**Migration cost at 2M.** `20261020110000` (generated part keys on
+`mod_items`) rewrites the table under an exclusive lock: 164 s for 4.9M build
+lines — instant at today's size, a maintenance-window step at 2M.
+`20261020120000`'s backfill (a full products run): 163 s. The rest: under 4 s.
+
+**What the gate found, and fixed before merge:**
+
+| Read | First measured | Cause | Fix | Now |
+|---|---|---|---|---|
+| Hourly `grow_products` (1,000 changed listings) | 59 s | finding changes by `listings.updated_at` read all 2M listings (28 s); "everything, or only these numbers" (`v_since is null or …`) hid the run's numbers from the planner, which merge-joined every product (20 s) | `20261020150000`: triggers queue a listing or build line when its brand, part number or status changes (never on a view or a price); every statement joins the run's number list | 1,000 brand edits 1.4 s; 1,000 price edits queue nothing; idle 0.15 s |
+| Brand corrections | 1,007 false reviews for 1,000 edits | the old brand + number stayed in the membership and read as two brands sharing a number | across-brands counts only identifiers a live record, link or admin decision still points at; stale reviews close themselves | 0 false reviews; the 1,000 closed |
+| `price_comparables`, 5,000-sale product | 2.7 s warm, 8 s cold (timeout) | planner estimated one matching line and redid each order's goods aggregate per line (quadratic) | per-line index lookups; at most the newest 500 sales per number, from an index in purchase order | 0.7 s cold, 10 ms warm |
+| `price_comparables`, typical product | 17 ms | — | — | 3–14 ms warm, ≤70 ms cold |
+| `product_coverage` | 3 min | reads every listing, build line and completed sale | set-based joins; nightly only (the admin page reads the stored result) | ~2–3 min, nightly |
+| Full `grow_products` | 61 s → 172 s with the liveness check | the check ran per number for 1.9M numbers | narrow to numbers held by more than one identifier first | 121 s, nightly |
+
+The admin review page's read (`product_identity_reviews`, open, oldest 25,
+exact count) is 38 ms. A comparables call from a visitor is refused (401).
+
 ## A search through the browse function (October 17, 2026)
 
 `marketplace_browse_rows(p_query, …)` still answered a search with

@@ -80,12 +80,34 @@ fixed here with guard checks.
   - Afterwards nothing remained: no test users, mandates or extra membership, and the `all` switch was still on.
 - **When #34 is applied:** its `20261019100000`/`100100` go on dev after this, so re-run `20261021100200` afterwards to end on v10.
 
+## October 20 — fitment evidence and price comparables, B1 step three
+
+| File | Applied to |
+|---|---|
+| `20261020130000_product_fitments.sql` | shared dev project (2026-10-18, twice) |
+| `20261020140000_price_comparables.sql` | shared dev project (2026-10-18, twice) |
+| `20261020150000_grow_products_queue.sql` | shared dev project (2026-10-18, twice) |
+
+Apply in order, after `20261020120000` (re-run `120000` first on a database that has it: it is now re-runnable).
+- `130000` adds `product_fitments`: claims about a product (source, relationship, `stated_on`, verification, engine/gearbox/brake constraints) against a catalog model and optionally one of its generations (composite foreign key). Public read of claims not retracted; service-role writes. Empty until B2.
+- `140000` adds `price_comparables(brand, part number, currency, exclude listing)`, a SECURITY DEFINER aggregate of completed sales (net of refunds, returns left out) and live listings of one product, with a minimum sample of 3, callable by members, reading at most the newest 500 sales of each number through an expression index on `order_items` (part number, `captured_at`); and restates `product_coverage` (from `120000`) to count completed sale lines, set-based.
+- `150000` makes the hourly products run read what changed: `product_grow_queue` (internal), filled by triggers when a listing or build line gains or changes its brand, part number or status (never on a price or a view) and when a listing gains an alternate; `grow_products` restated to read the queue, join the run's number list in every statement, and count only identifiers a live record, link or admin decision still points at when filing "one number, several brands". Index on `part_number_links.created_at`.
+
+Checked on a fresh database (CI's PG15 image): every B1 file applies twice; all 93 SQL guard files pass, including `products_guard.sql` checks 6d–6h (the queue) and `price_comparables_guard.sql` 1g (no negative ages). The 2M-part gate is in `docs/performance/query-plans.md`: vehicle fit unchanged, existing pages unchanged, the hourly run 59 s → 1.4 s, comparables' worst case 2.7 s → 10 ms warm.
+
+**Shared dev, 2026-10-18**, after #42 merged (d50d9ff), with `node scripts/apply-migration.mjs`, each twice, in order: `20261020120000` (re-run: it is re-runnable now), `130000`, `140000`, `150000`.
+- **Before:** `grow_products` as `120000` first wrote it; 13 products, 0 reviews, 11 runs; the audit subject check had eight values (A2's `agent` included). Saved to `~/drvn-db-backups/pre-20261020130000-comparables.sql` (schemas of the graph, order, listing and build-line tables, the four functions, the cron jobs) and `pre-20261020130000-products-data.sql`.
+- **After:** `pg_get_functiondef` of `grow_products`, `product_coverage`, `price_comparables`, `merge_products`, `resolve_product_identity_review`, the three `queue_product_growth_*` triggers' functions, `listing_commercial_snapshot` and `explore_build_rows` matches a fresh database at main; the audit check still holds all eight values; the five `product_growth_*` triggers exist; `order_items_snapshot_part_recent_idx` replaced `order_items_snapshot_part_number_idx`. Members can't read the queue or write fitment claims; visitors read claims (none yet) and get 401 from `price_comparables` and `products`.
+- **Behaviour, in a rolled-back transaction:** a price edit queued nothing; a brand edit queued its listing; the hourly run read it in 31 ms, made the new product, filed no review and emptied the queue; `product_coverage` and `price_comparables` answered. The rollback left 13 products and an empty queue.
+
+It also fixes `20261020120000` so it can be re-run (see that entry).
+
 ## October 20 — part keys and products, B1 step two
 
 | File | Applied to |
 |---|---|
-| `20261020110000_part_keys.sql` | not yet |
-| `20261020120000_products.sql` | not yet |
+| `20261020110000_part_keys.sql` | shared dev project (2026-10-18, twice) |
+| `20261020120000_products.sql` | shared dev project (2026-10-18; the second run failed safely, see below) |
 
 Apply in order, after `20261020100000`.
 - `110000` adds generated `mod_items.part_number_compact` (the listings expression from 0033) and `mod_items.brand_key` (brand compacted to letters and digits), with an index on both. It restates `listing_commercial_snapshot` from 0056 with one added line: `part.brand`.
@@ -93,7 +115,13 @@ Apply in order, after `20261020100000`.
 
 Adding generated columns rewrites `mod_items` under an exclusive lock; at today's size that is instant (measured at 2M parts in the B1 query-plan notes).
 
-Checked on a fresh database (CI's PG15 image): both files apply twice cleanly; every SQL guard passes, including the new `products_guard.sql`.
+Checked on a fresh database (CI's PG15 image): both files apply cleanly; every SQL guard passes, including the new `products_guard.sql`.
+
+**Re-running `120000` (fixed 2026-10-18 in #42).** The block that adds `product_review` to `admin_audit_log.subject_type` read the constraint's values with a regex that only understood the `ARRAY['x'::text]` rendering. After the first run Postgres renders it as `'{a,b}'::text[]`, so a second run kept `product_review` alone: on an empty audit log that silently narrowed the constraint, and on shared dev (which has audit rows) it raised and rolled the whole second run back. The block now reads both renderings, refuses to drop any of the seven values, and writes a stable `in (...)` form; `products_guard.sql` check 9 holds the seven. The first run is unchanged, which is the one shared dev has.
+
+**Shared dev, 2026-10-18**, after #38 merged (a0f0f78), with `node scripts/apply-migration.mjs`: `110000` twice; `120000` once (its second run rolled back on the bug above).
+- **Before:** `listing_commercial_snapshot` byte-identical to 0056's; `mod_items`, `part_number_links` (0 rows, 0042's columns and `part_number_links_key`) and the six audit subject types as on main. Saved to `~/drvn-db-backups/pre-20261020110000-products.sql` (schema and the old snapshot function) and `pre-20261020110000-mod-items-data.sql`.
+- **After:** the backfill made 13 products from 1 listing and 12 build lines — every record with a brand and a part number has one — and filed no reviews. `pg_get_functiondef` of `grow_products`, `merge_products`, `resolve_product_identity_review` and `listing_commercial_snapshot` matches a fresh database; `drvn-grow-products` (17 * * * *) and `drvn-grow-products-full` (47 4 * * *) are scheduled; the audit subject check holds all seven values; neither visitors nor members can read products, membership or reviews, call `grow_products`, or (visitors) call `resolve_product_identity_review`.
 
 ## October 20 — car generations, B1 step one
 
@@ -113,6 +141,34 @@ Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; e
 **Shared dev, 2026-10-18**, after #35 merged (5ccc623), with `node scripts/apply-migration.mjs`, twice.
 - **Before:** `cars` had exactly main's columns and `explore_build_rows` was byte-identical to 20261011120000's. Saved to `~/drvn-db-backups/pre-20261020100000-generations.sql` (cars, catalog schema and the old function) and `pre-20261020100000-cars-data.sql`.
 - **After:** 194 generations; 11 of 16 catalogued cars resolved (5 are changeover years or unseeded models). `pg_get_functiondef` of `explore_build_rows`, `resolve_vehicle_generation`, `car_generation_before_write` and `vehicle_generations_rescan` matches a fresh database exactly; all four triggers present. Through the API as a visitor: Explore build search returns cars with `generation_id`/`generation_source` and a null VIN; `vehicle_generations` reads; a write is refused (401). Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
+
+## October 19 — negotiation v2 and the private minimum: contract (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261019120000_negotiation_contract.sql` | not applied to shared dev (see below) |
+
+The contract step of A0 (the private minimum) and A1 (negotiation v2). Apply after every `20261018` file, and only once **every running app copy has the switched code** (main from `8321071` on). An app without it still writes `listings.offer_floor_cents` and calls `create_offer_with_message`, and both are gone.
+
+It drops:
+- `create_offer_with_message`;
+- the client write policies on `offers` (`buyers create offers`, `buyers withdraw own offers`, `suspended members don't make offers`) and anon/authenticated INSERT, UPDATE and DELETE on it, so members write offers only through `offer_open` and `offer_move`;
+- `guard_offer_private_floor` and its trigger;
+- `listings.offer_floor_cents`, its two check constraints, and `absorb_listing_offer_floor` with its trigger;
+- the `drvn.floor_checked_listing` skip in `guard_private_floor_within_price`;
+- the deferral on `listing_private_terms`' foreign key to `listings`.
+
+It adds `set_listing_offer_floor(listing, floor)`, SECURITY DEFINER with `search_path = public, pg_temp`, executable by `authenticated`. It acts only for the listing's own seller, refuses a suspended seller and a sold, reserved or removed listing, and checks 0 < minimum ≤ price. `save_listing_creation` calls it after inserting the listing; `update_listing_atomic` calls it before or after the listing update, whichever keeps the minimum within the price. Both read the minimum from the same `offer_floor_cents` JSON key, so the form payload is unchanged. Both bodies were taken from `pg_get_functiondef` and change only those lines.
+
+`record_offer_round` stays, because the expiry sweep, `purchase_finalize` and `offer_accept_begin` on an expired offer still change offers' status without writing a round. The export contract doesn't change.
+
+Checked on a fresh database with every migration:
+- the file applies twice cleanly, and generated types match;
+- every SQL guard passes. `offer_floor_privacy_guard.sql` (39 checks), `offer_move_guard.sql` (27), `definer_exposure_guard.sql` and `function_search_path_guard.sql` now prove the old paths are gone, and each fails on the schema before this file;
+- `npm test`, typecheck and lint pass;
+- `tests/operations/negotiation-concurrency.test.ts` passes on the local stack with this file applied.
+
+To reverse: restore the column and the absorb trigger from `20261017130000`, the three functions from `20261018100000`, the policies and `create_offer_with_message` from their last definitions, and re-defer the key.
 
 ## October 19 — stock parts on the build sheet, export v9 (shared dev project)
 

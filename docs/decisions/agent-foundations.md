@@ -123,20 +123,22 @@ retention and redaction rules, the exact allow-list of what may reach the model,
 
 ## 9. Constraints left by the private-minimum rollout
 
-They hold until the contract step, which drops `listings.offer_floor_cents` and
-the absorb trigger, and adds a definer setter the sell and edit functions call.
+Retired by the contract step (`20261019120000`), which dropped
+`listings.offer_floor_cents` and the absorb trigger:
 
-- **Deferred foreign key.** `listing_private_terms.listing_id` is checked at
-  commit, so the BEFORE INSERT trigger can write ahead of the listing row. A
-  future listing insert that is skipped by `ON CONFLICT` on a key other than
-  `id` would leave a private row with no listing and fail the commit. No such
-  upsert exists today; don't add one before contract.
-- **The `drvn.floor_checked_listing` setting.** It lets the private table's
-  bound check skip a row the absorb trigger has already checked. Any role can
-  call `set_config`, so the skip is safe only while no role except definer
-  functions and the service role can write `listing_private_terms`. Never
-  grant `agent_worker`, or any client role, direct writes on that table.
-  Contract replaces the setting with the definer setter.
+- **Deferred foreign key.** `listing_private_terms.listing_id` is checked
+  immediately again. Nothing writes a private row ahead of its listing: the
+  sell function inserts the listing, then sets the minimum.
+- **The `drvn.floor_checked_listing` setting** is gone. Members write the
+  minimum only through `set_listing_offer_floor(listing, floor)`, SECURITY DEFINER with a
+  pinned search path, which acts only for the listing's own seller and checks
+  the bound against the listing's current price. `save_listing_creation` and
+  `update_listing_atomic` call it; the edit writes it on whichever side of a
+  price change keeps it within the price. Members can execute it, because
+  those two functions run with the caller's rights; its reach is what a
+  seller already had by updating their own listing's old column.
+- Still true: never grant `agent_worker`, or any client role, direct writes
+  on `listing_private_terms`.
 
 ## 10. A2 as built (21 October 2026)
 

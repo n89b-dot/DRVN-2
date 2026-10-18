@@ -1,0 +1,90 @@
+== marketplace: newest page
+ Execution Time: 29873.887 ms
+== marketplace: newest page count
+ Execution Time: 1861.614 ms
+== marketplace: category, cheapest first
+ Execution Time: 1605.536 ms
+== marketplace: page 40 of newest
+ Execution Time: 1922.687 ms
+== marketplace: text search
+ Execution Time: 71025.771 ms
+== marketplace: part number search
+ Execution Time: 1142.975 ms
+== marketplace: text search, search entry point
+ Execution Time: 52043.615 ms
+== marketplace: part number, search entry point
+ Execution Time: 849.680 ms
+== marketplace: vehicle filter
+ Execution Time: 35656.274 ms
+== marketplace: vehicle filter count
+ Execution Time: 15893.252 ms
+== marketplace: brand counts
+ Execution Time: 8.409 ms
+== marketplace: category counts
+ Execution Time: 0.796 ms
+== marketplace: conditions in use
+ Execution Time: 8.498 ms
+== cards: cover photos
+ Execution Time: 49.099 ms
+== cards: watch counts
+ Execution Time: 33.850 ms
+== cards: seller ratings
+ Execution Time: 61.820 ms
+== cards: seller active counts
+ Execution Time: 12.210 ms
+== cards: like counts
+ Execution Time: 8.265 ms
+== cards: question counts
+ Execution Time: 8.536 ms
+== explore: mixed wall, page one
+ Execution Time: 31180.571 ms
+== explore: mixed wall, page ten
+ Execution Time: 20774.411 ms
+== explore: mixed wall, page one, paged function
+ Execution Time: 24.700 ms
+== explore: updates only
+ Execution Time: 18932.228 ms
+== explore: card hydration
+ Execution Time: 179.070 ms
+== explore: trending models
+ Execution Time: 4.346 ms
+== explore: suggested builders
+ Execution Time: 7.996 ms
+== explore: search builds
+ Execution Time: 9231.505 ms
+== explore: search updates
+ Execution Time: 288725.580 ms
+== explore: search updates, search entry point
+ Execution Time: 519633.143 ms
+== explore: updates for a model
+ Execution Time: 402807.605 ms
+== car page: car by slug
+ Execution Time: 14.060 ms
+== car page: mods
+ Execution Time: 19.537 ms
+== car page: updates
+ Execution Time: 4.283 ms
+== car page: parts off this car
+ Execution Time: 43.227 ms
+== listing page: listing
+ Execution Time: 11.709 ms
+== listing page: more from seller
+ Execution Time: 19.264 ms
+== listing page: seller sold count
+ Execution Time: 8.345 ms
+== listing page: tagged updates
+ Execution Time: 0.114 ms
+== profile: cars
+ Execution Time: 3.467 ms
+== profile: follow counts
+ Execution Time: 37.133 ms
+== member: marketplace newest page
+ Execution Time: 7388.690 ms
+== member: fits my garage
+ Execution Time: 246577.923 ms
+== member: following feed updates
+ Execution Time: 88.459 ms
+== member: saved marks
+ Execution Time: 2.921 ms
+== member: unread notifications
+ Execution Time: 0.072 ms

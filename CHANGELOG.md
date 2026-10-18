@@ -10,6 +10,12 @@ Everything the agent needs to act, and nothing that acts yet: the agent is pause
 - **Admin.** `/admin/agent` pauses all, one side, one member's agent, one mandate, one listing or one account, audited; offers and orders already made are untouched. Health counts go to monitoring.
 - **The model.** `src/lib/ai/` and a tool-runner turn with read-only tools, redaction and untrusted-data wrapping, plus an eval fixture suite. No member reaches the model until A3c.
 
+## 2026-10-20 — Fitment evidence and price comparables (graph foundation, B1 step three)
+
+Products can now carry fitment evidence that says what it's worth: who said it (manufacturer, admin, community or DRVN), whether it fits, fits with a modification or doesn't, when it was said, whether it has been verified, and which engines, gearboxes or brakes it holds for. B2 fills it. And a part's price can be compared: `price_comparables` gives what the same product sold for — completed sales only, at the price paid, net of refunds, with condition, shipping and age — and what it's listed at now. Below three sales it gives a count and no price. It's for the agent's opening offers and for sellers pricing a part; no screen shows it yet.
+
+Checked at two million parts: what shoppers see and how fast pages load are unchanged, vehicle fit is identical row for row, and the hourly products run now reads only what changed (59 s down to about a second), with brand corrections no longer filed as ambiguous.
+
 ## 2026-10-20 — Products with brand-aware identity (graph foundation, B1 step two)
 
 Parts gain an identity. A product is one maker's one part, and only the same brand and number, a "same product" link that names both brands, or an admin's decision makes two records one product. Interchange, supersedes and aftermarket links stay links: an interchangeable part is not the same part. Products grow hourly from the brand and part number on listings and build lines; anything ambiguous — one number under several brands, a known number with no brand, a "same product" link that doesn't say whose, a listing whose "also known as" number belongs to another product — goes to a new admin list at `/admin/products`, with coverage shown above it. Build lines get the same part-number key as listings plus a brand key, so a mod and a listing of the same part can be matched. A part added to a car from a purchase now keeps its brand.
@@ -17,6 +23,12 @@ Parts gain an identity. A product is one maker's one part, and only the same bra
 ## 2026-10-20 — Car generations (graph foundation, B1 step one)
 
 Cars now know their generation. `vehicle_generations` holds each generation of a catalog model — `Mk8`, `E46`, `R34`, `ND` — with its platform code and years, seeded by hand with about 200 enthusiast generations (no open source carries them). A car resolves to one only when exactly one generation of its model covers its year; changeover years, such as a 2020 Golf R that could be a Mk7 or a Mk8, resolve to nothing so the owner can be asked, and an owner's choice is kept while it still fits. Nothing a shopper sees changes: vehicle fit and search don't read generations yet. Explore's build search was restated to carry the two new car columns.
+
+## 2026-10-18 — The old offer paths are gone (negotiation v2 and the private minimum: contract)
+
+- **One way to make an offer.** `create_offer_with_message` is dropped, and members can no longer write the `offers` table directly. Every offer and every move goes through `offer_open` and `offer_move`, which apply the negotiation rules.
+- **One home for the minimum.** `listings.offer_floor_cents` is dropped. The seller's minimum lives only in `listing_private_terms`. It's written through `set_listing_offer_floor`, which the sell and edit forms' database functions call, and it acts only for the listing's seller. The trigger that redirected writes to the old column, and the session setting it relied on, are gone.
+- Nothing changes on screen. The sell and edit forms send the minimum exactly as before.
 
 ## 2026-10-18 — Show my minimum, one lock order, and negotiation drills (negotiation v2, step three)
 

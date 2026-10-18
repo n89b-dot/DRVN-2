@@ -353,16 +353,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "graph-foundation",
     name: "Car generations, products and price comparables (graph foundation)",
     group: "vehicle-identity",
-    status: "in-progress",
+    status: "implemented",
     brief: "Agent and graph plan B1 · PRD §4.9",
     existsToday:
       "Cars know make and model, not generation. Part numbers link listings to each other (part_number_links) but nothing says which records are the same product, build lines can't be joined to listings, and no price comparable exists.",
     changing:
-      "vehicle_generations with cars resolved from model and year; products grown from the brand + part number members write, with explicit brand-aware membership and an admin review list for the ambiguous; part keys on build lines; the brand kept through a purchase.",
+      "vehicle_generations with cars resolved from model and year; products grown from the brand + part number members write, with explicit brand-aware membership and an admin review list for the ambiguous; part keys on build lines; the brand kept through a purchase; product fitment evidence with source and constraints; price comparables from completed sales net of refunds and live listings.",
     surfaces: [
       "supabase/migrations/20261020100000_vehicle_generations.sql",
       "supabase/migrations/20261020110000_part_keys.sql",
       "supabase/migrations/20261020120000_products.sql",
+      "supabase/migrations/20261020130000_product_fitments.sql",
+      "supabase/migrations/20261020140000_price_comparables.sql",
       "src/app/(admin)/admin/products/",
       "src/features/commerce/add-to-car-actions.ts",
     ],
@@ -376,12 +378,13 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "An interchangeable or aftermarket part is never called the same part.",
     ],
     validation:
-      "vehicle_generations_guard.sql and products_guard.sql on CI's database image; a rehearsal on a copy of shared dev's catalog; full unit suite and typecheck.",
+      "vehicle_generations_guard, products_guard and price_comparables_guard on CI's database image; the admin review list end to end (e2e/admin-product-identity.spec.ts); a rehearsal on a copy of shared dev's catalog; the 2M-part gate in docs/performance/query-plans.md (vehicle fit unchanged, plans rechecked); applied to shared dev.",
     docs: ["docs/site/vehicles.md", "docs/plans/2026-10-agent-and-graph-plan.md", "supabase/MIGRATIONS.md"],
     decisions: [
       "Generation year ranges are the union of production and main-market model years, so overlaps resolve to nothing rather than to the wrong generation.",
       "Products and their membership are internal (service role only): a product named from a private car's build line must not be readable as a catalog.",
       "Only numbers with a digit, 3–64 characters compacted, start a product; draft and removed listings don't.",
+      "Comparables show no price below three sales, and never a row or an id; completed orders only, net of refunds, returned lines left out.",
     ],
   },
 
@@ -1311,21 +1314,21 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "offer-floor-private",
     name: "A seller's offer minimum is private",
     group: "foundations",
-    status: "in-progress",
+    status: "validated",
     brief: "PRD O-3 · agent plan A0",
     existsToday:
       "The lowest offer a seller will take lived on `listings.offer_floor_cents`, which anon and authenticated could read table-wide through the API, and the listing page showed it as \"Offers accepted from\".",
     changing:
       "The minimum moves to `listing_private_terms`, readable only by the seller (`my_listing_offer_floor`) and the offer checks, in three releases: expand (copy, kept in step), switch (every reader moved, the old column held empty), contract (drop the column once the switched app is live everywhere).",
-    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
+    surfaces: ["supabase/migrations/20261017120000_listing_private_terms.sql", "supabase/migrations/20261017130000_listing_private_terms_switch.sql", "supabase/migrations/20261019120000_negotiation_contract.sql", "src/features/commerce/offer-actions.ts", "/listings/[id]/edit", "/listings/[id]"],
     benefit: "A seller's minimum can't be read by anyone else, so it can't be used against them, by a buyer or by an agent.",
     approach:
-      "Owner-only table, no client grants; a BEFORE trigger moves any write to the old column into it; the price bound is checked from both sides; a SECURITY DEFINER trigger on offers refuses below-minimum offers without naming the amount.",
+      "Owner-only table, no client grants. One writer, `set_listing_offer_floor`, which acts only for the listing's seller and which the sell and edit functions call; the price bound is checked from both sides; offer_open and offer_move check the minimum and never name it. The switch step's absorb trigger and the old column are gone (contract, 20261019120000).",
     decisions: [
       "Showing the minimum on the listing becomes a seller toggle, off by default, with negotiation v2; until then no minimum is shown.",
     ],
     validation:
-      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). offer_floor_privacy_guard.sql (28 checks) fails before the expand migration and passes after; every SQL guard, npm test, typecheck, lint and next build pass. The contract step is not done.",
+      "Expand and switch are on the shared dev project (probes in supabase/MIGRATIONS.md). Contract (20261019120000): offer_floor_privacy_guard.sql (39 checks) fails on the switch-step schema and passes after; every SQL guard, npm test, typecheck, lint and the negotiation drills pass. The contract's shared-dev apply waits until every running app copy has the switched code (supabase/MIGRATIONS.md).",
     docs: ["docs/decisions/agent-foundations.md", "supabase/MIGRATIONS.md"],
   },
   {
@@ -1343,8 +1346,8 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach: "Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.",
     dependsOn: ["offer-floor-private"],
     validation:
-      "Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. Retiring the old offer write paths (the contract step) is still to come.",
-    docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
+      "Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. The contract step, 20261019120000, retires create_offer_with_message and the client write policies on offers; its shared-dev apply waits until every running app copy has the switched code.",
+    docs: ["docs/decisions/negotiation-v2.md", "docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md"],
   },
   {
     id: "member-agent",

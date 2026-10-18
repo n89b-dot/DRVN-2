@@ -1,0 +1,20 @@
+Pager usage is off.
+BEGIN
+SET
+CREATE TABLE
+DO
+                 op                  |  n  | avg_ms | median_ms 
+-------------------------------------+-----+--------+-----------
+ counted view                        | 300 |   0.21 |      0.19
+ title and description edit          | 300 |   0.41 |      0.33
+ price change                        | 300 |   0.72 |      0.57
+ off sale and back (two updates)     | 300 |   1.65 |      1.50
+ create (part, 2 fitments, 3 photos) | 300 |   9.34 |      6.94
+(5 rows)
+
+ search_jobs_queued 
+--------------------
+                300
+(1 row)
+
+ROLLBACK

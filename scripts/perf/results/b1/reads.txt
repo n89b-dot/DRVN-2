@@ -1,0 +1,13 @@
+comparables: MEGA-1 (~6,000 sales)               200   2729 ms
+comparables: HOT-5 (~40 sales, for sale too)     200     17 ms
+comparables: a one-off part                      200     15 ms
+admin: open reviews page (count=exact)           206     38 ms
+comparables MEGA-1: {"sold": {"count": 5005, "enough": true, "p25_cents": 1026, "p75_cents": 19567, "newest_days": -15, "by_condition": [{"count": 1869, "condition": "used", "median_cents": 1639}, {"count": 1258, "condition": "new", "median_cents": 1635}, {"count": 962, "condition": "for_parts", "median_cents": 1871}, {"count": 916, "condition": "like_new", "median_cents": 1628}], "median_cents": 1683, "median_age_days": 161, "median_shipping_cents": 1500}, "asking": {"count": 0, "enough": false}, "enough": true, "currency": "USD", "identity": {"numbers": 1, "product": false, "brand_key": "brembo", "number_compact": "mega1"}, "min_sample": 3, "window_days": 730}
+open reviews: listing_alternate 1058, unscoped_same_product 1765
+# After the fixes in 20261020140000 (per-line lookups, newest 500 sales per number) and
+# 20261020150000 (queue), through PostgREST as a member, first call after a restart then warm:
+#   comparables MEGA-1   698 ms cold, 10-14 ms warm (was 2,729 ms warm; 8 s cold = timeout)
+#   comparables HOT-7     70 ms cold, 3-5 ms warm
+#   comparables one-off   26 ms cold, 6-14 ms warm
+#   hourly grow_products: 1,000 brand edits 1.4 s, 1,000 price edits nothing queued, idle 0.15 s (was 59 s)
+#   full grow_products 121 s + product_coverage ~2-3 min (nightly)

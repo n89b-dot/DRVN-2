@@ -1,0 +1,29 @@
+Time: 0.351 ms
+Time: 0.361 ms
+Time: 0.320 ms
+Time: 27189.113 ms (00:27.189)
+Time: 401.953 ms
+Time: 414.810 ms
+Time: 263.160 ms
+Time: 212.456 ms
+Time: 10909.948 ms (00:10.910)
+Time: 17214.969 ms (00:17.215)
+Time: 75285.032 ms (01:15.285)
+Time: 28384.963 ms (00:28.385)
+Time: 1373.794 ms (00:01.374)
+Time: 33277.364 ms (00:33.277)
+Time: 338.089 ms
+Time: 25.928 ms
+Time: 46.706 ms
+Time: 70894.038 ms (01:10.894)
+             t             | count  
+---------------------------+--------
+ orders                    | 600977
+ completed                 | 481030
+ order items               | 600977
+ build lines with a number | 276029
+ alternates                |  20006
+ links                     |  22000
+(6 rows)
+
+Time: 3617.134 ms (00:03.617)

@@ -2246,7 +2246,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -2285,7 +2284,6 @@ export type Database = {
           id?: string
           length_in?: number | null
           location?: string | null
-          offer_floor_cents?: number | null
           part_miles?: number | null
           part_miles_unit?: string | null
           part_number?: string | null
@@ -2324,7 +2322,6 @@ export type Database = {
           id?: string
           length_in?: number | null
           location?: string | null
-          offer_floor_cents?: number | null
           part_miles?: number | null
           part_miles_unit?: string | null
           part_number?: string | null
@@ -3561,6 +3558,132 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_fitments: {
+        Row: {
+          brake_packages: string[] | null
+          catalog_model_id: number
+          created_at: string
+          created_by: string | null
+          engine_codes: string[] | null
+          gearbox_codes: string[] | null
+          generation_id: number | null
+          id: string
+          notes: string | null
+          product_id: string
+          relationship: string
+          source: string
+          source_ref: string | null
+          stated_on: string
+          updated_at: string
+          verification: string
+          verified_at: string | null
+          verified_by: string | null
+          year_end: number | null
+          year_start: number | null
+        }
+        Insert: {
+          brake_packages?: string[] | null
+          catalog_model_id: number
+          created_at?: string
+          created_by?: string | null
+          engine_codes?: string[] | null
+          gearbox_codes?: string[] | null
+          generation_id?: number | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          relationship: string
+          source: string
+          source_ref?: string | null
+          stated_on?: string
+          updated_at?: string
+          verification?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          year_end?: number | null
+          year_start?: number | null
+        }
+        Update: {
+          brake_packages?: string[] | null
+          catalog_model_id?: number
+          created_at?: string
+          created_by?: string | null
+          engine_codes?: string[] | null
+          gearbox_codes?: string[] | null
+          generation_id?: number | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          relationship?: string
+          source?: string
+          source_ref?: string | null
+          stated_on?: string
+          updated_at?: string
+          verification?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          year_end?: number | null
+          year_start?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_fitments_catalog_model_id_fkey"
+            columns: ["catalog_model_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_fitments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_fitments_generation_id_catalog_model_id_fkey"
+            columns: ["generation_id", "catalog_model_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_generations"
+            referencedColumns: ["id", "model_id"]
+          },
+          {
+            foreignKeyName: "product_fitments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_fitments_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_grow_queue: {
+        Row: {
+          id: number
+          listing_id: string | null
+          mod_item_id: string | null
+          queued_at: string
+        }
+        Insert: {
+          id?: never
+          listing_id?: string | null
+          mod_item_id?: string | null
+          queued_at?: string
+        }
+        Update: {
+          id?: never
+          listing_id?: string | null
+          mod_item_id?: string | null
+          queued_at?: string
+        }
+        Relationships: []
       }
       product_grow_runs: {
         Row: {
@@ -6049,15 +6172,6 @@ export type Database = {
         Args: { p_job: string; p_lease: string }
         Returns: undefined
       }
-      create_offer_with_message: {
-        Args: {
-          p_amount: number
-          p_listing: string
-          p_message?: string
-          p_offer: string
-        }
-        Returns: Json
-      }
       create_protection_return: {
         Args: {
           p_item_ids?: string[]
@@ -6460,7 +6574,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6545,7 +6658,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6625,7 +6737,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6709,7 +6820,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6772,7 +6882,6 @@ export type Database = {
           id: string
           length_in: number | null
           location: string | null
-          offer_floor_cents: number | null
           part_miles: number | null
           part_miles_unit: string | null
           part_number: string | null
@@ -6955,6 +7064,15 @@ export type Database = {
           p_worker: string
         }
         Returns: boolean
+      }
+      price_comparables: {
+        Args: {
+          p_brand: string
+          p_currency?: string
+          p_exclude_listing?: string
+          p_part_number: string
+        }
+        Returns: Json
       }
       product_coverage: { Args: never; Returns: Json }
       profile_follow_counts: {
@@ -7326,6 +7444,10 @@ export type Database = {
       }
       set_analytics_consent: {
         Args: { p_allowed: boolean }
+        Returns: undefined
+      }
+      set_listing_offer_floor: {
+        Args: { p_floor: number; p_listing: string }
         Returns: undefined
       }
       set_social_relationship: {

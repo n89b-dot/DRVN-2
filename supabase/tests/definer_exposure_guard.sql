@@ -51,6 +51,7 @@ declare
     'offer_move(uuid,text,integer,text,integer)',      -- a move on an offer the caller is party to, under the v2 rules (20261017160000)
     'offer_open(uuid,uuid,integer,text)',              -- the caller's own opening offer, under the v2 rules (20261017160000)
     'order_buyer_reviewable(uuid)',                    -- boolean, only for the order's buyer or seller
+    'price_comparables(text,text,text,uuid)',          -- aggregates of completed sales and live listings of one product, only from 3 up; no rows or ids (20261020140000)
     'reconcile_admin_external_operation(uuid,bigint,text,text)', -- refuses anyone but an admin with step-up
     'record_listing_edit(uuid,text,uuid,timestamp with time zone,jsonb)', -- the caller's own edit request
     'replay_listing_edit(uuid,text,uuid,timestamp with time zone)',      -- same request, replayed for its owner
@@ -59,6 +60,7 @@ declare
     'request_account_export()',                        -- the caller's own export
     'seller_payout_dates(uuid[])',                     -- payout dates of the caller's own sales only
     'set_analytics_consent(boolean)',                  -- the caller's own consent
+    'set_listing_offer_floor(uuid,integer)',           -- the caller's own listing's minimum; the one writer of it (20261019120000)
     'sync_activity_post_listings(uuid,uuid[])'         -- parts tagged on the caller's own post
   ];
   exposed text[];
@@ -94,6 +96,8 @@ begin
     'public.mark_due_transfer_intents()',
     'public.escalate_stale_disputes()',
     'public.prune_rate_limits()',
+    'public.offer_effective_floor(uuid)',
+    'public.offer_accept_begin(uuid,uuid,interval)',
     -- The agent's internals (20261021100100): the move cores take the actor
     -- as an argument; the sweeps are the service role's.
     'public.offer_open_core(uuid,uuid,uuid,integer,text,jsonb)',
@@ -111,6 +115,18 @@ begin
     if has_function_privilege('anon', internal, 'execute')
        or has_function_privilege('authenticated', internal, 'execute') then
       raise exception '% is callable by a client role', internal;
+    end if;
+  end loop;
+
+  -- Retired by the negotiation contract (20261019120000): the pre-v2 offer
+  -- path and the private minimum's switch-step machinery.
+  foreach internal in array array[
+    'public.create_offer_with_message(uuid,uuid,integer,text)',
+    'public.guard_offer_private_floor()',
+    'public.absorb_listing_offer_floor()'
+  ] loop
+    if to_regprocedure(internal) is not null then
+      raise exception '% is still installed', internal;
     end if;
   end loop;
 

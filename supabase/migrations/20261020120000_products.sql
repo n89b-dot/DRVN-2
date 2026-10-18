@@ -606,20 +606,29 @@ revoke all on function public.resolve_product_identity_review(uuid, text, text) 
 grant execute on function public.resolve_product_identity_review(uuid, text, text) to authenticated;
 
 -- The audit trail names the review it decided. Built from the constraint as
--- it stands, so a value another migration added is kept.
+-- it stands, so a value another migration added is kept. Postgres renders
+-- the constraint as ARRAY['a'::text, ...] when it is written and as
+-- '{a,b}'::text[] once rewritten, so a value is any word between quotes,
+-- braces or commas. (The first version only read the first form: re-run, it
+-- kept product_review alone. Fixed in place 2026-10-18; the first run on
+-- shared dev wrote all seven.)
 do $$
 declare
   v_values text[];
 begin
   select array_agg(distinct v order by v) into v_values
   from (
-    select (regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g'))[1] as v
+    select (regexp_matches(pg_get_constraintdef(c.oid), '[''{,]([a-z_]+)(?=[''},])', 'g'))[1] as v
     from pg_constraint c
     where c.conrelid = 'public.admin_audit_log'::regclass and c.conname = 'admin_audit_log_subject_type_check'
     union select 'product_review'
   ) x;
+  if not v_values @> array['order', 'listing', 'user', 'report', 'dispute', 'payment', 'product_review'] then
+    raise exception 'admin_audit_log subject types lost a value: %', v_values;
+  end if;
   alter table public.admin_audit_log drop constraint if exists admin_audit_log_subject_type_check;
-  execute format('alter table public.admin_audit_log add constraint admin_audit_log_subject_type_check check (subject_type = any (%L::text[]))', v_values);
+  execute format('alter table public.admin_audit_log add constraint admin_audit_log_subject_type_check check (subject_type in (%s))',
+                 (select string_agg(quote_literal(v), ', ' order by v) from unnest(v_values) v));
 end $$;
 
 -- ============================================================

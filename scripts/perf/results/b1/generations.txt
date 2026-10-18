@@ -1,0 +1,8 @@
+generations insert (re-resolves cars): INSERT 0 1200
+generations insert (re-resolves cars): Time: 53756.269 ms (00:53.756)
+cars resolved: 366092 of 400000
+fit after generations: 3410501 rows, checksum 7341294543176251023777
+# Note (re-checked separately): the checksum above differs from fit-after only because the gate's
+# "new reads" step changed 1,000 prices first (fit rows carry the price). Checked cleanly afterwards:
+# checksum, delete all 1,200 seeded generations (re-resolving 366,092 cars, 60 s), checksum:
+# 3410501 rows, checksum 7506610096582097596353 both times; no search jobs queued.
