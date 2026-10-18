@@ -1,7 +1,7 @@
 <!--
 Repo copy of the Claude Doc "DRVN AI-native: review and implementation plan"
 (https://claude.ai/code/artifact/0116734a-9a0d-4148-9efa-ecde4f9a177b), taken at
-revision 88 on 17 Oct 2026. The doc is the living plan where Neil rules; this
+revision 89 on 17 Oct 2026. The doc is the living plan where Neil rules; this
 copy is what build sessions follow, and it is re-taken from the doc whenever a
 phase closes or a ruling changes it. Diagrams are redrawn as Mermaid. Build
 progress: https://claude.ai/artifact/NnnwYYybSxqHypUcqvrpyd
@@ -350,6 +350,30 @@ Ships behind `AGENTS_BETA`. Each step opens only when the previous gate passes.
 4. **A3d More jobs, one at a time, photo understanding included.** Post an update → list the parts that came off → paste your build → listing from photos.
 
 There's no invited cohort (decided 17 Oct). Each step turns on for everyone behind the `AGENTS_BETA` flag once the previous gate passes.
+
+### Alongside A3c–A3d — two seller helpers (no AI)
+
+Added 17 Oct from the review of [Stunspot's Guide to Automotive Systems](https://github.com/Stunspot/stunspots-guide-to-automotive-systems) (CC BY 4.0, credited wherever its material is adapted). The guide is design-time source material only, with no runtime retrieval. Both features work without the agent, neither depends on A0 or A1, and the agent reuses both in AG-9. The wording of both lists is drafted as a document for Neil to sign off before any code.
+
+- **Photo shot lists on the sell form.**
+    - 3–5 short suggested shots for each marketplace subcategory (about 30 in `taxonomy.ts`), for example coilovers: full set side by side · threads and collars · top mounts · part number label.
+    - A generic list (whole part · labels and part numbers · any damage) shows until a category is known. Photos is step 1 and category step 2; a mod line or an import often prefills the category.
+    - Finer splits only where one subcategory hides very different parts, such as "Coilovers & Springs" or "Sway Bars & Arms".
+    - A suggestion, never proof of condition and never required: publishing still needs one photo (M-5, W-2).
+    - A static map in `src/lib/marketplace/photo-guide.ts`, with no migration and no AI. Later, "listing from photos" (AG-9) uses the same map to suggest missing shots.
+- **"What came off" for stock parts.**
+    - The build sheet lists only aftermarket mods, so fitting first coilovers to a stock car leaves nothing to mark as removed, and the stock parts never get listed.
+    - When a mod is added or replaced, offer the stock parts it usually replaces as tick boxes (stock struts ×4 · stock springs ×4 · top mounts). It asks once per mod, can be dismissed, and offers a few items at most.
+    - Ticked parts become removed lines marked stock, each with List it, so the listing carries the source car's fitment, with the car maker as brand.
+    - This needs finer mod types than `ModCategory`: a keyword match on the product name, with a short pick list as a fallback. It overlaps B1.
+    - The plain button ships first (AG-11); AG-9 "update my build" calls the same function.
+- **Ruled out (Neil, 17 Oct):**
+    - a longer condition checklist;
+    - photos as condition evidence;
+    - a "known issues" section;
+    - "also fitted", "often fitted with" and "before you buy" notes;
+    - a learned "fitted together" table;
+    - any runtime retrieval over the guide.
 
 ### B1 — Graph foundation (Track B, ≈ 2–3 weeks, starts with A1)
 
