@@ -246,6 +246,15 @@ begin
     raise exception 'FAIL 8: the snapshot lost the brand: %', v_snapshot -> 'part';
   end if;
 
+  -- 9. The audit trail still takes every subject it took before, plus reviews.
+  if exists (
+    select 1 from unnest(array['order', 'listing', 'user', 'report', 'dispute', 'payment', 'product_review']) t(v)
+    where pg_get_constraintdef((select oid from pg_constraint where conname = 'admin_audit_log_subject_type_check')) not like '%' || t.v || '%'
+  ) then
+    raise exception 'FAIL 9: admin_audit_log lost a subject type: %',
+      pg_get_constraintdef((select oid from pg_constraint where conname = 'admin_audit_log_subject_type_check'));
+  end if;
+
   raise notice 'all products checks passed';
 end $$;
 

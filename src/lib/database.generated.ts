@@ -2929,6 +2929,111 @@ export type Database = {
           },
         ]
       }
+      product_fitments: {
+        Row: {
+          brake_packages: string[] | null
+          catalog_model_id: number
+          created_at: string
+          created_by: string | null
+          engine_codes: string[] | null
+          gearbox_codes: string[] | null
+          generation_id: number | null
+          id: string
+          notes: string | null
+          product_id: string
+          relationship: string
+          source: string
+          source_ref: string | null
+          stated_on: string
+          updated_at: string
+          verification: string
+          verified_at: string | null
+          verified_by: string | null
+          year_end: number | null
+          year_start: number | null
+        }
+        Insert: {
+          brake_packages?: string[] | null
+          catalog_model_id: number
+          created_at?: string
+          created_by?: string | null
+          engine_codes?: string[] | null
+          gearbox_codes?: string[] | null
+          generation_id?: number | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          relationship: string
+          source: string
+          source_ref?: string | null
+          stated_on?: string
+          updated_at?: string
+          verification?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          year_end?: number | null
+          year_start?: number | null
+        }
+        Update: {
+          brake_packages?: string[] | null
+          catalog_model_id?: number
+          created_at?: string
+          created_by?: string | null
+          engine_codes?: string[] | null
+          gearbox_codes?: string[] | null
+          generation_id?: number | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          relationship?: string
+          source?: string
+          source_ref?: string | null
+          stated_on?: string
+          updated_at?: string
+          verification?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          year_end?: number | null
+          year_start?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_fitments_catalog_model_id_fkey"
+            columns: ["catalog_model_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_fitments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_fitments_generation_id_catalog_model_id_fkey"
+            columns: ["generation_id", "catalog_model_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_generations"
+            referencedColumns: ["id", "model_id"]
+          },
+          {
+            foreignKeyName: "product_fitments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_fitments_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_grow_runs: {
         Row: {
           id: number
@@ -6142,6 +6247,15 @@ export type Database = {
           p_worker: string
         }
         Returns: boolean
+      }
+      price_comparables: {
+        Args: {
+          p_brand: string
+          p_currency?: string
+          p_exclude_listing?: string
+          p_part_number: string
+        }
+        Returns: Json
       }
       product_coverage: { Args: never; Returns: Json }
       profile_follow_counts: {

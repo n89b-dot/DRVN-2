@@ -1,7 +1,7 @@
 # Vehicle identity & fitment
 
 > The vehicle catalog, the Add Car flows, and how fitment stays lightweight.
-> Code: `src/lib/vehicles/`, `supabase/migrations/0041`, `0025`, `20261020100000` (generations), `20261020110000`–`120000` (part keys, products).
+> Code: `src/lib/vehicles/`, `supabase/migrations/0041`, `0025`, `20261020100000` (generations), `20261020110000`–`140000` (part keys, products, fitment evidence, comparables).
 
 ## The canonical model
 
@@ -117,6 +117,59 @@ capabilities.
 `part.brand`; `addPurchaseToCar` copies it to the build line. Snapshots from
 before the change have no brand and the line gets none, never today's
 listing's.
+
+## Fitment evidence (B1)
+
+`listing_fitments` stays one seller's claim about one listing.
+`product_fitments` (`20261020130000`) is for claims about a **product**, and
+it records what each claim is worth instead of flattening it to "fits":
+
+- **source** — `manufacturer`, `admin`, `community`, `drvn_inference`, with
+  `source_ref` (catalogue page, URL) and **`stated_on`** (when the source said
+  it, not when it was stored);
+- **relationship** — `fits`, `fits_with_modification` (must say what, in
+  `notes`), `does_not_fit`;
+- **verification** — `unverified`, `verified` (with who and when),
+  `disputed`, `retracted` (hidden from reads);
+- **configuration constraints** — `engine_codes`, `gearbox_codes`,
+  `brake_packages`: plain codes the source used ("EA888 gen3", "DQ381",
+  "PCCB"). Null means no constraint; an empty list is refused. No variant
+  catalog.
+
+A claim names a catalog model and optionally one of its generations and a
+year range; the generation is a composite foreign key with the model, so it
+can never belong to another model. Public read (it's product data), written
+only by the service role. B1 creates the table; B2 fills it. "Installed on
+17 Mk8s" is not a claim — it's a count over build lines, recorded by members,
+not verified (B2).
+
+## Price comparables (B1)
+
+`price_comparables(brand, part number, currency = 'USD', exclude listing)`
+(`20261020140000`) says what a part sells for and is listed at:
+
+- **Identity first.** The brand + number resolves to its product, and every
+  number the product holds counts; before a product exists the pair itself
+  is the key. No brand, no answer.
+- **Sold** — completed orders only, last 730 days, the price the buyer paid
+  (an accepted offer's price), per unit, **net of refunds**: a line with a
+  completed return isn't a sale; other refunds on the order, less what
+  completed returns refunded, come off each line by its share of the goods;
+  a line refunded to nothing drops out. Brand and number come from the
+  purchase snapshot (older snapshots: the sold listing's brand). Each sale
+  carries condition, shipping and age (`median_shipping_cents`,
+  `newest_days`, `median_age_days`, `by_condition`).
+- **Asking** — parts for sale now with the same identity, sellers not
+  suspended, optionally without the caller's own listing.
+- **Minimum sample: 3.** Below it the answer is a count, never a price, so
+  one negotiated price can't be read off a "median"; the same floor applies
+  per condition.
+
+Aggregates only — no line, order, buyer or seller. SECURITY DEFINER (sold
+prices are in orders nobody else can read), callable by signed-in members
+and the service role, not visitors. The snapshot's part number is read
+through an expression index on `order_items`, so each number is an index
+probe at any volume (2M-part timings in `docs/performance/query-plans.md`).
 
 ## Data sources
 

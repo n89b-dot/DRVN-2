@@ -353,16 +353,18 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     id: "graph-foundation",
     name: "Car generations, products and price comparables (graph foundation)",
     group: "vehicle-identity",
-    status: "in-progress",
+    status: "implemented",
     brief: "Agent and graph plan B1 · PRD §4.9",
     existsToday:
       "Cars know make and model, not generation. Part numbers link listings to each other (part_number_links) but nothing says which records are the same product, build lines can't be joined to listings, and no price comparable exists.",
     changing:
-      "vehicle_generations with cars resolved from model and year; products grown from the brand + part number members write, with explicit brand-aware membership and an admin review list for the ambiguous; part keys on build lines; the brand kept through a purchase.",
+      "vehicle_generations with cars resolved from model and year; products grown from the brand + part number members write, with explicit brand-aware membership and an admin review list for the ambiguous; part keys on build lines; the brand kept through a purchase; product fitment evidence with source and constraints; price comparables from completed sales net of refunds and live listings.",
     surfaces: [
       "supabase/migrations/20261020100000_vehicle_generations.sql",
       "supabase/migrations/20261020110000_part_keys.sql",
       "supabase/migrations/20261020120000_products.sql",
+      "supabase/migrations/20261020130000_product_fitments.sql",
+      "supabase/migrations/20261020140000_price_comparables.sql",
       "src/app/(admin)/admin/products/",
       "src/features/commerce/add-to-car-actions.ts",
     ],
@@ -376,12 +378,13 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
       "An interchangeable or aftermarket part is never called the same part.",
     ],
     validation:
-      "vehicle_generations_guard.sql and products_guard.sql on CI's database image; a rehearsal on a copy of shared dev's catalog; full unit suite and typecheck.",
+      "vehicle_generations_guard, products_guard and price_comparables_guard on CI's database image; the admin review list end to end (e2e/admin-product-identity.spec.ts); a rehearsal on a copy of shared dev's catalog; the 2M-part gate in docs/performance/query-plans.md (vehicle fit unchanged, plans rechecked); applied to shared dev.",
     docs: ["docs/site/vehicles.md", "docs/plans/2026-10-agent-and-graph-plan.md", "supabase/MIGRATIONS.md"],
     decisions: [
       "Generation year ranges are the union of production and main-market model years, so overlaps resolve to nothing rather than to the wrong generation.",
       "Products and their membership are internal (service role only): a product named from a private car's build line must not be readable as a catalog.",
       "Only numbers with a digit, 3–64 characters compacted, start a product; draft and removed listings don't.",
+      "Comparables show no price below three sales, and never a row or an id; completed orders only, net of refunds, returned lines left out.",
     ],
   },
 

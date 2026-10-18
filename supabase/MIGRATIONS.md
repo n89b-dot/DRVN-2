@@ -1,11 +1,24 @@
 # Applying migrations
 
+## October 20 — fitment evidence and price comparables, B1 step three
+
+| File | Applied to |
+|---|---|
+| `20261020130000_product_fitments.sql` | not yet |
+| `20261020140000_price_comparables.sql` | not yet |
+
+Apply in order, after `20261020120000`.
+- `130000` adds `product_fitments`: claims about a product (source, relationship, `stated_on`, verification, engine/gearbox/brake constraints) against a catalog model and optionally one of its generations (composite foreign key). Public read of claims not retracted; service-role writes. Empty until B2.
+- `140000` adds `price_comparables(brand, part number, currency, exclude listing)`, a SECURITY DEFINER aggregate of completed sales (net of refunds, returns left out) and live listings of one product, with a minimum sample of 3, callable by members; an expression index on `order_items` for the snapshot's part number; and restates `product_coverage` (from `120000`) to count completed sale lines.
+
+It also fixes `20261020120000` so it can be re-run (see that entry).
+
 ## October 20 — part keys and products, B1 step two
 
 | File | Applied to |
 |---|---|
-| `20261020110000_part_keys.sql` | not yet |
-| `20261020120000_products.sql` | not yet |
+| `20261020110000_part_keys.sql` | shared dev project (2026-10-18, twice) |
+| `20261020120000_products.sql` | shared dev project (2026-10-18; the second run failed safely, see below) |
 
 Apply in order, after `20261020100000`.
 - `110000` adds generated `mod_items.part_number_compact` (the listings expression from 0033) and `mod_items.brand_key` (brand compacted to letters and digits), with an index on both. It restates `listing_commercial_snapshot` from 0056 with one added line: `part.brand`.
@@ -13,7 +26,13 @@ Apply in order, after `20261020100000`.
 
 Adding generated columns rewrites `mod_items` under an exclusive lock; at today's size that is instant (measured at 2M parts in the B1 query-plan notes).
 
-Checked on a fresh database (CI's PG15 image): both files apply twice cleanly; every SQL guard passes, including the new `products_guard.sql`.
+Checked on a fresh database (CI's PG15 image): both files apply cleanly; every SQL guard passes, including the new `products_guard.sql`.
+
+**Re-running `120000` (fixed 2026-10-18 in #42).** The block that adds `product_review` to `admin_audit_log.subject_type` read the constraint's values with a regex that only understood the `ARRAY['x'::text]` rendering. After the first run Postgres renders it as `'{a,b}'::text[]`, so a second run kept `product_review` alone: on an empty audit log that silently narrowed the constraint, and on shared dev (which has audit rows) it raised and rolled the whole second run back. The block now reads both renderings, refuses to drop any of the seven values, and writes a stable `in (...)` form; `products_guard.sql` check 9 holds the seven. The first run is unchanged, which is the one shared dev has.
+
+**Shared dev, 2026-10-18**, after #38 merged (a0f0f78), with `node scripts/apply-migration.mjs`: `110000` twice; `120000` once (its second run rolled back on the bug above).
+- **Before:** `listing_commercial_snapshot` byte-identical to 0056's; `mod_items`, `part_number_links` (0 rows, 0042's columns and `part_number_links_key`) and the six audit subject types as on main. Saved to `~/drvn-db-backups/pre-20261020110000-products.sql` (schema and the old snapshot function) and `pre-20261020110000-mod-items-data.sql`.
+- **After:** the backfill made 13 products from 1 listing and 12 build lines — every record with a brand and a part number has one — and filed no reviews. `pg_get_functiondef` of `grow_products`, `merge_products`, `resolve_product_identity_review` and `listing_commercial_snapshot` matches a fresh database; `drvn-grow-products` (17 * * * *) and `drvn-grow-products-full` (47 4 * * *) are scheduled; the audit subject check holds all seven values; neither visitors nor members can read products, membership or reviews, call `grow_products`, or (visitors) call `resolve_product_identity_review`.
 
 ## October 20 — car generations, B1 step one
 
