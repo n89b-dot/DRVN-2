@@ -1,10 +1,11 @@
 import { ImageResponse } from "next/og";
 
 import { postHeadline } from "@/lib/activity/headline";
+import { OG_COLORS, OG_SIZE, OgFrame, OgMicrolabel } from "@/lib/og/card";
 import { createPublicClient } from "@/lib/supabase/public";
 
 export const alt = "An update on DRVN";
-export const size = { width: 1200, height: 630 };
+export const size = OG_SIZE;
 export const contentType = "image/png";
 
 /**
@@ -45,62 +46,21 @@ export default async function PostCard({ params }: { params: Promise<{ postId: s
 
   return new ImageResponse(
     (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          background: "#20232a",
-          color: "#f8f6f0",
-          fontFamily: "sans-serif",
-        }}
-      >
-        {image?.url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image.url} alt="" style={{ width: 660, height: 630, objectFit: "cover" }} />
-        )}
+      <OgFrame photo={image?.url} foot="Follow the build on DRVN.">
+        <OgMicrolabel>Update</OgMicrolabel>
         <div
           style={{
-            flex: 1,
             display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            padding: 48,
+            fontSize: 48,
+            fontWeight: 700,
+            lineHeight: 1.15,
+            letterSpacing: -1,
           }}
         >
-          <div style={{ display: "flex", fontSize: 34, fontWeight: 700, letterSpacing: -1 }}>
-            DRVN<span style={{ color: "#e8593d" }}>.</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div
-              style={{
-                display: "flex",
-                fontSize: 18,
-                letterSpacing: 3,
-                textTransform: "uppercase",
-                color: "#a3a6ae",
-              }}
-            >
-              Update
-            </div>
-            <div
-              style={{
-                display: "flex",
-                fontSize: 48,
-                fontWeight: 700,
-                lineHeight: 1.15,
-                letterSpacing: -1,
-              }}
-            >
-              {headline}
-            </div>
-            {byline && <div style={{ display: "flex", fontSize: 22, color: "#a3a6ae" }}>{byline}</div>}
-          </div>
-          <div style={{ display: "flex", fontSize: 20, color: "#a3a6ae" }}>
-            Follow the build on DRVN.
-          </div>
+          {headline}
         </div>
-      </div>
+        {byline && <div style={{ display: "flex", fontSize: 22, color: OG_COLORS.dim }}>{byline}</div>}
+      </OgFrame>
     ),
     size,
   );

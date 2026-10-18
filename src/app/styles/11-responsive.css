@@ -317,28 +317,6 @@
     margin-top: 8px;
     padding-top: 8px;
   }
-  /* Row and split formats are desktop-width ideas; in a half-width column
-     they fold into the plain photo-over-text stack every neighbour uses. */
-  .feedcols .tile--row {
-    grid-template-columns: minmax(0, 1fr);
-    column-gap: 0;
-    padding: 12px 12px 8px;
-  }
-  .feedcols .tile__thumb {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1;
-    margin-bottom: 8px;
-  }
-  .feedcols .tile--split {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .feedcols .tile__img--side {
-    min-height: 0;
-    height: auto;
-    aspect-ratio: 3 / 2;
-    margin-bottom: 8px;
-  }
   .feedcols .cardeng,
   .mkt .cardeng {
     margin-top: 8px;

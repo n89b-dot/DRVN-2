@@ -1,6 +1,6 @@
 # Next-session brief — admin console + remaining Rev E work
 
-> **SUPERSEDED — historical brief (early Aug 2026).** Everything in Tasks 1–2 has shipped; the admin console exists; there are 28 migrations. Kept as archive. Paths below are as they were then: the stylesheet has since moved from `globals.css` to `src/app/styles/`, and payout onboarding has moved to `/payouts`.
+> **SUPERSEDED — historical brief (early Aug 2026), archived 2026-10-11.** Everything in Tasks 1–2 has shipped; the admin console exists. The authoritative spec is now `docs/DRVN-PRD-2026-09.md` (the `DRVN-PRD-v3.1.md` named below is superseded). `supabase/migrations/` now holds 0001–0057 plus timestamped migrations (187 files on 2026-10-11, 130 of them timestamped from `20260905011618` on). The "keep CHANGELOG and docs in sync, per `AGENTS.md`" rule below no longer lives in `AGENTS.md` (which now only warns that this Next.js differs from training data); the CI migration guard it mentions still exists. Paths below are as they were then: the stylesheet has since moved from `globals.css` to `src/app/styles/`, the design contract from `docs/livesheet-inventory.md` to `design-mockups/livesheet/design.md`, and payout onboarding to `/payouts`.
 
 Paste everything below the line into a new chat. It is written to be
 self-contained: a fresh session has none of the prior conversation.

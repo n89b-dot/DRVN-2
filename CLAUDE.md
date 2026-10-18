@@ -20,7 +20,7 @@ DRVN's UI is a governed component platform (Livesheet). Before writing **any** J
 
 Committed in `.claude/skills/` — available in local and cloud sessions.
 
-**Design & taste:** `taste-skill` (anti-generic frontend design direction) · `soft-skill` (high-end agency visual polish) · `minimalist-skill` (clean editorial monochrome interfaces) · `design-better` (UX craft and accessibility heuristics) · `design-system` (extract design tokens into docs/design.md)
+**Design & taste:** `taste-skill` (anti-generic frontend design direction) · `soft-skill` (high-end agency visual polish) · `minimalist-skill` (clean editorial monochrome interfaces) · `design-better` (UX craft and accessibility heuristics) · `design-system` (token extraction skill; in DRVN the contract is design-mockups/livesheet/design.md — do not re-derive tokens)
 
 **Build & iterate:** `build-loop-claude-code` (build, review, test, fix loop) · `iteration-pass` (adversarial polish passes on designs) · `redesign-skill` (upgrade existing UI to premium) · `output-skill` (no truncation, complete code output)
 

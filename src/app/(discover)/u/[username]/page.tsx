@@ -56,9 +56,9 @@ export async function generateMetadata({
       description,
       url: `/u/${profile.username}`,
       type: "profile",
-      images: profile.avatar_url ? [{ url: profile.avatar_url }] : undefined,
+      // The designed card at ./opengraph-image.tsx owns the unfurl.
     },
-    twitter: { card: "summary", title: `${name} on DRVN`, description },
+    twitter: { card: "summary_large_image", title: `${name} on DRVN`, description },
   };
 }
 

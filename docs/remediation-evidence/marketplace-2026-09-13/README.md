@@ -27,7 +27,7 @@ This record extends the September 12 browsing repair through the revised plan's 
 | Saved items and searches | Item saving resumes after sign-in; complete search definitions restore the vehicle, category, price and sort. Sold and unavailable items remain understandable. Alerts require a separate choice. |
 | Loading, failure and accessibility | Loading reserves grid space; pending changes suppress obsolete result announcements. Retry differs from zero results. Long filter values wrap at doubled text size without losing their remove control. |
 
-The existing component registry, generated component documentation and interactive specimens are updated. The feed-card redesign that was already in the working tree is preserved. The [P5 specification](../../DESIGN.md) records measured DRVN targets and deliberate differences from the original Mobbin references.
+The existing component registry, generated component documentation and interactive specimens are updated. The feed-card redesign that was already in the working tree is preserved. The [P5 specification](../../marketplace-reference-evidence-2026-09.md) records measured DRVN targets and deliberate differences from the original Mobbin references.
 
 ## Database rollout
 

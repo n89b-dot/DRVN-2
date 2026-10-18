@@ -9,12 +9,17 @@ import { cx } from "@/lib/format";
  *
  * Renders nothing on a single first page — pagination furniture with nowhere
  * to go is noise.
+ *
+ * `page` is 1-based. The console's queues parse a 0-based `page` param, so
+ * they pass `page + 1` and build hrefs from `target - 1`.
  */
 export function Pagination({
   page,
   hasMore,
   hrefFor,
   label = "Pagination",
+  prevLabel = "← Previous",
+  nextLabel = "Next →",
   className,
 }: {
   page: number;
@@ -23,6 +28,10 @@ export function Pagination({
    *  page override (page 1 should drop the param entirely). */
   hrefFor: (page: number) => string;
   label?: string;
+  /** Word overrides for queues whose sort order makes Previous/Next the
+   *  wrong words — the console's newest-first lists say Newer/Older. */
+  prevLabel?: string;
+  nextLabel?: string;
   /** Spacing overrides only (e.g. `!mt-8`, `!mb-8`) — never restyle the links. */
   className?: string;
 }) {
@@ -35,7 +44,7 @@ export function Pagination({
     >
       {page > 1 ? (
         <Link href={hrefFor(page - 1)} className="btn btn--ghost" rel="prev">
-          ← Previous
+          {prevLabel}
         </Link>
       ) : (
         <span />
@@ -43,7 +52,7 @@ export function Pagination({
       <span className="microlabel">Page {page}</span>
       {hasMore ? (
         <Link href={hrefFor(page + 1)} className="btn btn--ghost" rel="next">
-          Next →
+          {nextLabel}
         </Link>
       ) : (
         <span />

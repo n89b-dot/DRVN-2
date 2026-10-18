@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { MetricCard, PageHead, SheetTabs } from "@/components/ui";
+import { MetricCard, PageHead, SheetTabs, Pagination } from "@/components/ui";
 import {
   getIdentityReviews,
   getProductCoverage,
@@ -12,7 +12,6 @@ import {
 import { cx } from "@/lib/format";
 
 import { ConsoleEmpty } from "../_components/console-empty";
-import { Pager } from "../_components/pager";
 import { IdentityReviewList } from "./review-list";
 
 export const dynamic = "force-dynamic";
@@ -40,10 +39,10 @@ function ReviewsPanel({
         </p>
       )}
       <IdentityReviewList rows={result.rows} />
-      <Pager
-        page={result.page}
+      <Pagination
+        page={result.page + 1}
         hasMore={result.hasMore}
-        href={pagerHref}
+        hrefFor={(target) => pagerHref(target - 1)}
         prevLabel={older ? "← Newer" : "← Back"}
         nextLabel={older ? "Older →" : "More →"}
       />

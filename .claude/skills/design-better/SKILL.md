@@ -10,6 +10,13 @@ metadata:
 
 # Design Better
 
+> **DRVN note (2026-10-11).** In this repo the style layer referred to below as `docs/design.md`
+> is `design-mockups/livesheet/design.md` (with `design.html` alongside); its tokens live in
+> `src/app/styles/00-tokens-base.css` and must not be re-derived (PRD `docs/DRVN-PRD-2026-09.md`
+> §3: typeface, accent and light theme do not change). Reference its tokens by name, and
+> compose from `src/components/registry.ts` before writing any JSX (see `CLAUDE.md`).
+
+
 A craft layer for any coding agent generating or reviewing UI. Style is owned by `docs/design.md`; this skill owns the timeless UX/UI craft heuristics — drawn from Nielsen Norman Group, Laws of UX, Shneiderman, Refactoring UI, WCAG 2.2, Don Norman, Apple HIG, Material 3, and 2025–2026 AI-product patterns — that separate "shipped" from "designed."
 
 > **Boundary.** When a heuristic implies a visual property, reference a `docs/design.md` token by name (`{colors.primary}`, `{rounded.md}`). If `docs/design.md` doesn't have the token, flag it as a New Pattern to add via the **Design System** skill — never inline hex, font names, or arbitrary px. If `docs/design.md` doesn't exist at all, follow the codebase's existing convention for that property (theme config, CSS custom properties, component library) and note it.

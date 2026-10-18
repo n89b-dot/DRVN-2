@@ -203,7 +203,7 @@ export default function ComponentsPage() {
         <Specimen
           name="Deck"
           klass=".deck --kpi / --two / --three"
-          note="The one grid: gap 14. KPI is 4-col, two is 1.35fr/1fr, three is 3-col. Children take min-width: 0; never nest decks."
+          note="The one grid: gap 16. KPI is 4-col (--kpi-5 five on the console overview), two is 1.35fr/1fr, three is 3-col; --main and --aside are the page-level layouts. Children take min-width: 0; never nest decks."
         >
           <div className="deck deck--three !pb-0">
             <div className="grid h-12 place-items-center rounded-ctl bg-paper-deep text-micro text-dim">
@@ -1010,9 +1010,9 @@ export default function ComponentsPage() {
           </div>
         </Specimen>
         <Specimen
-          name="Buy sheet"
+          name="Dialog sheet"
           klass=".sheetwrap / .sheet"
-          note="Commit actions happen on a bottom sheet over a scrim — two steps (review, confirm), min(480px) wide. Not rendered live here; see any Buy or Release flow. The Dialog component wraps the same idiom."
+          note="Every modal is the Dialog component: .sheetwrap is its scrim, .sheet the one panel width — min(480px, 100vw - 40px) — with .sheet__row / .sheet__total ruling the lines inside. No step machinery. Not rendered live here; see any Buy, Release or Confirm flow."
         >
           <div className="rounded-ctl bg-paper-deep p-4">
             <div className="sheet__row flex items-baseline justify-between">
@@ -1579,8 +1579,9 @@ export default function ComponentsPage() {
           Rule: a new reusable component lands in src/components/ui (primitive) or
           src/components/commerce (domain pattern), gets a class in globals.css if it needs
           one, an entry in src/components/registry.ts, and a specimen above.
-          registry.test.ts fails the build when a public export has no entry (or an entry
-          points nowhere); npm run docs:components regenerates the markdown twin.
+          registry.test.ts fails the build when a component exported from either barrel or
+          from livesheet.tsx has no entry (or an entry points nowhere); npm run
+          docs:components regenerates the markdown twin.
         </p>
       </section>
     </>

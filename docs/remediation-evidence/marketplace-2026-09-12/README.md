@@ -66,7 +66,7 @@ The shared security advisor returned no ERROR-level findings before or after dep
 
 The implementation reuses the existing Finder, BottomSheet, Button, EmptyState, PageHead and Pagination components. Finder gained an optional cancellation callback, documented with an interactive Apply/Cancel specimen. Its registry description and generated component inventory were updated; the recipe baseline decreased instead of allowing new duplication.
 
-The [as-built design specification](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/DESIGN.md>) records the structural use of the earlier Etsy/Faire references and deliberate differences. These are DRVN design values, not measurements copied from Mobbin.
+The [as-built design specification](../../marketplace-reference-evidence-2026-09.md) records the structural use of the earlier Etsy/Faire references and deliberate differences. These are DRVN design values, not measurements copied from Mobbin.
 
 Responsive captures use controlled test inventory, not the live catalog: [320px](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/remediation-evidence/marketplace-2026-09-12/marketplace-320.png>), [390px](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/remediation-evidence/marketplace-2026-09-12/marketplace-390.png>), [768px](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/remediation-evidence/marketplace-2026-09-12/marketplace-768.png>), [1440px](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/remediation-evidence/marketplace-2026-09-12/marketplace-1440.png>).
 

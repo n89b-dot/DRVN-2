@@ -8,8 +8,7 @@ import { cx, isPersonStub, personLabel } from "@/lib/format";
 
 import { ActionDialog } from "../_components/action-dialog";
 import { ConsoleEmpty } from "../_components/console-empty";
-import { Pager } from "../_components/pager";
-import { SearchField, TileHead } from "@/components/ui";
+import { SearchField, TileHead, Pagination } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -274,10 +273,12 @@ export default async function AdminAuditPage({
               </div>
             ))}
           </div>
-          <Pager
-            page={page}
+          <Pagination
+            page={page + 1}
             hasMore={hasMore}
-            href={(target) => link({ page: target > 0 ? String(target) : undefined })}
+            hrefFor={(target) => link({ page: target > 1 ? String(target - 1) : undefined })}
+            prevLabel="← Newer"
+            nextLabel="Older →"
           />
         </>
       ) : (

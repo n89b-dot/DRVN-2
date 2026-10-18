@@ -23,6 +23,15 @@ metadata:
 
 # Design System — Image to design.md + design.html
 
+> **DRVN note (2026-10-11).** In this repo the design contract already exists: it is
+> `design-mockups/livesheet/design.md` (with `design.html` alongside), and the tokens it
+> describes live in `src/app/styles/00-tokens-base.css`. Treat that file as the `docs/design.md`
+> these instructions refer to. Do **not** re-derive tokens from imagery: the PRD
+> (`docs/DRVN-PRD-2026-09.md` §3) rules that the typeface (IBM Plex), the accent and the
+> light theme do not change. Use this skill in DRVN only to *read* or *extend* that contract
+> (adding a missing component spec, say), never to produce a second one.
+
+
 This skill takes an image (or a set of image references) and translates them into a design system captured as **two mirrored files**:
 
 - **`docs/design.md`** — a YAML token block in [Google's open design.md format](https://github.com/google-labs-code/design.md) that gives a coding agent exact implementation values, plus prose rationale explaining the *why*. This is the **source of truth**.

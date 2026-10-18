@@ -1,8 +1,18 @@
 # Marketplace reference evidence
 
-Research date: September 8, 2026. Companion to the [marketplace review](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/marketplace-review-2026-09-08.md>).
+> **Reference evidence (Mobbin), 2026-09-08.** Formerly `docs/DESIGN.md`; renamed 2026-10-11 because it is a
+> research record, not the design system (that is `design-mockups/livesheet/design.md` and `docs/site/design-system.md`).
+> **Superseded in part** by the September 2026 marketplace build: the marketplace now uses a persistent left
+> category panel (`.catside`, rendered by `src/app/(discover)/marketplace/category-nav.tsx`, styled in
+> `src/app/styles/12-overrides.css` ~1220; the page becomes a 248px + content two-column `.marketplace-layout`
+> grid from 1024px, 12-overrides.css ~1180), the listing grid counts columns from its container rather than
+> the viewport (`container: mktgrid`, 4→3→2→1 at 819/559/307px, 12-overrides.css ~1323), and card images are
+> `object-fit: cover` on a 4:3 plate (12-overrides.css ~834) rather than letterboxed. The P4/P5 "implemented
+> value" tables below describe the 2026-09-12/13 state and are not maintained.
 
-These are structural observations from real reference images, not an approved replacement design system. Existing tokens and rules remain documented in [the design system](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/site/design-system.md>). Mobbin MCP was unavailable; the references were inspected in Mobbin through the browser. Pixel dimensions not reliably measured are deliberately omitted. Proposed DRVN dimensions in the report are design targets, not reference measurements.
+Research date: September 8, 2026. Companion to the [marketplace review](marketplace-review-2026-09-08.md).
+
+These are structural observations from real reference images, not an approved replacement design system. Existing tokens and rules remain documented in [the design system](site/design-system.md). Mobbin MCP was unavailable; the references were inspected in Mobbin through the browser. Pixel dimensions not reliably measured are deliberately omitted. Proposed DRVN dimensions in the report are design targets, not reference measurements.
 
 ## P1 — Narrowed marketplace results (web)
 
@@ -92,7 +102,7 @@ Component governance: Finder's optional cancellation callback is recorded in the
 
 Fidelity check: inspected populated 320px, 390px, 768px and 1440px captures; all four browser checks passed after the final token correction. Search and category access remain visible without horizontal page overflow, and the mobile first listing starts above 600px. Actual shared inventory was inspected in dark mode as well. Card prices/shipping remain crowded in this retained card implementation; R09b owns that correction. This is structural verification of the first slice, not approval of the full visual redesign.
 
-See [implementation evidence and captures](</Users/neilbarrow/Desktop/Cursor Projects/DRVN 2/docs/remediation-evidence/marketplace-2026-09-12/README.md>).
+See [implementation evidence and captures](remediation-evidence/marketplace-2026-09-12/README.md).
 
 State audit: separate empty and failed results were also inspected at 320px and 390px. Both fit the viewport; only a successful empty request shows zero. Retry recovered the populated search and retained its budget and category in both sizes. At 320px the native sort control wraps below Filters/Categories to preserve readable labels and touch targets.
 

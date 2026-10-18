@@ -45,7 +45,55 @@ Two layers:
 
 Legacy aliases (`--color-background`, `--bg-surface`, `--text-primary`…) map
 old utility names onto Livesheet tones so pre-Livesheet code shifts palette in
-one move.
+one move. The radius scale also keeps legacy aliases — `--radius-card` /
+`--radius-tile` (16px), `--radius-input` (10px) and `--radius-pill` (10px:
+pills are banned, so the "pill" alias is a soft rectangle).
+
+Beyond colour and radius, `@theme` carries the **type scale** — a 4px grid
+with 8px display jumps, every product font size drawn from it — as
+`text-*` utilities:
+
+| Token / utility | Size | Line height |
+| --- | --- | --- |
+| `--text-micro` / `text-micro` | 12px | 16px |
+| `--text-body` / `text-body` | 16px | 24px |
+| `--text-section` / `text-section` | 20px | 28px |
+| `--text-sub` / `text-sub` | 24px | 32px |
+| `--text-head` / `text-head` | 32px | 40px |
+| `--text-display` / `text-display` | 40px | 48px |
+| `--text-display-lg` / `text-display-lg` | 48px | 56px |
+| `--text-display-xl` / `text-display-xl` | 64px | 1.1 |
+
+Also in `@theme`: `--ease-spring` (the same `cubic-bezier(0.32, 0.72, 0, 1)`
+as `--spring`, exposed for Tailwind `ease-*`).
+
+Other `:root` tokens worth knowing:
+
+| Token | Day / night | Role |
+| --- | --- | --- |
+| `--live-text`, `--ok-text`, `--warn-text`, `--info-text` | one step deeper than the status hues by day (`#a82410` / `#145c35` / `#6f4a00` / `#14527f`), a step brighter at night (`#ff7a66` / `#6cc794` / `#e6b45e` / `#8ec4ea`) | chip and small-text colour on the tints, kept ≥4.5:1 where the fill tokens alone would not be |
+| `--lightbox` | `#0a0b0e`, both themes | the lightbox stage — near-opaque, so the page behind a photo is gone |
+| `--maxw` | 1200px | the content column (`.wrap`) |
+| `--gutter` | `clamp(16px, 4vw, 40px)` — published on `.wrap` (`01-foundation.css`) | the column's side padding, so a full-bleed child can cancel exactly this much |
+| `--rail-w` | 232px, 68px when `.shell[data-rail="closed"]` (`02-shell.css`) | the register rail's width |
+
+Tailwind's generated `text-live` utility would paint the `--live` **fill**
+hue as small text, which misses AA on recessed day surfaces, so
+`00-tokens-base.css` overrides `.text-live`, `.!text-live`, `.hover:text-live`
+and `.group-hover:text-live` to use `--live-text` instead.
+
+**z-index ladder.** One ordering, every fixed or sticky surface agrees on it:
+
+| Level | Surface |
+| --- | --- |
+| 120 | `.toast` |
+| 90 | `.sheetwrap` (Dialog scrim) and `.bsheet` (BottomSheet) |
+| 61 / 60 / 55 | the signed-in register `.rail` (fixed, ≥1081px, `11-responsive.css`) / the sticky top `.bar` / `.indexwrap` (the Index sheet) |
+| 50 | `.savebar` |
+| 40 | `.buybar` and the pinned `.composer--pin` |
+
+Only one bottom surface may own the bottom edge on a route at a time; they
+all reserve `--bottom-surface-h` (76px) plus the safe area.
 
 ## 3. Theming: DAY and NIGHT
 
@@ -55,10 +103,13 @@ one move.
   (paper-deep) by day, raised (#242830) at night, so a secondary button sits
   above the graphite instead of reading as a black slab cut into it. Selected
   chips and category rows at night are a tile plate with an accent edge, not
-  a white inversion. The only dark-specific rules are the photo filter
-  (`brightness(0.86) contrast(1.05)` on img/video), the theme-pip fill and
-  the `select` chevron, which is an inline SVG and so carries `dim` as a
-  literal in both themes.
+  a white inversion. The only dark-specific rules are four: the photo filter
+  (`brightness(0.86) contrast(1.05)` on img/video — `00-tokens-base.css`),
+  the theme-pip fill (`.bar__theme .sw` — `02-shell.css`), the `select.ctl`
+  chevron (an inline SVG, so it carries `dim` as a literal in both themes —
+  `08-forms.css`), and the selected category row / filter chip plate
+  (`.catside__row[aria-current="page"]`, `.fbtn.is-on` — the tile plate with
+  an accent edge described above, `12-overrides.css`).
 - NIGHT moved from warm sepia to a **cooler graphite paper** in September
   2026 (PRD 2026-09 §3) — see the night table in
   [brand](brand.md#night-the-drawing-office-after-hours) for the values and
@@ -82,8 +133,12 @@ Radius descends with the size of the thing. **Nothing is a pill.**
 | `--r-meter` | 3px | bars and tracks |
 | circle | 50% | ONLY live dots, pipeline pips, thumb-remove badges |
 
-Layout: max width 1200px (`--maxw`, `.wrap`); the one grid gap is 16px
-(`.deck`); tile padding 20px; section bottom padding `clamp(48px, 7vw, 80px)`.
+Layout: max width 1200px (`--maxw`, `.wrap`), with three narrower steps that
+keep the same responsive gutter — `.wrap--narrow` 720px (auth, legal,
+single-column forms), `.wrap--medium` 900px (settings, sell/edit forms),
+`.wrap--wide` 1060px (cart, checkout); `NarrowColumn width="narrow|medium|wide"`
+renders `wrap wrap--<width>`. The one grid gap is 16px (`.deck`); tile padding
+20px; section bottom padding `clamp(48px, 7vw, 80px)`.
 
 ## Spacing
 
@@ -141,7 +196,6 @@ share one timing vocabulary:
 | `springs.*` | snappy / responsive / spatial / gentle | Motion spring presets (see motion.md §4) |
 | stagger | 70ms per index | reveal groups |
 | pulse | 2.2s ease-in-out infinite | live dots |
-| count-up | 900ms ease-out cubic | `[data-count]` numerals |
 | toast dwell | 3200ms | `.toast` |
 
 Behavior primitives (production) are **components**, not hooks:
@@ -152,7 +206,7 @@ stagger via its `stagger` prop, still emitting `is-in` for the CSS draw
 cascade), `LiveDim` (the signature measured value — `live` red + pulsing
 dot, `blank` dashed spine) and `Countdown` (server-authoritative H:MM:SS
 from `expiresAt`). The real hooks live in `src/lib/hooks/`:
-`useFinePointer`, `useReducedMotion`, `useKonamiCode`. Supabase Realtime is
+`useFinePointer`, `useReducedMotion`, `useKonamiCode`, `useHydrated`. Supabase Realtime is
 used in one place: `src/features/commerce/live-messages.tsx` subscribes to
 `messages` (an open conversation) and `conversation_unreads` (the Messages
 badge) and calls `router.refresh()` — the server render stays the source of
@@ -161,8 +215,9 @@ that the join is anonymous and RLS delivers nothing.
 
 `prefers-reduced-motion`: Motion-driven transforms are disabled globally by
 `MotionPolicy` (opacity still communicates state); reveals/draws render
-settled, pulses and sweeps stop, count-ups print the final value, ticks
-never start — **countdowns keep running** (information, not decoration).
+settled, pulses and sweeps stop, ticks never start — **countdowns keep
+running** (information, not decoration). (There is no count-up animation in
+production: KPI numerals print their value.)
 
 ## 6. The live color contract
 

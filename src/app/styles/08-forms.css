@@ -795,16 +795,6 @@
   .bline--own {
     grid-template-columns: 190px 1fr auto auto;
   }
-  /* A part that came off this car (A-2). Still a record, so it keeps the same
-     ruled line and the same columns — dimmed, not struck through: the part
-     isn't wrong, it's just no longer fitted. */
-  .bline--off {
-    grid-template-columns: 190px 1fr auto auto;
-    color: var(--dim);
-  }
-  .bline--off .bline__val {
-    color: var(--dim);
-  }
   .relbtn {
     grid-row: 1;
     grid-column: 4;

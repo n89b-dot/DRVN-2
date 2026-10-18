@@ -69,7 +69,7 @@ A community-built product record (one entry per real part, grown from DRVN's own
 
 - **Typeface unchanged:** IBM Plex Sans and IBM Plex Mono, as in `docs/site/typography.md`.
 - **Accent unchanged** (`--live`). **Light theme unchanged.**
-- **Dark theme moves to a cooler paper** (one block, `[data-theme="dark"]` in `src/app/styles/00-tokens-base.css`): `--paper #121418`, `--paper-deep #0c0e11`, `--tile #1c1f25`, `--tile-2 #171a1f`, `--ink #eceef2`, `--dim #8a909b`, `--img-fallback #22262d`, `--on-ink #14161a`, `--ghost-hover #262a31`; ink-tint tokens swap `240,238,229` → `236,238,242`.
+- **Dark theme moves to a cooler paper** (one block, `[data-theme="dark"]` in `src/app/styles/00-tokens-base.css`): `--paper #121418`, `--paper-deep #0c0e11`, `--tile #1c1f25`, `--tile-2 #171a1f`, `--ink #eceef2`, `--dim #8a909b`, `--img-fallback #22262d`, `--on-ink #14161a`, `--ghost-fill #242830`, `--ghost-hover #2e333b`; ink-tint tokens swap `240,238,229` → `236,238,242`.
 - **Reuse before create.** Screens are composed from the registry. A new component is made only when it is clearly better than extending or composing an existing one, and it is then registered, documented and given a specimen. CSS-only needs become named recipes, not wrapper components.
 - If imagery is ever generated, use the Higgsfield MCP. Nothing here requires it.
 

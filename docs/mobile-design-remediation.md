@@ -1,5 +1,11 @@
 # Mobile design remediation — tracker
 
+> **Reconciled 2026-10-11.** This tracker records the August 2026 pass. Several
+> of its artefacts have since been replaced; the affected rows carry a
+> *Reconciled* note. The five evidence captures listed under the Verification
+> log are committed in `screenshots/mobile-remediation/` (garage-390, home-390,
+> marketplace-320x568, marketplace-390, pdp-390).
+
 Working tracker for the mobile production remediation driven by the DRVN
 Mobile Production Design Audit (performed 2026-08-16 against `5def0718`).
 
@@ -22,13 +28,13 @@ code review.
 | SYS-01 | Verification matrix narrower than product | Browser verified | `e2e/viewports.ts` profiles (320×568 / 390×844 / 430×932) + `e2e/mobile-matrix.spec.ts` behavioral contracts + transition probes; 16/16 green on both Stripe-mode dev and stub production servers. WebKit project deferred (see Deviations). |
 | SYS-02 | Editorial pageheads on task surfaces | Browser verified | `.pagehead--task` (24px h1 floor, compact padding, standfirst retired ≤640 unless `.sub--keep`) + `.pagehead__row` action alignment. Applied to 20 heads: home, marketplace ×3, garage, listings, offers ×2, orders ×2, messages ×2, notifications, saved, settings, payouts, cart, checkout, sell, profile. Fixed a latent cascade bug: `--tight`/`--task` h1 rules tied with base `.pagehead h1` and lost on source order. |
 | SYS-03 | Marketplace stacks chrome before inventory | Browser verified (390×844 guest) | Task head + compact `SellCta` in `pagehead__row`; search+submit share a row (`.finder .search` basis 180 + min-width 0); compact toolbar = Refine + Sort select (`sort-select.tsx`, submits form on change; replaces hidden sort field, still submits display:none ≥640); desktop sort chips `hidden sm:flex`. First card top ≈ 587px at 390×844. |
-| SYS-04 | Garage presentation cards for management | Browser verified | `VehicleCard variant="manage"` + `flag` prop; `.vehicle--manage` (desktop = card anatomy; ≤640 = 112px 3:2 thumb row); `garage/vehicle-actions.tsx` — Manage always visible, secondary actions behind More → BottomSheet (inline ≥640). e2e updated. |
+| SYS-04 | Garage presentation cards for management | Browser verified | `VehicleCard variant="manage"` + `flag` prop; `.vehicle--manage` (desktop = card anatomy; ≤640 = 112px 3:2 thumb row); `garage/vehicle-actions.tsx` — Manage always visible, secondary actions behind More → BottomSheet (inline ≥640). e2e updated. *Reconciled 2026-10-11: the `manage` variant and `garage/vehicle-actions.tsx` were **removed** in the September garage rebuild (`src/components/ui/vehicle-card.tsx` ~23–26: the garage's management card is deliberately not `VehicleCard`); the focused-car view in `garage/page.tsx` replaced them.* |
 | SYS-05 | Fragmented breakpoint semantics | Implemented | Semantic roles (`compact`/`handheld`/`collapsed-shell`/`split-capable`) + documented route exceptions in `docs/site/material.md` §2. |
 | SYS-06 | Sticky/safe-area strong, keyboard unproven | Implemented (partial) | `--bottom-surface-h` token drives buybar/savebar clearance; `.savebar` fixed variant + toast gain safe-area; composer joins the contract (SYS-08). Visual-viewport-reactive bars deliberately not added (see Deviations). |
 | SYS-07 | Horizontal scroller affordance | Implemented | Scroll-driven edge fades (`@property --railfade-*` + `scroll(self inline)`, `@supports`-guarded, inert when no overflow) on familynav/sectionnav/filters--scroll/tabstrip; `ScrollActiveIntoView` (manual scrollLeft, no ancestor scroll) in familynav + settings sectionnav; SheetTabs scrolls active tab into view on mount. |
-| SYS-08 | Thread composer not persistent | Browser verified (stub build) | `thread-view.tsx`: lands at newest message on live view; `.composer--pin` (sticky bottom, opaque tile plate, safe-area, ≤768px); history mode adds bottom "Back to latest to reply"; Result feedback moves with the composer. |
+| SYS-08 | Thread composer not persistent | Browser verified (stub build) | `thread-view.tsx`: lands at newest message on live view; `.composer--pin` (sticky bottom, opaque tile plate, safe-area, ≤768px); history mode adds bottom "Back to latest to reply"; Result feedback moves with the composer. *Reconciled 2026-10-11: `/messages/[id]` is now the person-first conversation (2026-09-28) and composes with `ChatComposer` (`.chatbox`, `src/components/ui/chat-composer.tsx`, via `src/features/commerce/conversation-composer.tsx`). `.composer--pin` has no remaining call site (its rule survives in `09-states-content.css` ~707); the legacy `.composer` / `.composer__row` recipe now serves only the listing Q&A section.* |
 | SYS-09 | PDP rail order buries actions | Browser verified (390×844) | Rail tile reordered: state → price → shipping/total → condition·location → offer floor → Buy/Offer → Save → seller → ruled record block (watchers, part number, dispatch note, Report). Measured: Buy 708 < Save 906 < seller 970 < watchers 1085. Sticky buybar behavior unchanged. |
-| SYS-10 | Home lacks attention hierarchy | Browser verified | `home/attention.tsx` "Needs you" stack (offers needing reply, sales to dispatch, deliveries to confirm, unread messages — four head-counts, renders nothing when all zero) inserted directly under the task head. |
+| SYS-10 | Home lacks attention hierarchy | Browser verified | `home/attention.tsx` "Needs you" stack (offers needing reply, sales to dispatch, deliveries to confirm, unread messages — four head-counts, renders nothing when all zero) inserted directly under the task head. *Reconciled 2026-10-11: `home/attention.tsx` **no longer exists** — WS11 deleted it when `/home` became Following · For you · Local tabs with a rail (`src/app/(product)/home/page.tsx`); what needs you now surfaces through the Messages badge and `/selling`.* |
 | SYS-11 | Checkout repeats Change controls | Browser verified | Payment-step review consolidated: one "Delivery & contact" block (address + guest email, single Edit) + "Items" block (rows + Edit cart) + totals. Address-retention path untouched. |
 | SYS-12 | Microlabel scope | Confirmed (audit of new work) | No new long-copy microlabels introduced; attention rows/hints use order__name/order__meta body styles. Full route sweep tracked under M4. |
 
@@ -62,6 +68,11 @@ code review.
 4. **`.pagehead--task` is a CSS variant, not a new `PageHeadTask`
    component.** The pagehead is a CSS recipe across ~30 call sites; a class
    variant is the smallest systemic change and keeps markup per-route.
+   *Reconciled 2026-10-11: a `PageHead` component now exists
+   (`src/components/ui/page-head.tsx`; `eyebrow`/`title`/`sub` props) and the
+   task variant is passed as `className="pagehead--task"` (~27). The
+   no-separate-`PageHeadTask` decision stands; the raw `.pagehead` markup does
+   not — compose `PageHead`.*
 
 ## Verification log
 

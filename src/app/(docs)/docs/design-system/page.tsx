@@ -19,7 +19,6 @@ const MOTION = [
   { token: "--t-draw", value: "650ms", role: "rules drawing themselves in" },
   { token: "stagger", value: "70ms / index", role: "reveal groups" },
   { token: "pulse", value: "2.2s infinite", role: "live dots" },
-  { token: "count-up", value: "900ms ease-out", role: "[data-count] numerals" },
   { token: "toast dwell", value: "3200ms", role: ".toast" },
 ];
 
@@ -116,7 +115,7 @@ export default function DesignSystemPage() {
           <Specimen
             name="Night is a token remap"
             klass='[data-theme="dark"]'
-            note="Same variable names, different values, declared once on <html>. No component rule is duplicated for dark — the only dark-specific rules are the photo filter and the theme-pip fill. Try the toggle in the bar above."
+            note="Same variable names, different values, declared once on <html>. No component rule is duplicated for dark — the only dark-specific rules are four: the photo filter, the theme-pip fill, the select chevron (an inline SVG) and the selected category-row / filter-chip plate. Try the toggle in the bar above."
           >
             <table className="spec w-full">
               <tbody>
@@ -199,8 +198,12 @@ export default function DesignSystemPage() {
                   <td>clamp(48px, 7vw, 80px)</td>
                 </tr>
                 <tr>
-                  <td>Narrow column</td>
-                  <td>720px (profile-type surfaces — .wrap--narrow / NarrowColumn)</td>
+                  <td>Width steps</td>
+                  <td>.wrap--narrow 720 · .wrap--medium 900 · .wrap--wide 1060 (NarrowColumn width=…)</td>
+                </tr>
+                <tr>
+                  <td>z-index ladder</td>
+                  <td>toast 120 · sheets 90 · rail 61 / bar 60 / index 55 · savebar 50 · buybar & composer 40</td>
                 </tr>
               </tbody>
             </table>
@@ -233,7 +236,7 @@ export default function DesignSystemPage() {
           </Specimen>
           <Specimen
             name="Behavior components, hooks & reduced motion"
-            note="prefers-reduced-motion: reveals render settled, pulses stop, count-ups print final values — countdowns keep running (information, not decoration)."
+            note="prefers-reduced-motion: reveals render settled, pulses stop, ticks never start — countdowns keep running (information, not decoration)."
           >
             <table className="spec w-full">
               <tbody>
@@ -264,6 +267,10 @@ export default function DesignSystemPage() {
                 <tr>
                   <td>useKonamiCode</td>
                   <td>easter-egg key sequence (src/lib/hooks)</td>
+                </tr>
+                <tr>
+                  <td>useHydrated</td>
+                  <td>false until hydration finishes — gates controlled fields (src/lib/hooks)</td>
                 </tr>
               </tbody>
             </table>

@@ -5,8 +5,8 @@
  * structural animation (presence, layout, gestures, orchestration); CSS keeps
  * simple cosmetic transitions (hover colors, focus rings, ambient loading).
  * Both speak the same timing language defined here, which mirrors the
- * Livesheet CSS tokens in `globals.css` (`--t-fast` / `--t-move` /
- * `--t-draw`, `--spring`).
+ * Livesheet CSS tokens in `src/app/styles/00-tokens-base.css` (`--t-fast` /
+ * `--t-standard` / `--t-move` / `--t-draw`, `--spring`).
  *
  * Personality: precise, mechanical, controlled, slightly inertial — motion
  * that reads as well-engineered machinery, never rubbery or decorative.

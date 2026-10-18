@@ -8,7 +8,7 @@ import { getAdminContext } from "@/lib/admin/guard";
 import { getAdminIdentity, getNavCounts } from "@/lib/admin/queries";
 import { cx } from "@/lib/format";
 
-import { SlashFocus } from "@/components/ui/slash-focus";
+import { SlashFocus } from "@/components/ui";
 import { AdminNav } from "./admin/_components/admin-nav";
 import { AdminActionToast } from "./admin/_components/admin-action-toast";
 

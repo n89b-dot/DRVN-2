@@ -16,6 +16,17 @@
 > - `.fbtn` chips are hairline-outlined at 44px.
 > - The phone index menu uses single-line 48px rows.
 > - The stylesheet lives in `src/app/styles/`.
+>
+> **Known wrong today (checked 2026-10-11)** — do not copy these values from this file:
+> - DAY `--dim` is **`#565963`** (`00-tokens-base.css` ~104), not `#6B6E78`; `--live` is `#C02C14`, not `#F03A20`.
+> - Toast dwell is **3200ms** (`src/components/ui/toast.tsx` ~35), not 2600.
+> - `.num-giant` is weight **600** (650 is not a loaded Plex Sans cut — `01-foundation.css` ~68).
+> - `Button` has a defined `loading` state with `pendingLabel` (`button.tsx` ~43–48); ".btn has no spinner variant" is stale.
+> - The hooks `useReveal` / `useCountUp` / `useLiveCount` / `useCountdown` **never shipped**. Production motion is `Rv`, `LiveDim` and `Countdown` in `src/components/livesheet.tsx` over `src/lib/motion`.
+> - Night is not purely a token remap: there are **four** dark-specific rules outside the token file (`02-shell.css`, `08-forms.css`, two in `12-overrides.css`).
+> - `/messages/[id]` is **person-first** (one conversation per person, 2026-09-28), not `/messages/[orderId]`.
+> - The admin console has **13** pages (`find src/app/(admin)/admin -name page.tsx`), not 11.
+> - `.sheetwrap` is the `Dialog` component's wrapper (`src/components/ui/dialog.tsx` ~27), not a mockup-only buy/release sheet.
 
 Derived 2026-07-26 from `design-mockups/livesheet/` — shipped CSS (`livesheet.css`)
 treated as source of truth, cross-checked against `design.md` (frontmatter matches CSS)

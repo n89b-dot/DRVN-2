@@ -52,7 +52,7 @@ Then verify:
   suites; each must print `all … checks passed`). Confirm that job is green
   for the exact commit you applied.
 - On the hosted project: every file's self-check NOTICEs appeared with no
-  error; `select jobname, schedule from cron.job order by 1;` lists the nine
+  error; `select jobname, schedule from cron.job order by 1;` lists the 14
   jobs in §4; `select id, public from storage.buckets order by 1;` lists the
   buckets the migrations create (avatars, car-images, activity-images,
   listing-images public; dispute-evidence, message-photos, account-exports
@@ -147,7 +147,7 @@ insert into public.job_config (key, value) values
 on conflict (key) do update set value = excluded.value, updated_at = now();
 ```
 
-Confirm the nine pg_cron jobs (times are the database's UTC):
+Confirm the 14 pg_cron jobs (times are the database's UTC; the table below predates the five added by `20261006100100` and the October 11 set — `drvn-delivery-auto-confirm`, `drvn-marketplace-counts`, `drvn-explore-trending`, `drvn-explore-builders`, `drvn-search-words`):
 
 | Job | Schedule | Runs |
 |---|---|---|

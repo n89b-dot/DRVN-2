@@ -28,15 +28,39 @@ tags). Every number that ticks or aligns is `tabular-nums`, in either face.
 | Body-prose | Sans 400 | 16px / 1.7 | `.prose` legal/long-form |
 | Label (microlabel) | Mono 500 | 12px / 0.14em tracking / uppercase / dim | `.microlabel` — the connective tissue |
 | Label-row | Mono 400 | 12px / 0.12–0.13em / uppercase / dim | `.bline__label`, `.msg__who`, `.dealcard__eyebrow` (11px) |
-| Label-nav | Mono 400 | 11.5–12.5px / 0.10–0.12em / uppercase | `.bar__link`, `.jumplink`, `.fbtn` |
+| Label-nav | Mono 400 | 12px / 0.08–0.12em / uppercase | `.bar__link` (0.10em), `.jumplink` (0.12em), `.fbtn` (0.08em) |
 | Label-btn | Mono 500 | 12px / 0.10em / uppercase | `.btn` (ink) and `.btn--live` — only `--live` wears the `[ ]` brackets |
 | Label-btn-secondary | Sans 500 | 14px, sentence case as written | `.btn--ghost`, `.btn--destructive`; `.relbtn` at 13px |
 | Tab | Sans 500 | 15px (14px ≤640px), accent underline when current | `.tabstrip [role=tab]` |
 | Input | Sans 400 | 16px (15px in `.search` on desktop) | `.ctl`, `.search input` |
 | Price | Sans 600 | 18–20px on cards, tabular, ink | `.mcell__price`, `.marketplace-card__price` |
-| Figure | Sans 400 | 16px, tabular | `.kv`, `.vref--lg` / `--xl` |
-| Mono-data | Mono 500 | 12.5–14px, tabular | `.livedim .val`, `.spec` values, `.capsule` |
+| Figure | Sans 400 | 16px, tabular (`.kv`); vehicle references 14px/20px (`.vref--lg`) and 16px/1.55 (`.vref--xl`) | `.kv`, `.vref--lg` / `--xl` |
+| Mono-data | Mono 500 | 12px, tabular | `.livedim .val` (16px inside `.gsheet__dims`, 15px/600 in `.carstats`); `.spec` labels (`td:first-child`) — `.spec` **values** are Sans 16 tabular |
 | Mono-meta | Mono 400 | 11–12.5px / dim | order meta, feed times, mail footers |
+
+### Known exceptions (code drift, to resolve)
+
+Two recipes set mono **above** the 12px ceiling and are recorded here rather
+than silently excused: `.capsule` (mono 16px, `03-page.css` — specimen only,
+no product call site) and `.toc a` (mono 16px, `09-states-content.css` — the
+legal/long-form table of contents). Neither is a licence; the rule stands and
+the CSS is the thing to fix.
+
+### Scale utilities
+
+The `@theme` type scale (`00-tokens-base.css`) is a 4px grid with 8px display
+jumps; every product font size comes from it, as Tailwind utilities:
+
+| Utility | Size / line height |
+| --- | --- |
+| `text-micro` | 12px / 16px |
+| `text-body` | 16px / 24px |
+| `text-section` | 20px / 28px |
+| `text-sub` | 24px / 32px |
+| `text-head` | 32px / 40px |
+| `text-display` | 40px / 48px |
+| `text-display-lg` | 48px / 56px |
+| `text-display-xl` | 64px / 1.1 |
 
 ## Rules
 
@@ -45,7 +69,7 @@ tags). Every number that ticks or aligns is `tabular-nums`, in either face.
 - Microlabels are 2–6 words, always uppercase mono — they label regions of
   the sheet, never full sentences. In heading position (leading a
   `.tile__head` or `.bsec` row, ink variant) they promote to Section head
-  scale: sans, sentence case, 18px — the headline must outweigh every button
+  scale: sans, sentence case, 20px — the headline must outweigh every button
   in its section.
 - `tabular-nums` on anything that counts, ticks or aligns in columns.
 - No additional families, no italics as a system voice, no faux weights.

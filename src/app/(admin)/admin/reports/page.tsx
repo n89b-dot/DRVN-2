@@ -1,13 +1,12 @@
 import Link from "next/link";
 
 import { Rv } from "@/components/livesheet";
-import { SheetTabs } from "@/components/ui";
+import { SheetTabs, Pagination } from "@/components/ui";
 import { getReports, REPORTS_PAGE_SIZE, type AdminReportRow } from "@/lib/admin/queries";
 import type { ReportReason } from "@/lib/database.types";
 import { cx } from "@/lib/format";
 
 import { ConsoleEmpty } from "../_components/console-empty";
-import { Pager } from "../_components/pager";
 import { OpenReportsList } from "./open-reports-list";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +52,7 @@ function OpenReportsPanel({
         </p>
       )}
       <OpenReportsList rows={rows} />
-      <Pager page={page} hasMore={hasMore} href={pagerHref} prevLabel="← Back" nextLabel="More →" />
+      <Pagination page={page + 1} hasMore={hasMore} hrefFor={(target) => pagerHref(target - 1)} prevLabel="← Back" nextLabel="More →" />
     </>
   );
 }
@@ -113,7 +112,7 @@ function ResolvedReportsPanel({
           </div>
         ))}
       </div>
-      <Pager page={page} hasMore={hasMore} href={pagerHref} prevLabel="← Newer" nextLabel="Older →" />
+      <Pagination page={page + 1} hasMore={hasMore} hrefFor={(target) => pagerHref(target - 1)} prevLabel="← Newer" nextLabel="Older →" />
     </>
   );
 }

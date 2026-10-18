@@ -1,5 +1,22 @@
 # Livesheet Component System — implementation plan
 
+> **Status: delivered August 2026 — see `src/components/registry.ts`** (the
+> governed list of every component, its layer and when to use it) and
+> `docs/site/components.md`. Reconciled 2026-10-11. **Name drift** between this
+> plan and what shipped:
+>
+> - `FilterChip` shipped as **`FilterLink`** (link mode) and **`FilterButton`**
+>   (button mode) inside `FilterGroup` (registry.ts ~616–638).
+> - `FeedCard` was **removed**; `MasonryFeed` remains (registry.ts ~482,
+>   `src/components/ui/masonry-feed.tsx`).
+> - `Button` has **no `size` prop**; the link form is a separate **`ButtonLink`**
+>   rather than an `href` prop (registry.ts ~212/225, `src/components/ui/button.tsx`).
+>   `Button` does carry `loading` + `pendingLabel` (button.tsx ~43–48).
+> - "Register Rail", "Index" and "MarketplaceNav" in the inventory below are
+>   **not component names**: the rail is the unexported `AppRail` inside
+>   `src/components/ui/app-shell.tsx` (~35); the index menu and marketplace
+>   family nav are route-level composition.
+
 Goal: promote Livesheet's CSS recipes into first-class React components with
 semantic APIs, defined states, accessibility, and adaptive behavior — using
 Material 3 as a *behavioral* reference only. Material determines what a

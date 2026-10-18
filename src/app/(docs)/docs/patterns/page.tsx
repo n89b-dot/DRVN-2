@@ -11,18 +11,22 @@ const ROUTES = [
   ["Car sheet", "/cars/[slug]", "capped hero, tabs on the first screen, one row shape per build line, for-sale parts"],
   ["Garage", "/garage", "switcher → focused car (dark caption fade), stat strip, tabs: Overview · Mods · Parts · Media"],
   ["Sell", "/sell", "photos first (required to publish) → part → provenance → condition → price; pinned Publish on phones"],
-  ["Seller listings", "/listings", "ledger; one compact card per listing below 860px"],
+  ["Selling", "/selling", "the seller's workspace: what needs you first, stock and money at a glance; Selling family subnav"],
+  ["Import a listing", "/sell/import", "paste a link or the post; review every field before anything publishes"],
+  ["Seller listings", "/listings", "nav label My Listings; ledger; one compact card per listing below 860px"],
   ["Orders", "/orders", "Sales first for sellers; rows lead with the part photo; pipe, dispatch, payout math"],
-  ["Cart", "/cart", "review surface only — P20"],
+  ["Order detail", "/orders/[id] · /orders/[id]/pickup", "one order, buyer or seller reading; shipping, pickup and return controls; pickup confirmation task page"],
+  ["Order placed", "/order-placed", "post-checkout landing — “That's yours.” or “Payment confirming.” before the webhook"],
+  ["Cart", "/cart · /cart/complete", "review surface only — P20; /cart/complete is Stripe's return handler (verifies, clears, lands on the order)"],
   ["Checkout", "/checkout", "2-step stepper + summary rail — P21"],
   ["Saved", "/saved", "saved parts, searches and followed sheets; one empty state"],
   ["Notifications", "/notifications", "actionable rows; filters only when there is something to filter"],
   ["Profile", "/u/[username] · /profile", "banner + overlapping avatar, stats (zeros dim), Follow · Store · Share, tabs + rail, store four-across"],
-  ["Settings", "/settings", "one section at a time (picker on phones), Privacy section, per-section Save; payouts on /payouts"],
-  ["Auth", "/login · /signup", "420px authwrap on a paper plate, inline field errors, intent carried through"],
+  ["Settings", "/settings · /settings/payouts/return", "one section at a time (picker on phones), Privacy section, per-section Save; payouts on /payouts; the Connect return handler"],
+  ["Auth", "/login · /signup · /confirm · /callback · /admin-verify", "420px authwrap on a paper plate, inline field errors, intent carried through; /confirm lands every emailed link, /callback the OAuth return, /admin-verify the admin second factor"],
   ["Legal", "/terms · /privacy · /fees", "prose + toc"],
   ["Not found", "any unknown URL", "shell, page head, search and the two doors"],
-  ["Admin console", "/admin/*", "gated — 404 to non-admins; own nav, same tokens"],
+  ["Admin console", "/admin/*", "13 pages (incl. cases, invitations) + the export route handler; gated — 404 to non-admins; own nav, same tokens"],
   ["This microsite", "/docs/*", "gated like the console; markdown twins at /docs/md/*"],
 ];
 
@@ -91,7 +95,7 @@ export default function PatternsPage() {
                 </tr>
                 <tr>
                   <td>Layout</td>
-                  <td>2fr/1fr · gap 24 · stacks &lt;900</td>
+                  <td>2fr/1fr · gap 24 · stacks below lg (1024)</td>
                 </tr>
                 <tr>
                   <td>Rows</td>
@@ -214,8 +218,9 @@ export default function PatternsPage() {
           </p>
           <p className="mt-3 text-micro leading-relaxed text-dim">
             Controls keep a transparent 1px border at rest so validation borders never shift
-            layout. Settings uses a dirty-flag + sticky savebar + save toast. Countdowns and
-            expiries are server-authoritative.
+            layout. Settings sections each commit with their own form&apos;s Save (an
+            ActionFooter row) and a result note — the sticky .savebar recipe is unused in the
+            product. Countdowns and expiries are server-authoritative.
           </p>
         </div>
       </section>

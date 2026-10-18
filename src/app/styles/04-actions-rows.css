@@ -261,19 +261,6 @@
     align-items: flex-start;
     gap: 8px;
   }
-  /* Management rows (Garage) — the garage's job is choosing a car to work
-     on, so on phones the car keeps a real 3:2 thumbnail (112px — bigger than
-     an order thumbnail, smaller than a spread) beside identity, state and
-     Manage, and at least two complete rows fit a phone viewport. ≥640px the
-     expressive card anatomy returns. */
-  .vehicle--manage {
-    grid-template-columns: minmax(240px, 340px) 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-  .vehicle--manage .vehicle__img {
-    aspect-ratio: 16 / 10;
-  }
   /* Inline state flag beside the name — public/private is identity-level
      information on a management row, not an action. */
   .vehicle__flag {
@@ -327,25 +314,6 @@
       font-size: 10.5px;
       letter-spacing: 0.06em;
       margin-top: 4px;
-    }
-    .vehicle--manage {
-      grid-template-columns: 112px 1fr;
-      gap: 16px;
-    }
-    .vehicle--manage .vehicle__img {
-      aspect-ratio: 3 / 2;
-    }
-    .vehicle--manage .vehicle__name--lg {
-      font-size: 17px;
-      line-height: 1.3;
-    }
-    .vehicle--manage .vehicle__meta {
-      font-size: 14px;
-      margin-top: 2px;
-    }
-    .vehicle--manage .vehicle__actions {
-      margin-top: 8px;
-      gap: 8px;
     }
   }
 

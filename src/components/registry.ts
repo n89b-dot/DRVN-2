@@ -552,7 +552,7 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     category: "navigation",
     status: "active",
     description: "Ghost prev/next with mono page marker; renders nothing on a lone first page.",
-    use: "Every paginated list. (Admin's jumplink Pager is a deliberate console variant.)",
+    use: "Every paginated list, the console queues included — pass prevLabel/nextLabel where the sort order makes Newer/Older or Back/More the truer words.",
     a11y: "nav[aria-label], rel prev/next.",
   },
   {
@@ -655,6 +655,18 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     description: "Removable applied-filter chip.",
     use: "Active filter rows.",
     cssRecipe: ".chip--x",
+  },
+  {
+    name: "SlashFocus",
+    importPath: UI,
+    file: "src/components/ui/slash-focus.tsx",
+    layer: "primitive",
+    category: "navigation",
+    status: "active",
+    description: "Renders nothing; pressing `/` focuses the page's search field (default selector `form[role=\"search\"] input`). Inert while the user is typing in any input, textarea, select or contenteditable.",
+    use: "Layouts of surfaces power users live on — the admin console; any page with one primary search.",
+    avoid: "Pages with no search field, or with several — it only ever focuses the first match.",
+    a11y: "Keyboard-only affordance; never steals focus from an active text control.",
   },
   {
     name: "ScrollActiveIntoView",
@@ -1444,16 +1456,6 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     description: "One 32px live cart square at the end of a listing card's engagement strip — adds to cart in place, links to the cart once it's in.",
     use: "The discovery wall's listing card, via CardEngagement's `trailing` slot.",
     cssRecipe: ".cartbtn",
-  },
-  {
-    name: "ListingQuickCommerce",
-    importPath: "@/features/commerce/quick-commerce",
-    file: "src/features/commerce/quick-commerce.tsx",
-    layer: "feature",
-    category: "commerce",
-    status: "active",
-    description: "Card-level quick buy/offer actions.",
-    use: "Commerce mosaic walls.",
   },
 
   /* ---------------- feature workflows (documented for discoverability) ---------------- */
