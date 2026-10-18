@@ -237,14 +237,15 @@ function parsePage(value: string | undefined): number {
 /** Canonical filtered relation for browsing and saved-search workers. Workers
  * pass their explicit owner; the database enforces shopper-visible evidence.
  *
- * `searchEntry`: a text search asked through `marketplace_browse_rows` is
- * answered by checking every active part against the words. The search entry
- * point (migration 20261010100100) starts from the parts the words matched
- * and applies the same rules — same rows, a fraction of the work. Pages use
- * it; anything else keeps the original function. */
+ * A text search goes to the search entry point (migration 20261010100100),
+ * which starts from the parts the words matched and applies the same rules.
+ * Through PostgREST, `marketplace_browse_rows` ran the search once per part
+ * for sale until migration 20261017150000 — a timeout at a thousand parts —
+ * so nothing may depend on that migration being applied. `searchEntry:
+ * false` is only for a database without the entry point (PGRST202). */
 export function listingRowsQuery(supabase: SupabaseClient<Database>, raw: ListingFilters, workerViewer?: string, options: { searchEntry?: boolean; count?: boolean } = {}) {
   const filters = normalizeMarketplaceState(raw);
-  const rows = options.searchEntry && filters.q?.trim() ? "marketplace_search_browse_rows" : "marketplace_browse_rows";
+  const rows = options.searchEntry !== false && filters.q?.trim() ? "marketplace_search_browse_rows" : "marketplace_browse_rows";
   let query = supabase.rpc(rows, {
     p_query: filters.q ?? "", p_vehicle: filters.vehicle ?? "", p_vyear: Number(filters.vyear ?? 0),
     p_ymin: Number(filters.ymin ?? 0), p_ymax: Number(filters.ymax ?? 9999), p_fit: filters.fit === "1",

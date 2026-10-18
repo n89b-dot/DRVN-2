@@ -1,5 +1,22 @@
 # Applying migrations
 
+## October 17 — a search through the browse function
+
+| File | Applied to |
+|---|---|
+| `20261017150000_browse_rows_search_once.sql` | not applied to any shared project |
+
+Restates `marketplace_browse_rows` as a UNION ALL of the browse query (no
+words) and `marketplace_search_browse_rows` (words), so a search called
+through PostgREST runs once instead of once per part for sale. Same rows;
+signature, grants and invoker rights unchanged. Safe before or after the app
+change that ships with it (`listingRowsQuery` already sends searches to
+`marketplace_search_browse_rows`). Reverse by restating the function from
+`20261011100000_listing_vehicle_fit.sql`. Guard:
+`browse_rows_search_once_guard.sql`. Measurements and the one plan it makes
+slower: `docs/performance/query-plans.md` ("A search through the browse
+function").
+
 ## October 11 — millions of parts (shared dev project)
 
 | File | Applied to |
