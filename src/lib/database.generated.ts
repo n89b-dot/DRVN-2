@@ -773,6 +773,8 @@ export type Database = {
           created_at: string
           drivetrain: string | null
           engine: string | null
+          generation_id: number | null
+          generation_source: string | null
           id: string
           identity_source: string | null
           is_public: boolean
@@ -802,6 +804,8 @@ export type Database = {
           created_at?: string
           drivetrain?: string | null
           engine?: string | null
+          generation_id?: number | null
+          generation_source?: string | null
           id?: string
           identity_source?: string | null
           is_public?: boolean
@@ -831,6 +835,8 @@ export type Database = {
           created_at?: string
           drivetrain?: string | null
           engine?: string | null
+          generation_id?: number | null
+          generation_source?: string | null
           id?: string
           identity_source?: string | null
           is_public?: boolean
@@ -861,6 +867,13 @@ export type Database = {
             columns: ["catalog_model_id"]
             isOneToOne: false
             referencedRelation: "catalog_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cars_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_generations"
             referencedColumns: ["id"]
           },
           {
@@ -4572,6 +4585,53 @@ export type Database = {
           },
         ]
       }
+      vehicle_generations: {
+        Row: {
+          created_at: string
+          id: number
+          model_id: number
+          name: string
+          platform_code: string | null
+          source: string
+          source_ref: string | null
+          updated_at: string
+          year_end: number | null
+          year_start: number
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          model_id: number
+          name: string
+          platform_code?: string | null
+          source?: string
+          source_ref?: string | null
+          updated_at?: string
+          year_end?: number | null
+          year_start: number
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          model_id?: number
+          name?: string
+          platform_code?: string | null
+          source?: string
+          source_ref?: string | null
+          updated_at?: string
+          year_end?: number | null
+          year_start?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_generations_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_makes: {
         Row: {
           created_at: string
@@ -5023,6 +5083,8 @@ export type Database = {
           created_at: string
           drivetrain: string | null
           engine: string | null
+          generation_id: number | null
+          generation_source: string | null
           id: string
           identity_source: string | null
           is_public: boolean
@@ -6065,6 +6127,10 @@ export type Database = {
       }
       request_account_deletion: { Args: never; Returns: Json }
       request_account_export: { Args: never; Returns: string }
+      resolve_vehicle_generation: {
+        Args: { p_model_id: number; p_year: number }
+        Returns: number
+      }
       respond_shop_policy_return: {
         Args: {
           p_decision: string
