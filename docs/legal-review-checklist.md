@@ -118,6 +118,22 @@ payments or public launch; none of them has been decided in code.
       consent lapses after 180 days. Confirm this satisfies the cookie rules
       for the chosen jurisdiction.
 
+## The agent (before A3a; the model part before A3c)
+
+Drafts and rules: [`decisions/agent-data-rules.md`](decisions/agent-data-rules.md). Nothing is
+on the live pages yet: the wording goes in with the release that turns the agent on.
+
+- [ ] **Binding counters.** When a seller lets the agent handle offers, its counters bind the
+      seller, and a buyer's agent accepts a counter within the buyer's ceiling. Confirm the
+      terms clause and the one-time acknowledgement are enough, and that "via agent" on the offer
+      is enough notice for the other party.
+- [ ] **Retention periods** for agent chat, records, tasks and limits (proposed: 12 months).
+- [ ] **Model provider.** The privacy page names Anthropic for agent chat. Confirm the
+      no-training statement against the commercial terms, and whether to ask for zero data
+      retention.
+- [ ] **Operator access** to a member's agent chat (proposed: only for an abuse or dispute
+      case, written to the admin audit log).
+
 ## Product facts the drafts had to work around — fix or accept
 
 These are code issues found while writing the drafts. The pages are worded
