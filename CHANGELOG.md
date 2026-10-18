@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-10-17 — The agent's data rules
+
+`docs/decisions/agent-data-rules.md` sets out what the agent will keep and for how long, what a member's export includes, and what account deletion removes, table by table, before A2 creates the tables. It also gives the exact allow-list of what may reach the AI model provider: never addresses, phone numbers, emails, payment details, VINs, or anyone's price limits. It covers redaction of card numbers, VINs and contact details too. Draft privacy and terms wording waits there for the release that turns the agent on. Neil ruled the open points on 17 Oct: 12 months for chat, records, finished tasks and ended limits, 30 days for jobs, admin reads of agent chat only for abuse or dispute cases, and zero data retention requested from the provider. The legal checklist and data inventory gain matching items.
 ## 2026-10-17 — Row security checks "who is this?" once per query
 
 Postgres ran `auth.uid()` once per row in 88 of the 115 row-security policies, and `is_admin()`, a table read, in 34 of them. Migration `20261017140000` wraps each call in `(select …)`, so it runs once per query. Who can read or write what is unchanged: every policy is its original apart from the wrapping, and all SQL guards pass. The new `rls_initplan_guard.sql` keeps new policies in this form. It clears the advisor's `auth_rls_initplan` warnings and keeps commerce reads cheap as rows grow.

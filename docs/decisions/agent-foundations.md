@@ -112,7 +112,7 @@ current limits. This is O-4.
 Addresses, payment details and VINs are never sent to the model. Agent
 conversations, tasks, events, mandates and approvals join the account export
 contract and the deletion worker when their tables are created (A2). The
-retention and redaction rules are A0 data-rules work, written before chat (A3c).
+retention and redaction rules, the exact allow-list of what may reach the model, and the draft privacy and terms wording are in [`agent-data-rules.md`](agent-data-rules.md).
 
 ## 9. Constraints left by the private-minimum rollout
 
