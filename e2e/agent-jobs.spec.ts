@@ -35,7 +35,7 @@ test("a pasted build saves only on Confirm, and a part that came off opens the s
     const car = await admin.from("cars").insert({ owner_id: memberId, slug: `agent-jobs-${randomUUID()}`, name: "Jobs Civic", make: "Honda", is_public: true }).select("id").single().throwOnError();
     const carId = car.data!.id;
     const offMod = randomUUID();
-    await admin.from("mod_items").insert({ id: offMod, car_id: carId, group_label: "Exhaust", brand: "Mugen", product: "Twin loop exhaust", category: "exhaust", raw_text: "Mugen Twin loop exhaust", position: 0, status: "removed" }).throwOnError();
+    await admin.from("mod_items").insert({ id: offMod, car_id: carId, group_label: "Exhaust", brand: "Mugen", product: "Twin loop exhaust", category: "exhaust", raw_text: "Mugen Twin loop exhaust", position: 0, status: "removed", removed_at: new Date().toISOString() }).throwOnError();
 
     const listId = randomUUID();
     const lines = [
@@ -71,7 +71,7 @@ test("a pasted build saves only on Confirm, and a part that came off opens the s
     // The part that came off opens the sell form, prefilled from its line.
     await chat.getByRole("link", { name: /Mugen Twin loop exhaust/ }).click();
     await page.waitForURL(new RegExp(`/sell\\?car=${carId}&mod=${offMod}`));
-    await expect(page.locator("#main").getByText(/Mugen/).first()).toBeVisible();
+    await expect(page.locator("#main").getByLabel("Title")).toHaveValue("Mugen Twin loop exhaust");
   } finally {
     await db.end();
     await cleanupFixtureUser(memberId);
