@@ -30,6 +30,9 @@ export const RATE_LIMITS = {
   addComment: { action: "comment", limit: 20, windowSeconds: 60 * 10 },
   react: { action: "react", limit: 60, windowSeconds: 60 * 5 },
   sendMessage: { action: "message", limit: 40, windowSeconds: 60 * 10 },
+  /** A message to the member's own agent (A3c): each one is a model turn,
+   *  so it is capped here as well as by the daily spend caps. */
+  agentChat: { action: "agent-chat", limit: 30, windowSeconds: 60 * 10 },
   openDispute: { action: "dispute", limit: 5, windowSeconds: 60 * 60 },
   disputeEvidence: { action: "dispute-evidence", limit: 20, windowSeconds: 60 * 60 },
   createListing: { action: "listing", limit: 20, windowSeconds: 60 * 60 },

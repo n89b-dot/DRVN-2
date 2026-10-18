@@ -1356,7 +1356,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     status: "in-progress",
     brief: "PRD §4.9 (AG-1…AG-12) · agent plan A2–A3",
     existsToday:
-      "A2 foundation and A3a/A3b on main and shared dev: the agent tables, the NOLOGIN agent_worker role, admin kill switches, beta steps opened from /admin/agent, per-member and global model spend caps, daily first-party measures (agent_metrics_daily, docs/site/agent-measures.md), one member's agent for support with an audited chat gate, and agent provenance on admin orders. The seller agent (Let DRVN handle offers) and buyer agent (Negotiate for me) stay closed until their steps open.",
+      "A2 foundation and A3a/A3b on main and shared dev: the agent tables, the NOLOGIN agent_worker role, admin kill switches, beta steps opened from /admin/agent, per-member and global model spend caps, daily first-party measures (agent_metrics_daily, docs/site/agent-measures.md), one member's agent for support with an audited chat gate, and agent provenance on admin orders. The seller agent (Let DRVN handle offers) and buyer agent (Negotiate for me) stay closed until their steps open. A3c: the agent chat on /agent (one model turn per message, stored server-side, listing result cards resolved through the member's own read, starters, a first-visit intro), behind the chat step.",
     changing:
       "One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.",
     surfaces: ["src/lib/capabilities/", "src/lib/ai/", "src/lib/agent/", "/admin/agent", "/api/jobs/agent", "/agent", "BottomNav", "SidePanel"],
@@ -1364,7 +1364,7 @@ export const IMPLEMENTATION_REGISTRY: Initiative[] = [
     approach:
       "Rules set prices, never the model; agents speak only to their owner; no auto-accept or automatic payment at launch. The shapes are fixed in docs/decisions/agent-foundations.md.",
     dependsOn: ["negotiation-v2"],
-    validation: "A2: supabase/tests/agent_worker_guard.sql (the security regression set) run as the real worker role. A3a: offer-history.test.ts (roles, via agent, the owner-only reason), agent_notifications_guard.sql, and e2e/seller-agent.spec.ts — a person against the seller agent: counters within limits, no minimum in anything the buyer can load, Needs you accept, Cancel before checkout only before checkout.",
+    validation: "A2: supabase/tests/agent_worker_guard.sql (the security regression set) run as the real worker role. A3a: offer-history.test.ts (roles, via agent, the owner-only reason), agent_notifications_guard.sql, and e2e/seller-agent.spec.ts — a person against the seller agent: counters within limits, no minimum in anything the buyer can load, Needs you accept, Cancel before checkout only before checkout. A3c: e2e/agent-chat.spec.ts — a member's message and the agent's reply are stored, come back on reload, and members can't write chat rows; the evals check the reply's result cards.",
     docs: ["docs/decisions/agent-foundations.md", "docs/plans/2026-10-agent-and-graph-plan.md", "docs/decisions/agent-data-rules.md"],
   },
 

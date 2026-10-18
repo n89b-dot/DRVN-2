@@ -68,6 +68,8 @@ export type AnalyticsEvent =
   | { event: "negotiate_for_me_started"; props: { basis: "item" | "total"; style: "firm" | "balanced" | "flexible" } }
   | { event: "agent_tab_viewed"; props: { needs: "0" | "1" | "2-5" | "6+" } }
   | { event: "agent_approval_answered"; props: { choice: "accept" | "dismiss" } }
+  /** One message to the agent (A3c): how many tools it used, and whether the model answered. */
+  | { event: "agent_chat_turn"; props: { tool_calls: number; ok: boolean } }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }
   | { event: "seller_dispatched"; props?: undefined }

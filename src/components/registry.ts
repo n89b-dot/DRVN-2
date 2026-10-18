@@ -1196,6 +1196,18 @@ export const COMPONENT_REGISTRY: RegistryEntry[] = [
     cssRecipe: ".oround / .viaagent",
   },
   {
+    name: "AgentResultCard",
+    importPath: COMMERCE,
+    file: "src/components/commerce/agent-result-card.tsx",
+    layer: "pattern",
+    category: "commerce",
+    status: "active",
+    description: "A result card in the agent's thread: an eyebrow (what it is), the object as an ObjectRow, and the real page it opens. Never holds a form.",
+    use: "Agent replies on /agent (and the desktop side panel): listings the agent looked up; negotiation, offer set-up and confirm cards as they arrive.",
+    avoid: "Listing grids (ListingCard) and offers in a conversation (OfferCard).",
+    cssRecipe: ".tile / .order",
+  },
+  {
     name: "AgentHeader",
     importPath: COMMERCE,
     file: "src/components/commerce/agent-header.tsx",

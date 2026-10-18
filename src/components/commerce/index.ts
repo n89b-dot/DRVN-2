@@ -12,3 +12,4 @@ export { ConditionSummary } from "../condition-summary";
 export { ConversationRow, DealChip, DealCard, OfferCard, type DealTone } from "./conversation";
 export { OfferRound } from "./offer-round";
 export { AgentHeader } from "./agent-header";
+export { AgentResultCard } from "./agent-result-card";

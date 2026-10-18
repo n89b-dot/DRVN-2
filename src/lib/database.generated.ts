@@ -987,6 +987,7 @@ export type Database = {
       agent_messages: {
         Row: {
           body: string
+          cards: Json
           conversation_id: string
           created_at: string
           id: string
@@ -996,6 +997,7 @@ export type Database = {
         }
         Insert: {
           body: string
+          cards?: Json
           conversation_id: string
           created_at?: string
           id?: string
@@ -1005,6 +1007,7 @@ export type Database = {
         }
         Update: {
           body?: string
+          cards?: Json
           conversation_id?: string
           created_at?: string
           id?: string
@@ -5939,6 +5942,21 @@ export type Database = {
           p_offer: Database["public"]["Tables"]["offers"]["Row"]
         }
         Returns: Json
+      }
+      agent_chat_append: {
+        Args: {
+          p_body: string
+          p_cards?: Json
+          p_owner: string
+          p_role: string
+        }
+        Returns: {
+          body: string
+          cards: Json
+          created_at: string
+          id: string
+          role: string
+        }[]
       }
       agent_claim_jobs: {
         Args: { p_lease_seconds?: number; p_limit?: number }

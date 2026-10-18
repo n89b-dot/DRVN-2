@@ -807,11 +807,18 @@
       background: var(--tile);
       border-top: 1px solid var(--rule-mid);
     }
+    /* The agent's own chat keeps the bar (A3 design 02): its composer sits
+       just above it instead of taking the edge. */
     .bnav[hidden],
-    body:has(.buybar, .savebar, .chatbox) .bnav {
+    body:has(.buybar, .savebar) .bnav,
+    body:has(.chatbox):not(:has(.agentchat)) .bnav {
       display: none;
     }
-    body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body {
+    .agentchat .chatbox {
+      bottom: calc(56px + 1px + env(safe-area-inset-bottom, 0px));
+    }
+    body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body,
+    body:has(.agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
       padding-bottom: calc(var(--bottom-surface-h, 80px) + env(safe-area-inset-bottom, 0px));
     }
     body:not(:has(.buybar, .savebar, .chatbox)):has(.bnav:not([hidden])) .toast {
