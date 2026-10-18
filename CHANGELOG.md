@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-21 — The agent foundation (A2), invisible to members
+
+Everything the agent needs to act, and nothing that acts yet: the agent is paused for everyone by a kill switch until the A3a beta.
+- **Data.** Mandates (every version kept), tasks, an append-only record of decisions and moves, chat, approvals and a job queue, each owner-only, in the member's export (v10), removed on account deletion, and kept for the periods Neil ruled.
+- **Who it acts for.** A separate database role, `agent_worker`, that can't read a table. Every move it makes needs a job it leased; the database then works out the owner and re-checks their side, suspension, limits, the mandate and the kill switches. Its moves go through the same negotiation path people use, and each round records that the agent made it.
+- **The minimum.** An agent's minimum can only make the listing's floor stricter, never lower.
+- **Rules decide money.** `negotiate.ts` picks every amount from the owner's limits and the offer history. The seller's agent never accepts by itself; it asks its owner. Property tests and seeded simulations (seller's agent vs a person, buyer's agent vs a person, agent vs agent) run in the unit suite, and the same three run through the real worker role in `tests/operations/agent-worker.test.ts`.
+- **Admin.** `/admin/agent` pauses all, one side, one member's agent, one mandate, one listing or one account, audited; offers and orders already made are untouched. Health counts go to monitoring.
+- **The model.** `src/lib/ai/` and a tool-runner turn with read-only tools, redaction and untrusted-data wrapping, plus an eval fixture suite. No member reaches the model until A3c.
+
 ## 2026-10-20 — Products with brand-aware identity (graph foundation, B1 step two)
 
 Parts gain an identity. A product is one maker's one part, and only the same brand and number, a "same product" link that names both brands, or an admin's decision makes two records one product. Interchange, supersedes and aftermarket links stay links: an interchangeable part is not the same part. Products grow hourly from the brand and part number on listings and build lines; anything ambiguous — one number under several brands, a known number with no brand, a "same product" link that doesn't say whose, a listing whose "also known as" number belongs to another product — goes to a new admin list at `/admin/products`, with coverage shown above it. Build lines get the same part-number key as listings plus a brand key, so a mod and a listing of the same part can be matched. A part added to a car from a purchase now keeps its brand.
