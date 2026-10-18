@@ -634,6 +634,43 @@ export async function adminResolveReport(
 }
 
 /**
+ * Decides a product identity review (B1, 20261020120000): merge the products
+ * it names, keep them separate, or dismiss it. The database function checks
+ * the admin and a fresh step-up itself, records the decision and writes the
+ * audit row in one transaction — this only parses the form.
+ */
+export async function adminResolveIdentityReview(
+  _prev: AdminActionState,
+  formData: FormData
+): Promise<AdminActionState> {
+  const ctx = await requireAdmin();
+  if (!ctx) return { error: "Not found." };
+  if (!isCtx(ctx)) return ctx;
+
+  const reviewId = field(formData, "review_id");
+  const decision = field(formData, "decision");
+  const note = field(formData, "note");
+  if (!reviewId) return { error: "Missing review." };
+  if (!["merge", "keep_separate", "dismiss"].includes(decision)) return { error: "Pick a decision." };
+  if (!note) return { error: "A note is required — it goes in the audit log." };
+
+  const session = await createClient();
+  const { error } = await session.rpc("resolve_product_identity_review", {
+    p_review: reviewId,
+    p_decision: decision,
+    p_reason: note,
+  });
+  if (error) {
+    if (error.code === "42501") return { error: "Confirm your authenticator again, then retry." };
+    return { error: error.message };
+  }
+  revalidatePath("/admin", "layout");
+  return {
+    ok: decision === "merge" ? "Merged into one product." : decision === "keep_separate" ? "Kept separate." : "Dismissed.",
+  };
+}
+
+/**
  * Removes a reported post or reply (admin-11) — the post/comment equivalent
  * of a listing takedown, run from the report's row. The row is deleted (a
  * post has no "removed" state the feeds could honour); its text goes in the

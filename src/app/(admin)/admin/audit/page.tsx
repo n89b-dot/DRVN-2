@@ -20,6 +20,7 @@ const SUBJECT_TYPES: AdminAuditSubjectType[] = [
   "user",
   "report",
   "payment",
+  "product_review",
 ];
 
 /** Fixed-width local timestamp ("2026-08-02 14:03") so the gutter never drifts. */

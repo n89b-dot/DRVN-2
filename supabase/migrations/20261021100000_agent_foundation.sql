@@ -553,9 +553,27 @@ alter table public.offer_round_terms add column if not exists buyer_ceiling_cent
 -- ---------------------------------------------------------------------------
 -- Admin audit can name the agent as a subject (kill switches, mandates).
 -- ---------------------------------------------------------------------------
-alter table public.admin_audit_log drop constraint if exists admin_audit_log_subject_type_check;
-alter table public.admin_audit_log add constraint admin_audit_log_subject_type_check
-  check (subject_type in ('order', 'listing', 'user', 'report', 'dispute', 'payment', 'agent'));
+-- Built from the constraint as it stands, so a value another migration added
+-- (B1's product_review) is kept. The definition reads either as
+-- IN ('a', 'b') or, once rebuilt, as = ANY ('{a,b}'::text[]); both are parsed.
+do $$
+declare
+  v_def text;
+  v_values text[];
+begin
+  select pg_get_constraintdef(c.oid) into v_def
+  from pg_constraint c
+  where c.conrelid = 'public.admin_audit_log'::regclass and c.conname = 'admin_audit_log_subject_type_check';
+  select array_agg(distinct v order by v) into v_values
+  from (
+    select (regexp_matches(coalesce(v_def, ''), '''([a-z_]+)''', 'g'))[1] as v
+    union select unnest(string_to_array(substring(coalesce(v_def, '') from '''[{]([a-z_,]+)[}]'''), ','))
+    union select unnest(array['order', 'listing', 'user', 'report', 'dispute', 'payment', 'agent'])
+  ) x
+  where v is not null;
+  alter table public.admin_audit_log drop constraint if exists admin_audit_log_subject_type_check;
+  execute format('alter table public.admin_audit_log add constraint admin_audit_log_subject_type_check check (subject_type = any (%L::text[]))', v_values);
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Row security: owners read their own; nobody writes from the API.
