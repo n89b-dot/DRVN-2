@@ -87,7 +87,7 @@ export const readListing = defineCapability({
 
 export const readMyCar = defineCapability({
   name: "read_my_car",
-  description: "Read one of the owner's own cars and its build: make, model, year, engine and each mod line. Never the VIN.",
+  description: "Read one of the owner's own cars and its build: make, model, year, engine and each mod line with its id and status. Never the VIN.",
   risk: "R0",
   scopes: ["buyer", "garage", "seller"],
   input: z.object({ carId: id }),
@@ -98,7 +98,7 @@ export const readMyCar = defineCapability({
     model: z.string().nullable(),
     year: z.number().int().nullable(),
     engine: z.string().nullable(),
-    mods: z.array(z.object({ brand: z.string().nullable(), product: z.string().nullable(), partNumber: z.string().nullable(), category: z.string().nullable(), status: z.string() })),
+    mods: z.array(z.object({ id, brand: z.string().nullable(), product: z.string().nullable(), partNumber: z.string().nullable(), category: z.string().nullable(), status: z.string() })),
   }).nullable(),
   async run({ supabase, context }, input) {
     // The owner's own car only, whatever row security would also allow; the
@@ -111,7 +111,7 @@ export const readMyCar = defineCapability({
       .maybeSingle();
     if (error) throw new CapabilityError("failed", "Car is unavailable", error);
     if (!data) return null;
-    const mods = await supabase.from("mod_items").select("brand,product,part_number,category,status").eq("car_id", data.id).order("position");
+    const mods = await supabase.from("mod_items").select("id,brand,product,part_number,category,status").eq("car_id", data.id).order("position");
     if (mods.error) throw new CapabilityError("failed", "Build is unavailable", mods.error);
     return {
       id: data.id,
@@ -120,7 +120,7 @@ export const readMyCar = defineCapability({
       model: data.model,
       year: data.year,
       engine: data.engine,
-      mods: (mods.data ?? []).map((mod) => ({ brand: mod.brand, product: mod.product, partNumber: mod.part_number, category: mod.category, status: mod.status })),
+      mods: (mods.data ?? []).map((mod) => ({ id: mod.id, brand: mod.brand, product: mod.product, partNumber: mod.part_number, category: mod.category, status: mod.status })),
     };
   },
 });

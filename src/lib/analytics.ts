@@ -70,6 +70,8 @@ export type AnalyticsEvent =
   | { event: "agent_approval_answered"; props: { choice: "accept" | "dismiss" } }
   /** One message to the agent (A3c): how many tools it used, and whether the model answered. */
   | { event: "agent_chat_turn"; props: { tool_calls: number; ok: boolean } }
+  /** Confirm on an "Update my build" card (A3c): whether it replaced a part. */
+  | { event: "agent_build_change_confirmed"; props: { replaced: boolean } }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }
   | { event: "seller_dispatched"; props?: undefined }

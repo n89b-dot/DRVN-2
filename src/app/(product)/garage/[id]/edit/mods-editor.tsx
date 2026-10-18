@@ -21,6 +21,7 @@ import { unlinkModListing } from "@/app/(product)/sell/actions";
 
 import { readPartLink, saveModItems, type ModItemInput } from "../../actions";
 import { useUnsavedGuard } from "./use-unsaved";
+import { draftRow, type BuildDraft } from "@/features/agent/build-change";
 
 export { MOD_GROUPS };
 
@@ -107,6 +108,35 @@ function blankRow(group_label = "Other"): Row {
   };
 }
 
+/**
+ * An agent draft in the sheet, the way Replace does it: the new line keyed by
+ * the draft's id (so Confirm in the chat and Save here write the same line),
+ * just above the part it replaces, which is marked removed. A draft already
+ * saved, or one whose old part is gone, leaves the sheet as loaded.
+ */
+function withDraft(rows: Row[], draft: BuildDraft): Row[] {
+  if (rows.some((row) => (row.id ?? row.key) === draft.id)) return rows;
+  const index = draft.replaces ? rows.findIndex((row) => row.id === draft.replaces) : -1;
+  if (draft.replaces && (index < 0 || rows[index].status !== "installed")) return rows;
+  const line = draftRow(draft, index >= 0 ? rows[index].group_label : undefined);
+  const fresh: Row = {
+    ...blankRow(line.group_label),
+    key: draft.id,
+    brand: line.brand ?? "",
+    product: line.product ?? "",
+    part_number: line.part_number ?? "",
+    category: (line.category as ModCategory | null) ?? null,
+    raw_text: line.raw_text ?? "",
+    product_url: line.product_url,
+    image_url: line.image_url,
+  };
+  if (index < 0) return [...rows, fresh];
+  const next = [...rows];
+  next[index] = { ...rows[index], status: "removed" as ModStatus };
+  next.splice(index, 0, fresh);
+  return next;
+}
+
 /** A line with nothing typed and nothing attached — never worth saving. */
 function isEmptyRow(row: Row): boolean {
   return (
@@ -181,14 +211,17 @@ export function ModsEditor({
   carId,
   carMake,
   initialMods,
+  draft = null,
 }: {
   carId: string;
   /** The brand a stock part is listed under. */
   carMake: string | null;
   /** `linked_listing` is the linked listing's status, embedded by the caller. */
   initialMods: (ModItem & { linked_listing?: { status: string } | null })[];
+  /** An agent's "Update my build" draft (A3c Edit): filled in, unsaved. */
+  draft?: BuildDraft | null;
 }) {
-  const [rows, setRows] = useState<Row[]>(
+  const [loaded] = useState<Row[]>(() =>
     initialMods.map((m) => ({
       key: m.id,
       id: m.id,
@@ -213,6 +246,7 @@ export function ModsEditor({
       ref_price_currency: m.ref_price_currency,
     }))
   );
+  const [rows, setRows] = useState<Row[]>(() => (draft ? withDraft(loaded, draft) : loaded));
   // Controlled fields must not replace what was typed before hydration
   // (see useHydrated): they stay disabled until the page is live.
   const ready = useHydrated();
@@ -246,13 +280,13 @@ export function ModsEditor({
   const router = useRouter();
   // Dirty = differs from what was last loaded or saved. Marked beside Save,
   // and leaving the page while dirty asks first (the page has other Saves).
-  const [savedSnap, setSavedSnap] = useState(() => snapshot(rows));
+  const [savedSnap, setSavedSnap] = useState(() => snapshot(loaded));
   const dirty = snapshot(rows) !== savedSnap;
   useUnsavedGuard(dirty);
   // Phones fold every saved line to a one-row summary (five labelled fields
   // per line made a five-part build 2,400px long); tapping one opens it.
   // New, parsed and flagged lines always open unfolded.
-  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set());
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set(draft ? [draft.id] : []));
   const openRow = (key: string) => setOpenKeys((k) => new Set(k).add(key));
   // Replace moves the old part to "Came off this car" and leaves a blank line
   // where it was. Said out loud, with an undo, so it doesn't read as the
@@ -546,7 +580,7 @@ export function ModsEditor({
   const save = () => persist(rows);
 
   return (
-    <section className="tile">
+    <section className="tile scroll-mt-24" id="mods">
       <fieldset disabled={!ready} className="contents">
       <div className="tile__head">
         <span className="microlabel microlabel--ink">The build — seed the lines</span>
@@ -554,6 +588,12 @@ export function ModsEditor({
           Paste a list
         </Button>
       </div>
+
+      {draft && dirty && (
+        <p className="field__hint mt-3" role="status">
+          From your agent: check the new line{draft.replaces ? " and the part it replaces" : ""}, then Save.
+        </p>
+      )}
 
       <div className="mt-4 flex flex-wrap items-end gap-2">
         <TextField

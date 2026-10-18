@@ -1250,10 +1250,23 @@ export default function ComponentsPage() {
         <Specimen
           name="Agent result card"
           klass="AgentResultCard / .tile + .order"
-          note="What an agent reply points at, as the real object: an eyebrow, the object as a row, and the page it opens. A card never holds a form; Confirm and Edit arrive with 'Update my build'."
+          note="What an agent reply points at, as the real object: an eyebrow, the object as a row, and the page it opens. A card never holds a form. As a confirm card ('Update my build') it states the exact change with Confirm and Edit; then the title and photo are the links, since a link can't hold buttons."
         >
-          <div style={{ maxWidth: 460 }}>
+          <div className="grid gap-3" style={{ maxWidth: 460 }}>
             <AgentResultCard eyebrow="Listing" title="APR intake — Mk8 Golf R" meta="$250" image={{ alt: "APR intake" }} href="#annotation" />
+            <AgentResultCard
+              eyebrow="Update your build"
+              title="KW V3 coilovers"
+              meta="Add to your Mk8 Golf R; mark APR Roll-Control mount removed"
+              image={{ alt: "KW V3 coilovers" }}
+              href="#annotation"
+              action={
+                <div className="flex gap-2">
+                  <Button variant="live">Confirm</Button>
+                  <Button variant="ghost">Edit</Button>
+                </div>
+              }
+            />
           </div>
         </Specimen>
         <Specimen

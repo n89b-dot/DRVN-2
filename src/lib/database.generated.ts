@@ -5958,6 +5958,7 @@ export type Database = {
           role: string
         }[]
       }
+      agent_chat_card_ok: { Args: { p_card: Json }; Returns: boolean }
       agent_claim_jobs: {
         Args: { p_lease_seconds?: number; p_limit?: number }
         Returns: {

@@ -1,5 +1,15 @@
 # Applying migrations
 
+## October 25 — "Update my build" cards in the agent chat, A3c (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261025110000_agent_chat_build_cards.sql` | not yet |
+
+Apply after `20261025100000`. An agent reply can now carry a drafted build change (`kind: 'build_change'`: the new line's id, the car, the part it replaces, brand, product, part number, category, product link, thumbnail) for the member to confirm. `agent_chat_card_ok` checks every card's shape: no price or other key, a known category, http(s) links only; listing cards are still `{kind, id}`. `agent_chat_append` uses it. Nothing in the build changes until the member taps Confirm, which saves through `save_mod_items` as the member.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 4; generated types match.
+
 ## October 25 — the agent chat's result cards, A3c (shared dev project)
 
 | File | Applied to |
