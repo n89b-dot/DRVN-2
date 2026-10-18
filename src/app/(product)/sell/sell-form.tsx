@@ -1199,7 +1199,7 @@ export function SellForm({
                     hint="Off by default. When it's on, buyers see “offers accepted from” this amount."
                   />                  <fieldset className="field">
                     <legend className="microlabel">Style</legend>
-                    <span className="flex flex-wrap gap-x-6" role="radiogroup" aria-label="Style">
+                    <span className="flex flex-wrap gap-x-4" role="radiogroup" aria-label="Style">
                       {(["firm", "balanced", "flexible"] as const).map((style) => (
                         <Radio
                           key={style}

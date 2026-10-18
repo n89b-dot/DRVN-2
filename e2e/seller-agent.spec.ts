@@ -5,6 +5,7 @@ import { Client } from "pg";
 
 import { runAgentPass, type AgentDb } from "../src/lib/agent/worker";
 import { cleanupFixtureUser, fixtureAdmin } from "./fixtures";
+import { attachSellPhoto } from "./helpers";
 
 /**
  * A3a end to end: a person against the seller's agent.
@@ -116,6 +117,9 @@ test.describe("seller agent (A3a)", () => {
 
     // The seller turns the agent on from the listing editor.
     await seller.goto(`/listings/${listingId}/edit`);
+    // A live listing needs a real photo of its own (M-5/W-2); the fixture's
+    // placeholder URL isn't one, so attach one through the editor's uploader.
+    await attachSellPhoto(seller);
     await seller.getByLabel("Let DRVN handle offers").check();
     await seller.getByLabel(/Minimum — your walk-away price/).fill("230");
     await seller.getByLabel(/^Target$/).fill("245");
