@@ -1,7 +1,7 @@
 # Decision: negotiation v2 (A1)
 
-**Status: design proposed 17 October 2026.** The rules are decided (PRD O-1…O-6 and the plan's
-negotiation table). The four choices in §7 are open for Neil, and none of them blocks step 1.
+**Status: decided 17 October 2026.** The rules come from PRD O-1…O-6 and the plan's negotiation
+table; Neil ruled the four remaining choices in §7 the same day.
 This record turns the rules into the database and app shape that A1 builds and that the agent
 (A2–A3) uses unchanged. It follows [`agent-foundations.md`](agent-foundations.md): one move
 function, the lock order, the floor rule and the binding snapshot.
@@ -133,14 +133,12 @@ Each step ships on its own and leaves the app working.
    - An e2e three-round negotiation.
    - The existing checkout, notification and order-recovery suites still pass.
 
-## 7. Open for Neil
+## 7. Rulings (Neil, 17 October 2026)
 
-1. **Turn length:** keep 72 hours per turn, or move to 48 as the plan suggests? Recommended:
-   keep 72. Each turn now resets the clock, so a three-round deal can still close within a week.
-2. **Offers already live at the switch:** they count as the buyer's first offer and carry on
-   under the new rules. Recommended.
-3. **What the seller sees of a below-minimum attempt:** the seller sees "declined
-   automatically: below your minimum" in that buyer's history, and the buyer sees "declined".
-   Recommended, since it's what eBay does with auto-decline.
-4. **Expiry notifications:** add `offer_expired` for both sides, under the existing offers
-   preference. Recommended.
+1. **Turn length:** 72 hours per turn, and every move resets the clock.
+2. **Offers already live at the switch** count as the buyer's first offer and carry on under the
+   new rules.
+3. **A below-minimum attempt:** the seller sees "declined automatically: below your minimum" in
+   that buyer's history, and the buyer sees "declined".
+4. **Expiry notifications:** a new `offer_expired` kind, sent to both sides under the existing
+   offers preference.
