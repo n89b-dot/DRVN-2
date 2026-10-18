@@ -73,6 +73,13 @@ functions are restated to lock the listing before the order. A1's
 concurrency tests (buyer accepts vs seller cancels, two counters at once,
 acceptance vs another buyer's checkout) are the gate.
 
+**Done 18 Oct (`20261018100200`):** the freeze, cancellation, finalize and
+finalize's three callers lock the order's listings first, and the freeze also
+locks the offer before the order. `tests/operations/negotiation-concurrency.test.ts`
+runs those races. Cart checkout preparation (`prepare_payment_request`,
+`bind_cart_checkout_payment`, `freeze_cart_checkout_shipping`) never touches
+offers and keeps its order-first sequence.
+
 ## 5. One move function, retry-safe
 
 Every negotiation move, human or agent, goes through
