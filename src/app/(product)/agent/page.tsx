@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { AgentHeader } from "@/components/commerce";
 import { ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent } from "@/components/ui";
 import { ApprovalActions } from "@/features/agent/approval-actions";
-import { agentsBetaOn } from "@/lib/agent/beta";
+import { agentTabOpen } from "@/lib/agent/beta";
+import { capture } from "@/lib/analytics";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
@@ -81,7 +82,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour
  * record of what it did, each with a way to see why. Chat arrives in A3c.
  */
 export default async function AgentPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  if (!agentsBetaOn()) notFound();
+  if (!(await agentTabOpen())) notFound();
   const user = await getViewer();
   if (!user) redirect("/login?next=/agent");
   const supabase = await getPageClient();
@@ -232,6 +233,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
     { key: "done", label: "Done", count: done.length, panel: listPanel(done, "Nothing finished yet.") },
   ];
   const nothingYet = !allTasks.length && !pending.length && !handling && !buying;
+  capture(user.id, { event: "agent_tab_viewed", props: { needs: pending.length === 0 ? "0" : pending.length === 1 ? "1" : pending.length <= 5 ? "2-5" : "6+" } });
 
   return (
     <div className="wrap">

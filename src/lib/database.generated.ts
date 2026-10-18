@@ -590,6 +590,38 @@ export type Database = {
           },
         ]
       }
+      agent_beta_steps: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          open: boolean
+          reason: string | null
+          step: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          open?: boolean
+          reason?: string | null
+          step: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          open?: boolean
+          reason?: string | null
+          step?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_beta_steps_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_controls: {
         Row: {
           cleared_at: string | null
@@ -1004,6 +1036,65 @@ export type Database = {
           },
         ]
       }
+      agent_metrics_daily: {
+        Row: {
+          computed_at: string
+          day: string
+          measure: string
+          sample: number
+          scope: string
+          value: number | null
+        }
+        Insert: {
+          computed_at?: string
+          day: string
+          measure: string
+          sample: number
+          scope: string
+          value?: number | null
+        }
+        Update: {
+          computed_at?: string
+          day?: string
+          measure?: string
+          sample?: number
+          scope?: string
+          value?: number | null
+        }
+        Relationships: []
+      }
+      agent_spend_limits: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          global_daily_usd: number
+          per_member_daily_usd: number
+          singleton: boolean
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          global_daily_usd?: number
+          per_member_daily_usd?: number
+          singleton?: boolean
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          global_daily_usd?: number
+          per_member_daily_usd?: number
+          singleton?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_spend_limits_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_tasks: {
         Row: {
           created_at: string
@@ -1123,6 +1214,57 @@ export type Database = {
           },
           {
             foreignKeyName: "agent_telemetry_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_usage: {
+        Row: {
+          cost_usd: number | null
+          created_at: string
+          feature: string
+          id: number
+          input_tokens: number
+          model: string
+          output_tokens: number
+          owner_id: string | null
+          task_id: string | null
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string
+          feature: string
+          id?: never
+          input_tokens: number
+          model: string
+          output_tokens: number
+          owner_id?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string
+          feature?: string
+          id?: never
+          input_tokens?: number
+          model?: string
+          output_tokens?: number
+          owner_id?: string | null
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_usage_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_usage_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "agent_tasks"
@@ -5749,11 +5891,29 @@ export type Database = {
       activity_post_search_text: { Args: { body: Json }; Returns: string }
       activity_post_visible: { Args: { p_post_id: string }; Returns: boolean }
       actor_name: { Args: { p_id: string }; Returns: string }
+      admin_open_agent_chat: {
+        Args: {
+          p_case: string
+          p_case_kind: string
+          p_member: string
+          p_reason: string
+        }
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          role: string
+        }[]
+      }
       admin_order_money_window: {
         Args: { p_from: string; p_to: string }
         Returns: Json
       }
       admin_role: { Args: never; Returns: string }
+      admin_set_agent_beta_step: {
+        Args: { p_open: boolean; p_reason: string; p_step: string }
+        Returns: undefined
+      }
       admin_set_agent_control: {
         Args: {
           p_on: boolean
@@ -5762,6 +5922,10 @@ export type Database = {
           p_subject: string
         }
         Returns: string
+      }
+      admin_set_agent_spend_limits: {
+        Args: { p_global_usd: number; p_member_usd: number; p_reason: string }
+        Returns: undefined
       }
       advance_search_rebuild: { Args: { p_run: string }; Returns: Json }
       agent_approval_decide: {
@@ -5790,6 +5954,7 @@ export type Database = {
         }[]
       }
       agent_clear_conversation: { Args: never; Returns: number }
+      agent_compute_metrics: { Args: { p_day: string }; Returns: number }
       agent_controls_lock_key: { Args: never; Returns: number }
       agent_enqueue_turns: { Args: { p_task: string }; Returns: number }
       agent_finish_job: {
@@ -5912,6 +6077,8 @@ export type Database = {
         Returns: string
       }
       agent_retention_sweep: { Args: never; Returns: Json }
+      agent_spend_allowed: { Args: { p_owner: string }; Returns: Json }
+      agent_usage_retention_sweep: { Args: never; Returns: number }
       apply_stripe_dispute_event: {
         Args: {
           p_amount: number

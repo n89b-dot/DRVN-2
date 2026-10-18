@@ -2,10 +2,11 @@
 
 import { redirect } from "next/navigation";
 
-import { agentsBetaOn } from "@/lib/agent/beta";
+import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { memberContext } from "@/lib/agent/context";
 import { setAgentLimits } from "@/lib/capabilities/negotiation";
 import { CapabilityError, invokeCapability } from "@/lib/capabilities/types";
+import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { revalidatePath } from "@/lib/revalidate";
 import { createClient } from "@/lib/supabase/server";
@@ -44,13 +45,14 @@ function agentError(code: string | undefined, fallback: string): string {
  * a sale exactly as tapping Accept on the offer would.
  */
 export async function decideAgentApproval(_prev: AgentState, formData: FormData): Promise<AgentState> {
-  const { supabase } = await requireUser();
-  if (!agentsBetaOn()) return { error: "The agent isn't available yet." };
+  const { supabase, user } = await requireUser();
+  if (!(await agentTabOpen())) return { error: "The agent isn't available yet." };
   const approvalId = String(formData.get("approval_id") ?? "");
   const choice = String(formData.get("choice") ?? "");
   if (!approvalId || (choice !== "accept" && choice !== "dismiss")) return { error: "Missing choice." };
 
   const { error } = await supabase.rpc("agent_approval_decide", { p_approval: approvalId, p_choice: choice });
+  if (!error) capture(user.id, { event: "agent_approval_answered", props: { choice } });
   if (error) {
     reportError("[agent] approval decision failed", { approvalId, choice, code: error.code });
     return { error: agentError(error.code, "Couldn't record that. Try again.") };
@@ -83,7 +85,7 @@ export async function saveListingAgent(input: {
   acknowledgeBinding: boolean;
 }): Promise<AgentState> {
   const { supabase, user } = await requireUser();
-  if (!agentsBetaOn()) return {};
+  if (!(await agentStepOpen("seller"))) return {};
 
   const { data: live } = await supabase
     .from("agent_mandates")
@@ -98,6 +100,7 @@ export async function saveListingAgent(input: {
     if (!live) return {};
     const { error } = await supabase.rpc("agent_mandate_set_status", { p_mandate: live.id, p_status: "revoked" });
     if (error) return { error: agentError(error.code, "Couldn't turn your agent off. Try again.") };
+    capture(user.id, { event: "agent_offers_disabled" });
     return { ok: "Your agent stopped handling offers on this listing." };
   }
 
@@ -124,6 +127,7 @@ export async function saveListingAgent(input: {
     await supabase.rpc("agent_mandate_set_status", { p_mandate: live.id, p_status: "active" });
   }
   revalidatePath("/agent");
+  capture(user.id, { event: "agent_offers_enabled", props: { style: input.style, has_target: input.targetCents != null } });
   return { ok: "Your agent is handling offers on this listing." };
 }
 
@@ -142,7 +146,7 @@ export async function startBuyerAgent(input: {
   acknowledgeBinding: boolean;
 }): Promise<AgentState> {
   const { supabase, user } = await requireUser();
-  if (!agentsBetaOn()) return { error: "The agent isn't available yet." };
+  if (!(await agentStepOpen("buyer"))) return { error: "The agent isn't available yet." };
   if (!input.acknowledgeBinding) return { error: "Confirm that an accepted counter is a purchase you'll pay for." };
   if (!Number.isInteger(input.ceilingCents) || input.ceilingCents <= 0) return { error: "Enter the most you'll pay." };
 
@@ -175,5 +179,6 @@ export async function startBuyerAgent(input: {
   }
   revalidatePath("/agent");
   revalidatePath(`/listings/${input.listingId}`);
+  capture(user.id, { event: "negotiate_for_me_started", props: { basis: input.ceilingBasis, style: input.style } });
   return { ok: "Your agent is negotiating. It tells you when there's a deal, and you pay within 24 hours." };
 }

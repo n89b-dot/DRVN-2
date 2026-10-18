@@ -812,7 +812,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 #### The DRVN agent — In progress
 
 - **Brief:** PRD §4.9 (AG-1…AG-12) · agent plan A2–A3
-- **Exists today:** A2 foundation, invisible to members: the agent's tables, the NOLOGIN agent_worker role and its eight leased-job functions, the outbox on offer rounds, admin kill switches (seeded on, so the agent is paused for everyone; console at /admin/agent), export v10, deletion and retention (20261021100000–100200). The worker pass, negotiate.ts, typed capabilities, src/lib/ai with the tool-runner turn, and agent monitoring are built; nothing calls the model yet.
+- **Exists today:** A2 foundation and A3a/A3b on main and shared dev: the agent tables, the NOLOGIN agent_worker role, admin kill switches, beta steps opened from /admin/agent, per-member and global model spend caps, daily first-party measures (agent_metrics_daily, docs/site/agent-measures.md), one member's agent for support with an audited chat gate, and agent provenance on admin orders. The seller agent (Let DRVN handle offers) and buyer agent (Negotiate for me) stay closed until their steps open.
 - **Changing:** One agent per member that negotiates offers within limits the member sets, then chats and does garage and listing jobs, one at a time. Built on typed capabilities, mandates, tasks and a narrow worker role, with admin off switches.
 - **Surfaces:** `src/lib/capabilities/`, `src/lib/ai/`, `src/lib/agent/`, `/admin/agent`, `/api/jobs/agent`, `/agent`, `BottomNav`, `SidePanel`
 - **User benefit:** The tedious work between "I want this" and "done" gets done for you, inside limits you set, and every task still works without the agent.

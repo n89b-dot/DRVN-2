@@ -16,7 +16,7 @@ import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
-import { agentsBetaOn } from "@/lib/agent/beta";
+import { agentStepOpen } from "@/lib/agent/beta";
 import { DeleteListing } from "../../delete-listing";
 import { ListingStatusActions } from "../../status-actions";
 import { reportError } from "@/lib/monitoring";
@@ -50,7 +50,7 @@ export default async function EditListingPage({
   if (!listing || listing.seller_id !== user.id) notFound();
 
   // The seller agent's live limits here (A3a), owner-only.
-  const agentBeta = agentsBetaOn();
+  const agentBeta = await agentStepOpen("seller");
   const { data: mandate } = agentBeta
     ? await supabase
         .from("agent_mandates")
