@@ -134,3 +134,46 @@ export const PUBLIC_ROUTES: NavRoute[] = [
   { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
   { href: "/marketplace", label: "Marketplace", note: "Parts off real builds", icon: "market" },
 ];
+
+/**
+ * The phone tab bar (BottomNav, below 1081px): Explore · Marketplace · Home ·
+ * Garage, then Agent once the agent beta is on. Home sits in the centre, the
+ * feed people come back to; the agent is last because it's opt-in (agent
+ * plan, "Mobile bottom bar"). Messages, notifications, cart and profile stay
+ * in the top bar; the rest of the register stays in the index menu.
+ */
+export const BOTTOM_NAV: NavRoute[] = [
+  { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
+  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
+  { href: "/home", label: "Home", note: "What's moved since you looked", icon: "home" },
+  { href: "/garage", label: "Garage", note: "Your cars and their builds", icon: "garage" },
+];
+
+/** Signed out, the bar keeps the two public doors and an invitation in. */
+export const BOTTOM_NAV_PUBLIC: NavRoute[] = [
+  { href: "/explore", label: "Explore", note: "Builds from the community", icon: "compass" },
+  { href: "/marketplace", label: "Marketplace", note: "Used parts off modified cars", icon: "market" },
+  { href: "/signup", label: "Join", note: "Create an account", icon: "user" },
+];
+
+/**
+ * Screens that are the whole task: the bar would be one tap away from
+ * abandoning them. Checkout and the sell form also carry a purchase bar,
+ * which hides it anyway; editors and composers don't.
+ */
+export function bottomNavHiddenOn(pathname: string): boolean {
+  return (
+    pathname.startsWith("/checkout") ||
+    pathname === "/sell" ||
+    pathname.startsWith("/sell/") ||
+    /^\/listings\/[^/]+\/edit$/.test(pathname) ||
+    /^\/garage\/[^/]+\/update(\/|$)/.test(pathname) ||
+    /^\/messages\/[^/]+/.test(pathname)
+  );
+}
+
+/** Which bar item a pathname belongs to. */
+export function bottomNavActive(pathname: string, href: string): boolean {
+  if (href === "/marketplace") return matchesFamily(pathname, "marketplace");
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
