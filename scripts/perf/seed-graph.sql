@@ -22,8 +22,9 @@
 --                have an installed HOT-k.
 --   alternates   one active part in 60 says it's also known as the next
 --                part's number.
---   links        20,000 brand-scoped same_product (to an "OEM" number),
---                20,000 interchange, 2,000 same_product without brands.
+--   links        20,000 interchange, 2,000 same_product without brands.
+--                The 20,000 brand-scoped same_product links need B1's columns:
+--                seed-graph-links.sql adds them after the migrations.
 -- Triggers are skipped (replica role): the snapshot trigger would rebuild
 -- every snapshot from the listing.
 \set ON_ERROR_STOP 1
@@ -86,14 +87,6 @@ join (select id, substring(title from '#([0-9]+)$')::bigint as n from public.lis
 where x.n % 60 = 7
 on conflict do nothing;
 
-insert into public.part_number_links (from_compact, to_compact, kind, source, from_brand_key, to_brand_key)
-select 'pn' || k * 97, 'oem' || k * 97, 'same_product', 'perf-seed',
-       nullif(regexp_replace(lower(coalesce(l.brand, '')), '[^[:alnum:]]', '', 'g'), ''),
-       nullif(regexp_replace(lower(coalesce(l.brand, '')), '[^[:alnum:]]', '', 'g'), '')
-from generate_series(1, 20000) k
-join public.listings l on l.id = md5('l:' || k * 97)::uuid
-where l.brand is not null
-on conflict do nothing;
 insert into public.part_number_links (from_compact, to_compact, kind, source)
 select 'pn' || k * 89, 'pn' || (k * 89 + 1), 'interchange', 'perf-seed' from generate_series(1, 20000) k
 on conflict do nothing;

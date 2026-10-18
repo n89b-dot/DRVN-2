@@ -235,6 +235,27 @@ begin
     raise exception 'FAIL 6c: merged products were filed as ambiguous again';
   end if;
 
+  -- 6b. What queues a run (20261020150000): a price change doesn't, a brand
+  -- or number change does, and the run clears what it read.
+  delete from public.product_grow_queue;
+  update public.listings set price_cents = price_cents + 100 where id = l_kw;
+  if exists (select 1 from public.product_grow_queue) then raise exception 'FAIL 6d: a price change queued a products run'; end if;
+  update public.listings set brand = 'KW Suspensions' where id = l_kw;
+  if not exists (select 1 from public.product_grow_queue where listing_id = l_kw) then
+    raise exception 'FAIL 6e: a brand change was not queued';
+  end if;
+  v_run := public.grow_products();
+  if exists (select 1 from public.product_grow_queue) then raise exception 'FAIL 6f: the run left the queue full'; end if;
+  if not exists (select 1 from public.product_part_numbers where brand_key = 'kwsuspensions' and number_compact = '35220001') then
+    raise exception 'FAIL 6g: an hourly run missed the changed listing';
+  end if;
+  -- The corrected brand leaves "kw" + 35220001 with no record: that is not
+  -- two brands sharing a number.
+  if exists (select 1 from public.product_identity_reviews
+             where kind = 'number_across_brands' and number_compact = '35220001' and status = 'open') then
+    raise exception 'FAIL 6h: a corrected brand was filed as two brands sharing a number';
+  end if;
+
   -- 7. Nothing moved vehicle fit.
   select string_agg(format('%s|%s|%s|%s', listing_id, make_key, model_key, via), ',' order by listing_id, make_key, model_key, via)
     into v_fit_after from public.listing_vehicle_fit;

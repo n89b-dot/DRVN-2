@@ -10,7 +10,8 @@
 #      timings (MODE=after: the app's current requests) and write-cost.sql;
 #   2. applies every B1 migration (2026102010-14), timing each;
 #   3. after: the same checksum, plans, timings and write cost;
-#   4. the new reads: an hourly grow_products run (after 1,000 writes), a
+#   4. the new reads: 20,000 brand-scoped links (seed-graph-links.sql), an
+#      hourly grow_products run applying them after 1,000 writes, a
 #      full run, product_coverage, price_comparables through PostgREST for
 #      the worst-case product (MEGA-1), a popular one (HOT-k) and a one-off,
 #      the admin review page's read, and generations for every seeded model
@@ -56,6 +57,8 @@ psql -f scripts/perf/write-cost.sql > "$OUT/write-cost-after.txt" 2>&1
 
 echo "== new reads"
 {
+  psql -q -f scripts/perf/seed-graph-links.sql
+
   # An hourly run: mark a run as just started, write 1,000 listings, run.
   q "insert into public.product_grow_runs(result) values (jsonb_build_object('started_at', now() - interval '2 minutes', 'marker', true))"
   q "update public.listings set price_cents = price_cents + 1 where id in (select id from public.listings where status = 'active' order by id limit 1000)" > /dev/null

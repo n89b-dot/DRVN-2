@@ -114,6 +114,15 @@ begin
     raise exception 'FAIL 1f: excluding the caller''s listing should leave 2, without a price: %', v_c -> 'asking';
   end if;
 
+  -- A sale stamped a little in the future (clock skew) is not -N days old.
+  perform pg_temp.sale(v_seller, v_buyer, 'Garrett', 'GT-SKEW1', 50000, 'used', 'completed', 0, 'USD', now() + interval '2 days');
+  perform pg_temp.sale(v_seller, v_buyer, 'Garrett', 'GT-SKEW1', 51000, 'used', 'completed', 0, 'USD', now() + interval '2 days');
+  perform pg_temp.sale(v_seller, v_buyer, 'Garrett', 'GT-SKEW1', 52000, 'used');
+  v_c := public.price_comparables('Garrett', 'GT-SKEW1');
+  if (v_c -> 'sold' ->> 'newest_days')::int < 0 or (v_c -> 'sold' ->> 'median_age_days')::int < 0 then
+    raise exception 'FAIL 1g: a negative age: %', v_c -> 'sold';
+  end if;
+
   -- 4. Below the minimum sample: a count, no price.
   perform pg_temp.sale(v_seller, v_buyer, 'Garrett', 'G25-660', 70000, 'used');
   perform pg_temp.sale(v_seller, v_buyer, 'Garrett', 'G25-660', 72000, 'used');

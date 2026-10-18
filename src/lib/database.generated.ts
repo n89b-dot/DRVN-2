@@ -3664,6 +3664,27 @@ export type Database = {
           },
         ]
       }
+      product_grow_queue: {
+        Row: {
+          id: number
+          listing_id: string | null
+          mod_item_id: string | null
+          queued_at: string
+        }
+        Insert: {
+          id?: never
+          listing_id?: string | null
+          mod_item_id?: string | null
+          queued_at?: string
+        }
+        Update: {
+          id?: never
+          listing_id?: string | null
+          mod_item_id?: string | null
+          queued_at?: string
+        }
+        Relationships: []
+      }
       product_grow_runs: {
         Row: {
           id: number

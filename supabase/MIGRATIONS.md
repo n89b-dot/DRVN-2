@@ -48,10 +48,14 @@ fixed here with guard checks.
 |---|---|
 | `20261020130000_product_fitments.sql` | not yet |
 | `20261020140000_price_comparables.sql` | not yet |
+| `20261020150000_grow_products_queue.sql` | not yet |
 
-Apply in order, after `20261020120000`.
+Apply in order, after `20261020120000` (re-run `120000` first on a database that has it: it is now re-runnable).
 - `130000` adds `product_fitments`: claims about a product (source, relationship, `stated_on`, verification, engine/gearbox/brake constraints) against a catalog model and optionally one of its generations (composite foreign key). Public read of claims not retracted; service-role writes. Empty until B2.
-- `140000` adds `price_comparables(brand, part number, currency, exclude listing)`, a SECURITY DEFINER aggregate of completed sales (net of refunds, returns left out) and live listings of one product, with a minimum sample of 3, callable by members; an expression index on `order_items` for the snapshot's part number; and restates `product_coverage` (from `120000`) to count completed sale lines.
+- `140000` adds `price_comparables(brand, part number, currency, exclude listing)`, a SECURITY DEFINER aggregate of completed sales (net of refunds, returns left out) and live listings of one product, with a minimum sample of 3, callable by members, reading at most the newest 500 sales of each number through an expression index on `order_items` (part number, `captured_at`); and restates `product_coverage` (from `120000`) to count completed sale lines, set-based.
+- `150000` makes the hourly products run read what changed: `product_grow_queue` (internal), filled by triggers when a listing or build line gains or changes its brand, part number or status (never on a price or a view) and when a listing gains an alternate; `grow_products` restated to read the queue, join the run's number list in every statement, and count only identifiers a live record, link or admin decision still points at when filing "one number, several brands". Index on `part_number_links.created_at`.
+
+Checked on a fresh database (CI's PG15 image): every B1 file applies twice; all 93 SQL guard files pass, including `products_guard.sql` checks 6d–6h (the queue) and `price_comparables_guard.sql` 1g (no negative ages). The 2M-part gate is in `docs/performance/query-plans.md`: vehicle fit unchanged, existing pages unchanged, the hourly run 59 s → 1.4 s, comparables' worst case 2.7 s → 10 ms warm.
 
 It also fixes `20261020120000` so it can be re-run (see that entry).
 

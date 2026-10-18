@@ -83,16 +83,18 @@ never a stored id — a seller who edits either field moves the listing, and a
 merge moves every record at once.
 
 **Growth.** `grow_products()` runs in full once as the backfill, then hourly
-over what changed since the last run (pg_cron `drvn-grow-products`: listings
-and build lines by `updated_at`, alternates and links added since, links
-touching those numbers) and in full nightly (`drvn-grow-products-full`,
+over what changed since the last run (pg_cron `drvn-grow-products`: the
+listings and build lines `product_grow_queue` holds — triggers queue them
+when their brand, part number or status changes, never on a price or a view
+— plus alternates and links added since, and links touching those numbers) and in full nightly (`drvn-grow-products-full`,
 04:47). It makes a product for every brand + number
 on a listing (not draft or removed) or build line that no product holds,
 applies brand-scoped same-product links, and files what it can't decide in
 `product_identity_reviews`:
 
 - **one number, several brands** — different parts sharing a number, or one
-  brand spelled two ways;
+  brand spelled two ways (counting only
+  identifiers something still points at, so a corrected brand isn't one);
 - **no brand** — a known number written without a brand (dismiss only; it
   can't join a product until it has one);
 - **link without brands** — a `same_product` link that would join two
@@ -161,6 +163,8 @@ not verified (B2).
   `newest_days`, `median_age_days`, `by_condition`).
 - **Asking** — parts for sale now with the same identity, sellers not
   suspended, optionally without the caller's own listing.
+- **The newest 500 sales of each number** are read, from an index in
+  purchase order, so a part sold thousands of times can't make the call slow.
 - **Minimum sample: 3.** Below it the answer is a count, never a price, so
   one negotiated price can't be read off a "median"; the same floor applies
   per condition.
