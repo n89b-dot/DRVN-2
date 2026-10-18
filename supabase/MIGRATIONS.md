@@ -1,5 +1,18 @@
 # Applying migrations
 
+## October 19 — stock parts on the build sheet, export v9 (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261019100000_mod_items_stock_origin.sql` | not yet |
+| `20261019100100_account_export_contract_v9.sql` | not yet |
+
+Apply in order, after `20261018100200`.
+- `100000` adds `mod_items.origin` (`aftermarket` by default, or `stock`) for "What came off". `save_mod_items` is the `20260919203000` body with origin added to its checks, insert and update. An editor that omits origin leaves a line's stored value alone.
+- `100100` bumps the export contract to `2026-10-19.v9`, adding origin to the mod_items section.
+
+Checked on a fresh database: every file applies, every SQL guard passes (including the new `mod_stock_origin_guard.sql`), and the generated types match.
+
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 
 | File | Applied to |

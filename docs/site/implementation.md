@@ -11,7 +11,7 @@
 
 Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/docs/implementation`).
 
-**Progress:** 70 initiatives — 2 planned · 1 in progress · 24 implemented · 36 validated · 6 deferred · 1 blocked externally
+**Progress:** 71 initiatives — 1 planned · 1 in progress · 25 implemented · 37 validated · 6 deferred · 1 blocked externally
 
 ### 01 · Engineering foundations
 
@@ -319,7 +319,7 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **Validation:** 89 unit tests (SSRF matrix, fixture-driven adapters, non-invention validation, heuristic extractor, policy/config); import_guard.sql (8 assertions) green against the dev project; migration applied twice; e2e flow spec covering paste import, review and draft-save.
 - **Docs:** docs/listing-importer-spec.md, docs/site/listing-import.md
 
-#### Negotiation v2: counter-backs for every member — Planned
+#### Negotiation v2: counter-backs for every member — Validated
 
 - **Brief:** PRD O-1, O-2, O-4, O-5 · agent plan A1
 - **Exists today:** An offer gets one answer: the seller accepts, declines or counters once. A below-minimum offer is refused before anything is recorded, so trying again costs nothing.
@@ -328,8 +328,19 @@ Source of truth: `src/lib/docs/implementation-registry.ts` (rendered live at `/d
 - **User benefit:** Buyers and sellers can haggle a few rounds, and the minimum can't be found by trial and error.
 - **Approach:** Rules in the database, the same path for people and agents; lock order listing → negotiation → order → payment.
 - **Depends on:** offer-floor-private
-- **Validation:** Not started.
+- **Validation:** Merged (#27–#29) and on the shared dev project since 18 Oct (probes in supabase/MIGRATIONS.md). offer_rounds_guard and offer_move_guard pass, the four-race negotiation-concurrency suite passes, and e2e/negotiation-three-rounds.spec.ts runs offer → counter → counter-back → accept in a browser. Retiring the old offer write paths (the contract step) is still to come.
 - **Docs:** docs/decisions/agent-foundations.md, docs/plans/2026-10-agent-and-graph-plan.md
+
+#### Seller helpers: photo shot lists and what came off — Implemented
+
+- **Brief:** Agent plan, alongside A3c–A3d (no AI) · AG-9, AG-11
+- **Exists today:** The sell form asks for photos with no guidance on which ones buyers look for. The build sheet lists only aftermarket parts, so fitting first coilovers to a stock car leaves nothing to mark removed, and the stock parts never get listed.
+- **Changing:** The photo step suggests 3–5 shots for the part type (a generic list until the type is known; the title sharpens mixed types such as springs vs coilovers). A new mod line asks once, inline, which stock parts came off; ticked ones become removed lines marked stock (`mod_items.origin`), each with List it, so the listing carries the car maker as brand and the source car's fitment.
+- **Surfaces:** `src/lib/marketplace/photo-guide.ts`, `src/lib/mods/stock-parts.ts`, `SellForm`, `/garage/[id]/edit`, `supabase/migrations/20261019100000_mod_items_stock_origin.sql`
+- **User benefit:** Better photos without a checklist to fill in, and parts that came off a stock car become things to sell.
+- **Approach:** Static maps, no AI and no new screens. The shot list is a suggestion, never required (one photo still publishes). The stock offer reads the finer mod type from the product name by keyword, with a short pick list as the fallback; save_mod_items keeps a line's origin when an older editor omits it. The agent later calls the same functions (AG-9).
+- **Validation:** photo-guide.test.ts (every subcategory covered, 3–5 shots) and stock-parts.test.ts pass; mod_stock_origin_guard.sql passes on a fresh database with every other guard; generated types check clean.
+- **Docs:** docs/decisions/seller-helpers.md, supabase/MIGRATIONS.md
 
 #### Immutable commercial sale snapshot — Validated
 
