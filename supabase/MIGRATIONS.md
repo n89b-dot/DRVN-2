@@ -108,14 +108,18 @@ Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; e
 
 | File | Applied to |
 |---|---|
-| `20261019100000_mod_items_stock_origin.sql` | not yet |
-| `20261019100100_account_export_contract_v9.sql` | not yet |
+| `20261019100000_mod_items_stock_origin.sql` | shared dev project (2026-10-18) |
+| `20261019100100_account_export_contract_v9.sql` | shared dev project (2026-10-18) |
 
 Apply in order, after `20261018100200`.
 - `100000` adds `mod_items.origin` (`aftermarket` by default, or `stock`) for "What came off". `save_mod_items` is the `20260919203000` body with origin added to its checks, insert and update. An editor that omits origin leaves a line's stored value alone.
 - `100100` bumps the export contract to `2026-10-19.v9`, adding origin to the mod_items section.
 
 Checked on a fresh database: every file applies, every SQL guard passes (including the new `mod_stock_origin_guard.sql`), and the generated types match.
+
+**Shared dev, 2026-10-18**, after #34 merged (5cb7832), with `node scripts/apply-migration.mjs`. A2's v10 (`20261021100200`) was already on dev, so it was re-run straight after `100100` and dev ends on `2026-10-21.v10`; the constraint allows v9 too.
+- **Before:** public schema saved to `~/drvn-db-backups/pre-20261019-seller-helpers.sql`, with `mod_items` and `account_export_requests` data in `pre-20261019-seller-helpers-data.sql`.
+- **After:** `mod_items.origin` exists with its check; all 121 existing lines read `aftermarket`; `save_mod_items` carries origin; `request_account_export` stamps v10. In a rolled-back transaction, a real owner saved their sheet plus a stock line: their 6 lines stayed aftermarket and the new one saved as stock and removed.
 
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 
