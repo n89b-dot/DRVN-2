@@ -1,12 +1,12 @@
 # Applying migrations
 
-## October 18 — show my minimum, export v8, listing-first locks (not applied yet)
+## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261018100000_show_offer_floor.sql` | throwaway and local stacks only (2026-10-18) |
-| `20261018100100_account_export_contract_v8.sql` | throwaway and local stacks only (2026-10-18) |
-| `20261018100200_listing_first_lock_order.sql` | throwaway and local stacks only (2026-10-18) |
+| `20261018100000_show_offer_floor.sql` | shared dev project (2026-10-18, twice) |
+| `20261018100100_account_export_contract_v8.sql` | shared dev project (2026-10-18, twice) |
+| `20261018100200_listing_first_lock_order.sql` | shared dev project (2026-10-18, twice) |
 
 Apply in order, after `20261017160000`.
 - `100000` adds `listings.show_offer_floor`, the seller's choice to show their minimum (O-3), which is off by default. It also adds `listing_public_offer_floor(listing)`, which returns the private minimum only when that choice is on. `save_listing_creation` and `update_listing_atomic` save the flag; their bodies are otherwise unchanged, and a form that doesn't send it saves it as off.
@@ -18,11 +18,23 @@ Checked on a fresh database and the local stack:
 - every SQL guard passes, including `offer_floor_privacy_guard.sql` checks 29–31 for the switch;
 - `tests/operations/negotiation-concurrency.test.ts` passes four races: two counters at once, accept against pass, checkout against cancel, and acceptance against another buyer's checkout.
 
-## October 17 — negotiation v2 moves, A1 step two (not applied yet)
+**Shared dev, 2026-10-18 (all six A1 files, `20261017150000` through `20261018100200`)**, with Neil's go-ahead. They were applied in order, each twice, with `node scripts/apply-migration.mjs`, after #26–#29 merged.
+- **Before:**
+  - Dev matched a fresh database at the previous `main` (5458653) in everything A1 touches.
+  - Two differences, both outside A1: `marketplace_browse_rows`, which the search speed-up session applied from #23, and five `deletion_write_guard` triggers from an unmerged branch.
+  - Saved to `~/drvn-db-backups/pre-20261018-a1-apply.sql` (public schema), with offers, listings, private terms, export requests, orders, payments and notifications in `pre-20261018-a1-apply-data.sql`.
+- **After:** dev matches a fresh database at `main` (8321071) across 1,566 functions, policies, triggers, columns and grants, apart from those same two.
+  - All 12 existing offers have their rounds backfilled, with `round_count` agreeing.
+  - No listing shows its minimum.
+  - Exports stamp `2026-10-18.v8`.
+  - In a rolled-back transaction, a real buyer and seller ran offer → counter → counter-back → accept. That gave the rounds `offer:buyer counter:seller counter:buyer accept:seller` and an order at exactly the counter-back price. The rollback left the offer count unchanged.
+  - A signed-out API call to `offer_rounds` and to `offer_move` gets 42501.
+
+## October 17 — negotiation v2 moves, A1 step two (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261017160000_offer_move.sql` | throwaway database only (2026-10-17) |
+| `20261017160000_offer_move.sql` | shared dev project (2026-10-18, twice) |
 
 Apply after `20261017150000` and `20261017150100`. It adds `offer_open` and `offer_move`, two
 SECURITY DEFINER functions that make every negotiation move under the v2 rules
@@ -51,12 +63,12 @@ switched app runs everywhere. A later contract step removes them.
 Checked on a fresh database with every migration: the file applies twice cleanly, the new
 `offer_move_guard.sql` (23 checks) and every other guard pass, and generated types match.
 
-## October 17 — offer rounds, A1 step one (not applied yet)
+## October 17 — offer rounds, A1 step one (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261017150000_offer_rounds.sql` | throwaway database only (2026-10-17) |
-| `20261017150100_account_export_contract_v7.sql` | throwaway database only (2026-10-17) |
+| `20261017150000_offer_rounds.sql` | shared dev project (2026-10-18, twice) |
+| `20261017150100_account_export_contract_v7.sql` | shared dev project (2026-10-18, twice) |
 
 The expand step of negotiation v2 (`docs/decisions/negotiation-v2.md`). `150000` adds
 `offer_rounds`, one append-only row per move, readable by the offer's buyer and seller, writable
