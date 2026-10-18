@@ -19,7 +19,7 @@ Checked on a fresh database (CI's PG15 image): both files apply twice cleanly; e
 
 | File | Applied to |
 |---|---|
-| `20261020100000_vehicle_generations.sql` | not yet |
+| `20261020100000_vehicle_generations.sql` | shared dev project (2026-10-18, twice) |
 
 Apply after `20261018100200`. It adds:
 - `vehicle_generations` (catalog model, name, platform code, years), public read, no client writes, with a curated seed of about 200 generations joined to the catalog by make and model name. Models the catalog lacks are skipped; re-running the file after a catalog import fills them in.
@@ -28,7 +28,11 @@ Apply after `20261018100200`. It adds:
 
 It restates `explore_build_rows` with the two new columns appended (it returns whole `cars` rows; without them Explore's build search fails with "return type mismatch").
 
-Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; every SQL guard passes, including the new `vehicle_generations_guard.sql` and `car_vin_privacy_guard.sql`'s updated column set. Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
+Checked on a fresh database (CI's PG15 image): the file applies twice cleanly; every SQL guard passes, including the new `vehicle_generations_guard.sql` and `car_vin_privacy_guard.sql`'s updated column set.
+
+**Shared dev, 2026-10-18**, after #35 merged (5ccc623), with `node scripts/apply-migration.mjs`, twice.
+- **Before:** `cars` had exactly main's columns and `explore_build_rows` was byte-identical to 20261011120000's. Saved to `~/drvn-db-backups/pre-20261020100000-generations.sql` (cars, catalog schema and the old function) and `pre-20261020100000-cars-data.sql`.
+- **After:** 194 generations; 11 of 16 catalogued cars resolved (5 are changeover years or unseeded models). `pg_get_functiondef` of `explore_build_rows`, `resolve_vehicle_generation`, `car_generation_before_write` and `vehicle_generations_rescan` matches a fresh database exactly; all four triggers present. Through the API as a visitor: Explore build search returns cars with `generation_id`/`generation_source` and a null VIN; `vehicle_generations` reads; a write is refused (401). Rehearsed against a copy of shared dev's catalog and cars: 194 generations seeded, 11 of 16 catalogued cars resolved; the other five are changeover years (Silvia 1999, Skyline 2002) or models with no generations seeded (Genesis, 458, Delta Integrale).
 
 ## October 18 — show my minimum, export v8, listing-first locks (shared dev project)
 
