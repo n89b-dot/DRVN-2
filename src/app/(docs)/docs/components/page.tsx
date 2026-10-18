@@ -43,6 +43,7 @@ import {
   Badge,
   KindBadge,
   SheetTabs,
+  Icon,
 } from "@/components/ui";
 
 import { DocsJumprow, DocsPagehead, Specimen, SpecimenGroup } from "../../_components/docs-page";
@@ -1043,6 +1044,31 @@ export default function ComponentsPage() {
             <Button variant="live" className="min-w-0 flex-1">
               Proceed to checkout
             </Button>
+          </div>
+        </Specimen>
+        <Specimen
+          name="Bottom nav"
+          klass="BottomNav / .bnav"
+          note="The phone tab bar below 1081px: Explore · Marketplace · Home · Garage (signed out: Explore · Marketplace · Join). The current tab takes the rail's live tick on its top edge. One bottom surface per route, so it stands down on pages with a buybar, savebar or composer, on focused screens, and while the keyboard is up. Drawn static here; live at phone width."
+        >
+          <div className="rounded-ctl border-t border-[color:var(--rule-mid)] bg-tile px-2">
+            <ul className="bnav__rows">
+              {([
+                ["Explore", "compass", false],
+                ["Marketplace", "market", false],
+                ["Home", "home", true],
+                ["Garage", "garage", false],
+              ] as const).map(([label, icon, here]) => (
+                <li key={label}>
+                  <span className={here ? "bnav__item is-here" : "bnav__item"}>
+                    <span className="bnav__ico" aria-hidden="true">
+                      <Icon name={icon} className="h-[20px] w-[20px]" />
+                    </span>
+                    <span className="bnav__label">{label}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         </Specimen>
         <Specimen

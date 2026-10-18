@@ -6,9 +6,14 @@ import { Suspense, useState, type ReactNode } from "react";
 import { StreamedShellCounts, type ShellCounts } from "./streamed-shell-counts";
 
 import { cx } from "@/lib/format";
+import { BottomNav } from "./bottom-nav";
 import { Icon } from "./icons";
 import { LivesheetBar } from "./livesheet-bar";
 import {
+  BOTTOM_NAV,
+  BOTTOM_NAV_PUBLIC,
+  bottomNavActive,
+  bottomNavHiddenOn,
   FAMILY_HREFS,
   isSellingFamily,
   matchesFamily,
@@ -279,6 +284,7 @@ export function AppShell({
   counts?: Promise<ShellCounts>;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
+  const pathname = usePathname();
 
   const toggleRail = () => {
     const next = !railOpen;
@@ -315,6 +321,15 @@ export function AppShell({
         </Suspense> : renderBar(initialCounts)}
         <main id="main" className="min-w-0">{children}</main>
       </div>
+      <BottomNav
+        items={(signedIn ? BOTTOM_NAV : BOTTOM_NAV_PUBLIC).map((route) => ({
+          href: route.href,
+          label: route.label,
+          icon: route.icon,
+          active: bottomNavActive(pathname, route.href),
+        }))}
+        hidden={bottomNavHiddenOn(pathname)}
+      />
     </div>
   );
 }
