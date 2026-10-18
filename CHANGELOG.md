@@ -3,6 +3,9 @@
 ## 2026-10-17 — Every offer move is recorded (negotiation v2, step one)
 
 Offers gain a history of moves. `offer_rounds` keeps one row per move: the opening offer, a counter, accept, decline, withdraw or expiry. Each proposal's minimum at the time is kept privately in `offer_round_terms`. Today's offer code is unchanged; a trigger records its moves, and a backfill rebuilds the history of every existing offer. The offer page now reads its history from the rounds, falling back to the old reading if they can't be read. Members' exports include their rounds (contract `2026-10-17.v7`). The design for the rest of negotiation v2 is `docs/decisions/negotiation-v2.md`.
+## 2026-10-17 — Row security checks "who is this?" once per query
+
+Postgres ran `auth.uid()` once per row in 88 of the 115 row-security policies, and `is_admin()`, a table read, in 34 of them. Migration `20261017140000` wraps each call in `(select …)`, so it runs once per query. Who can read or write what is unchanged: every policy is its original apart from the wrapping, and all SQL guards pass. The new `rls_initplan_guard.sql` keeps new policies in this form. It clears the advisor's `auth_rls_initplan` warnings and keeps commerce reads cheap as rows grow.
 
 ## 2026-10-17 — The offer minimum is private
 
