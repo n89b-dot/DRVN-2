@@ -31,10 +31,13 @@ export function PurchaseActions({
   paymentsLive,
   priceCents,
   shippingCents,
+  offerFloorCents = null,
   myOffer = null,
   resumeAction = null,
   returnPath,
 }: {
+  /** The seller's minimum, only when they chose to show it (O-3). */
+  offerFloorCents?: number | null;
   /** The viewer's own live offer on this part, if any. */
   myOffer?: { id: string; amountCents: number; counterCents: number | null } | null;
   listingId: string;
@@ -267,7 +270,7 @@ export function PurchaseActions({
               inputMode="decimal"
               value={offerAmount}
               onChange={(event) => setOfferAmount(event.target.value)}
-              hint={`Asking ${formatPrice(priceCents)}. You get 3 offers on this part, counter-offers included. Each turn lasts 72 hours.`}
+              hint={`Asking ${formatPrice(priceCents)}${offerFloorCents != null ? ` · offers from ${formatPrice(offerFloorCents)}` : ""}. You get 3 offers on this part, counter-offers included. Each turn lasts 72 hours.`}
               error={offerState.error}
               ok={offerState.ok}
             />

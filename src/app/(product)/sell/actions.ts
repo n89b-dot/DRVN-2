@@ -217,6 +217,8 @@ async function readListingFields(formData: FormData, userId: string) {
       width_in: shippingMode === "drvn" ? widthIn : null,
       height_in: shippingMode === "drvn" ? heightIn : null,
       offer_floor_cents: floor,
+      // Showing it is the seller's choice, and only means something with a minimum (O-3).
+      show_offer_floor: floor !== null && formData.get("show_offer_floor") === "on",
       allows_collection: shippingMode === "pickup_only" ? true : allowsCollection,
       location: String(formData.get("location") ?? "").trim() || null,
       compatibility_notes: compatibility || null,

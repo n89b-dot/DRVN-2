@@ -1,5 +1,23 @@
 # Applying migrations
 
+## October 18 — show my minimum, export v8, listing-first locks (not applied yet)
+
+| File | Applied to |
+|---|---|
+| `20261018100000_show_offer_floor.sql` | throwaway and local stacks only (2026-10-18) |
+| `20261018100100_account_export_contract_v8.sql` | throwaway and local stacks only (2026-10-18) |
+| `20261018100200_listing_first_lock_order.sql` | throwaway and local stacks only (2026-10-18) |
+
+Apply in order, after `20261017160000`.
+- `100000` adds `listings.show_offer_floor`, the seller's choice to show their minimum (O-3), which is off by default. It also adds `listing_public_offer_floor(listing)`, which returns the private minimum only when that choice is on. `save_listing_creation` and `update_listing_atomic` save the flag; their bodies are otherwise unchanged, and a form that doesn't send it saves it as off.
+- `100100` bumps the export contract to `2026-10-18.v8`, adding the flag to the listings section.
+- `100200` makes `freeze_accepted_offer_checkout`, `settle_seller_cancellation`, `purchase_finalize`, `settle_payment_capture`, `record_payment_request_rejection` and `finish_reservation_expiry` lock the order's listings before the order. The freeze also locks the offer. That puts every path that sells a listing on listing → offer → order → payment. The change only adds lines.
+
+Checked on a fresh database and the local stack:
+- every file applies twice cleanly;
+- every SQL guard passes, including `offer_floor_privacy_guard.sql` checks 29–31 for the switch;
+- `tests/operations/negotiation-concurrency.test.ts` passes four races: two counters at once, accept against pass, checkout against cancel, and acceptance against another buyer's checkout.
+
 ## October 17 — negotiation v2 moves, A1 step two (not applied yet)
 
 | File | Applied to |

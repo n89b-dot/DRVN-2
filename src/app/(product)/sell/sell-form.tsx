@@ -58,6 +58,8 @@ export type ListingDraft = {
   width_in?: number | null;
   height_in?: number | null;
   offer_floor_cents: number | null;
+  /** Show the minimum on the listing (O-3); off by default. */
+  show_offer_floor?: boolean;
   allows_collection: boolean;
   location: string | null;
   compatibility_notes: string | null;
@@ -1085,6 +1087,13 @@ export function SellForm({
                   ? `Offers below this are declined automatically, and buyers never see this amount. Prefilled at your ${defaultOfferFloorPct}% default.`
                   : 'Offers below this are declined automatically, and buyers never see this amount.')
               }
+            />
+            <Checkbox
+              id="sell-show_offer_floor"
+              name="show_offer_floor"
+              defaultChecked={listing?.show_offer_floor ?? false}
+              label="Show this minimum on the listing"
+              hint="Off by default. When it's on, buyers see “offers accepted from” this amount."
             />
           </div>
           {/* Full width, short options: the select used to share a row and

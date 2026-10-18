@@ -186,6 +186,7 @@ export default async function EditListingPage({
             width_in: listing.width_in,
             height_in: listing.height_in,
             offer_floor_cents: offerFloorCents,
+            show_offer_floor: listing.show_offer_floor,
             allows_collection: listing.allows_collection ?? false,
             location: listing.location,
             compatibility_notes: listing.compatibility_notes,

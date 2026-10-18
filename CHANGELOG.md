@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-18 — Show my minimum, one lock order, and negotiation drills (negotiation v2, step three)
+
+- **Show my minimum (O-3).** Sellers choose whether buyers see "offers accepted from" their minimum, and it's off by default. The amount stays private; the listing page asks for it only when the seller has turned it on (`listing_public_offer_floor`).
+- **One lock order.** Checkout freeze, seller cancellation, payment finalisation and their callers now lock the listing first, like acceptance does. Every path that sells a listing takes listing → offer → order → payment, so a checkout racing an offer move waits instead of deadlocking.
+- **Drills.** `tests/operations/negotiation-concurrency.test.ts` races two counters, an acceptance against a pass, a checkout against a cancellation, and an acceptance against another buyer's checkout. Each time, one wins and the other is told why. `e2e/negotiation-three-rounds.spec.ts` plays a full five-move deal in two signed-in browsers.
+
 ## 2026-10-17 — Negotiation v2: counter-backs for everyone (step two)
 
 Buyers can now counter back. Every move goes through one database function, `offer_move` (or `offer_open` for the first offer), under the rules in `docs/decisions/negotiation-v2.md`:

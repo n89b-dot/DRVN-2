@@ -118,13 +118,13 @@ Each step ships on its own and leaves the app working.
    - Add buyer counter-backs, the 3-offer limit, the per-turn expiry, below-minimum rounds, the
      listing-first lock order and cancel-before-checkout.
    - Remove the client write policies on `offers`, and drop the step-1 trigger.
-3. **The screens.**
+3. **The screens** (done 18 Oct, except the "via agent" recipe, which comes with A3a).
    - Round history on `OfferCard` and on the offer page.
    - A counter-back form for buyers, and "Offer 2 of 3" shown to both sides.
    - "Show my minimum" on the sell form (O-3), off by default.
    - A quiet "via agent" recipe in CSS, unused until A3a.
    - Expiry notifications, and the lapsed-reservation wording fix.
-4. **The gate:**
+4. **The gate** (the concurrency drills and the three-round e2e were added 18 Oct; still to come is a contract step that retires the old offer paths):
    - SQL guards for turns, the limit across threads, below-minimum attempts using a turn, the
      snapshot honoured after a limit change, replay, stale rounds, and the refused
      cancellation once checkout has started.
