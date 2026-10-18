@@ -160,13 +160,34 @@
 
   --maxw: 1200px;
 
+  /* Spacing — an 8px grid with 4px half-steps where a whole step is too
+     coarse. N is the value in 4px units, the same numbers Tailwind's
+     gap-N / p-N / mt-N utilities use, so `gap: var(--space-3)` and
+     `className="gap-3"` are the same 12px. Permitted values: 4 · 8 · 12 · 16
+     · 20 · 24, then multiples of 8. 0, 1 and 2px are hairlines, not spacing.
+     Enforced by spacing-ratchet.test.ts. */
+  --space-1: 4px; /* tight: binds a line to the one above */
+  --space-2: 8px; /* group: opens a new line; chip/control inner air */
+  --space-3: 12px; /* control padding, row gaps */
+  --space-4: 16px; /* the grid gap (.deck); plate padding on phones */
+  --space-5: 20px; /* tile padding */
+  --space-6: 24px; /* section gaps */
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  /* Touch floor — every primary control, chip and bar icon is at least this
+     tall. Was 44px until October 2026; 40 sits on the grid. */
+  --touch: 40px;
+
   /* Bottom-surface contract — one number every fixed bottom bar (buybar,
      savebar, thread composer) and every page-clearance rule agree on: the
-     bar's own box is ≤64px tall, and content reserves 76px (bar + 12px of
+     bar's own box is ≤64px tall, and content reserves 80px (bar + 16px of
      air) plus the device safe-area. Only ONE bottom surface may own the
      bottom edge on a route at a time. z-index ladder (bottom-relevant):
      toast 120 > sheets 90 > savebar 50 > buybar/composer 40. */
-  --bottom-surface-h: 76px;
+  --bottom-surface-h: 80px;
 
   /* Legacy token aliases (pre-Livesheet product code) */
   --bg-app: var(--paper);

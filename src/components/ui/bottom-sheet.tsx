@@ -197,7 +197,7 @@ export function BottomSheet({
           <button
             type="button"
             onClick={onClose}
-            className="relbtn !static mx-auto mt-1 block min-h-[44px]"
+            className="relbtn !static mx-auto mt-1 block min-h-10"
             aria-label={`Close ${label}`}
           >
             {closeLabel}

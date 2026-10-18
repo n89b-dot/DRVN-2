@@ -46,7 +46,7 @@ export function ActivityGallery({ images, title }: { images: GalleryPhoto[]; tit
         {tile(images[0], 0, images.length === 1 ? "aspect-[16/10] w-full rounded-r" : "h-56 rounded-r")}
         {images.length > 1 && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {images.slice(1, 3).map((image, i) => tile(image, i + 1, "h-[106px] rounded-ctl"))}
+            {images.slice(1, 3).map((image, i) => tile(image, i + 1, "h-[104px] rounded-ctl"))}
           </div>
         )}
       </div>

@@ -76,7 +76,7 @@ export default function RulesPage() {
                 Every text/ground pair clears WCAG AA 4.5:1 in <b>both</b> lightings — re-measure
                 whenever a token moves.
               </li>
-              <li>Touch targets ≥ 44px for primary controls — chips, card Save/cart squares and dialog Close included.</li>
+              <li>Touch targets ≥ 40px for primary controls — chips, card Save/cart squares and dialog Close included.</li>
               <li>:focus-visible — 2px live outline, offset 3px. Never removed.</li>
               <li>Dialogs and sheets trap focus, close on Escape, lock body scroll.</li>
             </ul>

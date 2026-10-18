@@ -6,7 +6,7 @@ import { cx } from "@/lib/format";
  * The commit row of an editing surface — the `.saverow` recipe as a
  * component: aux action anchored left, status and the primary action on the
  * right; compact widths stack the three deliberately (aux, then status as a
- * line of its own, then a full-width 44px commit) instead of letting flex
+ * line of its own, then a full-width 40px commit) instead of letting flex
  * wrap decide.
  *
  * Status is part of the contract, not a per-page improvisation: `ok` renders

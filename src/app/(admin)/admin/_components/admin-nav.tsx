@@ -138,7 +138,7 @@ export function AdminNav({
               className={cx("fbtn", active && "is-on")}
               aria-current={active ? "page" : undefined}
             >
-              <Icon name={icon} className="h-[14px] w-[14px]" />
+              <Icon name={icon} className="h-4 w-4" />
               {label}
               {badge === null ? (
                 <span className="n n--live" aria-label="Count unavailable" title="Count unavailable">
@@ -162,7 +162,7 @@ export function AdminNav({
         aria-label={night ? "Switch to light theme" : "Switch to dark theme"}
         title={night ? "Dark theme" : "Light theme"}
       >
-        <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
+        <Icon name={night ? "moon" : "sun"} className="h-4 w-4" />
       </button>
 
       <button
@@ -240,7 +240,7 @@ export function AdminNav({
                 aria-pressed={night}
                 tabIndex={open ? undefined : -1}
               >
-                <Icon name={night ? "moon" : "sun"} className="h-[17px] w-[17px]" />
+                <Icon name={night ? "moon" : "sun"} className="h-4 w-4" />
                 Theme <b>{night ? "Dark" : "Light"}</b>
               </button>
             </div>

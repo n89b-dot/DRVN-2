@@ -103,8 +103,8 @@ export function SkeletonPdp() {
           <span className="gbar gbar--sm !w-[30%]" />
           <span className="gbar mt-3 !h-10 !w-[55%]" />
           <span className="gbar gbar--sm mt-3 !w-[65%]" />
-          <span className="gbar mt-5 !h-11 !w-full !rounded-ctl" />
-          <span className="gbar mt-2 !h-11 !w-full !rounded-ctl" />
+          <span className="gbar mt-5 !h-10 !w-full !rounded-ctl" />
+          <span className="gbar mt-2 !h-10 !w-full !rounded-ctl" />
         </div>
       </div>
     </div>
@@ -120,7 +120,7 @@ export function SkeletonLedger({ rows = 6 }: { rows?: number }) {
       </p>
       <header className="pagehead is-loading" aria-hidden="true">
         <span className="microlabel">Loading…</span>
-        <span className="gbar mt-3 !h-7 !w-[35%]" />
+        <span className="gbar mt-3 !h-8 !w-[35%]" />
       </header>
       <SkeletonRows rows={rows} />
     </>

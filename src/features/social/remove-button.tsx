@@ -36,7 +36,7 @@ export function RelationshipRemove({
     }}>
       <input type="hidden" name="target_type" value={targetType} />
       <input type="hidden" name="target_id" value={targetId} />
-      <button type="submit" disabled={pending} className="relbtn !static inline-flex min-h-11 items-center">
+      <button type="submit" disabled={pending} className="relbtn !static inline-flex min-h-10 items-center">
         {pending ? "Removing…" : label}
       </button>
       {state.error && (

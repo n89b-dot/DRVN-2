@@ -9,7 +9,7 @@ import { cx } from "@/lib/format";
  * Material's role here is behavioral only: variant = action hierarchy
  * (contained primary / contained default / outlined / text), loading is a
  * defined state rather than a per-page improvisation, and every variant keeps
- * the 44px compact touch floor the stylesheet already enforces. What the
+ * the 40px compact touch floor the stylesheet already enforces. What the
  * button *looks* like — Plex Mono, brackets, ink/live fills, 10px control
  * radius, press scale — is Livesheet's, entirely from `globals.css`.
  *

@@ -113,7 +113,7 @@ export default async function AdminAuditPage({
               <div key={op.operationId} className="jobrow auditrow">
                 <span className="auditrow__ts">{auditStamp(op.requestedAt)}</span>
                 <div className="min-w-0">
-                  <p className="flex flex-wrap items-baseline gap-x-2.5">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
                     <span className="auditrow__action">{op.action}</span>
                     <span className="order__meta">
                       {OPERATION_STATE[op.state]} · op {op.operationId.slice(0, 8)}
@@ -233,7 +233,7 @@ export default async function AdminAuditPage({
               <div key={r.id} className="jobrow auditrow">
                 <span className="auditrow__ts">{auditStamp(r.created_at)}</span>
                 <div className="min-w-0">
-                  <p className="flex flex-wrap items-baseline gap-x-2.5">
+                  <p className="flex flex-wrap items-baseline gap-x-2">
                     <span
                       className={cx("auditrow__dot", `auditrow__dot--${r.subject_type}`)}
                       title={r.subject_type}

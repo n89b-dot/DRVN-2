@@ -48,7 +48,7 @@ const paths: Record<CategoryIconName, React.ReactNode> = {
 
 export function CategoryIcon({
   name,
-  className = "h-7 w-7",
+  className = "h-6 w-6",
 }: {
   name: CategoryIconName;
   className?: string;
