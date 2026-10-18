@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { STATE_GROUPS } from "@/app/(product)/orders/next-action";
 
 import {
+  AGENT_JOB_TRANSITIONS,
+  AGENT_MANDATE_TRANSITIONS,
+  AGENT_TASK_TRANSITIONS,
   DOMAIN_STATES,
   LISTING_TRANSITIONS,
   OFFER_TRANSITIONS,
@@ -72,6 +75,14 @@ describe("domain state definitions", () => {
     // Refund crashes land in recovery, never silently complete.
     expect(canTransition(REFUND_TRANSITIONS, "provider_pending", "recovery_required")).toBe(true);
     expect(REFUND_TRANSITIONS.recovery_required).toEqual([]);
+  });
+
+  it("never reopens a finished agent task, mandate or job", () => {
+    for (const state of ["completed", "failed", "cancelled"] as const) expect(AGENT_TASK_TRANSITIONS[state]).toEqual([]);
+    expect(AGENT_MANDATE_TRANSITIONS.revoked).toEqual([]);
+    expect(AGENT_MANDATE_TRANSITIONS.ended).toEqual([]);
+    expect(canTransition(AGENT_JOB_TRANSITIONS, "done", "pending")).toBe(false);
+    expect(canTransition(AGENT_JOB_TRANSITIONS, "leased", "pending")).toBe(true);
   });
 
   it("only moderation clears a takedown", () => {

@@ -141,6 +141,43 @@ Enforced by: CHECK + guard_listing_import_status trigger (0047)
 | `consumed` | **terminal** |
 | `expired` | **terminal** |
 
+### Agent tasks
+
+Enforced by: CHECK + guard_agent_task_status trigger (20261021100000); agent_* functions and the offer_rounds outbox trigger (20261021100100)
+
+| From | May move to |
+| --- | --- |
+| `working` | `waiting_for_event` · `needs_approval` · `completed` · `failed` · `cancelled` |
+| `waiting_for_event` | `working` · `needs_approval` · `completed` · `failed` · `cancelled` |
+| `needs_approval` | `working` · `waiting_for_event` · `completed` · `failed` · `cancelled` |
+| `completed` | **terminal** |
+| `failed` | **terminal** |
+| `cancelled` | **terminal** |
+
+### Agent mandates
+
+Enforced by: CHECK + guard_agent_mandate_status trigger (20261021100000); agent_mandate_set_status (20261021100100)
+
+| From | May move to |
+| --- | --- |
+| `active` | `paused` · `revoked` · `ended` |
+| `paused` | `active` · `revoked` · `ended` |
+| `revoked` | **terminal** |
+| `ended` | **terminal** |
+
+### Agent jobs (outbox)
+
+Enforced by: CHECK (20261021100000); agent_claim_jobs / agent_finish_job / agent_reconcile_outbox (20261021100100)
+
+| From | May move to |
+| --- | --- |
+| `pending` | `leased` · `cancelled` |
+| `leased` | `pending` · `done` · `failed` · `cancelled` · `dead` |
+| `done` | **terminal** |
+| `failed` | **terminal** |
+| `cancelled` | **terminal** |
+| `dead` | **terminal** |
+
 <!-- END GENERATED: domain-states -->
 
 ## What the maps don't show

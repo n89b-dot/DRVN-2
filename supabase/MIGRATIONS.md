@@ -1,5 +1,47 @@
 # Applying migrations
 
+## October 21 — the agent foundation, A2 (not yet on shared dev)
+
+| File | Applied to |
+|---|---|
+| `20261021100000_agent_foundation.sql` | not yet applied |
+| `20261021100100_agent_worker.sql` | not yet applied |
+| `20261021100200_account_export_contract_v10.sql` | not yet applied |
+
+Apply in order, after B1's `20261020100000`–`120000`, the A1 files and the seller-helpers
+export bump (`2026-10-19.v9`) if it is on the project. Nothing changes for
+members: the seeded `all` kill switch keeps the agent paused for everyone, and
+no screen calls the new functions until A3a.
+- `100000` creates the agent's tables (`agent_mandates` and their versions,
+  `agent_tasks`, `agent_events`, `agent_conversations` and `agent_messages`,
+  `agent_approvals`, `agent_jobs`, `agent_controls`, `agent_telemetry`), all
+  owner-read or no client access at all, with the lifecycle and append-only
+  triggers and a database-side card-number scrub. `offer_rounds` gains
+  `actor_task_id`, `actor_job_id` and `mandate_version`; `offer_round_terms`
+  the buyer agent's ceiling. The admin audit log accepts `agent` subjects.
+- `100100` creates the `agent_worker` role **NOLOGIN** (giving it a login is the
+  operator step in `docs/production-runbook.md` §13a; never commit a password).
+  `offer_open` / `offer_move` become wrappers over `offer_open_core` /
+  `offer_move_core`, which take the actor and are callable by no client; their
+  bodies are 20261017160000's with the agent columns added. The effective
+  floor becomes the higher of the listing's minimum and an active seller
+  mandate's. It adds the outbox trigger on `offer_rounds`, the eight worker
+  functions (agent_worker only), the member functions (`agent_mandate_set`,
+  `agent_mandate_set_status`, `agent_approval_decide`, `agent_clear_conversation`),
+  `admin_set_agent_control`, and the service-role sweeps
+  (`agent_reconcile_outbox`, `agent_health`, `agent_retention_sweep`,
+  `agent_purge_member`).
+- `100200` bumps the export contract to `2026-10-21.v10` with the agent sections.
+
+Checked on a fresh database (port 55442): every file applies twice cleanly, all
+SQL guards pass, and `agent_worker_guard.sql` (the A2 security regression set,
+run as the real role) fails when the kill-switch or revocation check is
+removed. Also checked with #39's `20261019120000` applied before and after.
+An independent review (18 Oct) found the outbox trigger could fail a person's
+move in a revoke race, skipped jobs could block the queue, card redaction
+missed trailing digits, and several lock-order and null-argument gaps; all are
+fixed here with guard checks.
+
 ## October 20 — fitment evidence and price comparables, B1 step three
 
 | File | Applied to |

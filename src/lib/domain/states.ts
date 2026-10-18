@@ -157,6 +157,50 @@ export const MOD_ITEM_TRANSITIONS: TransitionMap<ModStatus> = {
   removed: ["installed"],
 };
 
+/** Agent tasks (A2, 20261021100000): what the agent is trying to do for its
+ *  owner. guard_agent_task_status refuses any move out of a finished state;
+ *  the agent functions and the outbox trigger make the rest. */
+export type AgentTaskStatus =
+  | "working"
+  | "waiting_for_event"
+  | "needs_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export const AGENT_TASK_TRANSITIONS: TransitionMap<AgentTaskStatus> = {
+  working: ["waiting_for_event", "needs_approval", "completed", "failed", "cancelled"],
+  waiting_for_event: ["working", "needs_approval", "completed", "failed", "cancelled"],
+  needs_approval: ["working", "waiting_for_event", "completed", "failed", "cancelled"],
+  completed: [],
+  failed: [],
+  cancelled: [],
+};
+
+/** Agent mandates (A2): the owner pauses, resumes or turns it off; a sale,
+ *  a finished offer or expiry ends it. guard_agent_mandate_status. */
+export type AgentMandateStatus = "active" | "paused" | "revoked" | "ended";
+
+export const AGENT_MANDATE_TRANSITIONS: TransitionMap<AgentMandateStatus> = {
+  active: ["paused", "revoked", "ended"],
+  paused: ["active", "revoked", "ended"],
+  revoked: [],
+  ended: [],
+};
+
+/** Agent jobs (A2): the outbox the worker leases. A lost lease goes back to
+ *  pending until max_attempts, then dead; a later round cancels it. */
+export type AgentJobStatus = "pending" | "leased" | "done" | "failed" | "cancelled" | "dead";
+
+export const AGENT_JOB_TRANSITIONS: TransitionMap<AgentJobStatus> = {
+  pending: ["leased", "cancelled"],
+  leased: ["pending", "done", "failed", "cancelled", "dead"],
+  done: [],
+  failed: [],
+  cancelled: [],
+  dead: [],
+};
+
 export type DomainName =
   | "mod_item"
   | "order"
@@ -166,7 +210,10 @@ export type DomainName =
   | "refund"
   | "shipment"
   | "return"
-  | "listing_import";
+  | "listing_import"
+  | "agent_task"
+  | "agent_mandate"
+  | "agent_job";
 
 export const DOMAIN_STATES: {
   domain: DomainName;
@@ -238,6 +285,25 @@ export const DOMAIN_STATES: {
     title: "Listing imports",
     authority: "CHECK + guard_listing_import_status trigger (0047)",
     transitions: IMPORT_TRANSITIONS,
+  },
+  {
+    domain: "agent_task",
+    title: "Agent tasks",
+    authority:
+      "CHECK + guard_agent_task_status trigger (20261021100000); agent_* functions and the offer_rounds outbox trigger (20261021100100)",
+    transitions: AGENT_TASK_TRANSITIONS,
+  },
+  {
+    domain: "agent_mandate",
+    title: "Agent mandates",
+    authority: "CHECK + guard_agent_mandate_status trigger (20261021100000); agent_mandate_set_status (20261021100100)",
+    transitions: AGENT_MANDATE_TRANSITIONS,
+  },
+  {
+    domain: "agent_job",
+    title: "Agent jobs (outbox)",
+    authority: "CHECK (20261021100000); agent_claim_jobs / agent_finish_job / agent_reconcile_outbox (20261021100100)",
+    transitions: AGENT_JOB_TRANSITIONS,
   },
 ];
 
