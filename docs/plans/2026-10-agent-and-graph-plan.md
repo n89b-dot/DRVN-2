@@ -53,7 +53,7 @@ There is one agent, reached from the Agent tab (or the desktop rail) and worked 
 | Buying | Negotiate for me | Offers up to your maximum within the 3-offer limit; accepts a seller counter within your max; tells you the gap if rounds run out; you always pay | Launch |
 | Buying | Will this fit my car? | Answers from DRVN's fitment evidence and says how it knows (seller-stated, same platform, unknown) | Launch |
 | Buying | Find one that fits my car | Watches for a part that fits, then negotiates within your max | Later, when inventory supports it |
-| Buying | Build Mine, goal planning | AI-chosen equivalents and plans from your Garage | Later (B3) |
+| Buying | Build Mine, goal planning | AI-chosen equivalents and plans from your Garage | Not building (ruled out 18 Oct) |
 | Garage | Update my build | "Just fitted KW V3s", a product link or a photo becomes a mod row; the replaced part is marked removed, and it offers to list the old one | Launch |
 | Garage | Post an update | Photos from today plus a sentence become a draft car update with the parts tagged; you publish | Launch |
 | Garage | Paste your build | A pasted build list becomes structured mod rows | Launch |
@@ -183,7 +183,7 @@ Eleven changes to the report's plan. The first four change the data model, the n
 9. **"Compare with my car" can ship early, without AI.**
    - Lining up two cars' mod lists by category, brand and part number is honest without any fitment claim: "They run KW V3, you run APR Roll-Control."
    - Only the "for sale for your car" line needs evidence, and `listing_vehicle_fit` already provides it.
-   - Build Mine with AI equivalents comes later. The plan holds the whole feature back for product identity; most of it doesn't need it.
+   - Build Mine with AI equivalents isn't being built (ruled out 18 Oct). Comparing two builds is B2's "Compare with my car", with no AI.
 10. **Model choice and cost need numbers.**
     - The importer defaults to `claude-sonnet-5`; review that against the current 5.5 models.
     - Use a cheaper model for classification and the stronger one for planning and extraction.
@@ -233,7 +233,7 @@ flowchart LR
   subgraph L["Driven by usage (dashed)"]
     A4["A4 · Agent v2<br/>context and reach<br/>plain-words setup · sentence to filters"]
     A5["A5 · Agents v2<br/>after beta data<br/>auto-accept in rules · watches, when stocked"]
-    B23["B2–B3 · Fitment<br/>evidence, compare<br/>then Build Mine with AI"]
+    B23["B2 · Fitment<br/>evidence, compare"]
     A6["A6 · MCP adapter<br/>later · same registry · OAuth scopes"]
   end
   B1 -- "fit answers use B1" --> A4
@@ -351,6 +351,29 @@ Ships behind `AGENTS_BETA`. Each step opens only when the previous gate passes.
 
 There's no invited cohort (decided 17 Oct). Each step turns on for everyone behind the `AGENTS_BETA` flag once the previous gate passes.
 
+### Alongside A3 — admin controls for the agent (added 18 Oct)
+
+A2 built the kill switches (everyone, one side, one member, mandate, listing or account; MFA step-up, audited), health counts and the reconciliation runbook. Running the agent for real needs more than an off switch. Build these after A3b and before A3c, since chat brings model spend and chat access:
+
+1. **Beta steps in admin, not an env var.** `AGENTS_BETA` stays as the master; each step (A3a seller, A3b buyer, A3c chat, A3d jobs) opens from `/admin/agent`, audited, so a gate passing doesn't need a deploy.
+2. **Gate metrics.** The numbers the gates and A5 depend on: agent-made sales and their cancellation rate, counters per negotiation, approvals answered and ignored, time to answer, members returning to the Agent tab, and any floor-leak or permission-denial count.
+3. **A member's agent, for support and disputes.** Mandates with their versions, tasks, events and approvals for one member, read-only. Chat stays closed unless the case is abuse or a dispute (agent-data-rules.md): opening it needs a reason and a case, and is audited.
+4. **Agent provenance where admins already work.** The admin order and dispute pages mark the agent's rounds and the mandate version in force, so "the seller didn't mean it" can be checked against what they set.
+5. **Model spend.** The per-member and global caps from risk 8, enforced in `src/lib/ai/run.ts`, with current spend and model errors on `/admin/agent`. Required before A3c.
+### Alongside A3 — measuring the agent (added 18 Oct)
+
+What exists: consent-based product analytics (`src/lib/analytics.ts`, 27 server-side events, PostHog optional) with one offer event (`offer_submitted`, no properties) and nothing for the agent; and A2's `agent_telemetry` (permission denials, model errors, stuck tasks; ids only, 30 days), which only feeds the health counts. "How we judge it" above lists the measures but nothing defines or computes them.
+
+The consented path can't carry them: agent moves happen in the worker, which has no consent cookie, so `capture()` records nothing there; and an opt-in sample can't support the headline comparison. The measures are already in DRVN's own records (rounds with `actor_task_id`, orders, cancellations, refunds, tasks, approvals), so:
+
+1. **Definitions first.** `docs/site/agent-measures.md` defines each measure from "How we judge it": numerator, denominator, source tables, window, and what counts as a comparable manual listing for the headline (same subcategory and price band, same period, listings that received at least one offer). Each one is either a gate threshold or watched only.
+2. **First-party aggregates, no personal data.** A daily sweep writes `agent_metrics_daily` (date, scope, measure, value, sample size) from the records. It holds no member ids, amounts are only aggregate bands, and any cell under five is suppressed. It outlives the 12-month and 30-day retention of the rows it was computed from.
+3. **Durable model usage.** `agent_usage` (task, model, input and output tokens, cost; no text) replaces the console-only `logUsage`. It gives cost per completed task and is what the spend caps (admin item 5) read.
+4. **"Incorrect action" made measurable.** An agent deal cancelled before checkout, an approval dismissed, a permission denial, a buyer report naming an agent round, or an owner turning the agent off within a day of a move. Each is a counted signal, not a judgement.
+5. **The consented funnel, for the screens only.** New `AnalyticsEvent` entries with coarse properties: `agent_offers_enabled` (style, has_target), `agent_offers_disabled`, `negotiate_for_me_started` (basis, style), `agent_tab_viewed` (needs_count band), and `agent_approval_answered` (choice, reason). In A3c, `agent_chat_turn` (tool calls, model tier) is added. `offer_submitted` gains `round` and `counter_back`.
+6. **Where it shows.** The gate metrics panel on `/admin/agent` (admin item 2) reads `agent_metrics_daily`, with the definition beside each number.
+
+
 ### Alongside A3c–A3d — two seller helpers (no AI)
 
 Added 17 Oct. Both features work without the agent, neither depends on A0 or A1, and the agent reuses both in AG-9. The wording of both lists is drafted as a document for Neil to sign off before any code.
@@ -409,9 +432,9 @@ Added 17 Oct. Both features work without the agent, neither depends on A0 or A1,
 - Draft Q&A replies that the owner sends.
 - Buyer "find one that fits my car" watches, only once inventory makes them useful. The agent dashboard (see UX).
 
-### B3 — Build intelligence
+### B3 — Build intelligence: not being built
 
-Build Mine with AI equivalents, goal planning, and pgvector if similar-build search needs it.
+Ruled out by Neil on 18 Oct 2026: Build Mine with AI equivalents, goal planning and similar-build search are out of scope, so pgvector isn't needed either. Track B ends at B2.
 
 ### A6 — Outside agents
 
@@ -743,7 +766,7 @@ When the agent is doing several things at once, the chat isn't the right place t
 | 5 | Offers below the minimum | Keep refusing them, as today. Add "counter lowballs instead" as a later option |
 | 6 | The seller's default target | The asking price |
 | 7 | PRD | Done 17 Oct: §4.9 added, M-8 narrowed, N-4 reversed, CHANGELOG entry written |
-| 8 | Model spend, privacy and terms | A per-member and global spend cap; update both pages before the A3 beta, since chat and photos go to the model from launch |
+| 8 | Model spend, privacy and terms | A per-member and global spend cap (built with the admin controls, before A3c); update both pages before the A3 beta, since chat and photos go to the model from launch |
 
 **Risks**
 
@@ -962,7 +985,6 @@ The agent gets more capable over time:
 - reading your messages for context;
 - accepting offers on its own once the beta proves it's trustworthy;
 - watching for parts that fit your car once there's enough inventory;
-- "Build Mine" (make my car like that one) and goal planning ("better handling, keep the ride");
 - a dashboard of everything it's doing;
 - eventually, letting your own outside AI assistant work with DRVN through the same safe actions.
 

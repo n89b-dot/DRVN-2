@@ -4,6 +4,8 @@
 >
 > Living artifacts (private to Neil): Direction — https://claude.ai/artifact/RtxJD7miquRrULqpnkowxw · Build plan — https://claude.ai/artifact/1tSqTJ2YTC5nTDGv1EApqY
 >
+> **Amended 2026-10-18 — build intelligence ruled out.** Build Mine with AI equivalents, goal planning and similar-build search (agent plan B3) became a non-goal, and their parked row went.
+
 > **Amended 2026-10-17 — the DRVN agent.** New §4.9 (Intelligence), a fifth principle, offers v2 (M-8 narrowed), and the mobile bottom bar (N-4 reversed, non-goal and parked row removed). Implementation plan: "DRVN AI-native: review and implementation plan" — https://claude.ai/code/artifact/0116734a-9a0d-4148-9efa-ecde4f9a177b (a repo copy goes in `docs/plans/` when build starts).
 
 ## 1. The product
@@ -58,6 +60,7 @@ Home, Explore, Marketplace, Garage, Profile, Store, Selling, Agent. Not "Build /
 - Horizontal content shelves. New accent colour. New typeface. Sidebar artwork. (The bottom tab bar left this list on 2026-10-17 — see N-4.)
 - Separate shop entity, catalogue sync, stock, product ratings, brand strips, sale events, bulk edit, stats dashboards.
 - Whole-car sales. Part history across several cars.
+- Build intelligence: Build Mine with AI equivalents, goal planning, similar-build search (ruled out 2026-10-18; comparing two builds is "Compare with my car", which has no AI).
 - Agents messaging other people (they may read their owner's messages for context, never reply). Automatic payment. Agent auto-accept of offers at launch. Open-ended chit-chat with the agent. Dynamic bundles. Admin and analytics agents.
 
 A community-built product record (one entry per real part, grown from DRVN's own listings, Garages and sales) is **not** "catalogue sync": nothing is fed in from brands or retailers.
@@ -256,7 +259,6 @@ Not needed: tables for shops, personas, home modules, away mode, car facts, note
 | Buy now on cards | Cart-to-checkout drop-off suggests it |
 | Agent auto-accept of offers | The beta shows a low seller cancellation rate |
 | "Find one that fits my car" watches | There's enough inventory for them to find things |
-| Build Mine, goal planning | Product identity and fitment evidence are strong enough to trust |
 | Agent dashboard (full page) | Needs you regularly holds more than three things |
 | Outside agents (MCP / API) | The agent's capabilities are stable and there are users |
 | Admin and analytics agents | The member agent's runtime is proven |
