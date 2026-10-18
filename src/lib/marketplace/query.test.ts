@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { COUNT_CAP, decodePosition, encodePosition, fetchListings, SEARCH_CAP } from "./query";
+import { COUNT_CAP, decodePosition, encodePosition, fetchListings, listingRowsQuery, SEARCH_CAP } from "./query";
 import { capture } from "@/lib/analytics";
 import { reportError } from "@/lib/monitoring";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
@@ -119,6 +119,14 @@ it("sends a text search to the search entry point, and to the browse function if
   const page = await fetchListings(older, { q: "coilovers" });
   expect(legacyCalls(older).map((call) => call[0])).toEqual(["marketplace_search_browse_rows", "marketplace_browse_rows"]);
   expect(page).toMatchObject({ status: "success", total: 0 });
+});
+
+it("sends a saved-search worker's text search to the search entry point", () => {
+  const supabase = client({ data: [], count: 0, error: null });
+  listingRowsQuery(supabase, { q: "coilovers", category: "suspension" }, "owner");
+  expect(supabase.rpc).toHaveBeenCalledWith("marketplace_search_browse_rows", expect.objectContaining({ p_query: "coilovers", p_viewer: "owner" }), { count: "exact" });
+  listingRowsQuery(supabase, { q: "  ", category: "suspension" }, "owner");
+  expect(supabase.rpc).toHaveBeenLastCalledWith("marketplace_browse_rows", expect.objectContaining({ p_viewer: "owner" }), { count: "exact" });
 });
 
 it("does not ask the database to count a view whose total the page already knows", async () => {

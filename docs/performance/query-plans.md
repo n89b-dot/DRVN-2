@@ -1,5 +1,58 @@
 # Query plans at volume
 
+## A search through the browse function (October 17, 2026)
+
+`marketplace_browse_rows(p_query, …)` still answered a search with
+`p_query = '' or id in (select marketplace_search_ids(p_query))`. Through
+PostgREST (fact 4 under "Why" below) that ran the search once per part for
+sale, and since typo-tolerant search (`20261011130000`) a run costs ~15 ms:
+the operations drill's 1,100 matching parts hit the signed-out 3-second
+limit on every CI run. The saved-search worker still searched this way.
+
+Two changes. The app sends every text search to the search entry point:
+`listingRowsQuery` (the pages' offset fallback and the saved-search worker)
+uses `marketplace_search_browse_rows` whenever there are words. And migration
+`20261017145500_browse_rows_search_once.sql` restates the browse function
+as a UNION ALL of the browse query (no words) and
+`marketplace_search_browse_rows` (words), each branch gated on `p_query`
+alone, so through PostgREST the search runs once and a browse never runs it.
+`supabase/tests/browse_rows_search_once_guard.sql` builds PostgREST's own
+statement and counts the runs (Postgres' per-function call count; four runs
+for one query before, one after); `tests/operations/browse-search.test.ts`
+asks it through the API.
+
+Measured on a disposable database with the volume seed at 60,000 parts
+(35,900 for sale), Postgres 17, as a signed-out visitor, PostgREST's
+statement (ms; "timeout" at 10 s in psql, HTTP 500 at 3 s through the API):
+
+| `marketplace_browse_rows` called as PostgREST calls it | before | after |
+|---|---|---|
+| Search, a common word (1,451 parts), exact count | timeout | 88 |
+| Search, a common word, page without a count | timeout | 65 |
+| Search, a rare word (136 parts), exact count | timeout (> 2 min) | 63 |
+| Search + vehicle filter, exact count | timeout | 120 |
+| Saved-search worker: 3 days of new parts, with words | timeout | 61 |
+| Saved-search worker: 3 days of new parts, no words | 6 | 1 |
+| No words, exact count | 36 | 41 |
+| Conditions in use (no arguments, 1,000 rows) | 4 | 1 |
+| No words, newest 24, no count | 0.9 | 31 |
+| Through the API: the drill's 1,100 parts, page + count | 500 at 3 s | 56–160 |
+
+The last-but-one row is the price. A UNION ALL branch carrying its own WHERE
+is planned as a subquery: the caller's filters still reach its indexes, but
+an `ORDER BY … LIMIT` sorts every matching part instead of stopping at the
+24th read off an index. No app request reads the function that way:
+marketplace pages and counts go through `marketplace_page` /
+`marketplace_count` (`20261011110000`), and what still calls it (the
+conditions sample, the worker's date window, the offset fallback for a
+database without `marketplace_page`) reads no sorted page of the whole
+catalogue. Keeping both — one function, the browse branch read off an index
+and the search run once — is not possible in an inlined SQL function: only a
+branch with no WHERE of its own is flattened, and the branch that doesn't
+apply can only be skipped by a test of its own. `scripts/perf/query-plans.sql`
+still reads browse pages through this function in psql; at 2M those rows now
+measure a sort, not the pages the app serves.
+
 ## Two million parts (October 2026)
 
 **Measured 5 October 2026** on disposable databases seeded at three sizes
