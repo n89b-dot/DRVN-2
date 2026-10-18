@@ -1,7 +1,7 @@
 # Vehicle identity & fitment
 
 > The vehicle catalog, the Add Car flows, and how fitment stays lightweight.
-> Code: `src/lib/vehicles/`, `supabase/migrations/0041`, `0025`.
+> Code: `src/lib/vehicles/`, `supabase/migrations/0041`, `0025`, `20261020100000` (generations).
 
 ## The canonical model
 
@@ -24,6 +24,36 @@ Competition" → M4). No model match leaves the car make-only. Only cars with
 no make reference were touched, so an id a member picked is never
 overridden. Marketplace's "Parts for my …" and the vehicle picker need these
 references; with no main car set, the shortcut offers the newest car.
+
+## Generations (B1)
+
+One level below the model, and no further: `vehicle_generations`
+(`20261020100000`) holds each generation of a catalog model — what
+enthusiasts call it (`Mk8`, `E46`, `R34`, `ND`), the maker's platform code
+(`CD`, `992`), and the years it covers. No trims, engines or variants; a
+fitment that needs them says so with configuration constraints on the
+product fitment instead.
+
+- **Resolved, never guessed.** `cars.generation_id` comes from
+  `catalog_model_id` + `year`: exactly one generation of the model covering
+  the year, or nothing (`resolve_vehicle_generation`). A car without a year
+  resolves only when its model has a single generation.
+- **Changeover years are asked, not guessed.** Year ranges are the union of
+  production years and main-market model years, so a 2020 Golf R covers both
+  the Mk7 and the Mk8 and resolves to nothing. That is where the owner is
+  asked (UI not built yet; the column takes their answer today).
+- **The owner's choice stands** while it still fits the car's model and year
+  (`generation_source = 'owner'`); change the year past it and the car
+  resolves again. A client can't claim a choice by writing
+  `generation_source` — the trigger decides.
+- **The catalog moves, cars follow.** Adding, widening or removing a
+  generation re-resolves that model's cars (owners' choices that still fit
+  are kept). Nothing in vehicle fit or search watches these columns.
+- **Curated seed.** No open source carries generations (VehiclesDB stops at
+  the model), so the migration seeds ~200 enthusiast generations by hand,
+  joined to the catalog by make and model name. A model the catalog doesn't
+  hold is skipped; re-running the migration after a catalog import fills it
+  in. Corrections are data changes, not code.
 
 ## Data sources
 
