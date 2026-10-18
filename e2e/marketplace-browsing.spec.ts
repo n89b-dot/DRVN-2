@@ -7,6 +7,13 @@ assertIsolatedTestTarget({ url: process.env.NEXT_PUBLIC_SUPABASE_URL, projectRef
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false } });
 const title = `MarketplaceBrowse ${Date.now()}`;
 const query = `q=${encodeURIComponent(title)}`;
+// Fault injection: the page reads through marketplace_page (20261011110000),
+// and marketplace_browse_rows is its fallback. Revoking both fails the read
+// either way.
+const PAGE_READ_FUNCTIONS = [
+  "public.marketplace_page(text,text,text,text,text,text,integer,integer,text,integer,integer,integer,boolean,text,timestamp with time zone,integer,uuid,boolean,integer,integer,uuid[])",
+  "public.marketplace_browse_rows(text,text,int,int,int,boolean,uuid)",
+];
 const email = `marketplace-browse-${Date.now()}@example.test`;
 const password = "marketplace-browser-fixture-only";
 let seller = "";
@@ -161,15 +168,14 @@ for (const width of [320, 390, 768, 1440]) {
 
 test("RPC failure shows Retry, retains context and recovers without a false zero count", async ({ page }) => {
   test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Fault injection is restricted to the disposable local database");
-  const signature = "public.marketplace_browse_rows(text,text,int,int,int,boolean,uuid)";
   const sql = (statement: string) => execFileSync("docker", ["exec", "supabase_db_DRVN_2", "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", statement], { stdio: "pipe" });
   try {
-    sql(`revoke execute on function ${signature} from anon;`);
+    for (const signature of PAGE_READ_FUNCTIONS) sql(`revoke execute on function ${signature} from anon;`);
     await page.goto(`/marketplace/engine?${query}&max=500`);
     await expect(page.getByRole("heading", { name: "Parts couldn’t be loaded" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /^0 parts/ })).toHaveCount(0);
   } finally {
-    sql(`grant execute on function ${signature} to anon;`);
+    for (const signature of PAGE_READ_FUNCTIONS) sql(`grant execute on function ${signature} to anon;`);
   }
   await page.getByRole("button", { name: /Retry/ }).click();
   await expect(page.getByRole("heading", { name: "26 parts found" })).toBeVisible();
@@ -178,7 +184,6 @@ test("RPC failure shows Retry, retains context and recovers without a false zero
 
 test("mobile empty and failed states remain distinct and usable", async ({ page }) => {
   test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Fault injection is restricted to the disposable local database");
-  const signature = "public.marketplace_browse_rows(text,text,int,int,int,boolean,uuid)";
   const sql = (statement: string) => execFileSync("docker", ["exec", "supabase_db_DRVN_2", "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", statement], { stdio: "pipe" });
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -188,14 +193,14 @@ test("mobile empty and failed states remain distinct and usable", async ({ page 
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await page.screenshot({ path: test.info().outputPath(`marketplace-empty-${width}.png`) });
     try {
-      sql(`revoke execute on function ${signature} from anon;`);
+      for (const signature of PAGE_READ_FUNCTIONS) sql(`revoke execute on function ${signature} from anon;`);
       await page.goto(`/marketplace/engine?${query}&max=500`);
       await expect(page.getByRole("heading", { name: "Parts couldn’t be loaded" })).toBeVisible();
       await expect(page.getByRole("heading", { name: /^0 parts/ })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
       await page.screenshot({ path: test.info().outputPath(`marketplace-error-${width}.png`) });
     } finally {
-      sql(`grant execute on function ${signature} to anon;`);
+      for (const signature of PAGE_READ_FUNCTIONS) sql(`grant execute on function ${signature} to anon;`);
     }
     await page.getByRole("button", { name: /Retry/ }).click();
     await expect(page.getByRole("heading", { name: "26 parts found" })).toBeVisible();
