@@ -24,7 +24,7 @@ export const metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "4 October 2026";
+const UPDATED = "18 October 2026";
 
 /**
  * Plain-language terms covering what DRVN actually does today.
@@ -168,6 +168,16 @@ export default async function TermsPage() {
           An offer is a promise you intend to keep, so only offer what you would pay. Offers lapse
           after 72 hours. An accepted offer doesn&apos;t charge you: it holds the part for you for
           24 hours to complete checkout at the agreed price, after which it&apos;s released.
+        </p>
+        <p>
+          If you turn on your agent for a listing or an offer, it makes offers and counters for
+          you within the limits you set, and those offers and counters are yours, as if you had
+          made them. It never goes past your limits, never pays and never messages anyone, and
+          the other side can see that an agent made the move. Selling, it asks you before
+          accepting an offer. Buying, it can accept a seller&apos;s counter within your maximum,
+          which holds the part for you to pay for as with any accepted offer.
+          When it answers you in chat or suggests a change to your build, it can be wrong: check
+          what it says, and nothing it drafts is saved until you confirm it.
         </p>
         <p>
           Where checkout without an account is available, buying with just an email address
