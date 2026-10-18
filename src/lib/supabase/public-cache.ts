@@ -89,6 +89,7 @@ export const PUBLIC_READ_FUNCTIONS: ReadonlySet<string> = new Set([
   "explore_update_search_rows",
   "feed_event_page",
   "feed_hydration",
+  "listing_public_offer_floor",
   "listing_watch_counts",
   "local_feed_rows",
   "marketplace_brand_counts",

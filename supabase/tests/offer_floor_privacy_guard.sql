@@ -188,6 +188,31 @@ begin
     raise exception 'FAIL 28: listing_private_terms is out of step with listings';
   end if;
 
+  -- 10. Showing the minimum is the seller's choice, off by default (O-3, 20261018100000).
+  perform set_config('role', 'anon', true);
+  perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+  if public.listing_public_offer_floor(listing) is not null then
+    raise exception 'FAIL 29: a minimum shows on the listing without the seller choosing to';
+  end if;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', seller, 'role', 'authenticated')::text, true);
+  update public.listings set show_offer_floor = true where id = listing;
+  update public.listings set offer_floor_cents = 33000 where id = listing;
+  perform set_config('role', 'anon', true);
+  perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+  if public.listing_public_offer_floor(listing) is distinct from 33000 then
+    raise exception 'FAIL 30: a minimum the seller chose to show isn''t shown, or is stale';
+  end if;
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', seller, 'role', 'authenticated')::text, true);
+  update public.listings set show_offer_floor = false where id = listing;
+  perform set_config('role', 'anon', true);
+  perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+  if public.listing_public_offer_floor(listing) is not null then
+    raise exception 'FAIL 31: a hidden minimum still shows';
+  end if;
+  perform set_config('role', 'none', true);
+
   raise notice 'all offer floor privacy checks passed';
 end $$;
 

@@ -1,4 +1,4 @@
-export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-17.v7";
+export const ACCOUNT_EXPORT_CONTRACT_VERSION = "2026-10-18.v8";
 export const ACCOUNT_EXPORT_PAGE_SIZE = 250;
 
 export type ExportAccess =
@@ -50,7 +50,7 @@ export const ACCOUNT_EXPORT_SECTIONS: readonly ExportSection[] = [
   { key: "activity_images", table: "activity_images", projection: "id,post_id,url,alt,position,created_at,activity_posts!inner(author_id)", access: "author", filter: "activity_posts.author_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "activity_comments", table: "activity_comments", projection: "id,post_id,author_id,body,created_at", access: "author", filter: "author_id", cursor: "id", cutoffColumn: "created_at" },
   { key: "activity_reactions", table: "activity_reactions", projection: "post_id,user_id,emoji,created_at", access: "owner", filter: "user_id", cursor: "post_id,emoji", cutoffColumn: "created_at" },
-  { key: "listings", table: "listings", projection: "id,seller_id,source_car_id,title,description,category,subcategory,condition,price_cents,currency,location,compatibility_notes,status,shipping_cents,allows_collection,sold_at,reserved_until,part_number,brand,part_miles,part_miles_unit,removed_at,grade,condition_checklist,shipping_mode,weight_oz,length_in,width_in,height_in,created_at,updated_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at" },
+  { key: "listings", table: "listings", projection: "id,seller_id,source_car_id,title,description,category,subcategory,condition,price_cents,currency,location,compatibility_notes,status,shipping_cents,allows_collection,show_offer_floor,sold_at,reserved_until,part_number,brand,part_miles,part_miles_unit,removed_at,grade,condition_checklist,shipping_mode,weight_oz,length_in,width_in,height_in,created_at,updated_at", access: "seller", filter: "seller_id", cursor: "id", cutoffColumn: "created_at" },
   // The offer minimum, private to the seller (20261017130000).
   { key: "listing_private_terms", table: "listing_private_terms", projection: "listing_id,seller_id,offer_floor_cents,updated_at", access: "seller", filter: "seller_id", cursor: "listing_id" },
   { key: "listing_images", table: "listing_images", projection: "id,listing_id,url,alt,position,created_at,listings!inner(seller_id)", access: "seller", filter: "listings.seller_id", cursor: "id", cutoffColumn: "created_at" },

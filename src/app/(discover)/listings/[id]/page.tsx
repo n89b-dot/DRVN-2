@@ -183,6 +183,7 @@ export default async function ListingPage({
     garageFitment,
     { count: soldCount },
     { count: openOfferCount },
+    { data: publicOfferFloor },
   ] = await Promise.all([
     // The viewer's own live offer, so the page points at it instead of
     // inviting a second one the server would refuse.
@@ -274,6 +275,11 @@ export default async function ListingPage({
           .eq("listing_id", id)
           .in("status", ["open", "countered"])
       : Promise.resolve({ count: 0 }),
+    // The minimum shows only when the seller chose to show it (O-3,
+    // migration 20261018100000); the amount otherwise stays private.
+    listing.show_offer_floor && listing.status === "active" && !isOwn
+      ? supabase.rpc("listing_public_offer_floor", { p_listing: listing.id })
+      : Promise.resolve({ data: null }),
   ]);
 
   const modLineName = sourceModLine
@@ -465,6 +471,9 @@ export default async function ListingPage({
             <p className="mt-1 text-micro text-dim">Any applicable tax and your selected delivery are confirmed at checkout.</p>
             {/* The condition here; the place is on the seller line below. */}
             {listing.condition && <p className="kv mt-2 text-dim">{conditionLabel(listing.condition)}</p>}
+            {publicOfferFloor != null && (
+              <p className="spec-note mt-2">Offers accepted from {formatPrice(publicOfferFloor)}.</p>
+            )}
             {isOwn ? (
               /* The owner's panel: what they came to their own listing to do.
                  Status changes (pause, archive) stay in My Listings, which
@@ -492,6 +501,7 @@ export default async function ListingPage({
                 paymentsLive={paymentsAreLive()}
                 priceCents={listing.price_cents}
                 shippingCents={listing.shipping_cents}
+                offerFloorCents={publicOfferFloor ?? null}
                 myOffer={
                   myOfferRow
                     ? { id: myOfferRow.id, amountCents: myOfferRow.amount_cents, counterCents: myOfferRow.counter_amount_cents }

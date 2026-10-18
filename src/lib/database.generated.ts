@@ -1641,6 +1641,7 @@ export type Database = {
           seller_id: string
           shipping_cents: number
           shipping_mode: string
+          show_offer_floor: boolean
           sold_at: string | null
           source_car_id: string | null
           status: string
@@ -1679,6 +1680,7 @@ export type Database = {
           seller_id: string
           shipping_cents?: number
           shipping_mode?: string
+          show_offer_floor?: boolean
           sold_at?: string | null
           source_car_id?: string | null
           status?: string
@@ -1717,6 +1719,7 @@ export type Database = {
           seller_id?: string
           shipping_cents?: number
           shipping_mode?: string
+          show_offer_floor?: boolean
           sold_at?: string | null
           source_car_id?: string | null
           status?: string
@@ -5268,6 +5271,10 @@ export type Database = {
         Args: { p_listing: string; p_request: string }
         Returns: Json
       }
+      listing_public_offer_floor: {
+        Args: { p_listing: string }
+        Returns: number
+      }
       listing_question_parent_matches: {
         Args: { p_listing_id: string; p_parent_id: string }
         Returns: boolean
@@ -5367,6 +5374,7 @@ export type Database = {
           seller_id: string
           shipping_cents: number
           shipping_mode: string
+          show_offer_floor: boolean
           sold_at: string | null
           source_car_id: string | null
           status: string
@@ -5451,6 +5459,7 @@ export type Database = {
           seller_id: string
           shipping_cents: number
           shipping_mode: string
+          show_offer_floor: boolean
           sold_at: string | null
           source_car_id: string | null
           status: string
@@ -5530,6 +5539,7 @@ export type Database = {
           seller_id: string
           shipping_cents: number
           shipping_mode: string
+          show_offer_floor: boolean
           sold_at: string | null
           source_car_id: string | null
           status: string
@@ -5613,6 +5623,7 @@ export type Database = {
           seller_id: string
           shipping_cents: number
           shipping_mode: string
+          show_offer_floor: boolean
           sold_at: string | null
           source_car_id: string | null
           status: string
@@ -5675,6 +5686,7 @@ export type Database = {
           seller_id: string
           shipping_cents: number
           shipping_mode: string
+          show_offer_floor: boolean
           sold_at: string | null
           source_car_id: string | null
           status: string
