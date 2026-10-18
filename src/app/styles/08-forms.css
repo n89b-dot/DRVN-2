@@ -1601,4 +1601,22 @@
     margin-top: 7px;
     max-width: 72ch;
   }
+
+  /* ---------- agent block — "Let DRVN handle offers" (A3a) ----------
+     A recessed plate inside the price section: the switch and its Beta
+     label, one explainer, then (while on) the minimum and target, the show
+     toggle, style, and the one-time binding acknowledgement under a
+     hairline. Tokens only; the plate is the tile's second surface. */
+  .agentblock {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    background: var(--tile-2);
+    border: 1px solid var(--rule-mid);
+    border-radius: var(--r-ctl);
+  }
+  .agentblock__ack {
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+  }
 }

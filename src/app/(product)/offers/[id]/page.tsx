@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
-import { ButtonLink, Foot, Media, MessageBubble, MessageRun, MessageThread, SellingNav, TileHead } from "@/components/ui";
+import { ButtonLink, buttonClass, Foot, Media, MessageBubble, MessageRun, MessageThread, SellingNav, TileHead } from "@/components/ui";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
@@ -10,9 +10,10 @@ import { reportError } from "@/lib/monitoring";
 import { markThreadMessagesRead } from "@/features/commerce/actions";
 import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
-import { StatusChip } from "@/components/commerce";
+import { OfferRound as OfferRoundRow, StatusChip } from "@/components/commerce";
+import { CancelOrder } from "@/features/commerce/cancel-order";
 import { OfferDecision } from "@/features/commerce/offer-decision";
-import { offerHistoryFromRounds, type OfferRound } from "@/features/commerce/offer-history";
+import { offerHistoryFromRounds, type HistoryMandate, type OfferRound } from "@/features/commerce/offer-history";
 
 /** How much of the conversation the offer page previews. */
 const PREVIEW_COUNT = 3;
@@ -26,7 +27,7 @@ export async function generateMetadata({
   return { title: `Offer ${id.slice(0, 8)} - DRVN` };
 }
 
-type HistoryEntry = { label: string; at: string; amount?: number };
+type HistoryEntry = { label: string; at: string; amount?: number; viaAgent?: boolean; reason?: string };
 
 /**
  * One offer's full thread: listing context, the complete action history
@@ -69,7 +70,7 @@ export default async function OfferThreadPage({
 
   const counterpartyId = incoming ? offer.buyer_id : listing.seller_id;
 
-  const [{ data: image }, { data: counterparty }, { data: rawMessages }, { data: rounds }, { count: buyerOffersUsed }] =
+  const [{ data: image }, { data: counterparty }, { data: rawMessages }, { data: rounds }, { count: buyerOffersUsed }, { data: ownMandate }] =
     await Promise.all([
       supabase
         .from("listing_images")
@@ -96,7 +97,7 @@ export default async function OfferThreadPage({
       // unreadable rounds fall back to the history the offer row implies.
       supabase
         .from("offer_rounds")
-        .select("round_no, actor_role, kind, amount_cents, created_at")
+        .select("round_no, actor_role, kind, amount_cents, created_at, actor_task_id")
         .eq("offer_id", id)
         .order("round_no"),
       // The buyer's offers on this part, across every thread: 3 in all,
@@ -108,6 +109,17 @@ export default async function OfferThreadPage({
         .eq("buyer_id", offer.buyer_id)
         .eq("actor_role", "buyer")
         .in("kind", ["offer", "counter", "below_minimum"]),
+      // The viewer's own agent limits here (owner-only, A2), for the one-line
+      // reasons under their agent's turns. The other side's never load.
+      supabase
+        .from("agent_mandates")
+        .select("minimum_cents, target_cents, style")
+        .eq("owner_id", user.id)
+        .eq("listing_id", listing.id)
+        .eq("scope", incoming ? "seller" : "buyer")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
   // This viewer's read receipt for the thread — scoped to messages
@@ -130,15 +142,21 @@ export default async function OfferThreadPage({
   // doesn't offer a checkout link for them.
   let acceptedOrderId: string | null = null;
   let acceptedOrderStatus: string | null = null;
+  let checkoutStarted = true;
   if (offer.status === "accepted") {
     const { data: order } = await supabase
       .from("orders")
-      .select("id, status")
+      .select("id, status, accepted_checkout_shipping")
       .eq("origin_offer_id", offer.id)
       .maybeSingle();
     acceptedOrderId = order?.id ?? null;
     acceptedOrderStatus = order?.status ?? null;
+    // Cancel before checkout (A1): settle_seller_cancellation refuses once
+    // the buyer's checkout is frozen, so the control only shows before that.
+    checkoutStarted = order?.accepted_checkout_shipping != null;
   }
+  const canCancelBeforeCheckout =
+    incoming && acceptedOrderId != null && acceptedOrderStatus === "pending" && !checkoutStarted;
 
   const offersCount = await loadOffersNeedingAttention(supabase, user.id);
 
@@ -192,8 +210,15 @@ export default async function OfferThreadPage({
     });
   }
 
+  const mandate: HistoryMandate | null = ownMandate
+    ? {
+        minimumCents: ownMandate.minimum_cents,
+        targetCents: ownMandate.target_cents,
+        style: ownMandate.style as HistoryMandate["style"],
+      }
+    : null;
   const history: HistoryEntry[] = rounds?.length
-    ? offerHistoryFromRounds(rounds as OfferRound[], { incoming, counterpartyName })
+    ? offerHistoryFromRounds(rounds as OfferRound[], { incoming, mandate })
     : derived;
 
   const live = offer.status === "open" || offer.status === "countered";
@@ -280,6 +305,18 @@ export default async function OfferThreadPage({
             </Link>
           </div>
         )}
+        {canCancelBeforeCheckout && acceptedOrderId && (
+          <div className="mt-3 grid gap-2 border-t border-[color:var(--rule-soft)] pt-3">
+            <CancelOrder
+              orderId={acceptedOrderId}
+              label="Cancel before checkout"
+              triggerClassName={buttonClass("destructive", "justify-self-start")}
+            />
+            <p className="field__hint !mt-0">
+              Only until the buyer starts checkout. No mark against you during the beta.
+            </p>
+          </div>
+        )}
         {offer.status === "accepted" && !acceptedOrderId && (
           <p className="spec-note mt-3 border-t border-[color:var(--rule-soft)] pt-3">
             This offer was accepted before orders recorded which offer they came
@@ -298,21 +335,19 @@ export default async function OfferThreadPage({
         </div>
         <ol className="rowlist">
           {history.map((entry, i) => (
-            <li
+            <OfferRoundRow
               key={i}
-              className="jobrow flex items-center justify-between gap-3 !py-2"
-            >
-              <span className="order__name !text-body">{entry.label}</span>
-              <span className="kv shrink-0 text-dim">
-                {entry.amount != null && `${formatPrice(entry.amount)} · `}
-                {new Date(entry.at).toLocaleString(undefined, {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </li>
+              who={entry.label}
+              amount={entry.amount != null ? formatPrice(entry.amount) : undefined}
+              when={new Date(entry.at).toLocaleString(undefined, {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              viaAgent={entry.viaAgent}
+              reason={entry.reason}
+            />
           ))}
         </ol>
       </Rv>
@@ -358,7 +393,7 @@ export default async function OfferThreadPage({
             ))}
           </MessageThread>
         ) : (
-          <p className="field__hint mt-2">Nothing said about this offer yet.</p>
+          <p className="field__hint mt-2">No messages yet. Agents never message the other side; only you do.</p>
         )}
       </Rv>
 

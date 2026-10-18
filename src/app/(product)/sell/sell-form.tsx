@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 
 import {
   ActionFooter,
+  Badge,
   Button,
   Checkbox,
   DropZone,
@@ -75,6 +76,19 @@ export type ListingDraft = {
   alt_part_numbers?: string[];
 };
 
+/** The seller agent's limits on a listing (agent_mandates, A2). */
+export type ListingAgentLimits = {
+  targetCents: number | null;
+  style: "firm" | "balanced" | "flexible";
+  acknowledged: boolean;
+};
+
+const AGENT_STYLE_HINT: Record<ListingAgentLimits["style"], string> = {
+  firm: "Firm holds near your target and moves in small steps.",
+  balanced: "Balanced gives about half the gap each round. Firm holds near your target; Flexible meets buyers sooner.",
+  flexible: "Flexible meets buyers sooner and gives most of the gap each round.",
+};
+
 /**
  * One normalized initialization contract for every way a listing form starts:
  * blank, Garage/Build → Sell, an imported external listing, or (via `listing`)
@@ -126,6 +140,8 @@ export function SellForm({
   canPublish = true,
   drvnShipping,
   defaultOfferFloorPct,
+  agentBeta = false,
+  listingAgent,
 }: {
   cars: { id: string; name: string; make?: string | null; model?: string | null; year?: number | null }[];
   /** Canonical make names for the fitment picker's suggestions. */
@@ -144,6 +160,10 @@ export function SellForm({
   /** P-9: the seller's own floor, as a percentage of the asking price.
    *  Prefills this form and nothing else. */
   defaultOfferFloorPct?: number | null;
+  /** The agent beta is on (A3a): draw "Let DRVN handle offers". */
+  agentBeta?: boolean;
+  /** This listing's live seller-agent limits, when there are some. */
+  listingAgent?: ListingAgentLimits | null;
 }) {
   const prefill = initialValues;
   const importReview = initialValues?.importReview;
@@ -212,10 +232,18 @@ export function SellForm({
   // P-9: a seller default, applied to the FORM only. The listing keeps its
   // own offer_floor_cents, so changing the setting later never alters what
   // a live listing already accepts — that would be a silent repricing.
-  const suggestedFloor =
-    defaultOfferFloorPct && price && Number(price) > 0
-      ? money(Math.round((Number(price) * 100 * defaultOfferFloorPct) / 100))
+  const suggestedFloorAt = (asking: string) =>
+    defaultOfferFloorPct && asking && Number(asking) > 0
+      ? money(Math.round((Number(asking) * 100 * defaultOfferFloorPct) / 100))
       : "";
+  // "Let DRVN handle offers" (A3a). While it's on, the minimum and its
+  // show toggle move into the agent block: one number, the listing's own.
+  const [agentOn, setAgentOn] = useState(Boolean(listingAgent));
+  // Controlled, because the field moves between the price row and the agent
+  // block when the agent is toggled; a remount would drop what was typed.
+  const [floor, setFloor] = useState(() => money(listing?.offer_floor_cents) || suggestedFloorAt(price));
+  const [showFloor, setShowFloor] = useState(listing?.show_offer_floor ?? false);
+  const [agentStyle, setAgentStyle] = useState<ListingAgentLimits["style"]>(listingAgent?.style ?? "balanced");
   const [shipping, setShipping] = useState(
     listing ? money(listing.shipping_cents ?? 0) : prefill?.shipping ?? money(0)
   );
@@ -1084,31 +1112,121 @@ export function SellForm({
               error={fieldErrors.price}
               hint={issueFor("price")}
             />
-            <TextField
-              id="sell-offer_floor"
-              name="offer_floor"
-              label="Lowest offer you'd read"
-              optional
-              inputMode="decimal"
-              defaultValue={money(listing?.offer_floor_cents) || suggestedFloor}
-              placeholder=""
-              prefix="$"
-              hint={
-                issueFor("offers") ??
-                (defaultOfferFloorPct && !listing
-                  ? `Offers below this are declined automatically, and buyers never see this amount. Prefilled at your ${defaultOfferFloorPct}% default.`
-                  : 'Offers below this are declined automatically, and buyers never see this amount.')
-              }
-            />
-            <Checkbox
-              id="sell-show_offer_floor"
-              name="show_offer_floor"
-              defaultChecked={listing?.show_offer_floor ?? false}
-              label="Show this minimum on the listing"
-              hint="Off by default. When it's on, buyers see “offers accepted from” this amount."
-            />
+            {!agentOn && (
+              <>
+                <TextField
+                  id="sell-offer_floor"
+                  name="offer_floor"
+                  label={agentOn ? "Minimum — your walk-away price" : "Lowest offer you'd read"}
+                  optional={!agentOn}
+                  inputMode="decimal"
+                  value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                  placeholder=""
+                  prefix="$"
+                  hint={
+                    issueFor("offers") ??
+                    (agentOn ? "Offers below this are declined automatically. Required while your agent is on." : null) ??
+                    (defaultOfferFloorPct && !listing
+                      ? `Offers below this are declined automatically, and buyers never see this amount. Prefilled at your ${defaultOfferFloorPct}% default.`
+                      : 'Offers below this are declined automatically, and buyers never see this amount.')
+                  }
+                />
+                <Checkbox
+                  id="sell-show_offer_floor"
+                  name="show_offer_floor"
+                  checked={showFloor}
+                onChange={(e) => setShowFloor(e.target.checked)}
+                  label={agentOn ? "Show my minimum on the listing" : "Show this minimum on the listing"}
+                  hint="Off by default. When it's on, buyers see “offers accepted from” this amount."
+                />              </>
+            )}
           </div>
-          {/* Full width, short options: the select used to share a row and
+          {agentBeta && (
+            <div className="agentblock">
+              <input type="hidden" name="agent_present" value="1" />
+              <div className="flex flex-wrap items-center gap-3">
+                <Checkbox
+                  id="sell-agent_on"
+                  name="agent_on"
+                  checked={agentOn}
+                  onChange={(e) => setAgentOn(e.target.checked)}
+                  label="Let DRVN handle offers"
+                />
+                <Badge>Beta</Badge>
+              </div>
+              <p className="field__hint !mt-0">
+                Your agent counters within the limits below, straight away, so offers don&apos;t sit waiting. It never accepts
+                for you: when an offer reaches your target, it tells you why and you tap Accept.
+              </p>
+              {agentOn && (
+                <>
+                  <div className="field--row">
+                    <TextField
+                      id="sell-offer_floor"
+                      name="offer_floor"
+                      label={agentOn ? "Minimum — your walk-away price" : "Lowest offer you'd read"}
+                      optional={!agentOn}
+                      inputMode="decimal"
+                      value={floor}
+                onChange={(e) => setFloor(e.target.value)}
+                      placeholder=""
+                      prefix="$"
+                      hint={
+                        issueFor("offers") ??
+                        (agentOn ? "Offers below this are declined automatically. Required while your agent is on." : null) ??
+                        (defaultOfferFloorPct && !listing
+                          ? `Offers below this are declined automatically, and buyers never see this amount. Prefilled at your ${defaultOfferFloorPct}% default.`
+                          : 'Offers below this are declined automatically, and buyers never see this amount.')
+                      }
+                    />
+                    <TextField
+                      id="sell-agent_target"
+                      name="agent_target"
+                      label="Target"
+                      inputMode="decimal"
+                      defaultValue={money(listingAgent?.targetCents) || price}
+                      prefix="$"
+                      hint="What your agent aims for. Starts at your asking price."
+                    />
+                  </div>
+                  <Checkbox
+                    id="sell-show_offer_floor"
+                    name="show_offer_floor"
+                    checked={showFloor}
+                onChange={(e) => setShowFloor(e.target.checked)}
+                    label={agentOn ? "Show my minimum on the listing" : "Show this minimum on the listing"}
+                    hint="Off by default. When it's on, buyers see “offers accepted from” this amount."
+                  />                  <fieldset className="field">
+                    <legend className="microlabel">Style</legend>
+                    <span className="flex flex-wrap gap-x-4" role="radiogroup" aria-label="Style">
+                      {(["firm", "balanced", "flexible"] as const).map((style) => (
+                        <Radio
+                          key={style}
+                          name="agent_style"
+                          value={style}
+                          label={style.charAt(0).toUpperCase() + style.slice(1)}
+                          checked={agentStyle === style}
+                          onChange={() => setAgentStyle(style)}
+                        />
+                      ))}
+                    </span>
+                    <span className="field__hint">{AGENT_STYLE_HINT[agentStyle]}</span>
+                  </fieldset>
+                  <div className="agentblock__ack">
+                    <Checkbox
+                      id="sell-agent_ack"
+                      name="agent_ack"
+                      defaultChecked={listingAgent?.acknowledged ?? false}
+                      label="I understand my agent's counters are binding offers to sell at that price, within these limits."
+                      hint="Asked once for this listing. Counters already sent stay binding if you change limits or turn it off."
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+                    {/* Full width, short options: the select used to share a row and
               truncate its own first option. The detail lives in the hint. */}
           <Select
             id="sell-shipping-mode"

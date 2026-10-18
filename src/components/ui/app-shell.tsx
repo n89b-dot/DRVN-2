@@ -10,6 +10,7 @@ import { BottomNav } from "./bottom-nav";
 import { Icon } from "./icons";
 import { LivesheetBar } from "./livesheet-bar";
 import {
+  AGENT_ROUTE,
   BOTTOM_NAV,
   BOTTOM_NAV_PUBLIC,
   bottomNavActive,
@@ -43,6 +44,8 @@ function AppRail({
   initialMktOpen = true,
   offersCount = 0,
   messagesCount = 0,
+  agentTab = false,
+  agentNeedsCount = 0,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -55,9 +58,17 @@ function AppRail({
    *  waiting on one answer and a seller with nine threads open are different
    *  situations and the rail can say which. */
   messagesCount?: number;
+  /** The agent beta is on: an Agent row follows Garage. */
+  agentTab?: boolean;
+  agentNeedsCount?: number;
 }) {
   const pathname = usePathname();
   const familyHere = isSellingFamily(pathname);
+  const entries: NavEntry[] = agentTab
+    ? PRIMARY_NAV.flatMap((entry) =>
+        entry.kind === "route" && entry.href === "/garage" ? [entry, { kind: "route" as const, ...AGENT_ROUTE }] : [entry]
+      )
+    : PRIMARY_NAV;
   // null = follow the route (unfolded on selling pages, folded elsewhere);
   // a tap overrides that until the reader crosses into or out of the family.
   // `initialMktOpen` (the old per-browser cookie) no longer decides it.
@@ -105,7 +116,7 @@ function AppRail({
         {/* Stroke icons carry the margin (they survive the collapsed rail,
             which bare register numbers never did); the label carries the row;
             weight belongs to the row you're on, not to every row at once. */}
-        {PRIMARY_NAV.map((entry) => {
+        {entries.map((entry) => {
           // The group caption and its /marketplace child fold into one parent
           // row — a real link at top-level weight, with the disclosure toggle
           // beside it and the three management children in one container.
@@ -210,7 +221,7 @@ function AppRail({
           if (entry.child) return null;
 
           const here = isActive(entry.href);
-          const badge = entry.href === "/messages" ? messagesCount : 0;
+          const badge = entry.href === "/messages" ? messagesCount : entry.href === "/agent" ? agentNeedsCount : 0;
           return (
             <Link
               key={entry.href}
@@ -220,7 +231,9 @@ function AppRail({
               title={open ? undefined : badge > 0 ? `${entry.label} (${badge})` : entry.label}
               aria-label={
                 badge > 0
-                  ? `${entry.label}, ${badge} conversation${badge === 1 ? "" : "s"} with unread messages`
+                  ? entry.href === "/agent"
+                    ? `${entry.label}, ${badge} need${badge === 1 ? "s" : ""} you`
+                    : `${entry.label}, ${badge} conversation${badge === 1 ? "" : "s"} with unread messages`
                   : undefined
               }
             >
@@ -257,15 +270,25 @@ function AppRail({
   );
 }
 
-function ShellBottomNav({ signedIn }: { signedIn: boolean }) {
+function ShellBottomNav({
+  signedIn,
+  agentTab = false,
+  agentNeedsCount = 0,
+}: {
+  signedIn: boolean;
+  agentTab?: boolean;
+  agentNeedsCount?: number;
+}) {
   const pathname = usePathname();
+  const routes = signedIn ? (agentTab ? [...BOTTOM_NAV, AGENT_ROUTE] : BOTTOM_NAV) : BOTTOM_NAV_PUBLIC;
   return (
     <BottomNav
-      items={(signedIn ? BOTTOM_NAV : BOTTOM_NAV_PUBLIC).map((route) => ({
+      items={routes.map((route) => ({
         href: route.href,
         label: route.label,
         icon: route.icon,
         active: bottomNavActive(pathname, route.href),
+        badge: route.href === "/agent" ? agentNeedsCount : 0,
       }))}
       hidden={bottomNavHiddenOn(pathname)}
     />
@@ -283,6 +306,7 @@ export function AppShell({
   messagesCount = 0,
   children,
   counts,
+  agentTab = false,
 }: {
   signedIn: boolean;
   initialNight: boolean;
@@ -297,6 +321,8 @@ export function AppShell({
   messagesCount?: number;
   children: ReactNode;
   counts?: Promise<ShellCounts>;
+  /** The agent beta is on for this member (A3a): Agent joins the rail and bar. */
+  agentTab?: boolean;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
 
@@ -307,7 +333,7 @@ export function AppShell({
   };
 
   const renderRail = (values: ShellCounts) => (
-    <AppRail open={railOpen} onToggle={toggleRail} initialMktOpen={initialMktOpen} offersCount={values.offersCount} messagesCount={values.messagesCount} />
+    <AppRail open={railOpen} onToggle={toggleRail} initialMktOpen={initialMktOpen} offersCount={values.offersCount} messagesCount={values.messagesCount} agentTab={agentTab} agentNeedsCount={values.agentNeedsCount} />
   );
   const renderBar = (values: ShellCounts) => (
     <LivesheetBar initialNight={initialNight} signedIn={signedIn} {...values} />
@@ -340,7 +366,15 @@ export function AppShell({
           copies of the bar's search before hydration). The rail reads it
           inside the counts boundary for the same reason. */}
       <Suspense fallback={null}>
-        <ShellBottomNav signedIn={signedIn} />
+        {counts ? (
+          <Suspense fallback={<ShellBottomNav signedIn={signedIn} agentTab={agentTab} />}>
+            <StreamedShellCounts counts={counts}>
+              {(values) => <ShellBottomNav signedIn={signedIn} agentTab={agentTab} agentNeedsCount={values.agentNeedsCount} />}
+            </StreamedShellCounts>
+          </Suspense>
+        ) : (
+          <ShellBottomNav signedIn={signedIn} agentTab={agentTab} />
+        )}
       </Suspense>
     </div>
   );

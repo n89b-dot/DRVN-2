@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { agentsBetaOn } from "@/lib/agent/beta";
 import { cartCount } from "@/lib/cart";
 import type { Database } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
@@ -25,17 +26,39 @@ export async function loadShellCounts(
   unreadCount: number;
   offersCount: number;
   messagesCount: number;
+  agentNeedsCount: number;
 }> {
   const cart = await cartCount();
-  if (!userId) return { cartCount: cart, unreadCount: 0, offersCount: 0, messagesCount: 0 };
+  if (!userId) return { cartCount: cart, unreadCount: 0, offersCount: 0, messagesCount: 0, agentNeedsCount: 0 };
 
-  const [unreadCount, offersCount, messagesCount] = await Promise.all([
+  const [unreadCount, offersCount, messagesCount, agentNeedsCount] = await Promise.all([
     loadUnreadNotificationCount(supabase, userId),
     loadOffersNeedingAttention(supabase, userId),
     loadUnreadMessages(supabase, userId),
+    agentsBetaOn() ? loadAgentNeedsCount(supabase, userId) : Promise.resolve(0),
   ]);
 
-  return { cartCount: cart, unreadCount, offersCount, messagesCount };
+  return { cartCount: cart, unreadCount, offersCount, messagesCount, agentNeedsCount };
+}
+
+/**
+ * What the agent is waiting on the member for (A3a's Needs you): its
+ * proposals still pending an answer. Owner-only by RLS.
+ */
+export async function loadAgentNeedsCount(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("agent_approvals")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", userId)
+    .eq("status", "pending");
+  if (error) {
+    reportError("[shell] agent count failed", error);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 /**

@@ -16,6 +16,7 @@ import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
+import { agentsBetaOn } from "@/lib/agent/beta";
 import { DeleteListing } from "../../delete-listing";
 import { ListingStatusActions } from "../../status-actions";
 import { reportError } from "@/lib/monitoring";
@@ -27,10 +28,10 @@ export default async function EditListingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; agent?: string }>;
 }) {
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, agent: agentParam } = await searchParams;
 
   const supabase = await getPageClient();
   const user = await getViewer();
@@ -47,6 +48,19 @@ export default async function EditListingPage({
     throw new Error("Could not load this listing");
   }
   if (!listing || listing.seller_id !== user.id) notFound();
+
+  // The seller agent's live limits here (A3a), owner-only.
+  const agentBeta = agentsBetaOn();
+  const { data: mandate } = agentBeta
+    ? await supabase
+        .from("agent_mandates")
+        .select("target_cents, style, binding_acknowledged_at")
+        .eq("owner_id", user.id)
+        .eq("listing_id", listing.id)
+        .eq("scope", "seller")
+        .in("status", ["active", "paused"])
+        .maybeSingle()
+    : { data: null };
 
   const [carsResult, imagesResult, fitmentsResult, altNumbersResult, floorResult, makes] =
     await Promise.all([
@@ -141,6 +155,12 @@ export default async function EditListingPage({
         </Alert>
       )}
 
+      {agentParam === "failed" && (
+        <Alert title="Your agent isn't on yet" className="mb-6">
+          The listing saved, but its agent limits didn&apos;t. Check the minimum and target under Price, then save again.
+        </Alert>
+      )}
+
       {locked ? (
         <>
           <Alert title={`This part is ${listing.status}`}>
@@ -153,6 +173,16 @@ export default async function EditListingPage({
         </>
       ) : (
         <SellForm
+          agentBeta={agentBeta}
+          listingAgent={
+            mandate
+              ? {
+                  targetCents: mandate.target_cents,
+                  style: mandate.style as "firm" | "balanced" | "flexible",
+                  acknowledged: Boolean(mandate.binding_acknowledged_at),
+                }
+              : null
+          }
           cars={cars ?? []}
           makes={makes.map((m) => m.name)}
           userId={user.id}

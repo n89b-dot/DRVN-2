@@ -10,3 +10,5 @@ export { ListingRow, type ListingRowData } from "./listing-row";
 export { AccountRowList, type AccountRowAccount } from "./account-row-list";
 export { ConditionSummary } from "../condition-summary";
 export { ConversationRow, DealChip, DealCard, OfferCard, type DealTone } from "./conversation";
+export { OfferRound } from "./offer-round";
+export { AgentHeader } from "./agent-header";

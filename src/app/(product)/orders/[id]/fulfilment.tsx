@@ -6,7 +6,6 @@ import { ConfirmDialog } from "@/components/ui";
 import {
   markReceived,
   markShipped,
-  requestCancellation,
   type CommerceState,
 } from "@/features/commerce/actions";
 import { useRecoverableAction } from "@/features/commerce/use-recoverable-action";
@@ -81,35 +80,3 @@ export function ReceivedButton({ orderId }: { orderId: string }) {
   );
 }
 
-export function CancelOrder({ orderId }: { orderId: string }) {
-  const [reason, setReason] = useState("");
-  const [state, action, pending] = useRecoverableAction<CommerceState>(requestCancellation);
-
-  return (
-    <div className="grid gap-2">
-      <ConfirmDialog
-        title="Cancel this order?"
-        destructive
-        consequences={[
-          "Refunds the buyer in full",
-          "Returns this part to sale so it can be bought again",
-          "Can't be undone once confirmed",
-        ]}
-        confirmLabel={pending ? "Cancelling…" : "Confirm cancellation"}
-        onSubmit={action}
-        hidden={{ order_id: orderId }}
-        pending={pending}
-        error={state.error}
-        triggerClassName="relbtn !static"
-        fields={
-          <label className="field mt-3">
-            <span className="field__label">Reason (optional, recorded on the order)</span>
-            <input name="reason" value={reason} onChange={(event) => setReason(event.target.value)} disabled={pending} className="ctl !max-w-none" maxLength={500} />
-          </label>
-        }
-      >
-        Cancel this order
-      </ConfirmDialog>
-    </div>
-  );
-}
