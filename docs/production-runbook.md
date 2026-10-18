@@ -454,3 +454,82 @@ two minutes; `cc.drvn2.stripe` kept alive). launchd can't open scripts inside
 the three commands. Logs: `~/Library/Logs/drvn2-jobs.log` and
 `~/Library/Logs/drvn2-stripe.log`. Admin → Settings → Background jobs shows
 whether the jobs are keeping up.
+
+## 13. The agent worker, kill switches and reconciliation (A2)
+
+Migrations `20261021100000`–`100200`. Nothing here is needed until A3a turns the
+agent on; until then the seeded `all` kill switch keeps it paused for everyone.
+Background: [`docs/decisions/agent-foundations.md`](decisions/agent-foundations.md),
+[`docs/site/operations.md`](site/operations.md) "The agent".
+
+### 13a. Give the worker a login (operator step, once per project)
+
+The migrations create `agent_worker` as `NOLOGIN` with no table privileges; it
+can execute only the eight worker functions (`agent_claim_jobs`,
+`agent_renew_lease`, `agent_job_context`, `agent_offer_move`, `agent_offer_open`,
+`agent_request_approval`, `agent_record_decision`, `agent_finish_job`).
+No password is ever written into a migration or committed. When the A3a beta
+is ready, an operator does this in the SQL editor of the project, as `postgres`:
+
+```sql
+alter role agent_worker with login password '<generated, 32+ random bytes>';
+```
+
+Then store the connection string as `AGENT_WORKER_DATABASE_URL` in the deploy
+environment only, through the **transaction pooler** with the role as the user
+(`postgresql://agent_worker.<project-ref>:<password>@<pooler-host>:6543/postgres`).
+Check it: connect as the role and confirm `select count(*) from public.listings`
+fails with 42501 and `select * from public.agent_claim_jobs(1, 60)` returns.
+Rotate by running the `alter role` again and updating the environment. To cut
+the worker off entirely: `alter role agent_worker nologin;` (in-flight leases
+lapse and their jobs return to the queue).
+
+### 13b. Kill switches
+
+Admin console → **Agent** (`/admin/agent`), an admin with step-up. Each switch
+is a row in `agent_controls` and an `agent.pause` / `agent.resume` entry in the
+audit log, written in one transaction by `admin_set_agent_control`.
+
+| Switch | Stops |
+|---|---|
+| All | Every agent write, both sides |
+| Buyer side / Seller side | That side's agent everywhere |
+| One member's agent (`member`) | Everything that member's agent does |
+| One mandate | That one listing's limits |
+| One listing | Every agent on that listing, either side |
+| One account (`account`) | Every agent acting for *or against* that member |
+
+What a switch does: `agent_claim_jobs` leaves the affected jobs queued (they
+are not lost), and every worker write re-checks the switches inside its own
+transaction, so a job claimed just before the switch was thrown still refuses
+with `AG004`. **Existing offers, counters and orders are never touched**: a
+counter the agent already sent stays live and binding until it is accepted,
+countered or expires; an accepted offer's order runs its normal course.
+
+### 13c. Reconciliation after a pause
+
+1. Look before lifting: `select public.agent_health();` (service role). Note
+   `stale_jobs`, `stuck_tasks`, `repeated_decisions` and `controls_on`.
+2. Decide per offer: anything the agent sent before the pause is the member's
+   offer. If it should not stand, the member (not an admin) declines or lets
+   it expire; a seller may cancel an accepted order only before checkout
+   begins, as for any sale.
+3. Lift the switch in the console. Queued jobs run on the next pass. A job
+   whose turn has since moved on fails harmlessly with `OF003` (stale round)
+   or was already cancelled when the next round arrived.
+4. Run `select public.agent_reconcile_outbox(500);` once. It re-queues any
+   turn that has no job (counted as `outbox_reconciled` in `agent_telemetry`),
+   returns expired leases to the queue and cancels jobs whose task ended.
+5. Re-check `agent_health()`: `stale_jobs` and `stuck_tasks` should be 0
+   within two passes. Any `dead` job is a worker that kept losing its lease;
+   its task stays open for the next event.
+
+### 13d. Scheduled sweeps
+
+`/api/jobs/agent` (bearer `CRON_SECRET`) runs the outbox reconcile, the
+retention sweep (`agent_retention_sweep`: jobs and monitoring after 30 days;
+events, finished tasks, ended mandates and idle chats after 12 months) and the
+health check, which reports to monitoring when a threshold trips. It also runs
+one worker pass when `AGENT_WORKER_DATABASE_URL` is set. Schedule it every
+5 minutes beside the transfer worker once A3a starts; until then it is not
+scheduled.
