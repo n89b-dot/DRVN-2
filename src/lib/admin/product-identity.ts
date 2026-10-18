@@ -64,7 +64,7 @@ export type IdentityReviewRow = {
 
 export type IdentityReviewsResult = { rows: IdentityReviewRow[]; total: number; page: number; hasMore: boolean };
 
-/** The latest grow_products run: what it did and the coverage it reached. */
+/** The latest full grow_products run: the coverage it reached. */
 export type ProductCoverage = {
   ranAt: string;
   listings: { withNumber: number; withBrandAndNumber: number; eligible: number; withProduct: number };
@@ -81,6 +81,8 @@ export async function getProductCoverage(): Promise<ProductCoverage | null> {
   const { data, error } = await createAdminClient()
     .from("product_grow_runs")
     .select("ran_at, result")
+    // Hourly runs only look at what changed; full runs (nightly) measure.
+    .eq("result->>full", "true")
     .order("id", { ascending: false })
     .limit(1)
     .maybeSingle();

@@ -25,8 +25,9 @@
 -- without brand scope says two numbers are one part without saying whose:
 -- it merges nothing and goes to the review list.
 --
--- Products grow out of what members already wrote. grow_products(), run by
--- the backfill below and then hourly (pg_cron), finds every brand + number
+-- Products grow out of what members already wrote. grow_products(), run in
+-- full as the backfill below, then hourly over what changed and nightly in
+-- full (pg_cron), finds every brand + number
 -- on a listing or build line that no product holds yet and makes one,
 -- applies brand-scoped same_product links, and sends anything ambiguous to
 -- product_identity_reviews instead of deciding:
@@ -44,8 +45,8 @@
 -- Admins resolve them (resolve_product_identity_review): merge, keep
 -- separate, or dismiss, audited. Reviews whose ambiguity has gone (the
 -- products merged, the record gained a brand) close themselves as obsolete.
--- Each run is logged with the coverage it reached (product_grow_runs), which
--- is how coverage is measured.
+-- Each run is logged (product_grow_runs); full runs record the coverage they
+-- reached, which is how coverage is measured.
 --
 -- Only a number with a digit, 3–64 characters once compacted, starts a
 -- product: "intercooler" or "kit" typed in the number box is not a part
@@ -290,13 +291,21 @@ revoke all on function public.product_coverage() from public, anon, authenticate
 -- ============================================================
 -- 5. Growing products
 -- ============================================================
-create or replace function public.grow_products()
+-- Incremental by default: only listings and build lines written since the
+-- last run started (updated_at is kept by their touch triggers), alternates
+-- and links added since, and links touching what changed. p_full rescans
+-- everything — the backfill, and a nightly safety net. Neither listings nor
+-- mod_items gets an updated_at index for this: a seq scan an hour is cheaper
+-- than breaking HOT updates on every view count.
+create or replace function public.grow_products(p_full boolean default false)
 returns jsonb
 language plpgsql
 security definer
 set search_path to 'public', 'pg_temp'
 as $function$
 declare
+  v_started timestamptz := clock_timestamp();
+  v_since timestamptz;
   v_created int := 0;
   v_linked int := 0;
   v_merged int := 0;
@@ -312,8 +321,14 @@ begin
   if not pg_try_advisory_xact_lock(hashtext('public.grow_products')) then
     return jsonb_build_object('skipped', 'another run in progress');
   end if;
+  if not p_full then
+    -- A minute of overlap: a write committed just as the last run started.
+    select max((result ->> 'started_at')::timestamptz) - interval '1 minute' into v_since
+    from public.product_grow_runs where result ? 'started_at';
+  end if;
+  -- (v_since null = everything: the first run, or a full one.)
 
-  -- Every brand + number members wrote, from listings and build lines.
+  -- The brand + number members wrote, from listings and build lines.
   create temp table if not exists grow_seen (
     brand_key text, number_compact text, brand text, number text, name text, category text,
     src text, listing_id uuid, mod_item_id uuid, created_at timestamptz
@@ -326,6 +341,8 @@ begin
            'listing', l.id, null::uuid, l.created_at
     from public.listings l
     where l.part_number_compact is not null and l.status not in ('draft', 'removed')
+      and (v_since is null or l.updated_at >= v_since or l.created_at >= v_since
+           or exists (select 1 from public.listing_part_numbers pn where pn.listing_id = l.id and pn.created_at >= v_since))
     union all
     select m.brand_key, m.part_number_compact,
            -- Display only: the paste parser leaves leading punctuation ("-Bosch").
@@ -333,6 +350,7 @@ begin
            'mod', null::uuid, m.id, m.created_at
     from public.mod_items m
     where m.part_number_compact is not null
+      and (v_since is null or m.updated_at >= v_since or m.created_at >= v_since)
   ) s(brand_key, number_compact, brand, number, name, category, src, listing_id, mod_item_id, created_at)
   where s.number_compact ~ '[0-9]' and char_length(s.number_compact) between 3 and 64;
   analyze grow_seen;
@@ -359,11 +377,27 @@ begin
   from fresh f join made on made.id = f.id;
   get diagnostics v_created = row_count;
 
+  -- The numbers this run is about: what was written, and what links added
+  -- since name. Everything below looks only at these (or at everything, in
+  -- a full run).
+  create temp table if not exists grow_numbers (number_compact text primary key) on commit drop;
+  truncate grow_numbers;
+  if v_since is not null then
+    insert into grow_numbers select distinct number_compact from grow_seen on conflict do nothing;
+    insert into grow_numbers
+    select n from public.part_number_links l, lateral (values (l.from_compact), (l.to_compact)) v(n)
+    where l.created_at >= v_since or l.verified_at >= v_since
+    on conflict do nothing;
+    analyze grow_numbers;
+  end if;
+
   -- 2. Brand-scoped same_product links join their two pairs' products.
   for r in
-    select l.id, l.from_brand_key, l.from_compact, l.to_brand_key, l.to_compact, l.verified_by
+    select l.id, l.from_brand_key, l.from_compact, l.to_brand_key, l.to_compact
     from public.part_number_links l
     where l.kind = 'same_product' and l.from_brand_key is not null
+      and (v_since is null
+           or exists (select 1 from grow_numbers g where g.number_compact in (l.from_compact, l.to_compact)))
     order by l.created_at, l.id
   loop
     select pm.product_id into v_a from public.product_part_numbers pm
@@ -402,6 +436,7 @@ begin
            array_agg(p.brand order by pm.brand_key) as brands
     from public.product_part_numbers pm
     join public.products p on p.id = pm.product_id and p.status = 'active'
+    where v_since is null or pm.number_compact in (select number_compact from grow_numbers)
     group by pm.number_compact
     having count(distinct pm.product_id) > 1
   ) x
@@ -437,6 +472,8 @@ begin
     from public.product_part_numbers pm where pm.number_compact in (l.from_compact, l.to_compact)
   ) k
   where l.kind = 'same_product' and l.from_brand_key is null
+    and (v_since is null
+         or exists (select 1 from grow_numbers g where g.number_compact in (l.from_compact, l.to_compact)))
     and exists (select 1 from public.product_part_numbers pm where pm.number_compact = l.from_compact)
     and exists (select 1 from public.product_part_numbers pm where pm.number_compact = l.to_compact)
     and cardinality(k.product_ids) > 1
@@ -459,7 +496,8 @@ begin
   v_opened := v_opened + v_n;
 
   -- 4. Close what is no longer ambiguous: the products are now one, or the
-  -- record has a brand or no longer carries the number.
+  -- record has a brand, no longer carries the number, or is gone from sale
+  -- for good. Read from the record itself, so an incremental run is right.
   update public.product_identity_reviews rv
      set status = 'obsolete', resolved_at = now(),
          resolution_note = 'No longer ambiguous: ' || case rv.kind
@@ -468,25 +506,35 @@ begin
    where rv.status = 'open'
      and case rv.kind
        when 'brandless_number' then not exists (
-         select 1 from grow_seen s
-         where s.brand_key is null and s.number_compact = rv.number_compact
-           and (s.listing_id = rv.listing_id or s.mod_item_id = rv.mod_item_id))
+         select 1 from public.listings l
+         where l.id = rv.listing_id and l.part_number_compact = rv.number_compact
+           and nullif(regexp_replace(lower(coalesce(l.brand, '')), '[^[:alnum:]]', '', 'g'), '') is null
+           and l.status not in ('draft', 'removed')
+         union all
+         select 1 from public.mod_items m
+         where m.id = rv.mod_item_id and m.part_number_compact = rv.number_compact and m.brand_key is null)
        else (
          select count(distinct coalesce(p.merged_into, p.id)) from public.products p where p.id = any(rv.product_ids)) <= 1
      end;
   get diagnostics v_obsolete = row_count;
 
   v_result := jsonb_build_object(
+    'started_at', v_started, 'full', v_since is null, 'seen', (select count(*) from grow_seen),
     'products_created', v_created, 'numbers_linked', v_linked, 'merges', v_merged,
     'reviews_opened', v_opened, 'reviews_obsolete', v_obsolete,
-    'coverage', public.product_coverage());
+    'ms', round(extract(epoch from clock_timestamp() - v_started) * 1000));
+  -- Coverage reads everything; measured on full runs only (and on demand
+  -- through product_coverage()).
+  if v_since is null then
+    v_result := v_result || jsonb_build_object('coverage', public.product_coverage());
+  end if;
   insert into public.product_grow_runs (result) values (v_result);
   delete from public.product_grow_runs
    where id < (select min(id) from (select id from public.product_grow_runs order by id desc limit 500) k);
   return v_result;
 end;
 $function$;
-revoke all on function public.grow_products() from public, anon, authenticated;
+revoke all on function public.grow_products(boolean) from public, anon, authenticated;
 
 -- ============================================================
 -- 6. Admins decide
@@ -575,18 +623,19 @@ begin
 end $$;
 
 -- ============================================================
--- 7. Backfill, then hourly
+-- 7. Backfill (a full run), then hourly, and in full nightly
 -- ============================================================
 do $$
 begin
-  perform public.grow_products();
+  perform public.grow_products(true);
 end $$;
 
 do $$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
-    perform cron.unschedule(jobid) from cron.job where jobname = 'drvn-grow-products';
+    perform cron.unschedule(jobid) from cron.job where jobname in ('drvn-grow-products', 'drvn-grow-products-full');
     perform cron.schedule('drvn-grow-products', '17 * * * *', 'select public.grow_products()');
+    perform cron.schedule('drvn-grow-products-full', '47 4 * * *', 'select public.grow_products(true)');
   end if;
 end $$;
 

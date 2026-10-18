@@ -148,8 +148,13 @@ begin
      or (select count(*) from public.product_identity_reviews) <> v_n then
     raise exception 'FAIL 3f: a second run was not a no-op: %', v_run;
   end if;
-  if (v_run -> 'coverage' -> 'listings' ->> 'with_product')::int < 10 then
-    raise exception 'FAIL 3g: coverage not measured: %', v_run -> 'coverage';
+  if (public.product_coverage() -> 'listings' ->> 'with_product')::int < 10 then
+    raise exception 'FAIL 3g: coverage not measured: %', public.product_coverage();
+  end if;
+  -- A full run finds nothing new either, and records coverage.
+  v_run := public.grow_products(true);
+  if (v_run ->> 'products_created')::int <> 0 or (v_run ->> 'reviews_opened')::int <> 0 or not v_run ? 'coverage' then
+    raise exception 'FAIL 3h: a full run after an incremental one disagreed: %', v_run;
   end if;
 
   -- 4. Clients see none of it.
