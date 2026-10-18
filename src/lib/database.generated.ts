@@ -2001,6 +2001,106 @@ export type Database = {
           },
         ]
       }
+      offer_round_terms: {
+        Row: {
+          created_at: string
+          effective_floor_cents: number | null
+          round_id: string
+        }
+        Insert: {
+          created_at?: string
+          effective_floor_cents?: number | null
+          round_id: string
+        }
+        Update: {
+          created_at?: string
+          effective_floor_cents?: number | null
+          round_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_round_terms_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: true
+            referencedRelation: "offer_rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      offer_rounds: {
+        Row: {
+          actor_member_id: string | null
+          actor_role: string
+          amount_cents: number | null
+          buyer_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          idempotency_key: string | null
+          kind: string
+          listing_id: string
+          offer_id: string
+          round_no: number
+        }
+        Insert: {
+          actor_member_id?: string | null
+          actor_role: string
+          amount_cents?: number | null
+          buyer_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          kind: string
+          listing_id: string
+          offer_id: string
+          round_no: number
+        }
+        Update: {
+          actor_member_id?: string | null
+          actor_role?: string
+          amount_cents?: number | null
+          buyer_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          kind?: string
+          listing_id?: string
+          offer_id?: string
+          round_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_rounds_actor_member_id_fkey"
+            columns: ["actor_member_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_rounds_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_rounds_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_rounds_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       offers: {
         Row: {
           amount_cents: number

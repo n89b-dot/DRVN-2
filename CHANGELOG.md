@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-17 — Every offer move is recorded (negotiation v2, step one)
+
+Offers gain a history of moves. `offer_rounds` keeps one row per move: the opening offer, a counter, accept, decline, withdraw or expiry. Each proposal's minimum at the time is kept privately in `offer_round_terms`. Today's offer code is unchanged; a trigger records its moves, and a backfill rebuilds the history of every existing offer. The offer page now reads its history from the rounds, falling back to the old reading if they can't be read. Members' exports include their rounds (contract `2026-10-17.v7`). The design for the rest of negotiation v2 is `docs/decisions/negotiation-v2.md`.
+
 ## 2026-10-17 — The offer minimum is private
 
 A seller's lowest acceptable offer was stored on the listing, which anyone could read through the database API. It now lives in `listing_private_terms`, which no member or visitor can read; the seller reads their own through `my_listing_offer_floor`. This is A0's first rollout in the agent plan, in three steps.

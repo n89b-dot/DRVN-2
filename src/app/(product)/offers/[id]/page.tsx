@@ -12,6 +12,7 @@ import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
 import { StatusChip } from "@/components/commerce";
 import { OfferDecision } from "@/features/commerce/offer-decision";
+import { offerHistoryFromRounds, type OfferRound } from "@/features/commerce/offer-history";
 
 /** How much of the conversation the offer page previews. */
 const PREVIEW_COUNT = 3;
@@ -68,7 +69,7 @@ export default async function OfferThreadPage({
 
   const counterpartyId = incoming ? offer.buyer_id : listing.seller_id;
 
-  const [{ data: image }, { data: counterparty }, { data: rawMessages }] =
+  const [{ data: image }, { data: counterparty }, { data: rawMessages }, { data: rounds }] =
     await Promise.all([
       supabase
         .from("listing_images")
@@ -91,6 +92,13 @@ export default async function OfferThreadPage({
         .eq("kind", "message")
         .order("created_at", { ascending: false })
         .limit(PREVIEW_COUNT),
+      // Every move as it happened (migration 20261017150000). Missing or
+      // unreadable rounds fall back to the history the offer row implies.
+      supabase
+        .from("offer_rounds")
+        .select("round_no, actor_role, kind, amount_cents, created_at")
+        .eq("offer_id", id)
+        .order("round_no"),
     ]);
 
   // This viewer's read receipt for the thread — scoped to messages
@@ -134,8 +142,8 @@ export default async function OfferThreadPage({
   const preview = [...(rawMessages ?? [])].reverse();
 
   // Derived history, oldest first — every column already on the offer row
-  // is a timestamped state change, just never assembled into a timeline.
-  const history: HistoryEntry[] = [
+  // is a timestamped state change. Used only when the rounds can't be read.
+  const derived: HistoryEntry[] = [
     {
       label: incoming
         ? `${counterpartyName} made an offer`
@@ -145,35 +153,39 @@ export default async function OfferThreadPage({
     },
   ];
   if (offer.countered_at && offer.counter_amount_cents) {
-    history.push({
+    derived.push({
       label: incoming ? "You countered" : `${counterpartyName} countered`,
       at: offer.countered_at,
       amount: offer.counter_amount_cents,
     });
   }
   if (offer.status === "accepted" && offer.responded_at) {
-    history.push({
+    derived.push({
       label: incoming ? "You accepted" : `${counterpartyName} accepted`,
       at: offer.responded_at,
     });
   }
   if (offer.status === "declined" && offer.responded_at) {
-    history.push({
+    derived.push({
       label: incoming ? "You declined" : `${counterpartyName} declined`,
       at: offer.responded_at,
     });
   }
   if (offer.status === "expired" && offer.responded_at) {
-    history.push({ label: "Offer expired unanswered", at: offer.responded_at });
+    derived.push({ label: "Offer expired unanswered", at: offer.responded_at });
   }
   if (offer.status === "withdrawn") {
-    history.push({
+    derived.push({
       label: isBuyer
         ? "You withdrew the offer"
         : `${counterpartyName} withdrew the offer`,
       at: offer.updated_at,
     });
   }
+
+  const history: HistoryEntry[] = rounds?.length
+    ? offerHistoryFromRounds(rounds as OfferRound[], { incoming, counterpartyName })
+    : derived;
 
   const live = offer.status === "open" || offer.status === "countered";
   // What the dateline says depends on how the offer stands: a live offer

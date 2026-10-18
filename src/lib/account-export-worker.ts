@@ -99,7 +99,7 @@ async function readPage(admin: UntypedAdmin, request: ExportRequest, section: Ex
     query = query.eq("cars.owner_id", request.user_id);
   } else if (section.key === "activity_images") {
     query = query.eq("activity_posts.author_id", request.user_id);
-  } else if (["listing_images", "listing_fitments", "listing_part_numbers", "offers_received"].includes(section.key)) {
+  } else if (["listing_images", "listing_fitments", "listing_part_numbers", "offers_received", "offer_rounds_received"].includes(section.key)) {
     query = query.eq("listings.seller_id", request.user_id);
   } else if (["order_items", "payments", "refunds", "returns", "dispute_evidence", "shipments", "pickup_confirmations"].includes(section.key)) {
     query = query.or(`buyer_id.eq.${request.user_id},seller_id.eq.${request.user_id}`, { referencedTable: "orders" });
