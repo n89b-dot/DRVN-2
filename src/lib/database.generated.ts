@@ -5519,7 +5519,7 @@ export type Database = {
           updates: number
         }[]
       }
-      grow_products: { Args: never; Returns: Json }
+      grow_products: { Args: { p_full?: boolean }; Returns: Json }
       has_embedded_media_reference: {
         Args: { p_url: string }
         Returns: boolean
