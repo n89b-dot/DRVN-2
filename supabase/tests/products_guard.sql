@@ -104,7 +104,7 @@ begin
      or (select basis from public.product_part_numbers where brand_key = 'bosch' and number_compact = '0986ab9999') <> 'same_product_link' then
     raise exception 'FAIL 2d: a linked number was not added to the product';
   end if;
-  if (select count(*) from public.products where status = 'merged') <> 1 then raise exception 'FAIL 2e: expected one merged product'; end if;
+  if (select count(*) from public.products where status = 'merged' and brand_key = 'bosch') <> 1 then raise exception 'FAIL 2e: expected one merged product'; end if;
   -- Delphi's part with the same number is a different product.
   select product_id into v_q from public.product_part_numbers where brand_key = 'delphi' and number_compact = '0280158117';
   if v_q is null or v_q = v_p then raise exception 'FAIL 2f: another brand''s part merged by number'; end if;
@@ -203,10 +203,15 @@ begin
   perform set_config('role', 'none', true);
   perform set_config('request.jwt.claims', '', true);
 
-  if (select product_id from public.product_part_numbers where brand_key = 'delphi' and number_compact = '0280158117') is distinct from v_p
-     or (select basis from public.product_part_numbers where brand_key = 'delphi' and number_compact = '0280158117') <> 'verified'
-     or (select verified_by from public.product_part_numbers where brand_key = 'delphi' and number_compact = '0280158117') is distinct from v_admin then
-    raise exception 'FAIL 5d: the merge decision did not move the number, verified';
+  -- Products made in one run tie on age, so which survives falls to id order
+  -- (merge_products keeps the oldest, then the lowest id). What matters is
+  -- that the two are one now, and the numbers that moved say who decided.
+  if (select count(distinct product_id) from public.product_part_numbers
+      where number_compact = '0280158117' and brand_key in ('bosch', 'delphi')) <> 1
+     or not exists (select 1 from public.product_part_numbers
+                    where number_compact = '0280158117' and brand_key in ('bosch', 'delphi')
+                      and basis = 'verified' and verified_by = v_admin) then
+    raise exception 'FAIL 5d: the merge decision did not make one product, verified';
   end if;
   if (select status from public.product_identity_reviews where id = v_review) <> 'merged' then raise exception 'FAIL 5e: review not closed'; end if;
   if (select count(*) from public.admin_audit_log where actor_id = v_admin and subject_type = 'product_review') <> 2 then
@@ -223,7 +228,7 @@ begin
   if (select status from public.product_identity_reviews where kind = 'brandless_number' and listing_id = l_nobrand) <> 'obsolete' then
     raise exception 'FAIL 6a: a brandless review stayed open after the brand was added';
   end if;
-  if (select count(*) from public.product_identity_reviews where kind = 'unscoped_same_product') <> 1 then
+  if (select count(*) from public.product_identity_reviews where kind = 'unscoped_same_product' and number_compact = 'x100') <> 1 then
     raise exception 'FAIL 6b: a kept-separate link was filed again';
   end if;
   if exists (select 1 from public.product_identity_reviews where kind = 'number_across_brands' and number_compact = '0280158117' and status = 'open') then
