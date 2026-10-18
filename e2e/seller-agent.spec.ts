@@ -198,7 +198,9 @@ test.describe("seller agent (A3a)", () => {
     await expect(seller.getByRole("tab", { name: /Needs you/ })).toBeVisible();
     await shoot(seller, "02-agent-screen");
     await seller.getByRole("button", { name: "Accept $237" }).click();
-    await expect(seller.getByText(/Accepted/).first()).toBeVisible();
+    // Accepting from Needs you lands on the offer, accepted.
+    await seller.waitForURL(new RegExp(`/offers/${offerId}$`));
+    await expect(seller.getByText(/accepted/i).first()).toBeVisible();
     const order = await db.query<{ id: string; status: string; subtotal_cents: number }>("select id, status, subtotal_cents from public.orders where origin_offer_id = $1", [offerId]);
     expect(order.rows[0]).toMatchObject({ status: "pending", subtotal_cents: 23700 });
     const orderId = order.rows[0].id;
