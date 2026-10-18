@@ -533,3 +533,27 @@ health check, which reports to monitoring when a threshold trips. It also runs
 one worker pass when `AGENT_WORKER_DATABASE_URL` is set. Schedule it every
 5 minutes beside the transfer worker once A3a starts; until then it is not
 scheduled.
+It also applies the usage retention (`agent_usage_retention_sweep`, 12 months)
+and recomputes today's and yesterday's measures (`agent_compute_metrics` →
+`agent_metrics_daily`; definitions in `docs/site/agent-measures.md`).
+
+### 13e. Opening a beta step, and the spend caps
+
+Each A3 step (seller, buyer, chat, jobs) opens from `/admin/agent` → Beta
+steps (admin with a fresh authenticator; a reason is required and audited as
+`agent.beta_open` / `agent.beta_close`). An environment needs `AGENTS_BETA=on`
+as well. Opening a step only shows its controls to members; lift the
+`all` kill switch (§13b) for the agent to act. Close the step to hide the
+controls again; mandates already set stay, and the kill switches still stop
+them.
+
+Model spend is capped per member and for everyone, per UTC day
+(`agent_spend_limits`, $2 and $50 to start), set on the same page and audited
+as `agent.spend_limits`. A turn past either cap is refused before the model
+is called (`spend_cap`), and every turn's tokens and cost land in
+`agent_usage`.
+
+One member's agent is at `/admin/agent/members/<id>`: their limits with
+versions, tasks, record and approvals. Their chat opens only for a report about
+them or a dispute they're party to, with the case id and a reason, and is
+audited (`agent.chat_opened`) before a line is shown.

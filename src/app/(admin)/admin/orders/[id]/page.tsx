@@ -10,7 +10,9 @@ import {
   adminMessageParties,
   adminResolveForSeller,
 } from "@/lib/admin/actions";
+import { OfferRound } from "@/components/commerce";
 import { getOrderDetail } from "@/lib/admin/queries";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ORDER_STATUS_CHIP } from "@/lib/admin/presentation";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { cx, isPersonStub, personLabel, plural } from "@/lib/format";
@@ -73,6 +75,18 @@ export default async function AdminOrderPage({
   if (!detail) notFound();
   const { order, items, payment, transferIntent, buyer, seller, messages, evidence, audit, timeline } =
     detail;
+
+  // Agent provenance (plan: admin controls 4): an order made from an offer
+  // shows every round, which were the agent's, and the mandate version each
+  // was made under, so "the seller didn't mean it" can be checked.
+  const { data: originOffer } = await createAdminClient().from("orders").select("origin_offer_id").eq("id", id).maybeSingle();
+  const { data: rounds } = originOffer?.origin_offer_id
+    ? await createAdminClient()
+        .from("offer_rounds")
+        .select("round_no, actor_role, kind, amount_cents, created_at, actor_task_id, mandate_version")
+        .eq("offer_id", originOffer.origin_offer_id)
+        .order("round_no")
+    : { data: null };
 
   const refundable = order.total_cents - order.refunded_cents;
   const disputed = order.status === "disputed";
@@ -341,6 +355,26 @@ export default async function AdminOrderPage({
           </div>
         </section>
       )}
+
+      {rounds?.length ? (
+        <section aria-label="Negotiation" className="mb-8">
+          <span className="microlabel">
+            Negotiation ({rounds.length} round{rounds.length === 1 ? "" : "s"}
+            {rounds.some((r) => r.actor_task_id) ? ", agent involved" : ""})
+          </span>
+          <ol className="rowlist">
+            {rounds.map((r) => (
+              <OfferRound
+                key={r.round_no}
+                who={`${r.actor_role === "seller" ? "Seller" : r.actor_role === "buyer" ? "Buyer" : "System"}${r.actor_task_id ? "'s agent" : ""} · ${r.kind}${r.mandate_version != null ? ` · mandate v${r.mandate_version}` : ""}`}
+                amount={r.amount_cents != null ? formatPrice(r.amount_cents) : undefined}
+                when={new Date(r.created_at).toLocaleString()}
+                viaAgent={Boolean(r.actor_task_id)}
+              />
+            ))}
+          </ol>
+        </section>
+      ) : null}
 
       {/* ---------- Diagnostics timeline (§AF) ---------- */}
       <section aria-label="Transaction timeline" className="mb-8">

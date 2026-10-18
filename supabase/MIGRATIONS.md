@@ -1,5 +1,21 @@
 # Applying migrations
 
+## October 24 — the agent's admin controls and measures (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261024100000_agent_admin_measure.sql` | not yet |
+
+Apply after `20261022110000`. It adds:
+- `agent_beta_steps` (seller, buyer, chat, jobs; seeded closed) and `admin_set_agent_beta_step`, so each A3 step opens from `/admin/agent`, audited. `AGENTS_BETA=on` stays the master switch.
+- `agent_usage` (task, owner, model, tokens, cost; never text), `agent_spend_limits` (per member $2/day, everyone $50/day to start) with `agent_spend_allowed` and the audited `admin_set_agent_spend_limits`.
+- `agent_metrics_daily` and `agent_compute_metrics(day)`: the plan's measures as aggregates with no member ids; values from fewer than five cases are null.
+- `admin_open_agent_chat`: one member's agent chat, only for a report about them or a dispute they're party to, audited first.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including the new `agent_admin_measure_guard.sql`; the three admin functions are on `definer_exposure_guard`'s reviewed list; generated types match.
+
+**After applying on dev,** the steps are closed: open `seller` and `buyer` from `/admin/agent` to show the A3a and A3b controls. The global kill switch still decides whether the agent acts.
+
 ## October 22 — the buyer agent's notifications, A3b (shared dev project)
 
 | File | Applied to |

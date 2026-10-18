@@ -1,4 +1,4 @@
-import { agentsBetaOn } from "@/lib/agent/beta";
+import { agentStepOpen } from "@/lib/agent/beta";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -300,7 +300,7 @@ export default async function SellPage({
       )}
 
       <SellForm
-        agentBeta={agentsBetaOn()}
+        agentBeta={await agentStepOpen("seller")}
         defaultOfferFloorPct={offerFloorPct ?? null}
         cars={orderedCars}
         makes={makes.map((m) => m.name)}

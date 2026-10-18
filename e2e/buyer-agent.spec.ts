@@ -51,6 +51,9 @@ test.describe("buyer agent (A3b)", () => {
 
     db = new Client({ host: "127.0.0.1", port: 54322, user: "supabase_admin", password: "postgres", database: "postgres" });
     await db.connect();
+    // Steps start closed (20261024100000); this stack opens the two the
+    // agent specs drive. AGENTS_BETA=on is set in playwright.config.ts.
+    await db.query("update public.agent_beta_steps set open = true where step in ('seller', 'buyer')");
   });
 
   test.afterAll(async () => {

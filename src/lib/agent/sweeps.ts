@@ -12,7 +12,8 @@ type Admin = ReturnType<typeof createAdminClient>;
 /**
  * One scheduled pass of the agent's housekeeping (/api/jobs/agent): reconcile
  * the outbox, apply the retention periods, run the worker once when its own
- * login is configured, then check health and alert. The sweeps run as the
+ * login is configured, check health and alert, then refresh the day's
+ * measures (agent_metrics_daily: today, and yesterday so late events land). The sweeps run as the
  * service role (they are its functions); the worker pass never does.
  */
 export async function runAgentSweeps(admin: Admin) {
@@ -20,6 +21,8 @@ export async function runAgentSweeps(admin: Admin) {
   if (reconciled.error) throw new Error(`Agent outbox reconcile failed: ${reconciled.error.message}`);
   const retention = await admin.rpc("agent_retention_sweep");
   if (retention.error) throw new Error(`Agent retention sweep failed: ${retention.error.message}`);
+  const usageRetention = await admin.rpc("agent_usage_retention_sweep");
+  if (usageRetention.error) reportError("[agent] usage retention failed", usageRetention.error);
 
   let pass: PassResult | null = null;
   const db = await agentWorkerDb().catch((error) => {
@@ -34,5 +37,14 @@ export async function runAgentSweeps(admin: Admin) {
   for (const alert of alerts) {
     await captureMessage(`[agent] ${alert.signal}`, "warning", { tags: { area: "agent", signal: alert.signal }, extra: { count: alert.count } });
   }
-  return { reconciled: reconciled.data, retention: retention.data, pass, health: health.data, alerts };
+  // Measures are worth having but never worth failing the pass for.
+  const today = new Date();
+  const days = [new Date(today.getTime() - 86_400_000), today].map((d) => d.toISOString().slice(0, 10));
+  const measures: Record<string, number | null> = {};
+  for (const day of days) {
+    const computed = await admin.rpc("agent_compute_metrics", { p_day: day });
+    if (computed.error) reportError("[agent] measures failed", { day, code: computed.error.code });
+    measures[day] = computed.error ? null : (computed.data as number);
+  }
+  return { reconciled: reconciled.data, retention: retention.data, pass, health: health.data, alerts, measures };
 }

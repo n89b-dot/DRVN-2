@@ -59,6 +59,15 @@ export type AnalyticsEvent =
   /** Aggregate viability signal for anonymous Facebook retrieval (§32). */
   | { event: "listing_import_facebook_outcome"; props: { outcome: "fetch_attempted" | "fetch_succeeded" | "render_attempted" | "render_succeeded" | "fallback_to_paste" | "listing_gone" } }
   | { event: "offer_submitted"; props?: undefined }
+  /** The agent's screens (plan: "measuring the agent" 5). Coarse properties
+   *  only, never an amount or a limit. The agent's own moves happen in the
+   *  worker, which has no consent context; those are measured from DRVN's
+   *  records instead (agent_metrics_daily). */
+  | { event: "agent_offers_enabled"; props: { style: "firm" | "balanced" | "flexible"; has_target: boolean } }
+  | { event: "agent_offers_disabled"; props?: undefined }
+  | { event: "negotiate_for_me_started"; props: { basis: "item" | "total"; style: "firm" | "balanced" | "flexible" } }
+  | { event: "agent_tab_viewed"; props: { needs: "0" | "1" | "2-5" | "6+" } }
+  | { event: "agent_approval_answered"; props: { choice: "accept" | "dismiss" } }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }
   | { event: "seller_dispatched"; props?: undefined }

@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
-import { agentsBetaOn } from "@/lib/agent/beta";
+import { agentTabOpen } from "@/lib/agent/beta";
 import { cartCount as getCartCount } from "@/lib/cart";
 import { loadShellCounts } from "@/lib/shell-counts";
 import { getPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
@@ -35,7 +35,7 @@ export default async function DiscoverLayout({ children }: { children: ReactNode
       initialMktOpen={mktOpen}
       cartCount={cartCount}
       counts={counts}
-      agentTab={Boolean(user) && agentsBetaOn()}
+      agentTab={Boolean(user) && (await agentTabOpen())}
     >
       {/* No blanket footer here — every (discover) page renders its own
           contextual page-level <Foot> (see src/components/ui/livesheet-bar.tsx)

@@ -12,6 +12,7 @@ import { anthropicClient } from "./client";
 import { resolveAiConfig, type AiConfig } from "./config";
 import { redactForModel } from "./redact";
 import { UNTRUSTED_RULE, wrapToolResult } from "./untrusted";
+import { databaseLedger, type SpendLedger } from "./spend";
 import { logUsage, usageRecord } from "./usage";
 
 /**
@@ -25,14 +26,16 @@ import { logUsage, usageRecord } from "./usage";
  *   set prices (AG-5), so nothing it reads or is tricked into saying can move one.
  * - What the member typed is redacted (cards, VINs, emails, phones) before it
  *   is sent; every tool result goes back as untrusted data.
- * - The usage log keeps the model, tokens, cost and task, never the content.
+ * - The usage log keeps the model, tokens, cost and task, never the content;
+ *   it is stored per task (agent_usage), and a turn past the member's or the
+ *   global daily cap is refused before the model is called (spend.ts).
  */
 
 export type ToolCall = { name: string; ok: boolean; code?: string };
 
 export type AgentTurnResult =
   | { ok: true; text: string; toolCalls: ToolCall[]; stopReason: string | null }
-  | { ok: false; code: "ai_disabled" | "model_error" | "refused" | "incomplete" | "not_allowed"; toolCalls: ToolCall[] };
+  | { ok: false; code: "ai_disabled" | "model_error" | "refused" | "incomplete" | "not_allowed" | "spend_cap"; toolCalls: ToolCall[] };
 
 type RunnerClient = Pick<Anthropic, "beta">;
 
@@ -61,6 +64,8 @@ export async function runAgentTurn(options: {
   taskId?: string | null;
   client?: RunnerClient;
   config?: AiConfig;
+  /** The spend caps and usage store; the database's by default. */
+  spend?: SpendLedger;
 }): Promise<AgentTurnResult> {
   const config = options.config ?? resolveAiConfig();
   const toolCalls: ToolCall[] = [];
@@ -70,6 +75,9 @@ export async function runAgentTurn(options: {
   if (config.mode === "stub" && !options.client) {
     return { ok: true, text: "I can't reach the model in this environment, so nothing was looked up.", toolCalls, stopReason: "stub" };
   }
+  const ledger = options.spend ?? databaseLedger();
+  const ownerId = options.context.principal.memberId;
+  if (!(await ledger.allowed(ownerId))) return { ok: false, code: "spend_cap", toolCalls };
 
   const tools = modelToolsFor(options.context.scope).map((capability) =>
     betaZodTool({
@@ -112,7 +120,9 @@ export async function runAgentTurn(options: {
       inputTokens += message.usage.input_tokens;
       outputTokens += message.usage.output_tokens;
     }
-    logUsage(usageRecord({ model: config.model, inputTokens, outputTokens, taskId: options.taskId ?? null, feature: "agent_chat" }));
+    const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: options.taskId ?? null, feature: "agent_chat" });
+    logUsage(usage);
+    await ledger.record(ownerId, usage);
     if (!last) return { ok: false, code: "model_error", toolCalls };
     if (last.stop_reason === "refusal") {
       reportError("[agent] model refused", { taskId: options.taskId ?? null });

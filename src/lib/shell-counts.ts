@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { agentsBetaOn } from "@/lib/agent/beta";
+import { agentTabOpen } from "@/lib/agent/beta";
 import { cartCount } from "@/lib/cart";
 import type { Database } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
@@ -35,7 +35,7 @@ export async function loadShellCounts(
     loadUnreadNotificationCount(supabase, userId),
     loadOffersNeedingAttention(supabase, userId),
     loadUnreadMessages(supabase, userId),
-    agentsBetaOn() ? loadAgentNeedsCount(supabase, userId) : Promise.resolve(0),
+    agentTabOpen().then((open) => (open ? loadAgentNeedsCount(supabase, userId) : 0)),
   ]);
 
   return { cartCount: cart, unreadCount, offersCount, messagesCount, agentNeedsCount };
