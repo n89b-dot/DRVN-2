@@ -52,7 +52,7 @@ test.describe("seller agent (A3a)", () => {
     const image = await admin.from("listing_images").insert({ listing_id: listingId, url: "https://example.test/agent-intake.webp", position: 0 });
     if (image.error) throw image.error;
 
-    db = new Client({ host: "127.0.0.1", port: 54322, user: "postgres", password: "postgres", database: "postgres" });
+    db = new Client({ host: "127.0.0.1", port: 54322, user: "supabase_admin", password: "postgres", database: "postgres" });
     await db.connect();
     // The agent ships paused for everyone (A2's seeded "all" switch); lift it
     // for this run only, and put it back after.
