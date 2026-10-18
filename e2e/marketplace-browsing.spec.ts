@@ -159,9 +159,14 @@ for (const width of [320, 390, 768, 1440]) {
   });
 }
 
+// The function a marketplace page reads its parts through (migration
+// 20261011110000): revoking it is a failed read. marketplace_browse_rows is
+// no longer on a page's path, so revoking that broke nothing.
+const MARKETPLACE_PAGE = "public.marketplace_page(text,text,text,text,text,text,int,int,text,int,int,int,boolean,text,timestamptz,int,uuid,boolean,int,int,uuid[])";
+
 test("RPC failure shows Retry, retains context and recovers without a false zero count", async ({ page }) => {
   test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Fault injection is restricted to the disposable local database");
-  const signature = "public.marketplace_browse_rows(text,text,int,int,int,boolean,uuid)";
+  const signature = MARKETPLACE_PAGE;
   const sql = (statement: string) => execFileSync("docker", ["exec", "supabase_db_DRVN_2", "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", statement], { stdio: "pipe" });
   try {
     sql(`revoke execute on function ${signature} from anon;`);
@@ -178,7 +183,7 @@ test("RPC failure shows Retry, retains context and recovers without a false zero
 
 test("mobile empty and failed states remain distinct and usable", async ({ page }) => {
   test.skip(process.env.E2E_TEST_PROJECT_REF !== "local-drvn-remediation", "Fault injection is restricted to the disposable local database");
-  const signature = "public.marketplace_browse_rows(text,text,int,int,int,boolean,uuid)";
+  const signature = MARKETPLACE_PAGE;
   const sql = (statement: string) => execFileSync("docker", ["exec", "supabase_db_DRVN_2", "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", statement], { stdio: "pipe" });
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 900 });
