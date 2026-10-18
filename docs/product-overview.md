@@ -55,7 +55,7 @@ DRVN listing answers four questions ordinary classifieds can't —
 
 (Historical note: through mid-2026 this document argued the opposite — that provenance was a
 supporting feature and should never be the headline. The September 2026 direction reverses
-that: the car is the middle of the product.) Seven principles drive every decision:
+that: the car is the middle of the product.) Eight principles drive every decision:
 
 1. **The car gives context; it is never a gate.** You can list tyres with no car behind them,
    and buy with no account.
@@ -71,6 +71,30 @@ that: the car is the middle of the product.) Seven principles drive every decisi
    front door and the photo walls; product pages stay minimal, structured, and scannable.
 7. **Token-driven and swappable.** Build against centralized design tokens; reuse the
    component registry before adding to it.
+8. **Software acts only inside limits you set.** The agent negotiates, drafts and updates
+   within the limits its owner approved, says why, and never pays or publishes on its own
+   (PRD principle 5, added 2026-10-17).
+
+### The agent, and the map of cars and parts underneath it (added 2026-10-17)
+
+DRVN stays the car-centred community marketplace above. Two things are being added
+underneath and on top of it ([PRD §4.9](DRVN-PRD-2026-09.md),
+[plan](plans/2026-10-agent-and-graph-plan.md)):
+
+- **A structured map of cars and parts.** Which generation a car is, which listings are the
+  same product, and what fits what, with the evidence for each answer. It makes fitment,
+  search and prices more honest, and it is what the agent reasons over.
+- **One agent per member.** Its first job is offers: a seller says "let DRVN handle offers"
+  with a minimum and a style, and a buyer says "negotiate for me" with a ceiling. Later it
+  chats, keeps a build up to date from words, links or photos, and lists the parts that came
+  off. Rules set every price; the AI model only understands requests and writes the words.
+  The agent speaks only to its owner, and other people see a quiet "via agent" on an offer it
+  sent.
+
+Every task still works without the agent: it is a faster way through the same pages, not a
+place of its own. A seller's minimum is private (no one else can read it), and fairer
+haggling (three offers each, taking turns) comes to everyone first. The shapes all of this
+builds to are fixed in [decisions/agent-foundations.md](decisions/agent-foundations.md).
 
 ### How this differs from the earlier directions (v2.1 → v3 → 2026-09)
 
