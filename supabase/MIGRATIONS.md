@@ -177,34 +177,6 @@ Next: **switch** (offer checks, sell form, edit page and export read the new
 table) and, once that app is live everywhere, **contract** (drop
 `listings.offer_floor_cents` and the mirror trigger). Until the contract step,
 the old column is still readable through the API, as it is today.
-## October 17 — a search through the browse function (shared dev project)
-
-| File | Applied to |
-|---|---|
-| `20261017145500_browse_rows_search_once.sql` | shared dev project (2026-10-17) |
-
-Restates `marketplace_browse_rows` as a UNION ALL of the browse query (no
-words) and `marketplace_search_browse_rows` (words), so a search called
-through PostgREST runs once instead of once per part for sale. Same rows;
-signature, grants and invoker rights unchanged. Safe before or after the app
-change that ships with it (`listingRowsQuery` already sends searches to
-`marketplace_search_browse_rows`). Reverse by restating the function from
-`20261011100000_listing_vehicle_fit.sql`. Guard:
-`browse_rows_search_once_guard.sql`. Measurements and the one plan it makes
-slower: `docs/performance/query-plans.md` ("A search through the browse
-function").
-
-**Shared dev, 2026-10-17**, with Neil's go-ahead once PR #23's CI was green,
-applied once with `node scripts/apply-migration.mjs`. Before: the three
-functions it touches or calls (`marketplace_browse_rows`,
-`marketplace_search_browse_rows`, `marketplace_search_ids`) were saved with
-their grants to `~/drvn-db-backups/pre-20261017145500-browse-rows-search-once.sql`
-and matched a fresh database at main's previous state, so there was no drift.
-After: the live body matches the file, grants are unchanged, it is still SQL,
-STABLE and SECURITY INVOKER with no SET, and a signed-out PostgREST-shaped
-call plans both branches behind one-time filters with the search computed
-once. Signed out through the API, the same calls return the same counts as
-before (a search for "brake" returns 3, a browse returns 11).
 
 ## October 11 — millions of parts (shared dev project)
 
