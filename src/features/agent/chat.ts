@@ -7,6 +7,7 @@ import { modelContext, type AgentScope } from "@/lib/agent/context";
 import { capture } from "@/lib/analytics";
 import { runAgentTurn, type TurnCard } from "@/lib/ai/run";
 import { resolveCards, type ResolvedCard } from "./cards";
+import { loadChat, resolveAbout, type ChatAbout } from "./chat-load";
 import { reportError } from "@/lib/monitoring";
 import { RATE_LIMITS, allowAction, rateLimitMessage } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -35,7 +36,7 @@ const FALLBACK: Record<string, string> = {
  * read, R1 at most, spend-capped, their text redacted — and stores the reply
  * with its cards. The model never moves money or limits from here (AG-5).
  */
-export async function sendAgentMessage(input: { text: string; scope?: AgentScope }): Promise<ChatState> {
+export async function sendAgentMessage(input: { text: string; scope?: AgentScope; about?: { kind: string; id: string } }): Promise<ChatState> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -69,7 +70,11 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
     role: row.role === "member" ? ("user" as const) : ("assistant" as const),
     content: row.body,
   }));
-  const turn = await runAgentTurn({ context: modelContext(user.id, input.scope ?? "buyer"), supabase, message: text, history });
+  // What the member opened the agent from, read as them; the model gets the
+  // kind and id only (it reads the rest through its tools, as untrusted data).
+  const about = await resolveAbout(supabase, user.id, input.about);
+  const modelMessage = about ? `${text}\n\n(Asked from ${about.mine ? "their own" : "a"} ${about.kind}: ${about.kind === "listing" ? "listingId" : "carId"} ${about.id}.)` : text;
+  const turn = await runAgentTurn({ context: modelContext(user.id, input.scope ?? "buyer"), supabase, message: modelMessage, history });
   const replyBody = turn.ok ? turn.text || "Done." : FALLBACK[turn.code] ?? FALLBACK.model_error;
   const replyCards = turn.ok ? turn.cards : [];
 
@@ -89,4 +94,19 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
       created_at: row.created_at,
     })),
   };
+}
+
+/**
+ * The side panel's thread (A3c): the same last 50 messages /agent shows, and
+ * what the opener asked about, read as the member. Loaded when the panel
+ * first opens, never with every page.
+ */
+export async function openAgentChat(about?: { kind: string; id: string } | null): Promise<{ messages: ChatMessage[]; about: ChatAbout | null } | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !(await agentStepOpen("chat"))) return null;
+  const [messages, resolved] = await Promise.all([loadChat(supabase, user.id), resolveAbout(supabase, user.id, about)]);
+  return { messages, about: resolved };
 }

@@ -75,7 +75,7 @@ test("a build change from the agent is saved only when the member confirms it", 
 
     // Edit opens the editor with the line filled in, unsaved until Save.
     await page.goto(`/garage/${carId}/edit?change=${editId}#mods`);
-    await expect(page.getByText(/From your agent: check the new line/)).toBeVisible();
+    await expect(page.locator("#main").getByText(/From your agent: check the new line/)).toBeVisible();
     await expect(page.locator(`input[value="Clubsport springs"]`).first()).toBeVisible();
     expect((await admin.from("mod_items").select("id").eq("car_id", carId)).data).toHaveLength(2);
     await page.locator("#mods").getByRole("button", { name: /save the build/i }).click();

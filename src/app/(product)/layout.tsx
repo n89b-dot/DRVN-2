@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/ui";
-import { agentTabOpen } from "@/lib/agent/beta";
+import { AgentPanel } from "@/features/agent/agent-panel";
+import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { LiveInbox } from "@/features/commerce/live-messages";
 import { cartCount as getCartCount } from "@/lib/cart";
 import { loadShellCounts } from "@/lib/shell-counts";
@@ -31,6 +32,9 @@ export default async function ProductLayout({ children }: { children: ReactNode 
 
   const counts = loadShellCounts(supabase, user?.id ?? null);
   const cartCount = await getCartCount();
+  const agentTab = await agentTabOpen();
+  // The agent beside the page on desktop (A3c), once the chat step is open.
+  const agentPanel = agentTab && (await agentStepOpen("chat"));
 
   return (
     <AppShell
@@ -40,7 +44,9 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       initialMktOpen={mktOpen}
       cartCount={cartCount}
       counts={counts}
-      agentTab={await agentTabOpen()}
+      agentTab={agentTab}
+      aside={agentPanel ? <AgentPanel /> : null}
+      initialPanel={jar.get("ls-panel")?.value ?? null}
     >
       {children}
       {/* Keeps the Messages badge live when someone writes (realtime). */}

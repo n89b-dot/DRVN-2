@@ -149,7 +149,8 @@ test.describe("buyer agent (A3b)", () => {
 
     // The seller sees "via agent", never the max.
     await seller.goto(`/offers/${offerId}`);
-    await expect(seller.getByText("Buyer's agent countered")).toBeVisible();
+    // #main: until React reveals a streamed boundary, its copy also sits in a hidden segment.
+    await expect(seller.locator("#main").getByText("Buyer's agent countered")).toBeVisible();
     expect(await seller.content()).not.toContain("$1,300");
 
     // The seller comes down inside the max; the agent accepts it.

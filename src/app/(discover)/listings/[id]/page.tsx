@@ -35,7 +35,8 @@ import { getBetaAccess } from "@/lib/beta-access";
 
 import { ReportButton } from "@/features/moderation/report-button";
 import { PurchaseActions } from "./purchase-actions";
-import { agentStepOpen } from "@/lib/agent/beta";
+import { AskAgentButton } from "@/features/agent/ask-agent-button";
+import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { QASection, type QAItem } from "./qa-section";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
@@ -512,6 +513,12 @@ export default async function ListingPage({
                 returnPath={detailPath}
                 agentOffers={Boolean(user) && listing.shipping_mode !== "drvn" && (await agentStepOpen("buyer"))}
               />
+            )}
+            {/* Ask about this listing (A3c): beside the page on desktop, /agent on a phone. */}
+            {user && (await agentTabOpen()) && (await agentStepOpen("chat")) && (
+              <div className="mt-2 grid">
+                <AskAgentButton about={{ kind: "listing", id: listing.id }} className="w-full" />
+              </div>
             )}
 
             {/* Who is selling, and the car it came off — the reason to buy

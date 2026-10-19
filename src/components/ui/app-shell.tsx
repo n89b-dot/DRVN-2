@@ -9,6 +9,7 @@ import { cx } from "@/lib/format";
 import { BottomNav } from "./bottom-nav";
 import { Icon } from "./icons";
 import { LivesheetBar } from "./livesheet-bar";
+import { SidePanelProvider, useSidePanel } from "./side-panel";
 import {
   AGENT_ROUTE,
   BOTTOM_NAV,
@@ -63,6 +64,7 @@ function AppRail({
   agentNeedsCount?: number;
 }) {
   const pathname = usePathname();
+  const panel = useSidePanel();
   const familyHere = isSellingFamily(pathname);
   const entries: NavEntry[] = agentTab
     ? PRIMARY_NAV.flatMap((entry) =>
@@ -222,10 +224,19 @@ function AppRail({
 
           const here = isActive(entry.href);
           const badge = entry.href === "/messages" ? messagesCount : entry.href === "/agent" ? agentNeedsCount : 0;
+          // The Agent row opens the agent beside the page when it has a
+          // panel here (A3c); on /agent itself, or without one, it's a link.
+          const panelRow = entry.href === "/agent" && !here && panel.available("agent");
           return (
             <Link
               key={entry.href}
               href={entry.href}
+              onClick={(event) => {
+                if (!panelRow || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                event.preventDefault();
+                panel.toggle("agent");
+              }}
+              aria-expanded={panelRow ? panel.openKey === "agent" : undefined}
               className={cx("railrow", here && "is-here")}
               aria-current={here ? "page" : undefined}
               title={open ? undefined : badge > 0 ? `${entry.label} (${badge})` : entry.label}
@@ -307,6 +318,8 @@ export function AppShell({
   children,
   counts,
   agentTab = false,
+  aside,
+  initialPanel = null,
 }: {
   signedIn: boolean;
   initialNight: boolean;
@@ -323,6 +336,10 @@ export function AppShell({
   counts?: Promise<ShellCounts>;
   /** The agent beta is on for this member (A3a): Agent joins the rail and bar. */
   agentTab?: boolean;
+  /** Side panels beside the page on desktop (SidePanel), e.g. the agent. */
+  aside?: ReactNode;
+  /** The panel open before this render (the `ls-panel` cookie), so it renders open. */
+  initialPanel?: string | null;
 }) {
   const [railOpen, setRailOpen] = useState(initialRailOpen);
 
@@ -341,6 +358,7 @@ export function AppShell({
   const initialCounts = { cartCount, unreadCount, offersCount, messagesCount };
 
   return (
+    <SidePanelProvider initialOpen={aside ? initialPanel : null}>
     <div
       className="shell"
       data-signed-in={signedIn ? "true" : "false"}
@@ -361,6 +379,10 @@ export function AppShell({
         </Suspense> : renderBar(initialCounts)}
         <main id="main" className="min-w-0">{children}</main>
       </div>
+      {/* Its own boundary, for the reason below: a panel that reads the
+          pathname (the agent's stands down on /agent) must not make the
+          shell render twice while the page streams. */}
+      {aside && <Suspense fallback={null}>{aside}</Suspense>}
       {/* Its own boundary: reading the pathname here, at the shell's top,
           made the whole shell render twice while the page streamed (two
           copies of the bar's search before hydration). The rail reads it
@@ -377,5 +399,6 @@ export function AppShell({
         )}
       </Suspense>
     </div>
+    </SidePanelProvider>
   );
 }

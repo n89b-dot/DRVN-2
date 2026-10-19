@@ -5,11 +5,9 @@ import { AgentHeader } from "@/components/commerce";
 import { ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
 import { ApprovalActions } from "@/features/agent/approval-actions";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
-import { resolveCards } from "@/features/agent/cards";
-import type { ChatMessage } from "@/features/agent/chat";
-import type { TurnCard } from "@/lib/ai/run";
+import { AgentChat } from "@/features/agent/agent-chat";
+import { loadChat, parseAbout, resolveAbout } from "@/features/agent/chat-load";
 
-import { AgentChat } from "./agent-chat";
 import { capture } from "@/lib/analytics";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
@@ -86,12 +84,12 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour
  * (each row with its one action), Working, Done — and below them the quiet
  * record of what it did, each with a way to see why. Chat arrives in A3c.
  */
-export default async function AgentPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function AgentPage({ searchParams }: { searchParams: Promise<{ view?: string; about?: string }> }) {
   if (!(await agentTabOpen())) notFound();
   const user = await getViewer();
   if (!user) redirect("/login?next=/agent");
   const supabase = await getPageClient();
-  const { view } = await searchParams;
+  const { view, about: aboutParam } = await searchParams;
 
   const [{ data: tasks }, { data: approvals }, { data: mandates }, { data: events }] = await Promise.all([
     supabase
@@ -116,20 +114,11 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
       .limit(40),
   ]);
 
-  // The chat (A3c), once its step is open: the last 50 messages, read as the
-  // member (owner-only), with their cards resolved the same way.
+  // The chat (A3c), once its step is open (loadChat: the last 50, read as the member).
   const chatOpen = await agentStepOpen("chat");
-  const { data: chatRows } = chatOpen
-    ? await supabase.from("agent_messages").select("id, role, body, cards, created_at").eq("owner_id", user.id).order("created_at", { ascending: false }).limit(50)
-    : { data: [] as { id: string; role: string; body: string; cards: unknown; created_at: string }[] };
-  const chatCards = await resolveCards(supabase, (chatRows ?? []).flatMap((row) => (row.cards ?? []) as TurnCard[]));
-  const chat: ChatMessage[] = [...(chatRows ?? [])].reverse().map((row) => ({
-    id: row.id,
-    role: row.role as ChatMessage["role"],
-    body: row.body,
-    cards: ((row.cards ?? []) as TurnCard[]).flatMap((card) => (chatCards.has(card.id) ? [chatCards.get(card.id)!] : [])),
-    created_at: row.created_at,
-  }));
+  const chat = chatOpen ? await loadChat(supabase, user.id) : [];
+  // Opened from a listing or car on a phone ("Ask your agent"): the chip.
+  const about = chatOpen ? await resolveAbout(supabase, user.id, parseAbout(aboutParam)) : null;
 
   const allTasks = (tasks ?? []) as Task[];
   const pending = approvals ?? [];
@@ -311,7 +300,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
         </>
       )}
 
-      {chatOpen && <AgentChat initial={chat} />}
+      {chatOpen && <AgentChat initial={chat} about={about} />}
 
       <Foot left="DRVN — your agent never accepts for you and never messages the other side" right={<Link href="/offers">All offers →</Link>} />
     </div>

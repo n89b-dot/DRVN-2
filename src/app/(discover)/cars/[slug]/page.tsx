@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 
 import { Rv } from "@/components/livesheet";
 import { Avatar, ButtonLink, Foot, Media, MetadataTags, TileHead } from "@/components/ui";
+import { AskAgentButton } from "@/features/agent/ask-agent-button";
+import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { FollowButton, SaveButton } from "@/features/social/buttons";
 import { formatPrice } from "@/lib/payments/fee";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
@@ -298,6 +300,7 @@ export default async function CarPage({
   // colour. A nameless car's label already leads, so only the colour remains.
   const carMeta = [vehicleSubline(car.name, car), car.color].filter(Boolean).join(" · ");
   const isOwner = user?.id === car.owner_id;
+  const agentChat = isOwner && (await agentTabOpen()) && (await agentStepOpen("chat"));
   const liveCount = forSale.filter((i) => i.status !== "sold").length;
   // The at-a-glance line the garage has: what's on it, what's been posted,
   // what you could buy off it. Zeroes are left out rather than shouted.
@@ -331,6 +334,8 @@ export default async function CarPage({
               <ButtonLink href={`/garage/${car.id}/edit`} variant="ghost">
                 Manage
               </ButtonLink>
+              {/* "Update my build" and parts for this car, from the agent (A3c). */}
+              {agentChat && <AskAgentButton about={{ kind: "car", id: car.id }} />}
             </span>
           )}
           {!isOwner && (

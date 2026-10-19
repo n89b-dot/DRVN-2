@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (88)
+### Primitives (90)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -200,6 +200,8 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `Select` | Primitive | `@/components/ui` | Native select in the field contract (platform picker on compact). — `.ctl` | Enumerated choices. |
 | `ShareButton` | Primitive | `@/components/ui` | Labelled share control: the system share sheet where one exists, the clipboard elsewhere, with a "Link copied" confirmation. | Sharing a whole page where there is room for a word — a profile header (P-2), a build page. *Not for:* The icon in a feed card's engagement strip — CardEngagement owns that. |
 | `SheetTabs` | Primitive | `@/components/ui` | URL-backed sheet tabs over the `.tabstrip` recipe: Sans labels on a ruled baseline, the current tab underlined in the accent; five tabs with counts fit a 358px phone column. Optional `onChange(key)` for callers that react to the switch (e.g. hiding a rail). | Profile/car sheet sections. |
+| `SidePanel` | Primitive | `@/components/ui` | A non-modal right-hand panel beside the page on desktop: the sheet plate on its side, no scrim and no focus trap, so the page stays usable. One open at a time by key (SidePanelProvider in AppShell, remembered in the `ls-panel` cookie); Esc closes it from inside and focus returns to the opener. Children mount on first open and stay mounted. — `.sidepanel` | A companion you use alongside the page: the agent (AppShell `aside`, opened by the rail's Agent row or useSidePanel().open). *Not for:* Anything that must be answered before going on (Dialog, ConfirmDialog) and compact screens (BottomSheet, or the full page; check useSidePanel().available). |
+| `SidePanelProvider` | Primitive | `@/components/ui` | Holds which SidePanel is open (by key), what its opener passed, and which panels are on the page. AppShell renders it; useSidePanel() reads it (open, close, toggle, available). | Already in AppShell; render it yourself only around a shell-less surface that has a SidePanel. *Not for:* Page state of any other kind. |
 | `SkeletonCardGrid` | Primitive | `@/components/ui` | Card-grid placeholder matching the marketplace 3→2→1 grid. | loading.tsx for card-grid routes. |
 | `SkeletonLedger` | Primitive | `@/components/ui` | Console placeholder — pagehead + ledger ghost rows, no wrap. | Admin console loading. |
 | `SkeletonMasonry` | Primitive | `@/components/ui` | Masonry placeholder with varied plate heights. | loading.tsx for feed walls (Explore). |
