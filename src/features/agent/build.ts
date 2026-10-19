@@ -7,12 +7,13 @@ import { capture } from "@/lib/analytics";
 import type { TurnCard } from "@/lib/ai/run";
 import { createClient } from "@/lib/supabase/server";
 
-import { buildChangeItems } from "./build-change";
+import { buildChangeItems, buildListItems, type BuildDraft, type BuildList } from "./build-change";
 
 export type BuildChangeState = { error?: string; ok?: string; sellHref?: string | null };
 
 /**
- * Confirm on an "Update my build" card (A3c, AG-9). The draft comes from the
+ * Confirm on an "Update my build" card (A3c, AG-9) or a "Paste your build"
+ * card (A3d). The draft comes from the
  * member's own stored chat (read as them, so only their cards), and is saved
  * through the mods editor's own saveModItems as the member: the new line
  * under the draft's id, and the part it replaces marked removed, never
@@ -35,7 +36,7 @@ export async function confirmBuildChange(cardId: string): Promise<BuildChangeSta
     .contains("cards", JSON.stringify([{ id: cardId }]))
     .limit(1);
   const draft = ((messages?.[0]?.cards ?? []) as TurnCard[]).find(
-    (card): card is Extract<TurnCard, { kind: "build_change" }> => card.kind === "build_change" && card.id === cardId,
+    (card): card is BuildDraft | BuildList => (card.kind === "build_change" || card.kind === "build_list") && card.id === cardId,
   );
   if (!draft) return { error: "That change isn't available any more." };
 
@@ -48,12 +49,16 @@ export async function confirmBuildChange(cardId: string): Promise<BuildChangeSta
     .order("position");
   if (error) return { error: "Couldn't read your build. Try again." };
 
-  const plan = buildChangeItems(mods ?? [], draft);
+  const plan = draft.kind === "build_list" ? buildListItems(mods ?? [], draft) : buildChangeItems(mods ?? [], draft);
   if (plan.kind === "stale") return { error: "That part isn't on the car any more. Open the editor to make the change." };
   if (plan.kind === "saved") return { ok: "Already on your build.", sellHref: plan.sellHref };
 
   const result = await saveModItems(car.id, plan.items as ModItemInput[]);
   if (result.error) return { error: result.error };
+  if (draft.kind === "build_list") {
+    capture(user.id, { event: "agent_build_list_confirmed", props: { lines: Math.min(draft.lines.length, 40) } });
+    return { ok: "Saved to your build.", sellHref: null };
+  }
   capture(user.id, { event: "agent_build_change_confirmed", props: { replaced: Boolean(draft.replaces) } });
   return { ok: "Saved to your build.", sellHref: plan.sellHref };
 }

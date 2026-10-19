@@ -74,7 +74,7 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   // kind and id only (it reads the rest through its tools, as untrusted data).
   const about = await resolveAbout(supabase, user.id, input.about);
   const modelMessage = about ? `${text}\n\n(Asked from ${about.mine ? "their own" : "a"} ${about.kind}: ${about.kind === "listing" ? "listingId" : "carId"} ${about.id}.)` : text;
-  const turn = await runAgentTurn({ context: modelContext(user.id, input.scope ?? "buyer"), supabase, message: modelMessage, history });
+  const turn = await runAgentTurn({ context: modelContext(user.id, input.scope ?? "buyer"), supabase, message: modelMessage, history, jobs: await agentStepOpen("jobs") });
   const replyBody = turn.ok ? turn.text || "Done." : FALLBACK[turn.code] ?? FALLBACK.model_error;
   const replyCards = turn.ok ? turn.cards : [];
 
@@ -101,12 +101,12 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
  * what the opener asked about, read as the member. Loaded when the panel
  * first opens, never with every page.
  */
-export async function openAgentChat(about?: { kind: string; id: string } | null): Promise<{ messages: ChatMessage[]; about: ChatAbout | null } | null> {
+export async function openAgentChat(about?: { kind: string; id: string } | null): Promise<{ messages: ChatMessage[]; about: ChatAbout | null; jobs: boolean } | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user || !(await agentStepOpen("chat"))) return null;
-  const [messages, resolved] = await Promise.all([loadChat(supabase, user.id), resolveAbout(supabase, user.id, about)]);
-  return { messages, about: resolved };
+  const [messages, resolved, jobs] = await Promise.all([loadChat(supabase, user.id), resolveAbout(supabase, user.id, about), agentStepOpen("jobs")]);
+  return { messages, about: resolved, jobs };
 }

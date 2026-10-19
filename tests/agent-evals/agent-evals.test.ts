@@ -194,7 +194,7 @@ describe("eval fixtures: the model's boundary", () => {
 });
 
 const CAR = { id: "33333333-3333-4333-8333-333333333333", name: "Mk8 Golf R" };
-const OLD_MOD = { id: "44444444-4444-4444-8444-444444444444", brand: "APR", product: "Roll-Control mount", status: "installed" };
+const OLD_MOD = { id: "44444444-4444-4444-8444-444444444444", car_id: "33333333-3333-4333-8333-333333333333", brand: "APR", product: "Roll-Control mount", status: "installed" };
 
 /** A member client for one car and its build that records any write it's asked for. */
 function garageSupabase() {
@@ -205,6 +205,8 @@ function garageSupabase() {
       const query = {
         select: () => query,
         eq: () => query,
+        in: () => query,
+        is: () => query,
         order: () => query,
         limit: () => Promise.resolve({ data: [answer(table)], error: null }),
         maybeSingle: () => Promise.resolve({ data: answer(table), error: null }),
@@ -270,5 +272,45 @@ describe("eval fixtures: Update my build (A3c)", () => {
       expect(modelToolsFor("garage").map((tool) => tool.name)).toContain(name);
       expect(modelToolsFor("seller").map((tool) => tool.name)).not.toContain(name);
     }
+  });
+});
+
+describe("eval fixtures: A3d jobs", () => {
+  const config = { ...resolveAiConfig({ NODE_ENV: "test", ANTHROPIC_API_KEY: "test" }), mode: "anthropic" as const };
+  const member = "22222222-2222-4222-8222-222222222222";
+  const pasted = "Suspension:\n- KW V3 coilovers\n- H&R sway bars\nExhaust: Akrapovic Evolution\nsomething odd";
+
+  it("the job tools reach the model only once the jobs step is open", async () => {
+    const { supabase } = garageSupabase();
+    const closed = scriptedClient([{ tool: "draft_build_list", input: { carId: CAR.id, text: pasted } }]);
+    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: pasted, client: closed.client, config, spend: openLedger });
+    expect(closed.seen.unknownTools).toEqual(["draft_build_list"]);
+    expect(JSON.stringify(closed.seen.params?.system)).not.toContain("draft_build_list");
+
+    const open = scriptedClient([{ tool: "draft_build_list", input: { carId: CAR.id, text: pasted } }]);
+    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: pasted, client: open.client, config, spend: openLedger, jobs: true });
+    expect(open.seen.unknownTools).toEqual([]);
+    expect(JSON.stringify(open.seen.params?.system)).toContain("draft_build_list");
+  });
+
+  it("a pasted build becomes lines from DRVN's own parser, as a card, and nothing is written", async () => {
+    const { supabase, writes } = garageSupabase();
+    const { client } = scriptedClient([{ tool: "draft_build_list", input: { carId: CAR.id, text: pasted } }]);
+    const result = await runAgentTurn({ context: modelContext(member, "garage"), supabase, message: pasted, client, config, spend: openLedger, jobs: true });
+    expect(writes).toEqual([]);
+    const card = result.ok ? result.cards[0] : null;
+    expect(card).toMatchObject({ kind: "build_list", car: CAR.id });
+    const lines = card && card.kind === "build_list" ? card.lines : [];
+    expect(lines.map((line) => [line.group_label, line.brand])).toEqual(expect.arrayContaining([["Suspension", "KW"]]));
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    expect(JSON.stringify(card)).not.toMatch(/price|cents/);
+  });
+
+  it("parts that came off become cards that open the sell form, never a listing it wrote", async () => {
+    const { supabase, writes } = garageSupabase();
+    const { client } = scriptedClient([{ tool: "find_parts_to_list", input: {} }]);
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list what came off", client, config, spend: openLedger, jobs: true });
+    expect(writes).toEqual([]);
+    expect(result.ok && result.cards).toEqual([{ kind: "list_part", id: OLD_MOD.id, car: CAR.id }]);
   });
 });

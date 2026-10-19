@@ -72,6 +72,8 @@ export type AnalyticsEvent =
   | { event: "agent_chat_turn"; props: { tool_calls: number; ok: boolean } }
   /** Confirm on an "Update my build" card (A3c): whether it replaced a part. */
   | { event: "agent_build_change_confirmed"; props: { replaced: boolean } }
+  /** Confirm on a "Paste your build" card (A3d): how many lines it added. */
+  | { event: "agent_build_list_confirmed"; props: { lines: number } }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }
   | { event: "seller_dispatched"; props?: undefined }

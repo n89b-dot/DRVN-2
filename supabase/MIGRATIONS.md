@@ -1,5 +1,15 @@
 # Applying migrations
 
+## October 25 — A3d's job cards in the agent chat (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261025120000_agent_chat_job_cards.sql` | not yet |
+
+Apply after `20261025110000`. `agent_chat_card_ok` takes two more card shapes: `build_list` ("Paste your build": up to 40 lines from the mods editor's own parser, each with the id it saves under and its confidence) and `list_part` ("List the parts that came off": a removed, unlisted mod line by id). Neither carries a price. The new tools reach the model only once the `jobs` step is open on `/admin/agent`.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 5.
+
 ## October 25 — "Update my build" cards in the agent chat, A3c (shared dev project)
 
 | File | Applied to |

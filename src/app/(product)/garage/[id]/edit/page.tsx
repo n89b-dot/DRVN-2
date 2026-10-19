@@ -13,7 +13,7 @@ import { ActivityComposer } from "./activity-composer";
 import { DangerZone } from "./danger-zone";
 import { postHeadline } from "@/lib/activity/headline";
 import { CAR_COLUMNS } from "@/lib/cars/columns";
-import type { BuildDraft } from "@/features/agent/build-change";
+import type { BuildDraft, BuildList } from "@/features/agent/build-change";
 import type { TurnCard } from "@/lib/ai/run";
 
 export const metadata = { title: "Manage car - DRVN" };
@@ -65,7 +65,7 @@ export default async function CarEditPage({
     ]);
   // The draft is read from the member's own chat, so only their agent's
   // cards open here, and only for this car.
-  let draft: BuildDraft | null = null;
+  let draft: BuildDraft | BuildList | null = null;
   if (change && /^[0-9a-f-]{36}$/i.test(change)) {
     const { data: messages } = await supabase
       .from("agent_messages")
@@ -73,7 +73,9 @@ export default async function CarEditPage({
       .eq("owner_id", user.id)
       .contains("cards", JSON.stringify([{ id: change }]))
       .limit(1);
-    const card = ((messages?.[0]?.cards ?? []) as TurnCard[]).find((c): c is BuildDraft => c.kind === "build_change" && c.id === change);
+    const card = ((messages?.[0]?.cards ?? []) as TurnCard[]).find(
+      (c): c is BuildDraft | BuildList => (c.kind === "build_change" || c.kind === "build_list") && c.id === change,
+    );
     draft = card && card.car === id ? card : null;
   }
   const images = requiredRead(imagesResult, "this car's photos");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildChangeItems, groupForCategory, type BuildDraft, type SheetRow } from "./build-change";
+import { buildChangeItems, buildListItems, groupForCategory, type BuildDraft, type BuildList, type SheetRow } from "./build-change";
 
 const car = "33333333-3333-4333-8333-333333333333";
 const row = (id: string, position: number, extra: Partial<SheetRow> = {}): SheetRow => ({
@@ -83,5 +83,35 @@ describe("Update my build: what Confirm saves", () => {
     expect(groupForCategory("wheels")).toBe("Wheels & Tires");
     expect(groupForCategory("turbo")).toBe("Performance");
     expect(groupForCategory(null)).toBe("Other");
+  });
+});
+
+describe("Paste your build: what Confirm saves", () => {
+  const list: BuildList = {
+    kind: "build_list",
+    id: "66666666-6666-4666-8666-666666666666",
+    car,
+    lines: [
+      { id: "l1", group_label: "Suspension", brand: "KW", product: "V3 coilovers", part_number: null, category: "suspension", confidence: 0.9 },
+      { id: "l2", group_label: "Other", brand: null, product: "something odd", part_number: null, category: null, confidence: 0.3 },
+    ],
+  };
+
+  it("adds every line at the end with its confidence, after the lines already there", () => {
+    const plan = buildListItems([row("a", 0)], list);
+    if (plan.kind !== "save") throw new Error(plan.kind);
+    expect(plan.items.map((item) => [item.id, item.position, item.confidence])).toEqual([
+      ["a", 0, null],
+      ["l1", 1, 0.9],
+      ["l2", 2, 0.3],
+    ]);
+    expect(plan.items[2]).toMatchObject({ status: "installed", raw_text: "something odd", group_label: "Other" });
+  });
+
+  it("adds nothing twice", () => {
+    expect(buildListItems([row("l1", 0), row("l2", 1)], list)).toEqual({ kind: "saved", sellHref: null });
+    const plan = buildListItems([row("l1", 0)], list);
+    if (plan.kind !== "save") throw new Error(plan.kind);
+    expect(plan.items.map((item) => item.id)).toEqual(["l1", "l2"]);
   });
 });

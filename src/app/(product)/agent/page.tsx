@@ -300,7 +300,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
         </>
       )}
 
-      {chatOpen && <AgentChat initial={chat} about={about} />}
+      {chatOpen && <AgentChat initial={chat} about={about} jobs={await agentStepOpen("jobs")} />}
 
       <Foot left="DRVN — your agent never accepts for you and never messages the other side" right={<Link href="/offers">All offers →</Link>} />
     </div>
