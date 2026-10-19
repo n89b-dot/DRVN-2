@@ -165,7 +165,8 @@ export default function PrivacyPage() {
             <strong>Anthropic</strong> — when you import a listing, the text of the page you
             imported is sent to Anthropic&apos;s AI service to draft the listing. When you chat
             with your agent, your message and recent chat, and what the agent looks up on DRVN to
-            answer you (listings, and your own cars and build), are sent to the same service.
+            answer you (listings, your own cars and build, and the messages you received about
+            your own listings), are sent to the same service.
             Card numbers, VINs, email addresses and phone numbers are removed from what you type
             before it&apos;s sent, and your agent&apos;s limits are never sent. Photos you add to
             a message to your agent are sent with that message. Your account details are not
