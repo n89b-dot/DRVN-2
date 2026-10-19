@@ -48,7 +48,10 @@ function remember(key: string | null) {
 export function SidePanelProvider({ initialOpen = null, children }: { initialOpen?: string | null; children: ReactNode }) {
   const [openKey, setOpenKey] = useState<string | null>(initialOpen);
   const [payload, setPayload] = useState<unknown>(null);
-  const [keys, setKeys] = useState<ReadonlySet<string>>(() => new Set());
+  // Which panels are on the page: a ref, not state. Registering is a mount
+  // side effect, and a context change during hydration makes React redo the
+  // page's still-streaming boundaries (hidden duplicate content).
+  const keys = useRef(new Set<string>());
   const opener = useRef<HTMLElement | null>(null);
 
   const open = useCallback((key: string, next?: unknown) => {
@@ -66,17 +69,14 @@ export function SidePanelProvider({ initialOpen = null, children }: { initialOpe
   }, []);
   const toggle = useCallback((key: string) => (openKey === key ? close() : open(key)), [openKey, open, close]);
   const available = useCallback(
-    (key: string) => keys.has(key) && typeof window !== "undefined" && window.matchMedia(DESKTOP_QUERY).matches,
-    [keys],
+    (key: string) => keys.current.has(key) && typeof window !== "undefined" && window.matchMedia(DESKTOP_QUERY).matches,
+    [],
   );
   const register = useCallback((key: string) => {
-    setKeys((current) => new Set(current).add(key));
-    return () =>
-      setKeys((current) => {
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
+    keys.current.add(key);
+    return () => {
+      keys.current.delete(key);
+    };
   }, []);
 
   const value = useMemo(() => ({ openKey, payload, open, close, toggle, available, register }), [openKey, payload, open, close, toggle, available, register]);
