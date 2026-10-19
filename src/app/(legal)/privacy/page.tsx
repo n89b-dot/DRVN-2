@@ -78,8 +78,9 @@ export default function PrivacyPage() {
           <li>
             <strong>Your agent</strong> — if you use it: the limits you set for it (your minimum
             and target on a listing, or your maximum as a buyer), what it did for you and why, and
-            your chat with it. Card numbers are removed from chat messages before they&apos;re
-            stored.
+            your chat with it, with any photos you add. Card numbers are removed from chat messages
+            before they&apos;re stored. Photos have their location data removed when you upload
+            them.
           </li>
           <li>
             <strong>Listing imports</strong> — if you import a listing from another site, the link
@@ -166,8 +167,9 @@ export default function PrivacyPage() {
             with your agent, your message and recent chat, and what the agent looks up on DRVN to
             answer you (listings, and your own cars and build), are sent to the same service.
             Card numbers, VINs, email addresses and phone numbers are removed from what you type
-            before it&apos;s sent, and your agent&apos;s limits are never sent. Photos and your
-            account details are not sent.
+            before it&apos;s sent, and your agent&apos;s limits are never sent. Photos you add to
+            a message to your agent are sent with that message. Your account details are not
+            sent.
           </li>
           <li>
             <strong>Sentry</strong> — error reports from our servers, which can include your
@@ -261,6 +263,10 @@ export default function PrivacyPage() {
           <li>Photos uploaded to a form you never saved: deleted after 48 hours.</li>
           <li>Rate-limit counters: deleted after a day.</li>
           <li>Your chat with your agent: deleted 12 months after its last message.</li>
+          <li>
+            Photos you send your agent: deleted after 48 hours unless you use them in a listing or
+            an update.
+          </li>
           <li>
             Everything else: for as long as your account exists. How long order, payment, message,
             dispute and log records are kept after an account is deleted is still being set; this
