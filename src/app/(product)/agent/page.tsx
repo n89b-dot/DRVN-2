@@ -7,6 +7,7 @@ import { ApprovalActions } from "@/features/agent/approval-actions";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { AgentChat } from "@/features/agent/agent-chat";
 import { loadChat, parseAbout, resolveAbout } from "@/features/agent/chat-load";
+import { loadPriceNudges } from "@/features/agent/nudges";
 
 import { capture } from "@/lib/analytics";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
@@ -37,6 +38,11 @@ type AgentEvent = {
 };
 
 /** Why the agent is asking, in the owner's words (negotiate.ts ApprovalReason). */
+/** This request's clock, outside render so the component stays pure. */
+function requestTime(): number {
+  return Date.now();
+}
+
 function approvalLine(reason: string | null, amountCents: number | null): string {
   const amount = amountCents != null ? formatPrice(amountCents) : "This offer";
   switch (reason) {
@@ -116,6 +122,8 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
 
   // The chat (A3c), once its step is open (loadChat: the last 50, read as the member).
   const chatOpen = await agentStepOpen("chat");
+  // A5: price-drop suggestions, with the seller's agent step.
+  const nudges = (await agentStepOpen("seller")) ? await loadPriceNudges(supabase, user.id, requestTime()) : [];
   const chat = chatOpen ? await loadChat(supabase, user.id) : [];
   // Opened from a listing or car on a phone ("Ask your agent"): the chip.
   const about = chatOpen ? await resolveAbout(supabase, user.id, parseAbout(aboutParam)) : null;
@@ -298,6 +306,31 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             </section>
           )}
         </>
+      )}
+
+      {nudges.length > 0 && (
+        // A5: listings that aren't moving, with a price a rule suggests. It
+        // opens the editor with that price filled in; nothing changes until
+        // the seller saves.
+        <section className="tile mt-6" aria-label="Worth a look">
+          <TileHead label="Worth a look" />
+          <div className="rowlist">
+            {nudges.map((nudge) => (
+              <ObjectRow
+                key={nudge.listingId}
+                media={{ src: nudge.image ?? undefined, alt: nudge.title }}
+                mediaHref={`/listings/${nudge.listingId}`}
+                title={nudge.title}
+                meta={`${formatPrice(nudge.priceCents)} → ${formatPrice(nudge.suggestedCents)} · ${nudge.reason}`}
+                actions={
+                  <ButtonLink href={`/listings/${nudge.listingId}/edit?suggest=${nudge.suggestedCents}`} variant="ghost">
+                    Review the price
+                  </ButtonLink>
+                }
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {chatOpen && <AgentChat initial={chat} about={about} jobs={await agentStepOpen("jobs")} userId={user.id} />}

@@ -28,10 +28,11 @@ export default async function EditListingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; agent?: string }>;
+  /** `suggest`: a price-drop suggestion from the agent (A5), in cents, filled in unsaved. */
+  searchParams: Promise<{ saved?: string; agent?: string; suggest?: string }>;
 }) {
   const { id } = await params;
-  const { saved, agent: agentParam } = await searchParams;
+  const { saved, agent: agentParam, suggest } = await searchParams;
 
   const supabase = await getPageClient();
   const user = await getViewer();
@@ -100,6 +101,13 @@ export default async function EditListingPage({
   const offerFloorCents = requiredRead(floorResult, "this listing's offer minimum") ?? null;
 
   const locked = ["sold", "reserved"].includes(listing.status);
+  // Only a real drop that respects the seller's own minimum is filled in;
+  // the save checks the minimum again either way.
+  const suggestedCents = /^\d{1,9}$/.test(suggest ?? "") ? Number(suggest) : null;
+  const suggestion =
+    !locked && suggestedCents !== null && suggestedCents > 0 && suggestedCents < listing.price_cents && suggestedCents >= (offerFloorCents ?? 0)
+      ? suggestedCents
+      : null;
   const statusLabel: Record<string, string> = {
     draft: "Draft, not public",
     active: "Live",
@@ -152,6 +160,12 @@ export default async function EditListingPage({
       {saved === "draft" && (
         <Alert tone="ok" ico="✓" title="Draft saved" className="mb-6">
           Nothing is public yet. Publish it from here or from your listings.
+        </Alert>
+      )}
+
+      {suggestion !== null && (
+        <Alert title={`Suggested price: ${formatPrice(suggestion)}`} className="mb-6">
+          It&apos;s filled in below, down from {formatPrice(listing.price_cents)}. Nothing changes until you save, and you can set any price you like.
         </Alert>
       )}
 
@@ -208,7 +222,7 @@ export default async function EditListingPage({
               ChecklistAnswer
             > | null,
             part_number: listing.part_number,
-            price_cents: listing.price_cents,
+            price_cents: suggestion ?? listing.price_cents,
             shipping_cents: listing.shipping_cents ?? 0,
             shipping_mode: listing.shipping_mode ?? "flat",
             weight_oz: listing.weight_oz,
