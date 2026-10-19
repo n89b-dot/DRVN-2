@@ -4,31 +4,37 @@
 
 | File | Applied to |
 |---|---|
-| `20261025140000_agent_chat_marketplace_cards.sql` | not yet |
+| `20261025140000_agent_chat_marketplace_cards.sql` | shared dev project (2026-10-19) |
 
 Apply after `20261025130000`. `agent_chat_card_ok` takes a `marketplace` card: the words, a count up to 1,000 (capped above), and a relative `/marketplace` URL only. `agent_usage.feature` gains `marketplace_filters` for the Marketplace's "Turn this into filters", which is one model call capped and counted with chat.
 
 Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 7.
 
+**Shared dev, 2026-10-19**, after #58 merged (a13e5c9), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261025140000-agent-chat-marketplace-cards.sql`. After: a Marketplace card with a `/marketplace` link is accepted and one with an outside link refused; `agent_usage` takes `marketplace_filters`; every agent step is still closed.
+
 ## October 25 — photos in the agent chat, A3d (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261025130000_agent_chat_photos.sql` | not yet |
+| `20261025130000_agent_chat_photos.sql` | shared dev project (2026-10-19) |
 
 Apply after `20261025120000`. A member's message to their agent can carry up to four photos (`agent_messages.images`): their own `listing-images` uploads, checked against their folder by `agent_chat_append`, which gains `p_images` (its signature changes, so it's dropped and recreated, service role only). Two more card shapes, `listing_draft` and `update_draft`, open the sell form and the update composer filled in; neither carries a price or a condition. The export moves to `2026-10-25.v12`, which carries the photos.
 
 Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 6; generated types match.
 
+**Shared dev, 2026-10-19**, after #57 merged (d521664), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261025130000-agent-chat-photos.sql`. After: `agent_messages.images` exists; only the service role can call the five-argument `agent_chat_append`; the export stamps `2026-10-25.v12`; every agent step is still closed.
+
 ## October 25 — A3d's job cards in the agent chat (shared dev project)
 
 | File | Applied to |
 |---|---|
-| `20261025120000_agent_chat_job_cards.sql` | not yet |
+| `20261025120000_agent_chat_job_cards.sql` | shared dev project (2026-10-19) |
 
 Apply after `20261025110000`. `agent_chat_card_ok` takes two more card shapes: `build_list` ("Paste your build": up to 40 lines from the mods editor's own parser, each with the id it saves under and its confidence) and `list_part` ("List the parts that came off": a removed, unlisted mod line by id). Neither carries a price. The new tools reach the model only once the `jobs` step is open on `/admin/agent`.
 
 Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 5.
+
+**Shared dev, 2026-10-19**, after #55 merged (d34ef0b), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261025120000-agent-chat-job-cards.sql`. After: a `list_part` card is accepted and one carrying a price refused; members can't call `agent_chat_card_ok`; every agent step is still closed.
 
 ## October 25 — "Update my build" cards in the agent chat, A3c (shared dev project)
 
