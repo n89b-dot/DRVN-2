@@ -4,11 +4,13 @@
 
 | File | Applied to |
 |---|---|
-| `20261025110000_agent_chat_build_cards.sql` | not yet |
+| `20261025110000_agent_chat_build_cards.sql` | shared dev project (2026-10-19) |
 
 Apply after `20261025100000`. An agent reply can now carry a drafted build change (`kind: 'build_change'`: the new line's id, the car, the part it replaces, brand, product, part number, category, product link, thumbnail) for the member to confirm. `agent_chat_card_ok` checks every card's shape: no price or other key, a known category, http(s) links only; listing cards are still `{kind, id}`. `agent_chat_append` uses it. Nothing in the build changes until the member taps Confirm, which saves through `save_mod_items` as the member.
 
 Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 4; generated types match.
+
+**Shared dev, 2026-10-19**, after #52 merged (c8247fd), with `node scripts/apply-migration.mjs`. Before: public schema saved to `~/drvn-db-backups/pre-20261025110000-agent-chat-build-cards.sql`. After: members can't call `agent_chat_card_ok`; it takes a listing card and refuses a build change carrying a price; every agent step is still closed.
 
 ## October 25 — the agent chat's result cards, A3c (shared dev project)
 
