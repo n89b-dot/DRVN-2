@@ -379,7 +379,10 @@ export function AppShell({
         </Suspense> : renderBar(initialCounts)}
         <main id="main" className="min-w-0">{children}</main>
       </div>
-      {aside}
+      {/* Its own boundary, for the reason below: a panel that reads the
+          pathname (the agent's stands down on /agent) must not make the
+          shell render twice while the page streams. */}
+      {aside && <Suspense fallback={null}>{aside}</Suspense>}
       {/* Its own boundary: reading the pathname here, at the shell's top,
           made the whole shell render twice while the page streamed (two
           copies of the bar's search before hydration). The rail reads it
