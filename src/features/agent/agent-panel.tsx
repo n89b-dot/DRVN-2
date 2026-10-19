@@ -45,6 +45,7 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [about, setAbout] = useState<ChatAbout | null>(null);
   const [jobs, setJobs] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const key = aboutRef ? `${aboutRef.kind}:${aboutRef.id}` : "";
 
@@ -57,6 +58,7 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
         setMessages((current) => current ?? result.messages);
         setAbout(result.about);
         setJobs(result.jobs);
+        setUserId(result.userId);
       })
       .catch((error) => {
         unstable_rethrow(error);
@@ -71,5 +73,5 @@ function PanelThread({ aboutRef }: { aboutRef: AgentAboutRef | null }) {
 
   if (failed) return <p className="field__hint mt-4">Couldn&apos;t open your agent here. Try the full page.</p>;
   if (!messages) return <SkeletonRows rows={3} />;
-  return <AgentChat initial={messages} about={about} jobs={jobs} />;
+  return <AgentChat initial={messages} about={about} jobs={jobs} userId={userId} />;
 }

@@ -6,7 +6,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { riskAtMost, type AgentContext, type AgentScope } from "@/lib/agent/context";
 import type { z } from "zod";
 
-import type { draftBuildList, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
+import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
 import { JOB_TOOLS, modelToolsFor } from "@/lib/capabilities/registry";
 import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capabilities/types";
 import { reportError } from "@/lib/monitoring";
@@ -68,7 +68,30 @@ export type TurnCard =
       kind: "list_part";
       id: string;
       car: string;
+    }
+  | {
+      /** "Listing from photos" (A3d): what the photos show; never a price or condition. */
+      kind: "listing_draft";
+      id: string;
+      title: string;
+      brand: string | null;
+      part_number: string | null;
+      category: string | null;
+      images: string[];
+    }
+  | {
+      /** "Post an update" (A3d): a draft for the update composer. */
+      kind: "update_draft";
+      id: string;
+      car: string;
+      title: string;
+      body: string;
+      images: string[];
+      mods: string[];
     };
+
+/** A photo on the member's message, as the model receives it. */
+export type TurnImage = { url: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string };
 const MAX_CARDS = 5;
 
 export type AgentTurnResult =
@@ -76,6 +99,19 @@ export type AgentTurnResult =
   | { ok: false; code: "ai_disabled" | "model_error" | "refused" | "incomplete" | "not_allowed" | "spend_cap"; toolCalls: ToolCall[] };
 
 type RunnerClient = Pick<Anthropic, "beta">;
+
+/** The member's turn: their photos first, numbered as the tools see them, then their words (redacted). */
+function userContent(message: string, images: TurnImage[] | undefined): Anthropic.Beta.BetaMessageParam["content"] {
+  const text = redactForModel(message);
+  if (!images?.length) return text;
+  return [
+    ...images.flatMap((image, index) => [
+      { type: "text" as const, text: `Photo ${index}:` },
+      { type: "image" as const, source: { type: "base64" as const, media_type: image.mediaType, data: image.data } },
+    ]),
+    { type: "text" as const, text },
+  ];
+}
 
 /** Whether `url` is a link the member typed in this message (same host and path). */
 export function linkInMessage(url: unknown, message: string): boolean {
@@ -111,7 +147,10 @@ export function agentSystemPrompt(scope: AgentScope, jobs = false): string {
     "Use the tools to look things up. When a tool says there isn't enough evidence, say so plainly; don't guess fitment or prices.",
     "When the member says a part went on or came off one of their cars, or pastes a product link for one, draft it with propose_build_change (read_part_link first for a link, list_my_cars and read_my_car to find the car and the part it replaces). It isn't saved until they tap Confirm on the card, so say that rather than that it's done.",
     ...(jobs
-      ? ["When they paste a whole build list, use draft_build_list with their text as it is; when they want to sell what came off, use find_parts_to_list. Each ends in a card they act on; you never list, price or describe a part's condition for them."]
+      ? [
+          "When they paste a whole build list, use draft_build_list with their text as it is; when they want to sell what came off, use find_parts_to_list. Each ends in a card they act on; you never list, price or describe a part's condition for them.",
+          "Photos on their message are numbered from 0 in the order sent. To list a part from them use draft_listing_from_photos; to post about their car use draft_car_update. Say only what the photos show; ask about anything you can't see, such as condition or mileage, rather than guessing.",
+        ]
       : []),
     UNTRUSTED_RULE,
     "Keep replies short and concrete.",
@@ -130,6 +169,8 @@ export async function runAgentTurn(options: {
   spend?: SpendLedger;
   /** The jobs step is open (A3d): its tools join the model's. */
   jobs?: boolean;
+  /** The member's photos on this message (A3d), already loaded: sent with it, and the only photos a draft may use. */
+  images?: TurnImage[];
 }): Promise<AgentTurnResult> {
   const config = options.config ?? resolveAiConfig();
   const toolCalls: ToolCall[] = [];
@@ -162,7 +203,7 @@ export async function runAgentTurn(options: {
           return wrapToolResult(capability.name, { error: "not_allowed", reason: "Only a link the member pasted in this message can be read." });
         }
         try {
-          const result = await invokeCapability(capability, { context: options.context, supabase: options.supabase }, args);
+          const result = await invokeCapability(capability, { context: options.context, supabase: options.supabase, attachments: (options.images ?? []).map((image) => image.url) }, args);
           toolCalls.push({ name: capability.name, ok: true });
           // The listings a reply leans on become its cards: the one read, or the top of a search.
           if (capability.name === "read_listing" && typeof (args as { listingId?: unknown }).listingId === "string") {
@@ -190,6 +231,14 @@ export async function runAgentTurn(options: {
             const draft = result as z.infer<typeof draftBuildList.output>;
             addCard({ kind: "build_list", id: draft.proposalId, car: draft.carId, lines: draft.lines });
           }
+          if (capability.name === "draft_listing_from_photos") {
+            const draft = result as z.infer<typeof draftListingFromPhotos.output>;
+            addCard({ kind: "listing_draft", id: draft.proposalId, title: draft.title, brand: draft.brand, part_number: draft.partNumber, category: draft.category, images: draft.images });
+          }
+          if (capability.name === "draft_car_update") {
+            const draft = result as z.infer<typeof draftCarUpdate.output>;
+            addCard({ kind: "update_draft", id: draft.proposalId, car: draft.carId, title: draft.title, body: draft.body, images: draft.images, mods: draft.modIds });
+          }
           if (capability.name === "find_parts_to_list") {
             for (const part of (result as z.infer<typeof findPartsToList.output>).slice(0, MAX_CARDS)) addCard({ kind: "list_part", id: part.modId, car: part.carId });
           }
@@ -211,7 +260,7 @@ export async function runAgentTurn(options: {
       max_iterations: config.maxIterations,
       system: agentSystemPrompt(options.context.scope, Boolean(options.jobs)),
       tools,
-      messages: [...(options.history ?? []), { role: "user", content: redactForModel(options.message) }],
+      messages: [...(options.history ?? []), { role: "user", content: userContent(options.message, options.images) }],
       output_config: { effort: "medium" },
       // A safeguard decline is retried on the model DRVN's account routes it to.
       betas: ["server-side-fallback-2026-07-01"],

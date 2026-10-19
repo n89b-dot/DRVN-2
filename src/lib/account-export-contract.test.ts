@@ -6,7 +6,7 @@ import { ACCOUNT_EXPORT_CONTRACT_VERSION, ACCOUNT_EXPORT_PAGE_SIZE, ACCOUNT_EXPO
 
 describe("account export contract", () => {
   it("uses explicit projections and covers both sides of shared records", () => {
-    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-25.v11");
+    expect(ACCOUNT_EXPORT_CONTRACT_VERSION).toBe("2026-10-25.v12");
     expect(ACCOUNT_EXPORT_SECTIONS.every((section) => !section.projection.includes("*"))).toBe(true);
     const keys = ACCOUNT_EXPORT_SECTIONS.map((section) => section.key);
     expect(keys).toEqual(expect.arrayContaining([

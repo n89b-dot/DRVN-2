@@ -214,6 +214,8 @@ function garageSupabase() {
         update: () => { writes.push(`update:${table}`); return query; },
         upsert: () => { writes.push(`upsert:${table}`); return query; },
         delete: () => { writes.push(`delete:${table}`); return query; },
+        // Awaiting a query with no terminal call (`.in(...)` last) reads its rows.
+        then: (resolve: (value: unknown) => void) => resolve({ data: [answer(table)], error: null }),
       };
       return query;
     },
@@ -312,5 +314,59 @@ describe("eval fixtures: A3d jobs", () => {
     const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list what came off", client, config, spend: openLedger, jobs: true });
     expect(writes).toEqual([]);
     expect(result.ok && result.cards).toEqual([{ kind: "list_part", id: OLD_MOD.id, car: CAR.id }]);
+  });
+});
+
+describe("eval fixtures: photo jobs (A3d)", () => {
+  const config = { ...resolveAiConfig({ NODE_ENV: "test", ANTHROPIC_API_KEY: "test" }), mode: "anthropic" as const };
+  const member = "22222222-2222-4222-8222-222222222222";
+  const photo = { url: `https://x.supabase.co/storage/v1/object/public/listing-images/${member}/a.jpg`, mediaType: "image/jpeg" as const, data: "AAAA" };
+
+  it("sends the member's photos with their words, numbered as the tools see them", async () => {
+    const { supabase } = garageSupabase();
+    const { client, seen } = scriptedClient([]);
+    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "what is this?", client, config, spend: openLedger, jobs: true, images: [photo] });
+    const messages = seen.params?.messages as { content: unknown }[];
+    const blocks = messages.at(-1)!.content as { type: string; text?: string }[];
+    expect(blocks.map((block) => block.type)).toEqual(["text", "image", "text"]);
+    expect(blocks[0].text).toBe("Photo 0:");
+    // The address never goes to the model, only the bytes.
+    expect(JSON.stringify(blocks)).not.toContain(photo.url);
+  });
+
+  it("a listing from photos uses only this message's photos, and carries no price or condition", async () => {
+    const { supabase, writes } = garageSupabase();
+    const { client } = scriptedClient([
+      { tool: "draft_listing_from_photos", input: { title: "Garrett G25-660 turbo", brand: "Garrett", partNumber: "G25-660", category: "turbo", photos: [0] } },
+      { tool: "draft_listing_from_photos", input: { title: "Someone else's photo", photos: [2] } },
+    ]);
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, jobs: true, images: [photo] });
+    expect(writes).toEqual([]);
+    expect(result.toolCalls).toEqual([{ name: "draft_listing_from_photos", ok: true }, { name: "draft_listing_from_photos", ok: false, code: "invalid_input" }]);
+    expect(result.ok && result.cards).toEqual([
+      { kind: "listing_draft", id: expect.any(String), title: "Garrett G25-660 turbo", brand: "Garrett", part_number: "G25-660", category: "turbo", images: [photo.url] },
+    ]);
+  });
+
+  it("the model can't hand a draft an address of its own", async () => {
+    const { supabase } = garageSupabase();
+    const { client } = scriptedClient([{ tool: "draft_listing_from_photos", input: { title: "Turbo", photos: [0], images: ["https://tracker.example.com/p.gif"] } }]);
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, jobs: true, images: [photo] });
+    expect(JSON.stringify(result.ok && result.cards)).not.toContain("tracker.example.com");
+  });
+
+  it("an update from photos is a draft on one of the member's cars, with its parts", async () => {
+    const { supabase, writes } = garageSupabase();
+    const { client } = scriptedClient([{ tool: "draft_car_update", input: { carId: CAR.id, title: "Turbo day", body: "Fitted the G25 today.", photos: [0], modIds: [OLD_MOD.id] } }]);
+    const result = await runAgentTurn({ context: modelContext(member, "garage"), supabase, message: "post this", client, config, spend: openLedger, jobs: true, images: [photo] });
+    expect(writes).toEqual([]);
+    expect(result.ok && result.cards[0]).toMatchObject({ kind: "update_draft", car: CAR.id, title: "Turbo day", images: [photo.url], mods: [OLD_MOD.id] });
+  });
+
+  it("without the jobs step the photo tools aren't there", async () => {
+    const { supabase } = garageSupabase();
+    const { client, seen } = scriptedClient([{ tool: "draft_listing_from_photos", input: { title: "Turbo", photos: [0] } }]);
+    await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "list this", client, config, spend: openLedger, images: [photo] });
+    expect(seen.unknownTools).toEqual(["draft_listing_from_photos"]);
   });
 });

@@ -15,7 +15,12 @@ import type { Database } from "@/lib/database.types";
 
 export type MemberClient = SupabaseClient<Database>;
 
-export type CapabilityRun = { context: AgentContext; supabase: MemberClient };
+export type CapabilityRun = {
+  context: AgentContext;
+  supabase: MemberClient;
+  /** The member's own photos on the message being answered (A3d), by index. */
+  attachments?: readonly string[];
+};
 
 export type Capability<I extends z.ZodType = z.ZodType, O extends z.ZodType = z.ZodType> = {
   name: string;

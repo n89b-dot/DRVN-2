@@ -9,6 +9,9 @@
 --      or other key, a known category, http(s) links only.
 --   5. A3d's cards (20261025120000): a parsed build list keeps to its lines'
 --      fields and 40 lines at most; a part to list is ids only.
+--   6. Photos (20261025130000): a member's message carries at most four, all
+--      their own listing-images uploads; an agent reply carries none; the
+--      photo drafts keep to their fields, never a price or a condition.
 begin;
 
 create function pg_temp.act(p_member uuid) returns void language sql as $$
@@ -30,9 +33,9 @@ begin
   insert into auth.users(id, email) values (member, 'agent-chat-member@drvn.test'), (other, 'agent-chat-other@drvn.test');
 
   -- 1. Who may write.
-  if has_function_privilege('authenticated', 'public.agent_chat_append(uuid,text,text,jsonb)', 'execute') then raise exception 'FAIL 1: members can call agent_chat_append'; end if;
-  if has_function_privilege('anon', 'public.agent_chat_append(uuid,text,text,jsonb)', 'execute') then raise exception 'FAIL 1b: visitors can call agent_chat_append'; end if;
-  if not has_function_privilege('service_role', 'public.agent_chat_append(uuid,text,text,jsonb)', 'execute') then raise exception 'FAIL 1c: the server cannot store chat'; end if;
+  if has_function_privilege('authenticated', 'public.agent_chat_append(uuid,text,text,jsonb,text[])', 'execute') then raise exception 'FAIL 1: members can call agent_chat_append'; end if;
+  if has_function_privilege('anon', 'public.agent_chat_append(uuid,text,text,jsonb,text[])', 'execute') then raise exception 'FAIL 1b: visitors can call agent_chat_append'; end if;
+  if not has_function_privilege('service_role', 'public.agent_chat_append(uuid,text,text,jsonb,text[])', 'execute') then raise exception 'FAIL 1c: the server cannot store chat'; end if;
   if has_table_privilege('service_role', 'public.agent_messages', 'insert') then raise exception 'FAIL 1d: the service role writes agent_messages directly'; end if;
 
   -- 2. Both sides, one conversation.
@@ -112,6 +115,36 @@ begin
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
     'kind', 'list_part', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'price_cents', 5000))));
   if c <> '22023' then raise exception 'FAIL 5e: a part to list carried a price (%)', c; end if;
+
+  -- 6. Photos and photo drafts.
+  perform public.agent_chat_append(member, 'member', 'What is this part?', '[]'::jsonb,
+    array['https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg']);
+  if (select cardinality(images) from public.agent_messages where owner_id = member and body = 'What is this part?') <> 1 then raise exception 'FAIL 6: a photo was not kept'; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
+    array['https://x.supabase.co/storage/v1/object/public/listing-images/' || other || '/a.jpg']));
+  if c <> '22023' then raise exception 'FAIL 6b: someone else''s photo was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
+    array['https://x.supabase.co/storage/v1/object/public/car-images/' || member || '/a.jpg']));
+  if c <> '22023' then raise exception 'FAIL 6c: a photo from another bucket was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'agent', 'x', '[]',
+    array['https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg']));
+  if c <> '22023' then raise exception 'FAIL 6d: an agent reply carried a photo (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb, %L::text[])', member, 'member', 'x', '[]',
+    (select array_agg('https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/' || g || '.jpg') from generate_series(1, 5) g)));
+  if c <> '22023' then raise exception 'FAIL 6e: five photos were stored (%)', c; end if;
+  perform public.agent_chat_append(member, 'agent', 'Here is a draft.', jsonb_build_array(
+    jsonb_build_object('kind', 'listing_draft', 'id', gen_random_uuid(), 'title', 'Garrett G25-660 turbo', 'brand', 'Garrett', 'part_number', 'G25-660', 'category', 'turbo',
+      'images', jsonb_build_array('https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg')),
+    jsonb_build_object('kind', 'update_draft', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'title', 'New turbo day', 'body', 'Fitted it today.',
+      'images', jsonb_build_array('https://x.supabase.co/storage/v1/object/public/listing-images/' || member || '/a.jpg'), 'mods', jsonb_build_array(gen_random_uuid()))));
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'listing_draft', 'id', gen_random_uuid(), 'title', 'Turbo', 'condition', 'like new',
+    'images', jsonb_build_array('https://x.supabase.co/a.jpg')))));
+  if c <> '22023' then raise exception 'FAIL 6f: a listing draft carried a condition (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'listing_draft', 'id', gen_random_uuid(), 'title', 'Turbo', 'price_cents', 100,
+    'images', jsonb_build_array('https://x.supabase.co/a.jpg')))));
+  if c <> '22023' then raise exception 'FAIL 6g: a listing draft carried a price (%)', c; end if;
 
   raise notice 'all agent chat checks passed';
 end $$;

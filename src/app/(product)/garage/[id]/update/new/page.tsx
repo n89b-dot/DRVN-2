@@ -5,6 +5,8 @@ import { notFound, redirect } from "next/navigation";
 import { normalizeBlocks } from "@/lib/activity-blocks";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 import { BuildStoryComposer } from "@/features/composer/composer";
+import type { TurnCard } from "@/lib/ai/run";
+import { isOwnedStorageUrl } from "@/lib/media-url";
 import { loadTaggableParts } from "@/features/composer/taggable-parts";
 
 import { createRichActivityPost, discardActivityDraft, saveActivityDraft } from "../../../actions";
@@ -16,7 +18,8 @@ export default async function NewUpdatePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ added?: string; removed?: string; photos?: string }>;
+  /** `agent`: a "Post an update" draft from the member's agent chat (A3d). */
+  searchParams: Promise<{ added?: string; removed?: string; photos?: string; agent?: string }>;
 }) {
   const { id } = await params;
   const seeds = await searchParams;
@@ -64,7 +67,34 @@ export default async function NewUpdatePage({
   // "Share these in an update" prepopulate the composer — visibly, as normal
   // editable blocks, and only when there's no draft already in flight.
   const seededBlocks: import("@/lib/activity-blocks").ActivityBlock[] = [];
-  if (!draftBlocks?.length) {
+  let seededTitle = "";
+  // A3d "Post an update": the agent's draft, read from the member's own chat,
+  // for this car only. Its photos are the member's own uploads (checked
+  // again when the post saves); its parts must be on this car. A draft
+  // already in flight wins, as with every other seed.
+  if (!draftBlocks?.length && seeds.agent && /^[0-9a-f-]{36}$/i.test(seeds.agent)) {
+    const { data: messages } = await supabase
+      .from("agent_messages")
+      .select("cards")
+      .eq("owner_id", user.id)
+      .contains("cards", JSON.stringify([{ id: seeds.agent }]))
+      .limit(1);
+    const card = ((messages?.[0]?.cards ?? []) as TurnCard[]).find(
+      (c): c is Extract<TurnCard, { kind: "update_draft" }> => c.kind === "update_draft" && c.id === seeds.agent,
+    );
+    if (card && card.car === car.id) {
+      seededTitle = card.title.slice(0, 140);
+      const onCar = new Map(mods.map((mod) => [mod.id, mod.label]));
+      for (const modId of card.mods) {
+        const label = onCar.get(modId);
+        if (label) seededBlocks.push({ type: "mod", action: "installed", modItemId: modId, label });
+      }
+      const urls = card.images.filter((url) => isOwnedStorageUrl(url, user.id));
+      if (urls.length) seededBlocks.push({ type: "images", urls });
+      seededBlocks.push({ type: "text", style: "normal", text: card.body });
+    }
+  }
+  if (!draftBlocks?.length && !seededBlocks.length) {
     const parseLabels = (raw?: string) =>
       (raw ?? "")
         .split("|")
@@ -116,7 +146,7 @@ export default async function NewUpdatePage({
         carId={car.id}
         userId={user.id}
         mods={mods}
-        initialTitle={draft?.title ?? ""}
+        initialTitle={draft?.title ?? seededTitle}
         initialBlocks={draftBlocks && draftBlocks.length ? draftBlocks : seededBlocks}
         initialOperationId={draft?.id ?? randomUUID()}
         draftSavedAt={draft?.updated_at ?? null}

@@ -1,5 +1,15 @@
 # Applying migrations
 
+## October 25 — photos in the agent chat, A3d (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261025130000_agent_chat_photos.sql` | not yet |
+
+Apply after `20261025120000`. A member's message to their agent can carry up to four photos (`agent_messages.images`): their own `listing-images` uploads, checked against their folder by `agent_chat_append`, which gains `p_images` (its signature changes, so it's dropped and recreated, service role only). Two more card shapes, `listing_draft` and `update_draft`, open the sell form and the update composer filled in; neither carries a price or a condition. The export moves to `2026-10-25.v12`, which carries the photos.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 6; generated types match.
+
 ## October 25 — A3d's job cards in the agent chat (shared dev project)
 
 | File | Applied to |

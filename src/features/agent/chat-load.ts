@@ -16,7 +16,7 @@ import type { ChatMessage } from "./chat";
 export async function loadChat(supabase: SupabaseClient<Database>, ownerId: string): Promise<ChatMessage[]> {
   const { data: rows } = await supabase
     .from("agent_messages")
-    .select("id, role, body, cards, created_at")
+    .select("id, role, body, cards, images, created_at")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -26,6 +26,7 @@ export async function loadChat(supabase: SupabaseClient<Database>, ownerId: stri
     role: row.role as ChatMessage["role"],
     body: row.body,
     cards: ((row.cards ?? []) as TurnCard[]).flatMap((card) => (cards.has(card.id) ? [cards.get(card.id)!] : [])),
+    images: row.images ?? [],
     created_at: row.created_at,
   }));
 }

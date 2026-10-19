@@ -991,6 +991,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           id: string
+          images: string[]
           owner_id: string
           role: string
           task_id: string | null
@@ -1001,6 +1002,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           id?: string
+          images?: string[]
           owner_id: string
           role: string
           task_id?: string | null
@@ -1011,6 +1013,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           id?: string
+          images?: string[]
           owner_id?: string
           role?: string
           task_id?: string | null
@@ -5947,6 +5950,7 @@ export type Database = {
         Args: {
           p_body: string
           p_cards?: Json
+          p_images?: string[]
           p_owner: string
           p_role: string
         }
@@ -5955,6 +5959,7 @@ export type Database = {
           cards: Json
           created_at: string
           id: string
+          images: string[]
           role: string
         }[]
       }
