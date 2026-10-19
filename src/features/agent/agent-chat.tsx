@@ -151,6 +151,14 @@ export function AgentChat({
                     image={{ src: card.image ?? undefined, alt: card.title }}
                     href={card.href}
                   />
+                ) : card.kind === "marketplace" ? (
+                  <AgentResultCard
+                    key={card.id}
+                    eyebrow="On DRVN now"
+                    title={card.query}
+                    meta={`${card.capped ? "Over 1,000" : card.count.toLocaleString()} for sale · see them in Marketplace`}
+                    href={card.href}
+                  />
                 ) : card.kind === "listing_draft" ? (
                   <AgentResultCard
                     key={card.id}

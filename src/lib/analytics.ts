@@ -74,6 +74,8 @@ export type AnalyticsEvent =
   | { event: "agent_build_change_confirmed"; props: { replaced: boolean } }
   /** Confirm on a "Paste your build" card (A3d): how many lines it added. */
   | { event: "agent_build_list_confirmed"; props: { lines: number } }
+  /** "Turn this into filters" on the Marketplace (A4): whether it found any. */
+  | { event: "marketplace_sentence_filters"; props: { ok: boolean } }
   | { event: "checkout_started"; props: { items: number } }
   | { event: "purchase_completed"; props: { orders: number } }
   | { event: "seller_dispatched"; props?: undefined }

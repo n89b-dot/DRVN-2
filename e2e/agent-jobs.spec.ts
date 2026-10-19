@@ -45,6 +45,8 @@ test("a pasted build saves only on Confirm, and a part that came off opens the s
     await db.query("select public.agent_chat_append($1, 'member', 'Paste my build')", [memberId]);
     await db.query("select public.agent_chat_append($1, 'agent', 'Here are your lines.', $2::jsonb)", [memberId, JSON.stringify([{ kind: "build_list", id: listId, car: carId, lines }])]);
     await db.query("select public.agent_chat_append($1, 'agent', 'This came off and isn''t listed.', $2::jsonb)", [memberId, JSON.stringify([{ kind: "list_part", id: offMod, car: carId }])]);
+    // A4 "Ask about DRVN": a count of public listings, opening that search.
+    await db.query("select public.agent_chat_append($1, 'agent', 'There are 3 for sale.', $2::jsonb)", [memberId, JSON.stringify([{ kind: "marketplace", id: randomUUID(), query: "Mugen exhaust", href: "/marketplace?q=Mugen+exhaust", count: 3, capped: false }])]);
 
     await page.goto("/login");
     await page.getByLabel(/^email$/i).fill(email);
@@ -57,6 +59,9 @@ test("a pasted build saves only on Confirm, and a part that came off opens the s
     await expect(chat.getByText("2 lines for your Jobs Civic")).toBeVisible();
     await expect(chat.getByText("1 to check: Edit flags them in the editor")).toBeVisible();
     expect((await admin.from("mod_items").select("id").eq("car_id", carId)).data).toHaveLength(1);
+
+    await expect(chat.getByRole("link", { name: /Mugen exhaust/ })).toHaveAttribute("href", "/marketplace?q=Mugen+exhaust");
+    await expect(chat.getByText("3 for sale · see them in Marketplace")).toBeVisible();
 
     await chat.getByRole("button", { name: "Confirm" }).click();
     await expect(chat.getByText("Build updated")).toBeVisible();

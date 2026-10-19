@@ -46,6 +46,7 @@ export type ResolvedCard =
       href: string;
       listed: boolean;
     }
+  | { kind: "marketplace"; id: string; query: string; count: number; capped: boolean; href: string }
   | {
       /** "Listing from photos": opens the sell form filled in. */
       kind: "listing_draft";
@@ -80,6 +81,8 @@ const CHECK_BELOW = LOW_CONFIDENCE_THRESHOLD;
  */
 export async function resolveCards(supabase: SupabaseClient<Database>, cards: TurnCard[]): Promise<Map<string, ResolvedCard>> {
   const resolved = new Map<string, ResolvedCard>();
+  // A Marketplace search is public and holds its own link: nothing to read.
+  for (const card of cards) if (card.kind === "marketplace") resolved.set(card.id, { ...card });
   const [, builds, jobs, photos] = await Promise.all([
     resolveListings(supabase, cards, resolved),
     resolveBuildChanges(supabase, cards),

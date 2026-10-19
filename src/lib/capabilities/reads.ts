@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { marketplaceHref, normalizeMarketplaceState } from "@/lib/marketplace/state";
+
 import { CapabilityError, defineCapability } from "./types";
 
 /**
@@ -161,5 +163,58 @@ export const priceComparables = defineCapability({
   output: z.object({ status: z.enum(["ok", "not_enough_sales"]), reason: z.string().optional(), sales: z.number().int().nonnegative(), medianCents: cents.nullable() }),
   async run() {
     return { status: "not_enough_sales" as const, reason: "graph_pending", sales: 0, medianCents: null };
+  },
+});
+
+/** The most a count says exactly; past it, "over 1,000". */
+const COUNT_CAP = 1000;
+
+/**
+ * "Ask about DRVN" (A4): how many parts for sale match some words and
+ * filters, from public data only (the same search a signed-out visitor runs),
+ * with the Marketplace search that shows them. Never anyone's private data.
+ */
+export const browseMarketplace = defineCapability({
+  name: "browse_marketplace",
+  description:
+    "Count the parts for sale on DRVN matching words and optional filters (category slug, condition, price range in dollars, brand), and get the Marketplace search that shows them. Public listings only. Use it for questions like 'how many Monte Carlo parts are for sale?'.",
+  risk: "R0",
+  scopes: ["seller", "buyer", "garage"],
+  input: z.object({
+    query: z.string().trim().min(1).max(200),
+    category: z.string().trim().max(60).optional(),
+    subcategory: z.string().trim().max(60).optional(),
+    condition: z.string().trim().max(30).optional(),
+    minDollars: z.number().nonnegative().max(1_000_000).optional(),
+    maxDollars: z.number().nonnegative().max(1_000_000).optional(),
+    brand: z.string().trim().max(120).optional(),
+  }),
+  output: z.object({ count: z.number().int().nonnegative(), capped: z.boolean(), href: z.string(), filters: z.record(z.string(), z.string()) }),
+  async run({ supabase }, input) {
+    // The Marketplace's own URL vocabulary decides what's a real filter; an
+    // unknown category or condition is dropped, not guessed.
+    const state = normalizeMarketplaceState({
+      q: input.query,
+      category: input.category,
+      subcategory: input.subcategory,
+      condition: input.condition,
+      min: input.minDollars === undefined ? undefined : String(input.minDollars),
+      max: input.maxDollars === undefined ? undefined : String(input.maxDollars),
+      brand: input.brand,
+    });
+    const { data, error } = await supabase.rpc("marketplace_search_capped_ids", {
+      p_query: state.q ?? input.query,
+      p_category: state.category,
+      p_subcategory: state.subcategory,
+      p_condition: state.condition,
+      p_brand: state.brand,
+      p_min_cents: state.min ? Math.round(Number(state.min) * 100) : undefined,
+      p_max_cents: state.max ? Math.round(Number(state.max) * 100) : undefined,
+      p_cap: COUNT_CAP + 1,
+    });
+    if (error) throw new CapabilityError("failed", "Search is unavailable", error);
+    const found = (data ?? []).length;
+    const filters = Object.fromEntries(Object.entries(state).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+    return { count: Math.min(found, COUNT_CAP), capped: found > COUNT_CAP, href: marketplaceHref(state), filters };
   },
 });

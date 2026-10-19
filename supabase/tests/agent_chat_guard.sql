@@ -12,6 +12,8 @@
 --   6. Photos (20261025130000): a member's message carries at most four, all
 --      their own listing-images uploads; an agent reply carries none; the
 --      photo drafts keep to their fields, never a price or a condition.
+--   7. "Ask about DRVN" (20261025140000): a Marketplace card holds a relative
+--      /marketplace link only, and a count of at most 1,000.
 begin;
 
 create function pg_temp.act(p_member uuid) returns void language sql as $$
@@ -145,6 +147,19 @@ begin
     'kind', 'listing_draft', 'id', gen_random_uuid(), 'title', 'Turbo', 'price_cents', 100,
     'images', jsonb_build_array('https://x.supabase.co/a.jpg')))));
   if c <> '22023' then raise exception 'FAIL 6g: a listing draft carried a price (%)', c; end if;
+
+  -- 7. Marketplace cards.
+  perform public.agent_chat_append(member, 'agent', 'There are 12.', jsonb_build_array(jsonb_build_object(
+    'kind', 'marketplace', 'id', gen_random_uuid(), 'query', 'Monte Carlo', 'href', '/marketplace/wheels-tires?q=Monte+Carlo', 'count', 12, 'capped', false)));
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'marketplace', 'id', gen_random_uuid(), 'query', 'x', 'href', 'https://evil.example.com/marketplace', 'count', 1, 'capped', false))));
+  if c <> '22023' then raise exception 'FAIL 7: an outside link was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'marketplace', 'id', gen_random_uuid(), 'query', 'x', 'href', '/marketplace//evil.example.com', 'count', 1, 'capped', false))));
+  if c <> '22023' then raise exception 'FAIL 7b: a protocol-relative link was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'marketplace', 'id', gen_random_uuid(), 'query', 'x', 'href', '/listings/1', 'count', 1, 'capped', false))));
+  if c <> '22023' then raise exception 'FAIL 7c: a non-Marketplace link was stored (%)', c; end if;
 
   raise notice 'all agent chat checks passed';
 end $$;

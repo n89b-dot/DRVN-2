@@ -12,7 +12,7 @@ export type UsageRecord = {
   outputTokens: number;
   costUsd: number | null;
   taskId: string | null;
-  feature: "agent_chat" | "agent_eval" | "listing_import";
+  feature: "agent_chat" | "agent_eval" | "listing_import" | "marketplace_filters";
 };
 
 export function usageRecord(input: Omit<UsageRecord, "costUsd">): UsageRecord {

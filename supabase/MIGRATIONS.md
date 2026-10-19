@@ -1,5 +1,15 @@
 # Applying migrations
 
+## October 25 — "Ask about DRVN" cards and sentence-to-filters usage, A4 (shared dev project)
+
+| File | Applied to |
+|---|---|
+| `20261025140000_agent_chat_marketplace_cards.sql` | not yet |
+
+Apply after `20261025130000`. `agent_chat_card_ok` takes a `marketplace` card: the words, a count up to 1,000 (capped above), and a relative `/marketplace` URL only. `agent_usage.feature` gains `marketplace_filters` for the Marketplace's "Turn this into filters", which is one model call capped and counted with chat.
+
+Checked on a fresh database: every migration applies and every SQL guard passes, including `agent_chat_guard.sql` check 7.
+
 ## October 25 — photos in the agent chat, A3d (shared dev project)
 
 | File | Applied to |
