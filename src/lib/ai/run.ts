@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import type Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 
@@ -7,6 +9,7 @@ import { riskAtMost, type AgentContext, type AgentScope } from "@/lib/agent/cont
 import type { z } from "zod";
 
 import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
+import type { browseMarketplace } from "@/lib/capabilities/reads";
 import { JOB_TOOLS, modelToolsFor } from "@/lib/capabilities/registry";
 import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capabilities/types";
 import { reportError } from "@/lib/monitoring";
@@ -43,6 +46,7 @@ export type ToolCall = { name: string; ok: boolean; code?: string };
  */
 export type TurnCard =
   | { kind: "listing"; id: string }
+  | MarketplaceCard
   | {
       kind: "build_change";
       /** The new mod line's id, so a repeated Confirm saves the same line. */
@@ -89,6 +93,9 @@ export type TurnCard =
       images: string[];
       mods: string[];
     };
+
+/** "Ask about DRVN" (A4): a Marketplace search it counted, as a link. */
+export type MarketplaceCard = { kind: "marketplace"; id: string; query: string; href: string; count: number; capped: boolean };
 
 /** A photo on the member's message, as the model receives it. */
 export type TurnImage = { url: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string };
@@ -145,6 +152,7 @@ export function agentSystemPrompt(scope: AgentScope, jobs = false): string {
     SCOPE_JOB[scope],
     "You never choose a price, a counter or a limit, and you never accept, pay or move money: DRVN's rules do that, and you may explain an outcome the rules already decided.",
     "Use the tools to look things up. When a tool says there isn't enough evidence, say so plainly; don't guess fitment or prices.",
+    "For questions about what's on DRVN (how many of something are for sale, under what price), use browse_marketplace and give its count; it only sees public listings, and you never have anyone else's private data.",
     "When the member says a part went on or came off one of their cars, or pastes a product link for one, draft it with propose_build_change (read_part_link first for a link, list_my_cars and read_my_car to find the car and the part it replaces). It isn't saved until they tap Confirm on the card, so say that rather than that it's done.",
     ...(jobs
       ? [
@@ -230,6 +238,10 @@ export async function runAgentTurn(options: {
           if (capability.name === "draft_build_list") {
             const draft = result as z.infer<typeof draftBuildList.output>;
             addCard({ kind: "build_list", id: draft.proposalId, car: draft.carId, lines: draft.lines });
+          }
+          if (capability.name === "browse_marketplace") {
+            const found = result as z.infer<typeof browseMarketplace.output>;
+            addCard({ kind: "marketplace", id: randomUUID(), query: (args as { query: string }).query.slice(0, 200), href: found.href, count: found.count, capped: found.capped });
           }
           if (capability.name === "draft_listing_from_photos") {
             const draft = result as z.infer<typeof draftListingFromPhotos.output>;

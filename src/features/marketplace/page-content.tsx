@@ -14,6 +14,9 @@ import { MarketplaceResults } from "./results";
 import { VehicleControl } from "./vehicle-control";
 import { resolveVehicleFilter } from "@/lib/vehicles/catalog";
 import { SaveSearchButton } from "./save-search-button";
+import { SentenceFilters } from "./sentence-filters";
+import { agentStepOpen } from "@/lib/agent/beta";
+import { resolveAiConfig } from "@/lib/ai/config";
 import { orderCars } from "@/lib/cars/order";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -50,6 +53,14 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
   const freeForm = [filters.q, filters.brand, filters.location, filters.min, filters.max, filters.ymin, filters.ymax].some(Boolean);
   const [supabase, user, betaEnforced] = await Promise.all([freeForm ? getPageClient() : getPublicPageClient(), getViewer(), betaAccessIsEnforced()]);
   const vehiclePromise = filters.vehicle ? resolveVehicleFilter(filters.vehicle) : Promise.resolve(null);
+  // A4: offer "Turn this into filters" for a sentence-like search with no
+  // filters on yet, when the model is on and the chat step is open.
+  const sentenceSearch =
+    Boolean(user) &&
+    (filters.q ?? "").trim().split(/\s+/).length >= 4 &&
+    !filters.category && !filters.condition && !filters.min && !filters.max && !filters.brand &&
+    resolveAiConfig().mode === "anthropic" &&
+    (await agentStepOpen("chat"));
   // P-5: the shopper's own car order, so the picker leads with the car they
   // mean. The main car is OFFERED as a one-tap choice, never applied — see
   // VehicleControl.
@@ -175,6 +186,8 @@ export async function MarketplacePageContent({ raw, categorySlug, subcategorySlu
         sidebar={<CategorySidebarList counts={categoryCounts} category={category} subcategory={leaf?.slug} filters={filters} />}
       />
       <ActiveFilters basePath={basePath} filters={filters} vehicleLabel={vehicle ? [filters.vyear, vehicle.label].filter(Boolean).join(" ") : undefined} />
+      {/* A4: a search that reads like a sentence can become filters (signed in, model on). */}
+      {user && sentenceSearch && <SentenceFilters sentence={filters.q!} />}
       <Suspense fallback={<CategoryNav category={category} subcategory={leaf?.slug} filters={filters} compact={hasMarketplaceSearch(filters) || Boolean(leaf)} />}>
         {categoryPromise.then(counts => <CategoryNav counts={searching ? undefined : counts} category={category} subcategory={leaf?.slug} filters={filters} compact={hasMarketplaceSearch(filters) || Boolean(leaf)} />)}
       </Suspense>

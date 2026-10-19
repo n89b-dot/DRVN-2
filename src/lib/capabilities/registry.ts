@@ -2,7 +2,7 @@ import { riskAtMost, type AgentScope, type Risk } from "@/lib/agent/context";
 
 import { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, listMyCars, proposeBuildChange, readPartLink } from "./build";
 import { moveOffer, setAgentLimits } from "./negotiation";
-import { fitmentEvidence, priceComparables, readListing, readMyCar, readProduct, searchParts } from "./reads";
+import { browseMarketplace, fitmentEvidence, readListingMessages, priceComparables, readListing, readMyCar, readProduct, searchParts } from "./reads";
 import type { Capability } from "./types";
 
 /**
@@ -12,12 +12,12 @@ import type { Capability } from "./types";
  * decide money, AG-5), so the money and limits capabilities never appear in it.
  * An MCP adapter (A6) will wrap this same registry.
  */
-export const CAPABILITIES: readonly Capability[] = [searchParts, readListing, readMyCar, readProduct, fitmentEvidence, priceComparables, listMyCars, readPartLink, proposeBuildChange, draftBuildList, findPartsToList, draftListingFromPhotos, draftCarUpdate, moveOffer, setAgentLimits];
+export const CAPABILITIES: readonly Capability[] = [searchParts, browseMarketplace, readListingMessages, readListing, readMyCar, readProduct, fitmentEvidence, priceComparables, listMyCars, readPartLink, proposeBuildChange, draftBuildList, findPartsToList, draftListingFromPhotos, draftCarUpdate, moveOffer, setAgentLimits];
 
 export const MODEL_TOOLS: Record<AgentScope, readonly string[]> = {
-  seller: ["search_parts", "read_listing", "read_product", "fitment_evidence", "price_comparables"],
-  buyer: ["search_parts", "read_listing", "list_my_cars", "read_my_car", "read_product", "fitment_evidence", "price_comparables", "read_part_link", "propose_build_change", "draft_build_list", "find_parts_to_list", "draft_listing_from_photos", "draft_car_update"],
-  garage: ["search_parts", "read_listing", "list_my_cars", "read_my_car", "read_product", "fitment_evidence", "read_part_link", "propose_build_change", "draft_build_list", "find_parts_to_list", "draft_listing_from_photos", "draft_car_update"],
+  seller: ["search_parts", "browse_marketplace", "read_listing_messages", "read_listing", "read_product", "fitment_evidence", "price_comparables"],
+  buyer: ["search_parts", "browse_marketplace", "read_listing_messages", "read_listing", "list_my_cars", "read_my_car", "read_product", "fitment_evidence", "price_comparables", "read_part_link", "propose_build_change", "draft_build_list", "find_parts_to_list", "draft_listing_from_photos", "draft_car_update"],
+  garage: ["search_parts", "browse_marketplace", "read_listing_messages", "read_listing", "list_my_cars", "read_my_car", "read_product", "fitment_evidence", "read_part_link", "propose_build_change", "draft_build_list", "find_parts_to_list", "draft_listing_from_photos", "draft_car_update"],
 };
 
 /** A3d's jobs: handed to the model only once the jobs step is open (/admin/agent). */
