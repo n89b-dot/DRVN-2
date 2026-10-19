@@ -1,5 +1,6 @@
 import { riskAtMost, type AgentScope, type Risk } from "@/lib/agent/context";
 
+import { listMyCars, proposeBuildChange, readPartLink } from "./build";
 import { moveOffer, setAgentLimits } from "./negotiation";
 import { fitmentEvidence, priceComparables, readListing, readMyCar, readProduct, searchParts } from "./reads";
 import type { Capability } from "./types";
@@ -11,12 +12,12 @@ import type { Capability } from "./types";
  * decide money, AG-5), so the money and limits capabilities never appear in it.
  * An MCP adapter (A6) will wrap this same registry.
  */
-export const CAPABILITIES: readonly Capability[] = [searchParts, readListing, readMyCar, readProduct, fitmentEvidence, priceComparables, moveOffer, setAgentLimits];
+export const CAPABILITIES: readonly Capability[] = [searchParts, readListing, readMyCar, readProduct, fitmentEvidence, priceComparables, listMyCars, readPartLink, proposeBuildChange, moveOffer, setAgentLimits];
 
 export const MODEL_TOOLS: Record<AgentScope, readonly string[]> = {
   seller: ["search_parts", "read_listing", "read_product", "fitment_evidence", "price_comparables"],
-  buyer: ["search_parts", "read_listing", "read_my_car", "read_product", "fitment_evidence", "price_comparables"],
-  garage: ["search_parts", "read_listing", "read_my_car", "read_product", "fitment_evidence"],
+  buyer: ["search_parts", "read_listing", "list_my_cars", "read_my_car", "read_product", "fitment_evidence", "price_comparables", "read_part_link", "propose_build_change"],
+  garage: ["search_parts", "read_listing", "list_my_cars", "read_my_car", "read_product", "fitment_evidence", "read_part_link", "propose_build_change"],
 };
 
 export const MODEL_MAX_RISK: Risk = "R1";

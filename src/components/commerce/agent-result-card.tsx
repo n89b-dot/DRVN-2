@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ObjectRow } from "@/components/ui";
@@ -21,13 +22,28 @@ export function AgentResultCard({
   meta?: ReactNode;
   image?: { src?: string; alt: string };
   href: string;
-  /** Optional trailing action (Confirm and Edit arrive with "Update my build"). */
+  /** Trailing actions: Confirm and Edit on a confirm card. With actions the
+   *  row isn't one link (a link can't hold buttons): the title and photo are. */
   action?: ReactNode;
 }) {
   return (
     <article className="tile !p-4">
       <span className="microlabel">{eyebrow}</span>
-      <ObjectRow href={href} media={image} title={title} meta={meta} actions={action} />
+      {action ? (
+        <ObjectRow
+          media={image}
+          mediaHref={image ? href : undefined}
+          title={
+            <Link href={href} className="hover:text-live">
+              {title}
+            </Link>
+          }
+          meta={meta}
+          actions={action}
+        />
+      ) : (
+        <ObjectRow href={href} media={image} title={title} meta={meta} />
+      )}
     </article>
   );
 }

@@ -5,6 +5,8 @@
 --      sides; the redaction trigger still runs.
 --   3. Cards are listing ids only: extra keys, other kinds, non-uuids, more
 --      than five, or cards on a member's own message are refused.
+--   4. A drafted build change (20261025110000) keeps to its fields: no price
+--      or other key, a known category, http(s) links only.
 begin;
 
 create function pg_temp.act(p_member uuid) returns void language sql as $$
@@ -62,6 +64,27 @@ begin
   if c <> '22023' then raise exception 'FAIL 3e: a member message carried cards (%)', c; end if;
   c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L)', member, 'system', 'x'));
   if c <> '22023' then raise exception 'FAIL 3f: a third role was stored (%)', c; end if;
+
+  -- 4. Build-change cards.
+  perform public.agent_chat_append(member, 'agent', 'Confirm to add it.', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_change', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'replaces', null, 'brand', 'KW', 'product', 'V3 coilovers',
+    'part_number', '35210012', 'category', 'suspension', 'product_url', 'https://example.com/kw-v3', 'image_url', null)));
+  if (select count(*) from public.agent_messages where owner_id = member and cards->0->>'kind' = 'build_change') <> 1 then raise exception 'FAIL 4: a build change card was not stored'; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_change', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'product', 'V3', 'price_cents', 100))));
+  if c <> '22023' then raise exception 'FAIL 4b: a build change carried a price (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_change', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'product', 'V3', 'category', 'rockets'))));
+  if c <> '22023' then raise exception 'FAIL 4c: an unknown category was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_change', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'product', 'V3', 'product_url', 'javascript:alert(1)'))));
+  if c <> '22023' then raise exception 'FAIL 4d: a non-http link was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_change', 'id', gen_random_uuid(), 'car', 'not-a-car', 'product', 'V3'))));
+  if c <> '22023' then raise exception 'FAIL 4e: a build change without a car id was stored (%)', c; end if;
+  c := pg_temp.code(format('select public.agent_chat_append(%L, %L, %L, %L::jsonb)', member, 'agent', 'x', jsonb_build_array(jsonb_build_object(
+    'kind', 'build_change', 'id', gen_random_uuid(), 'car', gen_random_uuid(), 'product', ''))));
+  if c <> '22023' then raise exception 'FAIL 4f: a build change without a product was stored (%)', c; end if;
 
   raise notice 'all agent chat checks passed';
 end $$;

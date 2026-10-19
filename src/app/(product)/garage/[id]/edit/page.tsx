@@ -13,11 +13,21 @@ import { ActivityComposer } from "./activity-composer";
 import { DangerZone } from "./danger-zone";
 import { postHeadline } from "@/lib/activity/headline";
 import { CAR_COLUMNS } from "@/lib/cars/columns";
+import type { BuildDraft } from "@/features/agent/build-change";
+import type { TurnCard } from "@/lib/ai/run";
 
 export const metadata = { title: "Manage car - DRVN" };
 
-export default async function CarEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CarEditPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  /** `change`: an agent's "Update my build" draft to open filled in (A3c Edit). */
+  searchParams: Promise<{ change?: string }>;
+}) {
   const { id } = await params;
+  const { change } = await searchParams;
   const supabase = await getPageClient();
   const user = await getViewer();
   if (!user) redirect("/login");
@@ -53,6 +63,19 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
       supabase.from("car_hotspots").select("*").eq("car_id", id).order("created_at"),
       supabase.from("profiles").select("main_car_id").eq("id", user.id).maybeSingle(),
     ]);
+  // The draft is read from the member's own chat, so only their agent's
+  // cards open here, and only for this car.
+  let draft: BuildDraft | null = null;
+  if (change && /^[0-9a-f-]{36}$/i.test(change)) {
+    const { data: messages } = await supabase
+      .from("agent_messages")
+      .select("cards")
+      .eq("owner_id", user.id)
+      .contains("cards", JSON.stringify([{ id: change }]))
+      .limit(1);
+    const card = ((messages?.[0]?.cards ?? []) as TurnCard[]).find((c): c is BuildDraft => c.kind === "build_change" && c.id === change);
+    draft = card && card.car === id ? card : null;
+  }
   const images = requiredRead(imagesResult, "this car's photos");
   const mods = requiredRead(modsResult, "this car's mod list");
   const hotspots = requiredRead(hotspotsResult, "this car's showcase");
@@ -101,7 +124,7 @@ export default async function CarEditPage({ params }: { params: Promise<{ id: st
           coverImageUrl={car.cover_image_url}
           coverFocal={{ x: car.cover_focal_x, y: car.cover_focal_y }}
         />
-        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} />
+        <ModsEditor carId={car.id} carMake={car.make} initialMods={mods ?? []} draft={draft} />
         <ShowcaseEditor
           carId={car.id}
           images={images ?? []}

