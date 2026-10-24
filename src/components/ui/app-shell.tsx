@@ -226,17 +226,19 @@ function AppRail({
           const badge = entry.href === "/messages" ? messagesCount : entry.href === "/agent" ? agentNeedsCount : 0;
           // The Agent row opens the agent beside the page when it has a
           // panel here (A3c); on /agent itself, or without one, it's a link.
-          const panelRow = entry.href === "/agent" && !here && panel.available("agent");
+          // Asked at click time: panels register without re-rendering the
+          // rail, so a value read while rendering can predate the panel.
+          const agentRow = entry.href === "/agent" && !here;
           return (
             <Link
               key={entry.href}
               href={entry.href}
               onClick={(event) => {
-                if (!panelRow || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                if (!agentRow || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0 || !panel.available("agent")) return;
                 event.preventDefault();
                 panel.toggle("agent");
               }}
-              aria-expanded={panelRow ? panel.openKey === "agent" : undefined}
+              aria-expanded={agentRow && panel.openKey === "agent" ? true : undefined}
               className={cx("railrow", here && "is-here")}
               aria-current={here ? "page" : undefined}
               title={open ? undefined : badge > 0 ? `${entry.label} (${badge})` : entry.label}
