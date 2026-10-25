@@ -51,3 +51,7 @@ next-env.d.ts
 # Storybook static builds (local lab only)
 storybook-static/
 *storybook.log
+
+# Local page smoke script — signs in as the console-admin fixture (password from
+# E2E_CONSOLE_ADMIN_PASSWORD), so it never belongs in the tree.
+.page-test.mjs

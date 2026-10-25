@@ -189,3 +189,10 @@ in on 2026-09-24. Its standing console-admin account has an enrolled factor
 whose secret is kept outside the repo (`~/drvn-db-backups/`). Keep it out of
 `.env*` files and specs: the specs must keep making their own disposable
 admins.
+
+The same goes for that account's password. The local smoke script
+`.page-test.mjs` (untracked, gitignored since readiness item 79) reads it from
+`E2E_CONSOLE_ADMIN_PASSWORD`; the only built-in default applies when
+`E2E_TEST_PROJECT_REF=local-drvn-remediation`, i.e. the isolated loopback
+stack. A hosted project needs the variable set, and no spec or fixture may
+carry the literal.
