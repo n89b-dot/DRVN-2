@@ -118,6 +118,8 @@ beforeEach(async () => {
   await db.query("grant agent_worker to current_user");
   await db.query("update public.beta_access_config set enforced = false where singleton = true");
   await db.query("update public.agent_controls set cleared_at = now() where scope = 'all' and cleared_at is null");
+  // Mandates need their side's beta step open (20261026100000).
+  await db.query("update public.agent_beta_steps set open = true where step in ('seller', 'buyer')");
 });
 
 afterEach(async () => {
