@@ -154,6 +154,51 @@ describe("eval fixtures: the model's boundary", () => {
     expect(seen.params?.model).toBe("claude-opus-5-5");
   });
 
+  it("redacts earlier turns too: a VIN or email typed before never reaches the model (readiness 63)", async () => {
+    const { client, seen } = scriptedClient([]);
+    await runAgentTurn({
+      context: modelContext("22222222-2222-4222-8222-222222222222", "buyer"),
+      supabase: fakeSupabase(),
+      message: "what fits it?",
+      history: [
+        { role: "user", content: "my VIN is WVWZZZAUZKW123456, mail kaito@drvn.test" },
+        { role: "assistant", content: [{ type: "text", text: "Noted WVWZZZAUZKW123456." }] },
+      ],
+      client,
+      config,
+      spend: openLedger,
+    });
+    const sent = JSON.stringify(seen.params);
+    expect(sent).not.toContain("WVWZZZAUZKW123456");
+    expect(sent).not.toContain("kaito@drvn.test");
+    expect(sent).toContain("what fits it?");
+  });
+
+  it("a kill switch on the member, or on everyone, stops the model before it is called (readiness 66)", async () => {
+    const { client, seen } = scriptedClient([]);
+    const result = await runAgentTurn({ context: modelContext("22222222-2222-4222-8222-222222222222", "buyer"), supabase: fakeSupabase(), message: "hi", client, config, spend: openLedger, halted: async () => true });
+    expect(result).toMatchObject({ ok: false, code: "paused" });
+    expect(seen.params).toBeUndefined();
+  });
+
+  it("cuts a turn short past its own cost cap and still records what it used (readiness 67)", async () => {
+    const recorded: unknown[] = [];
+    const counting: SpendLedger = { allowed: async () => true, record: async (_owner, usage) => void recorded.push(usage) };
+    // A "model" that burns a million input tokens a step: on Opus that is $4, past the per-turn cap on the first message.
+    const expensive = {
+      beta: { messages: { toolRunner: () => ({ async *[Symbol.asyncIterator]() { for (;;) yield { content: [], stop_reason: "tool_use", usage: { input_tokens: 1_000_000, output_tokens: 0 } }; } }) } },
+    } as unknown as NonNullable<Parameters<typeof runAgentTurn>[0]["client"]>;
+    const result = await runAgentTurn({ context: modelContext("22222222-2222-4222-8222-222222222222", "buyer"), supabase: fakeSupabase(), message: "hi", client: expensive, config, spend: counting });
+    expect(result).toMatchObject({ ok: false, code: "incomplete" });
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ inputTokens: 1_000_000, feature: "agent_chat" });
+  });
+
+  it("refuses a model it can't price instead of running it uncapped (readiness 67)", () => {
+    expect(resolveAiConfig({ NODE_ENV: "production", ANTHROPIC_API_KEY: "k", AGENT_MODEL: "claude-next-9" }).mode).toBe("disabled");
+    expect(resolveAiConfig({ NODE_ENV: "production", ANTHROPIC_API_KEY: "k", AGENT_MODEL: "claude-sonnet-5-5" }).mode).toBe("anthropic");
+  });
+
   it("refuses to run the model with more than read-and-draft authority", async () => {
     const { client, seen } = scriptedClient([]);
     const result = await runAgentTurn({ context: memberContext("22222222-2222-4222-8222-222222222222", "seller"), supabase: fakeSupabase(), message: "hi", client, config, spend: openLedger });

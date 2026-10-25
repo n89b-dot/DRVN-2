@@ -7,6 +7,8 @@ import { marketplaceHref, normalizeMarketplaceState, type ListingFilters } from 
 import { reportError } from "@/lib/monitoring";
 
 import { anthropicClient } from "./client";
+import { agentModelHalted } from "@/lib/agent/controls";
+
 import { resolveAiConfig, type AiConfig } from "./config";
 import { redactForModel } from "./redact";
 import { databaseLedger, type SpendLedger } from "./spend";
@@ -71,6 +73,8 @@ export async function sentenceToFilters(options: {
 }): Promise<SentenceFiltersResult> {
   const config = options.config ?? resolveAiConfig();
   if (config.mode !== "anthropic" && !options.client) return { ok: false, code: "ai_disabled" };
+  // An admin kill switch on this member, or on everyone, stops this call too.
+  if (!options.client && (await agentModelHalted(options.ownerId))) return { ok: false, code: "ai_disabled" };
   const ledger = options.spend ?? databaseLedger();
   if (!(await ledger.allowed(options.ownerId))) return { ok: false, code: "spend_cap" };
   try {

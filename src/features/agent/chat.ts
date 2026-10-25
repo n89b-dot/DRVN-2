@@ -49,6 +49,7 @@ async function loadImages(urls: string[]): Promise<TurnImage[]> {
 /** What the member reads when the model didn't answer: plain, and never the error. */
 const FALLBACK: Record<string, string> = {
   spend_cap: "I've reached today's limit for answering. Try again tomorrow, or open the offer or listing directly.",
+  paused: "Your agent is paused right now. Everything it does is also on the listing and offer pages.",
   ai_disabled: "Chat isn't switched on here yet. Everything I do is also on the listing and offer pages.",
   refused: "I can't help with that one. I can look things up on DRVN for you: parts, your car, what fits and what things sell for.",
   incomplete: "That took more steps than I can do at once. Try asking one thing at a time.",
@@ -81,9 +82,10 @@ export async function sendAgentMessage(input: { text: string; scope?: AgentScope
   if (text.length > MAX_LENGTH) return { error: `Keep it under ${MAX_LENGTH} characters.` };
   if (!(await allowAction(RATE_LIMITS.agentChat, user.id))) return { error: rateLimitMessage(RATE_LIMITS.agentChat) };
 
-  // History first (the member's last turns, oldest first), then both sides
-  // stored through agent_chat_append: the service role reads these tables
-  // but writes them only through that function (20261025100000).
+  // History first (the member's last turns, oldest first; runAgentTurn redacts
+  // them again before the model sees them), then both sides stored through
+  // agent_chat_append: the service role reads these tables but writes them
+  // only through that function (20261025100000).
   const admin = createAdminClient();
   const { data: prior } = await admin
     .from("agent_messages")

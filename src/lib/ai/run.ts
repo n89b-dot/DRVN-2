@@ -6,6 +6,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 
 import { riskAtMost, type AgentContext, type AgentScope } from "@/lib/agent/context";
+import { agentModelHalted } from "@/lib/agent/controls";
 import type { z } from "zod";
 
 import type { draftBuildList, draftCarUpdate, draftListingFromPhotos, findPartsToList, proposeBuildChange } from "@/lib/capabilities/build";
@@ -15,7 +16,7 @@ import { CapabilityError, invokeCapability, type MemberClient } from "@/lib/capa
 import { reportError } from "@/lib/monitoring";
 
 import { anthropicClient } from "./client";
-import { resolveAiConfig, type AiConfig } from "./config";
+import { estimateCostUsd, resolveAiConfig, type AiConfig } from "./config";
 import { redactForModel } from "./redact";
 import { UNTRUSTED_RULE, wrapToolResult } from "./untrusted";
 import { databaseLedger, type SpendLedger } from "./spend";
@@ -31,11 +32,22 @@ import { logUsage, usageRecord } from "./usage";
  * - It never gets a money or limits tool, and it is never told a limit: rules
  *   set prices (AG-5), so nothing it reads or is tricked into saying can move one.
  * - What the member typed is redacted (cards, VINs, emails, phones) before it
- *   is sent; every tool result goes back as untrusted data.
+ *   is sent — this turn and every earlier turn in the history, since storage
+ *   keeps them (agent-data-rules.md §3); every tool result goes back as
+ *   untrusted data.
  * - The usage log keeps the model, tokens, cost and task, never the content;
  *   it is stored per task (agent_usage), and a turn past the member's or the
- *   global daily cap is refused before the model is called (spend.ts).
+ *   global daily cap is refused before the model is called (spend.ts). One
+ *   turn is also bounded on its own: TURN_CAP_USD and TURN_TIMEOUT_MS cut it
+ *   short, and what it used is recorded even when it failed.
+ * - An admin kill switch that names this member, or everyone, stops the
+ *   model too (agent/controls.ts), not only the worker's writes.
  */
+
+/** The most one turn may cost before it is cut short, whatever the daily caps still allow. */
+export const TURN_CAP_USD = 0.5;
+/** The longest one turn may run; the server action it serves has twice this. */
+export const TURN_TIMEOUT_MS = 90_000;
 
 export type ToolCall = { name: string; ok: boolean; code?: string };
 
@@ -103,9 +115,20 @@ const MAX_CARDS = 5;
 
 export type AgentTurnResult =
   | { ok: true; text: string; toolCalls: ToolCall[]; cards: TurnCard[]; stopReason: string | null }
-  | { ok: false; code: "ai_disabled" | "model_error" | "refused" | "incomplete" | "not_allowed" | "spend_cap"; toolCalls: ToolCall[] };
+  | { ok: false; code: "ai_disabled" | "model_error" | "refused" | "incomplete" | "not_allowed" | "spend_cap" | "paused"; toolCalls: ToolCall[] };
 
 type RunnerClient = Pick<Anthropic, "beta">;
+
+/** Earlier turns as the model gets them: stored bodies carry VINs, emails and phones; the model never does. */
+export function redactHistory(history: Anthropic.Beta.BetaMessageParam[]): Anthropic.Beta.BetaMessageParam[] {
+  return history.map((message) => {
+    if (typeof message.content === "string") return { ...message, content: redactForModel(message.content) };
+    return {
+      ...message,
+      content: message.content.map((block) => (block.type === "text" ? { ...block, text: redactForModel(block.text) } : block)),
+    };
+  });
+}
 
 /** The member's turn: their photos first, numbered as the tools see them, then their words (redacted). */
 function userContent(message: string, images: TurnImage[] | undefined): Anthropic.Beta.BetaMessageParam["content"] {
@@ -175,6 +198,8 @@ export async function runAgentTurn(options: {
   config?: AiConfig;
   /** The spend caps and usage store; the database's by default. */
   spend?: SpendLedger;
+  /** Whether a kill switch stops this member's model calls; the database's switches by default (tests pass their own with their client). */
+  halted?: (ownerId: string) => Promise<boolean>;
   /** The jobs step is open (A3d): its tools join the model's. */
   jobs?: boolean;
   /** The member's photos on this message (A3d), already loaded: sent with it, and the only photos a draft may use. */
@@ -192,8 +217,11 @@ export async function runAgentTurn(options: {
   if (config.mode === "stub" && !options.client) {
     return { ok: true, text: "I can't reach the model in this environment, so nothing was looked up.", toolCalls, cards, stopReason: "stub" };
   }
-  const ledger = options.spend ?? databaseLedger();
   const ownerId = options.context.principal.memberId;
+  // The admin switches first: a paused agent spends nothing.
+  const halted = options.halted ?? (options.client ? async () => false : agentModelHalted);
+  if (await halted(ownerId)) return { ok: false, code: "paused", toolCalls };
+  const ledger = options.spend ?? databaseLedger();
   if (!(await ledger.allowed(ownerId))) return { ok: false, code: "spend_cap", toolCalls };
 
   const tools = modelToolsFor(options.context.scope)
@@ -264,31 +292,46 @@ export async function runAgentTurn(options: {
     }),
   );
 
+  // One turn's own bounds: the clock, and its cost so far. Both abort the
+  // runner's next request; what was used is recorded in `finally` either way.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TURN_TIMEOUT_MS);
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let overBudget = false;
   try {
     const client = options.client ?? (await anthropicClient());
-    const runner = client.beta.messages.toolRunner({
-      model: config.model,
-      max_tokens: 16000,
-      max_iterations: config.maxIterations,
-      system: agentSystemPrompt(options.context.scope, Boolean(options.jobs)),
-      tools,
-      messages: [...(options.history ?? []), { role: "user", content: userContent(options.message, options.images) }],
-      output_config: { effort: "medium" },
-      // A safeguard decline is retried on the model DRVN's account routes it to.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-    });
-    let inputTokens = 0;
-    let outputTokens = 0;
+    const runner = client.beta.messages.toolRunner(
+      {
+        model: config.model,
+        max_tokens: 16000,
+        max_iterations: config.maxIterations,
+        system: agentSystemPrompt(options.context.scope, Boolean(options.jobs)),
+        tools,
+        messages: [...redactHistory(options.history ?? []), { role: "user", content: userContent(options.message, options.images) }],
+        output_config: { effort: "medium" },
+        // A safeguard decline is retried on the model DRVN's account routes it to.
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+      },
+      { signal: controller.signal },
+    );
     let last: Anthropic.Beta.BetaMessage | null = null;
     for await (const message of runner) {
       last = message;
       inputTokens += message.usage.input_tokens;
       outputTokens += message.usage.output_tokens;
+      const cost = estimateCostUsd(config.model, inputTokens, outputTokens);
+      if (cost !== null && cost > TURN_CAP_USD) {
+        overBudget = true;
+        controller.abort();
+        break;
+      }
     }
-    const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: options.taskId ?? null, feature: "agent_chat" });
-    logUsage(usage);
-    await ledger.record(ownerId, usage);
+    if (overBudget) {
+      reportError("[agent] turn over budget", { taskId: options.taskId ?? null, inputTokens, outputTokens });
+      return { ok: false, code: "incomplete", toolCalls };
+    }
     if (!last) return { ok: false, code: "model_error", toolCalls };
     if (last.stop_reason === "refusal") {
       reportError("[agent] model refused", { taskId: options.taskId ?? null });
@@ -300,8 +343,20 @@ export async function runAgentTurn(options: {
     const text = last.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n").trim();
     return { ok: true, text, toolCalls, cards, stopReason: last.stop_reason };
   } catch (error) {
+    if (controller.signal.aborted) {
+      reportError("[agent] turn timed out", { taskId: options.taskId ?? null, inputTokens, outputTokens });
+      return { ok: false, code: "incomplete", toolCalls };
+    }
     // Ids and the error's kind only: never the conversation.
     reportError("[agent] model error", { taskId: options.taskId ?? null, kind: error instanceof Error ? error.name : "unknown" });
     return { ok: false, code: "model_error", toolCalls };
+  } finally {
+    clearTimeout(timer);
+    // A turn that failed or was cut short still cost its tokens; the caps count them.
+    if (inputTokens + outputTokens > 0) {
+      const usage = usageRecord({ model: config.model, inputTokens, outputTokens, taskId: options.taskId ?? null, feature: "agent_chat" });
+      logUsage(usage);
+      await ledger.record(ownerId, usage);
+    }
   }
 }
