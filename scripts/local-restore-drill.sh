@@ -11,6 +11,10 @@ psql_target() { docker exec -i -e PGPASSWORD=postgres drvn-recovery-target psql 
 restore_section() { docker exec -i -e PGPASSWORD=postgres drvn-recovery-target pg_restore --section="$1" --no-owner --exit-on-error --dbname=postgres -U supabase_admin < "$DRVN_RESTORE_DUMP"; }
 started=$(date +%s)
 psql_target -v ON_ERROR_STOP=1 -q -c 'drop schema if exists public,private,auth,storage,extensions cascade'
+# Roles are cluster-level: the archive carries grants to agent_worker
+# (20261021100100) but not the role, so a fresh target needs it first or
+# pre-data stops at the first GRANT. Same shape as the migration: no login.
+psql_target -v ON_ERROR_STOP=1 -q -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'agent_worker') then create role agent_worker nologin noinherit; end if; end \$\$"
 restore_section pre-data
 psql_target -v ON_ERROR_STOP=1 -q <<'SQL'
 create extension if not exists pg_trgm with schema public;
