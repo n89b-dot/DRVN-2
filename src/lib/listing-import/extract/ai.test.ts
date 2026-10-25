@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type { SpendLedger } from "@/lib/ai/spend";
+
+import type { ImportConfig } from "../config";
 import type { NormalizedImportSource } from "../schema";
 import { parseExtraction } from "../schema";
-import { extractWithHeuristics } from "./ai";
+import { extractListing, extractWithHeuristics } from "./ai";
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => { throw new Error("the ledger is injected in these tests"); } }));
 
 /**
  * The heuristic (stub-mode) extractor: deterministic, regex-evidenced, and
@@ -84,5 +90,44 @@ describe("extractWithHeuristics", () => {
       extractWithHeuristics(src("Went to the track today, car ran great, need new pads soon"))
     );
     expect(parsed?.isSalePost).toBe(false);
+  });
+});
+
+// Readiness 78: every importer model call goes through the member's spend
+// ledger — refused before the call when over the cap, recorded after it.
+describe("extractListing spend", () => {
+  const config: ImportConfig = { aiMode: "anthropic", model: "claude-test-1" } as ImportConfig;
+  const owner = "33333333-3333-4333-8333-333333333333";
+  const reply = {
+    usage: { input_tokens: 1200, output_tokens: 300 },
+    content: [{ type: "tool_use", id: "t1", name: "record_listing_extraction", input: { isSalePost: true, multipleItems: false, rawFitmentMentions: [] } }],
+  };
+  function ledger(allowed: boolean): SpendLedger & { recorded: unknown[] } {
+    const recorded: unknown[] = [];
+    return { recorded, allowed: vi.fn(async () => allowed), record: vi.fn(async (_owner, usage) => { recorded.push(usage); }) };
+  }
+
+  it("refuses with ai_spend_cap before calling the model when the member is over today's cap", async () => {
+    const create = vi.fn();
+    const spend = ledger(false);
+    const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend, client: { messages: { create } } as never });
+    expect(outcome).toEqual({ ok: false, code: "ai_spend_cap" });
+    expect(create).not.toHaveBeenCalled();
+    expect(spend.allowed).toHaveBeenCalledWith(owner);
+  });
+
+  it("records the call's usage against the importing member as listing_import", async () => {
+    const create = vi.fn(async () => reply);
+    const spend = ledger(true);
+    const outcome = await extractListing(src("FS: thing $100"), config, { ownerId: owner, spend, client: { messages: { create } } as never });
+    expect(outcome.ok).toBe(true);
+    expect(spend.record).toHaveBeenCalledWith(owner, expect.objectContaining({ feature: "listing_import", model: "claude-test-1", inputTokens: 1200, outputTokens: 300, taskId: null }));
+  });
+
+  it("costs nothing in stub mode, so the ledger isn't consulted", async () => {
+    const spend = ledger(false);
+    const outcome = await extractListing(src("FS: thing $100"), { aiMode: "stub", model: "stub" } as ImportConfig, { ownerId: owner, spend });
+    expect(outcome.ok).toBe(true);
+    expect(spend.allowed).not.toHaveBeenCalled();
   });
 });

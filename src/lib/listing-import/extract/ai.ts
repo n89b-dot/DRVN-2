@@ -1,6 +1,9 @@
 import "server-only";
 
+import type Anthropic from "@anthropic-ai/sdk";
+
 import { anthropicClient } from "@/lib/ai/client";
+import { databaseLedger, type SpendLedger } from "@/lib/ai/spend";
 import { logUsage, usageRecord } from "@/lib/ai/usage";
 
 import type { ImportConfig } from "../config";
@@ -18,11 +21,25 @@ import { CATEGORIES } from "@/lib/marketplace/taxonomy";
  * deterministic heuristic extractor below — the same shape, no network — so
  * dev/e2e exercise the full pipeline free, and a failed AI call can never be
  * mistaken for a working one in CI.
+ *
+ * Every model call is counted against the importing member's daily spend
+ * (agent_spend_limits via databaseLedger, readiness 78): checked before the
+ * call, recorded after it with feature "listing_import". Over the cap, the
+ * import stops at `ai_spend_cap` with its own sentence; the source stays
+ * saved. Stub mode costs nothing and is not counted.
  */
 
 export type AiExtractionOutcome =
   | { ok: true; raw: unknown }
-  | { ok: false; code: "ai_unavailable" | "ai_failed" };
+  | { ok: false; code: "ai_unavailable" | "ai_failed" | "ai_spend_cap" };
+
+export type ExtractionOptions = {
+  /** The importing member: whose daily model spend this call counts against. */
+  ownerId: string;
+  /** Tests and evals: a fake client and an open ledger. */
+  client?: Pick<Anthropic, "messages">;
+  spend?: SpendLedger;
+};
 
 const OUTPUT_TOOL = {
   name: "record_listing_extraction",
@@ -172,10 +189,15 @@ function buildUserContent(source: NormalizedImportSource): string {
 
 async function extractWithAnthropic(
   source: NormalizedImportSource,
-  config: ImportConfig
+  config: ImportConfig,
+  options: ExtractionOptions
 ): Promise<AiExtractionOutcome> {
+  const ledger = options.spend ?? databaseLedger();
+  // Unknown spend reads as over the cap inside the ledger: no call is better
+  // than an uncounted one.
+  if (!(await ledger.allowed(options.ownerId))) return { ok: false, code: "ai_spend_cap" };
   try {
-    const client = await anthropicClient();
+    const client = options.client ?? (await anthropicClient());
     const response = await client.messages.create({
       model: config.model,
       max_tokens: 3000,
@@ -185,7 +207,9 @@ async function extractWithAnthropic(
       tool_choice: { type: "tool", name: OUTPUT_TOOL.name },
       messages: [{ role: "user", content: buildUserContent(source) }],
     });
-    logUsage(usageRecord({ model: config.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, taskId: null, feature: "listing_import" }));
+    const usage = usageRecord({ model: config.model, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, taskId: null, feature: "listing_import" });
+    logUsage(usage);
+    await ledger.record(options.ownerId, usage);
     const toolUse = response.content.find(
       (block): block is Extract<(typeof response.content)[number], { type: "tool_use" }> =>
         block.type === "tool_use"
@@ -273,9 +297,10 @@ export function extractWithHeuristics(source: NormalizedImportSource): unknown {
 
 export async function extractListing(
   source: NormalizedImportSource,
-  config: ImportConfig
+  config: ImportConfig,
+  options: ExtractionOptions
 ): Promise<AiExtractionOutcome> {
   if (config.aiMode === "disabled") return { ok: false, code: "ai_unavailable" };
   if (config.aiMode === "stub") return { ok: true, raw: extractWithHeuristics(source) };
-  return extractWithAnthropic(source, config);
+  return extractWithAnthropic(source, config, options);
 }

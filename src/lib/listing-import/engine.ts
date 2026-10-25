@@ -230,7 +230,8 @@ async function stepExtract(admin: Admin, row: ListingImport, userId: string): Pr
     };
   }
 
-  const aiOutcome = await extractListing(focusedSource, config);
+  // Counted against the importing member's daily model spend (readiness 78).
+  const aiOutcome = await extractListing(focusedSource, config, { ownerId: userId });
   if (!aiOutcome.ok) {
     await fail(admin, row, "extracting", aiOutcome.code);
     return;
