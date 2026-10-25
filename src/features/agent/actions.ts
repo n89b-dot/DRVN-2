@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
 import { memberContext } from "@/lib/agent/context";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsMandates, agentModeRefusal } from "@/lib/agent/mode";
 import { setAgentLimits } from "@/lib/capabilities/negotiation";
 import { CapabilityError, invokeCapability } from "@/lib/capabilities/types";
 import { capture } from "@/lib/analytics";
@@ -74,6 +76,16 @@ export async function decideAgentApproval(_prev: AgentState, formData: FormData)
 }
 
 /**
+ * AG-7: a mandate can only be started while the member's agent is set to
+ * Act within my limits. The refusal names the setting, so the member knows
+ * where to change it.
+ */
+async function mandateRefusal(userId: string): Promise<string | null> {
+  const mode = await loadAgentMode(userId);
+  return agentModeAllowsMandates(mode) ? null : agentModeRefusal(mode);
+}
+
+/**
  * "Let DRVN handle offers" on one listing: set the seller agent's limits, or
  * turn it off. The minimum here can only make the listing's floor stricter
  * (agent_mandate_set enforces it); the binding acknowledgement is required.
@@ -106,6 +118,8 @@ export async function saveListingAgent(input: {
     return { ok: "Your agent stopped handling offers on this listing." };
   }
 
+  const refused = await mandateRefusal(user.id);
+  if (refused) return { error: refused };
   if (!input.acknowledgeBinding) return { error: "Confirm that your agent's counters are binding offers to sell." };
   let result: { ok: boolean; code: string | null };
   try {
@@ -149,6 +163,8 @@ export async function startBuyerAgent(input: {
 }): Promise<AgentState> {
   const { supabase, user } = await requireUser();
   if (!(await agentStepOpen("buyer"))) return { error: "The agent isn't available yet." };
+  const refused = await mandateRefusal(user.id);
+  if (refused) return { error: refused };
   if (!input.acknowledgeBinding) return { error: "Confirm that an accepted counter is a purchase you'll pay for." };
   if (!Number.isInteger(input.ceilingCents) || input.ceilingCents <= 0) return { error: "Enter the most you'll pay." };
 
@@ -183,4 +199,44 @@ export async function startBuyerAgent(input: {
   revalidatePath(`/listings/${input.listingId}`);
   capture(user.id, { event: "negotiate_for_me_started", props: { basis: input.ceilingBasis, style: input.style } });
   return { ok: "Your agent is negotiating. It tells you when there's a deal, and you pay within 24 hours." };
+}
+
+/**
+ * "Stop negotiating for me" (readiness 64): the buyer ends their own agent on
+ * one listing. 'revoked' is the status a member may set that means ended for
+ * good (agent_mandate_set_status accepts active, paused, revoked; 'ended' is
+ * the system's). The function cancels the open task and dismisses any
+ * pending card in the same transaction; offers already made stay as they
+ * are — an offer is the buyer's whether a person or their agent sent it.
+ */
+export async function stopBuyerAgent(_prev: AgentState, formData: FormData): Promise<AgentState> {
+  const { supabase, user } = await requireUser();
+  const mandateId = String(formData.get("mandate_id") ?? "");
+  if (!mandateId) return { error: "Missing mandate." };
+
+  // Owner-only RLS: another member's mandate simply isn't there.
+  const { data: mandate, error: readError } = await supabase
+    .from("agent_mandates")
+    .select("id, listing_id, scope, status")
+    .eq("id", mandateId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (readError) {
+    reportError("[agent] stop: mandate unreadable", { mandateId, code: readError.code });
+    return { error: "Couldn't check your agent just now. Try again." };
+  }
+  if (!mandate || mandate.scope !== "buyer") return { error: agentError("P0002", "That's no longer there. Reload the page.") };
+  if (mandate.status === "revoked" || mandate.status === "ended") return { ok: "Your agent has already stopped on this part." };
+
+  const { data: status, error } = await supabase.rpc("agent_mandate_set_status", { p_mandate: mandate.id, p_status: "revoked" });
+  if (error || status !== "revoked") {
+    reportError("[agent] stop buyer agent failed", { mandateId, code: error?.code ?? null, status: status ?? null });
+    return { error: agentError(error?.code, "Couldn't stop your agent. Try again.") };
+  }
+  capture(user.id, { event: "negotiate_for_me_stopped" });
+  revalidatePath("/agent");
+  revalidatePath(`/listings/${mandate.listing_id}`);
+  const offerId = String(formData.get("offer_id") ?? "");
+  if (offerId) revalidatePath(`/offers/${offerId}`);
+  return { ok: "Stopped. Your agent makes no more moves on this part; any offer it already sent stands until it expires." };
 }

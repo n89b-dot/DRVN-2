@@ -2,9 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { AgentHeader } from "@/components/commerce";
-import { ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
+import { Alert, ButtonLink, EmptyState, Foot, ObjectRow, SheetTabs, ThreadDivider, ThreadEvent, TileHead } from "@/components/ui";
 import { ApprovalActions } from "@/features/agent/approval-actions";
+import { StopBuyerAgent } from "@/features/agent/stop-buyer-agent";
 import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { AGENT_MODE_LABEL, agentModeAllowsChat } from "@/lib/agent/mode";
 import { AgentChat } from "@/features/agent/agent-chat";
 import { loadChat, parseAbout, resolveAbout } from "@/features/agent/chat-load";
 import { loadPriceNudges } from "@/features/agent/nudges";
@@ -122,10 +125,12 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
       .limit(40),
   ]);
 
+  // AG-7: Off hides the chat and the suggestions; Suggest keeps both but no mandate starts.
+  const mode = await loadAgentMode(user.id);
   // The chat (A3c), once its step is open (loadChat: the last 50, read as the member).
-  const chatOpen = await agentStepOpen("chat");
+  const chatOpen = (await agentStepOpen("chat")) && agentModeAllowsChat(mode);
   // A5: price-drop suggestions, with the seller's agent step.
-  const nudges = (await agentStepOpen("seller")) ? await loadPriceNudges(supabase, user.id, requestTime()) : [];
+  const nudges = (await agentStepOpen("seller")) && agentModeAllowsChat(mode) ? await loadPriceNudges(supabase, user.id, requestTime()) : [];
   const chat = chatOpen ? await loadChat(supabase, user.id) : [];
   // Opened from a listing or car on a phone ("Ask your agent"): the chip.
   const about = chatOpen ? await resolveAbout(supabase, user.id, parseAbout(aboutParam)) : null;
@@ -155,6 +160,10 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   const titleOf = (listingId: string | null) => (listingId && listingById.get(listingId)?.title) || "A listing";
   const mediaOf = (listingId: string | null) => ({ src: (listingId && cover.get(listingId)) || undefined, alt: titleOf(listingId) });
 
+  // The buyer's live mandate on a listing, for "Stop negotiating for me" on its Working row.
+  const buyerMandateByListing = new Map(
+    (mandates ?? []).filter((m) => m.scope === "buyer" && (m.status === "active" || m.status === "paused")).map((m) => [m.listing_id, m.id]),
+  );
   const needsTasks = new Set(pending.map((a) => a.task_id));
   const working = allTasks.filter((t) => !t.finished_at && !needsTasks.has(t.id));
   const done = allTasks.filter((t) => t.finished_at);
@@ -182,8 +191,19 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
         : task.scope === "buyer"
           ? "Opening an offer"
           : "Waiting for offers";
+    const buyerMandate = !task.finished_at && task.scope === "buyer" && task.listing_id ? buyerMandateByListing.get(task.listing_id) : undefined;
     return (
-      <ObjectRow key={task.id} as="li" href={href} media={mediaOf(task.listing_id)} title={titleOf(task.listing_id)} meta={meta} state={task.finished_at ? "done" : undefined} />
+      <ObjectRow
+        key={task.id}
+        as="li"
+        href={buyerMandate ? undefined : href}
+        mediaHref={buyerMandate ? href : undefined}
+        media={mediaOf(task.listing_id)}
+        title={titleOf(task.listing_id)}
+        meta={meta}
+        state={task.finished_at ? "done" : undefined}
+        actions={buyerMandate ? <StopBuyerAgent mandateId={buyerMandate} offerId={task.offer_id} compact /> : undefined}
+      />
     );
   };
 
@@ -257,6 +277,18 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
   return (
     <div className="wrap">
       <AgentHeader status={status} />
+
+      {mode !== "act" && (
+        // AG-7: the member turned it down in Settings; nothing new starts from here.
+        <Alert title={`Your agent is set to ${AGENT_MODE_LABEL[mode]}`} className="mb-6">
+          {mode === "off"
+            ? "It does nothing until you turn it back on. "
+            : "It answers and suggests, but won't negotiate or start anything for you. "}
+          <Link href="/settings#agent" className="jumplink">
+            Change it in Settings →
+          </Link>
+        </Alert>
+      )}
 
       {nothingYet && chatOpen ? (
         // First visit (design 08): what it does, in three groups, then the chat.

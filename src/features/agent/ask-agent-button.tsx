@@ -1,6 +1,6 @@
 "use client";
 
-import { ButtonLink, useSidePanel } from "@/components/ui";
+import { Button, ButtonLink, useSidePanel } from "@/components/ui";
 
 import type { AgentAboutRef } from "./agent-panel";
 
@@ -8,9 +8,33 @@ import type { AgentAboutRef } from "./agent-panel";
  * "Ask your agent" in an object's action row (A3c): on desktop it opens the
  * agent beside the page, about this listing or car; on a phone, or without
  * the panel, it goes to /agent with the same context chip, and Back returns.
+ *
+ * With `disabledReason` (AG-7: the member set their agent to Off) it is a
+ * disabled button that says why, instead of a link to a page that refuses.
  */
-export function AskAgentButton({ about, className }: { about: AgentAboutRef; className?: string }) {
+export function AskAgentButton({
+  about,
+  className,
+  disabledReason = null,
+}: {
+  about: AgentAboutRef;
+  className?: string;
+  /** Why the agent can't be asked right now — "Agent is off in Settings." */
+  disabledReason?: string | null;
+}) {
   const panel = useSidePanel();
+  if (disabledReason) {
+    return (
+      <span className={["inline-grid gap-1", className].filter(Boolean).join(" ")}>
+        <Button variant="ghost" disabled aria-describedby="ask-agent-disabled">
+          Ask your agent
+        </Button>
+        <span id="ask-agent-disabled" className="field__hint !mt-0">
+          {disabledReason}
+        </span>
+      </span>
+    );
+  }
   return (
     <ButtonLink
       href={`/agent?about=${about.kind}:${about.id}`}

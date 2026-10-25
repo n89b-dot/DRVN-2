@@ -11,6 +11,12 @@ import { markThreadMessagesRead } from "@/features/commerce/actions";
 import { markNotificationsReadForPage } from "@/lib/notifications-read";
 
 import { OfferRound as OfferRoundRow, StatusChip } from "@/components/commerce";
+import { StopBuyerAgent } from "@/features/agent/stop-buyer-agent";
+import { AskAgentButton } from "@/features/agent/ask-agent-button";
+import { agentStepOpen, agentTabOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsChat, agentModeRefusal } from "@/lib/agent/mode";
+import { agentPriceLine, type PriceRound } from "@/features/commerce/agent-price";
 import { CancelOrder } from "@/features/commerce/cancel-order";
 import { OfferDecision } from "@/features/commerce/offer-decision";
 import { offerHistoryFromRounds, type HistoryMandate, type OfferRound } from "@/features/commerce/offer-history";
@@ -110,10 +116,11 @@ export default async function OfferThreadPage({
         .eq("actor_role", "buyer")
         .in("kind", ["offer", "counter", "below_minimum"]),
       // The viewer's own agent limits here (owner-only, A2), for the one-line
-      // reasons under their agent's turns. The other side's never load.
+      // reasons under their agent's turns, and — while it is live — the
+      // buyer's "Stop negotiating for me". The other side's never load.
       supabase
         .from("agent_mandates")
-        .select("minimum_cents, target_cents, style")
+        .select("id, status, minimum_cents, target_cents, style")
         .eq("owner_id", user.id)
         .eq("listing_id", listing.id)
         .eq("scope", incoming ? "seller" : "buyer")
@@ -157,6 +164,14 @@ export default async function OfferThreadPage({
   }
   const canCancelBeforeCheckout =
     incoming && acceptedOrderId != null && acceptedOrderStatus === "pending" && !checkoutStarted;
+  // The buyer's running "Negotiate for me" on this part (readiness 64).
+  const buyerMandateLive = isBuyer && ownMandate != null && (ownMandate.status === "active" || ownMandate.status === "paused");
+  // AG-4: when an agent fixed the price the buyer is about to pay, say so here too.
+  const priceLine = isBuyer && offer.status === "accepted" && rounds?.length ? agentPriceLine(rounds as PriceRound[]) : null;
+  // "Ask your agent" about this offer (readiness 85), when the chat is open and the member's agent isn't off.
+  const agentChat = (await agentTabOpen()) && (await agentStepOpen("chat"));
+  const agentMode = agentChat ? await loadAgentMode(user.id) : "act";
+  const askDisabled = agentChat && !agentModeAllowsChat(agentMode) ? agentModeRefusal(agentMode) : null;
 
   const offersCount = await loadOffersNeedingAttention(supabase, user.id);
 
@@ -303,6 +318,20 @@ export default async function OfferThreadPage({
             <Link href={`/orders/${acceptedOrderId}`} className="jumplink">
               Order {acceptedOrderId.slice(0, 8).toUpperCase()} →
             </Link>
+            {priceLine && <span className="order__meta basis-full">{priceLine.text}</span>}
+          </div>
+        )}
+        {buyerMandateLive && ownMandate && (
+          <div className="mt-3 grid gap-2 border-t border-[color:var(--rule-soft)] pt-3">
+            <StopBuyerAgent mandateId={ownMandate.id} offerId={offer.id} />
+            <p className="field__hint !mt-0">
+              Your agent is negotiating this part within your max. Stopping it leaves this offer as it stands.
+            </p>
+          </div>
+        )}
+        {agentChat && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-[color:var(--rule-soft)] pt-3">
+            <AskAgentButton about={{ kind: "listing", id: listing.id }} disabledReason={askDisabled} />
           </div>
         )}
         {canCancelBeforeCheckout && acceptedOrderId && (

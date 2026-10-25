@@ -17,6 +17,8 @@ import type { ChecklistAnswer } from "@/lib/marketplace/grading";
 
 import { SellForm } from "../../../sell/sell-form";
 import { agentStepOpen } from "@/lib/agent/beta";
+import { loadAgentMode } from "@/lib/agent/member-mode";
+import { agentModeAllowsMandates, agentModeRefusal } from "@/lib/agent/mode";
 import { DeleteListing } from "../../delete-listing";
 import { ListingStatusActions } from "../../status-actions";
 import { reportError } from "@/lib/monitoring";
@@ -50,8 +52,10 @@ export default async function EditListingPage({
   }
   if (!listing || listing.seller_id !== user.id) notFound();
 
-  // The seller agent's live limits here (A3a), owner-only.
+  // The seller agent's live limits here (A3a), owner-only, and AG-7's mode.
   const agentBeta = await agentStepOpen("seller");
+  const agentMode = agentBeta ? await loadAgentMode(user.id) : "act";
+  const agentRefusal = agentModeAllowsMandates(agentMode) ? null : agentModeRefusal(agentMode);
   const { data: mandate } = agentBeta
     ? await supabase
         .from("agent_mandates")
@@ -188,6 +192,7 @@ export default async function EditListingPage({
       ) : (
         <SellForm
           agentBeta={agentBeta}
+          agentRefusal={agentRefusal}
           listingAgent={
             mandate
               ? {

@@ -1,5 +1,13 @@
 # Applying migrations
 
+## October 26 — AG-7, the member's agent mode (NOT applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261026130000_agent_member_mode.sql` | nowhere yet — not shared dev, not production |
+
+Apply after `20261025140000` (and after whichever `20261026100000`–`120000` files land first; it touches only `profiles`). One column, `profiles.agent_mode` (`'off' | 'suggest' | 'act'`, default `'act'`, Settings → Agent): Off disables every agent entry point, Suggest keeps the chat and price-drop suggestions but lets no mandate start, Act is today's behaviour. The owner writes it through the existing "users update own profile" policy plus a column update grant (0017's column-list model); there is no client select grant — the app reads it server-side for the signed-in member only. The worker is unchanged: it acts only on a live mandate, which the app refuses to start outside Act and ends when the member drops below it. Guard: `supabase/tests/agent_member_mode_guard.sql`.
+
 ## October 25 — "Ask about DRVN" cards and sentence-to-filters usage, A4 (shared dev project)
 
 | File | Applied to |

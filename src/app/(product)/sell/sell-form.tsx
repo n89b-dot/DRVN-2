@@ -141,6 +141,7 @@ export function SellForm({
   drvnShipping,
   defaultOfferFloorPct,
   agentBeta = false,
+  agentRefusal = null,
   listingAgent,
 }: {
   cars: { id: string; name: string; make?: string | null; model?: string | null; year?: number | null }[];
@@ -162,6 +163,8 @@ export function SellForm({
   defaultOfferFloorPct?: number | null;
   /** The agent beta is on (A3a): draw "Let DRVN handle offers". */
   agentBeta?: boolean;
+  /** AG-7: why the agent can't be turned on right now ("Agent is off in Settings."), or null when it can. */
+  agentRefusal?: string | null;
   /** This listing's live seller-agent limits, when there are some. */
   listingAgent?: ListingAgentLimits | null;
 }) {
@@ -1150,15 +1153,26 @@ export function SellForm({
                   id="sell-agent_on"
                   name="agent_on"
                   checked={agentOn}
+                  disabled={Boolean(agentRefusal) && !agentOn}
                   onChange={(e) => setAgentOn(e.target.checked)}
                   label="Let DRVN handle offers"
                 />
                 <Badge>Beta</Badge>
               </div>
-              <p className="field__hint !mt-0">
-                Your agent counters within the limits below, straight away, so offers don&apos;t sit waiting. It never accepts
-                for you: when an offer reaches your target, it tells you why and you tap Accept.
-              </p>
+              {agentRefusal && !agentOn ? (
+                // AG-7: the member turned their agent down in Settings; the box stays off here.
+                <p className="field__hint !mt-0">
+                  {agentRefusal}{" "}
+                  <Link href="/settings#agent" className="jumplink">
+                    Change it →
+                  </Link>
+                </p>
+              ) : (
+                <p className="field__hint !mt-0">
+                  Your agent counters within the limits below, straight away, so offers don&apos;t sit waiting. It never accepts
+                  for you: when an offer reaches your target, it tells you why and you tap Accept.
+                </p>
+              )}
               {agentOn && (
                 <>
                   <div className="field--row">

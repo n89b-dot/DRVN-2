@@ -4116,6 +4116,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          agent_mode: string
           avatar_url: string | null
           bio: string | null
           country: string | null
@@ -4141,6 +4142,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          agent_mode?: string
           avatar_url?: string | null
           bio?: string | null
           country?: string | null
@@ -4166,6 +4168,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          agent_mode?: string
           avatar_url?: string | null
           bio?: string | null
           country?: string | null

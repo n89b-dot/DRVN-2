@@ -13,6 +13,7 @@ import {
   Select,
   TextArea,
   TextField,
+  TileHead,
 } from "@/components/ui";
 import { NOTIFICATION_PREFS, NOTIFICATION_PREF_GROUPS, prefEnabled } from "@/lib/notification-prefs";
 import type { SavedCard } from "@/lib/payments/customers";
@@ -110,6 +111,7 @@ const SETTINGS_SECTIONS = [
   { id: "profile", label: "Profile" },
   { id: "notifications", label: "Notifications" },
   { id: "privacy", label: "Privacy" },
+  { id: "agent", label: "Agent" },
   { id: "payments", label: "Payments" },
   { id: "shipping", label: "Shipping" },
   { id: "shop", label: "Shop" },
@@ -166,6 +168,7 @@ export function SettingsPanel({
   connect,
   paymentsLive,
   privacySection,
+  agentSection,
   shippingSection,
   shopSection,
 }: {
@@ -176,6 +179,8 @@ export function SettingsPanel({
   paymentsLive: boolean;
   /** Settings → Privacy, server-rendered (reads the consent cookie + row). */
   privacySection?: React.ReactNode;
+  /** Settings → Agent (AG-7), server-rendered; absent while the agent isn't open to members. */
+  agentSection?: React.ReactNode;
   /** Settings → Shipping, server-rendered (0051 fulfillment profile). */
   shippingSection?: React.ReactNode;
   /** Settings → Shop, server-rendered (0056 shop profile). */
@@ -470,6 +475,14 @@ export function SettingsPanel({
         )}
 
         {active === "privacy" && privacySection}
+
+        {active === "agent" &&
+          (agentSection ?? (
+            <section id="agent" className="tile">
+              <TileHead label="Agent" />
+              <p className="field__hint max-w-[62ch]">Your agent isn&apos;t available yet. This is where you&apos;ll choose how far it may go.</p>
+            </section>
+          ))}
 
         {active === "payments" && (
         <section id="payments" className="tile tile--deep">

@@ -43,6 +43,9 @@ export type Profile = {
   suspended_reason: string | null;
   /** One-time importer content-rights acknowledgement (0047). */
   import_attested_at: string | null;
+  /** AG-7: how far the member's agent may go (20261026130000). Owner-written;
+   *  no client select grant — read server-side by loadAgentMode(). */
+  agent_mode: "off" | "suggest" | "act";
   created_at: string;
   updated_at: string;
 };

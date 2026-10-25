@@ -26,6 +26,8 @@ test.describe("buyer agent (A3b)", () => {
   const buyerEmail = `e2e-buyagent-buyer-${randomUUID()}@drvn.test`;
   const users: string[] = [];
   let listingId = "";
+  /** A second part, for the stop test: the first is sold by the end of the deal test. */
+  let stopListingId = "";
   let db: Client;
 
   test.beforeAll(async () => {
@@ -48,6 +50,11 @@ test.describe("buyer agent (A3b)", () => {
     listingId = listing.data.id;
     const image = await admin.from("listing_images").insert({ listing_id: listingId, url: "https://example.test/agent-brakes.webp", position: 0 });
     if (image.error) throw image.error;
+    const stopListing = await admin.from("listings").insert({ seller_id: users[0], title: `Agent coilovers ${randomUUID().slice(0, 8)}`, category: "brakes-suspension", subcategory: "coilovers", condition: "used", price_cents: 90000, shipping_cents: 0, currency: "USD", status: "active" }).select("id").single();
+    if (stopListing.error) throw stopListing.error;
+    stopListingId = stopListing.data.id;
+    const stopImage = await admin.from("listing_images").insert({ listing_id: stopListingId, url: "https://example.test/agent-coilovers.webp", position: 0 });
+    if (stopImage.error) throw stopImage.error;
 
     db = new Client({ host: "127.0.0.1", port: 54322, user: "supabase_admin", password: "postgres", database: "postgres" });
     await db.connect();
@@ -157,10 +164,52 @@ test.describe("buyer agent (A3b)", () => {
     await sellerCounter(seller, offerId, "1280");
     await agentPass();
     expect((await rounds(offerId)).at(-1)).toMatchObject({ kind: "accept", actor_role: "buyer", by_agent: true });
-    const order = await db.query<{ status: string; subtotal_cents: number }>("select status, subtotal_cents from public.orders where origin_offer_id = $1", [offerId]);
+    const order = await db.query<{ id: string; status: string; subtotal_cents: number }>("select id, status, subtotal_cents from public.orders where origin_offer_id = $1", [offerId]);
     expect(order.rows[0]).toMatchObject({ status: "pending", subtotal_cents: 128000 });
     const notice = await db.query<{ href: string }>("select href from public.notifications where user_id = $1 and kind = 'offer_agent_deal_reached'", [users[1]]);
     expect(notice.rows).toHaveLength(1);
     expect(notice.rows[0].href).toMatch(/\/orders\/[0-9a-f-]+\/checkout$/);
+
+    // AG-4 (readiness 65): the checkout says the agent set the price, and so does the offer.
+    await buyer.goto(notice.rows[0].href);
+    await expect(buyer.locator("#main").getByText(/Price set by your agent on .*, within the max you set\./)).toBeVisible();
+    await buyer.goto(`/offers/${offerId}`);
+    await expect(buyer.locator("#main").getByText(/Price set by your agent on/)).toBeVisible();
+  });
+
+  test("a buyer can stop negotiating, and the stopped agent makes no more moves", async ({ browser }) => {
+    const buyer = await signedIn(browser, buyerEmail);
+
+    await buyer.goto(`/listings/${stopListingId}`);
+    await buyer.getByRole("button", { name: "Make an offer" }).first().click();
+    await buyer.getByRole("button", { name: "Negotiate for me" }).click();
+    await buyer.getByLabel(/Your max — private/).fill("800");
+    await buyer.getByLabel(/I understand an accepted counter is a purchase/).check();
+    await buyer.getByRole("button", { name: "Start negotiating" }).click();
+    await expect(buyer.getByText(/Your agent is negotiating/)).toBeVisible();
+
+    // The agent opens; the offer page carries the way out.
+    await agentPass();
+    const offer = await db.query<{ id: string }>("select id from public.offers where listing_id = $1 and buyer_id = $2", [stopListingId, users[1]]);
+    const offerId = offer.rows[0].id;
+    await buyer.goto(`/offers/${offerId}`);
+    await buyer.getByRole("button", { name: "Stop negotiating for me" }).click();
+    await buyer.getByRole("button", { name: "Stop my agent" }).click();
+    await expect(buyer.getByText(/^Stopped\./)).toBeVisible();
+
+    // readiness 64: the mandate is the member's "revoked", the task is cancelled, and the offer it sent stands.
+    const mandate = await db.query<{ status: string; ended_at: string | null }>("select status, ended_at from public.agent_mandates where listing_id = $1 and owner_id = $2", [stopListingId, users[1]]);
+    expect(mandate.rows).toHaveLength(1);
+    expect(mandate.rows[0].status).toBe("revoked");
+    expect(mandate.rows[0].ended_at).not.toBeNull();
+    const task = await db.query<{ status: string; outcome: string | null }>("select status, outcome from public.agent_tasks where listing_id = $1 and owner_id = $2", [stopListingId, users[1]]);
+    expect(task.rows[0]).toMatchObject({ status: "cancelled", outcome: "turned off by owner" });
+    expect((await rounds(offerId)).map((row) => row.kind)).toEqual(["offer"]);
+
+    // Nothing is left for the worker, and the control is gone from the offer.
+    await agentPass();
+    expect(await rounds(offerId)).toHaveLength(1);
+    await buyer.goto(`/offers/${offerId}`);
+    await expect(buyer.getByRole("button", { name: "Stop negotiating for me" })).toHaveCount(0);
   });
 });
