@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ButtonLink, useSidePanel } from "@/components/ui";
+import { Badge, Button, ButtonLink, useSidePanel } from "@/components/ui";
 
 import type { AgentAboutRef } from "./agent-panel";
 
@@ -26,9 +26,12 @@ export function AskAgentButton({
   if (disabledReason) {
     return (
       <span className={["inline-grid gap-1", className].filter(Boolean).join(" ")}>
-        <Button variant="ghost" disabled aria-describedby="ask-agent-disabled">
-          Ask your agent
-        </Button>
+        <span className="inline-flex items-center gap-2">
+          <Button variant="ghost" disabled aria-describedby="ask-agent-disabled">
+            Ask your agent
+          </Button>
+          <Badge>Beta</Badge>
+        </span>
         <span id="ask-agent-disabled" className="field__hint !mt-0">
           {disabledReason}
         </span>
@@ -36,17 +39,20 @@ export function AskAgentButton({
     );
   }
   return (
-    <ButtonLink
-      href={`/agent?about=${about.kind}:${about.id}`}
-      variant="ghost"
-      className={className}
-      onClick={(event) => {
-        if (event.metaKey || event.ctrlKey || event.shiftKey || !panel.available("agent")) return;
-        event.preventDefault();
-        panel.open("agent", about);
-      }}
-    >
-      Ask your agent
-    </ButtonLink>
+    <span className={["inline-flex items-center gap-2", className].filter(Boolean).join(" ")}>
+      <ButtonLink
+        href={`/agent?about=${about.kind}:${about.id}`}
+        variant="ghost"
+        className={className?.includes("w-full") ? "flex-1" : undefined}
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || !panel.available("agent")) return;
+          event.preventDefault();
+          panel.open("agent", about);
+        }}
+      >
+        Ask your agent
+      </ButtonLink>
+      <Badge>Beta</Badge>
+    </span>
   );
 }

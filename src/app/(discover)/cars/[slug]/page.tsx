@@ -414,6 +414,7 @@ export default async function CarPage({
         initialTab={resolveView(view)}
         showcase={showcase}
         evolution={evolution}
+        agentAsk={agentChat ? { disabledReason: askDisabled } : null}
       />
 
       {/* The page people land on from a shared link — the moment to say the

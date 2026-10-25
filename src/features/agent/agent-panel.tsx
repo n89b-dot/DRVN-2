@@ -3,7 +3,7 @@
 import { unstable_rethrow, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ButtonLink, SidePanel, SkeletonRows, useSidePanel } from "@/components/ui";
+import { Badge, ButtonLink, SidePanel, SkeletonRows, useSidePanel } from "@/components/ui";
 
 import { AgentChat } from "./agent-chat";
 import { openAgentChat, type ChatMessage } from "./chat";
@@ -29,7 +29,11 @@ export function AgentPanel() {
     <SidePanel
       panelKey="agent"
       label="Your agent"
-      title="Agent"
+      title={
+        <>
+          Agent <Badge>Beta</Badge>
+        </>
+      }
       actions={
         <ButtonLink href={fullHref} variant="quiet">
           Full page

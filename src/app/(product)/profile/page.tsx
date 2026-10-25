@@ -104,6 +104,7 @@ export default async function ProfilePage({
         view={view}
         contactLinks={rest}
         basePath="/profile"
+        savedHref="/saved"
         initialTab={viewParam}
         storeNote={profile?.store_note}
         partsCount={partsForSale}
