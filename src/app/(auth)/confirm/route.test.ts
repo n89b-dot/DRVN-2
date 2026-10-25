@@ -115,3 +115,42 @@ describe("member links work in any browser", () => {
     expect(response.headers.get("location")).toBe(`${SITE}/orders`);
   });
 });
+
+// A member changing their sign-in email (readiness 53): the link used to carry
+// Supabase's PKCE address and land on the home page with no word of what had
+// happened. It now carries a token hash and comes back to Settings.
+describe("email change links land on Settings", () => {
+  it("offers the confirm page for an email_change link and takes Settings out of the return address", async () => {
+    const redirectTo = encodeURIComponent(`${SITE}/confirm?next=${encodeURIComponent("/settings?changed=email")}`);
+    const response = await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&redirect_to=${redirectTo}`));
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain("Confirm the change");
+    expect(html).toContain('name="type" value="email_change"');
+    expect(html).toContain('name="flow" value="email_change"');
+    expect(html).toContain('name="next" value="/settings?changed=email"');
+  });
+
+  it("falls back to Settings when the return address is missing, off-site or not Settings", async () => {
+    const bare = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change`))).text();
+    expect(bare).toContain('name="next" value="/settings?changed=email"');
+    const offsite = encodeURIComponent("https://evil.example/confirm?next=/settings?changed=email");
+    const stolen = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&redirect_to=${offsite}`))).text();
+    expect(stolen).toContain('name="next" value="/settings?changed=email"');
+    const elsewhere = await (await GET(new Request(`${SITE}/confirm?token_hash=abc&type=email_change&next=/orders`))).text();
+    expect(elsewhere).toContain('name="next" value="/settings?changed=email"');
+  });
+
+  it("verifies the token as an email change and lands on Settings with the notice", async () => {
+    const response = await POST(post({ token_hash: "abc", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(verifyOtp).toHaveBeenCalledWith({ token_hash: "abc", type: "email_change" });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`${SITE}/settings?changed=email`);
+  });
+
+  it("sends a failed email-change verification to the sign-in page like every other link", async () => {
+    verifyOtp.mockResolvedValue({ error: { message: "expired" } });
+    const response = await POST(post({ token_hash: "abc", type: "email_change", flow: "email_change", next: "/settings?changed=email" }));
+    expect(response.headers.get("location")).toContain("/login?message=auth-error");
+  });
+});

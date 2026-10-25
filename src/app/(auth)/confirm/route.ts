@@ -10,15 +10,19 @@ function origin(request: Request) { return new URL(process.env.NEXT_PUBLIC_SITE_
 // PKCE code that only the browser that asked can exchange: a reset or signup
 // email opened on a phone failed.)
 //
-//   magiclink  a guest's order link while "Confirm email" is off
-//   email      the Confirm signup email: a guest's order link once "Confirm
-//              email" is on, or a member confirming a new account
-//   recovery   a password reset
+//   magiclink     a guest's order link while "Confirm email" is off
+//   email         the Confirm signup email: a guest's order link once "Confirm
+//                 email" is on, or a member confirming a new account
+//   recovery      a password reset
+//   email_change  a member confirming a new sign-in email (sent to both the
+//                 old and the new address; the change completes when both
+//                 have been opened). Lands back on Settings.
 //
 // Nothing else is accepted.
-const LINK_TYPES = new Set(["magiclink", "email", "recovery"]);
-type LinkType = "magiclink" | "email" | "recovery";
-type Flow = "orders" | "signup" | "recovery";
+const LINK_TYPES = new Set(["magiclink", "email", "recovery", "email_change"]);
+type LinkType = "magiclink" | "email" | "recovery" | "email_change";
+type Flow = "orders" | "signup" | "recovery" | "email_change";
+const EMAIL_CHANGE_LANDING = "/settings?changed=email";
 
 /**
  * The member emails carry the address the app asked Supabase to return to
@@ -38,6 +42,13 @@ function nextFromRedirectTo(value: string | null, site: string): string {
 /** What the link is for, and where it leads once verified. */
 function linkPlan(type: string, next: string | null, redirectTo: string | null, flow: string | null, site: string): { flow: Flow; next: string } {
   if (type === "recovery") return { flow: "recovery", next: "/login/reset" };
+  if (type === "email_change") {
+    // Only Settings, however the link was built: a destination carried in
+    // the address Supabase was asked to return to is used when it is one of
+    // Settings' own, otherwise the account section.
+    const carried = safeRedirectPath(next, "") || nextFromRedirectTo(redirectTo, site);
+    return { flow: "email_change", next: carried.startsWith("/settings") ? carried : EMAIL_CHANGE_LANDING };
+  }
   if (type === "email" && (flow === "signup" || redirectTo)) {
     return { flow: "signup", next: safeRedirectPath(next, "") || nextFromRedirectTo(redirectTo, site) };
   }
@@ -48,6 +59,7 @@ const COPY: Record<Flow, { title: string; heading: string; body: string; button:
   orders: { title: "Open your orders", heading: "Open your DRVN orders", body: "Continue to sign in securely. This link can be used once.", button: "Continue to orders" },
   signup: { title: "Confirm your email", heading: "Confirm your email", body: "Continue to finish setting up your DRVN account. This link can be used once.", button: "Confirm and continue" },
   recovery: { title: "Reset your password", heading: "Reset your DRVN password", body: "Continue to choose a new password. This link can be used once.", button: "Choose a new password" },
+  email_change: { title: "Confirm your new email", heading: "Confirm your new DRVN email", body: "Continue to confirm the change to your sign-in email. Both the old and the new address receive a link; the change completes once both have been opened. This link can be used once.", button: "Confirm the change" },
 };
 
 /** GET/HEAD/prefetch never consumes a token or creates a session. */

@@ -6,11 +6,13 @@ const mocks = vi.hoisted(() => ({
   reportError: vi.fn(),
   signInWithPassword: vi.fn(),
   updateUser: vi.fn(),
+  deliverNotification: vi.fn(),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/monitoring", () => ({ reportError: mocks.reportError }));
+vi.mock("@/lib/notifications/deliver", () => ({ deliverNotification: mocks.deliverNotification }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: {
@@ -45,6 +47,43 @@ beforeEach(() => {
   });
   mocks.signInWithPassword.mockResolvedValue({ error: null });
   mocks.updateUser.mockResolvedValue({ error: null });
+  mocks.deliverNotification.mockResolvedValue("delivered");
+  process.env.NEXT_PUBLIC_SITE_URL = "https://drvn.example";
+});
+
+// Readiness 53: the confirmation link lands on Settings, and a changed
+// password is something the owner hears about.
+describe("email change and password change notices", () => {
+  it("asks Supabase to return the email-change link to /confirm with Settings as the destination", async () => {
+    await expect(changeEmail({}, emailForm("new@drvn.test"))).resolves.toEqual({
+      ok: "Confirm the change from the link we sent to new@drvn.test.",
+    });
+    expect(mocks.updateUser).toHaveBeenCalledWith(
+      { email: "new@drvn.test" },
+      { emailRedirectTo: `https://drvn.example/confirm?next=${encodeURIComponent("/settings?changed=email")}` },
+    );
+  });
+
+  it("notifies the owner once a password change goes through", async () => {
+    mocks.signInWithPassword
+      .mockResolvedValueOnce({ error: null }) // current password checks out
+      .mockResolvedValue({ error: { code: "invalid_credentials" } });
+    await expect(changePassword({}, passwordForm("current-pass", "brand-new-pass"))).resolves.toEqual({ ok: "Password updated." });
+    expect(mocks.deliverNotification).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", kind: "password_changed", href: "/settings#account" }));
+  });
+
+  it("does not notify when the change was refused", async () => {
+    mocks.signInWithPassword.mockResolvedValue({ error: { code: "invalid_credentials" } });
+    const result = await changePassword({}, passwordForm("wrong", "brand-new-pass"));
+    expect(result.error).toBe("Your current password isn't right.");
+    expect(mocks.deliverNotification).not.toHaveBeenCalled();
+  });
+
+  it("still reports success when the notice itself fails", async () => {
+    mocks.deliverNotification.mockRejectedValue(new Error("outbox down"));
+    await expect(changePassword({}, passwordForm("current-pass", "brand-new-pass"))).resolves.toEqual({ ok: "Password updated." });
+    expect(mocks.reportError).toHaveBeenCalledWith("[settings] password-changed notice failed", expect.any(Object));
+  });
 });
 
 describe("account setting recovery", () => {
@@ -84,7 +123,7 @@ describe("account setting recovery", () => {
     await expect(changeEmail({}, form)).resolves.toEqual({
       ok: "Confirm the change from the link we sent to new@drvn.test.",
     });
-    expect(mocks.updateUser).toHaveBeenCalledWith({ email: "new@drvn.test" });
+    expect(mocks.updateUser).toHaveBeenCalledWith({ email: "new@drvn.test" }, expect.objectContaining({ emailRedirectTo: expect.stringContaining("/confirm?next=") }));
   });
 
   it("reports a thrown email transport failure without claiming success", async () => {

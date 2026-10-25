@@ -9,6 +9,7 @@ import { listSavedCards } from "@/lib/payments/customers";
 import { getPaymentProvider, paymentsAreLive } from "@/lib/payments/provider";
 import { integratedShippingEnabled } from "@/lib/shipping/provider";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
+import { Alert } from "@/components/ui";
 
 import { logout } from "@/app/(auth)/actions";
 
@@ -20,10 +21,15 @@ export const metadata = { title: "Settings - DRVN" };
 
 type ProfileLink = { label: string; url: string };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ changed?: string }>;
+}) {
   const supabase = await getPageClient();
   const user = await getViewer();
   if (!user) redirect("/login");
+  const { changed } = await searchParams;
 
   // One parallel round. These used to run one after another (profile →
   // Connect → floor → shop → cards/fulfilment → consent), seven trips deep.
@@ -66,6 +72,11 @@ export default async function SettingsPage() {
   // fields would seed as empty strings and Save would blank the profile.
   if (!profile) throw new Error("Settings could not load your profile.");
 
+  // Landing from an email-change link (/confirm, readiness 53). Both addresses
+  // must confirm, so the notice says whether the change is done or still
+  // waiting on the other link; the auth user is read only on this landing.
+  const emailNotice = changed === "email" ? await emailChangeNotice(supabase) : null;
+
   const links = (Array.isArray(profile?.links) ? profile!.links : []) as ProfileLink[];
 
   return (
@@ -75,6 +86,11 @@ export default async function SettingsPage() {
     // own — without it the section register scrolls with no bleed and stops
     // dead at the column edge, saying nothing about the sections to its right.
     <div className="mx-auto w-full max-w-[900px] px-6 pb-10 [--gutter:24px]">
+      {emailNotice && (
+        <Alert tone={emailNotice.done ? "ok" : "default"} title={emailNotice.title} role="status" className="mb-6">
+          {emailNotice.body}
+        </Alert>
+      )}
       <SettingsPanel
         paymentsLive={paymentsAreLive()}
         savedCards={savedCards}
@@ -139,4 +155,25 @@ export default async function SettingsPage() {
       />
     </div>
   );
+}
+
+async function emailChangeNotice(
+  supabase: Awaited<ReturnType<typeof getPageClient>>,
+): Promise<{ done: boolean; title: string; body: string } | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  if (user.new_email) {
+    return {
+      done: false,
+      title: "One link confirmed",
+      body: `The change to ${user.new_email} completes once the link sent to the other address has been opened too.`,
+    };
+  }
+  return {
+    done: true,
+    title: "Sign-in email updated",
+    body: `You now sign in with ${user.email ?? "your new address"}.`,
+  };
 }
