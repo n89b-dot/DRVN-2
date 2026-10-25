@@ -146,7 +146,9 @@ export function AgentChat({
   return (
     <section ref={section} className="agentchat mt-6" aria-label="Chat with your agent">
       {messages.length > 0 && (
-        <MessageThread>
+        // A polite live log: the agent's reply is announced when it lands,
+        // and focus stays in the composer.
+        <MessageThread live>
           {messages.map((message) => (
             <MessageRun key={message.id} me={message.role === "member"} who={message.role === "member" ? "You" : "Agent"} when={message.created_at} whenLabel={time(message.created_at)}>
               <MessageBubble photos={message.images.length ? message.images : undefined}>{message.body}</MessageBubble>

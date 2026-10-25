@@ -14,8 +14,22 @@ import { cx } from "@/lib/format";
  */
 
 /** Conversation container — ruled message column. */
-export function MessageThread({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx("thread", className)}>{children}</div>;
+export function MessageThread({
+  className,
+  live = false,
+  children,
+}: {
+  className?: string;
+  /** A thread that grows while you watch (the agent's replies): a polite
+   *  live log, so a new row is announced without moving focus. */
+  live?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx("thread", className)} role={live ? "log" : undefined} aria-live={live ? "polite" : undefined} aria-relevant={live ? "additions" : undefined}>
+      {children}
+    </div>
+  );
 }
 
 /** Centered mono divider inside a thread — day buckets, section breaks. */

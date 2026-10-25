@@ -810,20 +810,23 @@
       border-top: 1px solid var(--rule-mid);
     }
     /* The agent's own chat keeps the bar (A3 design 02): its composer sits
-       just above it instead of taking the edge. */
+       just above it instead of taking the edge. The desktop side panel's
+       chatbox never counts: the panel keeps its thread mounted while closed
+       and below 1081px (where it isn't drawn), so without this the bar went
+       missing on a phone-width window that had once opened the panel. */
     .bnav[hidden],
     body:has(.buybar, .savebar) .bnav,
-    body:has(.chatbox):not(:has(#main .agentchat)) .bnav {
+    body:has(.chatbox:not(.sidepanel *)):not(:has(#main .agentchat)) .bnav {
       display: none;
     }
     #main .agentchat .chatbox {
       bottom: calc(56px + 1px + env(safe-area-inset-bottom, 0px));
     }
-    body:not(:has(.buybar, .savebar, .chatbox)) .shell:has(.bnav:not([hidden])) .shell__body,
+    body:not(:has(.buybar, .savebar, .chatbox:not(.sidepanel *))) .shell:has(.bnav:not([hidden])) .shell__body,
     body:has(#main .agentchat) .shell:has(.bnav:not([hidden])) .shell__body {
       padding-bottom: calc(var(--bottom-surface-h, 80px) + env(safe-area-inset-bottom, 0px));
     }
-    body:not(:has(.buybar, .savebar, .chatbox)):has(.bnav:not([hidden])) .toast {
+    body:not(:has(.buybar, .savebar, .chatbox:not(.sidepanel *))):has(.bnav:not([hidden])) .toast {
       bottom: calc(var(--bottom-surface-h, 80px) + 8px + env(safe-area-inset-bottom, 0px));
     }
   }
