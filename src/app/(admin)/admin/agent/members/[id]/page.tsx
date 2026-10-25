@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ObjectRow, PageHead, TileHead } from "@/components/ui";
+import { writeAudit } from "@/lib/admin/audit";
 import { getAdminContext } from "@/lib/admin/guard";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +19,11 @@ const when = (iso: string | null) =>
  * their limits with versions, tasks, the record of what the agent did, and
  * its approvals — read-only. Their chat isn't loaded here; it opens only
  * through the audited gate below, for an abuse report or a dispute.
+ *
+ * The numbers on their limits are a seller's floor and a buyer's ceiling
+ * (agent-data-rules.md §1: admin surfaces show ids, states and counts). Only
+ * a full admin sees them, and each view writes one audit row first; a viewer
+ * sees the states and versions without the amounts.
  */
 export default async function AdminAgentMember({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,6 +32,15 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("id, username, display_name").eq("id", id).maybeSingle();
   if (!profile) notFound();
+  let showLimits = context.role === "admin";
+  if (showLimits) {
+    try {
+      await writeAudit(admin, { actorId: context.userId, action: "agent.limits_viewed", subjectType: "user", subjectId: id, reason: "support view of agent limits" });
+    } catch {
+      // Unrecorded means unseen.
+      showLimits = false;
+    }
+  }
 
   const [mandates, tasks, events, approvals] = await Promise.all([
     admin.from("agent_mandates").select("id, scope, listing_id, status, version, minimum_cents, target_cents, ceiling_cents, ceiling_basis, style, created_at, ended_at").eq("owner_id", id).order("created_at", { ascending: false }).limit(50),
@@ -40,16 +55,18 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
   const titleOf = new Map((listings ?? []).map((l) => [l.id, l.title]));
 
   const limitsLine = (m: NonNullable<typeof mandates.data>[number]) =>
-    m.scope === "seller"
-      ? `minimum ${m.minimum_cents != null ? formatPrice(m.minimum_cents) : "the listing's"} · target ${m.target_cents != null ? formatPrice(m.target_cents) : "asking"} · ${m.style}`
-      : `max ${m.ceiling_cents != null ? formatPrice(m.ceiling_cents) : "—"} on ${m.ceiling_basis === "total" ? "item + shipping" : "the item"} · ${m.style}`;
+    !showLimits
+      ? `${m.style} · amounts shown to full admins only`
+      : m.scope === "seller"
+        ? `minimum ${m.minimum_cents != null ? formatPrice(m.minimum_cents) : "the listing's"} · target ${m.target_cents != null ? formatPrice(m.target_cents) : "asking"} · ${m.style}`
+        : `max ${m.ceiling_cents != null ? formatPrice(m.ceiling_cents) : "—"} on ${m.ceiling_basis === "total" ? "item + shipping" : "the item"} · ${m.style}`;
 
   return (
     <>
       <PageHead
         eyebrow={<Link href="/admin/agent" className="jumplink">Agent</Link>}
         title={profile.display_name ?? `@${profile.username ?? "member"}`}
-        sub="Their agent, read-only. Pause it from the agent page's targeted switches (one member's agent)."
+        sub={`Their agent, read-only. Pause it from the agent page's targeted switches (one member's agent).${showLimits ? " Viewing their amounts is recorded in the audit log." : ""}`}
       />
 
       <section className="tile mb-8" aria-label="Limits">
@@ -96,7 +113,7 @@ export default async function AdminAgentMember({ params }: { params: Promise<{ i
             const result = (e.result ?? {}) as Record<string, unknown>;
             const what =
               e.kind === "move"
-                ? `${String(inputs.kind ?? "move")}${typeof inputs.amount_cents === "number" ? ` ${formatPrice(inputs.amount_cents)}` : ""}`
+                ? `${String(inputs.kind ?? "move")}${showLimits && typeof inputs.amount_cents === "number" ? ` ${formatPrice(inputs.amount_cents)}` : ""}`
                 : e.kind === "decision"
                   ? `held: ${String(result.reason ?? result.decision ?? "")}`
                   : e.kind === "approval"
