@@ -75,8 +75,13 @@ runbook: `docs/production-runbook.md` §13.
   the moves both sides see), lets `negotiate.ts` decide, and makes the one
   call. A refusal is handed back with its code (`agent_finish_job`), which
   becomes telemetry. `/api/jobs/agent` runs reconcile, retention, one pass
-  (only with `AGENT_WORKER_DATABASE_URL`) and the health check; it isn't
-  scheduled until A3a.
+  (only with `AGENT_WORKER_DATABASE_URL`) and the health check.
+  `20261026100000_agent_hosted_schedule.sql` schedules it as the
+  `drvn-agent-worker` pg_cron job every 5 minutes through
+  `invoke_remediation_worker('agent')`, and gives `worker_health_snapshot` an
+  `agent` family on a 30-minute budget; the runbook's §4 table lists all
+  eighteen jobs. Before that migration is applied the route runs only when
+  called by hand.
 - **Kill switches** (`/admin/agent`, `admin_set_agent_control`): all, buyer
   side, seller side, one member's agent, one mandate, one listing, one
   account. Seeded with `all` on. Existing offers and orders are never touched.

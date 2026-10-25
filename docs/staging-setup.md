@@ -100,9 +100,10 @@ every table in `public`.
      → both. (0020 swallows a pg_net install failure with a NOTICE; if it is
      missing, enable it under Database → Extensions and re-apply
      `0020_transfer_scheduling.sql`.)
-   - `select jobname, schedule from cron.job order by 1;` → the 19 `drvn-*`
-     jobs the migrations schedule (as of 7 Nov 2026; the same list as on
-     shared dev).
+   - `select jobname, schedule from cron.job order by 1;` → the twenty
+     `drvn-*` jobs in runbook §4 (`private.scheduled_job_inventory()`).
+     Staging listed 19 on 7 Nov 2026, before `20261107200300` added
+     `drvn-saved-search-digests`; apply it and the count is twenty.
    - `select id, public from storage.buckets order by 1;` → `account-exports`
      f, `activity-images` t, `avatars` t, `car-images` t, `dispute-evidence`
      f, `listing-images` t, `message-photos` f. **Buckets and their policies
@@ -182,7 +183,12 @@ Emails:
 | `EASYPOST_API_KEY` | EasyPost **test** key (`EZTK…`), step 6 |
 | `EASYPOST_WEBHOOK_SECRET` | step 6 |
 | `SHIPPING_MODE` + `SHIPPING_ALLOW_STUB_IN_PRODUCTION=true` | only if the candidate declares `shippingMode: "stub"` |
-| `ANTHROPIC_API_KEY` | optional (step 0.3), from the Anthropic console |
+| `ANTHROPIC_API_KEY` | optional (step 0.3), from the Anthropic console. One key serves the listing importer and the agent; unset, both report disabled |
+| `AGENT_MODEL`, `AGENT_AI_MODE`, `AGENT_MAX_ITERATIONS` | optional. Model (default `claude-opus-5-5`; one of the priced models in `src/lib/ai/config.ts`), mode `anthropic` \| `stub` \| `disabled`, tool-loop cap 1–20 (default 8). Runbook §4 has each row |
+| `AGENTS_BETA` | `on` only if staging exercises the agent; the steps still open from `/admin/agent` (runbook §13e) |
+| `AGENT_WORKER_DATABASE_URL` | only if staging exercises the agent: the `agent_worker` login through the transaction pooler, after runbook §13a. Without it `/api/jobs/agent` runs no worker pass |
+| `LISTING_IMPORT_MODEL`, `LISTING_IMPORT_AI_MODE` | optional importer model and mode override. Never set `LISTING_IMPORT_ALLOW_STUB_IN_PRODUCTION`, `LISTING_IMPORT_ALLOW_PRIVATE_HOSTS` or `LISTING_IMPORT_PUBLIC_BROWSER_ENABLED` on staging — the last two are ignored in production anyway |
+| `DRVN_PUBLIC_CACHE` | leave unset (`off` is for the isolated e2e stack) |
 | `TYPESENSE_URL`, `TYPESENSE_API_KEY` | optional (step 0.3) |
 | `POSTHOG_KEY`, `POSTHOG_HOST` | optional (step 0.3) |
 
@@ -269,6 +275,11 @@ GitHub → repository → Settings → Secrets and variables → Actions:
 - variable `DRVN_MONITOR_ENABLED` = `true`
 - variable `DRVN_MONITOR_ORIGIN` = the staging origin
 - secret `DRVN_MONITOR_SECRET` = the staging `CRON_SECRET`
+
+The `--watch` mode's variables (`DRVN_MONITOR_ALERT_URL`,
+`DRVN_MONITOR_HEARTBEAT_URL`, `DRVN_MONITOR_STATE_FILE`,
+`DRVN_MONITOR_INTERVAL_MS`) belong to a separately run monitor host, not to
+this workflow or the hosting project (runbook §9b).
 
 Run "Independent worker monitor" once by hand (Actions → workflow_dispatch).
 It fails while any daily family has never run — expected until after the
