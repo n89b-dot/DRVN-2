@@ -68,7 +68,9 @@ export async function decideAgentApproval(_prev: AgentState, formData: FormData)
     }
     return { ok: "Accepted. The buyer has 24 hours to pay." };
   }
-  return { ok: "Dismissed. Your agent keeps going within your limits." };
+  // agent_approval_decide('dismiss') puts the task back to waiting_for_event
+  // and queues nothing: the agent moves again only when the other side does.
+  return { ok: "Dismissed. Your agent waits for the next move on this offer." };
 }
 
 /**

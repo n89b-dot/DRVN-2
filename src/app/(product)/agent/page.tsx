@@ -267,7 +267,10 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             <ObjectRow title="Buying" meta="Negotiates a part for you up to your private max. Start it from a listing's Make an offer." href="/marketplace" />
             <ObjectRow title="Garage" meta="Answers what fits your car and what parts sell for. Ask below." />
           </div>
-          <p className="field__hint mt-3">Nothing to set up first. It never accepts for you, and it never messages anyone else.</p>
+          <p className="field__hint mt-3">
+            Nothing to set up first. Selling, it never accepts for you. Buying, it can accept a seller&apos;s counter within your
+            max — every other step asks you. It never messages anyone else.
+          </p>
         </section>
       ) : nothingYet ? (
         <EmptyState
@@ -278,8 +281,9 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
             </ButtonLink>
           }
         >
-          Turn on “Let DRVN handle offers” on a listing: set your minimum and target, and your agent counters for you. It never
-          accepts for you, and it never messages the buyer.
+          Turn on “Let DRVN handle offers” on a listing: set your minimum and target, and your agent counters for you. Selling,
+          it never accepts for you; buying, it can accept a seller&apos;s counter within your max. It never messages the other
+          side.
         </EmptyState>
       ) : (
         <>
@@ -337,7 +341,7 @@ export default async function AgentPage({ searchParams }: { searchParams: Promis
 
       {chatOpen && <AgentChat initial={chat} about={about} jobs={await agentStepOpen("jobs")} userId={user.id} />}
 
-      <Foot left="DRVN — your agent never accepts for you and never messages the other side" right={<Link href="/offers">All offers →</Link>} />
+      <Foot left="DRVN — your agent acts only within your limits and never messages the other side" right={<Link href="/offers">All offers →</Link>} />
     </div>
   );
 }
