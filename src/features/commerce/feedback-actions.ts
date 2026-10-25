@@ -7,6 +7,7 @@ import { reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { CommerceState } from "./action-types";
+import { reviewRefusalMessage } from "./review-refusal";
 import { isSuspended, SUSPENDED_MESSAGE } from "@/lib/suspension";
 
 async function requireUser() {
@@ -101,6 +102,10 @@ export async function submitReview(_prev: CommerceState, formData: FormData): Pr
       }
       return { error: "You've already reviewed this order." };
     }
+    // The database refused it for a reason the member can act on (an
+    // unconfirmed guest buyer, 20261005101000): say that, not "try again".
+    const refused = reviewRefusalMessage(error);
+    if (refused) return { error: refused };
     reportError("[commerce] review insert could not be confirmed", {
       orderId,
       error,
