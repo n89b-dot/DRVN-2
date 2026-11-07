@@ -11,14 +11,14 @@ vi.mock("@/lib/monitoring", () => ({ reportError: vi.fn() }));
 vi.mock("@/lib/vehicles/catalog", () => ({ resolveVehicleFilter: vi.fn() }));
 
 const MISSING = { data: null, count: null, error: { code: "PGRST202", message: "Could not find the function" } };
-const NEW_FUNCTIONS = ["marketplace_page", "marketplace_count", "listing_watch_counts", "seller_active_counts", "search_word_corrections"];
+const NEW_FUNCTIONS = ["marketplace_page", "marketplace_count", "listing_watch_counts", "seller_active_counts", "search_word_corrections", "listing_engagement_counts", "seller_review_summaries"];
 
 /** A Supabase client whose RPCs answer per function. `response` is the
  *  original path's answer (marketplace_browse_rows / _search_browse_rows,
  *  read with .range()); `page` and `count` are marketplace_page's and
  *  marketplace_count's, awaited directly. Both are "not deployed" (PGRST202)
  *  unless given, so tests of the original path run through its fallback. */
-function client(response: object, fresh: { page?: object; count?: object; corrections?: object } = {}) {
+function client(response: object, fresh: { page?: object; count?: object; corrections?: object; engagement?: object; reviews?: object } = {}) {
   const legacy = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), range: vi.fn().mockResolvedValue(response) };
   legacy.select.mockReturnValue(legacy);
   legacy.eq.mockReturnValue(legacy);
@@ -39,6 +39,8 @@ function client(response: object, fresh: { page?: object; count?: object; correc
     rpc: vi.fn((name: string) => name === "marketplace_page" ? awaited(fresh.page ?? MISSING)
       : name === "marketplace_count" ? awaited(fresh.count ?? MISSING)
       : name === "search_word_corrections" ? awaited(fresh.corrections ?? MISSING)
+      : name === "listing_engagement_counts" ? awaited(fresh.engagement ?? { data: [], error: null })
+      : name === "seller_review_summaries" ? awaited(fresh.reviews ?? { data: [], error: null })
       : name === "listing_watch_counts" || name === "seller_active_counts" ? awaited({ data: [], error: null }) : legacy),
     from: vi.fn(table),
   } as unknown as SupabaseClient<Database>;
@@ -100,8 +102,7 @@ it("starts social lookups while fitment is still loading", async () => {
   const pending = fetchListings(supabase, {}, "viewer", { garage: Promise.resolve([]), selection: Promise.resolve({ makeId: 1, modelId: null, make: "BMW", model: null, label: "BMW" }) });
   // Allow the thenable queries to start without resolving the fitment request.
   await vi.waitFor(() => expect(started).toContain("listing_fitments"));
-  expect(started).toContain("likes");
-  expect(started).toContain("listing_questions");
+  expect(supabase.rpc).toHaveBeenCalledWith("listing_engagement_counts", { p_listings: ["listing"] });
   releaseFitment();
   expect(await pending).toMatchObject({ status: "success", total: 1 });
 });
@@ -217,4 +218,31 @@ it("ignores a position from another sort and reads the page by skipping", async 
   expect(supabase.rpc).toHaveBeenCalledWith("marketplace_page", expect.objectContaining({ p_offset: 24 }));
   expect(decodePosition("bm90LWEtdG9rZW4", "newest")).toBeNull();
   expect(decodePosition(encodePosition("newest", row(1)).slice(0, -2) + "zz", "newest")).toBeNull();
+});
+
+it("N30: card likes, questions and seller ratings come counted from the database, past 1,000", async () => {
+  const listing = { id: "listing", title: "Brakes", price_cents: 100, condition: "used", location: null, seller_id: "seller" };
+  const supabase = client({ data: [listing], count: 1, error: null }, {
+    engagement: { data: [{ listing_id: "listing", likes: 1500, questions: 1203 }], error: null },
+    reviews: { data: [{ seller_id: "seller", review_count: 1042, rating_avg: 4.6666 }], error: null },
+  });
+  const tables: string[] = [];
+  const from = supabase.from;
+  supabase.from = vi.fn((table: string) => {
+    tables.push(table);
+    if (table === "profiles") {
+      const query: Record<string, unknown> = { then: (resolve: (v: object) => unknown) => Promise.resolve({ data: [{ id: "seller", display_name: "Sam", username: "sam", avatar_url: null }], error: null }).then(resolve) };
+      for (const method of ["select", "eq", "in", "order", "not", "limit"]) query[method] = () => query;
+      return query;
+    }
+    return (from as unknown as (t: string) => unknown)(table);
+  }) as unknown as typeof supabase.from;
+  const page = await fetchListings(supabase, {});
+  if (page.status !== "success") throw new Error("expected a page");
+  expect(page.results[0]).toMatchObject({ like_count: 1500, question_count: 1203 });
+  expect(page.results[0].seller).toMatchObject({ rating: "4.7", review_count: 1042 });
+  // Nothing fetched row by row to be counted here.
+  expect(tables).not.toContain("likes");
+  expect(tables).not.toContain("listing_questions");
+  expect(tables).not.toContain("reviews");
 });

@@ -129,7 +129,7 @@ image upload loop: validation, storage placement, GC staging).
 
 Source of truth: `src/components/registry.ts` (validated by `src/components/registry.test.ts`).
 
-### Primitives (90)
+### Primitives (91)
 
 | Component | Layer | Import from | What it is | Use it for |
 | --- | --- | --- | --- | --- |
@@ -151,6 +151,7 @@ Source of truth: `src/components/registry.ts` (validated by `src/components/regi
 | `ConsentVideo` | Primitive | `@/components/ui` | YouTube video behind a play plate: nothing loads from YouTube until the visitor presses play. | Every embedded YouTube video (post bodies, the composer preview). Never render a YouTube iframe directly. |
 | `Countdown` | Primitive | `@/components/livesheet` | H:MM:SS countdown from an absolute expiry; server-authoritative. | Offer/order expiry windows. |
 | `CountedField` | Primitive | `@/components/ui` | Controlled input/textarea with a live character counter. — `.field__count` | Length-limited titles and bios. |
+| `CursorPagination` | Primitive | `@/components/ui` | Ghost "← Newest" / "Older →" links for a list read from a position; renders nothing when the list fits one page. | Lists that can grow without bound and page from where the last page ended (src/lib/page-cursor.ts): a build's updates, a post's replies, each Saved section. *Not for:* A list with page numbers and a total — that is Pagination. |
 | `DataRow` | Primitive | `@/components/ui` | Ruled baseline row (`.bline`) — read-only value row or labelled control row, with an optional trailing action (`end`). — `.bline` | Settings-style label/value and label/control lines, and build-sheet lines whose trailing slot carries a state chip or a 'Sell it' action. *Not for:* Full form fields with hints/errors — that's the `.field` family. |
 | `Dialog` | Primitive | `@/components/ui` | The sheet dialog — focus management, escape/backdrop dismissal, and a quiet Close in the panel's top-right corner (`.dialogbox__close`), never on the scrim below it. | Modal editing/confirmation surfaces. |
 | `DropZone` | Primitive | `@/components/ui` | Click/drag file target with busy state and keyboard support. — `.drop` | Every upload entry point (pair with lib/media-upload's uploadImages). |

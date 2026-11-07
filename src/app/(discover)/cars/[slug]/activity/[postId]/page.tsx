@@ -8,7 +8,8 @@ import { SaveButton } from "@/features/social/buttons";
 import { ReportButton } from "@/features/moderation/report-button";
 import { ActivityBlocksView } from "@/features/activity/blocks-view";
 import { ActivityEngagement } from "@/features/activity/engagement";
-import { loadPostEngagement } from "@/features/activity/load-engagement";
+import { loadPostEngagement, REPLIES_PARAM, replyPageLinks } from "@/features/activity/load-engagement";
+import { decodePageCursor } from "@/lib/page-cursor";
 import { getPublicPageClient as createClient, getViewer } from "@/lib/supabase/page-context";
 
 import { ActivityGallery } from "@/features/activity/activity-gallery";
@@ -71,10 +72,13 @@ export async function generateMetadata({
 
 export default async function ActivityDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; postId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug, postId } = await params;
+  const repliesBefore = decodePageCursor((await searchParams)[REPLIES_PARAM]);
   const supabase = await createClient();
 
   const { data: car } = await loadCar(slug);
@@ -85,10 +89,10 @@ export default async function ActivityDetailPage({
 
   const user = await getViewer();
 
-  const [{ data: owner }, { data: images }, { reactions, comments }, { data: saveRow }] = await Promise.all([
+  const [{ data: owner }, { data: images }, engagement, { data: saveRow }] = await Promise.all([
     supabase.from("profiles").select("display_name, username, avatar_url").eq("id", car.owner_id).single(),
     supabase.from("activity_images").select("url, alt, position").eq("post_id", postId).order("position"),
-    loadPostEngagement(supabase, postId, user?.id ?? null),
+    loadPostEngagement(supabase, postId, user?.id ?? null, { before: repliesBefore }),
     user
       ? supabase
           .from("saves")
@@ -318,8 +322,10 @@ export default async function ActivityDetailPage({
         path={`/cars/${slug}/activity/${post.id}`}
         authorName={ownerName || "the owner"}
         isLoggedIn={Boolean(user)}
-        reactions={reactions}
-        comments={comments}
+        reactions={engagement.reactions}
+        comments={engagement.comments}
+        replyCount={engagement.replyCount}
+        {...replyPageLinks(path, engagement, Boolean(repliesBefore))}
       />
 
       {/* Anyone but the author can flag a post for review — the same quiet

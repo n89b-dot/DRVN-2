@@ -7,6 +7,7 @@ import { ListingRow } from "@/components/commerce";
 import { ShowcaseExplorer, type ShowcasePin } from "@/features/garage/showcase";
 import { BuildEvolution, type EvolutionMilestone } from "@/features/garage/build-evolution";
 import {
+  CursorPagination,
   EmptyState,
   ObjectRow,
   GalleryLightbox,
@@ -179,6 +180,7 @@ export function CarTabs({
   modGroups,
   cameOff,
   activity,
+  activityPaging,
   forSale,
   soldFrom,
   carName,
@@ -194,7 +196,10 @@ export function CarTabs({
   modGroups: ModGroup[];
   /** Parts that came off this car — still records, not deletions (A-2). */
   cameOff: ModLine[];
+  /** One page of updates, newest first. */
   activity: ActivityItem[];
+  /** Every published update, and the links to the pages around this one (N60). */
+  activityPaging?: { total: number; olderHref: string | null; newestHref: string | null };
   forSale: ForSaleItem[];
   soldFrom: number;
   carName: string;
@@ -390,7 +395,7 @@ export function CarTabs({
             </li>
           ))}
         </ul>
-      ) : (
+      ) : activityPaging?.newestHref ? null : (
         <EmptyState
           mark="✎"
           title="No updates yet"
@@ -407,6 +412,13 @@ export function CarTabs({
             : "The owner hasn't posted any updates for this car yet."}
         </EmptyState>
       )}
+      <CursorPagination
+        label="Updates"
+        newestHref={activityPaging?.newestHref}
+        olderHref={activityPaging?.olderHref}
+        newestLabel="← Newest updates"
+        olderLabel="Older updates →"
+      />
     </div>
   );
 
@@ -443,7 +455,7 @@ export function CarTabs({
       live: true,
       panel: forSalePanel,
     },
-    { key: "activity", label: "Activity", count: activity.length || null, panel: activityPanel },
+    { key: "activity", label: "Activity", count: (activityPaging?.total ?? activity.length) || null, panel: activityPanel },
     { key: "gallery", label: "Gallery", count: gallery.length || null, panel: galleryPanel },
   ];
 

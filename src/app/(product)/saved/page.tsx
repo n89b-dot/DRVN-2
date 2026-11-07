@@ -15,6 +15,7 @@ import {
   ListingCard,
   Mosaic,
   ObjectRow,
+  CursorPagination,
   Pagination,
   TileHead,
 } from "@/components/ui";
@@ -29,6 +30,7 @@ import { savedSearchName } from "@/features/marketplace/saved-search-name";
 import { vehicleSubline } from "@/lib/vehicles/label";
 import { postHeadline } from "@/lib/activity/headline";
 import { postHref } from "@/lib/activity/href";
+import { cursorArgs, cursorPage, decodePageCursor, encodePageCursor, type PageCursor } from "@/lib/page-cursor";
 
 export const metadata = { title: "Saved - DRVN" };
 
@@ -46,12 +48,24 @@ type SavedTab = "saved" | "following";
 type SortKey = "newest" | "price";
 
 const PAGE_SIZE = 24;
-// The other lists on this page (builds saved / builds followed / sellers
-// followed) aren't the fetch this page was flagged for — that was the saved
-// *parts* query, pulling every save a user ever made with no bound. They get
-// a generous cap instead of full ?page= pagination: simpler, and follow
-// counts rarely approach it in practice.
-const SECONDARY_CAP = 100;
+/** Each other section shows this many at a time, paged on its own (N68: they
+ *  used to stop at 100 with no way to see older ones). */
+const SECTION_SIZE = 24;
+
+/** A Saved section, as saved_page (20261107180000) names it, and the query
+ *  parameter that holds its position. Each section reads on independently,
+ *  so paging one leaves the others where they were. */
+const SECTION_PARAM = {
+  post: "updates",
+  build: "builds",
+  unavailable_part: "unavailable",
+  followed_build: "following_builds",
+  followed_seller: "sellers",
+} as const;
+type SectionKey = keyof typeof SECTION_PARAM;
+type SavedSearchParams = { tab?: string; page?: string; q?: string; sort?: string } & Partial<
+  Record<(typeof SECTION_PARAM)[SectionKey], string>
+>;
 
 function withParams(
   params: Record<string, string | undefined>,
@@ -60,135 +74,126 @@ function withParams(
   return buildParams("/saved", params, overrides);
 }
 
+type SectionPage = { ids: string[]; next: PageCursor | null; failed: boolean };
+
+/** One page of a section: the ids of what the caller saved or follows, still
+ *  there and still visible, newest first, from `before`. */
+async function loadSection(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  collection: SectionKey,
+  before: PageCursor | null
+): Promise<SectionPage> {
+  const { data, error } = await supabase.rpc("saved_page", {
+    p_collection: collection,
+    p_limit: SECTION_SIZE + 1,
+    ...cursorArgs(before),
+  });
+  if (error) reportError(`[saved] failed to load ${collection}`, error);
+  const page = cursorPage(data, SECTION_SIZE, (row) => ({ at: row.saved_at, id: row.target_id }));
+  return { ids: page.rows.map((row) => row.target_id), next: page.next, failed: Boolean(error) };
+}
+
+const NO_SECTION: SectionPage = { ids: [], next: null, failed: false };
+
 /**
- * Saved and followed, correctly labelled — now also correctly bounded.
+ * Saved and followed, correctly labelled — and now complete at any size.
  *
- * Three bugs fixed here (two originally, one newly found). "Sellers you
+ * Three bugs fixed here first (two originally, one newly found). "Sellers you
  * follow" read profile *saves*, but nothing in the app ever renders a save
  * button for a profile — so that section could never populate, while actual
  * follows appeared nowhere at all. There was no way to unsave anything from
- * this page. And the saved-parts query had no limit at all — every save a
- * user had ever made, and every listing/image/car row behind it, loaded on
- * every visit.
+ * this page. And the saved-parts query had no limit at all.
+ *
+ * Then OS-W22. The page read every save and follow (Supabase stops at 1,000
+ * rows), counted them here, and asked for the things behind them with every
+ * id in one URL — too long past a few hundred, and the page showed empty
+ * (N31). The side sections stopped at 100 (N68), and a save of something
+ * deleted still counted (N61). Now the database counts what still exists and
+ * the member can see (saved_counts), the parts grid is its own page of the
+ * member's saves (saved_listing_page), and every other section is paged on
+ * its own from a position (saved_page). Only a page's ids are ever asked for.
  */
 export default async function SavedPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; page?: string; q?: string; sort?: string }>;
+  searchParams: Promise<SavedSearchParams>;
 }) {
-  const { tab: tabParam, page: pageParam, q, sort: sortParam } = await searchParams;
+  const params = await searchParams;
+  const { tab: tabParam, page: pageParam, q, sort: sortParam } = params;
   const tab: SavedTab = tabParam === "following" ? "following" : "saved";
   const sort: SortKey = sortParam === "price" ? "price" : "newest";
   const query = (q ?? "").trim();
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
+  const positionOf = (key: SectionKey) => decodePageCursor(params[SECTION_PARAM[key]]);
 
   const supabase = await createClient();
   const user = await getViewer();
   if (!user) redirect("/login");
 
-  // Cheap either way — just the id columns — so both are fetched unbounded
-  // to know the true shape of what a user has saved/followed, even though
-  // only one tab's worth gets fully hydrated below.
-  const [{ data: saves, error: savesError }, { data: follows, error: followsError }, { data: savedSearches, error: searchesError }] =
+  const onSaved = tab === "saved";
+  const [countsResult, { data: savedSearches, error: searchesError }, partsResult, posts, builds, unavailable, followedBuilds, sellers] =
     await Promise.all([
-      supabase
-        .from("saves")
-        .select("target_type, target_id, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("follows")
-        .select("target_type, target_id, created_at")
-        .eq("follower_id", user.id)
-        .order("created_at", { ascending: false }),
+      supabase.rpc("saved_counts").maybeSingle(),
       supabase
         .from("saved_searches")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
+      onSaved
+        ? supabase.rpc("saved_listing_page", {
+            p_query: query || undefined,
+            p_sort: sort,
+            p_limit: PAGE_SIZE,
+            p_offset: from,
+          })
+        : Promise.resolve({ data: [] as { listing_id: string; total: number }[], error: null }),
+      onSaved ? loadSection(supabase, "post", positionOf("post")) : NO_SECTION,
+      onSaved ? loadSection(supabase, "build", positionOf("build")) : NO_SECTION,
+      onSaved && !query ? loadSection(supabase, "unavailable_part", positionOf("unavailable_part")) : NO_SECTION,
+      onSaved ? NO_SECTION : loadSection(supabase, "followed_build", positionOf("followed_build")),
+      onSaved ? NO_SECTION : loadSection(supabase, "followed_seller", positionOf("followed_seller")),
     ]);
 
-  if (savesError) reportError("[saved] failed to load saves", savesError);
-  if (followsError) reportError("[saved] failed to load follows", followsError);
+  const countsError = countsResult.error;
+  if (countsError) reportError("[saved] failed to count saves", countsError);
+  const counts = countsResult.data;
+  const savesError = Boolean(countsError) || posts.failed || builds.failed || unavailable.failed;
+  const followsError = Boolean(countsError) || followedBuilds.failed || sellers.failed;
+  const listingsError = partsResult.error;
+  if (listingsError) reportError("[saved] failed to load saved parts", listingsError);
 
-  const listingIds = (saves ?? [])
-    .filter((s) => s.target_type === "listing")
-    .map((s) => s.target_id);
-  const savedCarIds = (saves ?? [])
-    .filter((s) => s.target_type === "car")
-    .map((s) => s.target_id)
-    .slice(0, SECONDARY_CAP);
-  const followedCarIds = (follows ?? [])
-    .filter((f) => f.target_type === "car")
-    .map((f) => f.target_id)
-    .slice(0, SECONDARY_CAP);
-  const followedProfileIds = (follows ?? [])
-    .filter((f) => f.target_type === "profile")
-    .map((f) => f.target_id)
-    .slice(0, SECONDARY_CAP);
-  const savedPostIds = (saves ?? [])
-    .filter((s) => s.target_type === "post")
-    .map((s) => s.target_id)
-    .slice(0, SECONDARY_CAP);
+  // Only this page's parts: at most PAGE_SIZE ids, in the page's own order.
+  const pagePartIds = (partsResult.data ?? []).map((row) => row.listing_id);
+  const listingsTotal = partsResult.data?.[0]?.total ?? (from > 0 ? null : 0);
+  const carIds = [...new Set([...builds.ids, ...followedBuilds.ids])];
 
-  const totalListingSaves = listingIds.length;
-  const totalCarSaves = (saves ?? []).filter((s) => s.target_type === "car").length;
-  const totalPostSaves = (saves ?? []).filter((s) => s.target_type === "post").length;
-  const totalFollowedCars = (follows ?? []).filter((f) => f.target_type === "car").length;
-  const totalFollowedProfiles = (follows ?? []).filter((f) => f.target_type === "profile").length;
-
-  const allCarIds = [...new Set([...savedCarIds, ...followedCarIds])];
-
-  // Saved-parts pagination runs on the listings table (not `saves`) — the
-  // save rows are only ever the cheap uuid list above; the actual page and
-  // search/sort apply to the listings query itself.
-  let listingsQuery = tab === "saved" && listingIds.length
-    ? supabase
-        .from("listings")
-        .select("id, title, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, status, part_number, seller_id, source_car_id", { count: "exact" })
-        .in("id", listingIds)
-    : null;
-  if (listingsQuery && query) {
-    listingsQuery = listingsQuery.ilike("title", `%${query.replace(/[%_]/g, " ")}%`);
-  }
-  if (listingsQuery) {
-    listingsQuery =
-      sort === "price"
-        ? listingsQuery.order("price_cents", { ascending: true })
-        : listingsQuery.order("created_at", { ascending: false });
-    listingsQuery = listingsQuery.range(from, from + PAGE_SIZE - 1);
-  }
-
-  const [{ data: listings, count: listingsTotal, error: listingsError }, { data: cars }, { data: profiles }] =
-    await Promise.all([
-      listingsQuery ?? Promise.resolve({ data: [], count: 0, error: null }),
-      allCarIds.length
-        ? supabase
-            .from("cars")
-            .select("id, slug, name, make, model, year, cover_image_url")
-            .in("id", allCarIds)
-        : Promise.resolve({ data: [] }),
-      tab === "following" && followedProfileIds.length
-        ? supabase
-            .from("profiles")
-            .select("id, username, display_name")
-            .in("id", followedProfileIds)
-        : Promise.resolve({ data: [] }),
-    ]);
-
-  // Saved build updates (0037): the post, its car (for the deep link), and
-  // its first photo. Bounded by SECONDARY_CAP like the other side sections.
-  const { data: savedPosts } =
-    tab === "saved" && savedPostIds.length
-      ? await supabase
+  const [{ data: listings }, { data: cars }, { data: profiles }, { data: savedPosts }] = await Promise.all([
+    pagePartIds.length
+      ? supabase
+          .from("listings")
+          .select("id, title, price_cents, shipping_cents, shipping_mode, allows_collection, condition, location, status, part_number, seller_id, source_car_id")
+          .in("id", pagePartIds)
+      : Promise.resolve({ data: [] }),
+    carIds.length
+      ? supabase.from("cars").select("id, slug, name, make, model, year, cover_image_url").in("id", carIds)
+      : Promise.resolve({ data: [] }),
+    sellers.ids.length
+      ? supabase.from("profiles").select("id, username, display_name").in("id", sellers.ids)
+      : Promise.resolve({ data: [] }),
+    // Saved build updates (0037): the post, its car (for the deep link), and
+    // its first photo — this page's posts only.
+    posts.ids.length
+      ? supabase
           .from("activity_posts")
           // `body` too: a quick post has no title, and its caption is the
           // only thing that tells one saved post from another.
           .select("id, title, intro, body, car_id, published_at")
-          .in("id", savedPostIds)
+          .in("id", posts.ids)
           .not("published_at", "is", null)
-      : { data: [] };
+      : Promise.resolve({ data: [] }),
+  ]);
+
   // W-5: a saved post may have no car. It still belongs in the list — it
   // just has no build to name beside it.
   const savedPostCarIds = [
@@ -211,40 +216,48 @@ export default async function SavedPage({
   for (const img of savedPostImages ?? []) {
     if (!savedPostCover.has(img.post_id)) savedPostCover.set(img.post_id, img.url);
   }
-  // Keep the save-order (newest first), and drop posts on private cars. A
-  // post with no car (W-5) has nothing to go private, so it stays.
-  const savedUpdates = savedPostIds
+  // Keep the save order (newest first). saved_page already left out posts
+  // the member can no longer see.
+  const savedUpdates = posts.ids
     .map((id) => (savedPosts ?? []).find((p) => p.id === id))
     .filter((p): p is NonNullable<typeof p> => Boolean(p))
-    .map((p) => ({ ...p, car: p.car_id ? savedPostCarById.get(p.car_id) : undefined }))
-    .filter((p) => !p.car_id || p.car);
+    .map((p) => ({ ...p, car: p.car_id ? savedPostCarById.get(p.car_id) : undefined }));
 
   // Same hydration as the Marketplace grid, so a saved part is the same card
   // it was when it was saved — cover, source car, seller trust, state flag.
-  const savedCards = await hydrateListingCards(supabase, listings ?? []);
-  const visibleSaved = tab === "saved" && !query && !listingsError && (listingsTotal ?? 0) < listingIds.length
-    ? await supabase.from("listings").select("id").in("id", listingIds)
-    : null;
-  const visibleIds = new Set((visibleSaved?.data ?? []).map(row => row.id));
-  const unavailableIds = visibleSaved && !visibleSaved.error ? listingIds.filter(id => !visibleIds.has(id)) : [];
-
+  const listingById = new Map((listings ?? []).map((l) => [l.id, l]));
+  const savedCards = await hydrateListingCards(
+    supabase,
+    pagePartIds.flatMap((id) => {
+      const listing = listingById.get(id);
+      return listing ? [listing] : [];
+    })
+  );
 
   const carById = new Map<string, CarRowData>((cars ?? []).map((c) => [c.id, c]));
-  const savedCars = savedCarIds
-    .map((id) => carById.get(id))
-    .filter((c): c is CarRowData => Boolean(c));
-  const followedCars = followedCarIds
-    .map((id) => carById.get(id))
-    .filter((c): c is CarRowData => Boolean(c));
+  const savedCars = builds.ids.map((id) => carById.get(id)).filter((c): c is CarRowData => Boolean(c));
+  const followedCars = followedBuilds.ids.map((id) => carById.get(id)).filter((c): c is CarRowData => Boolean(c));
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+  const followedSellers = sellers.ids.map((id) => profileById.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p));
 
+  // Totals of what still exists and the member can see (N61).
+  const totalListingSaves = counts?.parts ?? 0;
+  const totalUnavailable = counts?.unavailable_parts ?? 0;
+  const totalCarSaves = counts?.builds ?? 0;
+  const totalPostSaves = counts?.posts ?? 0;
+  const totalFollowedCars = counts?.followed_builds ?? 0;
+  const sellerCount = counts?.followed_sellers ?? 0;
   const buildCount = totalCarSaves + totalFollowedCars;
-  const sellerCount = totalFollowedProfiles;
-  // A saved post that has since been deleted leaves its save row behind; on
-  // this tab, count the posts that are still there so the header never
-  // promises a post the page doesn't show.
-  const postCount = tab === "saved" && totalPostSaves <= SECONDARY_CAP ? savedUpdates.length : totalPostSaves;
-  const isEmpty = !savesError && !followsError && !searchesError && !totalListingSaves && !buildCount && !sellerCount && !postCount && !(savedSearches ?? []).length;
-  const hasMoreListings = tab === "saved" && (listingsTotal ?? 0) > from + PAGE_SIZE;
+  const postCount = totalPostSaves;
+  const isEmpty = !savesError && !followsError && !searchesError && !totalListingSaves && !totalUnavailable && !buildCount && !sellerCount && !postCount && !(savedSearches ?? []).length;
+  const hasMoreListings = onSaved && (listingsTotal ?? 0) > from + PAGE_SIZE;
+
+  // Every link keeps every other section where it is.
+  const currentParams: Record<string, string | undefined> = { ...params };
+  const sectionLinks = (key: SectionKey, section: SectionPage) => ({
+    newestHref: positionOf(key) ? withParams(currentParams, { [SECTION_PARAM[key]]: undefined }) : null,
+    olderHref: section.next ? withParams(currentParams, { [SECTION_PARAM[key]]: encodePageCursor(section.next) }) : null,
+  });
 
   const CarRow = ({ car, kind }: { car: CarRowData; kind: "save" | "follow" }) => (
     <ObjectRow
@@ -340,7 +353,7 @@ export default async function SavedPage({
         </section>
       )}
 
-      {tab === "saved" && totalListingSaves > 0 && (
+      {tab === "saved" && (totalListingSaves > 0 || totalUnavailable > 0) && (
         <section className="deck">
           <div>
             <div className="tile__head">
@@ -407,21 +420,35 @@ export default async function SavedPage({
               </p>
             )}
 
-            {unavailableIds.length > 0 && <div className="rowlist">
-              {unavailableIds.map(id => <ObjectRow key={id} actions={<RelationshipRemove kind="save" targetType="listing" targetId={id} label="Unsave" />}>
-                <span><span className="order__name block">Unavailable saved part</span><span className="order__meta">This part is no longer publicly available.</span></span>
-              </ObjectRow>)}
-            </div>}
             <Pagination
               page={page}
               hasMore={hasMoreListings}
-              hrefFor={(p) => withParams(tabParams, { page: p === 1 ? undefined : String(p) })}
+              hrefFor={(p) => withParams(currentParams, { page: p === 1 ? undefined : String(p) })}
             />
+
+            {/* Saves of parts the member can no longer see — taken down, or
+                back to draft. Not counted as saved parts (N61); listed so
+                they can be let go, a page at a time. */}
+            {unavailable.ids.length > 0 && (
+              <>
+                <p className="field__hint mt-6">
+                  {totalUnavailable} saved part{totalUnavailable === 1 ? " is" : "s are"} no longer available.
+                </p>
+                <div className="rowlist">
+                  {unavailable.ids.map((id) => (
+                    <ObjectRow key={id} actions={<RelationshipRemove kind="save" targetType="listing" targetId={id} label="Unsave" />}>
+                      <span><span className="order__name block">Unavailable saved part</span><span className="order__meta">This part is no longer publicly available.</span></span>
+                    </ObjectRow>
+                  ))}
+                </div>
+                <CursorPagination label="Unavailable saved parts" {...sectionLinks("unavailable_part", unavailable)} />
+              </>
+            )}
           </div>
         </section>
       )}
 
-      {tab === "saved" && savedUpdates.length > 0 && (
+      {tab === "saved" && totalPostSaves > 0 && (
         <section className="deck">
           <Rv className="tile">
             <div className="tile__head">
@@ -461,9 +488,7 @@ export default async function SavedPage({
                 </ObjectRow>
               ))}
             </div>
-            {totalPostSaves > savedUpdates.length && (
-              <p className="field__hint mt-2">Showing your {savedUpdates.length} most recent.</p>
-            )}
+            <CursorPagination label="Saved updates" {...sectionLinks("post", posts)} />
           </Rv>
         </section>
       )}
@@ -483,7 +508,7 @@ export default async function SavedPage({
         </section>
       )}
 
-      {tab === "saved" && savedCars.length > 0 && (
+      {tab === "saved" && totalCarSaves > 0 && (
         <section className="deck">
           <Rv className="tile">
             <div className="tile__head">
@@ -495,14 +520,12 @@ export default async function SavedPage({
                 <CarRow key={car.id} car={car} kind="save" />
               ))}
             </div>
-            {totalCarSaves > savedCars.length && (
-              <p className="field__hint mt-2">Showing your {savedCars.length} most recent.</p>
-            )}
+            <CursorPagination label="Builds you've saved" {...sectionLinks("build", builds)} />
           </Rv>
         </section>
       )}
 
-      {tab === "following" && followedCars.length > 0 && (
+      {tab === "following" && totalFollowedCars > 0 && (
         <section className="deck">
           <Rv className="tile">
             <div className="tile__head">
@@ -514,9 +537,7 @@ export default async function SavedPage({
                 <CarRow key={car.id} car={car} kind="follow" />
               ))}
             </div>
-            {totalFollowedCars > followedCars.length && (
-              <p className="field__hint mt-2">Showing your {followedCars.length} most recent.</p>
-            )}
+            <CursorPagination label="Builds you follow" {...sectionLinks("followed_build", followedBuilds)} />
           </Rv>
         </section>
       )}
@@ -529,7 +550,7 @@ export default async function SavedPage({
               <span className="chip">{sellerCount}</span>
             </div>
             <div className="rowlist">
-              {(profiles ?? []).map((p) => (
+              {followedSellers.map((p) => (
                 <ObjectRow
                   key={p.id}
                   leading={
@@ -554,11 +575,12 @@ export default async function SavedPage({
                 </ObjectRow>
               ))}
             </div>
+            <CursorPagination label="Sellers you follow" {...sectionLinks("followed_seller", sellers)} />
           </Rv>
         </section>
       )}
 
-      {!isEmpty && !followsError && tab === "following" && followedCars.length === 0 && sellerCount === 0 && (
+      {!isEmpty && !followsError && tab === "following" && totalFollowedCars === 0 && sellerCount === 0 && (
         <section className="deck">
           <Rv>
             <EmptyState

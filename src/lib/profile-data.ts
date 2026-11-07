@@ -170,7 +170,7 @@ export async function loadProfileView(
     { data: reviewRows, count: reviewsTotal },
     { data: salesCount },
     { data: followCounts },
-    { data: allRatingRows },
+    { data: ratingSummary },
   ] = await Promise.all([
     carsQuery,
     supabase.from("profiles").select("main_car_id").eq("id", profileId).maybeSingle(),
@@ -192,9 +192,9 @@ export async function loadProfileView(
     // counting through RLS saw 0. The function returns the totals only.
     supabase.rpc("profile_follow_counts", { p_profile: profileId }).maybeSingle(),
     // Average rating has to look at every review, not just the current page —
-    // otherwise it would drift as the reviewer paged through history. Just
-    // the rating column, so it stays cheap even with many reviews.
-    supabase.from("reviews").select("rating").eq("reviewee_id", profileId),
+    // otherwise it would drift as the reviewer paged through history. The
+    // database averages them: fetching the ratings stopped at 1,000 (N30).
+    supabase.rpc("seller_review_summaries", { p_sellers: [profileId] }).maybeSingle(),
   ]);
 
   const carList = orderCars(cars ?? [], mainCar?.main_car_id);
@@ -258,9 +258,8 @@ export async function loadProfileView(
     };
   });
 
-  const ratings = (allRatingRows ?? []).map((r) => r.rating);
-  const rating = ratings.length
-    ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
+  const rating = ratingSummary?.review_count
+    ? Math.round(Number(ratingSummary.rating_avg) * 10) / 10
     : null;
 
   return {
@@ -269,7 +268,7 @@ export async function loadProfileView(
     listings,
     reviews,
     rating,
-    reviewCount: reviewsTotal ?? ratings.length,
+    reviewCount: reviewsTotal ?? ratingSummary?.review_count ?? 0,
     salesCount: Number(salesCount ?? 0),
     followerCount: Number(followCounts?.followers ?? 0),
     followingCount: Number(followCounts?.following ?? 0),

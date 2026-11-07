@@ -6,7 +6,7 @@ import { agentTabOpen } from "@/lib/agent/beta";
 import { cartCount } from "@/lib/cart";
 import type { Database } from "@/lib/database.types";
 import { reportError } from "@/lib/monitoring";
-import { kindIsShown } from "@/lib/notification-prefs";
+import { mutedKindFilter } from "@/lib/notification-prefs";
 
 /**
  * The badges the app shell shows.
@@ -64,28 +64,31 @@ export async function loadAgentNeedsCount(
 /**
  * Unread notifications the member will actually see: kinds they muted in
  * Settings are left out, so the bell never counts rows the list hides.
- * Reads kinds rather than a head count because the kind → preference rule
- * lives in notification-prefs.ts.
+ *
+ * Counted by the database (N30). It used to fetch the kinds of up to 1,000
+ * unread rows and filter them here, so a member past 1,000 saw 1,000 or
+ * fewer. The muted kinds are now the same `or` filter the list itself uses
+ * (`mutedKindFilter`), on an exact count of no rows.
  */
 export async function loadUnreadNotificationCount(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<number> {
-  const [{ data: unread, error }, { data: me }] = await Promise.all([
-    supabase
-      .from("notifications")
-      .select("kind")
-      .eq("user_id", userId)
-      .is("read_at", null)
-      .limit(1000),
-    supabase.from("profiles").select("notification_prefs").eq("id", userId).maybeSingle(),
-  ]);
+  const { data: me } = await supabase.from("profiles").select("notification_prefs").eq("id", userId).maybeSingle();
+  let query = supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .is("read_at", null);
+  const muted = mutedKindFilter(me?.notification_prefs);
+  if (muted) query = query.or(muted);
+  const { count, error } = await query;
   if (error) {
     // A badge is not worth failing a page render over.
     reportError("[shell] unread count failed", error);
     return 0;
   }
-  return (unread ?? []).filter((row) => kindIsShown(me?.notification_prefs, row.kind)).length;
+  return count ?? 0;
 }
 
 /**

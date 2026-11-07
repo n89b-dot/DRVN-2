@@ -27,6 +27,7 @@ import {
   ObjectRow,
   PageHead,
   Pagination,
+  CursorPagination,
   RatingStars,
   ResultNote,
   UnconfirmedOutcome,
@@ -346,6 +347,13 @@ export default function ComponentsPage() {
           note="Ghost prev/next with the mono page marker between; placeholders keep the row balanced at either edge. Renders nothing on a single first page. One component where four pages each hand-rolled the same nav."
         >
           <Pagination page={2} hasMore hrefFor={(p) => `#page-${p}`} />
+        </Specimen>
+        <Specimen
+          name="CursorPagination"
+          klass="CursorPagination"
+          note="For a list read from a position, not a page number: back to the newest, on to the next older page. Renders nothing when the list fits on one page."
+        >
+          <CursorPagination newestHref="#newest" olderHref="#older" label="Updates" olderLabel="Older updates →" />
         </Specimen>
         <Specimen
           name="Chip"

@@ -51,3 +51,51 @@ export function Pagination({
     </nav>
   );
 }
+
+/**
+ * Pagination for a list read from a position rather than by page number
+ * (OS-W22): a build's updates, a post's replies, each Saved section. A
+ * position only reads on, so the links are "back to the newest" and "on to
+ * the next older page" — there is no page number to show.
+ *
+ * Renders nothing when there is neither — the whole list fits on one page.
+ */
+export function CursorPagination({
+  newestHref,
+  olderHref,
+  newestLabel = "← Newest",
+  olderLabel = "Older →",
+  label = "Pagination",
+  className,
+}: {
+  /** Back to the first page; null on the first page itself. */
+  newestHref?: string | null;
+  /** The next page from where this one ends; null at the end of the list. */
+  olderHref?: string | null;
+  newestLabel?: string;
+  olderLabel?: string;
+  label?: string;
+  /** Spacing overrides only (e.g. `!mt-8`, `!mb-8`) — never restyle the links. */
+  className?: string;
+}) {
+  if (!newestHref && !olderHref) return null;
+
+  return (
+    <nav className={cx("mt-6 flex items-center justify-between gap-3", className)} aria-label={label}>
+      {newestHref ? (
+        <Link href={newestHref} className="btn btn--ghost" rel="first">
+          {newestLabel}
+        </Link>
+      ) : (
+        <span />
+      )}
+      {olderHref ? (
+        <Link href={olderHref} className="btn btn--ghost" rel="next">
+          {olderLabel}
+        </Link>
+      ) : (
+        <span />
+      )}
+    </nav>
+  );
+}
