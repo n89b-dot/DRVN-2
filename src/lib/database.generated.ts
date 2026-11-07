@@ -2611,6 +2611,36 @@ export type Database = {
         }
         Relationships: []
       }
+      media_cleanup_queue: {
+        Row: {
+          attempts: number
+          bucket: string
+          enqueued_at: string
+          last_error: string | null
+          owner_id: string
+          path: string
+          reason: string
+        }
+        Insert: {
+          attempts?: number
+          bucket: string
+          enqueued_at?: string
+          last_error?: string | null
+          owner_id: string
+          path: string
+          reason: string
+        }
+        Update: {
+          attempts?: number
+          bucket?: string
+          enqueued_at?: string
+          last_error?: string | null
+          owner_id?: string
+          path?: string
+          reason?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           attachments: string[]
@@ -7285,6 +7315,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      media_object_referenced: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: boolean
       }
       merge_products: {
         Args: { p_actor?: string; p_basis?: string; p_products: string[] }

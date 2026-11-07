@@ -54,7 +54,7 @@ begin
     from public.write_activity_post(
       'quick', v_quick_op, v_car, null,
       '[{"type":"text","html":"<p>New wheels turned up.</p>"}]'::jsonb,
-      array['https://example.test/wheels.jpg']
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_owner || '/wheels.jpg']
     );
   if v_outcome <> 'published' then
     raise exception 'A quick post did not publish (got %)', v_outcome;
@@ -99,7 +99,7 @@ begin
     from public.write_activity_post(
       'quick', v_quick_op, v_car, null,
       '[{"type":"text","html":"<p>New wheels turned up.</p>"}]'::jsonb,
-      array['https://example.test/wheels.jpg']
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_owner || '/wheels.jpg']
     );
   if v_outcome <> 'replayed' then
     raise exception 'A repeated quick post did not replay (got %)', v_outcome;
@@ -127,7 +127,7 @@ begin
   perform public.write_activity_post(
     'update', v_quick_op, v_car, '',
     '[{"type":"text","html":"<p>New wheels turned up. 18s.</p>"}]'::jsonb,
-    array['https://example.test/wheels.jpg']
+    array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_owner || '/wheels.jpg']
   );
   -- ...while a titled post still can't be edited down to nothing.
   v_rejected := false;

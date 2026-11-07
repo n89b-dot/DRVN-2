@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/marketplace/taxonomy";
 import { reportError } from "@/lib/monitoring";
+import { scheduleMediaCleanup } from "@/lib/media-lifecycle";
 
 /**
  * Admin mutations. Every action:
@@ -703,7 +704,7 @@ export async function adminRemoveReportedContent(
   const isPost = report.subject_type === "post";
 
   try {
-    await auditedAction(
+    const { removed } = await auditedAction(
       ctx.admin,
       {
         actorId: ctx.userId,
@@ -759,6 +760,9 @@ export async function adminRemoveReportedContent(
         return { removed: row };
       }
     );
+    // Deleting the post queued its photos (20261107150500, N51); taken-down
+    // content shouldn't stay reachable by link until the daily job.
+    if (isPost) scheduleMediaCleanup(removed.author_id);
     await notifyReporter(ctx.admin, reportId, "actioned");
     revalidatePath("/admin", "layout");
     revalidatePath("/home");

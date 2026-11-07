@@ -48,7 +48,8 @@ export function DangerZone({ carId, carName }: { carId: string; carName: string 
         title={`Delete "${carName}"?`}
         destructive
         consequences={[
-          "Removes the car, its build page, photos, mods and updates permanently",
+          "Removes the car, its build page, mods and updates permanently",
+          "Its photos are then deleted from DRVN's storage, except any a buyer's order keeps as its record",
           "Parts you've already sold keep their listing record",
           "This cannot be undone",
         ]}

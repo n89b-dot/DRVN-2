@@ -40,8 +40,8 @@ declare
     'location',null,'compatibility_notes',null,'part_number','ABC-123','status','draft'
   );
   images_payload jsonb := jsonb_build_array(
-    jsonb_build_object('url','https://example.test/one.webp','alt','One'),
-    jsonb_build_object('url','https://example.test/two.webp','alt','Two')
+    jsonb_build_object('url','https://proj.supabase.co/storage/v1/object/public/listing-images/' || seller || '/one.webp','alt','One'),
+    jsonb_build_object('url','https://proj.supabase.co/storage/v1/object/public/listing-images/' || seller || '/two.webp','alt','Two')
   );
   fitments_payload jsonb := jsonb_build_array(
     jsonb_build_object('make','Audi','model','S4','year_start',2018,'year_end',2020)

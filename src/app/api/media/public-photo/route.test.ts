@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import sharp from "sharp";
 const fixture = vi.hoisted(() => ({ bytes: Buffer.alloc(0), user: { id: "11111111-1111-4111-8111-111111111111" } as { id: string } | null, staged: vi.fn(async () => ({ error: null })) }));
@@ -10,9 +12,9 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({
 import { POST } from "./route";
 const ME = "11111111-1111-4111-8111-111111111111";
 const THEM = "22222222-2222-4222-8222-222222222222";
-function request(bytes: Uint8Array, bucket = "avatars", prefix = ME, target = bucket === "message-photos" ? "message-photos" : "") {
+function request(bytes: Uint8Array, bucket = "avatars", prefix = ME, target = bucket === "message-photos" ? "message-photos" : "", name = "small.jpg", type = "image/jpeg") {
   const form = new FormData(); form.set("bucket", bucket); form.set("pathPrefix", prefix);
-  form.set("file", new File([Buffer.from(bytes)], "small.jpg", { type: "image/jpeg" }));
+  form.set("file", new File([Buffer.from(bytes)], name, { type }));
   return new Request("http://localhost/api/media/public-photo", {
     method: "POST",
     body: form,
@@ -63,5 +65,40 @@ describe("public photo trust boundary", () => {
     fixture.user = null;
     expect((await POST(request(Buffer.from("anything")))).status).toBe(401);
     expect(fixture.staged).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * N64: iPhones save HEIC — HEIF holding HEVC. These are real files (made with
+ * macOS `sips`, 64×48): one HEVC, as an iPhone takes, and one AVIF, the other
+ * thing HEIF holds. The route must decode what the bundled image library can,
+ * and give a clear, actionable refusal for what it can't — never the generic
+ * "could not be safely processed". Whether the DEPLOYED runtime's sharp
+ * decodes HEVC is the owner's hosted check; this pins the code path.
+ */
+describe("HEIC and HEIF uploads", () => {
+  const sample = (name: string) => readFileSync(join(__dirname, "__fixtures__", name));
+
+  it("reads an iPhone HEIC as HEVC-in-HEIF, which the bundled sharp cannot decode", async () => {
+    const meta = await sharp(sample("iphone-hevc.heic")).metadata();
+    expect(meta.format).toBe("heif");
+    expect(meta.compression).toBe("hevc");
+    // Prebuilt sharp ships libheif without an HEVC decoder. If this starts
+    // passing a decode, the refusal below is no longer needed.
+    await expect(sharp(sample("iphone-hevc.heic")).webp().toBuffer()).rejects.toThrow(/HEVC|compression format/i);
+  });
+
+  it("refuses an undecodable HEIC with words the uploader can act on, publishing nothing", async () => {
+    const response = await POST(request(sample("iphone-hevc.heic"), "car-images", ME, "", "IMG_0001.HEIC", "image/heic"));
+    expect(response.status).toBe(415);
+    expect((await response.json()).error).toMatch(/HEIC photo can't be processed.*JPEG/);
+    expect(fixture.bytes.length).toBe(0);
+    expect(fixture.staged).not.toHaveBeenCalled();
+  });
+
+  it("decodes and re-encodes an AVIF-in-HEIF photo", async () => {
+    const response = await POST(request(sample("av1.avif"), "car-images", ME, "", "photo.avif", "image/avif"));
+    expect(response.status).toBe(200);
+    expect((await sharp(fixture.bytes).metadata()).format).toBe("webp");
   });
 });

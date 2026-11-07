@@ -1,5 +1,15 @@
 # Applying migrations
 
+## November 7 — Media integrity and lifecycle, OS-W15 (not applied anywhere)
+
+| File | Applied to |
+|---|---|
+| `20261107150500_media_integrity.sql` | not applied |
+
+Apply after every earlier migration. One storage object has one identity, `(bucket, decoded path)` (`private.media_object_key`, indexed on every photo column), and `public.media_object_referenced(bucket, path)` (service role only) is the one in-use check: it now counts dispute evidence by `storage_path` and message photos by path. Members can no longer insert, delete or rewrite `staged_uploads` rows (only stamp `consumed_at`); every row must name an object in its owner's own folder, and rows that don't are dropped from the ledger (storage untouched). Members can't delete media or evidence objects from Storage at all, evidence can't be overwritten, and evidence uploads only into `<uploader>/<order>/<file>` while that order is disputed and under 8 photos. A member's photo columns (car cover and gallery, hotspots, mod thumbnail, listing gallery, post photos and body media, avatar) only take their own canonical public URLs, and only on `job_config.media_storage_origin` once that's set (the media-gc job records it from `NEXT_PUBLIC_SUPABASE_URL` on its first run; an operator can set it first). Deleting a car, post or listing queues its photos in `media_cleanup_queue`; the media job (and the deleting action, straight after) removes each one only if nothing references it.
+
+Checked on a fresh database (native PostgreSQL 17 with the CI shim): every migration applies and every SQL guard passes, including the new `media_integrity_guard.sql`, which fails on the schema before this migration.
+
 ## November 7 — AG-7, the member's agent mode (NOT applied anywhere)
 
 | File | Applied to |

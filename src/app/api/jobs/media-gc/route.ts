@@ -1,5 +1,5 @@
 import { trackedWorker } from "@/lib/tracked-worker";
-import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
+import { ensureMediaStorageOrigin, processMediaCleanupQueue, removeMediaObject } from "@/lib/media-lifecycle";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 import { cronAuthorized } from "@/lib/cron-auth";
@@ -18,6 +18,13 @@ import { cronAuthorized } from "@/lib/cron-auth";
  *   curl -X POST https://<app-host>/api/jobs/media-gc \
  *     -H "Authorization: Bearer $CRON_SECRET"
  * See supabase/MIGRATIONS.md.
+ *
+ * Since 20261107150500 (N12) a staged row can only be written by the server
+ * and only for an object in its owner's own folder, and this sweep removes
+ * an object only as that verified owner — a row naming anyone else's object
+ * (registered before the lockdown) is dropped from the ledger without
+ * touching storage. The same run works the cleanup queue of deleted cars,
+ * posts and listings (N51).
  */
 
 const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
@@ -36,9 +43,12 @@ async function run(request: Request) {
     const admin = createAdminClient();
     const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
 
+    await ensureMediaStorageOrigin(admin);
+    const cleanup = await processMediaCleanupQueue({ admin, limit: BATCH });
+
     const { data: stale, error } = await admin
       .from("staged_uploads")
-      .select("id, url")
+      .select("id, owner_id, bucket, path")
       .is("consumed_at", null)
       .lt("created_at", cutoff)
       .order("created_at")
@@ -48,10 +58,11 @@ async function run(request: Request) {
     let removed = 0;
     let healed = 0;
     let skipped = 0;
+    let rejected = 0;
     for (const row of stale ?? []) {
-      const outcome = await deleteMediaIfUnreferenced(row.url);
+      const outcome = await removeMediaObject({ bucket: row.bucket, path: row.path }, row.owner_id, { admin });
       if (outcome === "removed") {
-        // deleteMediaIfUnreferenced already deleted the staged row by url.
+        // removeMediaObject already deleted the staged row.
         removed += 1;
       } else if (outcome === "referenced") {
         // Persisted without a finalize stamp — heal the ledger, keep the object.
@@ -61,14 +72,24 @@ async function run(request: Request) {
           .eq("id", row.id);
         if (healedRow.error) throw healedRow.error;
         healed += 1;
+      } else if (outcome === "invalid") {
+        // Not an object its owner uploaded: not a ledger entry worth keeping,
+        // and never a reason to touch storage.
+        const dropped = await admin.from("staged_uploads").delete().eq("id", row.id);
+        if (dropped.error) throw dropped.error;
+        rejected += 1;
       } else {
-        // Transient storage error or unparseable URL — logged inside the
-        // helper; left for the next pass rather than dropped on the floor.
+        // Transient storage or lookup error — logged inside the helper; left
+        // for the next pass rather than dropped on the floor.
         skipped += 1;
       }
     }
 
-    return Response.json({ scanned: stale?.length ?? 0, removed, healed, skipped }, { status: skipped ? 503 : 200 });
+    const failing = skipped + cleanup.failed;
+    return Response.json(
+      { scanned: stale?.length ?? 0, removed, healed, skipped, rejected, cleanup },
+      { status: failing ? 503 : 200 }
+    );
   } catch (error) {
     reportError("[media-gc] sweep failed", error);
     return new Response("worker failed", { status: 500 });

@@ -19,6 +19,9 @@ declare
   stranger uuid := gen_random_uuid();
   listing uuid := gen_random_uuid();
   held uuid := gen_random_uuid();
+  -- The seller's own listing-photo folder: a member's write may only name
+  -- their own uploads (20261107150500).
+  img text := 'https://proj.supabase.co/storage/v1/object/public/listing-images/' || seller || '/';
   opened_at timestamptz := now() - interval '1 hour';
   saved jsonb;
   v_version timestamptz;
@@ -32,8 +35,8 @@ declare
     'brand', 'Brand', 'part_miles', null, 'part_miles_unit', null
   );
   new_images jsonb := jsonb_build_array(
-    jsonb_build_object('url', 'https://example.test/keep.webp', 'alt', 'Kept, now first'),
-    jsonb_build_object('url', 'https://example.test/new.webp', 'alt', null)
+    jsonb_build_object('url', img || 'keep.webp', 'alt', 'Kept, now first'),
+    jsonb_build_object('url', img || 'new.webp', 'alt', null)
   );
   fitments jsonb := jsonb_build_array(
     jsonb_build_object('make', 'Audi', 'model', 'S4', 'year_start', 2018, 'year_end', 2020)
@@ -49,8 +52,8 @@ begin
     (listing, seller, 'Original intake', 'performance', 12000, 0, 'active', opened_at),
     (held, seller, 'Held part', 'performance', 5000, 0, 'active', opened_at);
   insert into public.listing_images(listing_id, url, alt, position) values
-    (listing, 'https://example.test/old.webp', 'Old cover', 0),
-    (listing, 'https://example.test/keep.webp', 'Kept', 1);
+    (listing, img || 'old.webp', 'Old cover', 0),
+    (listing, img || 'keep.webp', 'Kept', 1);
   insert into public.listing_fitments(listing_id, make, model) values (listing, 'BMW', 'M3');
   insert into public.listing_part_numbers(listing_id, number) values (listing, 'OLD-ALT');
   -- `held` is reserved by a checkout (trusted writer path).
@@ -72,7 +75,7 @@ begin
   if (select price_cents from public.listings where id = listing) <> 12000
      or (select title from public.listings where id = listing) <> 'Original intake'
      or (select string_agg(url, ',' order by position) from public.listing_images where listing_id = listing)
-        <> 'https://example.test/old.webp,https://example.test/keep.webp'
+        <> img || 'old.webp,' || img || 'keep.webp'
      or (select count(*) from public.listing_fitments where listing_id = listing and make = 'BMW') <> 1
      or (select string_agg(number, ',') from public.listing_part_numbers where listing_id = listing) <> 'OLD-ALT' then
     raise exception 'A failed edit left the listing half-saved';
@@ -87,13 +90,13 @@ begin
   if (select price_cents from public.listings where id = listing) <> 9900
      or (select brand from public.listings where id = listing) <> 'Brand'
      or (select string_agg(url || ':' || position, ',' order by position) from public.listing_images where listing_id = listing)
-        <> 'https://example.test/keep.webp:0,https://example.test/new.webp:1'
+        <> img || 'keep.webp:0,' || img || 'new.webp:1'
      or (select count(*) from public.listing_fitments where listing_id = listing and make = 'Audi') <> 1
      or (select count(*) from public.listing_fitments where listing_id = listing) <> 1
      or (select string_agg(number, ',') from public.listing_part_numbers where listing_id = listing) <> 'ALT-9' then
     raise exception 'Edit did not save every part of the listing';
   end if;
-  if saved->'removed_image_urls' <> '["https://example.test/old.webp"]'::jsonb then
+  if saved->'removed_image_urls' <> jsonb_build_array(img || 'old.webp') then
     raise exception 'Edit did not report the dropped photo: %', saved->'removed_image_urls';
   end if;
 

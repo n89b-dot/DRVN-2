@@ -49,7 +49,7 @@ begin
     from public.write_activity_post(
       'quick', v_op, null, null,
       '[{"type":"text","style":"normal","text":"Sold the car, this manifold is spare."}]'::jsonb,
-      array['https://example.test/manifold.jpg'],
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_author || '/manifold.jpg'],
       null, null, array[v_listing]
     );
   if v_outcome <> 'published' then
@@ -61,7 +61,7 @@ begin
     from public.write_activity_post(
       'quick', v_op_withcar, v_car, null,
       '[{"type":"text","style":"normal","text":"Still here."}]'::jsonb,
-      array['https://example.test/car.jpg']
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_author || '/car.jpg']
     );
 
   -- W-5 boundary: neither a car nor a part is not a post.
@@ -70,7 +70,7 @@ begin
     perform public.write_activity_post(
       'quick', v_op_nopart, null, null,
       '[{"type":"text","style":"normal","text":"About nothing."}]'::jsonb,
-      array['https://example.test/nothing.jpg']
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_author || '/nothing.jpg']
     );
   exception when others then
     v_rejected := true;

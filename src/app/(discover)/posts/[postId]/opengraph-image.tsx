@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 
+import { ogImageSource } from "@/lib/media-url";
 import { postHeadline } from "@/lib/activity/headline";
 import { createPublicClient } from "@/lib/supabase/public";
 
@@ -43,6 +44,9 @@ export default async function PostCard({ params }: { params: Promise<{ postId: s
   const headline = post ? postHeadline(post) : "An update on DRVN";
   const byline = author?.username ? `@${author.username}` : (author?.display_name ?? "");
 
+  // Only our own public storage is a fetch destination for the card (N55).
+  const imageSrc = ogImageSource(image?.url);
+
   return new ImageResponse(
     (
       <div
@@ -55,8 +59,8 @@ export default async function PostCard({ params }: { params: Promise<{ postId: s
           fontFamily: "sans-serif",
         }}
       >
-        {image?.url && (
-          <img src={image.url} alt="" style={{ width: 660, height: 630, objectFit: "cover" }} />
+        {imageSrc && (
+          <img src={imageSrc} alt="" style={{ width: 660, height: 630, objectFit: "cover" }} />
         )}
         <div
           style={{

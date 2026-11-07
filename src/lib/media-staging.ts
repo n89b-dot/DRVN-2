@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
 import { isOwnedStorageUrl, parseStorageObject } from "@/lib/media-url";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { reportError } from "@/lib/monitoring";
 
@@ -15,7 +16,8 @@ import { reportError } from "@/lib/monitoring";
  * flow itself must never block on the staging ledger.
  *
  * These are real server actions (any signed-in client can POST them), so
- * each one proves ownership from the URL itself before touching anything.
+ * each one proves ownership from the URL itself before touching anything,
+ * and matches the ledger by object (bucket, path), never by URL spelling.
  */
 
 async function requireUser() {
@@ -27,18 +29,32 @@ async function requireUser() {
   return { supabase, user };
 }
 
-/** Ledgers a fresh client-side upload so an abandoned form can't orphan it. */
+/**
+ * Buckets the browser uploads into directly. Everything else is uploaded and
+ * ledgered by /api/media/public-photo with the service role; dispute
+ * evidence keeps its original bytes, so it is the one direct upload.
+ */
+const DIRECT_UPLOAD_BUCKETS = ["dispute-evidence"];
+
+/**
+ * Ledgers a fresh browser upload so an abandoned form can't orphan it.
+ *
+ * Members can't write `staged_uploads` themselves any more (20261107150500,
+ * N12): a row is a promise to the GC job that this member uploaded this
+ * object, so only the server writes one, after checking the URL is ours, in
+ * the claimed bucket/path, under the caller's own folder. The database
+ * refuses any row whose path isn't in its owner's folder as well.
+ */
 export async function recordStagedUpload(
   bucket: string,
   path: string,
   url: string
 ): Promise<void> {
-  const { supabase, user } = await requireUser();
+  const { user } = await requireUser();
 
-  // The URL must be our storage, in the claimed bucket/path, under the
-  // caller's own folder — same provenance bar the persisting actions apply.
   const object = parseStorageObject(url);
   if (
+    !DIRECT_UPLOAD_BUCKETS.includes(bucket) ||
     !object ||
     object.bucket !== bucket ||
     object.path !== path ||
@@ -49,7 +65,7 @@ export async function recordStagedUpload(
   }
 
   // `path` is unique — a replayed call is a no-op, not an error.
-  const { error } = await supabase
+  const { error } = await createAdminClient()
     .from("staged_uploads")
     .upsert({ owner_id: user.id, bucket, path, url }, { onConflict: "path", ignoreDuplicates: true });
   if (error) reportError("[media-gc] staging record failed", { bucket, error });
@@ -67,10 +83,13 @@ export async function deleteStagedIfUnconsumed(url: string): Promise<void> {
 
   // RLS already scopes reads to the owner; the explicit filters make the
   // contract visible and keep admin visibility from widening this delete.
+  const object = parseStorageObject(url);
+  if (!object) return;
   const { data: staged } = await supabase
     .from("staged_uploads")
     .select("id")
-    .eq("url", url)
+    .eq("bucket", object.bucket)
+    .eq("path", object.path)
     .eq("owner_id", user.id)
     .is("consumed_at", null)
     .maybeSingle();
@@ -79,5 +98,5 @@ export async function deleteStagedIfUnconsumed(url: string): Promise<void> {
   // The reference check inside guards the row-exists-but-URL-persisted edge
   // (e.g. a finalize that never ran) — never delete storage that might be
   // referenced.
-  await deleteMediaIfUnreferenced(url, false, user.id);
+  await deleteMediaIfUnreferenced(object, false, user.id);
 }

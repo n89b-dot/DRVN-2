@@ -130,7 +130,7 @@ export function OpenReportsList({ rows }: { rows: AdminReportRow[] }) {
                   trigger={r.subject_type === "post" ? "Remove post" : "Remove reply"}
                   triggerClassName="relbtn !static"
                   hidden={{ report_id: r.id }}
-                  confirmNote="Deletes it for everyone (its text is kept in the audit log), tells the author why, marks this report actioned and tells the reporter."
+                  confirmNote="Deletes it for everyone (its text is kept in the audit log) and then deletes its photos from storage, tells the author why, marks this report actioned and tells the reporter."
                   fields={[{ kind: "reason" as const, name: "reason", label: "Reason — shown to the author" }]}
                   submitLabel="Remove"
                 />

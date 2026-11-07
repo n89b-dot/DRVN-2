@@ -59,11 +59,11 @@ begin
   select result.post_id into published_id
   from public.write_activity_post(
     'publish', draft_b, v_car_id, 'Published title', final_body,
-    array['https://example.test/member/activity/cover.jpg']::text[]
+    array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/cover.jpg']::text[]
   ) result;
   perform * from public.write_activity_post(
     'publish', draft_b, v_car_id, 'Published title', final_body,
-    array['https://example.test/member/activity/cover.jpg']::text[]
+    array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/cover.jpg']::text[]
   );
   -- Simulates a draft request that began before publish but acquired the
   -- per-car lock after it. It must observe the publish receipt and do nothing.
@@ -87,7 +87,7 @@ begin
   begin
     perform * from public.write_activity_post(
       'publish', draft_b, v_car_id, 'Changed retry', final_body,
-      array['https://example.test/member/activity/cover.jpg']::text[]
+      array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/cover.jpg']::text[]
     );
   exception when invalid_parameter_value then
     rejected := true;
@@ -115,7 +115,7 @@ begin
     where p.id = published_id and p.title = 'Details only' and p.body = final_body
   ) then raise exception 'Details-only update replaced the document'; end if;
   if (select array_agg(ai.url order by ai.position) from public.activity_images ai where ai.post_id = published_id)
-      is distinct from array['https://example.test/member/activity/cover.jpg']::text[]
+      is distinct from array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/cover.jpg']::text[]
   then raise exception 'Details-only update replaced the image projection'; end if;
 
   perform set_config('role', 'authenticated', true);
@@ -134,13 +134,13 @@ begin
     where p.id = published_id and p.title = 'Details only' and p.body = final_body
   ) then raise exception 'Post changed when its image projection failed'; end if;
   if (select array_agg(ai.url order by ai.position) from public.activity_images ai where ai.post_id = published_id)
-      is distinct from array['https://example.test/member/activity/cover.jpg']::text[]
+      is distinct from array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/cover.jpg']::text[]
   then raise exception 'Image projection changed after rolled-back update'; end if;
 
   perform set_config('role', 'authenticated', true);
   perform * from public.write_activity_post(
     'update', published_id, v_car_id, 'Updated atomically', first_body,
-    array['https://example.test/member/activity/new-cover.jpg']::text[], null, null
+    array['https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/new-cover.jpg']::text[], null, null
   );
   perform set_config('role', 'none', true);
   if not exists (
@@ -148,7 +148,7 @@ begin
     join public.activity_images ai on ai.post_id = p.id
     where p.id = published_id and p.title = 'Updated atomically'
       and p.body = first_body
-      and ai.url = 'https://example.test/member/activity/new-cover.jpg'
+      and ai.url = 'https://proj.supabase.co/storage/v1/object/public/activity-images/' || v_member_id || '/new-cover.jpg'
   ) then raise exception 'Atomic post/image update did not converge'; end if;
 
   raise notice 'all durable activity write checks passed';
