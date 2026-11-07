@@ -17,6 +17,7 @@ import { processDueTransfers, reconcileTransferRecords } from "@/lib/payments/tr
 import { processPurchaseAnalytics } from "@/lib/purchase-analytics";
 import { processReceiptJobs } from "@/lib/receipt-worker";
 import { reconcileOutboundLabelVoids } from "@/lib/shipping/outbound-label-void";
+import { processTrackerRegistrations } from "@/lib/shipping/tracker-registration";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -31,7 +32,7 @@ export type MoneyWorkerPass = {
  * One pass of the money worker: every durable queue the money paths write
  * gets its retry heartbeat here — reservation expiries, capture
  * reconciliation, due transfers, transfer-record reconciliation, carry-forward credit payouts, abandoned
- * refunds, label voids, return timers, the dispute-SLA sweep, the alert
+ * refunds, label voids and carrier trackers, return timers, the dispute-SLA sweep, the alert
  * outbox, purchase analytics and receipts. Each family is recorded in
  * worker_runs, which is what /api/health/workers and the console read.
  *
@@ -52,7 +53,23 @@ export async function runMoneyWorkerPass(admin: Admin): Promise<MoneyWorkerPass>
     },
     transferReconciliation: () => reconcileTransferRecords(admin),
     refunds: () => resumeIncompleteRefunds(admin, { batch: 3 }),
-    labelVoids: () => reconcileOutboundLabelVoids(admin, { batch: 5 }),
+    // The shipping provider's queues: unused-label refunds and carrier
+    // trackers for seller-entered tracking (N110). One family, one health
+    // check, but each queue runs whatever happens to the other: label voids
+    // need DRVN Shipping on (getShippingProvider throws when it's off), and
+    // trackers only need an EasyPost key. Failures are combined afterwards.
+    labelVoids: async () => {
+      const [voids, trackers] = await Promise.allSettled([
+        reconcileOutboundLabelVoids(admin, { batch: 5 }),
+        processTrackerRegistrations(admin, { batch: 10 }),
+      ]);
+      for (const [queue, outcome] of [["labelVoids", voids], ["trackers", trackers]] as const) {
+        if (outcome.status === "rejected") reportError("[worker] shipping queue failed", { queue, error: outcome.reason });
+      }
+      const voidSummary = voids.status === "fulfilled" ? voids.value : { failed: 1, error: "Label void queue failed" };
+      const trackerSummary = trackers.status === "fulfilled" ? trackers.value : { failed: 1, error: "Tracker queue failed" };
+      return { ...voidSummary, failed: voidSummary.failed + trackerSummary.failed, trackers: trackerSummary };
+    },
     returns: () => processReturnTimers(admin),
     disputes: () => processDisputeSla(admin),
     alerts: () => processAlertOutbox(admin, { batch: 5 }),

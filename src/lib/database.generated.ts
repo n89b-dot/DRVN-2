@@ -5669,6 +5669,7 @@ export type Database = {
           provider: string
           provider_shipment_id: string
           rate_ref: string
+          request_fingerprint: string | null
           service: string
           service_label: string
         }
@@ -5688,6 +5689,7 @@ export type Database = {
           provider: string
           provider_shipment_id: string
           rate_ref: string
+          request_fingerprint?: string | null
           service: string
           service_label: string
         }
@@ -5707,6 +5709,7 @@ export type Database = {
           provider?: string
           provider_shipment_id?: string
           rate_ref?: string
+          request_fingerprint?: string | null
           service?: string
           service_label?: string
         }
@@ -7571,6 +7574,16 @@ export type Database = {
       payout_release_at: {
         Args: { p_delivered_at: string; p_now: boolean; p_order: string }
         Returns: string
+      }
+      pickup_mint_pass: {
+        Args: {
+          p_buyer_id: string
+          p_code_hash: string
+          p_expires_at: string
+          p_order_id: string
+          p_token_hash: string
+        }
+        Returns: Json
       }
       pickup_redeem: {
         Args: { p_hash: string; p_order_id: string; p_seller_id: string }

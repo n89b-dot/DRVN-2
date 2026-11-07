@@ -94,44 +94,32 @@ export async function showPickupPass(
   const orderId = String(formData.get("order_id") ?? "");
   if (!orderId) return { error: "Missing order." };
 
-  const admin = createAdminClient();
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, buyer_id, status, is_collection, pickup_ready_at")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!order || order.buyer_id !== user.id) return { error: "Not your order." };
-  if (!order.is_collection || order.status !== "paid" || !order.pickup_ready_at) {
-    return { error: "The pass appears once the seller marks the order ready." };
-  }
-
-  // A redeemed pass is done — never re-mintable.
-  const { data: existing } = await admin
-    .from("pickup_confirmations")
-    .select("redeemed_at")
-    .eq("order_id", orderId)
-    .maybeSingle();
-  if (existing?.redeemed_at) return { error: "This pickup was already confirmed." };
-
   const token = randomBytes(24).toString("hex");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(Date.now() + PASS_TTL_MS).toISOString();
 
-  const { error } = await admin.from("pickup_confirmations").upsert(
-    {
-      order_id: orderId,
-      token_hash: sha256(token),
-      code_hash: sha256(`${orderId}:${code}`),
-      attempts: 0,
-      expires_at: expiresAt,
-      redeemed_at: null,
-      redeemed_by: null,
-    },
-    { onConflict: "order_id" }
-  );
-  if (error) {
+  // N93: minted under the order lock pickup_redeem takes, and never touching
+  // redeemed_at — a mint racing a handoff can't erase its proof.
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("pickup_mint_pass", {
+    p_order_id: orderId,
+    p_buyer_id: user.id,
+    p_token_hash: sha256(token),
+    p_code_hash: sha256(`${orderId}:${code}`),
+    p_expires_at: expiresAt,
+  });
+  if (error || !data) {
     reportError("[pickup] pass mint failed", { orderId, error });
     return { error: "Couldn't create the pass. Try again." };
+  }
+  const minted = data as { ok: boolean; reason?: string };
+  if (!minted.ok) {
+    const messages: Record<string, string> = {
+      not_your_order: "Not your order.",
+      already_redeemed: "This pickup was already confirmed.",
+      not_ready: "The pass appears once the seller marks the order ready.",
+    };
+    return { error: messages[minted.reason ?? ""] ?? "Couldn't create the pass. Try again." };
   }
 
   const redeemUrl = `${siteUrl()}/orders/${orderId}/pickup?token=${token}`;

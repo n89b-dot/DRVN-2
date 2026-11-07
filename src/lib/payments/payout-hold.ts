@@ -125,14 +125,13 @@ export async function readPayoutHoldPolicy(
 
 /**
  * The owner's risk settings beside the hold (20261009100000). Amounts are
- * cents; null means that control is off.
+ * cents; null means that control is off. tracking_required_from_cents is no
+ * longer read: there is no amount-based dispatch rule (20261107200100, N110).
  */
 export type SettlementRiskSettings = {
   /** A buyer's "received" releases the payout at once only after this many
    *  days in transit (or a carrier delivery scan). */
   receiptReleaseAfterDays: number;
-  /** Orders at or above this need tracking DRVN follows to be dispatched. */
-  trackingRequiredFromCents: number | null;
   /** Payments at or above this ask the card's bank to verify the buyer. */
   cardVerificationFromCents: number | null;
 };
@@ -148,15 +147,14 @@ export async function readSettlementRisk(
 ): Promise<SettlementRiskSettings | null> {
   const { data, error } = await supabase
     .from("settlement_settings")
-    .select("receipt_release_after_days, tracking_required_from_cents, card_verification_from_cents")
+    .select("receipt_release_after_days, card_verification_from_cents")
     .limit(1);
   if (error || !data) return null;
   const row = data[0];
-  // A missing row: the SQL's own fallbacks (3 days, both controls off).
-  if (!row) return { receiptReleaseAfterDays: 3, trackingRequiredFromCents: null, cardVerificationFromCents: null };
-  const tracking = positiveCents(row.tracking_required_from_cents);
+  // A missing row: the SQL's own fallbacks (3 days, verification off).
+  if (!row) return { receiptReleaseAfterDays: 3, cardVerificationFromCents: null };
   const card = positiveCents(row.card_verification_from_cents);
   const days = row.receipt_release_after_days;
-  if (tracking === undefined || card === undefined || !Number.isInteger(days) || days < 0) return null;
-  return { receiptReleaseAfterDays: days, trackingRequiredFromCents: tracking, cardVerificationFromCents: card };
+  if (card === undefined || !Number.isInteger(days) || days < 0) return null;
+  return { receiptReleaseAfterDays: days, cardVerificationFromCents: card };
 }

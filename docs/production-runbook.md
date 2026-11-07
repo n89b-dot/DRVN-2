@@ -494,6 +494,13 @@ shipping its own inventory. Before any production postage is enabled:
    The code stores `seller_fulfillment_profiles.easypost_end_shipper_id` as
    an opaque reference and passes it through the provider seam only — a move
    between models changes `src/lib/shipping/easypost.ts`, nothing else.
+   **Tracking is separate from labels** (N110): with `EASYPOST_API_KEY`
+   set, every seller-entered tracking number is registered with the EasyPost
+   tracker after dispatch, even while `FLAG_INTEGRATED_SHIPPING_V1` is off;
+   the money worker's `labelVoids` family retries what fails
+   (`tracker_registration` jobs). There is no amount limit on dispatch, and
+   nothing to switch for $1,000+ orders. With no key, dispatch is unchanged
+   and untracked.
 3. **Webhook**: create an EasyPost webhook pointing at
    `https://<domain>/api/shipping/easypost` (it acts on `tracker.created`
    and `tracker.updated`), generate a webhook secret, and

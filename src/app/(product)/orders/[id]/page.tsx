@@ -20,7 +20,6 @@ import { orderCarry, readSellerCarry } from "@/lib/payments/carry";
 import { sellerProceeds } from "@/lib/payments/proceeds";
 import { countryLabel } from "@/lib/geo/countries";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { readSettlementRisk } from "@/lib/payments/payout-hold";
 import { getPageClient, getViewer } from "@/lib/supabase/page-context";
 
 import { loadOffersNeedingAttention } from "@/lib/shell-counts";
@@ -131,7 +130,6 @@ export default async function OrderDetailPage({
     offersCount,
     { data: originOffer },
     ,
-    dispatchRisk,
     { data: buyerReviewable },
   ] = await Promise.all([
     supabase.from("order_items").select("*").eq("order_id", id),
@@ -191,19 +189,12 @@ export default async function OrderDetailPage({
       : Promise.resolve({ data: null }),
     // Opening the order deals with what its notifications were about.
     markNotificationsReadForPage(supabase, user.id, [`/orders/${id}`, `/orders/${id}/checkout`]),
-    // Whether this order needs tracking DRVN follows to be dispatched
-    // (20261009100000) — only the seller's dispatch tile asks.
-    isSeller && order.status === "paid" && !order.is_collection
-      ? readSettlementRisk(supabase)
-      : Promise.resolve(null),
     // Whether the seller may review this buyer (20261005101000): a buyer who
     // checked out as a guest without a confirmed email can't be reviewed on
     // this order, so the form isn't offered.
     // Answers only a party to the order; the buyer's own review is unaffected.
     isSeller ? supabase.rpc("order_buyer_reviewable", { p_order: id }) : Promise.resolve({ data: null }),
   ]);
-  const trackingRequiredFrom = dispatchRisk?.trackingRequiredFromCents ?? null;
-  const needsFollowedTracking = trackingRequiredFrom !== null && order.total_cents >= trackingRequiredFrom;
 
   // "As purchased" reads snapshot data only (0049): covers come from the
   // gallery frozen onto the order, and category/part identity/fitment from
@@ -352,6 +343,7 @@ export default async function OrderDetailPage({
   const confirmingPayment = Boolean(processing) && isBuyer && order.status === "pending";
   const action = confirmingPayment ? "Confirming your payment" : nextAction(order, isSeller);
   const canFinishCheckout = isBuyer && order.status === "pending" && !confirmingPayment;
+  const canDispatch = isSeller && order.status === "paid" && !order.is_collection;
   // Money only moved once the order was paid. An unpaid or failed checkout,
   // or one cancelled before payment, charged nobody and pays nobody out.
   const moneyMoved =
@@ -442,6 +434,13 @@ export default async function OrderDetailPage({
           {canFinishCheckout && (
             <ButtonLink href={`/orders/${id}/checkout`} variant="live" className="mt-2">
               Finish checkout
+            </ButtonLink>
+          )}
+          {/* The seller's time-limited job, one tap from the top (R-audit-
+              dispatch): it jumps to the Dispatch tile and its form. */}
+          {canDispatch && (
+            <ButtonLink href="#dispatch" variant="live" className="mt-2">
+              {boughtLabel ? "Print the label and dispatch" : pendingLabel ? "Buy a label or dispatch" : "Mark dispatched"}
             </ButtonLink>
           )}
           {originOffer && (
@@ -906,15 +905,9 @@ export default async function OrderDetailPage({
               </Rv>
             )}
 
-          {isSeller && order.status === "paid" && !order.is_collection && (
-            <Rv className="tile" stagger={3}>
+          {canDispatch && (
+            <Rv id="dispatch" className="tile jumptarget" stagger={3}>
               <span className="microlabel microlabel--ink">Dispatch</span>
-              {needsFollowedTracking && (
-                <p className="spec-note">
-                  Orders of {formatPrice(trackingRequiredFrom)} or more need tracking DRVN can
-                  follow: buy a DRVN label, or use a carrier tracking number DRVN can register.
-                </p>
-              )}
               <div className="mt-3 grid gap-4">
                 {pendingLabel && (
                   <BuyLabelPanel

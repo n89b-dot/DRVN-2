@@ -20,6 +20,7 @@ const quote: ShippingRateQuote = {
   currency: "USD",
   est_delivery_days: 2,
   destination_hash: "destination",
+  request_fingerprint: null,
   parcel: {},
   consumed_order_id: null,
   expires_at: "2026-09-06T00:00:00.000Z",
