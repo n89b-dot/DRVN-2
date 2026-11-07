@@ -110,6 +110,10 @@ describe("buildOrderTimeline", () => {
         received_at: "2026-08-01T10:00:30Z",
         processed_at: "2026-08-01T10:00:31Z",
         payload: null,
+        failed_attempts: 0,
+        last_failed_at: null,
+        last_failure_kind: null,
+        last_failure_detail: null,
       },
     ];
 

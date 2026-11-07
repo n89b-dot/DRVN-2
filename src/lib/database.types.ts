@@ -948,6 +948,11 @@ export type WebhookEvent = {
   /** Raw Stripe event, kept for console drill-in and replay (0023). Null for
    *  events recorded before payload retention. */
   payload: unknown | null;
+  /** Failed deliveries while unprocessed (20261107191000, record_webhook_failure). */
+  failed_attempts: number;
+  last_failed_at: string | null;
+  last_failure_kind: "retry" | "error" | null;
+  last_failure_detail: string | null;
 };
 
 export type TransferIntentStatus =

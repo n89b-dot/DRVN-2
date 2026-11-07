@@ -2,6 +2,7 @@ import { trackedWorker } from "@/lib/tracked-worker";
 import { deleteMediaIfUnreferenced } from "@/lib/media-lifecycle";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { flushMonitoring, reportError } from "@/lib/monitoring";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 /**
  * Staged-media garbage collector (migration 0029). Client uploads hit storage
@@ -23,13 +24,11 @@ const STALE_AFTER_MS = 48 * 60 * 60 * 1000;
 const BATCH = 200;
 
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
+  if (!process.env.CRON_SECRET) {
     reportError("[media-gc] CRON_SECRET is not configured");
     return new Response(null, { status: 404 });
   }
-  const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${secret}`) {
+  if (!cronAuthorized(request)) {
     return new Response(null, { status: 404 });
   }
 

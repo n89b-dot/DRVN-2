@@ -1,6 +1,7 @@
 import { flushMonitoring, reportError } from "@/lib/monitoring";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { trackedWorker } from "@/lib/tracked-worker";
+import { cronAuthorized } from "@/lib/cron-auth";
 
 /**
  * Listing-import sweep (0047) — the retention half of the importer:
@@ -30,10 +31,9 @@ const MAX_ROUNDS = 25;
 const SCRUB_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
   // 404, not 401 — the worker route pattern (0020): unauthenticated callers
   // learn nothing about which job endpoints exist.
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!cronAuthorized(request)) {
     return new Response(null, { status: 404 });
   }
 

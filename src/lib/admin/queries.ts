@@ -503,7 +503,7 @@ export async function getOrderDetail(orderId: string): Promise<AdminOrderDetail 
     paymentRef
       ? a
           .from("webhook_events")
-          .select("id, type, received_at, processed_at, payload")
+          .select("id, type, received_at, processed_at, payload, failed_attempts, last_failed_at, last_failure_kind, last_failure_detail")
           .or(
             `payload->data->object->>id.eq.${paymentRef},payload->data->object->>payment_intent.eq.${paymentRef}`,
           )
@@ -1261,6 +1261,11 @@ export type PaymentsOps = {
     processedAt: string | null;
     /** Pretty-printed payload for the drill-in; null for pre-0023 events. */
     payload: string | null;
+    /** Failed deliveries of a still-unprocessed event (20261107191000). */
+    failedAttempts: number;
+    lastFailedAt: string | null;
+    /** "retry" or "error", with the handler's reason when it threw. */
+    lastFailure: string | null;
   }[];
 };
 
@@ -1359,14 +1364,38 @@ export async function getPaymentsOps(opts: { query?: string } = {}): Promise<Pay
           r.status.includes(q)
       ),
     alertBacklog: alerts.data ?? [],
-    recentEvents: (events.data ?? []).map((e) => ({
+    recentEvents: (await withUnprocessedEvents(a, (events.data ?? []) as WebhookEvent[])).map((e) => ({
       id: e.id,
       type: e.type,
       receivedAt: e.received_at,
       processedAt: e.processed_at,
       payload: e.payload ? JSON.stringify(e.payload, null, 2) : null,
+      failedAttempts: e.failed_attempts,
+      lastFailedAt: e.last_failed_at,
+      lastFailure: e.last_failure_kind
+        ? `${e.last_failure_kind}${e.last_failure_detail ? ` — ${e.last_failure_detail}` : ""}`
+        : null,
     })),
   };
+}
+
+/**
+ * Events not yet applied, oldest first, then the recent ones (N109). An event
+ * Stripe keeps redelivering used to scroll out of the last 25 while it was
+ * still owed; it now stays at the top, with its attempts and last failure, and
+ * the same Replay (idempotent handlers, applied only on a confirmed outcome).
+ */
+async function withUnprocessedEvents(a: ReturnType<typeof admin>, recent: WebhookEvent[]): Promise<WebhookEvent[]> {
+  const { data, error } = await a
+    .from("webhook_events")
+    .select("*")
+    .is("processed_at", null)
+    .order("received_at", { ascending: true })
+    .limit(25);
+  unlessFailed("unprocessed webhook events", error);
+  const owed = (data ?? []) as WebhookEvent[];
+  const seen = new Set(owed.map((e) => e.id));
+  return [...owed, ...recent.filter((e) => !seen.has(e.id))];
 }
 
 // ---------- Audit log ----------
